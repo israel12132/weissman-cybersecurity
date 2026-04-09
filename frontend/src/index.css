@@ -104,9 +104,9 @@ body {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   SOC 2100 – Global Intel Map layout (App.jsx / /intel-map route)
+   SOC Intel Map – Global Intel Map layout (App.jsx / /intel-map route)
    ──────────────────────────────────────────────────────────────── */
-.soc-2100-root {
+.soc-intel-map-root {
   position: relative;
   min-height: 100dvh;
   display: flex;

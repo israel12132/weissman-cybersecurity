@@ -198,7 +198,7 @@ export default function App() {
   }, [connectionStatus])
 
   return (
-    <div className="soc-2100-root">
+    <div className="soc-intel-map-root">
       <CinematicBackground />
       <EmergencyAlert message={emergencyMessage} onComplete={() => setEmergencyMessage('')} />
 
