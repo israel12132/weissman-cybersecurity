@@ -136,6 +136,25 @@ body {
 .nav-link:hover {
   color: rgba(255, 255, 255, 0.9);
 }
+.nav-link-active {
+  color: rgba(34, 211, 238, 0.9);
+  font-weight: 600;
+}
+.nav-link-active:hover {
+  color: #22d3ee;
+}
+.nav-link-findings {
+  color: rgba(251, 191, 36, 0.85);
+}
+.nav-link-findings:hover {
+  color: #fbbf24;
+}
+.nav-link-danger {
+  color: rgba(248, 113, 113, 0.85);
+}
+.nav-link-danger:hover {
+  color: #f87171;
+}
 
 .soc-header-error {
   background: rgba(127, 29, 29, 0.55);
