@@ -35,6 +35,68 @@ pub fn target_prefix_for_poc(target: &str) -> String {
     weissman_core::models::poc::client_target_search_prefix(target)
 }
 
+/// Detect potential typosquat: a package whose name is suspiciously close to a well-known package.
+/// Returns the likely impersonated package name if risk is detected.
+fn detect_typosquat(name: &str) -> Option<String> {
+    // Well-known high-value npm packages commonly typosquatted
+    const POPULAR_PACKAGES: &[&str] = &[
+        "lodash", "express", "react", "vue", "angular", "axios", "moment",
+        "chalk", "debug", "request", "underscore", "bluebird", "commander",
+        "webpack", "babel", "eslint", "typescript", "jest", "mocha",
+        "passport", "mongoose", "sequelize", "knex", "pg", "mysql",
+        "redis", "socket.io", "ws", "node-fetch", "cross-fetch",
+        "dotenv", "uuid", "path", "fs-extra", "glob", "rimraf",
+        "semver", "minimist", "yargs", "inquirer", "ora", "cli-table",
+        "jsonwebtoken", "bcrypt", "crypto-js", "helmet", "cors",
+        "body-parser", "multer", "nodemailer", "aws-sdk", "azure",
+    ];
+    let name_lower = name.to_lowercase();
+    for &popular in POPULAR_PACKAGES {
+        // Skip exact matches
+        if name_lower == popular {
+            return None;
+        }
+        // Check edit distance ≤ 2 for short packages (≤ 8 chars) or ≤ 3 for longer ones
+        let max_dist = if popular.len() <= 8 { 2 } else { 3 };
+        if levenshtein_distance(&name_lower, popular) <= max_dist {
+            return Some(popular.to_string());
+        }
+        // Also catch common patterns: prefixing/suffixing with common words
+        if (name_lower.starts_with(popular) || name_lower.ends_with(popular))
+            && name_lower != popular
+            && name_lower.len() <= popular.len() + 5
+        {
+            return Some(popular.to_string());
+        }
+    }
+    None
+}
+
+/// Simple Levenshtein distance (character edit distance) for typosquat detection.
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let m = a.len();
+    let n = b.len();
+    if m == 0 { return n; }
+    if n == 0 { return m; }
+    // Only compute if lengths are close enough to be typosquats
+    if m.abs_diff(n) > 4 { return usize::MAX; }
+    let mut dp = vec![vec![0usize; n + 1]; m + 1];
+    for i in 0..=m { dp[i][0] = i; }
+    for j in 0..=n { dp[0][j] = j; }
+    for i in 1..=m {
+        for j in 1..=n {
+            dp[i][j] = if a[i - 1] == b[j - 1] {
+                dp[i - 1][j - 1]
+            } else {
+                1 + dp[i - 1][j].min(dp[i][j - 1]).min(dp[i - 1][j - 1])
+            };
+        }
+    }
+    dp[m][n]
+}
+
 pub async fn run_supply_chain_result(
     target: &str,
     stealth: Option<&stealth_engine::StealthConfig>,
@@ -119,6 +181,13 @@ pub async fn run_supply_chain_result(
                      curl -sS -X POST 'https://api.osv.dev/v1/query' -H 'Content-Type: application/json' -d '{}'",
                     npm_url, osv_esc
                 );
+                let typosquat = detect_typosquat(&name);
+                let typosquat_risk = typosquat.is_some();
+                let severity = if osv.vuln_count > 0 || typosquat_risk {
+                    "high"
+                } else {
+                    "info"
+                };
                 json!({
                     "type": "supply_chain",
                     "package": name,
@@ -127,8 +196,9 @@ pub async fn run_supply_chain_result(
                     "vuln_count": osv.vuln_count,
                     "osv_ids": osv.ids,
                     "osv_summaries": osv.summaries,
-                    "typosquat_risk": false,
-                    "severity": if osv.vuln_count > 0 { "high" } else { "info" },
+                    "typosquat_risk": typosquat_risk,
+                    "typosquat_similar_to": typosquat,
+                    "severity": severity,
                     "poc_exploit": poc
                 })
             }
@@ -164,6 +234,9 @@ pub async fn run_supply_chain_result(
                          curl -sS -X POST 'https://api.osv.dev/v1/query' -H 'Content-Type: application/json' -d '{}'",
                         pypi_url, osv_esc
                     );
+                    let typosquat = detect_typosquat(&name);
+                    let typosquat_risk = typosquat.is_some();
+                    let severity = if osv.vuln_count > 0 || typosquat_risk { "high" } else { "info" };
                     findings.push(json!({
                         "type": "supply_chain",
                         "package": name,
@@ -172,8 +245,9 @@ pub async fn run_supply_chain_result(
                         "vuln_count": osv.vuln_count,
                         "osv_ids": osv.ids,
                         "osv_summaries": osv.summaries,
-                        "typosquat_risk": false,
-                        "severity": if osv.vuln_count > 0 { "high" } else { "info" },
+                        "typosquat_risk": typosquat_risk,
+                        "typosquat_similar_to": typosquat,
+                        "severity": severity,
                         "poc_exploit": poc
                     }));
                 }

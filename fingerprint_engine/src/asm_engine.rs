@@ -12,13 +12,27 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 
 /// Fast-fail dead ports; full connect attempt budget is still large when scanning many hosts in parallel upstream.
-const PORT_TIMEOUT_MS: u64 = 350;
+const PORT_TIMEOUT_MS: u64 = 500;
 /// Default ports: classic attack surface plus common cloud / API / observability / dev ports.
-pub const TOP_PORTS: [u16; 45] = [
-    80, 443, 8080, 8443, 8008, 8888, 9443, 3000, 3001, 4200, 5000, 5001, 5601, 5602, 6333, 7474, 7687,
-    22, 21, 25, 53, 111, 135, 139, 445, 1433, 3389, 5900,
-    3306, 5432, 27017, 6379, 9200, 9300, 5984, 11211, 1521, 1434,
-    9000, 9090, 9091, 6443, 10250, 2375, 4243,
+pub const TOP_PORTS: [u16; 63] = [
+    // Web / API / reverse proxies
+    80, 443, 8080, 8443, 8008, 8888, 9443, 3000, 3001, 4200, 5000, 5001, 8000, 8001, 8181,
+    // Monitoring / observability / admin UIs
+    5601, 5602, 6333, 7474, 7687, 9090, 9091,
+    // Classic insecure services
+    22, 21, 23, 25, 53, 111, 135, 139, 445, 1433, 3389, 5900,
+    // SQL databases
+    3306, 5432, 1521, 1434,
+    // NoSQL / cache / search
+    27017, 6379, 9200, 9300, 5984, 11211, 28017,
+    // Message queues / streaming
+    5672, 15672, 4369, 9092, 2181,
+    // Container / orchestration
+    2375, 4243, 6443, 10250, 10255, 2376,
+    // Service mesh / secrets / config
+    8200, 8500, 8300, 8301,
+    // Dev / CI / misc
+    9000, 50000, 8161,
 ];
 
 fn target_to_host(target: &str) -> Option<String> {
@@ -90,7 +104,22 @@ pub async fn run_asm_result_with_ports_and_subdomains(
         }
         let severity = if matches!(
             port,
-            21 | 22 | 23 | 25 | 3306 | 5432 | 6379 | 1433 | 3389 | 5900 | 2375 | 10250
+            // Classic insecure remote-access / protocol services
+            21 | 22 | 23 | 25 |
+            // Windows / SMB / RDP / VNC
+            135 | 139 | 445 | 1433 | 3389 | 5900 |
+            // SQL databases
+            3306 | 5432 | 1521 | 1434 |
+            // NoSQL / cache / search
+            27017 | 28017 | 6379 | 9200 | 9300 | 5984 | 11211 |
+            // Message queues / streaming
+            5672 | 15672 | 4369 | 9092 | 2181 |
+            // Container / orchestration (Docker daemon, K8s, kubelet)
+            2375 | 2376 | 4243 | 6443 | 10250 | 10255 |
+            // Secrets / config management (Vault, Consul)
+            8200 | 8300 | 8301 |
+            // CI/CD (Jenkins JNLP, ActiveMQ admin)
+            50000 | 8161
         ) {
             "high"
         } else {

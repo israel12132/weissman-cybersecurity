@@ -17,13 +17,14 @@ pub struct CicdFinding {
 
 fn aws_key_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"AKIA[0-9A-Z]{16}").unwrap_or_else(|_| never_matches()))
+    // AWS Access Key IDs (AKIA = long-term, ASIA = session)
+    R.get_or_init(|| Regex::new(r"(?:AKIA|ASIA|AROA|AIDA|ANPA|ANVA|AIPA)[0-9A-Z]{16}").unwrap_or_else(|_| never_matches()))
 }
 
 fn pem_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----")
+        Regex::new(r"-----BEGIN (RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY-----")
             .unwrap_or_else(|_| never_matches())
     })
 }
@@ -39,7 +40,61 @@ fn sqli_re() -> &'static Regex {
 fn hardcoded_secret_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r#"(?i)(api[_-]?key|secret|password|token|bearer)\s*[=:]\s*['"][^'"]{12,}['"]"#)
+        Regex::new(r#"(?i)(api[_-]?key|secret[_-]?key|private[_-]?key|password|passwd|pwd|token|bearer|auth[_-]?token|access[_-]?key|client[_-]?secret|db[_-]?password|database[_-]?url)\s*[=:]\s*['"][^'"]{12,}['"]"#)
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// GitHub Personal Access Token (classic and fine-grained)
+fn github_token_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"gh[pousr]_[A-Za-z0-9]{36,}")
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// GCP service account JSON key (contains "private_key_id")
+fn gcp_service_account_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#""private_key_id"\s*:\s*"[0-9a-f]{40}""#)
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// Slack Bot / OAuth tokens
+fn slack_token_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"xox[baprs]-[0-9A-Za-z\-]{10,}")
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// Stripe publishable / secret keys
+fn stripe_key_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"(?:sk|pk)_(?:live|test)_[0-9A-Za-z]{24,}")
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// Generic high-entropy JWT secret assignments (jwt_secret = "...", JWT_SECRET = "...")
+fn jwt_secret_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"(?i)jwt[_-]?secret\s*[=:]\s*['"][^'"]{16,}['"]"#)
+            .unwrap_or_else(|_| never_matches())
+    })
+}
+
+/// Twilio Account SID and Auth Token
+fn twilio_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"AC[0-9a-f]{32}|SK[0-9a-f]{32}")
             .unwrap_or_else(|_| never_matches())
     })
 }
@@ -99,6 +154,60 @@ impl<'ast, 'a> Visit<'ast> for RustStringVisitor<'a> {
                 snippet: v.chars().take(200).collect(),
             });
         }
+        if github_token_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "github_token".into(),
+                severity: "critical".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
+        if gcp_service_account_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "gcp_service_account_key".into(),
+                severity: "critical".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
+        if slack_token_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "slack_token".into(),
+                severity: "high".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
+        if stripe_key_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "stripe_api_key".into(),
+                severity: "critical".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
+        if jwt_secret_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "hardcoded_jwt_secret".into(),
+                severity: "critical".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
+        if twilio_re().is_match(&v) {
+            self.findings.push(CicdFinding {
+                path: self.path.into(),
+                line,
+                rule: "twilio_credential".into(),
+                severity: "high".into(),
+                snippet: v.chars().take(200).collect(),
+            });
+        }
         syn::visit::visit_lit_str(self, s);
     }
 }
@@ -120,6 +229,54 @@ fn scan_regex_only(path: &str, content: &str) -> Vec<CicdFinding> {
                 path: path.into(),
                 line: ln,
                 rule: "aws_access_key_id".into(),
+                severity: "critical".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if github_token_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "github_token".into(),
+                severity: "critical".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if gcp_service_account_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "gcp_service_account_key".into(),
+                severity: "critical".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if stripe_key_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "stripe_api_key".into(),
+                severity: "critical".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if slack_token_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "slack_token".into(),
+                severity: "high".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if twilio_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "twilio_credential".into(),
+                severity: "high".into(),
+                snippet: line.chars().take(200).collect(),
+            });
+        } else if jwt_secret_re().is_match(line) {
+            out.push(CicdFinding {
+                path: path.into(),
+                line: ln,
+                rule: "hardcoded_jwt_secret".into(),
                 severity: "critical".into(),
                 snippet: line.chars().take(200).collect(),
             });
