@@ -35,29 +35,52 @@ export function TelemetryProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    const url = apiEventSourceUrl('/api/telemetry/stream')
-    const es = new EventSource(url, { withCredentials: true })
-    esRef.current = es
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data || '{}')
-        const severity = data.severity || 'error'
-        const message = data.message || 'Unknown error'
-        const engine = data.engine || ''
-        const clientId = data.client_id || ''
-        addProgress(clientId, engine, message)
-        if (severity === 'error') addToast(severity, message, engine)
-      } catch (_) {
-        addToast('error', e.data || 'Telemetry event')
+    let isMounted = true
+    let retryTimer = null
+    let retryDelay = 2000
+
+    function connect() {
+      if (!isMounted) return
+      const url = apiEventSourceUrl('/api/telemetry/stream')
+      const es = new EventSource(url, { withCredentials: true })
+      esRef.current = es
+
+      es.onmessage = (e) => {
+        retryDelay = 2000 // reset backoff on successful message
+        try {
+          const data = JSON.parse(e.data || '{}')
+          const severity = data.severity || 'error'
+          const message = data.message || 'Unknown error'
+          const engine = data.engine || ''
+          const clientId = data.client_id || ''
+          addProgress(clientId, engine, message)
+          if (severity === 'error') addToast(severity, message, engine)
+        } catch (_) {
+          addToast('error', e.data || 'Telemetry event')
+        }
+      }
+
+      es.onerror = () => {
+        es.close()
+        esRef.current = null
+        if (!isMounted) return
+        // Exponential backoff reconnect (max 30 s)
+        retryTimer = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 1.5, 30_000)
+          connect()
+        }, retryDelay)
       }
     }
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return
-      es.close()
-    }
+
+    connect()
+
     return () => {
-      es.close()
-      esRef.current = null
+      isMounted = false
+      if (retryTimer) clearTimeout(retryTimer)
+      if (esRef.current) {
+        esRef.current.close()
+        esRef.current = null
+      }
     }
   }, [addToast, addProgress])
 

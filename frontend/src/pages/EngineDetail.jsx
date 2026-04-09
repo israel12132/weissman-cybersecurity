@@ -171,7 +171,11 @@ export default function EngineDetail() {
       const jobId = d.job_id || ''
       setLines([`> Job queued: ${jobId || '(no id)'}`, `> Connecting to stream...`])
       if (jobId) {
-        const url = apiEventSourceUrl(`/api/poe-scan/stream/${encodeURIComponent(jobId)}`)
+        // Use generic telemetry stream filtered by job_id; poe_synthesis has its own endpoint
+        const streamPath = engineId === 'poe_synthesis'
+          ? `/api/poe-scan/stream/${encodeURIComponent(jobId)}`
+          : `/api/telemetry/stream?job_id=${encodeURIComponent(jobId)}`
+        const url = apiEventSourceUrl(streamPath)
         if (esRef.current) esRef.current.close()
         const es = new EventSource(url, { withCredentials: true })
         esRef.current = es

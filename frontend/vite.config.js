@@ -7,6 +7,27 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: '/command-center/',
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // Animation
+          'vendor-motion': ['framer-motion'],
+          // Charts
+          'vendor-recharts': ['recharts'],
+          // 3D globe
+          'vendor-three': ['three'],
+          // Flow graph
+          'vendor-xyflow': ['@xyflow/react'],
+          // Icons
+          'vendor-lucide': ['lucide-react'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
   server: {
     port: 5173,
     // Dev-only: API lives on the Rust process. Do not use for production access.

@@ -140,9 +140,10 @@ export default function App() {
             if (to) {
               const arcId = `arc-${eventId}`
               setRealtimeArcs((prev) => [...prev, { id: arcId, from, to, label: message.slice(0, 12), severity: severity === 'critical' ? 'critical' : 'high', eventId }])
-              arcTimeoutsRef.current.push(setTimeout(() => {
+              const arcTimer = setTimeout(() => {
                 setRealtimeArcs((a) => a.filter((x) => x.id !== arcId))
-              }, ARC_MAX_AGE_MS))
+              }, ARC_MAX_AGE_MS)
+              arcTimeoutsRef.current = [...arcTimeoutsRef.current.slice(-100), arcTimer]
               if (kind === 'emergency_alert') {
                 const pulseId = `pulse-${eventId}`
                 setRealtimePulses((prev) => [...prev, { id: pulseId, lat: to.lat, lon: to.lon }])
@@ -191,7 +192,7 @@ export default function App() {
 
   useEffect(() => {
     if (connectionStatus !== 'online') return
-    const iv = setInterval(() => setNow(new Date()), 120)
+    const iv = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(iv)
   }, [connectionStatus])
 

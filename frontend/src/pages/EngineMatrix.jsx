@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS, getEnginesByGroup, ENGINES_BY_ID } from '../lib/enginesRegistry'
@@ -56,14 +56,14 @@ function EngineMatrixCard({ engine, enabled, status, lastRun, findingsDelta, onT
 
   const handleRun = useCallback(async (e) => {
     e.stopPropagation()
-    if (runBusy || !onRun) return
+    if (runBusy || !onRun || !enabled) return
     setRunBusy(true)
     try {
       await onRun(engine.id)
     } finally {
       setRunBusy(false)
     }
-  }, [runBusy, onRun, engine.id])
+  }, [runBusy, onRun, engine.id, enabled])
 
   const handleToggle = useCallback((e) => {
     e.stopPropagation()
@@ -109,7 +109,8 @@ function EngineMatrixCard({ engine, enabled, status, lastRun, findingsDelta, onT
           {/* Run */}
           <button
             type="button"
-            disabled={loading || runBusy}
+            disabled={loading || runBusy || !enabled}
+            title={!enabled ? 'Enable engine first' : 'Queue engine scan'}
             onClick={handleRun}
             className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-950/40 hover:text-cyan-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
@@ -261,8 +262,9 @@ export default function EngineMatrix() {
     setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
   }, [])
 
-  const enabledSet = new Set(
-    Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : [],
+  const enabledSet = useMemo(
+    () => new Set(Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : []),
+    [clientConfig?.enabled_engines],
   )
 
   const patchEngines = useCallback(async (nextList) => {
@@ -347,11 +349,10 @@ export default function EngineMatrix() {
       showToast('error', 'Select a client first')
       return
     }
-    for (const id of engineIds) {
-      if (enabledSet.has(id)) {
-        await handleRun(id)
-      }
-    }
+    // Run all enabled engines in the group in parallel
+    await Promise.allSettled(
+      engineIds.filter((id) => enabledSet.has(id)).map((id) => handleRun(id)),
+    )
   }, [selectedClientId, enabledSet, handleRun, showToast])
 
   const visibleGroups = activeGroup === 'all'
