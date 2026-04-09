@@ -127,6 +127,17 @@ pub mod strategy_engine;
 pub mod general;
 pub mod threat_intel_ingestor;
 pub mod verification_sandbox;
+pub mod graphql_attack_engine;
+pub mod jwt_attack_engine;
+pub mod oauth_oidc_engine;
+pub mod http_smuggling_engine;
+pub mod prototype_pollution_engine;
+pub mod ssrf_advanced_engine;
+pub mod xxe_engine;
+pub mod ssti_engine;
+pub mod file_upload_engine;
+pub mod websocket_attack_engine;
+pub mod cache_poisoning_engine;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

@@ -82,6 +82,50 @@ fn main() {
         fingerprint_engine::llm_path_fuzz_engine::run_llm_path_fuzz_cli(target).await;
         return;
     }
+    if cmd == "graphql_attack" {
+        fingerprint_engine::graphql_attack_engine::run_graphql_attack(target).await;
+        return;
+    }
+    if cmd == "jwt_attack" {
+        fingerprint_engine::jwt_attack_engine::run_jwt_attack(target).await;
+        return;
+    }
+    if cmd == "oauth_oidc" {
+        fingerprint_engine::oauth_oidc_engine::run_oauth_oidc(target).await;
+        return;
+    }
+    if cmd == "http_smuggling" {
+        fingerprint_engine::http_smuggling_engine::run_http_smuggling(target).await;
+        return;
+    }
+    if cmd == "prototype_pollution" {
+        fingerprint_engine::prototype_pollution_engine::run_prototype_pollution(target).await;
+        return;
+    }
+    if cmd == "ssrf_advanced" {
+        fingerprint_engine::ssrf_advanced_engine::run_ssrf_advanced(target).await;
+        return;
+    }
+    if cmd == "xxe" {
+        fingerprint_engine::xxe_engine::run_xxe(target).await;
+        return;
+    }
+    if cmd == "ssti" {
+        fingerprint_engine::ssti_engine::run_ssti(target).await;
+        return;
+    }
+    if cmd == "file_upload" {
+        fingerprint_engine::file_upload_engine::run_file_upload(target).await;
+        return;
+    }
+    if cmd == "websocket_attack" {
+        fingerprint_engine::websocket_attack_engine::run_websocket_attack(target).await;
+        return;
+    }
+    if cmd == "cache_poisoning" {
+        fingerprint_engine::cache_poisoning_engine::run_cache_poisoning(target).await;
+        return;
+    }
 
     if args.first().map(|s| s.as_str()) == Some("fuzz") {
         let _ = tracing_subscriber::fmt::try_init();
