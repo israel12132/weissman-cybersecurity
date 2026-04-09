@@ -10,15 +10,50 @@ pub const TIME_ANOMALY_MULTIPLIER: f64 = 5.0;
 pub const LENGTH_ANOMALY_RATIO: f64 = 2.0;
 
 pub static DANGEROUS_SUFFIXES: &[&str] = &[
+    // Null byte / encoding
     "%00",
     "\\x00",
+    // SQL injection
     "'",
     "\"",
+    "' OR '1'='1",
+    "' OR 1=1--",
+    "\" OR \"1\"=\"1",
+    "1; DROP TABLE users--",
+    // XSS
     "<script>alert(1)</script>",
+    "<img src=x onerror=alert(1)>",
+    "<svg/onload=alert(1)>",
+    // Path traversal / LFI
     "../../../etc/passwd",
+    "..\\..\\..\\windows\\win.ini",
+    "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    // SSTI (Server-Side Template Injection)
     "{{7*7}}",
     "${7*7}",
+    "#{7*7}",
+    "<%= 7*7 %>",
+    "{{config}}",
+    "${{<%[%'\"}}%\\",
+    // XXE (XML External Entity)
+    "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><foo>&xxe;</foo>",
+    // SSRF probes (safe: loopback / metadata endpoint patterns)
+    "http://169.254.169.254/latest/meta-data/",
+    "http://127.0.0.1/",
+    "http://[::1]/",
+    // Command injection
+    "; id",
+    "| id",
+    "`id`",
+    "$(id)",
+    // NoSQL injection
+    "{\"$gt\": \"\"}",
+    "{\"$where\": \"1==1\"}",
+    // Null byte / encoding
     "\u{0000}",
+    // CRLF injection (header splitting)
+    "\r\nX-Injected: weissman",
+    "%0d%0aX-Injected:%20weissman",
 ];
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

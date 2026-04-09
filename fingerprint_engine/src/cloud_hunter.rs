@@ -9,38 +9,84 @@ use trust_dns_resolver::TokioAsyncResolver;
 
 /// Known CNAME suffixes that are common subdomain takeover targets when the target service is gone.
 const TAKEOVER_CNAME_SUFFIXES: &[&str] = &[
+    // AWS S3
     ".s3.amazonaws.com",
     ".s3-website.",
     ".s3-website-",
     ".s3.",
+    // GitHub / Bitbucket
     ".github.io",
+    ".bitbucket.io",
+    // Heroku
     ".herokuapp.com",
     ".herokuspace.com",
+    // Azure
     ".azurewebsites.net",
     ".cloudapp.net",
     ".cloudapp.azure.com",
     ".blob.core.windows.net",
     ".azure-api.net",
     ".trafficmanager.net",
+    ".azurecontainer.io",
+    ".azurehdinsight.net",
+    ".azureedge.net",
+    // Zendesk / Help tools
     ".zendesk.com",
-    ".fastly.net",
-    ".ghost.io",
     ".helpscoutdocs.com",
+    // CDN / PaaS
+    ".fastly.net",
+    ".cloudfront.net", // only if no default cert / NX
+    // Ghost / CMS
+    ".ghost.io",
+    // Platform hosting
     ".cargo.run",
     ".pantheonsite.io",
     ".surge.sh",
-    ".bitbucket.io",
-    ".azurecontainer.io",
-    ".cloudfront.net", // only if no default cert / NX
+    // Modern PaaS (high-frequency takeover targets)
+    ".netlify.app",
+    ".netlify.com",
+    ".vercel.app",
+    ".vercel.com",
+    ".fly.dev",
+    ".render.com",
+    ".railway.app",
+    ".onrender.com",
+    ".adaptable.app",
+    // Website builders
+    ".webflow.io",
+    ".squarespace.com",
+    ".wixsite.com",
+    ".strikingly.com",
+    ".pagecloud.com",
+    // Docs / dev tools
+    ".readthedocs.io",
+    ".gitbook.io",
+    // E-commerce
+    ".myshopify.com",
+    ".bigcartel.com",
+    // Comms / CRM
+    ".freshdesk.com",
+    ".desk.com",
+    ".uservoice.com",
+    ".intercom.io",
 ];
 
-/// S3 ListBucketResult and Azure EnumerationResults indicate public directory listing.
+/// S3 / GCS / Azure markers indicating public directory listing or direct access.
 const LIST_BUCKET_MARKERS: &[&str] = &[
+    // AWS S3
     "ListBucketResult",
+    "<Contents>",
+    // Azure Blob
     "ListBlobResult",
     "EnumerationResults",
-    "<Contents>",
     "<Blob>",
+    // Google Cloud Storage
+    "storage#objects",
+    "storage#buckets",
+    "\"kind\": \"storage#",
+    // Generic XML listing
+    "<Key>",
+    "<Name>",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -117,19 +163,46 @@ fn is_provider_error_page(body: &str, status: u16) -> bool {
     }
     let body_lower = body.to_lowercase();
     let error_phrases = [
+        // AWS S3
         "no such bucket",
         "the specified bucket does not exist",
+        "nosuchbucket",
+        // GitHub Pages
         "there isn't a github pages site here",
+        "404 | github pages",
+        // Heroku
         "no such app",
         "heroku | no such app",
+        "no app configured at that hostname",
+        // Azure
         "the requested url was not found",
         "azure web app",
         "404 - file or directory not found",
+        "web app not found",
+        // Netlify
+        "not found - request id",
+        "site not found",
+        // Vercel
+        "the deployment could not be found",
+        "this deployment does not exist",
+        "404: this page could not be found",
+        // Fly.dev
+        "fly.io - 404",
+        // Render
+        "service not found",
+        // Fastly / CDN
         "you're almost done",
         "domain not configured",
         "this site is temporarily unavailable",
+        // Pantheon
+        "404 error unknown site",
+        // Zendesk
+        "help center closed",
+        // Generic
         "repository not found",
         "sorry, this shop is currently unavailable",
+        "project not found",
+        "this page is no longer active",
     ];
     error_phrases.iter().any(|p| body_lower.contains(p))
 }
