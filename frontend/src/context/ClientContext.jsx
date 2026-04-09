@@ -3,7 +3,7 @@ import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
 
 const defaultConfig = {
-  enabled_engines: ['osint', 'asm', 'supply_chain', 'bola_idor', 'llm_path_fuzz', 'semantic_ai_fuzz', 'microsecond_timing', 'ai_adversarial_redteam'],
+  enabled_engines: ['osint', 'asm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
   roe_mode: 'safe_proofs',
   stealth_level: 50,
   auto_harvest: true,

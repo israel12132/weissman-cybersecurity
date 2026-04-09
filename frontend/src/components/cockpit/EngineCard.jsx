@@ -5,6 +5,7 @@ import { useTelemetry } from '../../context/TelemetryContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { apiFetch, apiEventSourceUrl } from '../../lib/apiBase'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
+import { ENGINES_BY_ID } from '../../lib/enginesRegistry'
 
 const MAX_TERMINAL_LINES = 80
 
@@ -28,7 +29,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
   const terminalRef = useRef(null)
   const { selectedClientId, selectedClient } = useClient()
   const { addToast, progressByEngine, addProgress } = useTelemetry()
-  const { commandConfirmed, commandRefused } = useWarRoom()
+  const { commandConfirmed } = useWarRoom()
   const progress = progressByEngine ?? {}
   const showConfirmed = commandConfirmed?.source === 'engine' && commandConfirmed?.meta === showCommandConfirmed
 
@@ -133,15 +134,18 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     else if (globalLines.length > 0) base = globalLines.join('\n')
     else base = enabled ? '> System idle...' : '> Engine offline'
     if (showConfirmed) base += '\n> Command Confirmed'
-    if (commandRefused) base += '\n> COMMAND REFUSED'
     return base
   })()
+
+  // MITRE badge from engine registry
+  const registryEntry = ENGINES_BY_ID[engineId]
+  const mitreId = registryEntry?.mitre ?? null
 
   return (
     <div
       className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_30px_rgba(0,0,0,0.25)]"
     >
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold text-white truncate">{label}</span>
           <span
@@ -192,6 +196,15 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
         </div>
       </div>
 
+      {/* MITRE badge */}
+      {mitreId && (
+        <div className="mb-2">
+          <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 border border-white/10 text-white/40 tracking-wider">
+            {mitreId}
+          </span>
+        </div>
+      )}
+
       <div
         ref={terminalRef}
         className="relative rounded-xl bg-black/80 shadow-inner border border-white/5 p-3 min-h-[72px] font-mono text-[11px] leading-relaxed overflow-auto"
@@ -213,18 +226,6 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
               style={{ textShadow: '0 0 8px rgba(34,211,238,0.8)' }}
             >
               Command Confirmed
-            </motion.div>
-          )}
-          {commandRefused && (
-            <motion.div
-              initial={{ opacity: 0, x: -2 }}
-              animate={{ opacity: [1, 0.5, 1], x: [0, 2, -2, 0] }}
-              exit={{ opacity: 0 }}
-              transition={{ repeat: 3, duration: 0.12 }}
-              className="absolute bottom-2 right-2 text-[10px] font-mono font-bold text-red-400"
-              style={{ textShadow: '0 0 6px rgba(239,68,68,0.9)' }}
-            >
-              COMMAND REFUSED
             </motion.div>
           )}
         </AnimatePresence>

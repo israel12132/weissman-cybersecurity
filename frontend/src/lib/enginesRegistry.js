@@ -1,0 +1,540 @@
+/**
+ * Master registry of all 52 attack engines.
+ *
+ * Each engine entry:
+ *   id           — backend engine identifier (used in API calls)
+ *   label        — human-readable display name
+ *   group        — one of ENGINE_GROUPS keys
+ *   mitre        — primary MITRE ATT&CK technique ID
+ *   description  — one-line description shown on engine card
+ *   requiresTarget — whether a domain/URL is required to run this engine
+ */
+
+export const ENGINE_GROUP_DEFS = [
+  { id: 'recon',        label: 'Recon & OSINT',       color: '#06b6d4' },
+  { id: 'web',          label: 'Web / API',            color: '#8b5cf6' },
+  { id: 'ai',           label: 'AI / LLM',             color: '#ec4899' },
+  { id: 'cloud',        label: 'Cloud / Infra',        color: '#3b82f6' },
+  { id: 'ot',           label: 'OT / ICS / IoT',       color: '#f59e0b' },
+  { id: 'stealth',      label: 'Stealth / Evasion',    color: '#6366f1' },
+  { id: 'crypto',       label: 'Crypto / Identity',    color: '#10b981' },
+  { id: 'network',      label: 'Network / Protocol',   color: '#f97316' },
+  { id: 'supply_chain', label: 'Supply Chain',         color: '#84cc16' },
+  { id: 'apt',          label: 'APT / Top-Tier',       color: '#ef4444' },
+]
+
+/** Flat map of groupId → group definition for quick lookup */
+export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
+
+/** All 52 engines in registry order */
+export const ENGINES_REGISTRY = [
+  // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
+  {
+    id: 'osint',
+    label: 'OSINT',
+    group: 'recon',
+    mitre: 'T1589',
+    description: 'Open-source intelligence gathering across all public data sources',
+    requiresTarget: true,
+  },
+  {
+    id: 'asm',
+    label: 'ASM',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'Attack Surface Management — enumerate all internet-exposed assets',
+    requiresTarget: true,
+  },
+  {
+    id: 'leak_hunter',
+    label: 'Leak Hunter',
+    group: 'recon',
+    mitre: 'T1530',
+    description: 'Dark web & paste-site credential and data leak detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'discovery_engine',
+    label: 'Discovery Engine',
+    group: 'recon',
+    mitre: 'T1046',
+    description: 'Automated service and endpoint discovery via passive and active probing',
+    requiresTarget: true,
+  },
+  {
+    id: 'recon',
+    label: 'Deep Recon',
+    group: 'recon',
+    mitre: 'T1592',
+    description: 'Comprehensive host, domain, WHOIS, and certificate reconnaissance',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 2: Web / API ───────────────────────────────────────────────────────
+  {
+    id: 'bola_idor',
+    label: 'BOLA / IDOR',
+    group: 'web',
+    mitre: 'T1548',
+    description: 'Broken Object-Level Authorization and Insecure Direct Object Reference attacks',
+    requiresTarget: true,
+  },
+  {
+    id: 'graphql_attack',
+    label: 'GraphQL Attack',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Introspection abuse, query depth-limit bypass, batching amplification',
+    requiresTarget: true,
+  },
+  {
+    id: 'jwt_attack',
+    label: 'JWT Attack',
+    group: 'web',
+    mitre: 'T1550.001',
+    description: 'alg:none bypass, key confusion, weak-secret brute-force, header injection',
+    requiresTarget: true,
+  },
+  {
+    id: 'oauth_oidc',
+    label: 'OAuth / OIDC',
+    group: 'web',
+    mitre: 'T1550.001',
+    description: 'Authorization code flow hijacking, PKCE bypass, open redirect abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'http_smuggling',
+    label: 'HTTP Smuggling',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'CL.TE / TE.CL request smuggling, desync attacks, cache poisoning chains',
+    requiresTarget: true,
+  },
+  {
+    id: 'prototype_pollution',
+    label: 'Prototype Pollution',
+    group: 'web',
+    mitre: 'T1059.007',
+    description: 'Server-side prototype pollution via JSON merge, query params, body keys',
+    requiresTarget: true,
+  },
+  {
+    id: 'ssrf_advanced',
+    label: 'SSRF Advanced',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Multi-hop SSRF, cloud metadata exfil, DNS rebinding, open redirect chains',
+    requiresTarget: true,
+  },
+  {
+    id: 'xxe',
+    label: 'XXE',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'XML External Entity injection via DTD, parameter entities, out-of-band channels',
+    requiresTarget: true,
+  },
+  {
+    id: 'ssti',
+    label: 'SSTI',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Server-Side Template Injection across Jinja2, Twig, Freemarker, Handlebars',
+    requiresTarget: true,
+  },
+  {
+    id: 'file_upload',
+    label: 'File Upload',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Polyglot bypass, extension confusion, MIME-type mismatch, path traversal upload',
+    requiresTarget: true,
+  },
+  {
+    id: 'websocket_attack',
+    label: 'WebSocket Attack',
+    group: 'web',
+    mitre: 'T1071.001',
+    description: 'Origin spoofing, WS injection, race conditions, hijacking via CSRF',
+    requiresTarget: true,
+  },
+  {
+    id: 'cache_poisoning',
+    label: 'Cache Poisoning',
+    group: 'web',
+    mitre: 'T1557',
+    description: 'Web cache deception, unkeyed header poisoning, CDN edge cache manipulation',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 3: AI / LLM ────────────────────────────────────────────────────────
+  {
+    id: 'llm_path_fuzz',
+    label: 'LLM Path Fuzz',
+    group: 'ai',
+    mitre: 'T1190',
+    description: 'LLM-generated endpoint path fuzzing tailored to detected tech stack',
+    requiresTarget: true,
+  },
+  {
+    id: 'semantic_ai_fuzz',
+    label: 'Semantic AI Fuzz',
+    group: 'ai',
+    mitre: 'T1059',
+    description: 'Semantically-aware fuzzing using language models to infer application logic',
+    requiresTarget: true,
+  },
+  {
+    id: 'ai_adversarial_redteam',
+    label: 'AI Adversarial Red Team',
+    group: 'ai',
+    mitre: 'T1059',
+    description: 'Adversarial prompt injection, jailbreak, and model output manipulation',
+    requiresTarget: true,
+  },
+  {
+    id: 'llm_redteam',
+    label: 'LLM Red Team',
+    group: 'ai',
+    mitre: 'T1059',
+    description: 'Structured LLM red-teaming: role confusion, data leakage, context overflow',
+    requiresTarget: true,
+  },
+  {
+    id: 'adversarial_ml',
+    label: 'Adversarial ML',
+    group: 'ai',
+    mitre: 'T1562',
+    description: 'Evasion attacks against ML-based WAF, IDS, and anomaly detection models',
+    requiresTarget: true,
+  },
+  {
+    id: 'autonomous_pentest',
+    label: 'Autonomous Pentest',
+    group: 'ai',
+    mitre: 'T1595',
+    description: 'Fully autonomous multi-step penetration test orchestrated by AI planner',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 4: Cloud / Infra ───────────────────────────────────────────────────
+  {
+    id: 'aws_attack',
+    label: 'AWS Attack',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'IAM privilege escalation, S3 bucket exposure, Lambda event injection',
+    requiresTarget: false,
+  },
+  {
+    id: 'azure_attack',
+    label: 'Azure Attack',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'Azure AD token abuse, Blob SAS exposure, Function App command injection',
+    requiresTarget: false,
+  },
+  {
+    id: 'gcp_attack',
+    label: 'GCP Attack',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'GCP service account key exposure, Cloud Run abuse, IAM over-permission scan',
+    requiresTarget: false,
+  },
+  {
+    id: 'k8s_container',
+    label: 'K8s Container',
+    group: 'cloud',
+    mitre: 'T1610',
+    description: 'Kubernetes RBAC misconfig, privileged pod escape, API server exposure',
+    requiresTarget: false,
+  },
+  {
+    id: 'iac_misconfig',
+    label: 'IaC Misconfig',
+    group: 'cloud',
+    mitre: 'T1059',
+    description: 'Terraform, CloudFormation, Pulumi misconfiguration and drift detection',
+    requiresTarget: false,
+  },
+  {
+    id: 'serverless_attack',
+    label: 'Serverless Attack',
+    group: 'cloud',
+    mitre: 'T1648',
+    description: 'Serverless event injection, function chaining, cold-start timing attacks',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 5: OT / ICS / IoT ──────────────────────────────────────────────────
+  {
+    id: 'scada_ics',
+    label: 'SCADA / ICS',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Modbus, DNP3, IEC 61850 protocol fuzzing and unauthorized command detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'iot_firmware',
+    label: 'IoT Firmware',
+    group: 'ot',
+    mitre: 'T1542',
+    description: 'Firmware extraction, hardcoded credential detection, update stream hijacking',
+    requiresTarget: true,
+  },
+  {
+    id: 'ble_rf',
+    label: 'BLE / RF',
+    group: 'ot',
+    mitre: 'T1011',
+    description: 'Bluetooth LE pairing bypass, RF replay attacks, spectrum analysis',
+    requiresTarget: false,
+  },
+
+  // ── GROUP 6: Stealth / Evasion ────────────────────────────────────────────────
+  {
+    id: 'edr_evasion',
+    label: 'EDR Evasion',
+    group: 'stealth',
+    mitre: 'T1562.001',
+    description: 'Endpoint detection bypass via process hollowing, AMSI patching, syscall proxying',
+    requiresTarget: false,
+  },
+  {
+    id: 'waf_bypass',
+    label: 'WAF Bypass',
+    group: 'stealth',
+    mitre: 'T1027',
+    description: 'WAF rule evasion via encoding, chunking, Unicode normalization, payload mutation',
+    requiresTarget: true,
+  },
+  {
+    id: 'timing_sidechannel',
+    label: 'Timing Side-Channel',
+    group: 'stealth',
+    mitre: 'T1600',
+    description: 'Microsecond-precision timing attacks against auth, crypto, and rate limiters',
+    requiresTarget: true,
+  },
+  {
+    id: 'antiforensics',
+    label: 'Anti-Forensics',
+    group: 'stealth',
+    mitre: 'T1070',
+    description: 'Log tampering, timestomping, artifact deletion, and evidence destruction sim',
+    requiresTarget: false,
+  },
+  {
+    id: 'stealth_engine',
+    label: 'Stealth Engine',
+    group: 'stealth',
+    mitre: 'T1027',
+    description: 'Covert channel operations: DNS tunneling, ICMP exfil, low-and-slow scanning',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 7: Crypto / Identity ────────────────────────────────────────────────
+  {
+    id: 'pki_tls',
+    label: 'PKI / TLS',
+    group: 'crypto',
+    mitre: 'T1557.002',
+    description: 'Certificate transparency abuse, weak cipher enumeration, TLS downgrade',
+    requiresTarget: true,
+  },
+  {
+    id: 'pqc_scanner',
+    label: 'PQC Scanner',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'Post-quantum readiness: RSA key size, algorithm inventory, NIST PQC gap',
+    requiresTarget: true,
+  },
+  {
+    id: 'password_spray',
+    label: 'Password Spray',
+    group: 'crypto',
+    mitre: 'T1110.003',
+    description: 'Low-rate distributed password spraying against SSO, OWA, ADFS, M365',
+    requiresTarget: true,
+  },
+  {
+    id: 'kerberoasting',
+    label: 'Kerberoasting',
+    group: 'crypto',
+    mitre: 'T1558.003',
+    description: 'Service principal name enumeration and TGS ticket offline cracking',
+    requiresTarget: true,
+  },
+  {
+    id: 'saml_attack',
+    label: 'SAML Attack',
+    group: 'crypto',
+    mitre: 'T1550.004',
+    description: 'XML Signature Wrapping, metadata exposure, SHA-1 weak signature detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'crypto_engine',
+    label: 'Crypto Engine',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'Cipher suite analysis, padding oracle, ECB mode detection, entropy audit',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 8: Network / Protocol ───────────────────────────────────────────────
+  {
+    id: 'bgp_dns_hijacking',
+    label: 'BGP / DNS Hijacking',
+    group: 'network',
+    mitre: 'T1584.005',
+    description: 'DNS resolver discrepancy (DoH vs DoG), BGP prefix hijack via RIPE API',
+    requiresTarget: true,
+  },
+  {
+    id: 'ipv6_attack',
+    label: 'IPv6 Attack',
+    group: 'network',
+    mitre: 'T1018',
+    description: 'AAAA record enumeration, link-local leak detection, IPv6 RA flood surface',
+    requiresTarget: true,
+  },
+  {
+    id: 'mtls_grpc',
+    label: 'mTLS / gRPC',
+    group: 'network',
+    mitre: 'T1552',
+    description: 'gRPC reflection abuse, missing client-cert enforcement, mTLS cert validation',
+    requiresTarget: true,
+  },
+  {
+    id: 'smb_netbios',
+    label: 'SMB / NetBIOS',
+    group: 'network',
+    mitre: 'T1021.002',
+    description: 'TCP port 445/139/137 exposure, EternalBlue/SMBGhost CVE surface mapping',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 9: Supply Chain ─────────────────────────────────────────────────────
+  {
+    id: 'supply_chain',
+    label: 'Supply Chain',
+    group: 'supply_chain',
+    mitre: 'T1195',
+    description: 'Third-party dependency and vendor supply chain compromise detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'cicd_pipeline',
+    label: 'CI/CD Pipeline',
+    group: 'supply_chain',
+    mitre: 'T1195.002',
+    description: 'Unauthenticated ArgoCD, Jenkins, GitLab CI, Azure DevOps API exposure',
+    requiresTarget: true,
+  },
+  {
+    id: 'container_registry',
+    label: 'Container Registry',
+    group: 'supply_chain',
+    mitre: 'T1525',
+    description: 'DockerHub org exposure, ECR public gallery, /v2/_catalog unauthorized listing',
+    requiresTarget: true,
+  },
+  {
+    id: 'sbom_analyzer',
+    label: 'SBOM Analyzer',
+    group: 'supply_chain',
+    mitre: 'T1195.001',
+    description: 'CycloneDX/SPDX/lockfile exposure scan with inline CVE pattern matching',
+    requiresTarget: true,
+  },
+  {
+    id: 'typosquatting_monitor',
+    label: 'Typosquatting Monitor',
+    group: 'supply_chain',
+    mitre: 'T1195.001',
+    description: 'Levenshtein typo generation and NPM/PyPI package impersonation detection',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 10: APT / Top-Tier ─────────────────────────────────────────────────
+  {
+    id: 'kill_chain',
+    label: 'Kill Chain',
+    group: 'apt',
+    mitre: 'T1210',
+    description: 'Full Cyber Kill Chain execution across Recon → Exfiltration phases',
+    requiresTarget: true,
+  },
+  {
+    id: 'oast_oob',
+    label: 'OAST / OOB',
+    group: 'apt',
+    mitre: 'T1071',
+    description: 'Out-of-band callbacks via Log4Shell JNDI, blind XSS, XXE, SSRF canaries',
+    requiresTarget: true,
+  },
+  {
+    id: 'deception_honeypot',
+    label: 'Deception Honeypot',
+    group: 'apt',
+    mitre: 'T1219',
+    description: 'Honeypot detection heuristics, canary token exposure, fake asset fingerprint',
+    requiresTarget: true,
+  },
+  {
+    id: 'digital_twin',
+    label: 'Digital Twin',
+    group: 'apt',
+    mitre: 'T1588',
+    description: 'Environment simulation with XSS, SQLi, MITM, CORS attack path modeling',
+    requiresTarget: true,
+  },
+  {
+    id: 'zero_day_prediction',
+    label: 'Zero-Day Prediction',
+    group: 'apt',
+    mitre: 'T1212',
+    description: 'Component fingerprint + historical CVE frequency + live NVD feed analysis',
+    requiresTarget: false,
+  },
+  {
+    id: 'threat_emulation',
+    label: 'APT Threat Emulation',
+    group: 'apt',
+    mitre: 'T1583',
+    description: 'Nation-state TTP emulation: Lazarus, APT28/29/41, Sandworm, Kimsuky, Equation',
+    requiresTarget: true,
+  },
+  {
+    id: 'poe_synthesis',
+    label: 'PoE Synthesis',
+    group: 'apt',
+    mitre: 'T1588',
+    description: 'Proof-of-Exploitation synthesis — AI-generated PoC from raw findings',
+    requiresTarget: true,
+  },
+]
+
+/** Engines that do not need a URL target to run (tenant/global scope) */
+export const TARGETLESS_ENGINE_IDS = new Set(
+  ENGINES_REGISTRY.filter((e) => !e.requiresTarget).map((e) => e.id),
+)
+
+/** Get a single engine by ID */
+export function getEngine(engineId) {
+  return ENGINES_REGISTRY.find((e) => e.id === engineId) ?? null
+}
+
+/** Get all engines in a given group */
+export function getEnginesByGroup(groupId) {
+  return ENGINES_REGISTRY.filter((e) => e.group === groupId)
+}
+
+/** Quick-lookup map: engineId → engine */
+export const ENGINES_BY_ID = Object.fromEntries(ENGINES_REGISTRY.map((e) => [e.id, e]))

@@ -147,6 +147,38 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         </div>
       </div>
 
+      {/* Quick navigation to new pages */}
+      <div className="px-3 py-3 border-b border-white/10 space-y-1">
+        <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-1 mb-2 font-mono">Quick Nav</div>
+        <Link
+          to="/engines"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
+        >
+          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 52)
+        </Link>
+        <Link to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
+          <span>◈</span> APT Emulation
+        </Link>
+        <Link to="/cloud" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-blue-400/70 hover:bg-blue-950/20 hover:text-blue-300 transition-colors">
+          <span>☁</span> Cloud Tower
+        </Link>
+        <Link to="/supply-chain" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-lime-400/70 hover:bg-lime-950/20 hover:text-lime-300 transition-colors">
+          <span>⛓</span> Supply Chain
+        </Link>
+        <Link to="/network" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-orange-400/70 hover:bg-orange-950/20 hover:text-orange-300 transition-colors">
+          <span>⛢</span> Network Intel
+        </Link>
+        <Link to="/pqc-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/70 hover:bg-emerald-950/20 hover:text-emerald-300 transition-colors">
+          <span>🔐</span> PQC Radar
+        </Link>
+        <Link to="/oast" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-[#22d3ee]/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
+          <span>⊂</span> OAST / OOB
+        </Link>
+        <Link to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
+          <span>⟐</span> Digital Twin
+        </Link>
+      </div>
+
       {/* Body: Client list */}
       <div className="flex-1 overflow-y-auto py-2 min-h-0">
         <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-4 mb-2 font-mono">

@@ -140,9 +140,10 @@ export default function App() {
             if (to) {
               const arcId = `arc-${eventId}`
               setRealtimeArcs((prev) => [...prev, { id: arcId, from, to, label: message.slice(0, 12), severity: severity === 'critical' ? 'critical' : 'high', eventId }])
-              arcTimeoutsRef.current.push(setTimeout(() => {
+              const arcTimer = setTimeout(() => {
                 setRealtimeArcs((a) => a.filter((x) => x.id !== arcId))
-              }, ARC_MAX_AGE_MS))
+              }, ARC_MAX_AGE_MS)
+              arcTimeoutsRef.current = [...arcTimeoutsRef.current.slice(-100), arcTimer]
               if (kind === 'emergency_alert') {
                 const pulseId = `pulse-${eventId}`
                 setRealtimePulses((prev) => [...prev, { id: pulseId, lat: to.lat, lon: to.lon }])
@@ -191,7 +192,7 @@ export default function App() {
 
   useEffect(() => {
     if (connectionStatus !== 'online') return
-    const iv = setInterval(() => setNow(new Date()), 120)
+    const iv = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(iv)
   }, [connectionStatus])
 
@@ -201,13 +202,19 @@ export default function App() {
       <EmergencyAlert message={emergencyMessage} onComplete={() => setEmergencyMessage('')} />
 
       <header className="soc-header">
-        <nav className="flex gap-6 text-sm font-mono">
+        <nav className="flex gap-6 text-sm font-mono flex-wrap">
           <a href="/" className="nav-link">Dashboard</a>
           <a href="/clients" className="nav-link">Clients</a>
-          <a href="/reports" className="nav-link">Reports</a>
-          <a href="/findings" className="nav-link">Findings</a>
+          <a href="/command-center/engines" className="nav-link font-semibold text-cyan-400/90 hover:text-cyan-300">Engine Matrix</a>
+          <a href="/command-center/threat-emulation" className="nav-link">APT Emulation</a>
+          <a href="/command-center/cloud" className="nav-link">Cloud</a>
+          <a href="/command-center/supply-chain" className="nav-link">Supply Chain</a>
+          <a href="/command-center/network" className="nav-link">Network</a>
+          <a href="/command-center/pqc-radar" className="nav-link">PQC Radar</a>
+          <a href="/command-center/oast" className="nav-link">OAST</a>
+          <a href="/command-center/digital-twin" className="nav-link">Digital Twin</a>
+          <a href="/command-center/zero-day-radar" className="nav-link">Zero-Day</a>
           <a href="/command-center/system-core" className="nav-link">System Core</a>
-          <a href="/command-center/zero-day-radar" className="nav-link">Zero-Day Radar</a>
           <a href="/api/export/findings" className="nav-link" download>Export CSV</a>
           <a href="/logout" className="nav-link text-red-400/90 hover:text-red-400">Logout</a>
         </nav>

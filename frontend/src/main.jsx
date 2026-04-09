@@ -55,6 +55,16 @@ import CICDThreatMatrix from './components/CICDThreatMatrix'
 import MemoryForensicsLab from './components/MemoryForensicsLab'
 import AttackChainView from './components/cockpit/AttackChainView'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
+// ── New enterprise pages ──────────────────────────────────────────────────────
+import EngineMatrix from './pages/EngineMatrix'
+import EngineDetail from './pages/EngineDetail'
+import ThreatEmulation from './pages/ThreatEmulation'
+import SupplyChainHub from './pages/SupplyChainHub'
+import NetworkIntelligence from './pages/NetworkIntelligence'
+import CloudControlTower from './pages/CloudControlTower'
+import PqcRadar from './pages/PqcRadar'
+import OastDashboard from './pages/OastDashboard'
+import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import './index.css'
 
 function ProtectedOutlet() {
@@ -95,6 +105,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="cicd-matrix/:clientId" element={<CICDThreatMatrix />} />
             <Route path="memory-lab/:clientId" element={<MemoryForensicsLab />} />
             <Route path="attack-chain/:clientId" element={<AttackChainView />} />
+            {/* ── Enterprise C2 pages ─────────────────────────────────────────── */}
+            <Route path="engines" element={<EngineMatrix />} />
+            <Route path="engines/:engineId" element={<EngineDetail />} />
+            <Route path="threat-emulation" element={<ThreatEmulation />} />
+            <Route path="supply-chain" element={<SupplyChainHub />} />
+            <Route path="network" element={<NetworkIntelligence />} />
+            <Route path="cloud" element={<CloudControlTower />} />
+            <Route path="pqc-radar" element={<PqcRadar />} />
+            <Route path="oast" element={<OastDashboard />} />
+            <Route path="digital-twin" element={<DigitalTwinSimulator />} />
+            <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
+            {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

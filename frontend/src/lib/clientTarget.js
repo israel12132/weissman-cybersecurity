@@ -20,5 +20,18 @@ export function clientPrimaryTargetUrl(client) {
 
 /** Engines that do not need a URL target (tenant/global job). */
 export function engineRunsWithoutTarget(engineId) {
-  return engineId === 'zero_day_radar'
+  // Kept for backward compat; new code should import TARGETLESS_ENGINE_IDS from enginesRegistry.js
+  const TARGETLESS = new Set([
+    'zero_day_radar',
+    'zero_day_prediction',
+    'aws_attack',
+    'azure_attack',
+    'gcp_attack',
+    'k8s_container',
+    'iac_misconfig',
+    'ble_rf',
+    'edr_evasion',
+    'antiforensics',
+  ])
+  return TARGETLESS.has(engineId)
 }
