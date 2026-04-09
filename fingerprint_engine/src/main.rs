@@ -166,6 +166,106 @@ fn main() {
         fingerprint_engine::serverless_attack_engine::run_serverless_attack(target).await;
         return;
     }
+    if cmd == "scada_ics" {
+        fingerprint_engine::scada_ics_engine::run_scada_ics(target).await;
+        return;
+    }
+    if cmd == "iot_firmware" {
+        fingerprint_engine::iot_firmware_engine::run_iot_firmware(target).await;
+        return;
+    }
+    if cmd == "ble_rf" {
+        fingerprint_engine::ble_rf_engine::run_ble_rf(target).await;
+        return;
+    }
+    if cmd == "edr_evasion" {
+        fingerprint_engine::edr_evasion_engine::run_edr_evasion(target).await;
+        return;
+    }
+    if cmd == "waf_bypass" {
+        fingerprint_engine::waf_bypass_engine::run_waf_bypass(target).await;
+        return;
+    }
+    if cmd == "timing_sidechannel" {
+        fingerprint_engine::timing_sidechannel_engine::run_timing_sidechannel(target).await;
+        return;
+    }
+    if cmd == "antiforensics" {
+        fingerprint_engine::antiforensics_engine::run_antiforensics(target).await;
+        return;
+    }
+    if cmd == "pki_tls" {
+        fingerprint_engine::pki_tls_engine::run_pki_tls(target).await;
+        return;
+    }
+    if cmd == "password_spray" {
+        fingerprint_engine::password_spray_engine::run_password_spray(target).await;
+        return;
+    }
+    if cmd == "kerberoasting" {
+        fingerprint_engine::kerberoasting_engine::run_kerberoasting(target).await;
+        return;
+    }
+    if cmd == "saml_attack" {
+        fingerprint_engine::saml_attack_engine::run_saml_attack(target).await;
+        return;
+    }
+    if cmd == "pqc_scanner" {
+        fingerprint_engine::pqc_scanner_engine::run_pqc_scanner(target).await;
+        return;
+    }
+    if cmd == "bgp_dns_hijacking" {
+        fingerprint_engine::bgp_dns_hijacking_engine::run_bgp_dns_hijacking(target).await;
+        return;
+    }
+    if cmd == "ipv6_attack" {
+        fingerprint_engine::ipv6_attack_engine::run_ipv6_attack(target).await;
+        return;
+    }
+    if cmd == "mtls_grpc" {
+        fingerprint_engine::mtls_grpc_engine::run_mtls_grpc(target).await;
+        return;
+    }
+    if cmd == "smb_netbios" {
+        fingerprint_engine::smb_netbios_engine::run_smb_netbios(target).await;
+        return;
+    }
+    if cmd == "cicd_pipeline" {
+        fingerprint_engine::cicd_pipeline_engine::run_cicd_pipeline(target).await;
+        return;
+    }
+    if cmd == "container_registry" {
+        fingerprint_engine::container_registry_engine::run_container_registry(target).await;
+        return;
+    }
+    if cmd == "sbom_analyzer" {
+        fingerprint_engine::sbom_analyzer_engine::run_sbom_analyzer(target).await;
+        return;
+    }
+    if cmd == "typosquatting_monitor" {
+        fingerprint_engine::typosquatting_monitor_engine::run_typosquatting_monitor(target).await;
+        return;
+    }
+    if cmd == "oast_oob" {
+        fingerprint_engine::oast_oob_engine::run_oast_oob(target).await;
+        return;
+    }
+    if cmd == "deception_honeypot" {
+        fingerprint_engine::deception_honeypot_engine::run_deception_honeypot(target).await;
+        return;
+    }
+    if cmd == "digital_twin" {
+        fingerprint_engine::digital_twin_engine::run_digital_twin(target).await;
+        return;
+    }
+    if cmd == "zero_day_prediction" {
+        fingerprint_engine::zero_day_prediction_engine::run_zero_day_prediction(target).await;
+        return;
+    }
+    if cmd == "threat_emulation" {
+        fingerprint_engine::threat_emulation_engine::run_threat_emulation(target).await;
+        return;
+    }
 
     if args.first().map(|s| s.as_str()) == Some("fuzz") {
         let _ = tracing_subscriber::fmt::try_init();
