@@ -23,6 +23,8 @@ export default defineConfig({
           'vendor-xyflow': ['@xyflow/react'],
           // Icons
           'vendor-lucide': ['lucide-react'],
+          // Table
+          'vendor-table': ['@tanstack/react-table'],
         },
       },
     },
