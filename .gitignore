@@ -13,6 +13,7 @@ logs/
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
+frontend/dist/
 target/
 node_modules/
 result/
