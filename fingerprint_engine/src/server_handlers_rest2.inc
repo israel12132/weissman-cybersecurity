@@ -306,11 +306,14 @@ async fn api_findings_update_status(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
     };
+    // Explicitly scope update to current tenant to defend against any RLS gap
     let affected = sqlx::query(
-        "UPDATE vulnerabilities SET status = $1, updated_at = now(), status_changed_at = now() WHERE id = $2",
+        "UPDATE vulnerabilities SET status = $1, updated_at = now(), status_changed_at = now() \
+         WHERE id = $2 AND tenant_id = $3",
     )
     .bind(&new_status)
     .bind(id)
+    .bind(auth.tenant_id)
     .execute(&mut *tx)
     .await;
     let _ = tx.commit().await;
@@ -362,16 +365,20 @@ async fn api_findings_export_csv(
             .unwrap_or_default()
             .replace('"', "\"\"");
         let desc = r.try_get::<String, _>("description").unwrap_or_default().replace('"', "\"\"");
+        // All fields quoted to handle commas and special characters safely
         csv.push_str(&format!(
-            "VLN-{},\"{}\",\"{}\",{},{},{},{},{},\"{}\",\"{}\"\n",
+            "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
             raw_id, finding_id, title, sev, src, st, client, verified, disc, desc
         ));
     }
+    let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let filename = format!("Weissman_findings_{}.csv", now);
     let mut res = Response::new(Body::from(csv));
     res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/csv; charset=utf-8"));
     res.headers_mut().insert(
         CONTENT_DISPOSITION,
-        HeaderValue::from_static("attachment; filename=\"Weissman_findings.csv\""),
+        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
+            .unwrap_or(HeaderValue::from_static("attachment; filename=\"Weissman_findings.csv\"")),
     );
     res
 }

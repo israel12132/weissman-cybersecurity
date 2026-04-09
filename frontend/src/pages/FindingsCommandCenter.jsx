@@ -527,6 +527,7 @@ export default function FindingsCommandCenter() {
   // Status update handler — updates local state + calls API
   const handleStatusUpdate = useCallback((rawId, newStatus) => {
     if (!rawId) return
+    const matchesId = (f) => Number(f.raw_id) === Number(rawId)
     apiFetch(`/api/findings/${rawId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -536,16 +537,10 @@ export default function FindingsCommandCenter() {
       .then((d) => {
         if (d.ok) {
           setRawFindings((prev) =>
-            prev.map((f) =>
-              f.raw_id === rawId || Number(f.raw_id) === Number(rawId)
-                ? { ...f, status: d.status }
-                : f,
-            ),
+            prev.map((f) => (matchesId(f) ? { ...f, status: d.status } : f)),
           )
           setSelectedFinding((prev) =>
-            prev && (prev.raw_id === rawId || Number(prev.raw_id) === Number(rawId))
-              ? { ...prev, status: d.status }
-              : prev,
+            prev && matchesId(prev) ? { ...prev, status: d.status } : prev,
           )
         }
       })
@@ -557,13 +552,17 @@ export default function FindingsCommandCenter() {
     apiFetch('/api/findings/export/csv')
       .then((r) => {
         if (!r.ok) throw new Error('Export failed')
-        return r.blob()
+        // Use filename from Content-Disposition header when available; fallback to dated name
+        const disposition = r.headers.get('content-disposition') || ''
+        const match = disposition.match(/filename="?([^";\s]+)"?/)
+        const filename = match?.[1] ?? `Weissman_findings_${new Date().toISOString().slice(0, 10)}.csv`
+        return r.blob().then((blob) => ({ blob, filename }))
       })
-      .then((blob) => {
+      .then(({ blob, filename }) => {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `Weissman_findings_${new Date().toISOString().slice(0, 10)}.csv`
+        a.download = filename
         a.click()
         URL.revokeObjectURL(url)
       })
