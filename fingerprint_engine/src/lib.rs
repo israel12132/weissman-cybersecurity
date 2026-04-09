@@ -138,6 +138,16 @@ pub mod ssti_engine;
 pub mod file_upload_engine;
 pub mod websocket_attack_engine;
 pub mod cache_poisoning_engine;
+pub mod adversarial_ml_engine;
+pub mod autonomous_pentest_engine;
+pub mod aws_attack_engine;
+pub mod azure_attack_engine;
+pub mod gcp_attack_engine;
+pub mod iac_misconfig_engine;
+pub mod k8s_container_engine;
+pub mod kill_chain_engine;
+pub mod llm_redteam_engine;
+pub mod serverless_attack_engine;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

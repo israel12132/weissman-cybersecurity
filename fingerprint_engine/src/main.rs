@@ -126,6 +126,46 @@ fn main() {
         fingerprint_engine::cache_poisoning_engine::run_cache_poisoning(target).await;
         return;
     }
+    if cmd == "adversarial_ml" {
+        fingerprint_engine::adversarial_ml_engine::run_adversarial_ml(target).await;
+        return;
+    }
+    if cmd == "autonomous_pentest" {
+        fingerprint_engine::autonomous_pentest_engine::run_autonomous_pentest(target).await;
+        return;
+    }
+    if cmd == "aws_attack" {
+        fingerprint_engine::aws_attack_engine::run_aws_attack(target).await;
+        return;
+    }
+    if cmd == "azure_attack" {
+        fingerprint_engine::azure_attack_engine::run_azure_attack(target).await;
+        return;
+    }
+    if cmd == "gcp_attack" {
+        fingerprint_engine::gcp_attack_engine::run_gcp_attack(target).await;
+        return;
+    }
+    if cmd == "iac_misconfig" {
+        fingerprint_engine::iac_misconfig_engine::run_iac_misconfig(target).await;
+        return;
+    }
+    if cmd == "k8s_container" {
+        fingerprint_engine::k8s_container_engine::run_k8s_container(target).await;
+        return;
+    }
+    if cmd == "kill_chain" {
+        fingerprint_engine::kill_chain_engine::run_kill_chain(target).await;
+        return;
+    }
+    if cmd == "llm_redteam" {
+        fingerprint_engine::llm_redteam_engine::run_llm_redteam(target).await;
+        return;
+    }
+    if cmd == "serverless_attack" {
+        fingerprint_engine::serverless_attack_engine::run_serverless_attack(target).await;
+        return;
+    }
 
     if args.first().map(|s| s.as_str()) == Some("fuzz") {
         let _ = tracing_subscriber::fmt::try_init();
