@@ -214,6 +214,7 @@ export default function App() {
           <a href="/command-center/oast" className="nav-link">OAST</a>
           <a href="/command-center/digital-twin" className="nav-link">Digital Twin</a>
           <a href="/command-center/zero-day-radar" className="nav-link">Zero-Day</a>
+          <a href="/command-center/findings" className="nav-link" style={{ color: '#fbbf24', opacity: 0.9 }}>Findings C2</a>
           <a href="/command-center/system-core" className="nav-link">System Core</a>
           <a href="/api/export/findings" className="nav-link" download>Export CSV</a>
           <a href="/logout" className="nav-link text-red-400/90 hover:text-red-400">Logout</a>

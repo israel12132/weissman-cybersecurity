@@ -102,3 +102,145 @@ body {
 .animate-glitch {
   animation: glitch 0.4s ease-in-out infinite;
 }
+
+/* ────────────────────────────────────────────────────────────────
+   SOC 2100 – Global Intel Map layout (App.jsx / /intel-map route)
+   ──────────────────────────────────────────────────────────────── */
+.soc-2100-root {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #d4d4d8;
+}
+
+.soc-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.12);
+  padding: 0.5rem 1.25rem;
+}
+
+.nav-link {
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  transition: color 0.15s ease;
+}
+.nav-link:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.soc-header-error {
+  background: rgba(127, 29, 29, 0.55);
+  border-top: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 0.7rem;
+  font-family: 'Space Mono', monospace;
+  padding: 0.4rem 1.25rem;
+}
+
+/* Branding HUD banner */
+.soc-branding {
+  position: relative;
+  text-align: center;
+}
+.soc-branding-frame {
+  margin: 0.4rem 1rem 0;
+  padding: 0.6rem 2rem;
+  border: 1px solid rgba(34, 211, 238, 0.13);
+}
+.soc-branding-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: rgba(34, 211, 238, 0.4);
+  border-style: solid;
+}
+.soc-branding-tl { top: 0; left: 0; border-width: 1px 0 0 1px; }
+.soc-branding-tr { top: 0; right: 0; border-width: 1px 1px 0 0; }
+.soc-branding-bl { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
+.soc-branding-br { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+
+.soc-branding-status {
+  position: absolute;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  color: rgba(34, 211, 238, 0.5);
+  letter-spacing: 0.1em;
+}
+.soc-branding-status-tl { top: 4px; left: 1.25rem; }
+.soc-branding-status-tr { top: 4px; right: 1.25rem; }
+
+.soc-title {
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.15em;
+}
+@keyframes soc-shimmer {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+.soc-title-ultimate {
+  font-size: clamp(0.85rem, 1.8vw, 1.3rem);
+  font-weight: 800;
+  background: linear-gradient(90deg, #22d3ee 0%, #818cf8 50%, #22d3ee 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: soc-shimmer 5s linear infinite;
+}
+
+/* Main 3-column grid */
+.soc-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  min-height: 0;
+  overflow: hidden;
+}
+.soc-left,
+.soc-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: hidden;
+}
+.soc-center {
+  position: relative;
+  min-height: 0;
+}
+
+/* Panel base */
+.soc-panel {
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 0.65rem;
+  overflow: hidden;
+}
+.soc-panel-killchain { flex: 1.5; min-height: 0; }
+.soc-panel-hex       { flex: 1;   min-height: 0; }
+.soc-panel-score     { flex: 1;   min-height: 0; }
+.soc-panel-radar     { flex: 1;   min-height: 0; }
+.soc-panel-terminal  { flex: 2;   min-height: 0; overflow: auto; }
+
+@media (max-width: 1200px) {
+  .soc-grid {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .soc-left,
+  .soc-right {
+    display: none;
+  }
+}

@@ -66,6 +66,7 @@ import PqcRadar from './pages/PqcRadar'
 import OastDashboard from './pages/OastDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
+import App from './App'
 import './index.css'
 
 function ProtectedOutlet() {
@@ -118,6 +119,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
+            <Route path="intel-map" element={<App />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
