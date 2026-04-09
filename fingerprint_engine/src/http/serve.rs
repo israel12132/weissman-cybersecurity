@@ -199,6 +199,9 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
     if path == "/api/deception/aws-events" && method == Method::POST {
         return next.run(request).await;
     }
+    if path == "/api/openapi.json" && method == Method::GET {
+        return next.run(request).await;
+    }
     if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
         return next.run(request).await;
     }
@@ -1056,6 +1059,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/ws/command-center", get(ws_command_center))
         .route("/api/dashboard/stats", get(api_dashboard_stats))
         .route("/api/findings", get(api_findings))
+        .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/:id/status", patch(api_findings_update_status))
+        .route("/api/config/public", get(api_config_public))
+        .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
         .route("/api/command-center/ticker", get(api_command_center_ticker))
