@@ -234,6 +234,9 @@ pub async fn run_supply_chain_result(
                          curl -sS -X POST 'https://api.osv.dev/v1/query' -H 'Content-Type: application/json' -d '{}'",
                         pypi_url, osv_esc
                     );
+                    let typosquat = detect_typosquat(&name);
+                    let typosquat_risk = typosquat.is_some();
+                    let severity = if osv.vuln_count > 0 || typosquat_risk { "high" } else { "info" };
                     findings.push(json!({
                         "type": "supply_chain",
                         "package": name,
@@ -242,9 +245,9 @@ pub async fn run_supply_chain_result(
                         "vuln_count": osv.vuln_count,
                         "osv_ids": osv.ids,
                         "osv_summaries": osv.summaries,
-                        "typosquat_risk": detect_typosquat(&name).is_some(),
-                        "typosquat_similar_to": detect_typosquat(&name),
-                        "severity": if osv.vuln_count > 0 || detect_typosquat(&name).is_some() { "high" } else { "info" },
+                        "typosquat_risk": typosquat_risk,
+                        "typosquat_similar_to": typosquat,
+                        "severity": severity,
                         "poc_exploit": poc
                     }));
                 }

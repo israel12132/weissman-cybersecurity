@@ -13,6 +13,7 @@ pub static DANGEROUS_SUFFIXES: &[&str] = &[
     // Null byte / encoding
     "%00",
     "\\x00",
+    "\u{0000}",
     // SQL injection
     "'",
     "\"",
@@ -49,8 +50,6 @@ pub static DANGEROUS_SUFFIXES: &[&str] = &[
     // NoSQL injection
     "{\"$gt\": \"\"}",
     "{\"$where\": \"1==1\"}",
-    // Null byte / encoding
-    "\u{0000}",
     // CRLF injection (header splitting)
     "\r\nX-Injected: weissman",
     "%0d%0aX-Injected:%20weissman",

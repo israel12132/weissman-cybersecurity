@@ -176,7 +176,6 @@ pub const DEFAULT_SUBDOMAINS: &[&str] = &[
     // Misc
     "backup",
     "archive",
-    "assets",
     "crm",
     "erp",
     "hr",
