@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{% if client %}Edit {{ client.name }}{% else %}Add client{% endif %}{% endblock %}
+{% block content %}
+<div class="panel">
+<h1>{% if client %}Edit client{% else %}Add new client{% endif %}</h1>
+<p>Enter client details and approved scope (domains, technologies).</p>
+{% if client %}
+<p>
+    <form method="post" action="/clients/{{ client.id }}/attack" style="display:inline;">
+        <button type="submit" class="btn btn-attack">Run scan on this client</button>
+    </form>
+</p>
+{% endif %}
+
+<form method="post" action="{% if client %}/clients/{{ client.id }}{% else %}/clients{% endif %}" class="form">
+    <label for="name">Client name *</label>
+    <input type="text" id="name" name="name" value="{{ client.name if client else '' }}" required>
+
+    <label for="domains">Domains (one per line or comma-separated)</label>
+    <textarea id="domains" name="domains" rows="4" placeholder="example.com&#10;app.example.com">{% if client %}{{ domains_display|default('') }}{% endif %}</textarea>
+
+    <label for="ip_ranges">IP ranges (optional)</label>
+    <textarea id="ip_ranges" name="ip_ranges" rows="2" placeholder="10.0.0.0/24">{% if client %}{{ ip_ranges_display|default('') }}{% endif %}</textarea>
+
+    <label for="auto_detect_tech_stack">
+        <input type="checkbox" id="auto_detect_tech_stack" name="auto_detect_tech_stack" value="1" {% if not client or (client.auto_detect_tech_stack|default(1)) %}checked{% endif %}>
+        Auto-detect Tech Stack
+    </label>
+    <p class="form-hint">When enabled, the scanner detects software and versions via HTTP headers and metadata. The field below becomes read-only and is populated by the bot.</p>
+    <label for="tech_stack">Tech stack (software/versions for CVE matching)</label>
+    <textarea id="tech_stack" name="tech_stack" rows="4" placeholder="nginx, wordpress, python-3.11" data-auto-readonly="true">{% if client %}{{ tech_stack_display|default('') }}{% endif %}</textarea>
+    <p class="form-hint tech_stack-readonly-hint" id="tech_stack_readonly_hint" style="display:none;">Populated by scanner. Run a scan to refresh.</p>
+
+    <label for="contact_email">Contact email</label>
+    <input type="email" id="contact_email" name="contact_email" value="{{ client.contact_email if client else '' }}">
+
+    <div class="form-actions">
+        <button type="submit">Save</button>
+        <a href="/clients" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+<script>
+(function(){
+    var cb = document.getElementById('auto_detect_tech_stack');
+    var ta = document.getElementById('tech_stack');
+    var hint = document.getElementById('tech_stack_readonly_hint');
+    function toggleTechStack() {
+        var on = cb && cb.checked;
+        if (ta) { ta.readOnly = on; }
+        if (hint) { hint.style.display = on ? 'block' : 'none'; }
+    }
+    if (cb) { cb.addEventListener('change', toggleTechStack); toggleTechStack(); }
+})();
+</script>
+</div>
+{% endblock %}

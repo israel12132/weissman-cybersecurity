@@ -1,0 +1,46 @@
+# Remaining Python utilities (feeds, correlation helpers, etc.). Orchestration and HTTP are Rust-only:
+#   weissman-server  — production API + Command Center
+#   weissman-worker  — background work
+#   fingerprint_engine — CLI engines (no `serve` subcommand)
+#
+# Install: pip install -r requirements.txt
+
+# --- Database & ORM (legacy scripts / tooling) ---
+sqlalchemy
+aiosqlite
+asyncpg
+psycopg2-binary
+alembic
+
+# --- HTTP & networking ---
+requests
+requests[socks]
+aiohttp
+tenacity
+
+# --- Auth & security (bcrypt<5 for passlib) ---
+pyotp
+bcrypt<5.0.0
+passlib[bcrypt]
+itsdangerous
+authlib
+
+# --- Config & env ---
+python-dotenv
+pydantic
+pydantic-settings
+pyyaml
+
+# --- Reporting & PDF ---
+weasyprint
+markdown
+openpyxl
+
+# --- Scheduling (in-process; not Celery) ---
+apscheduler
+
+# --- CLI & logging ---
+rich
+
+# --- Scraping & parsing ---
+beautifulsoup4

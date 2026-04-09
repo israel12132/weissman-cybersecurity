@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Report {{ filename }} - Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+    <p class="page-actions"><a href="/reports#fuzzer" class="btn btn-secondary">← Back to Fuzzer reports</a></p>
+    <h1>{{ filename }}</h1>
+    <div class="report-md">{{ content | e }}</div>
+</div>
+{% endblock %}

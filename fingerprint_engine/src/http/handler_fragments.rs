@@ -1,0 +1,60 @@
+// Route handler implementations split across `.inc` fragments (large blocks).
+// This file is `include!`d from `serve.rs` so all handlers share the same module scope
+// (`AppState`, auth helpers, `crate::` paths). Only the wiring lives here; review the `.inc` files.
+
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_auth.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_sqlx.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_rest.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_rest2.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_rest3.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_rest4.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_phase3.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_phase4.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_phase5.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_phase6.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_phase7.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_onboarding_billing.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_jobs.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_ceo.inc"
+));

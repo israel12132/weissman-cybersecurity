@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "fuzz_core",
+    "fingerprint_engine",
+    "backend/weissman-core",
+    "crates/weissman-db",
+    "crates/weissman-oast-server",
+    "backend/weissman-engines",
+    "backend/weissman-server",
+    "crates/weissman-worker",
+]
+
+# Tuned release for all `cargo build --release` (unwind kept so panic_shield::catch_unwind works).
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+strip = "symbols"
+
+# Nix production package only: abort on panic (smaller/faster; no unwind through catch_unwind).
+[profile.release-nix]
+inherits = "release"
+panic = "abort"

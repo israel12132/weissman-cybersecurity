@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Report {{ run.id }} - Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+<p class="page-actions"><a href="/reports" class="btn btn-secondary">← Back to CVE Reports</a> <a href="/reports/{{ run.id }}/pdf" class="btn btn-primary" download>Export PDF</a></p>
+<h1>Report from run {{ run_created_str }}</h1>
+
+<section class="summary-inline">
+    <span class="security-rating-inline score-{% if security_score >= 90 %}green{% elif security_score >= 70 %}yellow{% else %}red{% endif %}">Weissman Security Rating: {{ security_score }}/100</span>
+    <strong>Total findings:</strong> {{ summary.get('total', 0) }}
+    {% if summary.get('total', 0) == 0 %}
+    <p class="zero-findings-tip">No findings. Try: leave <strong>Tech Stack</strong> empty (shows findings from all sources), or add software names such as nginx, python, node, wordpress.</p>
+    {% endif %}
+    {% if summary.get('by_severity') %}
+    {% for sev, count in summary.get('by_severity', {}).items() %}
+    | <span class="badge severity-{{ sev }}">{{ sev }}: {{ count }}</span>
+    {% endfor %}
+    {% endif %}
+</section>
+
+<div class="table-wrap">
+<table class="table findings">
+    <thead>
+        <tr>
+            <th>Client</th>
+            <th>Severity</th>
+            <th>Type</th>
+            <th>Source</th>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Relevance</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in findings %}
+        <tr data-vuln-id="{{ item.vuln_id or '' }}">
+            <td>{{ item.client_id }}</td>
+            <td><span class="badge severity-{{ item.finding.severity }}">{{ item.finding.severity }}</span></td>
+            <td>{{ item.finding.type }}</td>
+            <td>{{ item.finding.source }}</td>
+            <td>{{ item.finding.id }}</td>
+            <td>{{ (item.finding.title or '')[:70] }}{% if (item.finding.title or '')|length > 70 %}...{% endif %}</td>
+            <td>{{ (item.relevance_note or '')[:50] }}{% if (item.relevance_note or '')|length > 50 %}...{% endif %}</td>
+            <td>
+                {% if item.vuln_id %}
+                <select class="finding-status-select" data-vuln-id="{{ item.vuln_id }}" data-csrf-placeholder="status">
+                    <option value="OPEN" {% if item.status == 'OPEN' %}selected{% endif %}>OPEN</option>
+                    <option value="IN_PROGRESS" {% if item.status == 'IN_PROGRESS' %}selected{% endif %}>IN_PROGRESS</option>
+                    <option value="FIXED" {% if item.status == 'FIXED' %}selected{% endif %}>FIXED</option>
+                    <option value="FALSE_POSITIVE" {% if item.status == 'FALSE_POSITIVE' %}selected{% endif %}>FALSE_POSITIVE</option>
+                </select>
+                {% else %}
+                <span>{{ item.status or 'OPEN' }}</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No findings in this run.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+<script>
+(function() {
+    document.querySelectorAll('.finding-status-select').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            var vulnId = this.getAttribute('data-vuln-id');
+            var status = this.value;
+            fetch('/api/findings/' + vulnId + '/status', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ status: status })
+            }).then(function(r) {
+                if (r.ok) return;
+                throw new Error('Update failed');
+            }).catch(function() {
+                alert('Failed to update status');
+            });
+        });
+    });
+})();
+</script>
+</div>
+{% endblock %}

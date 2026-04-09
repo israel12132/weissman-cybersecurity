@@ -1,0 +1,93 @@
+[package]
+name = "fingerprint_engine"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.1"
+description = "Active tech stack fingerprinting for threat intel correlation"
+
+[dependencies]
+fuzz_core = { path = "../fuzz_core" }
+weissman-core = { path = "../backend/weissman-core" }
+weissman-db = { path = "../crates/weissman-db" }
+weissman-engines = { path = "../backend/weissman-engines" }
+ml-kem = "0.2.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "blocking"] }
+tokio = { version = "1", features = ["full", "sync"] }
+regex = "1.10"
+futures = "0.3"
+async-stream = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+ipnetwork = "0.20"
+urlencoding = "2.1"
+rand = "0.8"
+# Full-stack server: live API + dashboard, no dummy
+axum = { version = "0.7", features = ["json", "ws"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "migrate", "chrono"] }
+openidconnect = { version = "3.5", default-features = false, features = ["reqwest", "rustls-tls"] }
+oauth2 = { version = "4.4", default-features = false, features = ["reqwest"] }
+url = "2.5"
+uuid = { version = "1", features = ["v4"] }
+quick-xml = "0.31"
+flate2 = "1"
+bcrypt = "0.16"
+chrono = "0.4"
+jsonwebtoken = "9"
+chrono-tz = "0.10"
+# Module 1: Immutable Audit Trail & RFC 3161-style PDF signing
+openssl = "0.10"
+sha2 = "0.10"
+hmac = "0.12"
+qrcode = "0.14"
+base64 = "0.21"
+# Module 3: Graph ASM & Cloud Hunter (DNS CNAME, subdomain takeover, S3/Azure exposure)
+trust-dns-resolver = { version = "0.23", features = ["tokio-runtime"] }
+# Module 8: IaC / CI-CD pipeline analysis (YAML)
+serde_yaml = "0.9"
+# Production: granular locking for SSE registry (no global RwLock contention)
+dashmap = "6"
+# Binary PDF generation (Executive Report)
+genpdf = "0.2"
+# Load .env so WEISSMAN_ADMIN_EMAIL / WEISSMAN_ADMIN_PASSWORD are set
+dotenvy = "0.15"
+tempfile = "3"
+# True DAG execution (concurrent engine scheduling)
+petgraph = "0.6"
+# 200% verification: ephemeral Docker container
+bollard = "0.16"
+# Deception: active cloud injection (AWS). Requires Rust ≥1.91 (aws-smithy-* / aws-sdk-* MSRV).
+aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
+aws-config = "1.1"
+aws-sdk-iam = "1.14"
+aws-sdk-sts = "1.14"
+aws-sdk-s3 = "1.14"
+aws-sdk-ec2 = "1.14"
+aws-sdk-ssm = "1.14"
+aws-types = "1"
+tokio-util = { version = "0.7", features = ["codec"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "builder", "smtp-transport"] }
+aes-gcm = "0.10"
+hex = "0.4"
+syn = { version = "2.0", features = ["full", "visit"] }
+subtle = "2.6"
+metrics = "0.24"
+metrics-exporter-prometheus = "0.17"
+# HPC: lock-free async channels + zero-copy helpers; NUMA CPU bind (Linux) via hwloc.
+bytes = "1.6"
+flume = { version = "0.11", default-features = false, features = ["async"] }
+governor = "0.6"
+moka = { version = "0.12", features = ["future"] }
+thiserror = "1"
+# Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
+ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
+rand_core = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# System libhwloc via pkg-config (install libhwloc-dev). Vendored build needs autoconf/automake.
+hwlocality = "1.0.0-alpha.12"
+libc = "0.2"
+

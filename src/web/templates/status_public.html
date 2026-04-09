@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Status — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Status</h1>
+    <p>Live infrastructure status. All values are real-time.</p>
+    <div class="stats-grid">
+        <div class="stat-tile">
+            <span class="value">{{ 'Operational' if redis_ok else 'Down' }}</span>
+            <span class="label">Redis</span>
+        </div>
+        <div class="stat-tile">
+            <span class="value">{{ last_run_at or '—' }}</span>
+            <span class="label">Last run</span>
+        </div>
+        <div class="stat-tile">
+            <span class="value">{{ harvester_rules_count or '—' }}</span>
+            <span class="label">Payload rules</span>
+        </div>
+        <div class="stat-tile">
+            <span class="value">{{ harvester_updated or '—' }}</span>
+            <span class="label">Harvester updated</span>
+        </div>
+    </div>
+    <p class="text-muted">For full system details and Celery workers, use <a href="/settings/system">Settings → System</a> (requires login).</p>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: weissman-backend
+  template:
+    metadata:
+      labels:
+        app: weissman-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-registry/weissman-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: weissman-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: database_url
+            - name: WEISSMAN_AUTH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: auth_database_url
+            - name: WEISSMAN_MIGRATE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: migrate_url
+                  optional: true
+            - name: WEISSMAN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: jwt_secret
+            - name: WEISSMAN_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: admin_email
+                  optional: true
+            - name: WEISSMAN_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: admin_password
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20

@@ -1,0 +1,36 @@
+[Unit]
+Description=Weissman async job worker (engine runs — CRITICAL)
+Documentation=man:systemd.service(5)
+After=network-online.target
+Wants=network-online.target
+# Worker only needs Postgres, not the HTTP server. Start after DB if local:
+# After=postgresql.service
+# Requires=postgresql.service
+
+[Service]
+Type=simple
+User=weissman
+Group=weissman
+WorkingDirectory=/opt/weissman/app
+
+EnvironmentFile=-/etc/weissman/weissman.env
+
+ExecStart=/opt/weissman/app/bin/weissman-worker
+
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+LimitNOFILE=1048576
+TimeoutStopSec=60
+KillMode=mixed
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=weissman-worker
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=weissman.target multi-user.target

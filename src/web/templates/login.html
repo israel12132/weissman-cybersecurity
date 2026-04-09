@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in — Weissman-cybersecurity Control Center</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+    <div class="bg-layer bg-0"></div>
+    <div class="bg-layer bg-1"></div>
+    <div class="bg-layer bg-2"></div>
+    <div class="bg-layer bg-3"></div>
+    <div class="bg-layer bg-4"></div>
+    <div class="scanline" aria-hidden="true"></div>
+    <div class="login-box">
+        <h1>Weissman-cybersecurity</h1>
+        <p class="sub">Control Center — Sign in to access Dashboard (clients, reports) and Command Center</p>
+        <form method="post" action="/login" class="login-form">
+            <label for="username">Email</label>
+            <input type="text" id="username" name="username" required placeholder="user@example.com" autocomplete="username">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+            <button type="submit">Sign in</button>
+        </form>
+        <p style="margin-top:12px;"><a href="/auth/login/sso?provider=google" style="color:var(--neon-cyan);">Sign in with Google</a></p>
+    </div>
+    <script src="/static/bg-rotate.js"></script>
+</body>
+</html>

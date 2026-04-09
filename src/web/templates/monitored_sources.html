@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Monitored Sources — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Monitored Sources</h1>
+    <p>Dark web and intel sources discovered or configured for the autonomous harvester. Read-only view.</p>
+    {% if sources %}
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>URL / Source</th><th>Type</th><th>Risk</th><th>Validated</th><th>Last checked</th></tr>
+            </thead>
+            <tbody>
+                {% for s in sources %}
+                <tr>
+                    <td><code style="font-size:0.8rem; max-width:300px; overflow:hidden; text-overflow:ellipsis; display:block;">{{ (s.url or '')[:120] }}{% if (s.url or '')|length > 120 %}…{% endif %}</code></td>
+                    <td><span class="badge badge-source">{{ s.source_type or '—' }}</span></td>
+                    <td>{{ s.risk_level or '—' }}</td>
+                    <td>{{ 'Yes' if s.validated else 'No' }}</td>
+                    <td>{{ format_ist(s.last_checked, true) if s.last_checked else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No monitored sources yet. The harvester will populate this from Dark Web discovery.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+# Copy to `.envrc.private` (never commit). Loaded by `.envrc` after the flake devShell.
+export DATABASE_URL="postgres://weissman_app:password@127.0.0.1:5432/weissman"
+# export WEISSMAN_AUTH_DATABASE_URL="..."
+export PADDLE_ENVIRONMENT="sandbox"
+export PADDLE_API_KEY=""
+export PADDLE_WEBHOOK_SECRET=""
+export NVD_API_KEY=""

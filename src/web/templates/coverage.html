@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Coverage — What we scan and what we do not{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Coverage</h1>
+    <p>Transparent list of what the platform scans and what it does not. No marketing fluff — actual capabilities.</p>
+    <section class="data-section">
+        <h2>What we scan</h2>
+        <ul>
+            <li><strong>CVE / advisories:</strong> NVD (last 30 days), GitHub Security Advisories, OSV, AlienVault OTX. Matched to your tech stack and scope.</li>
+            <li><strong>Dark Web:</strong> Tor-routed search for your domains, company names, and tech; leak indicators. Tor killswitch: no clearnet fallback.</li>
+            <li><strong>Exploit matching:</strong> GitHub repos (exploit, poc, payload) matched to your fingerprint; safe probe only (no destructive payloads).</li>
+            <li><strong>Fuzzer:</strong> Context-aware payloads; LFI/path traversal, SQLi, XSS, etc. Validated by response signature before reporting.</li>
+            <li><strong>Recon:</strong> Certificate Transparency (crt.sh), DNS, subdomains; S3/Azure/GCP bucket discovery; IP-to-org mapping.</li>
+            <li><strong>Supply chain & secrets:</strong> NPM/PyPI typosquatting; GitHub code search for leaked secrets (API keys, .env).</li>
+            <li><strong>HIBP:</strong> Breached domains in scope (when API key configured).</li>
+        </ul>
+    </section>
+    <section class="data-section">
+        <h2>What we do not do</h2>
+        <ul>
+            <li>We do not run destructive or modifying payloads (e.g. DROP TABLE, delete file). Safe probe and signature-based validation only.</li>
+            <li>We do not scan all 65535 ports by default; default is 80, 443, 8080; extended port list available with deep scan.</li>
+            <li>We do not receive real-time webhooks from NVD/GitHub; we poll on a schedule (orchestrator / auto_check).</li>
+            <li>We do not include synthetic, mock, or example findings in reports; all data is from live DB and feeds.</li>
+        </ul>
+    </section>
+    <section class="data-section">
+        <h2>Verified vs potential</h2>
+        <p>Findings that pass signature validation (fuzzer) or PoC check are treated as <strong>Verified</strong>. Only verified findings are included in the final report. Potential or unvalidated items are not presented as confirmed.</p>
+    </section>
+</div>
+{% endblock %}

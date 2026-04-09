@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}CVE Reports - Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+<h1>Report runs (CVE / Intel)</h1>
+<p><a href="/dashboard" class="btn btn-primary">Run new scan</a> <a href="/api/export/findings" class="btn btn-secondary" download>Export to CSV</a></p>
+
+<p class="text-muted">{% if total is defined and total > 0 %}Page {{ page }} ({{ total }} runs total){% endif %}</p>
+<div class="table-wrap">
+<table class="table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Findings</th>
+            <th></th>
+            <th>PDF</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for run in runs %}
+        <tr>
+            <td>{{ format_ist(run.created_at, true) }}</td>
+            <td>{{ run_totals[loop.index0] if run_totals else 0 }}</td>
+            <td><a href="/reports/{{ run.id }}">View report</a></td>
+            <td>{% if run.pdf_path %}<a href="/reports/{{ run.id }}/pdf" download>{{ run.pdf_path.split('/')[-1] if run.pdf_path else 'Download PDF' }}</a>{% else %}<a href="/reports/{{ run.id }}/pdf">Generate PDF</a>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No reports. Run a scan from the Dashboard.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% if total is defined and total > per_page %}
+<p>
+  {% if page > 1 %}<a href="?page={{ page - 1 }}&per_page={{ per_page }}">Prev</a>{% endif %}
+  {% if page * per_page < total %}<a href="?page={{ page + 1 }}&per_page={{ per_page }}">Next</a>{% endif %}
+</p>
+{% endif %}
+
+<h2 id="fuzzer">Fuzzer reports</h2>
+<p>Anomaly reports from the Fuzzer engine (Zero-Day potential).</p>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>File</th><th>Size</th><th></th></tr></thead>
+<tbody>
+{% for f in fuzzer_files %}
+<tr><td>{{ f.name }}</td><td>{{ f.size_kb }} KB</td><td><a href="/reports/fuzzer/{{ f.name }}">View</a></td></tr>
+{% else %}
+<tr><td colspan="3">No Fuzzer reports. Run Fuzz from the Clients page.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+{% endblock %}

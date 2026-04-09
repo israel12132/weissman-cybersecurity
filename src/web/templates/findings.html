@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Findings — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Findings</h1>
+    <p>All vulnerabilities from scans. Filter by client, severity, status, or source. Update status in bulk or per row.</p>
+
+    <form method="get" action="/findings" class="filter-bar">
+        <input type="hidden" name="page" value="1">
+        <label>Client</label>
+        <select name="client_id">
+            <option value="">All</option>
+            {% for c in clients %}
+            <option value="{{ c.id }}" {% if filters.client_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+        <label>Severity</label>
+        <select name="severity">
+            <option value="">All</option>
+            <option value="critical" {% if filters.severity == 'critical' %}selected{% endif %}>Critical</option>
+            <option value="high" {% if filters.severity == 'high' %}selected{% endif %}>High</option>
+            <option value="medium" {% if filters.severity == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="low" {% if filters.severity == 'low' %}selected{% endif %}>Low</option>
+        </select>
+        <label>Status</label>
+        <select name="status">
+            <option value="">All</option>
+            <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
+            <option value="IN_PROGRESS" {% if filters.status == 'IN_PROGRESS' %}selected{% endif %}>In progress</option>
+            <option value="FIXED" {% if filters.status == 'FIXED' %}selected{% endif %}>Fixed</option>
+            <option value="FALSE_POSITIVE" {% if filters.status == 'FALSE_POSITIVE' %}selected{% endif %}>False positive</option>
+        </select>
+        <label>Source</label>
+        <select name="source">
+            <option value="">All</option>
+            <option value="nvd" {% if filters.source == 'nvd' %}selected{% endif %}>NVD</option>
+            <option value="fuzzer" {% if filters.source == 'fuzzer' %}selected{% endif %}>Fuzzer</option>
+            <option value="github" {% if filters.source == 'github' %}selected{% endif %}>GitHub</option>
+        </select>
+        <input type="search" name="search" placeholder="Search title / CVE" value="{{ filters.search }}">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="/findings" class="btn btn-secondary">Reset</a>
+    </form>
+
+    <div class="page-actions">
+        <a href="/api/export/findings" class="btn btn-secondary" download>Export CSV</a>
+        <span class="text-muted" style="margin-left:1rem;">{{ total }} finding(s)</span>
+    </div>
+
+    {% if vulns %}
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="select-all" aria-label="Select all"></th>
+                    <th>CVE / ID</th>
+                    <th>Title</th>
+                    <th>Client</th>
+                    <th>Severity</th>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th>Discovered</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vulns %}
+                <tr data-id="{{ v.id }}">
+                    <td><input type="checkbox" class="row-select" value="{{ v.id }}"></td>
+                    <td><span class="font-mono">{{ v.finding_id or '—' }}</span></td>
+                    <td>{{ (v.title or '')[:80] }}{% if (v.title or '')|length > 80 %}…{% endif %}</td>
+                    <td>{{ client_map.get(v.client_id, v.client_id) }}</td>
+                    <td><span class="badge severity-{{ v.severity }}">{{ v.severity }}</span></td>
+                    <td><span class="badge badge-source">{{ v.source or '—' }}</span>{% if (v.source or '').lower() == 'fuzzer' or (v.proof or '') %} <span class="status-pill fixed" title="Verified">Verified</span>{% endif %}</td>
+                    <td>
+                        <select class="status-select" data-id="{{ v.id }}">
+                            <option value="OPEN" {% if v.status == 'OPEN' %}selected{% endif %}>Open</option>
+                            <option value="IN_PROGRESS" {% if v.status == 'IN_PROGRESS' %}selected{% endif %}>In progress</option>
+                            <option value="FIXED" {% if v.status == 'FIXED' %}selected{% endif %}>Fixed</option>
+                            <option value="FALSE_POSITIVE" {% if v.status == 'FALSE_POSITIVE' %}selected{% endif %}>False positive</option>
+                        </select>
+                    </td>
+                    <td>{{ format_ist(v.discovered_at, true) if v.discovered_at else '—' }}</td>
+                    <td><a href="/reports/{{ v.run_id }}">Report</a> (run #{{ v.run_id }})</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" style="margin-top:1rem;">
+        <label>Bulk: </label>
+        <select id="bulk-status">
+            <option value="">— Set status —</option>
+            <option value="OPEN">Open</option>
+            <option value="IN_PROGRESS">In progress</option>
+            <option value="FIXED">Fixed</option>
+            <option value="FALSE_POSITIVE">False positive</option>
+        </select>
+        <button type="button" class="btn btn-secondary" id="bulk-apply">Apply to selected</button>
+        <span style="margin-left:2rem;">
+            {% if page > 1 %}<a href="?page={{ page - 1 }}&client_id={{ filters.client_id }}&severity={{ filters.severity }}&status={{ filters.status }}&source={{ filters.source }}&search={{ filters.search }}">Prev</a>{% else %}<span class="disabled">Prev</span>{% endif %}
+            Page {{ page }} / {{ total_pages }}
+            {% if page < total_pages %}<a href="?page={{ page + 1 }}&client_id={{ filters.client_id }}&severity={{ filters.severity }}&status={{ filters.status }}&source={{ filters.source }}&search={{ filters.search }}">Next</a>{% else %}<span class="disabled">Next</span>{% endif %}
+        </span>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">📋</div>
+        <p>No findings match the filters.</p>
+        <p><a href="/findings">Clear filters</a> or run a scan from the <a href="/dashboard">Dashboard</a>.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+    var statusSelects = document.querySelectorAll('.status-select');
+    statusSelects.forEach(function(el){
+        el.addEventListener('change', function(){
+            var id = el.getAttribute('data-id');
+            var status = el.value;
+            fetch('/api/findings/' + id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ status: status }) })
+                .then(function(r){ return r.json(); })
+                .then(function(d){ if(d.ok) el.closest('td').innerHTML = '<span class="status-pill ' + status.toLowerCase() + '">' + status + '</span>'; })
+                .catch(function(){});
+        });
+    });
+    var selectAll = document.getElementById('select-all');
+    if(selectAll) selectAll.onclick = function(){ document.querySelectorAll('.row-select').forEach(function(c){ c.checked = selectAll.checked; }); };
+    document.getElementById('bulk-apply').onclick = function(){
+        var status = document.getElementById('bulk-status').value;
+        if(!status) return;
+        var ids = [];
+        document.querySelectorAll('.row-select:checked').forEach(function(c){ ids.push(parseInt(c.value,10)); });
+        if(ids.length === 0) { alert('Select at least one row'); return; }
+        fetch('/api/findings/bulk-status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ ids: ids, status: status }) })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if(d.ok) window.location.reload(); });
+    };
+})();
+</script>
+{% endblock %}

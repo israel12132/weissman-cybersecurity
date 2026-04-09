@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Weissman-cybersecurity Control Center{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="bg-layer bg-0"></div>
+    <div class="bg-layer bg-1"></div>
+    <div class="bg-layer bg-2"></div>
+    <div class="bg-layer bg-3"></div>
+    <div class="bg-layer bg-4"></div>
+    <div class="scanline" aria-hidden="true"></div>
+
+    <nav class="nav-wrap">
+        <div class="nav">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/clients">Clients</a>
+            <a href="/reports">CVE Reports</a>
+            <a href="/reports#fuzzer">Fuzzer</a>
+            <a href="/findings">Findings</a>
+            <a href="/audit">Audit Log</a>
+            <a href="/command-center">Command Center</a>
+            <a href="/status">Status</a>
+            <div class="nav-dropdown">
+                <a href="/compliance" class="dropdown-toggle">Trust ▾</a>
+                <div class="dropdown-menu">
+                    <a href="/compliance">Compliance</a>
+                    <a href="/methodology">Methodology</a>
+                    <a href="/coverage">Coverage</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="/settings/webhooks" class="dropdown-toggle">Settings ▾</a>
+                <div class="dropdown-menu">
+                    <a href="/settings/system">System</a>
+                    <a href="/settings/webhooks">Webhooks</a>
+                    <a href="/settings/api-keys">API Keys</a>
+                    <a href="/settings/monitored-sources">Monitored Sources</a>
+                    <a href="/settings/tenants">Tenants</a>
+                    <a href="/settings/users">Users</a>
+                    <a href="/settings/alerts">Alert History</a>
+                    <a href="/attack-surface">Attack Surface</a>
+                </div>
+            </div>
+            <a href="/logout">Logout</a>
+            <span class="nav-logo">WEISSMAN-CYBER</span>
+        </div>
+    </nav>
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/bg-rotate.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

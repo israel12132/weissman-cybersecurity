@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Alert History — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Alert History</h1>
+    <p>Telegram and webhook alerts sent. Deduplicated by target + finding within 24h.</p>
+    {% if alerts %}
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>Target</th><th>Finding ID</th><th>Sent at</th></tr>
+            </thead>
+            <tbody>
+                {% for a in alerts %}
+                <tr>
+                    <td><code style="font-size:0.85rem;">{{ (a.target or '')[:60] }}{% if (a.target or '')|length > 60 %}…{% endif %}</code></td>
+                    <td>{{ a.finding_id or '—' }}</td>
+                    <td>{{ format_ist(a.alerted_at) if a.alerted_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" style="margin-top:1rem;">
+        {% if page > 1 %}<a href="?page={{ page - 1 }}">Prev</a>{% else %}<span class="disabled">Prev</span>{% endif %}
+        Page {{ page }} / {{ total_pages }} ({{ total }} total)
+        {% if page < total_pages %}<a href="?page={{ page + 1 }}">Next</a>{% else %}<span class="disabled">Next</span>{% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No alerts sent yet.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}API Keys — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>API Keys</h1>
+    <p>Create and revoke API keys for programmatic access (e.g. GET /api/v1/findings, POST /api/v1/scans/trigger). Use the X-API-Key header.</p>
+    <form method="post" action="/settings/api-keys/create" class="form" style="margin-bottom:1.5rem;">
+        <label for="name">Key name</label>
+        <input type="text" id="name" name="name" placeholder="e.g. CI/CD pipeline" maxlength="128">
+        <button type="submit" class="btn btn-primary">Create API key</button>
+    </form>
+    <div class="data-section">
+        <h2>Existing keys</h2>
+        {% if api_keys %}
+        <div class="table-wrap">
+            <table class="table table-modern">
+                <thead>
+                    <tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for k in api_keys %}
+                    <tr>
+                        <td>{{ k.name or '—' }}</td>
+                        <td><code>{{ k.key_prefix or '—' }}…</code></td>
+                        <td>{{ format_ist(k.created_at, true) if k.created_at else '—' }}</td>
+                        <td>{{ format_ist(k.last_used_at, true) if k.last_used_at else '—' }}</td>
+                        <td>
+                            <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="display:inline;" onsubmit="return confirm('Revoke this key?');">
+                                <button type="submit" class="btn btn-danger btn-link" style="padding:0;">Revoke</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state"><p>No API keys yet. Create one above.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

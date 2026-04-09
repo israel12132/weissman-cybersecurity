@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Clients - Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+<h1>Clients (approved scope)</h1>
+{% if request.query_params.get('fuzz_started') %}
+<p class="zero-findings-tip" style="border-color: rgba(0,255,136,0.3); color: var(--neon-green);">Fuzzer started in background. Reports will appear under <strong>Fuzzer Reports</strong>.</p>
+{% endif %}
+<p><a href="/clients/new" class="btn btn-primary">+ Add client</a></p>
+
+<div class="table-wrap">
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Domains</th>
+            <th>Tech Stack</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in clients %}
+        <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ (c.domains or '[]')[:60] }}...</td>
+            <td>{{ (c.tech_stack or '[]')[:60] }}...</td>
+            <td class="actions-cell">
+                <form method="post" action="/clients/{{ c.id }}/attack" style="display:inline;">
+                    <button type="submit" class="btn btn-attack">Run scan</button>
+                </form>
+                <form method="post" action="/clients/{{ c.id }}/fuzz" style="display:inline;">
+                    <button type="submit" class="btn btn-fuzz">Fuzz</button>
+                </form>
+                <a href="/clients/{{ c.id }}">Edit</a>
+                <form method="post" action="/clients/{{ c.id }}/delete" style="display:inline;">
+                    <button type="submit" class="btn-link" onclick="return confirm('Delete this client?');">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No clients. <a href="/clients/new">Add client</a></td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+{% endblock %}

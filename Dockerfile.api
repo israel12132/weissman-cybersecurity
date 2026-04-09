@@ -1,0 +1,5 @@
+# Do not use this path for production. Build the Rust API with:
+#   docker build -f deploy/backend.Dockerfile -t weissman-api .
+FROM alpine:3.20
+LABEL org.opencontainers.image.description="Stub — use deploy/backend.Dockerfile"
+CMD ["sh", "-c", "echo 'Use: docker build -f deploy/backend.Dockerfile .' >&2; exit 1"]

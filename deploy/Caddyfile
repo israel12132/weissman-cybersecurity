@@ -1,0 +1,31 @@
+# Weissman production — Caddy 2 (automatic HTTPS via Let's Encrypt).
+#
+# Prerequisites:
+#   - DNS A/AAAA for your hostname points to this VPS.
+#   - Rust app listening on 127.0.0.1:8000 (weissman-server or fingerprint_engine serve).
+#   - Ports 80 and 443 open to the world.
+#
+# Install (Debian/Ubuntu):  sudo apt install -y caddy
+# Deploy:                   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+# Validate:                 sudo caddy validate --config /etc/caddy/Caddyfile
+# Reload:                   sudo systemctl reload caddy
+#
+# Set the site label below to your real FQDN (e.g. weissman.example.com).
+# -----------------------------------------------------------------------------
+
+weissman.example.com {
+	encode zstd gzip
+
+	# Streaming (SSE) and WebSockets: avoid buffering delays.
+	reverse_proxy 127.0.0.1:8000 {
+		flush_interval -1
+	}
+}
+
+# Optional: serve both apex and www (uncomment and fix names).
+# weissman.example.com, www.weissman.example.com {
+# 	encode zstd gzip
+# 	reverse_proxy 127.0.0.1:8000 {
+# 		flush_interval -1
+# 	}
+# }

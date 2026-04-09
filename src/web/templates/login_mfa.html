@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Two-factor authentication — Weissman-cybersecurity</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+    <div class="bg-layer bg-0"></div>
+    <div class="bg-layer bg-1"></div>
+    <div class="bg-layer bg-2"></div>
+    <div class="bg-layer bg-3"></div>
+    <div class="bg-layer bg-4"></div>
+    <div class="scanline" aria-hidden="true"></div>
+    <div class="login-box">
+        <h1>Weissman-cybersecurity</h1>
+        <p class="sub">Enter verification code (TOTP) — Google Authenticator / Authy</p>
+        <form method="post" action="/login/mfa" class="login-form">
+            <label for="code">6-digit code</label>
+            <input type="text" id="code" name="code" required placeholder="000000" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" inputmode="numeric">
+            <button type="submit">Verify</button>
+        </form>
+        <p class="mfa-hint">Expired? <a href="/login">Back to sign in</a></p>
+    </div>
+    <script src="/static/bg-rotate.js"></script>
+</body>
+</html>

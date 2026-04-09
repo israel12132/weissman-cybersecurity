@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Methodology — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Methodology</h1>
+    <p>How findings are discovered, correlated, and validated. This describes the actual engine behavior.</p>
+    <section class="data-section">
+        <h2>Correlation</h2>
+        <p>Feeds (NVD, GitHub Advisories, OSV, AlienVault OTX, HIBP) are fetched with short-lived caching. Findings are matched to your scope using <strong>tech stack</strong> (word-boundary matching) and <strong>domains</strong>. Only findings that match your configured clients and technologies are included.</p>
+    </section>
+    <section class="data-section">
+        <h2>Fingerprinting</h2>
+        <p>Before CVE matching, targets are fingerprinted (HTTP headers, meta tags). The detected tech stack is stored and used for correlation. If the Rust engine is unavailable, a Python fallback (Server, X-Powered-By headers) is used.</p>
+    </section>
+    <section class="data-section">
+        <h2>Fuzzer & validation</h2>
+        <p>Fuzzer runs context-aware payloads (from <code>payload_signatures.json</code>). Anomalies (e.g. status 500, length change) are confirmed by <strong>payload-specific signature matching</strong> in the response body (e.g. LFI requires <code>root:x:</code> in body). Only confirmed anomalies are reported; no synthetic or mock findings.</p>
+    </section>
+    <section class="data-section">
+        <h2>Severity</h2>
+        <p>Severity comes from the feed (NVD CVSS, GitHub, OSV) or from the fuzzer anomaly type. CVSS and EPSS are used where available for priority scoring.</p>
+    </section>
+    <section class="data-section">
+        <h2>Reports</h2>
+        <p>PDF reports use only data from the database for the selected run. Benchmark sector averages are <strong>industry reference values</strong>, not your organization's data. Every report includes a SHA-256 integrity stamp.</p>
+    </section>
+</div>
+{% endblock %}

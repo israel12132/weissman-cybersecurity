@@ -1,0 +1,73 @@
+# Weissman Phase 2: PostgreSQL + Rust API + Nginx (SPA + /api /ws proxy on :80).
+# Run from repo root: docker compose up --build
+#
+# URLs: http://localhost/ → Command Center. Migrations run once at backend start when WEISSMAN_MIGRATE_URL is set.
+#
+# DB roles (from sqlx migrations): postgres superuser runs migrations; app uses weissman_app (RLS); auth uses weissman_auth (BYPASSRLS).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: weissman
+    volumes:
+      - weissman_pg:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d weissman"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    image: weissman-backend:local
+    environment:
+      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
+      WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@postgres:5432/weissman
+      WEISSMAN_PUBLIC_BASE_URL: http://localhost
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
+      # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
+      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
+      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:-changeme}
+      # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
+      WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
+      WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
+      PORT: "8000"
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
+  worker:
+    image: weissman-backend:local
+    command: ["/usr/local/bin/weissman-worker"]
+    environment:
+      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  weissman_pg:

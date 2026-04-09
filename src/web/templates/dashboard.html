@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+<h1>Weissman-cybersecurity Control Center</h1>
+<p>Start continuous scanning (autopilot) to run CVE matching and the Rust Fuzzer for all clients. Each cycle runs the full suite and repeats after a configurable delay while the toggle is ON.</p>
+
+<section class="cards">
+    <div class="card">
+        <h2>Clients</h2>
+        <p class="big">{{ clients|length }}</p>
+        <a href="/clients">Manage clients</a>
+    </div>
+    <div class="card">
+        <h2>Last run</h2>
+        {% if last_run %}
+        <p>{{ format_ist(last_run.created_at, true) }}</p>
+        <p class="big">{{ summary.get('total', 0) }} findings</p>
+        <a href="/reports/{{ last_run.id }}">View report</a>
+        {% else %}
+        <p>No run yet</p>
+        <a href="/clients">Add client and run</a>
+        {% endif %}
+    </div>
+    {% if security_score is not none and last_run %}
+    <div class="card card-score">
+        <h2>Weissman Security Rating</h2>
+        <p class="big score-value score-{% if security_score >= 90 %}green{% elif security_score >= 70 %}yellow{% else %}red{% endif %}">{{ security_score }}</p>
+        <p class="score-hint">/ 100 · Critical -25, High -15, Medium -5</p>
+        <a href="/reports/{{ last_run.id }}">View report</a>
+    </div>
+    {% endif %}
+</section>
+
+<p class="text-muted">Last scan: {% if last_run %}{{ format_ist(last_run.created_at, true) }}{% else %}—{% endif %}. {% if next_cycle_in_sec is not none and next_cycle_in_sec > 0 %}Next cycle in ~{{ (next_cycle_in_sec // 60) }} min.{% endif %}</p>
+<section class="actions">
+    <button type="button" class="btn btn-primary" id="scan-start-btn" style="display:{% if scan_status and scan_status.scanning_active %}none{% else %}inline-block{% endif %};">Start Continuous Scanning</button>
+    <button type="button" class="btn btn-danger" id="scan-stop-btn" style="display:{% if scan_status and scan_status.scanning_active %}inline-block{% else %}none{% endif %};">Stop Scanning</button>
+    <span class="scan-status-indicator" id="scan-status-text" style="margin-left:12px; color:#0ff;">{% if scan_status and scan_status.scanning_active %}Scanning {{ (scan_status.scanning_clients_count or 0) }} client{% if (scan_status.scanning_clients_count or 0) != 1 %}s{% endif %} in parallel{% endif %}</span>
+    <a href="/api/export/findings" class="btn btn-secondary" download style="margin-left:8px;">Export CSV</a>
+    <a href="/api/export/findings.xlsx" class="btn btn-secondary" download style="margin-left:8px;">Export Excel</a>
+</section>
+<script>
+(function(){
+    var POLL_INTERVAL_MS = 10000;
+    var startBtn = document.getElementById('scan-start-btn');
+    var stopBtn = document.getElementById('scan-stop-btn');
+    var statusText = document.getElementById('scan-status-text');
+    function updateScanStatus(data) {
+        if (!data) return;
+        var active = !!data.scanning_active;
+        var count = parseInt(data.scanning_clients_count, 10) || 0;
+        if (startBtn) startBtn.style.display = active ? 'none' : 'inline-block';
+        if (stopBtn) stopBtn.style.display = active ? 'inline-block' : 'none';
+        if (statusText) statusText.textContent = active ? ('Scanning ' + count + ' client' + (count !== 1 ? 's' : '') + ' in parallel') : '';
+    }
+    function pollStatus() {
+        fetch('/api/scan/status', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(updateScanStatus)
+            .catch(function() {});
+    }
+    if (startBtn) {
+        startBtn.onclick = function() {
+            startBtn.disabled = true;
+            fetch('/api/scan/start', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+                .then(function(r) { if (r.ok) { updateScanStatus({ scanning_active: true, scanning_clients_count: 0 }); pollStatus(); } startBtn.disabled = false; })
+                .catch(function() { startBtn.disabled = false; });
+        };
+    }
+    if (stopBtn) {
+        stopBtn.onclick = function() {
+            stopBtn.disabled = true;
+            fetch('/api/scan/stop', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+                .then(function() { updateScanStatus({ scanning_active: false, scanning_clients_count: 0 }); })
+                .catch(function() {})
+                .then(function() { stopBtn.disabled = false; });
+        };
+    }
+    setInterval(pollStatus, POLL_INTERVAL_MS);
+})();
+</script>
+
+{% if system_status %}
+<section class="data-section">
+    <h2>System</h2>
+    <div class="stats-grid">
+        <div class="stat-tile"><span class="value">{{ 'OK' if system_status.redis_ok else '—' }}</span><span class="label">Redis</span></div>
+        {% if system_status.harvester_rules_count is not none %}
+        <div class="stat-tile"><span class="value">{{ system_status.harvester_rules_count }}</span><span class="label">Payload rules</span></div>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if run_history %}
+<section class="data-section">
+    <h2>Run history</h2>
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead><tr><th>Date</th><th>Findings</th><th></th></tr></thead>
+            <tbody>
+            {% for run in run_history %}
+            <tr>
+                <td>{{ format_ist(run.created_at, true) }}</td>
+                <td class="num">{{ run_totals.get(run.id, 0) }}</td>
+                <td><a href="/reports/{{ run.id }}">View</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if last_run and summary %}
+<section class="summary data-section">
+    <h2>Latest findings</h2>
+    <div class="stats-grid">
+        {% for sev, count in summary.get('by_severity', {}).items() %}
+        <div class="stat-tile"><span class="value severity-{{ sev }}">{{ count }}</span><span class="label">{{ sev }}</span></div>
+        {% endfor %}
+    </div>
+    {% if by_source %}
+    <p class="text-muted" style="margin-top:0.75rem;">By source: {% for src, c in by_source.items() %}<span class="badge badge-source">{{ src }}: {{ c }}</span>{% endfor %}</p>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if clients %}
+<section class="data-section">
+    <h2>Clients</h2>
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead><tr><th>Name</th><th>Domains</th><th>Last scan</th><th></th></tr></thead>
+            <tbody>
+            {% for c in clients[:15] %}
+            <tr>
+                <td>{{ c.name }}</td>
+                <td class="num">{{ domain_counts.get(c.id, 0) }}</td>
+                <td>{% if last_scan_by_client.get(c.id|string) %}{{ format_ist(last_scan_by_client[c.id|string], true) }}{% else %}—{% endif %}</td>
+                <td><a href="/clients/{{ c.id }}">Edit</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p><a href="/clients">Manage all clients</a></p>
+</section>
+{% endif %}
+</div>
+{% endblock %}

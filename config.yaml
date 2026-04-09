@@ -1,0 +1,58 @@
+# Security Assessment Bot - Configuration Example
+# Copy to config.yaml and fill in your values
+
+# Clients = companies that authorized you to assess their assets
+clients:
+  - id: client-acme
+    name: "Acme Corp"
+    # Only these assets are in scope (authorized)
+    scope:
+      domains: ["acme.com", "*.acme.com", "app.acme.com"]
+      ip_ranges: ["203.0.113.0/24"]  # optional
+      tech_stack: ["nginx", "wordpress", "python-3.11", "postgresql"]  # for CVE matching
+    contact_email: security@acme.com
+
+  - id: client-beta
+    name: "Beta Ltd"
+    scope:
+      domains: ["beta.co.il"]
+      tech_stack: ["node", "react", "redis"]
+
+# Intelligence feeds (5 sources)
+intelligence:
+  # 1. NVD - National Vulnerability Database (CVE)
+  nvd:
+    enabled: true
+    api_key: ""  # optional, get from https://nvd.nist.gov/developers/request-an-api-key
+
+  # 2. GitHub Security Advisories
+  github:
+    enabled: true
+    token: ""  # GitHub PAT with read:packages scope for private if needed
+
+  # 3. OSV - Open Source Vulnerabilities
+  osv:
+    enabled: true
+    # No key needed - public API
+
+  # 4. AlienVault OTX (Open Threat Exchange)
+  otx:
+    enabled: true
+    api_key: ""  # https://otx.alienvault.com/api
+
+  # 5. Have I Been Pwned (breach/domain check - with authorization only)
+  hibp:
+    enabled: true
+    api_key: ""  # https://haveibeenpwned.com/API/Key
+
+# Reporting
+reporting:
+  hourly: true
+  output_dir: ./reports
+  format: ["html", "json"]  # html, json, pdf
+  timezone: "Asia/Jerusalem"
+
+# Scheduler
+scheduler:
+  check_interval_hours: 1
+  feed_refresh_minutes: 15

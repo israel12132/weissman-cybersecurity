@@ -1,0 +1,5 @@
+# MSRV matches workspace `rust-version`. Nix builds pin the compiler via `flake.lock` + Fenix `stable.toolchain`.
+[toolchain]
+channel = "1.91.1"
+components = ["rustfmt", "clippy", "rust-src"]
+profile = "default"

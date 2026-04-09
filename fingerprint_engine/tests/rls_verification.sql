@@ -1,0 +1,14 @@
+-- PostgreSQL RLS manual proof (run as role `weissman_app`, not superuser).
+--
+-- Goal: show that with `app.current_tenant_id` set to T1, queries never return rows for tenant_id = T2.
+--
+-- Example session:
+--   \c weissman weissman_app
+--   BEGIN;
+--   SELECT set_config('app.current_tenant_id', '1', true);
+--   SELECT id, tenant_id, name FROM clients LIMIT 5;
+--   SELECT set_config('app.current_tenant_id', '2', true);
+--   SELECT count(*) FROM clients WHERE tenant_id = 1;  -- must be 0
+--   ROLLBACK;
+--
+-- The application sets this GUC per transaction in `db::begin_tenant_tx` (see migrations row_level_security.sql).

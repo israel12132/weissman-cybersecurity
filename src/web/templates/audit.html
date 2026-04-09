@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Audit Log</h1>
+    <p>Recent system actions: logins, report views, scan triggers, status updates. Immutable record.</p>
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ format_ist(log.created_at) if log.created_at else '—' }}</td>
+                    <td><span class="badge badge-source">{{ log.action or '—' }}</span></td>
+                    <td>{{ log.user_email or log.user_id or '—' }}</td>
+                    <td><code style="font-size:0.85rem;">{{ (log.details or '')[:100] }}{% if (log.details or '')|length > 100 %}…{% endif %}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not logs %}
+    <div class="empty-state"><p>No audit entries yet.</p></div>
+    {% endif %}
+    <div class="pagination" style="margin-top:1rem;">
+        {% if page > 1 %}<a href="?page={{ page - 1 }}">Prev</a>{% else %}<span class="disabled">Prev</span>{% endif %}
+        Page {{ page }} / {{ total_pages }} ({{ total }} total)
+        {% if page < total_pages %}<a href="?page={{ page + 1 }}">Next</a>{% else %}<span class="disabled">Next</span>{% endif %}
+    </div>
+</div>
+{% endblock %}

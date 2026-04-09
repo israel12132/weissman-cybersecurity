@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Tenants — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Tenants</h1>
+    <p>Multi-tenant accounts (Super Admin only). Each tenant has isolated clients and data.</p>
+    {% if tenants %}
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>ID</th><th>Name</th><th>Slug</th><th>Region</th><th>Updated</th></tr>
+            </thead>
+            <tbody>
+                {% for t in tenants %}
+                <tr>
+                    <td class="num">{{ t.id }}</td>
+                    <td>{{ t.name or '—' }}</td>
+                    <td><code>{{ t.slug or '—' }}</code></td>
+                    <td>{{ t.region or '—' }}</td>
+                    <td>{{ format_ist(t.updated_at, true) if t.updated_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No tenants. Default (single-tenant) uses null tenant_id.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

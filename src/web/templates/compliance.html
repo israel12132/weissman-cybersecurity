@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Security & Compliance — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Security & Compliance</h1>
+    <p>This page reflects <strong>live configuration</strong>. No mock or sample data.</p>
+    <section class="data-section">
+        <h2>Data residency</h2>
+        <p>Your data is stored and processed in the configured region only.</p>
+        <ul>
+            <li><strong>Current region:</strong> {{ region }}</li>
+        </ul>
+    </section>
+    <section class="data-section">
+        <h2>Retention</h2>
+        <p>Findings, reports, and audit logs are retained according to the following policy.</p>
+        <ul>
+            <li><strong>Retention period:</strong> {{ retention_days }} days (configurable via RETENTION_DAYS).</li>
+            <li>Data deletion and export on request: contact your administrator or use the API.</li>
+        </ul>
+    </section>
+    <section class="data-section">
+        <h2>Encryption</h2>
+        <ul>
+            <li><strong>In transit:</strong> HTTPS (TLS) for all dashboard and API traffic.</li>
+            <li><strong>At rest:</strong> {{ encryption_at_rest_note }}</li>
+        </ul>
+    </section>
+    <section class="data-section">
+        <h2>Access & audit</h2>
+        <p>All actions (login, scan trigger, report download, status changes) are logged in the <a href="/audit">Audit log</a>. Logs are immutable.</p>
+    </section>
+</div>
+{% endblock %}

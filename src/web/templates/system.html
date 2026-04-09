@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}System Status — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>System Status</h1>
+    <p>Infrastructure and harvester health. Ensure Redis and Celery workers are running for scans.</p>
+    <div class="stats-grid">
+        <div class="stat-tile">
+            <span class="value">{{ 'OK' if system_status.redis_ok else 'Down' }}</span>
+            <span class="label">Redis</span>
+        </div>
+        <div class="stat-tile">
+            <span class="value">{{ system_status.harvester_rules_count or '—' }}</span>
+            <span class="label">Payload rules</span>
+        </div>
+        <div class="stat-tile">
+            <span class="value">{{ harvester_updated_str or '—' }}</span>
+            <span class="label">Harvester updated</span>
+        </div>
+    </div>
+    <section class="data-section">
+        <h2>Checks</h2>
+        <ul style="color:var(--text-dim);">
+            <li>Redis: required for Celery and scan toggle. Run <code>redis-cli ping</code> → PONG.</li>
+            <li>Celery: run <code>celery -A src.celery_app worker -Q scan,fuzz,orchestrator</code> and <code>celery -A src.celery_app beat</code>.</li>
+            <li>Payload rules: from <code>fingerprint_engine/config/payload_signatures.json</code>; updated by the 15‑min harvester.</li>
+        </ul>
+    </section>
+</div>
+{% endblock %}

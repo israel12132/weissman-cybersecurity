@@ -1,0 +1,21 @@
+# Celery worker: runs scan + fuzz tasks (invokes Rust when needed)
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt celery[redis]
+
+COPY . .
+# Optional: build Rust fingerprint_engine here
+# RUN apt-get install -y rustc cargo && cd fingerprint_engine && cargo build --release
+ENV PYTHONPATH=/app
+
+CMD ["celery", "-A", "src.celery_app", "worker", "-l", "info", "-Q", "default,scan,fuzz", "-c", "4"]

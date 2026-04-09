@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-bg: #09090b;
+  --card-bg: #18181b;
+  --border: #27272a;
+  --text: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --accent: #94a3b8;
+  --accent-strong: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body, #root {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+}
+
+/* Prefer dynamic viewport on mobile (address bar) */
+html, body, #root {
+  min-height: 100dvh;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--app-bg);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+}
+
+/* Enterprise data grid */
+.data-grid {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.data-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+.data-grid td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.data-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* iOS-style toggle */
+.toggle-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.toggle-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Data interference glitch (latency > 500ms) */
+@keyframes glitch {
+  0% { transform: translate(0); filter: drop-shadow(0 0 6px #ef4444); }
+  20% { transform: translate(-2px, 1px); filter: drop-shadow(2px 0 10px #ef4444); }
+  40% { transform: translate(2px, -1px); filter: drop-shadow(-2px 0 10px #ef4444); }
+  60% { transform: translate(-1px, 2px); filter: drop-shadow(0 2px 12px #ef4444); }
+  80% { transform: translate(1px, -2px); filter: drop-shadow(0 -2px 12px #ef4444); }
+  100% { transform: translate(0); filter: drop-shadow(0 0 6px #ef4444); }
+}
+.animate-glitch {
+  animation: glitch 0.4s ease-in-out infinite;
+}

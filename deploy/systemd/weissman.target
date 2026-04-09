@@ -1,0 +1,8 @@
+[Unit]
+Description=Weissman stack (API + job worker; React UI is built into frontend/dist and served by weissman-server — no Node process)
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target weissman-server.service weissman-worker.service
+
+[Install]
+WantedBy=multi-user.target

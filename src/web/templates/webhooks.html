@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Webhooks - Weissman-cybersecurity Control Center{% endblock %}
+{% block content %}
+<div class="panel">
+<h1>Webhooks</h1>
+<p>Configure URLs to receive findings as structured JSON (Jira, Splunk, etc.). Each new report run is POSTed to all enabled webhooks.</p>
+
+<form method="post" action="/settings/webhooks/add" class="form-inline" style="margin: 1rem 0;">
+    <input type="url" name="url" placeholder="https://your-endpoint.com/webhook" required style="min-width: 320px; padding: 8px;">
+    <button type="submit" class="btn btn-primary">Add Webhook</button>
+</form>
+
+<div class="table-wrap">
+<table class="table">
+    <thead>
+        <tr>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for w in webhooks %}
+        <tr>
+            <td><code>{{ (w.url or '')[:80] }}{% if (w.url or '')|length > 80 %}...{% endif %}</code></td>
+            <td>{% if w.enabled %}Enabled{% else %}Disabled{% endif %}</td>
+            <td class="actions-cell">
+                <form method="post" action="/settings/webhooks/{{ w.id }}/toggle" style="display:inline;">
+                    <button type="submit" class="btn btn-secondary">{% if w.enabled %}Disable{% else %}Enable{% endif %}</button>
+                </form>
+                <form method="post" action="/settings/webhooks/{{ w.id }}/delete" style="display:inline;">
+                    <button type="submit" class="btn-link" onclick="return confirm('Delete this webhook?');">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">No webhooks. Add a URL above to push findings to your system.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<p class="zero-findings-tip" style="margin-top: 1rem;">Payload format: <code>{"source":"Weissman-cybersecurity","report_id":"...","timestamp":"...","summary":{...},"findings":[{...}],"total_findings":N}</code>. Each finding includes title, description, severity, cvss_score, remediation.</p>
+</div>
+{% endblock %}

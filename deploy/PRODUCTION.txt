@@ -1,0 +1,58 @@
+Weissman — production on a Cloud VPS (Ubuntu or NixOS)
+======================================================
+
+Goal: no Vite dev server, no Cloudflare Tunnel. Browser → HTTPS (443) → reverse proxy → Rust :8000 → static UI from frontend/dist.
+
+1) Clone and install system deps (Ubuntu example)
+   - Postgres reachable from the VPS (not localhost on your laptop).
+   - For source builds on Linux: libhwloc-dev, pkg-config, OpenSSL dev headers, etc. (see project README / Nix flake).
+
+2) Build the Command Center (production static assets)
+   From repository root:
+
+     ./deploy/build-frontend.sh
+
+   Or manually:
+
+     cd frontend && npm ci && npm run build
+
+   Output: frontend/dist/  (served under URL path /command-center/ by the Rust app.)
+
+3) Configure environment
+   Copy .env.example to /run/secrets/weissman.env (or /etc/weissman.env), chmod 600.
+   Set at least the variables in the "PRODUCTION (VPS)" section of .env.example:
+   - DATABASE_URL, WEISSMAN_PUBLIC_BASE_URL=https://your-domain.com, PORT=8000
+   - Optional: WEISSMAN_STATIC=/absolute/path/to/frontend/dist if the binary is not run from repo root.
+
+4) Run the Rust server (binds 0.0.0.0:PORT; use 8000 behind the proxy)
+   Examples:
+
+     cd /path/to/security-assessment-bot
+     export $(grep -v '^#' /etc/weissman.env | xargs)
+     ./target/release/weissman-server
+
+   Or fingerprint_engine:
+
+     ./target/release/fingerprint_engine serve --port 8000
+
+   weissman-server auto-detects frontend/dist when cwd is the repo root; otherwise set WEISSMAN_STATIC.
+
+5) Reverse proxy (pick one)
+
+   Caddy (recommended — automatic HTTPS):
+     sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+     Edit the site name (weissman.example.com → your FQDN).
+     sudo systemctl reload caddy
+
+   Nginx + certbot:
+     sudo cp deploy/nginx-snippet-websocket-map.conf /etc/nginx/conf.d/00-websocket-map.conf
+     sudo cp deploy/nginx-weissman.conf /etc/nginx/sites-available/weissman
+     Edit server_name and ssl_certificate paths; obtain certs with certbot.
+     sudo nginx -t && sudo systemctl reload nginx
+
+6) Idempotent systemd (sketch)
+   Use EnvironmentFile=/etc/weissman.env, WorkingDirectory=/path/to/repo or a install prefix,
+   ExecStart=/usr/local/bin/weissman-server, After=network-online.target postgresql.service (if local DB).
+
+NixOS users: use flake packages + nixosModules.weissman-bot and optionally nixosModules.weissman-hpc;
+put secrets in environmentFile. Caddy/Nginx can be configured via corresponding NixOS services.

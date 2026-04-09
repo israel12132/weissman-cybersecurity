@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Attack Surface — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Attack Surface</h1>
+    <p>Delta-scan snapshots: last known ports, headers, and assets per target. Used to detect infrastructure changes.</p>
+    {% if snapshots %}
+    <div class="table-wrap">
+        <table class="table table-modern">
+            <thead>
+                <tr><th>Target</th><th>Type</th><th>Updated</th><th>Ports / Assets</th></tr>
+            </thead>
+            <tbody>
+                {% for s in snapshots %}
+                <tr>
+                    <td>{{ client_map.get(s.target_id, s.target_id) }}</td>
+                    <td><span class="badge badge-source">{{ s.target_type or 'client' }}</span></td>
+                    <td>{{ format_ist(s.updated_at, true) if s.updated_at else '—' }}</td>
+                    <td><code style="font-size:0.8rem;">{{ (s.ports_json or s.assets_json or '')[:80] }}{% if ((s.ports_json or '') + (s.assets_json or ''))|length > 80 %}…{% endif %}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><p>No attack surface snapshots yet. They are created during recon and delta scans.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

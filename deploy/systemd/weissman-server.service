@@ -1,0 +1,42 @@
+[Unit]
+Description=Weissman Command Center API (weissman-server + static UI)
+Documentation=man:systemd.service(5)
+After=network-online.target
+Wants=network-online.target
+# Uncomment if Postgres runs on this host:
+# After=postgresql.service
+# Requires=postgresql.service
+
+[Service]
+Type=simple
+User=weissman
+Group=weissman
+WorkingDirectory=/opt/weissman/app
+
+# Production secrets and config (chmod 600). Create from deploy/systemd/weissman.env.example
+EnvironmentFile=-/etc/weissman/weissman.env
+
+# Optional: override install path without editing the unit
+# Environment=WEISSMAN_STATIC=/opt/weissman/app/frontend/dist
+
+ExecStart=/opt/weissman/app/bin/weissman-server
+
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+LimitNOFILE=1048576
+TimeoutStopSec=45
+KillMode=mixed
+
+# journalctl -u weissman-server -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=weissman-server
+
+# Hardening (adjust if you hit permission errors)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=weissman.target multi-user.target

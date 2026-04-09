@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: weissman-gateway
+  template:
+    metadata:
+      labels:
+        app: weissman-gateway
+    spec:
+      containers:
+        - name: nginx
+          image: your-registry/weissman-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80

@@ -1,0 +1,32 @@
+Weissman production operations
+==============================
+
+Async jobs (required for Command Center scans and engine POST endpoints)
+------------------------------------------------------------------------
+Scan and engine runs enqueue into `weissman_async_jobs` and return a UUID.
+You must run **weissman-worker** beside **weissman-server**, sharing the same
+`DATABASE_URL` (and `WEISSMAN_AUTH_DATABASE_URL` / `WEISSMAN_INTEL_DATABASE_URL`
+when used).
+
+NixOS (flake `services.weissman-bot`)
+-------------------------------------
+  services.weissman-bot.enable = true;
+  services.weissman-bot.package = inputs.security-assessment-bot.packages.${pkgs.system}.default;
+  services.weissman-bot.environmentFile = "/etc/weissman/secrets.env";
+  services.weissman-bot.server.enable = true;
+  services.weissman-bot.worker.enable = true;   # required for job queue
+
+systemd (non-Nix)
+-----------------
+  # After installing the flake package or copying binaries from `nix build .#`:
+  systemctl enable --now weissman-server.service
+  systemctl enable --now weissman-worker.service
+
+  Both units should use the same EnvironmentFile containing at least DATABASE_URL.
+
+RLS integration test (manual)
+-----------------------------
+  TEST_DATABASE_URL='postgres://…superuser…' \
+    cargo test -p weissman-db weissman_app_cannot_read_other_tenant_clients -- --ignored --nocapture
+
+See `crates/weissman-db/tests/rls_cross_tenant.rs` for prerequisites.

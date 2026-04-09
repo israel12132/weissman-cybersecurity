@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}API Key Created — Weissman-cybersecurity{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>API key created</h1>
+    <p>Copy this key now. It will not be shown again.</p>
+    <div style="background:var(--dark-2); border:1px solid var(--glass-border); border-radius:8px; padding:1rem; margin:1rem 0; font-family:var(--font-mono); word-break:break-all;">
+        {{ key }}
+    </div>
+    <p class="text-muted">Use it in the <code>X-API-Key</code> header for the public API.</p>
+    <a href="/settings/api-keys" class="btn btn-primary">Back to API keys</a>
+</div>
+{% endblock %}
