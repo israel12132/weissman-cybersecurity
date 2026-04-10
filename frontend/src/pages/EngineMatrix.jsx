@@ -90,6 +90,7 @@ function EngineMatrixCard({ engine, enabled, status, lastRun, findingsDelta, onT
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Toggle */}
           <button
+            id={`engine-${engine.id}-toggle`}
             type="button"
             role="switch"
             aria-checked={enabled}
@@ -108,6 +109,7 @@ function EngineMatrixCard({ engine, enabled, status, lastRun, findingsDelta, onT
           </button>
           {/* Run */}
           <button
+            id={`engine-${engine.id}-run-btn`}
             type="button"
             disabled={loading || runBusy || !enabled}
             title={!enabled ? 'Enable engine first' : 'Queue engine scan'}
@@ -171,6 +173,7 @@ function GroupSection({ groupDef, engines, engineStates, enabledSet, loading, on
         </div>
         <div className="flex items-center gap-2">
           <button
+            id={`engine-group-${groupDef.id}-run-btn`}
             type="button"
             onClick={() => onRunGroup(groupEngines.map((e) => e.id))}
             disabled={loading || enabledCount === 0}
@@ -179,6 +182,7 @@ function GroupSection({ groupDef, engines, engineStates, enabledSet, loading, on
             Run Group
           </button>
           <button
+            id={`engine-group-${groupDef.id}-enable-all-btn`}
             type="button"
             onClick={() => onEnableAll(groupEngines.map((e) => e.id))}
             disabled={loading}
@@ -187,6 +191,7 @@ function GroupSection({ groupDef, engines, engineStates, enabledSet, loading, on
             Enable All
           </button>
           <button
+            id={`engine-group-${groupDef.id}-disable-all-btn`}
             type="button"
             onClick={() => onDisableAll(groupEngines.map((e) => e.id))}
             disabled={loading}

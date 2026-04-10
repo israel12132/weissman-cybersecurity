@@ -165,6 +165,7 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <button
+          id="ceo-genesis-apply-strategy-btn"
           type="submit"
           disabled={saving}
           className="px-4 py-2 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-100 text-xs font-mono uppercase disabled:opacity-50"
@@ -222,6 +223,7 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <button
+          id="ceo-genesis-apply-hpc-btn"
           type="submit"
           disabled={hpcSaving}
           className="px-4 py-2 rounded bg-amber-900/60 border border-amber-500/40 text-amber-50 text-xs font-mono uppercase disabled:opacity-50"

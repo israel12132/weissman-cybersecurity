@@ -175,6 +175,7 @@ pub mod timing_sidechannel_engine;
 pub mod typosquatting_monitor_engine;
 pub mod waf_bypass_engine;
 pub mod zero_day_prediction_engine;
+pub mod admin_users;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

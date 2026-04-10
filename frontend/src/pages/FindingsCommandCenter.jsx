@@ -240,6 +240,7 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                 </p>
               </div>
               <button
+                id="findings-drawer-close-btn"
                 type="button"
                 onClick={onClose}
                 aria-label="Close findings drawer"
@@ -257,6 +258,7 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">Status:</span>
                   <select
+                    id="findings-drawer-status-select"
                     value={finding.status || 'OPEN'}
                     onChange={handleStatusChange}
                     disabled={statusUpdating}
@@ -670,6 +672,7 @@ export default function FindingsCommandCenter() {
               {rawFindings.length} total · {totalFiltered} shown
             </span>
             <button
+              id="findings-export-csv-btn"
               type="button"
               onClick={handleExportCsv}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
@@ -689,6 +692,7 @@ export default function FindingsCommandCenter() {
             const active = severityFilter === key
             return (
               <button
+                id={`findings-filter-severity-${key}`}
                 key={key}
                 type="button"
                 onClick={() => setSeverityFilter(active ? '' : key)}
@@ -920,6 +924,7 @@ export default function FindingsCommandCenter() {
 
               <div className="flex items-center gap-1.5">
                 <button
+                  id="findings-pagination-first"
                   type="button"
                   onClick={() => table.setPageIndex(0)}
                   disabled={!table.getCanPreviousPage()}
@@ -928,6 +933,7 @@ export default function FindingsCommandCenter() {
                   «
                 </button>
                 <button
+                  id="findings-pagination-prev"
                   type="button"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
@@ -944,6 +950,7 @@ export default function FindingsCommandCenter() {
                   const active = p === pagination.pageIndex
                   return (
                     <button
+                      id={`findings-pagination-page-${p + 1}`}
                       key={p}
                       type="button"
                       onClick={() => table.setPageIndex(p)}
@@ -960,6 +967,7 @@ export default function FindingsCommandCenter() {
                 })}
 
                 <button
+                  id="findings-pagination-next"
                   type="button"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
@@ -968,6 +976,7 @@ export default function FindingsCommandCenter() {
                   ›
                 </button>
                 <button
+                  id="findings-pagination-last"
                   type="button"
                   onClick={() => table.setPageIndex(pageCount - 1)}
                   disabled={!table.getCanNextPage()}

@@ -99,12 +99,13 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="text-sm font-mono text-red-500 text-center py-2 border border-red-500/30 bg-red-500/5 rounded">
+            <p id="login-error-message" className="text-sm font-mono text-red-500 text-center py-2 border border-red-500/30 bg-red-500/5 rounded">
               {error}
             </p>
           )}
 
           <button
+            id="login-submit-btn"
             type="submit"
             disabled={submitting}
             className="w-full py-3.5 rounded font-semibold text-sm tracking-widest uppercase transition-all border-2 border-[#22d3ee] bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 focus:outline-none focus:ring-2 focus:ring-[#22d3ee] focus:ring-offset-2 focus:ring-offset-[#050505] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -116,6 +117,7 @@ export default function Login() {
         <div className="mt-8 space-y-3">
           <p className="text-center text-[10px] uppercase tracking-widest text-[#6b7280] font-mono">Enterprise SSO</p>
           <button
+            id="login-oidc-btn"
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
@@ -126,6 +128,7 @@ export default function Login() {
             Login with OIDC (IdP name: enterprise)
           </button>
           <button
+            id="login-saml-btn"
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
