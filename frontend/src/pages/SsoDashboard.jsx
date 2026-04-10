@@ -90,10 +90,21 @@ const FIELD_DEFS = {
 function deriveIssuerUrl(vendor, form) {
   if (vendor === 'okta' && form.okta_domain) {
     const d = form.okta_domain.trim().replace(/^https?:\/\//, '')
+    // Validate domain ends with okta.com or oktapreview.com to prevent SSRF
+    if (!d.match(/\.(okta\.com|oktapreview\.com|okta-emea\.com)$/)) {
+      return '' // will fail server-side validation; surface error from API
+    }
     return `https://${d}`
   }
   if (vendor === 'azure_ad' && form.azure_tenant_id) {
-    return `https://login.microsoftonline.com/${form.azure_tenant_id.trim()}/v2.0`
+    const tid = form.azure_tenant_id.trim()
+    // Must be a GUID or a verified domain — validate GUID format or domain
+    const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
+    if (!guidPattern.test(tid) && !domainPattern.test(tid)) {
+      return ''
+    }
+    return `https://login.microsoftonline.com/${tid}/v2.0`
   }
   if (vendor === 'google') {
     return 'https://accounts.google.com'
@@ -212,7 +223,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   placeholder={def.placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
-                  required={def.required && !initial}
+                  required={def.required && (!initial || !form[key])}
                   className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
                 {def.note && <p className="text-[10px] text-white/25">{def.note}</p>}

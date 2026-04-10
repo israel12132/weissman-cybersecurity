@@ -490,6 +490,53 @@ pub async fn api_sso_idp_test(
     (status, Json(json!({"ok": ok, "error": error_msg, "detail": detail}))).into_response()
 }
 
+/// Validates that a URL is a safe HTTPS URL for use in outgoing requests.
+/// Blocks private IP ranges, localhost, and non-HTTPS schemes to prevent SSRF.
+fn validate_outbound_url(url: &str) -> Result<(), String> {
+    use std::net::IpAddr;
+
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid URL: {e}"))?;
+
+    if parsed.scheme() != "https" {
+        return Err("URL must use HTTPS scheme".to_string());
+    }
+
+    let host = parsed.host_str().ok_or("URL has no host")?;
+
+    // Block localhost and loopback
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+        return Err("URL host is not allowed".to_string());
+    }
+
+    // If host is an IP address, block RFC-1918 ranges and link-local
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        let blocked = match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()
+                    || v4.is_link_local()
+                    || v4.is_broadcast()
+                    || v4.is_documentation()
+                    || v4.is_unspecified()
+                    || v4.octets()[0] == 169 // 169.254.0.0/16
+                    || v4.octets()[0] == 100 && v4.octets()[1] >= 64 // 100.64.0.0/10 CGNAT
+            }
+            IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.is_multicast(),
+        };
+        if blocked {
+            return Err("URL host is not allowed (private/reserved address)".to_string());
+        }
+    }
+
+    // Block metadata service hostnames commonly used in SSRF
+    let blocked_hosts = ["metadata.google.internal", "169.254.169.254", "fd00:ec2::254"];
+    if blocked_hosts.contains(&host) {
+        return Err("URL host is not allowed".to_string());
+    }
+
+    Ok(())
+}
+
 /// Performs the actual test without auth context — safe for the Rust async runtime.
 async fn perform_test_connection(
     provider: &str,
@@ -498,7 +545,7 @@ async fn perform_test_connection(
 ) -> (bool, Option<String>, Value) {
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .user_agent("Weissman-SSO-Test/1.0")
+        .user_agent("Mozilla/5.0 (compatible; platform-health-check/1.0)")
         .build()
     {
         Ok(c) => c,
@@ -506,6 +553,10 @@ async fn perform_test_connection(
     };
 
     if provider == "oidc" {
+        // Validate issuer URL before making outbound request (SSRF protection)
+        if let Err(e) = validate_outbound_url(issuer_url) {
+            return (false, Some(format!("issuer_url validation failed: {e}")), json!({}));
+        }
         // OIDC discovery
         let discovery_url = format!(
             "{}/.well-known/openid-configuration",
@@ -545,6 +596,10 @@ async fn perform_test_connection(
         let url = saml_url.unwrap_or(issuer_url);
         if url.is_empty() {
             return (false, Some("saml_idp_sso_url not configured".to_string()), json!({}));
+        }
+        // Validate URL before outbound request (SSRF protection)
+        if let Err(e) = validate_outbound_url(url) {
+            return (false, Some(format!("URL validation failed: {e}")), json!({}));
         }
         match client.get(url).send().await {
             Ok(resp) if resp.status().is_success() => {
