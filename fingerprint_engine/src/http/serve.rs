@@ -212,6 +212,21 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
                 request.extensions_mut().insert(ctx);
                 return next.run(request).await;
             }
+            // Token was provided but validation failed
+            tracing::debug!(
+                target: "auth_guard",
+                path = %path,
+                method = %method,
+                "JWT token validation failed for request"
+            );
+        } else {
+            // No token found at all
+            tracing::debug!(
+                target: "auth_guard",
+                path = %path,
+                method = %method,
+                "No auth token found in request (cookie, header, or query)"
+            );
         }
         return (
             StatusCode::UNAUTHORIZED,
