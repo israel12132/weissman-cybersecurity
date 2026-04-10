@@ -322,6 +322,7 @@ export default function OastDashboard() {
                 {tok.first_hit_at && (
                   <p className="text-[10px] text-green-400/70">First hit: {new Date(tok.first_hit_at).toLocaleString()}</p>
                 )}
+              </motion.div>
             ))}
           </div>
         )}

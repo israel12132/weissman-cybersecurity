@@ -38,6 +38,7 @@ pub mod compliance_engine;
 pub mod council;
 pub mod council_hitl;
 pub mod council_synthesis;
+pub mod sso_management;
 pub mod ceo;
 pub mod crypto_engine;
 pub mod eternal_fuzz;

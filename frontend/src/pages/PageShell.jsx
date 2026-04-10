@@ -29,6 +29,10 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Council Queue
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
+            SSO Config
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           {badge && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"

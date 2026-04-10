@@ -1159,6 +1159,11 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))
         .route("/api/oast/verify/:token", get(api_oast_probe_verify))
+        // ── Enterprise SSO management ─────────────────────────────────────────
+        .route("/api/sso/idps", get(crate::sso_management::api_sso_idps_list).post(crate::sso_management::api_sso_idps_create))
+        .route("/api/sso/idps/:id", get(crate::sso_management::api_sso_idp_get).patch(crate::sso_management::api_sso_idp_patch).delete(crate::sso_management::api_sso_idp_delete))
+        .route("/api/sso/idps/:id/test", post(crate::sso_management::api_sso_idp_test))
+        .route("/api/sso/idps/:id/toggle", post(crate::sso_management::api_sso_idp_toggle))
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
         .route("/api/timing-scan/run", post(api_timing_scan_run))
