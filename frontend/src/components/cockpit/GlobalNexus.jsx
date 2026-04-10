@@ -151,44 +151,50 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       <div className="px-3 py-3 border-b border-white/10 space-y-1">
         <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-1 mb-2 font-mono">Quick Nav</div>
         <Link
+          id="nav-engine-matrix"
           to="/engines"
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
         >
           <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 52)
         </Link>
-        <Link to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
+        <Link id="nav-threat-emulation" to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
           <span>◈</span> APT Emulation
         </Link>
-        <Link to="/cloud" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-blue-400/70 hover:bg-blue-950/20 hover:text-blue-300 transition-colors">
+        <Link id="nav-cloud-tower" to="/cloud" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-blue-400/70 hover:bg-blue-950/20 hover:text-blue-300 transition-colors">
           <span>☁</span> Cloud Tower
         </Link>
-        <Link to="/supply-chain" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-lime-400/70 hover:bg-lime-950/20 hover:text-lime-300 transition-colors">
+        <Link id="nav-supply-chain" to="/supply-chain" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-lime-400/70 hover:bg-lime-950/20 hover:text-lime-300 transition-colors">
           <span>⛓</span> Supply Chain
         </Link>
-        <Link to="/network" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-orange-400/70 hover:bg-orange-950/20 hover:text-orange-300 transition-colors">
+        <Link id="nav-network-intel" to="/network" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-orange-400/70 hover:bg-orange-950/20 hover:text-orange-300 transition-colors">
           <span>⛢</span> Network Intel
         </Link>
-        <Link to="/pqc-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/70 hover:bg-emerald-950/20 hover:text-emerald-300 transition-colors">
+        <Link id="nav-pqc-radar" to="/pqc-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/70 hover:bg-emerald-950/20 hover:text-emerald-300 transition-colors">
           <span>🔐</span> PQC Radar
         </Link>
-        <Link to="/oast" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-[#22d3ee]/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
+        <Link id="nav-oast" to="/oast" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-[#22d3ee]/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
           <span>⊂</span> OAST / OOB
         </Link>
-        <Link to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
+        <Link id="nav-digital-twin" to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
           <span>⟐</span> Digital Twin
         </Link>
-        <Link to="/zero-day-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-rose-400/70 hover:bg-rose-950/20 hover:text-rose-300 transition-colors">
+        <Link id="nav-zero-day-radar" to="/zero-day-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-rose-400/70 hover:bg-rose-950/20 hover:text-rose-300 transition-colors">
           <span>☢</span> Zero-Day Radar
         </Link>
-        <Link to="/findings" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/80 hover:bg-amber-950/30 hover:text-amber-300 transition-colors font-semibold">
+        <Link to="/findings" id="nav-findings-c2" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/80 hover:bg-amber-950/30 hover:text-amber-300 transition-colors font-semibold">
           <span>◉</span> Findings C2
         </Link>
-        <Link to="/intel-map" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-sky-400/70 hover:bg-sky-950/20 hover:text-sky-300 transition-colors">
+        <Link to="/intel-map" id="nav-intel-map" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-sky-400/70 hover:bg-sky-950/20 hover:text-sky-300 transition-colors">
           <span>🌐</span> Global Intel Map
         </Link>
-        <Link to="/system-core" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/70 hover:bg-slate-800/40 hover:text-slate-300 transition-colors">
+        <Link to="/system-core" id="nav-system-core" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/70 hover:bg-slate-800/40 hover:text-slate-300 transition-colors">
           <span>⚙</span> System Core
         </Link>
+        {isCeo && (
+          <Link to="/admin" id="nav-admin-management" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-300/90 hover:bg-amber-950/40 hover:text-amber-200 transition-colors font-semibold border border-amber-500/20 mt-2">
+            <span>👤</span> Admin Management
+          </Link>
+        )}
       </div>
 
       {/* Body: Client list */}
@@ -358,12 +364,13 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             </div>
           </details>
           {addMessage?.error && (
-            <p className="text-xs text-red-400">{addMessage.error}</p>
+            <p id="add-client-error-msg" className="text-xs text-red-400">{addMessage.error}</p>
           )}
           {addMessage?.success && (
-            <p className="text-xs text-[#4ade80]">Client added.</p>
+            <p id="add-client-success-msg" className="text-xs text-[#4ade80]">Client added.</p>
           )}
           <button
+            id="add-client-submit-btn"
             type="button"
             disabled={addSubmitting}
             onClick={() => handleAddClient()}

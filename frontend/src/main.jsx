@@ -68,6 +68,7 @@ import CouncilHitlQueue from './pages/CouncilHitlQueue'
 import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
+import AdminManagement from './pages/AdminManagement'
 import App from './App'
 import './index.css'
 
@@ -124,6 +125,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
             <Route path="intel-map" element={<App />} />
+            <Route path="admin" element={<AdminManagement />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

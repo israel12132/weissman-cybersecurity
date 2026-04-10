@@ -254,6 +254,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
                 : 'Health: —'}
             </span>
             <button
+              id="cockpit-safe-mode-toggle"
               type="button"
               disabled={safeSaving}
               onClick={toggleSafeMode}
@@ -268,6 +269,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           </div>
           <div className="flex flex-wrap items-stretch sm:items-center gap-2 shrink-0">
             <button
+              id="cockpit-board-report-btn"
               type="button"
               onClick={downloadBoardReport}
               disabled={boardReportLoading}
@@ -276,6 +278,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               {boardReportLoading ? 'PDF…' : 'Board report'}
             </button>
             <button
+              id="cockpit-engage-scan-btn"
               type="button"
               onClick={runFullScan}
               disabled={engageLoading}
@@ -290,6 +293,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/10 overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {tabs.map((tab) => (
             <button
+              id={`cockpit-tab-${tab.id}`}
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}

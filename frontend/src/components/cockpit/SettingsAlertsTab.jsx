@@ -155,10 +155,11 @@ function SettingsAlertsTabInner() {
             </span>
           </label>
           {msg && (
-            <p className={msg.type === 'ok' ? 'text-emerald-400 text-sm' : 'text-red-400 text-sm'}>{msg.text}</p>
+            <p id="settings-message" className={msg.type === 'ok' ? 'text-emerald-400 text-sm' : 'text-red-400 text-sm'}>{msg.text}</p>
           )}
           <div className="flex flex-wrap gap-3">
             <button
+              id="settings-save-btn"
               type="button"
               onClick={save}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20"
@@ -166,6 +167,7 @@ function SettingsAlertsTabInner() {
               Save settings
             </button>
             <button
+              id="settings-backup-btn"
               type="button"
               onClick={runBackup}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
@@ -175,6 +177,7 @@ function SettingsAlertsTabInner() {
           </div>
           {backupMsg && (
             <p
+              id="settings-backup-message"
               className={
                 backupMsg.type === 'ok' ? 'text-emerald-400 text-xs font-mono break-all' : 'text-red-400 text-sm'
               }

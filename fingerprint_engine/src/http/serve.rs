@@ -1118,6 +1118,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/health", get(api_health))
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/auth/me", get(api_auth_me))
+        // ── Admin user management (CEO/Superadmin only) ───────────────────────
+        .route("/api/admin/users", get(crate::admin_users::api_admin_users_list).post(crate::admin_users::api_admin_users_create))
+        .route("/api/admin/users/:id", patch(crate::admin_users::api_admin_users_update))
+        .route("/api/admin/users/:id/deactivate", post(crate::admin_users::api_admin_users_deactivate))
         .route(
             "/api/enterprise/settings",
             get(api_enterprise_settings_get).patch(api_enterprise_settings_patch),
