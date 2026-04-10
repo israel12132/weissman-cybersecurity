@@ -38,22 +38,48 @@ async fn api_findings(State(state): State<Arc<AppState>>, Extension(auth): Exten
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
     };
-    let rows = sqlx::query("SELECT id, finding_id, title, severity, source, status, client_id::text FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 500")
-        .fetch_all(&mut *tx).await.unwrap_or_default();
+    let rows = sqlx::query(
+        "SELECT id, finding_id, title, severity, source, status, client_id::text, \
+         COALESCE(description,'') AS description, discovered_at, \
+         COALESCE(poc_sealed, false) AS poc_sealed, \
+         COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256 \
+         FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 500"
+    )
+    .fetch_all(&mut *tx).await.unwrap_or_default();
     let _ = tx.commit().await;
     let mut out = Vec::new();
     for r in rows {
+        let raw_id = r.try_get::<i64,_>("id").unwrap_or(0);
+        let poc_sealed = r.try_get::<bool,_>("poc_sealed").unwrap_or(false);
         out.push(json!({
-            "id": format!("VLN-{}", r.try_get::<i64,_>("id").unwrap_or(0)),
+            "id": format!("VLN-{}", raw_id),
+            "raw_id": raw_id,
+            "finding_id": r.try_get::<String,_>("finding_id").unwrap_or_default(),
             "title": r.try_get::<String,_>("title").unwrap_or_else(|_| "Finding".to_string()),
             "source": r.try_get::<String,_>("source").unwrap_or_else(|_| "NVD".to_string()),
             "severity": r.try_get::<String,_>("severity").unwrap_or_else(|_| "MEDIUM".to_string()),
             "status": r.try_get::<String,_>("status").unwrap_or_else(|_| "OPEN".to_string()),
+            "client_id": r.try_get::<String,_>("client_id").unwrap_or_default(),
             "client": r.try_get::<String,_>("client_id").unwrap_or_default(),
+            "description": r.try_get::<String,_>("description").unwrap_or_default(),
+            "discovered_at": r.try_get::<chrono::DateTime<Utc>,_>("discovered_at").ok().map(|d| d.to_rfc3339()),
+            "poc_sealed": poc_sealed,
+            "verified": poc_sealed,
+            "poc_commitment_sha256": r.try_get::<String,_>("poc_commitment_sha256").unwrap_or_default(),
             "risk_score": 5.0
         }));
     }
     (StatusCode::OK, Json(Value::Array(out))).into_response()
+}
+
+async fn api_config_public(Extension(auth): Extension<AuthContext>) -> Response {
+    let region = std::env::var("WEISSMAN_REGION").unwrap_or_else(|_| "EU-West".to_string());
+    let version = env!("CARGO_PKG_VERSION");
+    (StatusCode::OK, Json(json!({
+        "region": region,
+        "version": version,
+        "tenant_id": auth.tenant_id,
+    }))).into_response()
 }
 
 async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {

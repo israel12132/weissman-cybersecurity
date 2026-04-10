@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import CinematicBackground from './components/CinematicBackground'
 import EmergencyAlert from './components/EmergencyAlert'
 import Globe from './components/Globe'
@@ -197,7 +198,7 @@ export default function App() {
   }, [connectionStatus])
 
   return (
-    <div className="soc-2100-root">
+    <div className="soc-intel-map-root">
       <CinematicBackground />
       <EmergencyAlert message={emergencyMessage} onComplete={() => setEmergencyMessage('')} />
 
@@ -205,18 +206,19 @@ export default function App() {
         <nav className="flex gap-6 text-sm font-mono flex-wrap">
           <a href="/" className="nav-link">Dashboard</a>
           <a href="/clients" className="nav-link">Clients</a>
-          <a href="/command-center/engines" className="nav-link font-semibold text-cyan-400/90 hover:text-cyan-300">Engine Matrix</a>
-          <a href="/command-center/threat-emulation" className="nav-link">APT Emulation</a>
-          <a href="/command-center/cloud" className="nav-link">Cloud</a>
-          <a href="/command-center/supply-chain" className="nav-link">Supply Chain</a>
-          <a href="/command-center/network" className="nav-link">Network</a>
-          <a href="/command-center/pqc-radar" className="nav-link">PQC Radar</a>
-          <a href="/command-center/oast" className="nav-link">OAST</a>
-          <a href="/command-center/digital-twin" className="nav-link">Digital Twin</a>
-          <a href="/command-center/zero-day-radar" className="nav-link">Zero-Day</a>
-          <a href="/command-center/system-core" className="nav-link">System Core</a>
+          <Link to="/engines" className="nav-link nav-link-active">Engine Matrix</Link>
+          <Link to="/threat-emulation" className="nav-link">APT Emulation</Link>
+          <Link to="/cloud" className="nav-link">Cloud</Link>
+          <Link to="/supply-chain" className="nav-link">Supply Chain</Link>
+          <Link to="/network" className="nav-link">Network</Link>
+          <Link to="/pqc-radar" className="nav-link">PQC Radar</Link>
+          <Link to="/oast" className="nav-link">OAST</Link>
+          <Link to="/digital-twin" className="nav-link">Digital Twin</Link>
+          <Link to="/zero-day-radar" className="nav-link">Zero-Day</Link>
+          <Link to="/findings" className="nav-link nav-link-findings">Findings C2</Link>
+          <Link to="/system-core" className="nav-link">System Core</Link>
           <a href="/api/export/findings" className="nav-link" download>Export CSV</a>
-          <a href="/logout" className="nav-link text-red-400/90 hover:text-red-400">Logout</a>
+          <a href="/logout" className="nav-link nav-link-danger">Logout</a>
         </nav>
       </header>
 

@@ -177,6 +177,18 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         <Link to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
           <span>⟐</span> Digital Twin
         </Link>
+        <Link to="/zero-day-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-rose-400/70 hover:bg-rose-950/20 hover:text-rose-300 transition-colors">
+          <span>☢</span> Zero-Day Radar
+        </Link>
+        <Link to="/findings" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/80 hover:bg-amber-950/30 hover:text-amber-300 transition-colors font-semibold">
+          <span>◉</span> Findings C2
+        </Link>
+        <Link to="/intel-map" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-sky-400/70 hover:bg-sky-950/20 hover:text-sky-300 transition-colors">
+          <span>🌐</span> Global Intel Map
+        </Link>
+        <Link to="/system-core" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/70 hover:bg-slate-800/40 hover:text-slate-300 transition-colors">
+          <span>⚙</span> System Core
+        </Link>
       </div>
 
       {/* Body: Client list */}

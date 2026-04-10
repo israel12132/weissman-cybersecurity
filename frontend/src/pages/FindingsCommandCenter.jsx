@@ -2,9 +2,10 @@
  * Phase 3 – Findings Command Center
  *
  * TanStack Table aggregating results from all 52 engines.
- * Columns: Severity, Engine Name, Title, MITRE ATT&CK, Score (CVSS), Time/Date.
- * Filters: Severity, Engine group/name, global text search.
- * Row click: drawer showing raw JSON + technical details.
+ * Columns: Severity, Engine Name, Title, MITRE ATT&CK, Score (CVSS), Status, Time/Date.
+ * Filters: Severity, Engine group/name, Status, global text search.
+ * Row click: drawer showing raw JSON + technical details + status update.
+ * Export: CSV download of all findings.
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
@@ -30,6 +31,48 @@ const SEVERITY_META = {
   medium:   { color: '#f59e0b', bg: '#f59e0b20', label: 'Medium',   order: 2 },
   low:      { color: '#22d3ee', bg: '#22d3ee20', label: 'Low',      order: 3 },
   info:     { color: '#6b7280', bg: '#6b728020', label: 'Info',     order: 4 },
+}
+
+const FINDING_STATUSES = [
+  { value: 'OPEN',          label: 'Open',          color: '#ef4444' },
+  { value: 'ACKNOWLEDGED',  label: 'Acknowledged',  color: '#f59e0b' },
+  { value: 'IN_PROGRESS',   label: 'In Progress',   color: '#3b82f6' },
+  { value: 'FIXED',         label: 'Fixed',         color: '#22c55e' },
+  { value: 'FALSE_POSITIVE',label: 'False Positive',color: '#6b7280' },
+]
+
+function getStatusMeta(s) {
+  return FINDING_STATUSES.find((x) => x.value === (s || '').toUpperCase()) ??
+    { value: s, label: s || '—', color: '#6b7280' }
+}
+
+function StatusBadge({ status }) {
+  const meta = getStatusMeta(status)
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono"
+      style={{ color: meta.color, backgroundColor: `${meta.color}20`, border: `1px solid ${meta.color}40` }}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
+function VerifiedBadge({ verified }) {
+  if (verified) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono"
+        style={{ color: '#22c55e', backgroundColor: '#22c55e15', border: '1px solid #22c55e40' }}>
+        ✓ Verified
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono"
+      style={{ color: '#94a3b8', backgroundColor: '#94a3b810', border: '1px solid #94a3b830' }}>
+      Potential
+    </span>
+  )
 }
 
 const UNKNOWN_SEVERITY_ORDER = 5
@@ -121,10 +164,19 @@ function SortIndicator({ sorted }) {
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
 
-function FindingDrawer({ finding, onClose }) {
+function FindingDrawer({ finding, onClose, onStatusUpdate }) {
   const meta = getSeverityMeta(finding?.severity)
   const engine = resolveEngine(finding?.source || finding?.engine)
   const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
+  const [statusUpdating, setStatusUpdating] = useState(false)
+
+  const handleStatusChange = (e) => {
+    const newStatus = e.target.value
+    if (!newStatus || newStatus === finding?.status) return
+    setStatusUpdating(true)
+    onStatusUpdate?.(finding?.raw_id, newStatus)
+    setTimeout(() => setStatusUpdating(false), 600)
+  }
 
   const rawJson = useMemo(() => {
     try {
@@ -199,6 +251,27 @@ function FindingDrawer({ finding, onClose }) {
 
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+              {/* Verification + Status Update */}
+              <section className="flex flex-wrap items-center gap-3">
+                <VerifiedBadge verified={!!finding.verified || !!finding.poc_sealed} />
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">Status:</span>
+                  <select
+                    value={finding.status || 'OPEN'}
+                    onChange={handleStatusChange}
+                    disabled={statusUpdating}
+                    className="bg-black/60 border border-white/15 rounded px-2 py-1 text-[11px] font-mono text-white/70 focus:outline-none focus:border-cyan-500/40 transition-colors disabled:opacity-50"
+                  >
+                    {FINDING_STATUSES.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                  {statusUpdating && (
+                    <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
+                  )}
+                </div>
+              </section>
+
               {/* Key fields */}
               <section>
                 <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">
@@ -206,11 +279,11 @@ function FindingDrawer({ finding, onClose }) {
                 </h3>
                 <dl className="space-y-2">
                   {[
-                    ['Status',      finding.status],
                     ['Score (CVSS)', finding.cvss_score ?? finding.score],
                     ['Discovered',  formatDate(finding.discovered_at || finding.created_at)],
                     ['Client ID',   finding.client_id],
                     ['Run ID',      finding.run_id],
+                    ['Finding ID',  finding.finding_id],
                   ].map(([label, val]) =>
                     val != null && val !== '' ? (
                       <div key={label} className="flex items-start gap-3">
@@ -363,6 +436,21 @@ function buildColumns() {
         cell: ({ getValue }) => <ScoreBadge score={getValue()} />,
       },
     ),
+    columnHelper.accessor('status', {
+      id: 'status',
+      header: 'Status',
+      size: 130,
+      cell: ({ getValue }) => <StatusBadge status={getValue()} />,
+      filterFn: (row, _id, filterValue) =>
+        !filterValue || (row.original.status || '').toUpperCase() === filterValue,
+    }),
+    columnHelper.accessor('verified', {
+      id: 'verified',
+      header: 'Verified',
+      size: 100,
+      enableSorting: false,
+      cell: ({ getValue }) => <VerifiedBadge verified={!!getValue()} />,
+    }),
     columnHelper.accessor(
       (row) => row.discovered_at || row.created_at || null,
       {
@@ -403,6 +491,7 @@ export default function FindingsCommandCenter() {
   const [rawFindings, setRawFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [region, setRegion] = useState('')
 
   const [selectedFinding, setSelectedFinding] = useState(null)
 
@@ -410,6 +499,7 @@ export default function FindingsCommandCenter() {
   const [globalFilter, setGlobalFilter] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
   const [engineFilter, setEngineFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   // Sorting
   const [sorting, setSorting] = useState([{ id: 'severity', desc: false }])
@@ -417,7 +507,7 @@ export default function FindingsCommandCenter() {
   // Pagination
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
 
-  // Load findings
+  // Load findings and public config
   useEffect(() => {
     setLoading(true)
     apiFetch('/api/findings')
@@ -428,6 +518,55 @@ export default function FindingsCommandCenter() {
       .then((d) => setRawFindings(Array.isArray(d) ? d : []))
       .catch((e) => setError(e?.message || 'Failed to load findings'))
       .finally(() => setLoading(false))
+    apiFetch('/api/config/public')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.region) setRegion(d.region) })
+      .catch(() => {})
+  }, [])
+
+  // Status update handler — updates local state + calls API
+  const handleStatusUpdate = useCallback((rawId, newStatus) => {
+    if (!rawId) return
+    const matchesId = (f) => Number(f.raw_id) === Number(rawId)
+    apiFetch(`/api/findings/${rawId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) {
+          setRawFindings((prev) =>
+            prev.map((f) => (matchesId(f) ? { ...f, status: d.status } : f)),
+          )
+          setSelectedFinding((prev) =>
+            prev && matchesId(prev) ? { ...prev, status: d.status } : prev,
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // CSV export
+  const handleExportCsv = useCallback(() => {
+    apiFetch('/api/findings/export/csv')
+      .then((r) => {
+        if (!r.ok) throw new Error('Export failed')
+        // Use filename from Content-Disposition header when available; fallback to dated name
+        const disposition = r.headers.get('content-disposition') || ''
+        const match = disposition.match(/filename="?([^";\s]+)"?/)
+        const filename = match?.[1] ?? `Weissman_findings_${new Date().toISOString().slice(0, 10)}.csv`
+        return r.blob().then((blob) => ({ blob, filename }))
+      })
+      .then(({ blob, filename }) => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(url)
+      })
+      .catch(() => {})
   }, [])
 
   const columns = useMemo(() => buildColumns(), [])
@@ -437,8 +576,9 @@ export default function FindingsCommandCenter() {
     const f = []
     if (severityFilter) f.push({ id: 'severity', value: severityFilter })
     if (engineFilter) f.push({ id: 'engine', value: engineFilter })
+    if (statusFilter) f.push({ id: 'status', value: statusFilter })
     return f
-  }, [severityFilter, engineFilter])
+  }, [severityFilter, engineFilter, statusFilter])
 
   const table = useReactTable({
     data: rawFindings,
@@ -519,9 +659,24 @@ export default function FindingsCommandCenter() {
             {loading && (
               <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
             )}
+            {region && (
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded border"
+                style={{ color: '#22d3ee', borderColor: '#22d3ee30', backgroundColor: '#22d3ee08' }}
+                title="Data residency region">
+                🌐 {region}
+              </span>
+            )}
             <span className="text-[11px] font-mono text-white/35">
               {rawFindings.length} total · {totalFiltered} shown
             </span>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+              title="Export all findings as CSV"
+            >
+              ↓ Export CSV
+            </button>
           </div>
         </div>
       </header>
@@ -601,14 +756,30 @@ export default function FindingsCommandCenter() {
             ))}
           </select>
 
+          {/* Status filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setPagination((p) => ({ ...p, pageIndex: 0 }))
+            }}
+            className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
+          >
+            <option value="">All Statuses</option>
+            {FINDING_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+
           {/* Clear filters */}
-          {(globalFilter || severityFilter || engineFilter) && (
+          {(globalFilter || severityFilter || engineFilter || statusFilter) && (
             <button
               type="button"
               onClick={() => {
                 setGlobalFilter('')
                 setSeverityFilter('')
                 setEngineFilter('')
+                setStatusFilter('')
                 setPagination((p) => ({ ...p, pageIndex: 0 }))
               }}
               className="px-3 py-2 rounded-lg text-xs font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
@@ -811,7 +982,7 @@ export default function FindingsCommandCenter() {
       </main>
 
       {/* ── Detail Drawer ──────────────────────────────────────────────────── */}
-      <FindingDrawer finding={selectedFinding} onClose={handleCloseDrawer} />
+      <FindingDrawer finding={selectedFinding} onClose={handleCloseDrawer} onStatusUpdate={handleStatusUpdate} />
     </div>
   )
 }

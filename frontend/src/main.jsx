@@ -64,8 +64,11 @@ import NetworkIntelligence from './pages/NetworkIntelligence'
 import CloudControlTower from './pages/CloudControlTower'
 import PqcRadar from './pages/PqcRadar'
 import OastDashboard from './pages/OastDashboard'
+import CouncilHitlQueue from './pages/CouncilHitlQueue'
+import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
+import App from './App'
 import './index.css'
 
 function ProtectedOutlet() {
@@ -115,9 +118,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="cloud" element={<CloudControlTower />} />
             <Route path="pqc-radar" element={<PqcRadar />} />
             <Route path="oast" element={<OastDashboard />} />
+            <Route path="council-queue" element={<CouncilHitlQueue />} />
+            <Route path="sso-config" element={<SsoDashboard />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
+            <Route path="intel-map" element={<App />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

@@ -1888,3 +1888,268 @@ async fn api_payload_sync_run(
         }
     }
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Council HITL (Human-In-The-Loop) approval queue handlers
+// ════════════════════════════════════════════════════════════════════
+
+/// Request body for POST /api/council/hitl/propose
+#[derive(Deserialize)]
+struct HitlProposeBody {
+    target_brief: String,
+    #[serde(default)]
+    chain_steps: Vec<String>,
+    #[serde(default)]
+    payload_preview: Option<String>,
+    #[serde(default)]
+    rationale: Option<String>,
+    #[serde(default)]
+    estimated_severity: Option<String>,
+    #[serde(default)]
+    council_job_id: Option<String>,
+    #[serde(default)]
+    client_id: Option<i64>,
+}
+
+/// POST /api/council/hitl/propose — record a Council proposal for operator review.
+async fn api_council_hitl_propose(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<HitlProposeBody>,
+) -> Response {
+    let brief = body.target_brief.trim().to_string();
+    if brief.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"target_brief required"}))).into_response();
+    }
+    let council_job_id = body
+        .council_job_id
+        .as_deref()
+        .and_then(|s| uuid::Uuid::parse_str(s).ok());
+
+    let proposal = crate::council_hitl::HitlProposal {
+        target_brief: brief,
+        chain_steps: body.chain_steps,
+        payload_preview: body.payload_preview.unwrap_or_default(),
+        rationale: body.rationale.unwrap_or_default(),
+        estimated_severity: body.estimated_severity.unwrap_or_else(|| "medium".to_string()),
+        council_job_id,
+        client_id: body.client_id,
+    };
+
+    match crate::council_hitl::propose(state.app_pool.as_ref(), auth.tenant_id, &proposal).await {
+        Ok(id) => (
+            StatusCode::CREATED,
+            Json(json!({
+                "id": id,
+                "status": "PENDING_APPROVAL",
+                "message": "Proposal queued for operator review. No payload has been fired.",
+                "safety_rails_no_shells": true,
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "hitl", "propose failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+/// GET /api/council/hitl/queue?status=PENDING_APPROVAL — list HITL queue items.
+#[derive(Deserialize)]
+struct HitlQueueQuery {
+    status: Option<String>,
+}
+
+async fn api_council_hitl_queue(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    axum::extract::Query(q): axum::extract::Query<HitlQueueQuery>,
+) -> Response {
+    let status_filter = q.status.as_deref().filter(|s| {
+        matches!(*s, "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "FIRED" | "FAILED")
+    });
+
+    match crate::council_hitl::list_queue(state.app_pool.as_ref(), auth.tenant_id, status_filter).await {
+        Ok(items) => Json(json!({"items": items, "count": items.len(), "safety_rails_no_shells": true})).into_response(),
+        Err(e) => {
+            tracing::error!(target: "hitl", "list_queue failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+/// Request body for approval / rejection
+#[derive(Deserialize)]
+struct HitlReviewBody {
+    #[serde(default)]
+    review_note: Option<String>,
+}
+
+/// POST /api/council/hitl/:id/approve — operator approves; fires async council_debate job.
+async fn api_council_hitl_approve(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(item_id): Path<i64>,
+    Json(body): Json<HitlReviewBody>,
+) -> Response {
+    match crate::council_hitl::approve_and_fire(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        item_id,
+        auth.user_id,
+        body.review_note.as_deref(),
+    )
+    .await
+    {
+        Ok(job_id) => (
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "item_id": item_id,
+                "status": "FIRED",
+                "job_id": job_id.to_string(),
+                "status_url": format!("/api/jobs/{}", job_id),
+                "message": "Approved. Council debate job queued. safety_rails_no_shells=true enforced.",
+                "safety_rails_no_shells": true,
+            })),
+        )
+            .into_response(),
+        Err(crate::council_hitl::ApproveError::NotFound) => {
+            (StatusCode::NOT_FOUND, Json(json!({"error":"not_found"}))).into_response()
+        }
+        Err(crate::council_hitl::ApproveError::WrongStatus(s)) => (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "wrong_status", "current_status": s})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "hitl", "approve_and_fire failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+/// POST /api/council/hitl/:id/reject — operator rejects; no job is fired.
+async fn api_council_hitl_reject(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(item_id): Path<i64>,
+    Json(body): Json<HitlReviewBody>,
+) -> Response {
+    match crate::council_hitl::reject(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        item_id,
+        auth.user_id,
+        body.review_note.as_deref(),
+    )
+    .await
+    {
+        Ok(()) => Json(json!({
+            "item_id": item_id,
+            "status": "REJECTED",
+            "message": "Proposal rejected. No payload has been fired.",
+        }))
+        .into_response(),
+        Err(crate::council_hitl::ApproveError::NotFound) => {
+            (StatusCode::NOT_FOUND, Json(json!({"error":"not_found"}))).into_response()
+        }
+        Err(crate::council_hitl::ApproveError::WrongStatus(s)) => (
+            StatusCode::CONFLICT,
+            Json(json!({"error":"wrong_status","current_status":s})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "hitl", "reject failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// OAST structured probe token handlers
+// ════════════════════════════════════════════════════════════════════
+
+/// Request body for POST /api/oast/probe
+#[derive(Deserialize)]
+struct OastProbeBody {
+    #[serde(default)]
+    client_id: Option<i64>,
+    #[serde(default)]
+    finding_id: Option<String>,
+    #[serde(default)]
+    hitl_queue_id: Option<i64>,
+    probe_type: String,
+    target_url: String,
+    #[serde(default)]
+    label: Option<String>,
+}
+
+/// POST /api/oast/probe — mint a structured OAST probe token for safe OOB verification.
+async fn api_oast_probe_mint(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<OastProbeBody>,
+) -> Response {
+    let target = body.target_url.trim().to_string();
+    if target.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"target_url required"}))).into_response();
+    }
+
+    match crate::council_hitl::mint_oast_probe(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        body.client_id,
+        body.finding_id.as_deref(),
+        body.hitl_queue_id,
+        &body.probe_type,
+        &target,
+        body.label.as_deref().unwrap_or(""),
+    )
+    .await
+    {
+        Ok(token) => {
+            let oast_base = std::env::var("WEISSMAN_OAST_DOMAIN")
+                .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
+                .unwrap_or_else(|_| "weissmancyber.com".to_string());
+            let callback_domain = format!("{}.{}", token, oast_base.trim());
+            (
+                StatusCode::CREATED,
+                Json(json!({
+                    "token": token.to_string(),
+                    "callback_domain": callback_domain,
+                    "callback_url": format!("http://{}", callback_domain),
+                    "verify_url": format!("/api/oast/verify/{}", token),
+                    "probe_type": body.probe_type,
+                    "target_url": target,
+                    "safety_rails_no_shells": true,
+                    "note": "Monitor callback_domain for DNS/HTTP interactions. Poll verify_url to confirm OOB hit.",
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "oast_probe", "mint failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+/// GET /api/oast/verify/:token — poll OOB callback status for a structured probe token.
+async fn api_oast_probe_verify(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(token_str): Path<String>,
+) -> Response {
+    let token = match uuid::Uuid::parse_str(token_str.trim()) {
+        Ok(u) => u,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error":"invalid_token"}))).into_response(),
+    };
+
+    match crate::council_hitl::poll_oast_token(state.app_pool.as_ref(), auth.tenant_id, token).await {
+        Ok(result) => Json(result).into_response(),
+        Err(e) => {
+            tracing::error!(target: "oast_probe", "poll failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}

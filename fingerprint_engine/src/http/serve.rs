@@ -199,6 +199,9 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
     if path == "/api/deception/aws-events" && method == Method::POST {
         return next.run(request).await;
     }
+    if path == "/api/openapi.json" && method == Method::GET {
+        return next.run(request).await;
+    }
     if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
         return next.run(request).await;
     }
@@ -1056,6 +1059,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/ws/command-center", get(ws_command_center))
         .route("/api/dashboard/stats", get(api_dashboard_stats))
         .route("/api/findings", get(api_findings))
+        .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/:id/status", patch(api_findings_update_status))
+        .route("/api/config/public", get(api_config_public))
+        .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
         .route("/api/command-center/ticker", get(api_command_center_ticker))
@@ -1144,6 +1151,19 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/command-center/deep-fuzz", post(api_deep_fuzz))
         .route("/api/general/mission", post(api_general_mission))
         .route("/api/council/debate", post(api_council_debate))
+        // ── Council HITL approval queue ───────────────────────────────────────
+        .route("/api/council/hitl/propose", post(api_council_hitl_propose))
+        .route("/api/council/hitl/queue", get(api_council_hitl_queue))
+        .route("/api/council/hitl/:id/approve", post(api_council_hitl_approve))
+        .route("/api/council/hitl/:id/reject", post(api_council_hitl_reject))
+        // ── Structured OAST probe token registry ─────────────────────────────
+        .route("/api/oast/probe", post(api_oast_probe_mint))
+        .route("/api/oast/verify/:token", get(api_oast_probe_verify))
+        // ── Enterprise SSO management ─────────────────────────────────────────
+        .route("/api/sso/idps", get(crate::sso_management::api_sso_idps_list).post(crate::sso_management::api_sso_idps_create))
+        .route("/api/sso/idps/:id", get(crate::sso_management::api_sso_idp_get).patch(crate::sso_management::api_sso_idp_patch).delete(crate::sso_management::api_sso_idp_delete))
+        .route("/api/sso/idps/:id/test", post(crate::sso_management::api_sso_idp_test))
+        .route("/api/sso/idps/:id/toggle", post(crate::sso_management::api_sso_idp_toggle))
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
         .route("/api/timing-scan/run", post(api_timing_scan_run))
