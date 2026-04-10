@@ -317,12 +317,11 @@ export default function OastDashboard() {
                   </div>
                 </div>
                 <p className="text-[10px] font-mono text-white/20">
-                  Callback: <code className="text-cyan-400/50">{tok.callback_domain ?? tok.token + '.weissmancyber.com'}</code>
+                  Callback: <code className="text-cyan-400/50">{tok.callback_domain ?? '—'}</code>
                 </p>
                 {tok.first_hit_at && (
                   <p className="text-[10px] text-green-400/70">First hit: {new Date(tok.first_hit_at).toLocaleString()}</p>
                 )}
-              </motion.div>
             ))}
           </div>
         )}

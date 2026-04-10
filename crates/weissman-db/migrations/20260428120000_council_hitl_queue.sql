@@ -25,7 +25,7 @@ CREATE TABLE council_hitl_queue (
         CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'FIRED', 'FAILED')),
     reviewed_by     BIGINT,                               -- user id from JWT (operators only)
     review_note     TEXT,
-    fired_job_id    UUID,                                 -- async job enqueued on APPROVED
+    fired_job_id    UUID,                                 -- async job enqueued when status transitions to FIRED
 
     -- Timestamps
     proposed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),

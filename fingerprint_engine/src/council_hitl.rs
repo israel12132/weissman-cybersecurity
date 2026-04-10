@@ -31,9 +31,10 @@ pub struct HitlProposal {
 fn sanitize_preview(raw: &str) -> String {
     const MAX_LEN: usize = 800;
     let truncated: String = raw.chars().take(MAX_LEN).collect();
-    // Strip tokens associated with shell escapes / stager patterns.
+    // Case-insensitive check for tokens associated with shell escapes / stager patterns.
+    let lower = truncated.to_ascii_lowercase();
     for bad in &["/bin/sh", "/bin/bash", "cmd.exe", "powershell", "nc -e", "bash -i"] {
-        if truncated.to_ascii_lowercase().contains(bad) {
+        if lower.contains(bad) {
             return "[preview redacted — shell keyword detected]".to_string();
         }
     }
