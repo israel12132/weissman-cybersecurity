@@ -261,28 +261,22 @@ pub async fn api_admin_users_update(
             .into_response();
     }
 
-    // Build update query dynamically
-    let mut updates = Vec::new();
-    let mut params: Vec<String> = Vec::new();
-
-    if let Some(ref role) = body.role {
-        let role = role.trim().to_lowercase();
+    // Validate role if provided
+    let valid_role = body.role.as_ref().map(|r| {
+        let role = r.trim().to_lowercase();
         let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
         if valid_roles.contains(&role.as_str()) {
-            updates.push(format!("role = ${}", params.len() + 1));
-            params.push(role);
+            Some(role)
+        } else {
+            None
         }
-    }
+    }).flatten();
 
-    // Only superadmin can grant superadmin
-    if let Some(is_superadmin) = body.is_superadmin {
-        if auth.is_superadmin {
-            updates.push(format!("is_superadmin = ${}", params.len() + 1));
-            params.push(is_superadmin.to_string());
-        }
-    }
+    // Check if there are any changes to make
+    let has_role_change = valid_role.is_some();
+    let has_superadmin_change = body.is_superadmin.is_some() && auth.is_superadmin;
 
-    if updates.is_empty() {
+    if !has_role_change && !has_superadmin_change {
         return (
             StatusCode::OK,
             Json(json!({"ok": true, "detail": "No changes"})),
@@ -291,13 +285,13 @@ pub async fn api_admin_users_update(
     }
 
     // Execute update with proper parameter binding
-    let update_sql = if let Some(ref role) = body.role {
+    let update_sql = if let Some(ref role) = valid_role {
         if let Some(is_sa) = body.is_superadmin {
             if auth.is_superadmin {
                 sqlx::query(
                     "UPDATE users SET role = $1, is_superadmin = $2 WHERE id = $3 AND tenant_id = $4",
                 )
-                .bind(role.trim().to_lowercase())
+                .bind(role)
                 .bind(is_sa)
                 .bind(user_id)
                 .bind(auth.tenant_id)
@@ -305,7 +299,7 @@ pub async fn api_admin_users_update(
                 .await
             } else {
                 sqlx::query("UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3")
-                    .bind(role.trim().to_lowercase())
+                    .bind(role)
                     .bind(user_id)
                     .bind(auth.tenant_id)
                     .execute(pool)
@@ -313,7 +307,7 @@ pub async fn api_admin_users_update(
             }
         } else {
             sqlx::query("UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3")
-                .bind(role.trim().to_lowercase())
+                .bind(role)
                 .bind(user_id)
                 .bind(auth.tenant_id)
                 .execute(pool)

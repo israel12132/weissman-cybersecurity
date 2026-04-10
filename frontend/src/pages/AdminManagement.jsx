@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/apiBase'
 import PageShell from './PageShell'
@@ -8,6 +9,7 @@ import PageShell from './PageShell'
  * Unique IDs: adminmgmt-*
  */
 export default function AdminManagement() {
+  const navigate = useNavigate()
   const { session, isCeo } = useAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -476,9 +478,7 @@ export default function AdminManagement() {
             <button
               id="adminmgmt-audit-log-btn"
               type="button"
-              onClick={() => {
-                window.location.href = '/command-center/audit-trail'
-              }}
+              onClick={() => navigate('/')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
             >
               📋 View Audit Logs
@@ -486,9 +486,7 @@ export default function AdminManagement() {
             <button
               id="adminmgmt-sso-config-btn"
               type="button"
-              onClick={() => {
-                window.location.href = '/command-center/sso-config'
-              }}
+              onClick={() => navigate('/sso-config')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
             >
               🔑 SSO Configuration
@@ -496,9 +494,7 @@ export default function AdminManagement() {
             <button
               id="adminmgmt-system-settings-btn"
               type="button"
-              onClick={() => {
-                window.location.href = '/command-center/operations'
-              }}
+              onClick={() => navigate('/')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
             >
               ⚙️ System Settings
