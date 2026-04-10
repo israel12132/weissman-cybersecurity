@@ -25,6 +25,10 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Findings C2
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
+            Council Queue
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           {badge && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"

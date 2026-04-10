@@ -1151,6 +1151,14 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/command-center/deep-fuzz", post(api_deep_fuzz))
         .route("/api/general/mission", post(api_general_mission))
         .route("/api/council/debate", post(api_council_debate))
+        // ── Council HITL approval queue ───────────────────────────────────────
+        .route("/api/council/hitl/propose", post(api_council_hitl_propose))
+        .route("/api/council/hitl/queue", get(api_council_hitl_queue))
+        .route("/api/council/hitl/:id/approve", post(api_council_hitl_approve))
+        .route("/api/council/hitl/:id/reject", post(api_council_hitl_reject))
+        // ── Structured OAST probe token registry ─────────────────────────────
+        .route("/api/oast/probe", post(api_oast_probe_mint))
+        .route("/api/oast/verify/:token", get(api_oast_probe_verify))
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
         .route("/api/timing-scan/run", post(api_timing_scan_run))

@@ -64,6 +64,7 @@ import NetworkIntelligence from './pages/NetworkIntelligence'
 import CloudControlTower from './pages/CloudControlTower'
 import PqcRadar from './pages/PqcRadar'
 import OastDashboard from './pages/OastDashboard'
+import CouncilHitlQueue from './pages/CouncilHitlQueue'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
 import App from './App'
@@ -116,6 +117,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="cloud" element={<CloudControlTower />} />
             <Route path="pqc-radar" element={<PqcRadar />} />
             <Route path="oast" element={<OastDashboard />} />
+            <Route path="council-queue" element={<CouncilHitlQueue />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
