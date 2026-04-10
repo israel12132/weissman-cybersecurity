@@ -116,18 +116,26 @@ pub fn create_session_token(
 }
 
 /// Verify access JWT; rejects explicit refresh-type claims and expired tokens.
+/// Returns AuthContext on success, None on any verification failure.
 pub fn verify_access_token(token: &str) -> Option<AuthContext> {
     let secret = jwt_secret();
     if secret.is_empty() {
+        tracing::warn!(
+            target: "auth_jwt",
+            "JWT secret empty — verify_access_token returning None"
+        );
         return None;
     }
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
-        .ok()
-        .and_then(|d| {
+    match decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation) {
+        Ok(d) => {
             let c = d.claims;
             if matches!(c.typ.as_deref(), Some("refresh")) {
+                tracing::debug!(
+                    target: "auth_jwt",
+                    "Rejected refresh token used as access token"
+                );
                 return None;
             }
             if c.sub > 0 && c.tid > 0 {
@@ -146,9 +154,27 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
                     is_superadmin,
                 })
             } else {
+                tracing::warn!(
+                    target: "auth_jwt",
+                    sub = c.sub,
+                    tid = c.tid,
+                    "Invalid sub/tid in JWT claims"
+                );
                 None
             }
-        })
+        }
+        Err(e) => {
+            // Log token verification failure for debugging
+            let token_preview: String = token.chars().take(20).collect();
+            tracing::debug!(
+                target: "auth_jwt",
+                error = %e,
+                token_preview = %token_preview,
+                "JWT verification failed"
+            );
+            None
+        }
+    }
 }
 
 /// Alias for [`verify_access_token`].

@@ -37,22 +37,62 @@ export function authHeaders() {
 }
 
 /**
+ * Attempt to refresh the access token using the refresh token cookie.
+ * Returns true if refresh succeeded, false otherwise.
+ */
+async function tryRefreshToken() {
+  try {
+    const r = await fetch(apiUrl('/api/auth/refresh'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!r.ok) return false
+    const data = await r.json().catch(() => ({}))
+    if (data.ok && data.access_token) {
+      setStoredAccessToken(data.access_token)
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
  * Same-origin fetch with credentials + optional Bearer from sessionStorage.
+ * On 401, attempts automatic token refresh and retries once.
  * @param {string} pathOrUrl path starting with `/` or absolute URL
  */
-export function apiFetch(pathOrUrl, init = {}) {
+export async function apiFetch(pathOrUrl, init = {}) {
   if (pathOrUrl == null || pathOrUrl === '') {
     return Promise.reject(new TypeError('apiFetch: path or URL is required'))
   }
   const pathStr = String(pathOrUrl)
   const url = pathStr.startsWith('http') ? pathStr : apiUrl(pathStr)
-  const headers = new Headers(init.headers || {})
-  const ah = authHeaders()
-  if (ah.Authorization) headers.set('Authorization', ah.Authorization)
-  const method = String(init.method || 'GET').toUpperCase()
-  const withInit =
-    method === 'GET' && init.cache === undefined ? { ...init, cache: 'no-store' } : init
-  return fetch(url, { credentials: 'include', ...withInit, headers })
+  
+  const doFetch = () => {
+    const headers = new Headers(init.headers || {})
+    const ah = authHeaders()
+    if (ah.Authorization) headers.set('Authorization', ah.Authorization)
+    const method = String(init.method || 'GET').toUpperCase()
+    const withInit =
+      method === 'GET' && init.cache === undefined ? { ...init, cache: 'no-store' } : init
+    return fetch(url, { credentials: 'include', ...withInit, headers })
+  }
+  
+  const response = await doFetch()
+  
+  // If 401 Unauthorized, attempt token refresh and retry
+  if (response.status === 401 && !pathStr.includes('/api/auth/refresh') && !pathStr.includes('/api/login')) {
+    const refreshed = await tryRefreshToken()
+    if (refreshed) {
+      // Retry the original request with the new token
+      return doFetch()
+    }
+  }
+  
+  return response
 }
 
 /** EventSource cannot send Authorization; append access_token when stored (backend accepts query for SSE). */
