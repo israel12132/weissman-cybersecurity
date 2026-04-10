@@ -13,24 +13,28 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
     >
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-dashboard" to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
             ← Dashboard
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-engines" to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
             Engine Matrix
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link to="/findings" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
             Findings C2
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-council" to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
             Council Queue
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-sso" to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
             SSO Config
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-admin" to="/admin" className="text-amber-300/70 hover:text-amber-200 text-xs font-mono transition-colors font-semibold">
+            Admin
           </Link>
           <span className="text-white/20 text-xs">|</span>
           {badge && (
