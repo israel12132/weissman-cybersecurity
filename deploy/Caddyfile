@@ -10,10 +10,10 @@
 # Validate:                 sudo caddy validate --config /etc/caddy/Caddyfile
 # Reload:                   sudo systemctl reload caddy
 #
-# Set the site label below to your real FQDN (e.g. weissman.example.com).
+# Set the site label below to your real FQDN (e.g. weissmancyber.com).
 # -----------------------------------------------------------------------------
 
-weissman.example.com {
+weissmancyber.com {
 	encode zstd gzip
 
 	# Streaming (SSE) and WebSockets: avoid buffering delays.
@@ -23,7 +23,7 @@ weissman.example.com {
 }
 
 # Optional: serve both apex and www (uncomment and fix names).
-# weissman.example.com, www.weissman.example.com {
+# weissmancyber.com, www.weissmancyber.com {
 # 	encode zstd gzip
 # 	reverse_proxy 127.0.0.1:8000 {
 # 		flush_interval -1

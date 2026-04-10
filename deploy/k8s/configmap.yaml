@@ -4,6 +4,6 @@ metadata:
   name: weissman-config
 data:
   PORT: "8000"
-  WEISSMAN_PUBLIC_BASE_URL: "https://weissman.example.com"
+  WEISSMAN_PUBLIC_BASE_URL: "https://weissmancyber.com"
   # DATABASE_URL, WEISSMAN_AUTH_DATABASE_URL, WEISSMAN_MIGRATE_URL, WEISSMAN_JWT_SECRET
   # must be supplied via Secrets in production.
