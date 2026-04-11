@@ -45,16 +45,27 @@ cd fingerprint_engine && cargo build --release && cd ..
 ### הפעלת המערכת (פקודת מאסטר)
 
 ```bash
-./start_weissman.sh
+# הפעלה מלאה עם Docker (מומלץ):
+./weissman start
+
+# או הפעלה native (ללא Docker):
+./weissman start native
 ```
 
-- מפעיל אוטומטית את ה־venv, בונה את מנוע Rust אם חסר, ומריץ את הבקאנד.
-- אם קיים `start_public.sh` — מפעיל גם שרת + Cloudflare Tunnel (גישה מכל מכשיר בעולם).
-- פתח בדפדפן: **http://localhost:8000** (או את כתובת ה־tunnel אם הופעל).
-- **העתק את הכתובת מהשורה "Visit it at"** אם השתמשת ב־tunnel.
-- ייתכן שייקח **10–20 שניות** עד שהכתובת תענה בדפדפן.
-- **אל תסגור את חלון הטרמינל** – כל עוד הוא פתוח, הגישה מהאינטרנט עובדת.
-- נכנסים לכתובת מכל דפדפן ומתחברים עם שם המשתמש והסיסמה (מ־.env).
+**פקודות נוספות:**
+```bash
+./weissman status     # בדיקת סטטוס
+./weissman logs -f    # צפייה בלוגים
+./weissman stop       # עצירת המערכת
+./weissman help       # עזרה מלאה
+```
+
+**כתובות:**
+- **Command Center:** http://localhost/
+- **API:** http://localhost/api/
+- **WebSocket:** ws://localhost/ws/
+
+> **הערה:** סקריפט `weissman` מפעיל את כל המערכת כולל PostgreSQL, Backend, Worker ו-Gateway.
 
 - **התחבר** עם שם המשתמש והסיסמה (מוגדרים ב־.env).
 - **חברות** – הוסף/ערוך חברות והזן כתובות (דומיינים), טווחי IP ו־Tech Stack.
