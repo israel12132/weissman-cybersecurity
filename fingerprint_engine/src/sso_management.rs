@@ -19,7 +19,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Row;
 use std::sync::Arc;

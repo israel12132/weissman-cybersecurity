@@ -152,3 +152,11 @@ pub fn qr_code_for_audit(base_url: &str, audit_root_hash: &str) -> Result<String
     let payload = format!("HASH:{}\nVERIFY:{}", audit_root_hash, url);
     qr_code_base64_svg(&payload)
 }
+
+/// Run crypto/audit engine on a target (no-op for this module - audit only).
+pub async fn run_crypto_engine_result(_target: &str) -> crate::engine_result::EngineResult {
+    crate::engine_result::EngineResult::ok(
+        vec![],
+        "Crypto engine: audit-only module, no active scanning performed".to_string(),
+    )
+}

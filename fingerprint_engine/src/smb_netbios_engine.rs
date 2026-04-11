@@ -1,6 +1,6 @@
 //! SMB/NetBIOS Engine — detects SMB exposure indicators via HTTP responses and known vulnerability signatures.
 
-use crate::engine_result::{print_result, EngineResult};
+use crate::engine_result::EngineResult;
 use serde_json::json;
 use std::net::SocketAddr;
 use std::time::Duration;
