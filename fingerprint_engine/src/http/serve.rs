@@ -1163,6 +1163,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/scan/start", post(api_scan_start))
         .route("/api/scan/stop", post(api_scan_stop))
         .route("/api/scan/run-all", post(api_scan_run_all))
+        .route("/api/scan/all-engines", post(api_scan_all_engines))
+        .route("/api/discovery/domains", post(api_discovery_domains))
+        .route("/api/scan/discovered-domains", post(api_scan_discovered_domains))
         .route(
             "/api/system/configs",
             get(api_system_configs_get).post(api_system_configs_post),

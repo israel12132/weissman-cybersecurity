@@ -85,6 +85,7 @@ pub mod threat_intel_engine;
 pub mod timing_engine;
 pub mod validator;
 
+pub mod auto_domain_discovery_engine;
 pub mod asm_engine;
 pub mod auto_heal;
 pub mod auto_heal_job;

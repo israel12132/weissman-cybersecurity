@@ -236,6 +236,7 @@ export default function EngineMatrix() {
   const [configLoading, setConfigLoading] = useState(false)
   const [engineStates, setEngineStates] = useState({})
   const [toast, setToast] = useState(null)
+  const [runAllLoading, setRunAllLoading] = useState(false)
 
   // Load clients
   useEffect(() => {
@@ -360,6 +361,46 @@ export default function EngineMatrix() {
     )
   }, [selectedClientId, enabledSet, handleRun, showToast])
 
+  const handleRunAllEngines = useCallback(async () => {
+    if (selectedClientId == null) {
+      showToast('error', 'Select a client first')
+      return
+    }
+    if (enabledSet.size === 0) {
+      showToast('error', 'No engines enabled for this client')
+      return
+    }
+    setRunAllLoading(true)
+    try {
+      const r = await apiFetch('/api/scan/all-engines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: Number(selectedClientId),
+          engines: Array.from(enabledSet),
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        showToast('error', d.detail || `Scan failed (${r.status})`)
+        return
+      }
+      showToast('info', `Queued ${d.engines_queued} engines (Job: ${d.job_id})`)
+      // Mark all enabled engines as running
+      setEngineStates((prev) => {
+        const next = { ...prev }
+        for (const id of enabledSet) {
+          next[id] = { ...next[id], status: 'running' }
+        }
+        return next
+      })
+    } catch (e) {
+      showToast('error', e?.message ?? 'Network error')
+    } finally {
+      setRunAllLoading(false)
+    }
+  }, [selectedClientId, enabledSet, showToast])
+
   const visibleGroups = activeGroup === 'all'
     ? ENGINE_GROUP_DEFS
     : ENGINE_GROUP_DEFS.filter((g) => g.id === activeGroup)
@@ -379,6 +420,10 @@ export default function EngineMatrix() {
           <div className="flex items-center gap-3">
             <Link to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
               ← Dashboard
+            </Link>
+            <span className="text-white/20 text-xs">|</span>
+            <Link to="/domain-discovery" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
+              🔍 Domain Discovery
             </Link>
             <span className="text-white/20 text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">Engine Matrix</h1>
@@ -408,6 +453,15 @@ export default function EngineMatrix() {
                 {totalEnabled} enabled
               </span>
             )}
+            {/* Run All Engines Button */}
+            <button
+              type="button"
+              onClick={handleRunAllEngines}
+              disabled={runAllLoading || configLoading || !selectedClientId || totalEnabled === 0}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {runAllLoading ? '⟳ Running…' : `🚀 Run All Engines (${totalEnabled})`}
+            </button>
           </div>
         </div>
       </header>

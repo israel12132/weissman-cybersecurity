@@ -905,3 +905,302 @@ async fn api_dag_get() -> Response {
     stage_to_nodes.insert(4, vec!["compliance".to_string()]);
     (StatusCode::OK, Json(json!({ "nodes": nodes_json, "edges": edges_json, "stage_to_nodes": stage_to_nodes }))).into_response()
 }
+
+// ── Auto Domain Discovery ─────────────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+struct DomainDiscoveryRequest {
+    target: String,
+    #[serde(default)]
+    company_name: Option<String>,
+}
+
+async fn api_discovery_domains(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: axum::extract::Json<DomainDiscoveryRequest>,
+) -> Response {
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &u,
+            "discovery_initiated",
+            &format!("auto_domain_discovery target={}", body.target.chars().take(200).collect::<String>()),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    let target = body.target.trim().to_string();
+    if target.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "target required"})),
+        )
+            .into_response();
+    }
+
+    let result = crate::auto_domain_discovery_engine::run_auto_discovery(
+        &target,
+        body.company_name.as_deref(),
+    )
+    .await;
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "primary_domain": result.primary_domain,
+            "company_name": result.company_name,
+            "total_discovered": result.total_discovered,
+            "live_domains": result.live_domains,
+            "stages_completed": result.stages_completed.iter().map(|s| format!("{}", s)).collect::<Vec<_>>(),
+            "domains": result.domains,
+        })),
+    )
+        .into_response()
+}
+
+// ── Scan All Engines for Client ───────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+struct ScanAllEnginesRequest {
+    client_id: i64,
+    #[serde(default)]
+    target: Option<String>,
+    #[serde(default)]
+    engines: Option<Vec<String>>,
+}
+
+async fn api_scan_all_engines(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    trace_ext: Option<Extension<crate::request_trace::TraceId>>,
+    body: axum::extract::Json<ScanAllEnginesRequest>,
+) -> Response {
+    if let Err(detail) =
+        crate::billing::enforce_scan_start(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
+
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &u,
+            "scan_all_engines_initiated",
+            &format!("client_id={} engines={:?}", body.client_id, body.engines),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    // Get enabled engines for client, or use provided list
+    let engines: Vec<String> = if let Some(ref custom_engines) = body.engines {
+        custom_engines.clone()
+    } else {
+        // Fetch from client config
+        let config_result: Option<Value> = sqlx::query_scalar(
+            "SELECT config FROM clients WHERE id = $1 AND tenant_id = $2"
+        )
+        .bind(body.client_id)
+        .bind(auth.tenant_id)
+        .fetch_optional(state.app_pool.as_ref())
+        .await
+        .ok()
+        .flatten();
+        
+        config_result
+            .and_then(|c| c.get("enabled_engines").cloned())
+            .and_then(|e| e.as_array().cloned())
+            .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_else(|| weissman_core::models::engine::KNOWN_ENGINE_IDS.iter().map(|s| s.to_string()).collect())
+    };
+
+    if engines.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "No engines configured for this client"})),
+        )
+            .into_response();
+    }
+
+    // Get target from client if not provided
+    let target = if let Some(ref t) = body.target {
+        t.clone()
+    } else {
+        let domains_result: Option<String> = sqlx::query_scalar(
+            "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2"
+        )
+        .bind(body.client_id)
+        .bind(auth.tenant_id)
+        .fetch_optional(state.app_pool.as_ref())
+        .await
+        .ok()
+        .flatten();
+
+        domains_result
+            .and_then(|d| {
+                serde_json::from_str::<Vec<String>>(&d)
+                    .ok()
+                    .and_then(|arr| arr.first().cloned())
+            })
+            .unwrap_or_default()
+    };
+
+    // Queue scan-all-engines job
+    let payload = json!({
+        "client_id": body.client_id,
+        "target": target,
+        "engines": engines,
+    });
+
+    match crate::async_jobs::enqueue(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        "scan_all_engines",
+        payload,
+        trace_ext.map(|Extension(t)| t.0),
+    )
+    .await
+    {
+        Ok(job_id) => (
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "job_id": job_id.to_string(),
+                "status_url": format!("/api/jobs/{}", job_id),
+                "engines_queued": engines.len(),
+                "message": "All engines scan queued; poll status_url for progress",
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "async_jobs", error = %e, "enqueue scan_all_engines failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ── Scan All Discovered Domains ───────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+struct ScanDomainsRequest {
+    client_id: i64,
+    domains: Vec<String>,
+    #[serde(default)]
+    engines: Option<Vec<String>>,
+}
+
+async fn api_scan_discovered_domains(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    trace_ext: Option<Extension<crate::request_trace::TraceId>>,
+    body: axum::extract::Json<ScanDomainsRequest>,
+) -> Response {
+    if let Err(detail) =
+        crate::billing::enforce_scan_start(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
+
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &u,
+            "scan_domains_initiated",
+            &format!("client_id={} domains_count={}", body.client_id, body.domains.len()),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    if body.domains.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "domains list required"})),
+        )
+            .into_response();
+    }
+
+    // Default engines for domain scanning (recon-focused)
+    let engines = body.engines.clone().unwrap_or_else(|| {
+        vec![
+            "osint".to_string(),
+            "asm".to_string(),
+            "discovery_engine".to_string(),
+            "recon".to_string(),
+            "leak_hunter".to_string(),
+        ]
+    });
+
+    let payload = json!({
+        "client_id": body.client_id,
+        "domains": body.domains,
+        "engines": engines,
+    });
+
+    match crate::async_jobs::enqueue(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        "scan_discovered_domains",
+        payload,
+        trace_ext.map(|Extension(t)| t.0),
+    )
+    .await
+    {
+        Ok(job_id) => (
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "job_id": job_id.to_string(),
+                "status_url": format!("/api/jobs/{}", job_id),
+                "domains_count": body.domains.len(),
+                "engines": engines,
+                "message": "Domain scan queued for all discovered domains",
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "async_jobs", error = %e, "enqueue scan_discovered_domains failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
