@@ -172,9 +172,36 @@ cmd_start_docker() {
     echo -e "    • ${CYAN}weissman stop${NC}       Stop services"
     echo ""
     
-    # Wait for services to become healthy (backend has 60s start_period)
-    log_info "Waiting for services to become healthy..."
-    sleep 10
+    # Wait for services to become healthy (backend has 60s start_period for migrations)
+    log_info "Waiting for services to become healthy (this may take up to 60 seconds for migrations)..."
+    local max_wait=90
+    local waited=0
+    local interval=5
+    
+    while [ $waited -lt $max_wait ]; do
+        sleep $interval
+        waited=$((waited + interval))
+        
+        # Check if backend is healthy
+        local backend_health
+        backend_health=$(docker compose ps backend --format "{{.Health}}" 2>/dev/null | head -1)
+        
+        if [ "$backend_health" = "healthy" ]; then
+            log_success "Backend is healthy after ${waited}s"
+            break
+        elif [ "$backend_health" = "unhealthy" ]; then
+            log_error "Backend failed health check after ${waited}s"
+            log_info "Check logs with: weissman logs backend"
+            break
+        fi
+        
+        # Show progress
+        if [ $((waited % 15)) -eq 0 ]; then
+            log_info "Still waiting for backend... (${waited}s/${max_wait}s)"
+        fi
+    done
+    
+    echo ""
     cmd_status
 }
 
