@@ -28,7 +28,7 @@ RUN cargo build -p weissman-server -p weissman-worker --release --locked
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 \
+    ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 curl procps \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -r -s /bin/false -u 65532 weissman
 COPY --from=build /build/target/release/weissman-server /usr/local/bin/weissman-server
