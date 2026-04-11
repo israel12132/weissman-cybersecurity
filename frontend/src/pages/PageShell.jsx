@@ -21,6 +21,10 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Engine Matrix
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-discovery" to="/domain-discovery" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
+            Domain Discovery
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
             Findings C2
           </Link>

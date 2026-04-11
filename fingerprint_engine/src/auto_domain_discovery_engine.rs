@@ -148,8 +148,9 @@ async fn discover_from_ct_logs(domain: &str) -> Vec<String> {
     let client = build_client(CT_LOGS_TIMEOUT_SECS);
     let mut domains = HashSet::new();
     
-    // crt.sh API
-    let crtsh_url = format!("https://crt.sh/?q=%.{}&output=json", domain);
+    // crt.sh API - URL encode the domain to prevent injection
+    let encoded_domain = urlencoding::encode(domain);
+    let crtsh_url = format!("https://crt.sh/?q=%.{}&output=json", encoded_domain);
     if let Ok(resp) = client.get(&crtsh_url).send().await {
         if let Ok(json) = resp.json::<Vec<serde_json::Value>>().await {
             for entry in json.iter().take(500) {
@@ -233,20 +234,17 @@ async fn discover_from_web_crawl(base_domains: &[String]) -> Vec<String> {
 async fn discover_from_email_records(domain: &str) -> Vec<String> {
     let mut domains = Vec::new();
     
-    // Check SPF record for include: directives
-    let spf_host = format!("{}:80", domain);
-    if let Ok(mut addrs) = tokio::net::lookup_host(&spf_host).await {
-        if addrs.next().is_some() {
-            // Domain resolves, try TXT records via DNS-over-HTTPS
-            let client = build_client(HTTP_TIMEOUT_SECS);
-            let doh_url = format!("https://dns.google/resolve?name={}&type=TXT", domain);
-            if let Ok(resp) = client.get(&doh_url).send().await {
-                if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    if let Some(answers) = json.get("Answer").and_then(|a| a.as_array()) {
-                        for ans in answers {
-                            if let Some(data) = ans.get("data").and_then(|d| d.as_str()) {
-                                // Parse SPF include: directives
-                                if data.contains("v=spf1") {
+    // Try TXT records via DNS-over-HTTPS (don't require DNS resolution first)
+    let client = build_client(HTTP_TIMEOUT_SECS);
+    let encoded_domain = urlencoding::encode(domain);
+    let doh_url = format!("https://dns.google/resolve?name={}&type=TXT", encoded_domain);
+    if let Ok(resp) = client.get(&doh_url).send().await {
+        if let Ok(json) = resp.json::<serde_json::Value>().await {
+            if let Some(answers) = json.get("Answer").and_then(|a| a.as_array()) {
+                for ans in answers {
+                    if let Some(data) = ans.get("data").and_then(|d| d.as_str()) {
+                        // Parse SPF include: directives
+                        if data.contains("v=spf1") {
                                     for part in data.split_whitespace() {
                                         if let Some(include_domain) = part.strip_prefix("include:") {
                                             domains.push(include_domain.to_lowercase());
@@ -261,8 +259,6 @@ async fn discover_from_email_records(domain: &str) -> Vec<String> {
                     }
                 }
             }
-        }
-    }
     
     domains
 }

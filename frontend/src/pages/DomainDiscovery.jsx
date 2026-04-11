@@ -247,7 +247,7 @@ export default function DomainDiscovery() {
     if (!result?.domains) return
     const filtered = getFilteredDomains()
     setSelectedDomains(new Set(filtered.map((d) => d.domain)))
-  }, [result])
+  }, [result, getFilteredDomains])
 
   const handleSelectNone = useCallback(() => {
     setSelectedDomains(new Set())
