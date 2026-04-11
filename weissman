@@ -1,0 +1,512 @@
+#!/bin/bash
+#
+# ██╗    ██╗███████╗██╗███████╗███████╗███╗   ███╗ █████╗ ███╗   ██╗
+# ██║    ██║██╔════╝██║██╔════╝██╔════╝████╗ ████║██╔══██╗████╗  ██║
+# ██║ █╗ ██║█████╗  ██║███████╗███████╗██╔████╔██║███████║██╔██╗ ██║
+# ██║███╗██║██╔══╝  ██║╚════██║╚════██║██║╚██╔╝██║██╔══██║██║╚██╗██║
+# ╚███╔███╔╝███████╗██║███████║███████║██║ ╚═╝ ██║██║  ██║██║ ╚████║
+#  ╚══╝╚══╝ ╚══════╝╚═╝╚══════╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
+#
+# Weissman Cybersecurity Platform — CLI Management Tool
+# https://weissmancyber.com
+#
+# Usage: weissman <command> [options]
+#
+# Commands:
+#   start       Start the complete system (Docker or native)
+#   stop        Stop all services
+#   restart     Restart all services
+#   status      Show system status
+#   logs        Show logs (use -f for follow)
+#   dev         Start in development mode (hot reload)
+#   build       Build all components
+#   migrate     Run database migrations
+#   shell       Open a shell in the backend container
+#   help        Show this help message
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Get the script directory (handle symlinks)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Load .env if exists
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+fi
+
+# Default values
+export PORT="${PORT:-8000}"
+export WEISSMAN_STATIC="${WEISSMAN_STATIC:-$SCRIPT_DIR/frontend/dist}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-weissman}"
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+print_banner() {
+    echo -e "${CYAN}"
+    echo '██╗    ██╗███████╗██╗███████╗███████╗███╗   ███╗ █████╗ ███╗   ██╗'
+    echo '██║    ██║██╔════╝██║██╔════╝██╔════╝████╗ ████║██╔══██╗████╗  ██║'
+    echo '██║ █╗ ██║█████╗  ██║███████╗███████╗██╔████╔██║███████║██╔██╗ ██║'
+    echo '██║███╗██║██╔══╝  ██║╚════██║╚════██║██║╚██╔╝██║██╔══██║██║╚██╗██║'
+    echo '╚███╔███╔╝███████╗██║███████║███████║██║ ╚═╝ ██║██║  ██║██║ ╚████║'
+    echo ' ╚══╝╚══╝ ╚══════╝╚═╝╚══════╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝'
+    echo -e "${NC}"
+    echo -e "${BOLD}Cybersecurity Command & Control Platform${NC}"
+    echo ""
+}
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[✓]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[!]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[✗]${NC} $1"
+}
+
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker is not installed. Install Docker: https://docs.docker.com/get-docker/"
+        return 1
+    fi
+    if ! docker info &> /dev/null; then
+        log_error "Docker daemon is not running. Start Docker and try again."
+        return 1
+    fi
+    return 0
+}
+
+check_rust() {
+    if ! command -v cargo &> /dev/null; then
+        log_warn "Rust/Cargo not found. Install: https://rustup.rs"
+        return 1
+    fi
+    return 0
+}
+
+check_node() {
+    if ! command -v node &> /dev/null; then
+        log_warn "Node.js not found. Install: https://nodejs.org"
+        return 1
+    fi
+    return 0
+}
+
+# =============================================================================
+# Commands
+# =============================================================================
+
+cmd_start() {
+    print_banner
+    
+    local MODE="${1:-docker}"
+    
+    case "$MODE" in
+        docker|d)
+            cmd_start_docker
+            ;;
+        native|n)
+            cmd_start_native
+            ;;
+        *)
+            log_info "Starting in Docker mode (use 'weissman start native' for native mode)"
+            cmd_start_docker
+            ;;
+    esac
+}
+
+cmd_start_docker() {
+    log_info "Starting Weissman in Docker mode..."
+    
+    if ! check_docker; then
+        exit 1
+    fi
+    
+    # Check for .env file
+    if [ ! -f ".env" ]; then
+        log_warn "No .env file found. Creating from .env.example..."
+        if [ -f ".env.example" ]; then
+            cp .env.example .env
+            log_info "Created .env from .env.example. Please configure it before production use."
+        else
+            log_warn "No .env.example found. Using defaults from docker-compose.yml"
+        fi
+    fi
+    
+    log_info "Building and starting containers..."
+    docker compose up --build -d
+    
+    echo ""
+    log_success "Weissman is starting!"
+    echo ""
+    echo -e "  ${BOLD}Services:${NC}"
+    echo -e "    • ${GREEN}Command Center:${NC}  http://localhost/"
+    echo -e "    • ${GREEN}API:${NC}             http://localhost/api/"
+    echo -e "    • ${GREEN}WebSocket:${NC}       ws://localhost/ws/"
+    echo -e "    • ${GREEN}PostgreSQL:${NC}      localhost:5432"
+    echo ""
+    echo -e "  ${BOLD}Commands:${NC}"
+    echo -e "    • ${CYAN}weissman logs -f${NC}    Follow logs"
+    echo -e "    • ${CYAN}weissman status${NC}     Check status"
+    echo -e "    • ${CYAN}weissman stop${NC}       Stop services"
+    echo ""
+    
+    # Wait and show initial status
+    sleep 3
+    cmd_status
+}
+
+cmd_start_native() {
+    log_info "Starting Weissman in native mode..."
+    
+    # Check for PostgreSQL
+    if [ -z "${DATABASE_URL:-}" ]; then
+        log_error "DATABASE_URL not set. Set it in .env or export it."
+        log_info "Example: DATABASE_URL=postgres://postgres:postgres@localhost:5432/weissman"
+        exit 1
+    fi
+    
+    # Check for JWT secret
+    if [ -z "${WEISSMAN_JWT_SECRET:-}" ]; then
+        log_warn "WEISSMAN_JWT_SECRET not set. Using development default."
+        export WEISSMAN_JWT_SECRET="dev-secret-change-in-production"
+    fi
+    
+    # Build Rust backend if needed
+    RUST_BIN="$SCRIPT_DIR/target/release/weissman-server"
+    if [ ! -x "$RUST_BIN" ]; then
+        log_info "Building weissman-server..."
+        if check_rust; then
+            cargo build --release -p weissman-server
+        else
+            log_error "Cannot build without Rust. Install Rust: https://rustup.rs"
+            exit 1
+        fi
+    fi
+    
+    # Build frontend if needed
+    if [ ! -f "frontend/dist/index.html" ] && [ -d "frontend" ]; then
+        log_info "Building frontend..."
+        if check_node; then
+            (cd frontend && npm install && npm run build)
+        else
+            log_warn "Skipping frontend build (Node.js not found). API-only mode."
+        fi
+    fi
+    
+    mkdir -p data
+    
+    echo ""
+    log_success "Starting Weissman server..."
+    echo ""
+    echo -e "  ${BOLD}URL:${NC} http://localhost:${PORT}"
+    echo -e "  ${BOLD}Press Ctrl+C to stop${NC}"
+    echo ""
+    
+    exec "$RUST_BIN"
+}
+
+cmd_stop() {
+    print_banner
+    log_info "Stopping Weissman services..."
+    
+    if check_docker; then
+        docker compose down
+        log_success "All services stopped."
+    else
+        log_warn "Docker not available. If running in native mode, use Ctrl+C."
+    fi
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 2
+    cmd_start "$@"
+}
+
+cmd_status() {
+    if ! check_docker; then
+        # Check for native process
+        if pgrep -f "weissman-server" > /dev/null; then
+            log_success "weissman-server is running (native mode)"
+            pgrep -af "weissman-server"
+        else
+            log_warn "No Weissman processes found"
+        fi
+        return
+    fi
+    
+    echo -e "${BOLD}Container Status:${NC}"
+    echo ""
+    docker compose ps
+    echo ""
+    
+    # Health checks
+    echo -e "${BOLD}Health Checks:${NC}"
+    
+    # Check API
+    if curl -sf http://localhost/api/config/public > /dev/null 2>&1; then
+        log_success "API: Healthy"
+    else
+        log_warn "API: Not responding"
+    fi
+    
+    # Check frontend
+    if curl -sf http://localhost/command-center/ > /dev/null 2>&1; then
+        log_success "Frontend: Healthy"
+    else
+        log_warn "Frontend: Not responding"
+    fi
+    
+    # Check database
+    if docker compose exec -T postgres pg_isready -U postgres -d weissman > /dev/null 2>&1; then
+        log_success "PostgreSQL: Healthy"
+    else
+        log_warn "PostgreSQL: Not responding"
+    fi
+    
+    echo ""
+}
+
+cmd_logs() {
+    if ! check_docker; then
+        log_error "Docker not available"
+        exit 1
+    fi
+    
+    local FOLLOW=""
+    local SERVICE=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--follow)
+                FOLLOW="-f"
+                shift
+                ;;
+            *)
+                SERVICE="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    docker compose logs $FOLLOW $SERVICE
+}
+
+cmd_dev() {
+    print_banner
+    log_info "Starting in development mode..."
+    
+    if ! check_docker; then
+        exit 1
+    fi
+    
+    # Start database only
+    log_info "Starting PostgreSQL..."
+    docker compose up -d postgres
+    
+    sleep 3
+    
+    # Export DATABASE_URL for local development
+    export DATABASE_URL="postgres://postgres:postgres@localhost:5432/weissman"
+    export WEISSMAN_AUTH_DATABASE_URL="$DATABASE_URL"
+    export WEISSMAN_MIGRATE_URL="$DATABASE_URL"
+    export WEISSMAN_JWT_SECRET="${WEISSMAN_JWT_SECRET:-dev-secret-change-in-production}"
+    
+    log_success "PostgreSQL is running on localhost:5432"
+    echo ""
+    echo -e "${BOLD}Development Commands:${NC}"
+    echo ""
+    echo -e "  ${CYAN}# Terminal 1 - Backend:${NC}"
+    echo "  export DATABASE_URL=\"$DATABASE_URL\""
+    echo "  export WEISSMAN_JWT_SECRET=\"$WEISSMAN_JWT_SECRET\""
+    echo "  cargo watch -x 'run -p weissman-server'"
+    echo ""
+    echo -e "  ${CYAN}# Terminal 2 - Frontend:${NC}"
+    echo "  cd frontend && npm run dev"
+    echo ""
+    echo -e "  ${CYAN}# Or run both with:${NC}"
+    echo "  weissman start native"
+    echo ""
+}
+
+cmd_build() {
+    print_banner
+    log_info "Building all components..."
+    
+    # Build Rust
+    if check_rust; then
+        log_info "Building Rust backend..."
+        cargo build --release -p weissman-server
+        cargo build --release -p weissman-worker
+        log_success "Rust build complete"
+    else
+        log_warn "Skipping Rust build (Cargo not found)"
+    fi
+    
+    # Build frontend
+    if check_node; then
+        log_info "Building frontend..."
+        (cd frontend && npm install && npm run build)
+        log_success "Frontend build complete"
+    else
+        log_warn "Skipping frontend build (Node.js not found)"
+    fi
+    
+    # Build Docker images
+    if check_docker; then
+        log_info "Building Docker images..."
+        docker compose build
+        log_success "Docker images built"
+    fi
+    
+    log_success "Build complete!"
+}
+
+cmd_migrate() {
+    log_info "Running database migrations..."
+    
+    if [ -z "${WEISSMAN_MIGRATE_URL:-}" ] && [ -z "${DATABASE_URL:-}" ]; then
+        log_error "WEISSMAN_MIGRATE_URL or DATABASE_URL must be set"
+        exit 1
+    fi
+    
+    if check_docker && docker compose ps postgres | grep -q "running"; then
+        # Use backend container for migrations
+        docker compose exec backend /usr/local/bin/weissman-server --migrate-only
+    elif check_rust; then
+        # Run locally
+        cargo run -p weissman-server --release -- --migrate-only
+    else
+        log_error "Cannot run migrations: No Docker or Rust available"
+        exit 1
+    fi
+    
+    log_success "Migrations complete"
+}
+
+cmd_shell() {
+    if ! check_docker; then
+        exit 1
+    fi
+    
+    local SERVICE="${1:-backend}"
+    
+    log_info "Opening shell in $SERVICE container..."
+    docker compose exec "$SERVICE" /bin/sh
+}
+
+cmd_help() {
+    print_banner
+    echo -e "${BOLD}Usage:${NC} weissman <command> [options]"
+    echo ""
+    echo -e "${BOLD}Commands:${NC}"
+    echo ""
+    echo -e "  ${GREEN}start${NC} [docker|native]  Start the complete system"
+    echo -e "                         docker (default): Use Docker Compose"
+    echo -e "                         native: Run Rust binary directly"
+    echo ""
+    echo -e "  ${GREEN}stop${NC}                   Stop all services"
+    echo ""
+    echo -e "  ${GREEN}restart${NC}                Restart all services"
+    echo ""
+    echo -e "  ${GREEN}status${NC}                 Show system status and health"
+    echo ""
+    echo -e "  ${GREEN}logs${NC} [-f] [service]    Show logs"
+    echo -e "                         -f: Follow log output"
+    echo -e "                         service: backend, worker, postgres, gateway"
+    echo ""
+    echo -e "  ${GREEN}dev${NC}                    Start PostgreSQL for development"
+    echo ""
+    echo -e "  ${GREEN}build${NC}                  Build all components"
+    echo ""
+    echo -e "  ${GREEN}migrate${NC}                Run database migrations"
+    echo ""
+    echo -e "  ${GREEN}shell${NC} [service]        Open shell in container (default: backend)"
+    echo ""
+    echo -e "  ${GREEN}help${NC}                   Show this help message"
+    echo ""
+    echo -e "${BOLD}Examples:${NC}"
+    echo ""
+    echo "  weissman start              # Start with Docker (recommended)"
+    echo "  weissman start native       # Start Rust server directly"
+    echo "  weissman logs -f backend    # Follow backend logs"
+    echo "  weissman status             # Check system health"
+    echo ""
+    echo -e "${BOLD}Environment Variables:${NC}"
+    echo ""
+    echo "  PORT                        HTTP port (default: 8000)"
+    echo "  DATABASE_URL                PostgreSQL connection string"
+    echo "  WEISSMAN_JWT_SECRET         JWT signing secret (required)"
+    echo "  WEISSMAN_ADMIN_EMAIL        Admin user email"
+    echo "  WEISSMAN_ADMIN_PASSWORD     Admin user password"
+    echo ""
+    echo "  See .env.example for all options"
+    echo ""
+}
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+COMMAND="${1:-help}"
+shift || true
+
+case "$COMMAND" in
+    start)
+        cmd_start "$@"
+        ;;
+    stop)
+        cmd_stop
+        ;;
+    restart)
+        cmd_restart "$@"
+        ;;
+    status|ps)
+        cmd_status
+        ;;
+    logs|log)
+        cmd_logs "$@"
+        ;;
+    dev|develop)
+        cmd_dev
+        ;;
+    build)
+        cmd_build
+        ;;
+    migrate|migration|migrations)
+        cmd_migrate
+        ;;
+    shell|sh|exec)
+        cmd_shell "$@"
+        ;;
+    help|--help|-h)
+        cmd_help
+        ;;
+    *)
+        log_error "Unknown command: $COMMAND"
+        echo "Run 'weissman help' for usage"
+        exit 1
+        ;;
+esac
