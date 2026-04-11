@@ -172,8 +172,9 @@ cmd_start_docker() {
     echo -e "    • ${CYAN}weissman stop${NC}       Stop services"
     echo ""
     
-    # Wait and show initial status
-    sleep 3
+    # Wait for services to become healthy (backend has 60s start_period)
+    log_info "Waiting for services to become healthy..."
+    sleep 10
     cmd_status
 }
 
@@ -259,31 +260,45 @@ cmd_status() {
     
     echo -e "${BOLD}Container Status:${NC}"
     echo ""
-    docker compose ps
+    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
     echo ""
     
     # Health checks
     echo -e "${BOLD}Health Checks:${NC}"
     
-    # Check API
-    if curl -sf http://localhost/api/config/public > /dev/null 2>&1; then
-        log_success "API: Healthy"
-    else
-        log_warn "API: Not responding"
-    fi
-    
-    # Check frontend
-    if curl -sf http://localhost/command-center/ > /dev/null 2>&1; then
-        log_success "Frontend: Healthy"
-    else
-        log_warn "Frontend: Not responding"
-    fi
-    
-    # Check database
+    # Check PostgreSQL first (foundation)
     if docker compose exec -T postgres pg_isready -U postgres -d weissman > /dev/null 2>&1; then
         log_success "PostgreSQL: Healthy"
     else
         log_warn "PostgreSQL: Not responding"
+    fi
+    
+    # Check API (via backend container health or direct curl)
+    local backend_health
+    backend_health=$(docker compose ps backend --format "{{.Health}}" 2>/dev/null | head -1)
+    if [ "$backend_health" = "healthy" ]; then
+        log_success "API: Healthy"
+    elif curl -sf http://localhost/api/config/public > /dev/null 2>&1; then
+        log_success "API: Healthy"
+    elif [ "$backend_health" = "starting" ]; then
+        log_info "API: Starting (migrations or initialization in progress...)"
+    else
+        log_warn "API: Not responding"
+        log_info "  → Run 'weissman logs backend' to check logs"
+    fi
+    
+    # Check frontend (via gateway container health or direct curl)
+    local gateway_health
+    gateway_health=$(docker compose ps gateway --format "{{.Health}}" 2>/dev/null | head -1)
+    if [ "$gateway_health" = "healthy" ]; then
+        log_success "Frontend: Healthy"
+    elif curl -sf http://localhost/command-center/ > /dev/null 2>&1; then
+        log_success "Frontend: Healthy"
+    elif [ "$gateway_health" = "starting" ]; then
+        log_info "Frontend: Starting..."
+    else
+        log_warn "Frontend: Not responding"
+        log_info "  → Run 'weissman logs gateway' to check logs"
     fi
     
     echo ""

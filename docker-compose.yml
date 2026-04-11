@@ -21,6 +21,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   backend:
     build:
@@ -46,6 +47,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/config/public"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
@@ -56,9 +64,16 @@ services:
       WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "weissman-worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
   gateway:
     build:
@@ -67,7 +82,15 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/command-center/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   weissman_pg:

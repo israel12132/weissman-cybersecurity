@@ -7,6 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM nginx:1.27-alpine
+RUN apk add --no-cache curl
 COPY deploy/nginx-gateway.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html/command-center
 EXPOSE 80
