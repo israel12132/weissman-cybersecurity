@@ -210,7 +210,7 @@ pub async fn execute_job(
                     "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
                     "recon" => crate::recon::enum_subdomains_default(&target).await.into_iter().map(|d| json!({"type": "recon", "subdomain": d})).collect::<Vec<_>>().into(),
                     "supply_chain" => crate::supply_chain_engine::run_supply_chain_result(&target, None).await,
-                    "bola_idor" => crate::bola_idor_engine::run_bola_idor_result(&target).await,
+                    "bola_idor" => crate::bola_idor_engine::run_bola_idor_result(&target, None).await,
                     "graphql_attack" => crate::graphql_attack_engine::run_graphql_attack_result(&target).await,
                     "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(&target).await,
                     "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(&target).await,

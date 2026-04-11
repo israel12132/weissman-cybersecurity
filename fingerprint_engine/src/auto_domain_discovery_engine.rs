@@ -464,7 +464,7 @@ pub async fn run_auto_discovery(
     
     // Check liveness for all domains (concurrent)
     tracing::info!(target: "auto_domain_discovery", "Checking liveness for {} domains", discovered_domains.len());
-    let client = Arc::new(build_client(HTTP_TIMEOUT_SECS));
+    let _client = Arc::new(build_client(HTTP_TIMEOUT_SECS));
     
     let checks: Vec<_> = discovered_domains
         .iter()

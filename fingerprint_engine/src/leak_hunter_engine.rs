@@ -319,6 +319,11 @@ pub async fn run_leak_hunter(
     EngineResult::ok(findings, msg)
 }
 
+/// Convenience wrapper that takes a single target string for async_job_executor.
+pub async fn run_leak_hunter_result(target: &str) -> EngineResult {
+    run_leak_hunter(&[target.to_string()], None).await
+}
+
 /// Query GitHub API for repos/code containing domain or org name (optional; requires token).
 pub async fn github_leak_search(
     domain_or_org: &str,

@@ -8,6 +8,12 @@ pub struct EngineResult {
     pub status: String,
     pub findings: Vec<serde_json::Value>,
     pub message: String,
+    /// Helper for compatibility: indicates success based on status
+    #[serde(skip_serializing)]
+    pub success: bool,
+    /// Helper for compatibility: summary string (same as message)
+    #[serde(skip_serializing)]
+    pub summary: String,
     /// Module 3: nodes for Attack Surface Graph (ASM/cloud_hunter).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_nodes: Option<Vec<super::cloud_hunter::GraphNode>>,
@@ -18,10 +24,13 @@ pub struct EngineResult {
 
 impl EngineResult {
     pub fn ok(findings: Vec<serde_json::Value>, message: impl Into<String>) -> Self {
+        let msg = message.into();
         Self {
             status: "ok".to_string(),
             findings,
-            message: message.into(),
+            message: msg.clone(),
+            success: true,
+            summary: msg,
             graph_nodes: None,
             graph_edges: None,
         }
@@ -32,19 +41,25 @@ impl EngineResult {
         graph_nodes: Vec<super::cloud_hunter::GraphNode>,
         graph_edges: Vec<super::cloud_hunter::GraphEdge>,
     ) -> Self {
+        let msg = message.into();
         Self {
             status: "ok".to_string(),
             findings,
-            message: message.into(),
+            message: msg.clone(),
+            success: true,
+            summary: msg,
             graph_nodes: Some(graph_nodes),
             graph_edges: Some(graph_edges),
         }
     }
     pub fn error(message: impl Into<String>) -> Self {
+        let msg = message.into();
         Self {
             status: "error".to_string(),
             findings: vec![],
-            message: message.into(),
+            message: msg.clone(),
+            success: false,
+            summary: msg,
             graph_nodes: None,
             graph_edges: None,
         }
@@ -53,10 +68,28 @@ impl EngineResult {
 
 impl From<weissman_engines::EngineResult> for EngineResult {
     fn from(r: weissman_engines::EngineResult) -> Self {
+        let is_ok = r.status == "ok";
         Self {
             status: r.status,
             findings: r.findings,
-            message: r.message,
+            message: r.message.clone(),
+            success: is_ok,
+            summary: r.message,
+            graph_nodes: None,
+            graph_edges: None,
+        }
+    }
+}
+
+impl From<Vec<serde_json::Value>> for EngineResult {
+    fn from(findings: Vec<serde_json::Value>) -> Self {
+        let msg = format!("Generated {} findings", findings.len());
+        Self {
+            status: "ok".to_string(),
+            findings,
+            message: msg.clone(),
+            success: true,
+            summary: msg,
             graph_nodes: None,
             graph_edges: None,
         }
