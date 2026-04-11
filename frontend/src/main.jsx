@@ -69,6 +69,7 @@ import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
 import AdminManagement from './pages/AdminManagement'
+import DomainDiscovery from './pages/DomainDiscovery'
 import App from './App'
 import './index.css'
 
@@ -113,6 +114,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             {/* ── Enterprise C2 pages ─────────────────────────────────────────── */}
             <Route path="engines" element={<EngineMatrix />} />
             <Route path="engines/:engineId" element={<EngineDetail />} />
+            <Route path="domain-discovery" element={<DomainDiscovery />} />
             <Route path="threat-emulation" element={<ThreatEmulation />} />
             <Route path="supply-chain" element={<SupplyChainHub />} />
             <Route path="network" element={<NetworkIntelligence />} />

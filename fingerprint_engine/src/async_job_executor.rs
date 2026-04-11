@@ -179,6 +179,198 @@ pub async fn execute_job(
                 )),
             }
         }
+        "scan_all_engines" => {
+            // Run all engines for a client in proper order
+            let client_id = p.get("client_id").and_then(Value::as_i64)
+                .ok_or_else(|| "payload.client_id required".to_string())?;
+            let target = p.get("target").and_then(Value::as_str).unwrap_or("").to_string();
+            let engines: Vec<String> = p.get("engines")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            
+            let telemetry = channels.telemetry.clone();
+            let app = app_pool.clone();
+            let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
+            
+            let mut results = Vec::new();
+            let mut succeeded = 0usize;
+            let mut failed = 0usize;
+            
+            // Execute engines in order defined by registry
+            let ordered_engines = weissman_core::models::engine::order_engines_by_registry(&engines);
+            
+            for engine_id in &ordered_engines {
+                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#, job.id, engine_id));
+                
+                let result = match engine_id.as_str() {
+                    "osint" => crate::osint_engine::run_osint_result(&target, None).await,
+                    "asm" => crate::asm_engine::run_asm_result(&target).await,
+                    "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
+                    "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
+                    "recon" => crate::recon::enum_subdomains_default(&target).await.into_iter().map(|d| json!({"type": "recon", "subdomain": d})).collect::<Vec<_>>().into(),
+                    "supply_chain" => crate::supply_chain_engine::run_supply_chain_result(&target, None).await,
+                    "bola_idor" => crate::bola_idor_engine::run_bola_idor_result(&target).await,
+                    "graphql_attack" => crate::graphql_attack_engine::run_graphql_attack_result(&target).await,
+                    "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(&target).await,
+                    "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(&target).await,
+                    "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(&target).await,
+                    "prototype_pollution" => crate::prototype_pollution_engine::run_prototype_pollution_result(&target).await,
+                    "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result(&target).await,
+                    "xxe" => crate::xxe_engine::run_xxe_result(&target).await,
+                    "ssti" => crate::ssti_engine::run_ssti_result(&target).await,
+                    "file_upload" => crate::file_upload_engine::run_file_upload_result(&target).await,
+                    "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result(&target).await,
+                    "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result(&target).await,
+                    "pki_tls" => crate::pki_tls_engine::run_pki_tls_result(&target).await,
+                    "pqc_scanner" => crate::pqc_scanner_engine::run_pqc_scanner_result(&target).await,
+                    "password_spray" => crate::password_spray_engine::run_password_spray_result(&target).await,
+                    "kerberoasting" => crate::kerberoasting_engine::run_kerberoasting_result(&target).await,
+                    "saml_attack" => crate::saml_attack_engine::run_saml_attack_result(&target).await,
+                    "crypto_engine" => crate::crypto_engine::run_crypto_engine_result(&target).await,
+                    "bgp_dns_hijacking" => crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(&target).await,
+                    "ipv6_attack" => crate::ipv6_attack_engine::run_ipv6_attack_result(&target).await,
+                    "mtls_grpc" => crate::mtls_grpc_engine::run_mtls_grpc_result(&target).await,
+                    "smb_netbios" => crate::smb_netbios_engine::run_smb_netbios_result(&target).await,
+                    "cicd_pipeline" => crate::cicd_pipeline_engine::run_cicd_pipeline_result(&target).await,
+                    "container_registry" => crate::container_registry_engine::run_container_registry_result(&target).await,
+                    "sbom_analyzer" => crate::sbom_analyzer_engine::run_sbom_analyzer_result(&target).await,
+                    "typosquatting_monitor" => crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(&target).await,
+                    "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(&target).await,
+                    "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(&target).await,
+                    "deception_honeypot" => crate::deception_honeypot_engine::run_deception_honeypot_result(&target).await,
+                    "digital_twin" => crate::digital_twin_engine::run_digital_twin_result(&target).await,
+                    "threat_emulation" => crate::threat_emulation_engine::run_threat_emulation_result(&target).await,
+                    "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result(&target).await,
+                    "timing_sidechannel" => crate::timing_sidechannel_engine::run_timing_sidechannel_result(&target).await,
+                    "stealth_engine" => crate::stealth_engine::run_stealth_engine_result(&target).await,
+                    _ => crate::engine_result::EngineResult::ok(vec![], format!("Engine {} not yet integrated", engine_id)),
+                };
+                
+                if result.success {
+                    succeeded += 1;
+                    let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
+                } else {
+                    failed += 1;
+                    let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#, job.id, engine_id, result.summary));
+                }
+                
+                results.push(json!({
+                    "engine": engine_id,
+                    "success": result.success,
+                    "findings_count": result.findings.len(),
+                    "summary": result.summary,
+                }));
+                
+                // Save findings to DB
+                if !result.findings.is_empty() {
+                    if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
+                        for finding in &result.findings {
+                            let _ = sqlx::query(
+                                "INSERT INTO vulnerabilities (tenant_id, client_id, raw_data, severity, source, created_at, updated_at)
+                                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+                                 ON CONFLICT DO NOTHING"
+                            )
+                            .bind(tid)
+                            .bind(client_id)
+                            .bind(finding)
+                            .bind(finding.get("severity").and_then(Value::as_str).unwrap_or("info"))
+                            .bind(engine_id.as_str())
+                            .execute(&mut *tx)
+                            .await;
+                        }
+                        let _ = tx.commit().await;
+                    }
+                }
+            }
+            
+            let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
+            
+            Ok(json!({
+                "ok": true,
+                "client_id": client_id,
+                "engines_total": ordered_engines.len(),
+                "succeeded": succeeded,
+                "failed": failed,
+                "results": results,
+            }))
+        }
+        "scan_discovered_domains" => {
+            // Scan all discovered domains with specified engines
+            let client_id = p.get("client_id").and_then(Value::as_i64)
+                .ok_or_else(|| "payload.client_id required".to_string())?;
+            let domains: Vec<String> = p.get("domains")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let engines: Vec<String> = p.get("engines")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_else(|| vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]);
+            
+            let telemetry = channels.telemetry.clone();
+            let app = app_pool.clone();
+            let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning {} domains with {} engines","status":"running"}}"#, job.id, domains.len(), engines.len()));
+            
+            let mut total_findings = 0usize;
+            let mut scanned_domains = 0usize;
+            
+            for domain in &domains {
+                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning domain: {}","status":"running"}}"#, job.id, domain));
+                scanned_domains += 1;
+                
+                for engine_id in &engines {
+                    let target = if domain.starts_with("http") { domain.clone() } else { format!("https://{}", domain) };
+                    let result = match engine_id.as_str() {
+                        "osint" => crate::osint_engine::run_osint_result(&target, None).await,
+                        "asm" => crate::asm_engine::run_asm_result(&target).await,
+                        "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
+                        "recon" => {
+                            let subs = crate::recon::enum_subdomains_default(domain).await;
+                            crate::engine_result::EngineResult::ok(
+                                subs.iter().map(|d| json!({"type": "recon", "subdomain": d})).collect(),
+                                format!("{} subdomains found", subs.len()),
+                            )
+                        },
+                        "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
+                        _ => continue,
+                    };
+                    
+                    total_findings += result.findings.len();
+                    
+                    // Save findings
+                    if !result.findings.is_empty() {
+                        if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
+                            for finding in &result.findings {
+                                let _ = sqlx::query(
+                                    "INSERT INTO vulnerabilities (tenant_id, client_id, raw_data, severity, source, created_at, updated_at)
+                                     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+                                     ON CONFLICT DO NOTHING"
+                                )
+                                .bind(tid)
+                                .bind(client_id)
+                                .bind(finding)
+                                .bind(finding.get("severity").and_then(Value::as_str).unwrap_or("info"))
+                                .bind(format!("{}:{}", engine_id, domain))
+                                .execute(&mut *tx)
+                                .await;
+                            }
+                            let _ = tx.commit().await;
+                        }
+                    }
+                }
+            }
+            
+            let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Domain scan completed: {} domains, {} findings","status":"completed"}}"#, job.id, scanned_domains, total_findings));
+            
+            Ok(json!({
+                "ok": true,
+                "client_id": client_id,
+                "domains_scanned": scanned_domains,
+                "engines_used": engines,
+                "total_findings": total_findings,
+            }))
+        }
         "ascension_wave" => {
             let app = app_pool.clone();
             let tele = channels.telemetry.clone();
