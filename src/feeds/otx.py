@@ -46,7 +46,7 @@ class OTXFeed(BaseFeed):
                     source=self.source_name,
                     source_id=str(pid),
                     references=refs[:5],
-                    affected_components=p.get("tags", [])[:5] or ["threat"],
+                    affected_components=(tags[:5] if tags else ["threat"]),
                     published_at=datetime.fromisoformat(p.get("created", "").replace("Z", "+00:00")) if p.get("created") else None,
                     raw={"author": p.get("author_name")},
                 )
