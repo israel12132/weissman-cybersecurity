@@ -1,5 +1,5 @@
 /**
- * Master registry of all 79 attack engines.
+ * Master registry of all 99 attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -26,7 +26,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 79 engines in registry order */
+/** All 99 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -679,6 +679,88 @@ export const ENGINES_REGISTRY = [
     group: 'apt',
     mitre: 'T1190',
     description: 'CVE-2021-44228 JNDI injection scan across HTTP headers, user-agents, JSON fields, XML payloads',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 11: Elite 10 — World-Class Attack Engines ──────────────────────────
+  {
+    id: 'kernel_exploit',
+    label: 'Kernel Exploit',
+    group: 'apt',
+    mitre: 'T1068',
+    description: 'Kernel privilege escalation: Dirty Pipe, eBPF program abuse, io_uring UAF, SELinux/AppArmor bypass, SUID chain exploitation',
+    requiresTarget: false,
+  },
+  {
+    id: 'credential_stuffing',
+    label: 'Credential Stuffing',
+    group: 'web',
+    mitre: 'T1110.004',
+    description: 'Large-scale breach corpus replay, distributed credential stuffing, legacy-protocol MFA bypass (Basic Auth, IMAP, ActiveSync)',
+    requiresTarget: true,
+  },
+  {
+    id: 'spear_phishing',
+    label: 'Spear Phishing / BEC',
+    group: 'recon',
+    mitre: 'T1566.002',
+    description: 'AI-crafted spear phishing, BEC wire-fraud simulation, SPF/DKIM spoofing, domain lookalike generation, smishing/vishing',
+    requiresTarget: true,
+  },
+  {
+    id: 'vlan_bypass',
+    label: 'VLAN Bypass',
+    group: 'network',
+    mitre: 'T1599',
+    description: 'VLAN double-tagging (802.1Q/802.1ad), DTP trunk negotiation, native VLAN abuse, inter-VLAN pivot and ARP poisoning',
+    requiresTarget: true,
+  },
+  {
+    id: 'malware_persistence',
+    label: 'Malware Persistence',
+    group: 'stealth',
+    mitre: 'T1542.003',
+    description: 'Advanced persistence via UEFI bootkit, kernel rootkit implant, COM hijacking, scheduled task/service abuse, boot sector manipulation',
+    requiresTarget: false,
+  },
+  {
+    id: 'insider_threat',
+    label: 'Insider Threat Emulation',
+    group: 'stealth',
+    mitre: 'T1078.002',
+    description: 'Insider TTP simulation: DLP bypass, excessive-privilege abuse, data staging to cloud storage, shadow-IT and rogue device detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'post_exploitation',
+    label: 'Post-Exploitation',
+    group: 'apt',
+    mitre: 'T1003',
+    description: 'Automated post-exploitation: LSASS dump, SAM/NTDS.dit extraction, credential cache scraping, privilege-escalation chain enumeration',
+    requiresTarget: true,
+  },
+  {
+    id: 'cloud_lateral',
+    label: 'Cloud Lateral Movement',
+    group: 'cloud',
+    mitre: 'T1552.005',
+    description: 'Cloud-to-cloud lateral movement: IMDSv1 SSRF, IAM role chaining, cross-account pivot, EC2/GCE instance-profile credential theft',
+    requiresTarget: false,
+  },
+  {
+    id: 'process_injection',
+    label: 'Process Injection',
+    group: 'stealth',
+    mitre: 'T1055',
+    description: 'Advanced process injection: DLL hijacking, reflective loading, process hollowing, APC queue injection, thread hijacking, ghostwriting',
+    requiresTarget: false,
+  },
+  {
+    id: 'api_fuzzing',
+    label: 'Intelligent API Fuzzing',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'OpenAPI/Swagger-guided API fuzzing: mass assignment, business-logic bypass, rate-limit evasion, hidden endpoint discovery, parameter pollution',
     requiresTarget: true,
   },
 ]
