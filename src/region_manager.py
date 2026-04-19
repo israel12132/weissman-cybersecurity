@@ -5,6 +5,7 @@ WEISSMAN_REGION restricts data storage and scan origination to the configured re
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any
@@ -35,7 +36,6 @@ def get_tenant_region(tenant_id: int | None, db_session: Any = None) -> str:
             region = getattr(t, "region", None) or ""
             if region:
                 return (region or "").strip()
-            import json
             settings = json.loads(getattr(t, "settings_json", None) or "{}")
             return (settings.get("region") or "").strip()
         finally:

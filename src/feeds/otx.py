@@ -29,10 +29,10 @@ class OTXFeed(BaseFeed):
                 name = p.get("name", pid)
                 desc = (p.get("description", "") or "")[:300]
                 refs = [p.get("url", "")] if p.get("url") else []
-                refs.extend([t.get("indicator", "") for t in p.get("tags", [])[:3] if t.get("indicator")])
+                # Tags in OTX pulses are plain strings; no "indicator" dict key.
+                tags = [str(t).lower() for t in p.get("tags", []) if t]
                 # Map OTX severity-like to our Severity
                 severity = Severity.MEDIUM
-                tags = [t.lower() if isinstance(t, str) else str(t).lower() for t in p.get("tags", [])]
                 if "critical" in tags or "ransomware" in tags:
                     severity = Severity.CRITICAL
                 elif "malware" in tags or "high" in tags:

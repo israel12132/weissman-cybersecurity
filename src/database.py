@@ -80,7 +80,7 @@ def get_async_engine():
 def get_engine():
     """
     Sync engine for Celery workers and fallback.
-    PostgreSQL: Enterprise pool (100 + 200 overflow) for 200+ concurrent workers.
+    PostgreSQL: Enterprise pool (500 + 1000 overflow) for high-concurrency workers.
     SQLite: NullPool + WAL + synchronous=NORMAL + busy_timeout.
     """
     global _sync_engine

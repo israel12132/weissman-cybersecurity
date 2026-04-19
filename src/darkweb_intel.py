@@ -268,7 +268,6 @@ def add_monitored_source(
     except Exception as e:
         logger.warning("add_monitored_source: %s", e)
         return False
-    return False
 
 
 def run_autonomous_discovery_cycle(db_session: Any = None) -> int:

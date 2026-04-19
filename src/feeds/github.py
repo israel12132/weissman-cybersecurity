@@ -32,7 +32,8 @@ class GitHubFeed(BaseFeed):
                 sev_map = {"critical": Severity.CRITICAL, "high": Severity.HIGH, "medium": Severity.MEDIUM, "low": Severity.LOW}
                 refs = [adv.get("html_url", "")] if adv.get("html_url") else []
                 refs.extend([u.get("value") for u in adv.get("references", []) if u.get("value")])
-                cves = [e.get("value") for e in adv.get("cve", []) if e.get("value")]
+                # GitHub Advisory API: cve_ids is a list of CVE ID strings.
+                cves = [c for c in (adv.get("cve_ids") or []) if isinstance(c, str) and c]
                 if cves:
                     refs = cves + refs
                 ecosystem = adv.get("ecosystem", "") or "unknown"
@@ -48,7 +49,7 @@ class GitHubFeed(BaseFeed):
                     references=refs[:5],
                     affected_components=[f"{ecosystem}:{package}"],
                     published_at=datetime.fromisoformat(adv.get("published_at", "").replace("Z", "+00:00")) if adv.get("published_at") else None,
-                    raw={"cve": cves},
+                    raw={"cve_ids": cves},
                 )
                 findings.append(finding)
         except Exception as e:

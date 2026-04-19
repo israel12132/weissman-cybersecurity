@@ -15,9 +15,13 @@ from __future__ import annotations
 
 import hashlib
 import html
+import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 BRAND = "Weissman-cybersecurity"
 COPYRIGHT_FOOTER = "© 2026 Weissman-cybersecurity | Strictly Confidential"
@@ -163,7 +167,6 @@ def _reproduction_snippets_multilang(
         target = f"https://{target}" if target else "https://TARGET_HOST/"
     payload: str | None = None
     if "curl" in proof_curl and " -d " in proof_curl:
-        import re
         m = re.search(r"-d\s+['\"]([^'\"]+)['\"]", proof_curl)
         if m:
             payload = m.group(1).replace("\\\"", '"')
@@ -215,8 +218,14 @@ def generate_report_pdf(
     try:
         from weasyprint import HTML, CSS
         from weasyprint.text.fonts import FontConfiguration
+        _weasyprint_available = True
     except ImportError:
-        return None
+        logger.warning(
+            "WeasyPrint is not installed; PDF generation unavailable. "
+            "Install with: pip install weasyprint  (requires system libs: libpango, libcairo). "
+            "Falling back to HTML report."
+        )
+        _weasyprint_available = False
 
     by_severity = summary.get("by_severity") or {}
     total = int(summary.get("total", len(findings)) or 0)
@@ -559,14 +568,20 @@ def generate_report_pdf(
         output_path = out_dir / f"report_run_{run_id}.pdf"
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not _weasyprint_available:
+        # WeasyPrint not installed: save as HTML so the caller still gets a usable report.
+        html_path = output_path.with_suffix(".html")
+        html_path.write_text(full_html, encoding="utf-8")
+        return html_path
+
     try:
         font_config = FontConfiguration()
         doc = HTML(string=full_html)
         doc.write_pdf(output_path, font_config=font_config)
         return output_path
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("WeasyPrint PDF generation failed (%s), saving HTML report", e)
+        logger.warning("WeasyPrint PDF generation failed (%s), saving HTML report", e)
         html_path = output_path.with_suffix(".html")
         html_path.write_text(full_html, encoding="utf-8")
         return html_path
