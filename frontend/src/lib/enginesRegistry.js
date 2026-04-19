@@ -1,5 +1,5 @@
 /**
- * Master registry of all 52 attack engines.
+ * Master registry of all 79 attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -26,7 +26,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 52 engines in registry order */
+/** All 79 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -517,6 +517,168 @@ export const ENGINES_REGISTRY = [
     group: 'apt',
     mitre: 'T1588',
     description: 'Proof-of-Exploitation synthesis — AI-generated PoC from raw findings',
+    requiresTarget: true,
+  },
+
+  // ── GROUP 10 (continued): APT / Top-Tier — 20 elite additions ────────────────
+  {
+    id: 'rce_chain',
+    label: 'RCE Chain',
+    group: 'apt',
+    mitre: 'T1203',
+    description: 'Multi-vector Remote Code Execution via deserialization, EL injection, shell metacharacter chains',
+    requiresTarget: true,
+  },
+  {
+    id: 'active_directory',
+    label: 'Active Directory Attack',
+    group: 'apt',
+    mitre: 'T1558',
+    description: 'DCSync, Pass-the-Hash, Golden/Silver Ticket, NTLM relay, AS-REP Roasting, BloodHound path abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'c2_emulation',
+    label: 'C2 Framework Emulation',
+    group: 'apt',
+    mitre: 'T1071.001',
+    description: 'Cobalt Strike Beacon, Sliver, Mythic, Havoc C2 simulation — beacon detection and listener fingerprinting',
+    requiresTarget: false,
+  },
+  {
+    id: 'ransomware_emulation',
+    label: 'Ransomware Emulation',
+    group: 'apt',
+    mitre: 'T1486',
+    description: 'Ransomware TTP emulation: staged encryption, shadow-copy wipe, ransom note delivery, backup deletion',
+    requiresTarget: false,
+  },
+  {
+    id: 'lateral_movement',
+    label: 'Lateral Movement',
+    group: 'network',
+    mitre: 'T1021',
+    description: 'WMI/DCOM, PsExec, SSH key reuse, RDP hijacking, token impersonation, credential re-spray',
+    requiresTarget: true,
+  },
+  {
+    id: 'data_exfiltration',
+    label: 'Data Exfiltration',
+    group: 'stealth',
+    mitre: 'T1048',
+    description: 'Multi-channel covert exfiltration: DNS-over-HTTPS tunnelling, ICMP covert, SMTP, S3 presigned URL',
+    requiresTarget: true,
+  },
+  {
+    id: 'memory_corruption',
+    label: 'Memory Corruption',
+    group: 'apt',
+    mitre: 'T1203',
+    description: 'Heap spray, use-after-free, ROP-chain detection, format-string, and integer overflow surface mapping',
+    requiresTarget: true,
+  },
+  {
+    id: 'browser_exploitation',
+    label: 'Browser Exploitation',
+    group: 'apt',
+    mitre: 'T1189',
+    description: 'JS engine RCE chains, sandbox escape, drive-by download emulation, renderer exploit surface',
+    requiresTarget: true,
+  },
+  {
+    id: 'deepfake_genai',
+    label: 'Deepfake / GenAI Attack',
+    group: 'ai',
+    mitre: 'T1566',
+    description: 'AI-generated deepfake voice/video phishing, synthetic identity creation, vishing simulation',
+    requiresTarget: false,
+  },
+  {
+    id: 'zero_trust_bypass',
+    label: 'Zero Trust Bypass',
+    group: 'stealth',
+    mitre: 'T1078',
+    description: 'Conditional access bypass, device-posture spoofing, MFA fatigue bombing, token exfiltration',
+    requiresTarget: true,
+  },
+  {
+    id: 'container_escape',
+    label: 'Container Escape',
+    group: 'cloud',
+    mitre: 'T1611',
+    description: 'Docker socket abuse, privileged container breakout, cgroups v1/v2 escape, host PID namespace takeover',
+    requiresTarget: false,
+  },
+  {
+    id: 'wireless_attack',
+    label: 'Wireless Attack',
+    group: 'network',
+    mitre: 'T1465',
+    description: 'WiFi PMKID cracking, 802.11 deauth flood, evil-twin AP, KRACK replay, WPA2 handshake capture',
+    requiresTarget: false,
+  },
+  {
+    id: 'mobile_attack',
+    label: 'Mobile Attack',
+    group: 'recon',
+    mitre: 'T1421',
+    description: 'APK reversing, iOS plist credential leak, deep-link hijacking, MDM bypass, mobile OAuth PKCE theft',
+    requiresTarget: true,
+  },
+  {
+    id: 'cloud_ransomware',
+    label: 'Cloud Ransomware',
+    group: 'cloud',
+    mitre: 'T1486',
+    description: 'S3 object encryption via SSE-C key rotation, RDS snapshot hijacking, Glacier vault lock abuse',
+    requiresTarget: false,
+  },
+  {
+    id: 'firmware_exploit',
+    label: 'Firmware Exploit',
+    group: 'ot',
+    mitre: 'T1542.001',
+    description: 'UART/JTAG boot extraction, secure-boot bypass, bootloader signature spoofing, OTA update hijacking',
+    requiresTarget: true,
+  },
+  {
+    id: 'dns_rebinding',
+    label: 'DNS Rebinding',
+    group: 'network',
+    mitre: 'T1557',
+    description: 'Same-origin policy bypass via DNS rebind, intranet pivot, browser-as-proxy, rebind-SSRF chaining',
+    requiresTarget: true,
+  },
+  {
+    id: 'physical_security',
+    label: 'Physical Security Emulation',
+    group: 'stealth',
+    mitre: 'T1200',
+    description: 'RFID/NFC badge clone detection, HID proximity card analysis, physical intrusion path mapping',
+    requiresTarget: false,
+  },
+  {
+    id: 'vuln_chaining',
+    label: 'Vuln Chain Synthesis',
+    group: 'apt',
+    mitre: 'T1210',
+    description: 'Multi-CVE exploit chain synthesis: N-day stacking, CVSS-weighted kill-path scoring, auto-PoC linking',
+    requiresTarget: true,
+  },
+  {
+    id: 'sqli_advanced',
+    label: 'Advanced SQLi',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Time-based blind, error-based, OOB DNS exfil, second-order SQLi, stored procedure abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'log4shell_scan',
+    label: 'Log4Shell / Log4J',
+    group: 'apt',
+    mitre: 'T1190',
+    description: 'CVE-2021-44228 JNDI injection scan across HTTP headers, user-agents, JSON fields, XML payloads',
     requiresTarget: true,
   },
 ]

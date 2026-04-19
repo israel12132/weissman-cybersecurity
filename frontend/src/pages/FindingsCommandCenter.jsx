@@ -1,7 +1,7 @@
 /**
  * Phase 3 – Findings Command Center
  *
- * TanStack Table aggregating results from all 52 engines.
+ * TanStack Table aggregating results from all 79 engines.
  * Columns: Severity, Engine Name, Title, MITRE ATT&CK, Score (CVSS), Status, Time/Date.
  * Filters: Severity, Engine group/name, Status, global text search.
  * Row click: drawer showing raw JSON + technical details + status update.
