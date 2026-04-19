@@ -155,7 +155,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           to="/engines"
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
         >
-          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 52)
+          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 79)
         </Link>
         <Link id="nav-threat-emulation" to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
           <span>◈</span> APT Emulation
