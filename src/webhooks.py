@@ -68,7 +68,8 @@ def build_webhook_payload(
 
 
 WEBHOOK_MAX_RETRIES = 5
-WEBHOOK_BACKOFF_BASE_SECONDS = 1
+# Base for exponential backoff: delay = 2**attempt seconds (1, 2, 4, 8, 16 …)
+WEBHOOK_BACKOFF_BASE = 2
 
 
 def push_findings_to_webhooks(payload: dict[str, Any]) -> None:
@@ -105,7 +106,7 @@ def push_findings_to_webhooks(payload: dict[str, Any]) -> None:
                 if r.status_code >= 400:
                     last_error = f"HTTP {r.status_code}"
                     if attempt < WEBHOOK_MAX_RETRIES:
-                        time.sleep(WEBHOOK_BACKOFF_BASE_SECONDS ** attempt)
+                        time.sleep(WEBHOOK_BACKOFF_BASE ** attempt)
                         continue
                     logger.warning("Webhook POST %s returned %s", url[:80], r.status_code)
                 else:
@@ -113,7 +114,7 @@ def push_findings_to_webhooks(payload: dict[str, Any]) -> None:
             except Exception as e:
                 last_error = str(e)
                 if attempt < WEBHOOK_MAX_RETRIES:
-                    delay = WEBHOOK_BACKOFF_BASE_SECONDS ** attempt
+                    delay = WEBHOOK_BACKOFF_BASE ** attempt
                     logger.debug("Webhook POST attempt %s failed for %s, retry in %ss: %s", attempt + 1, url[:80], delay, e)
                     time.sleep(delay)
                 else:
@@ -159,9 +160,9 @@ def push_scan_complete_to_webhooks(run_ids: list[int], tenant_id: int | None, co
                 if r.status_code < 400:
                     break
                 if attempt < WEBHOOK_MAX_RETRIES:
-                    time.sleep(WEBHOOK_BACKOFF_BASE_SECONDS ** attempt)
+                    time.sleep(WEBHOOK_BACKOFF_BASE ** attempt)
             except Exception as e:
                 if attempt >= WEBHOOK_MAX_RETRIES:
                     logger.warning("Webhook scan_complete POST failed for %s: %s", url[:80], e)
                 else:
-                    time.sleep(WEBHOOK_BACKOFF_BASE_SECONDS ** attempt)
+                    time.sleep(WEBHOOK_BACKOFF_BASE ** attempt)

@@ -2,6 +2,7 @@
 Verified-only reporting: run non-destructive PoC (safe_probe) per finding.
 Only findings that pass validation are included in the PDF/Dashboard.
 """
+import json
 import logging
 from typing import Any
 
@@ -18,7 +19,6 @@ def _first_url_for_client(client_id: str, db_clients: list[dict]) -> str | None:
             continue
         scope = c.get("scope") or {}
         if isinstance(scope, str):
-            import json
             try:
                 scope = json.loads(scope)
             except Exception:

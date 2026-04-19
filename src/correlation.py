@@ -164,7 +164,6 @@ def correlate_findings_from_db(
         cid = str(row.get("id", ""))
         scope = row.get("scope", {})
         if isinstance(scope, str):
-            import json
             scope = json.loads(scope) if scope else {}
         domains = [d.strip().lower() for d in scope.get("domains", []) if d and not str(d).startswith("*")]
         raw_tech = scope.get("tech_stack")

@@ -1,16 +1,42 @@
 """OSV (Open Source Vulnerabilities) feed. Uses modified_id.csv for recent vulns."""
 import csv
 import io
-import requests
 from datetime import datetime
 
 from src.models import Finding, FindingType, Severity
-from src.http_client import safe_get, safe_post, ENTERPRISE_HTTP_TIMEOUT
-import requests
+from src.http_client import safe_get, ENTERPRISE_HTTP_TIMEOUT
 from .base import BaseFeed, FeedResult
 
 OSV_MODIFIED_CSV = "https://osv-vulnerabilities.storage.googleapis.com/modified_id.csv"
 OSV_VULN_URL = "https://api.osv.dev/v1/vulns"
+
+
+def _severity_from_osv(v: dict) -> Severity:
+    """
+    Resolve severity from OSV record. Priority:
+    1. severity[] array with CVSS score (most precise).
+    2. database_specific.severity string.
+    Falls back to MEDIUM when nothing matches.
+    """
+    for sev_entry in v.get("severity") or []:
+        score_str = sev_entry.get("score") or ""
+        # CVSS3 vector → extract base score from last digit cluster is unreliable; try numeric directly.
+        sev_type = (sev_entry.get("type") or "").upper()
+        if sev_type in ("CVSS_V3", "CVSS_V2"):
+            # OSV CVSS score may be a vector string like "CVSS:3.1/…/7.5" or numeric.
+            # Try to extract the trailing numeric part.
+            parts = score_str.split("/")
+            for part in reversed(parts):
+                try:
+                    numeric = float(part)
+                    from .base import BaseFeed as _B
+                    return _B._severity_from_cvss(numeric)
+                except ValueError:
+                    continue
+    db_sev = (v.get("database_specific") or {}).get("severity") or ""
+    if db_sev:
+        return getattr(Severity, db_sev.upper(), Severity.MEDIUM)
+    return Severity.MEDIUM
 
 
 class OSVFeed(BaseFeed):
@@ -36,10 +62,7 @@ class OSVFeed(BaseFeed):
                 refs = [x.get("url") for x in v.get("references", []) if x.get("url")]
                 if v.get("database_specific", {}).get("url"):
                     refs.insert(0, v["database_specific"]["url"])
-                severity = Severity.MEDIUM
-                if v.get("database_specific", {}).get("severity"):
-                    sev = v["database_specific"]["severity"].upper()
-                    severity = getattr(Severity, sev, Severity.MEDIUM)
+                severity = _severity_from_osv(v)
                 affected = []
                 for a in v.get("affected", []):
                     pkg = a.get("package", {})
@@ -58,8 +81,6 @@ class OSVFeed(BaseFeed):
                     raw={},
                 )
                 findings.append(finding)
-            if not findings:
-                pass  # Live only: no fallback; return empty when CSV fails or is empty
         except Exception as e:
             return FeedResult([], self.source_name, str(e))
         return FeedResult(findings, self.source_name)

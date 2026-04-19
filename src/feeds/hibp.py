@@ -32,6 +32,13 @@ class HIBPFeed(BaseFeed):
                 name = b.get("Name", "")
                 desc = (b.get("Description", "") or "")[:300]
                 breach_date = b.get("BreachDate", "")
+                # Build a useful reference URL: HIBP breach detail page when available.
+                breach_domain = b.get("Domain", "")
+                refs = []
+                if breach_domain:
+                    refs.append(f"https://haveibeenpwned.com/PwnedWebsites#{breach_domain}")
+                if breach_date:
+                    refs.append(breach_date)
                 finding = Finding(
                     id=f"hibp-{name}-{domain}",
                     type=FindingType.BREACH,
@@ -40,7 +47,7 @@ class HIBPFeed(BaseFeed):
                     severity=Severity.HIGH if b.get("IsSensitive") else Severity.MEDIUM,
                     source=self.source_name,
                     source_id=name,
-                    references=[b.get("Domain", ""), breach_date],
+                    references=refs,
                     affected_components=[domain, name],
                     published_at=datetime.strptime(breach_date, "%Y-%m-%d") if breach_date else None,
                     raw=b,
