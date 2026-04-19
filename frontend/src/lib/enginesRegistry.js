@@ -1,5 +1,5 @@
 /**
- * Master registry of all 52 attack engines.
+ * Master registry of all 89 attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -26,7 +26,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 52 engines in registry order */
+/** All 89 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -67,6 +67,23 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1592',
     description: 'Comprehensive host, domain, WHOIS, and certificate reconnaissance',
+    requiresTarget: true,
+  },
+
+  {
+    id: 'dark_web_intel',
+    label: 'Dark Web Intel',
+    group: 'recon',
+    mitre: 'T1597.001',
+    description: 'Tor/I2P crawling, threat-actor forum tracking, and dark market credential correlation',
+    requiresTarget: true,
+  },
+  {
+    id: 'social_engineering_recon',
+    label: 'Social Engineering Recon',
+    group: 'recon',
+    mitre: 'T1591',
+    description: 'LinkedIn harvest, org-chart mapping, spear-phishing target profiling via OSINT fusion',
     requiresTarget: true,
   },
 
@@ -168,6 +185,47 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
 
+  {
+    id: 'race_condition',
+    label: 'Race Condition',
+    group: 'web',
+    mitre: 'T1499.003',
+    description: 'TOCTOU and parallel-request race: limit bypass, double-spend, coupon reuse attacks',
+    requiresTarget: true,
+  },
+  {
+    id: 'deserialization',
+    label: 'Deserialization Attack',
+    group: 'web',
+    mitre: 'T1059',
+    description: 'Java/Python/.NET/PHP gadget-chain detection and unsafe deserialization exploitation',
+    requiresTarget: true,
+  },
+  {
+    id: 'nosql_injection',
+    label: 'NoSQL Injection',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'MongoDB operator injection, Cassandra CQL abuse, Redis command injection',
+    requiresTarget: true,
+  },
+  {
+    id: 'cors_attack',
+    label: 'CORS Attack',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Misconfigured CORS wildcard detection, credential leakage via cross-origin requests',
+    requiresTarget: true,
+  },
+  {
+    id: 'business_logic',
+    label: 'Business Logic',
+    group: 'web',
+    mitre: 'T1548',
+    description: 'State-machine bypass, price manipulation, workflow abuse, and privilege escalation',
+    requiresTarget: true,
+  },
+
   // ── GROUP 3: AI / LLM ────────────────────────────────────────────────────────
   {
     id: 'llm_path_fuzz',
@@ -215,6 +273,23 @@ export const ENGINES_REGISTRY = [
     group: 'ai',
     mitre: 'T1595',
     description: 'Fully autonomous multi-step penetration test orchestrated by AI planner',
+    requiresTarget: true,
+  },
+
+  {
+    id: 'rag_poisoning',
+    label: 'RAG Poisoning',
+    group: 'ai',
+    mitre: 'T1565',
+    description: 'Retrieval-Augmented Generation data poisoning, embedding injection, vector store abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'model_extraction',
+    label: 'Model Extraction',
+    group: 'ai',
+    mitre: 'T1588',
+    description: 'MLaaS model stealing via query probing, membership inference, training data leakage',
     requiresTarget: true,
   },
 
@@ -268,6 +343,31 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
 
+  {
+    id: 'cloud_lateral',
+    label: 'Cloud Lateral Movement',
+    group: 'cloud',
+    mitre: 'T1021.007',
+    description: 'Cross-account role chaining, trust policy abuse, metadata SSRF pivot to other services',
+    requiresTarget: false,
+  },
+  {
+    id: 'secrets_scanner',
+    label: 'Secrets Scanner',
+    group: 'cloud',
+    mitre: 'T1552.001',
+    description: 'Cloud credential exposure: hardcoded keys in APIs, env vars, public repos, and logs',
+    requiresTarget: true,
+  },
+  {
+    id: 'cloud_misconfig_drift',
+    label: 'Cloud Misconfig Drift',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'Real-time vs. declared infrastructure drift: public buckets, open SGs, unencrypted volumes',
+    requiresTarget: false,
+  },
+
   // ── GROUP 5: OT / ICS / IoT ──────────────────────────────────────────────────
   {
     id: 'scada_ics',
@@ -292,6 +392,23 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1011',
     description: 'Bluetooth LE pairing bypass, RF replay attacks, spectrum analysis',
     requiresTarget: false,
+  },
+
+  {
+    id: 'can_bus_attack',
+    label: 'CAN Bus Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Automotive CAN bus frame injection, spoofing, and fuzzing for ECU compromise',
+    requiresTarget: false,
+  },
+  {
+    id: 'plc_attack',
+    label: 'PLC Attack',
+    group: 'ot',
+    mitre: 'T0821',
+    description: 'Programmable Logic Controller command injection and ladder logic tampering via EtherNet/IP',
+    requiresTarget: true,
   },
 
   // ── GROUP 6: Stealth / Evasion ────────────────────────────────────────────────
@@ -333,6 +450,31 @@ export const ENGINES_REGISTRY = [
     group: 'stealth',
     mitre: 'T1027',
     description: 'Covert channel operations: DNS tunneling, ICMP exfil, low-and-slow scanning',
+    requiresTarget: true,
+  },
+
+  {
+    id: 'living_off_land',
+    label: 'Living Off The Land',
+    group: 'stealth',
+    mitre: 'T1218',
+    description: 'LOLBin abuse: certutil, mshta, regsvr32, wmic, and other signed-binary exploitation',
+    requiresTarget: false,
+  },
+  {
+    id: 'memory_evasion',
+    label: 'Memory Evasion',
+    group: 'stealth',
+    mitre: 'T1055',
+    description: 'Reflective DLL loading, heap spray, userland unhooking, and in-memory shellcode injection',
+    requiresTarget: false,
+  },
+  {
+    id: 'traffic_obfuscation',
+    label: 'Traffic Obfuscation',
+    group: 'stealth',
+    mitre: 'T1090.004',
+    description: 'Domain fronting, encrypted C2 mimicry, protocol camouflage over HTTP/S and DNS',
     requiresTarget: true,
   },
 
@@ -386,6 +528,31 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
 
+  {
+    id: 'mfa_bypass',
+    label: 'MFA Bypass',
+    group: 'crypto',
+    mitre: 'T1111',
+    description: 'Push-fatigue attack, OTP relay, SIM-swap simulation, authenticator phishing (Evilginx)',
+    requiresTarget: true,
+  },
+  {
+    id: 'active_directory',
+    label: 'Active Directory',
+    group: 'crypto',
+    mitre: 'T1484',
+    description: 'BloodHound-style ACL path analysis, DCSync simulation, AS-REP roasting, Golden Ticket',
+    requiresTarget: true,
+  },
+  {
+    id: 'ldap_injection',
+    label: 'LDAP Injection',
+    group: 'crypto',
+    mitre: 'T1556',
+    description: 'Blind LDAP injection, null-base traversal, attribute enumeration and filter bypass',
+    requiresTarget: true,
+  },
+
   // ── GROUP 8: Network / Protocol ───────────────────────────────────────────────
   {
     id: 'bgp_dns_hijacking',
@@ -417,6 +584,31 @@ export const ENGINES_REGISTRY = [
     group: 'network',
     mitre: 'T1021.002',
     description: 'TCP port 445/139/137 exposure, EternalBlue/SMBGhost CVE surface mapping',
+    requiresTarget: true,
+  },
+
+  {
+    id: 'wifi_attack',
+    label: 'Wi-Fi Attack',
+    group: 'network',
+    mitre: 'T1557.003',
+    description: 'WPA2 PMKID capture, evil-twin AP, deauth flood, KRACK replay, rogue RADIUS',
+    requiresTarget: false,
+  },
+  {
+    id: 'voip_sip',
+    label: 'VoIP / SIP',
+    group: 'network',
+    mitre: 'T1499',
+    description: 'SIP flood, toll-fraud path enumeration, eavesdropping via SRTP key weakness',
+    requiresTarget: true,
+  },
+  {
+    id: 'ssl_stripping',
+    label: 'SSL Stripping',
+    group: 'network',
+    mitre: 'T1557',
+    description: 'HSTS bypass, TLS downgrade to 1.0, mixed-content exploit, certificate pinning defeat',
     requiresTarget: true,
   },
 
@@ -459,6 +651,23 @@ export const ENGINES_REGISTRY = [
     group: 'supply_chain',
     mitre: 'T1195.001',
     description: 'Levenshtein typo generation and NPM/PyPI package impersonation detection',
+    requiresTarget: true,
+  },
+
+  {
+    id: 'dependency_confusion',
+    label: 'Dependency Confusion',
+    group: 'supply_chain',
+    mitre: 'T1195.001',
+    description: 'Private package namespace squatting simulation across NPM, PyPI, RubyGems, Maven',
+    requiresTarget: true,
+  },
+  {
+    id: 'git_secrets',
+    label: 'Git Secrets',
+    group: 'supply_chain',
+    mitre: 'T1552.004',
+    description: 'Exposed .git directory, historical secret commits, dangling ref and force-push detection',
     requiresTarget: true,
   },
 
@@ -517,6 +726,46 @@ export const ENGINES_REGISTRY = [
     group: 'apt',
     mitre: 'T1588',
     description: 'Proof-of-Exploitation synthesis — AI-generated PoC from raw findings',
+    requiresTarget: true,
+  },
+  {
+    id: 'ransomware_simulation',
+    label: 'Ransomware Simulation',
+    group: 'apt',
+    mitre: 'T1486',
+    description: 'Encryption behavior emulation, C2 beaconing pattern, shadow copy deletion detection',
+    requiresTarget: false,
+  },
+  {
+    id: 'c2_beaconing',
+    label: 'C2 Beaconing',
+    group: 'apt',
+    mitre: 'T1071.001',
+    description: 'Command-and-Control infrastructure detection: beacon jitter, domain-generation, JA3 hunt',
+    requiresTarget: true,
+  },
+  {
+    id: 'fileless_attack',
+    label: 'Fileless Attack',
+    group: 'apt',
+    mitre: 'T1059.001',
+    description: 'In-memory PowerShell execution, WMI persistence, registry-based fileless payload staging',
+    requiresTarget: false,
+  },
+  {
+    id: 'initial_access',
+    label: 'Initial Access',
+    group: 'apt',
+    mitre: 'T1566',
+    description: 'Phishing simulation, credential stuffing, exploit chaining for initial foothold detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'exfiltration_engine',
+    label: 'Exfiltration Engine',
+    group: 'apt',
+    mitre: 'T1041',
+    description: 'Multi-channel data exfiltration path analysis: DNS, HTTP, ICMP, and encrypted tunnels',
     requiresTarget: true,
   },
 ]
