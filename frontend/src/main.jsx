@@ -70,6 +70,7 @@ import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
 import AdminManagement from './pages/AdminManagement'
 import DomainDiscovery from './pages/DomainDiscovery'
+import ThreatIntelHub from './pages/ThreatIntelHub'
 import App from './App'
 import './index.css'
 
@@ -126,6 +127,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
+            <Route path="threat-intel" element={<ThreatIntelHub />} />
             <Route path="intel-map" element={<App />} />
             <Route path="admin" element={<AdminManagement />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
