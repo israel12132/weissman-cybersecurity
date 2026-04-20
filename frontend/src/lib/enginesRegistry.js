@@ -21,6 +21,10 @@ export const ENGINE_GROUP_DEFS = [
   { id: 'network',      label: 'Network / Protocol',   color: '#f97316' },
   { id: 'supply_chain', label: 'Supply Chain',         color: '#84cc16' },
   { id: 'apt',          label: 'APT / Top-Tier',       color: '#ef4444' },
+  { id: 'malware',      label: 'Malware & Ransomware', color: '#dc2626' },
+  { id: 'social',       label: 'Social Engineering',   color: '#d97706' },
+  { id: 'mobile',       label: 'Mobile / Apps',        color: '#7c3aed' },
+  { id: 'data',         label: 'Data Exfiltration',    color: '#0891b2' },
 ]
 
 /** Flat map of groupId → group definition for quick lookup */
