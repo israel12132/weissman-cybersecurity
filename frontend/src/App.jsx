@@ -207,15 +207,20 @@ export default function App() {
           <a href="/" className="nav-link">Dashboard</a>
           <a href="/clients" className="nav-link">Clients</a>
           <Link to="/engines" className="nav-link nav-link-active">Engine Matrix</Link>
+          <Link to="/threat-intel" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>Threat Intel</Link>
           <Link to="/threat-emulation" className="nav-link">APT Emulation</Link>
           <Link to="/cloud" className="nav-link">Cloud</Link>
           <Link to="/supply-chain" className="nav-link">Supply Chain</Link>
           <Link to="/network" className="nav-link">Network</Link>
+          <Link to="/domain-discovery" className="nav-link">Discovery</Link>
           <Link to="/pqc-radar" className="nav-link">PQC Radar</Link>
           <Link to="/oast" className="nav-link">OAST</Link>
           <Link to="/digital-twin" className="nav-link">Digital Twin</Link>
           <Link to="/zero-day-radar" className="nav-link">Zero-Day</Link>
           <Link to="/findings" className="nav-link nav-link-findings">Findings C2</Link>
+          <Link to="/council-queue" className="nav-link" style={{ color: 'rgba(251,191,36,0.7)' }}>Council</Link>
+          <Link to="/sso-config" className="nav-link" style={{ color: 'rgba(168,85,247,0.7)' }}>SSO</Link>
+          <Link to="/admin" className="nav-link" style={{ color: 'rgba(251,191,36,0.9)' }}>Admin</Link>
           <Link to="/system-core" className="nav-link">System Core</Link>
           <a href="/api/export/findings" className="nav-link" download>Export CSV</a>
           <a href="/logout" className="nav-link nav-link-danger">Logout</a>
