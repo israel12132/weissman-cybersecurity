@@ -182,8 +182,9 @@ function useFindingsStats() {
           const summary = d.summary ?? {}
           setStats({ total, summary })
         }
-      } catch (_) {}
-      finally { setLoading(false) }
+      } catch (_) {
+        // Non-critical: stats widget degrades gracefully when the API is unavailable
+      } finally { setLoading(false) }
     }
     load()
   }, [])
