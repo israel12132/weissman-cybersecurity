@@ -45,6 +45,22 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Admin
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-incident-response" to="/incident-response" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
+            IR Center
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-vuln-intel" to="/vuln-intel" className="text-orange-400/70 hover:text-orange-300 text-xs font-mono transition-colors">
+            Vuln Intel
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-dark-web" to="/dark-web" className="text-violet-400/70 hover:text-violet-300 text-xs font-mono transition-colors">
+            Dark Web
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-threat-hunting" to="/threat-hunting" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
+            Threat Hunt
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           {badge && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"

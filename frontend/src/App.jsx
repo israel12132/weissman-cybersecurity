@@ -218,6 +218,10 @@ export default function App() {
           <Link to="/digital-twin" className="nav-link">Digital Twin</Link>
           <Link to="/zero-day-radar" className="nav-link">Zero-Day</Link>
           <Link to="/findings" className="nav-link nav-link-findings">Findings C2</Link>
+          <Link to="/incident-response" className="nav-link" style={{ color: 'rgba(239,68,68,0.85)' }}>IR Center</Link>
+          <Link to="/vuln-intel" className="nav-link" style={{ color: 'rgba(249,115,22,0.85)' }}>Vuln Intel</Link>
+          <Link to="/dark-web" className="nav-link" style={{ color: 'rgba(167,139,250,0.85)' }}>Dark Web</Link>
+          <Link to="/threat-hunting" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>Threat Hunt</Link>
           <Link to="/council-queue" className="nav-link" style={{ color: 'rgba(251,191,36,0.7)' }}>Council</Link>
           <Link to="/sso-config" className="nav-link" style={{ color: 'rgba(168,85,247,0.7)' }}>SSO</Link>
           <Link to="/admin" className="nav-link" style={{ color: 'rgba(251,191,36,0.9)' }}>Admin</Link>
