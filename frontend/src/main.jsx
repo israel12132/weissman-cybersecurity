@@ -71,6 +71,10 @@ import FindingsCommandCenter from './pages/FindingsCommandCenter'
 import AdminManagement from './pages/AdminManagement'
 import DomainDiscovery from './pages/DomainDiscovery'
 import ThreatIntelHub from './pages/ThreatIntelHub'
+import IncidentResponseCenter from './pages/IncidentResponseCenter'
+import VulnIntelDashboard from './pages/VulnIntelDashboard'
+import DarkWebMonitor from './pages/DarkWebMonitor'
+import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
 import App from './App'
 import './index.css'
 
@@ -129,6 +133,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="findings" element={<FindingsCommandCenter />} />
             <Route path="threat-intel" element={<ThreatIntelHub />} />
             <Route path="intel-map" element={<App />} />
+            <Route path="incident-response" element={<IncidentResponseCenter />} />
+            <Route path="vuln-intel" element={<VulnIntelDashboard />} />
+            <Route path="dark-web" element={<DarkWebMonitor />} />
+            <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
             <Route path="admin" element={<AdminManagement />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
