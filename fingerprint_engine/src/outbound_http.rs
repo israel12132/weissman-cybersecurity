@@ -1,21 +1,10 @@
 //! Central outbound HTTP for third-party APIs (NVD, OSV, GitHub): timeouts, retries, optional cache hooks.
 
+use crate::resilience::jittered_backoff_duration;
 use reqwest::header::HeaderMap;
 use reqwest::StatusCode;
 use std::time::Duration;
 use thiserror::Error;
-
-/// Full-jitter helper: returns a random sleep duration in `[0, min(base*2^attempt, cap_ms)]`.
-/// Prevents thundering-herd retry storms (AWS Architecture Blog: "Exponential Backoff And Jitter").
-fn jitter_backoff(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
-    let exp = base_ms.saturating_mul(2u64.saturating_pow(attempt)).min(cap_ms);
-    let entropy = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0) as u64;
-    let jitter_ms = if exp == 0 { 0 } else { entropy % exp };
-    Duration::from_millis(jitter_ms)
-}
 
 /// Default connect timeout for external dependency calls.
 pub const EXTERNAL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -94,7 +83,7 @@ pub async fn get_bytes_with_retry(
                 .map(|s| s.saturating_mul(1000));
             let wait = match retry_after_ms {
                 Some(ms) => Duration::from_millis(ms.min(60_000)),
-                None => jitter_backoff(800, attempt, 60_000),
+                None => jittered_backoff_duration(800, attempt, 60_000),
             };
             tracing::warn!(
                 target: "outbound_http",

@@ -9,7 +9,7 @@ use tokio::time::sleep;
 /// Full-jitter: sleep for a random duration in `[0, cap]` where `cap` is the exponential backoff.
 /// This prevents thundering-herd on retry storms (see AWS Architecture Blog: "Exponential Backoff
 /// And Jitter").
-fn jitter_duration(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
+pub fn jittered_backoff_duration(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
     let exp = base_ms.saturating_mul(2u64.saturating_pow(attempt)).min(cap_ms);
     // Use the low bits of a cheap wall-clock read as entropy — no crypto quality needed here.
     let entropy = std::time::SystemTime::now()
@@ -112,7 +112,7 @@ where
                     return Err(format!("All retries failed: {}", e));
                 }
                 // Exponential backoff with full jitter (base 500 ms, cap 30 s).
-                let wait = jitter_duration(500, attempt, 30_000);
+                let wait = jittered_backoff_duration(500, attempt, 30_000);
                 sleep(wait).await;
             }
         }
