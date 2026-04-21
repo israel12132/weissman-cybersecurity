@@ -4,13 +4,17 @@
 # URLs: http://localhost/ → Command Center. Migrations run once at backend start when WEISSMAN_MIGRATE_URL is set.
 #
 # DB roles (from sqlx migrations): postgres superuser runs migrations; app uses weissman_app (RLS); auth uses weissman_auth (BYPASSRLS).
+#
+# SECRETS: ALL sensitive values must be set via a .env file or the host environment.
+# Copy .env.example to .env, fill in every variable, then run: docker compose up --build
+# Never commit a populated .env file.
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: weissman
     volumes:
       - weissman_pg:/var/lib/postgresql/data
@@ -22,6 +26,16 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
 
   backend:
     build:
@@ -29,15 +43,15 @@ services:
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:local
     environment:
-      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
-      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
-      WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@postgres:5432/weissman
-      WEISSMAN_PUBLIC_BASE_URL: http://localhost
-      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
+      DATABASE_URL: ${DATABASE_URL}
+      WEISSMAN_AUTH_DATABASE_URL: ${WEISSMAN_AUTH_DATABASE_URL}
+      WEISSMAN_MIGRATE_URL: ${WEISSMAN_MIGRATE_URL}
+      WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-http://localhost}
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
-      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
-      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:-changeme}
+      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD}
       # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
@@ -55,14 +69,18 @@ services:
       retries: 30
       start_period: 60s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
     image: weissman-backend:local
     command: ["/usr/local/bin/weissman-worker"]
     environment:
-      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
-      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
+      DATABASE_URL: ${DATABASE_URL}
+      WEISSMAN_AUTH_DATABASE_URL: ${WEISSMAN_AUTH_DATABASE_URL}
     depends_on:
       backend:
         condition: service_healthy
@@ -76,6 +94,10 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   gateway:
     build:
@@ -93,6 +115,12 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
 
 volumes:
   weissman_pg:

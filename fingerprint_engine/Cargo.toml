@@ -11,7 +11,7 @@ weissman-core = { path = "../backend/weissman-core" }
 weissman-db = { path = "../crates/weissman-db" }
 weissman-engines = { path = "../backend/weissman-engines" }
 ml-kem = "0.2.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 tokio = { version = "1", features = ["full", "sync"] }
 regex = "1.10"
 futures = "0.3"
@@ -27,7 +27,7 @@ rand = "0.8"
 axum = { version = "0.7", features = ["json", "ws"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
-sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "migrate", "chrono"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "migrate", "chrono"] }
 openidconnect = { version = "3.5", default-features = false, features = ["reqwest", "rustls-tls"] }
 oauth2 = { version = "4.4", default-features = false, features = ["reqwest"] }
 url = "2.5"
@@ -60,6 +60,9 @@ petgraph = "0.6"
 # 200% verification: ephemeral Docker container
 bollard = "0.16"
 # Deception: active cloud injection (AWS). Requires Rust ≥1.91 (aws-smithy-* / aws-sdk-* MSRV).
+# aws-credential-types: `hardcoded-credentials` is required so `Credentials::from_keys` /
+# `Credentials::new` compile. Credentials are always sourced at runtime (from tenant DB rows or
+# environment variables) — never embedded in source code. Reviewed: acceptable use.
 aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
 aws-config = "1.1"
 aws-sdk-iam = "1.14"
@@ -69,7 +72,7 @@ aws-sdk-ec2 = "1.14"
 aws-sdk-ssm = "1.14"
 aws-types = "1"
 tokio-util = { version = "0.7", features = ["codec"] }
-lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "builder", "smtp-transport"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 aes-gcm = "0.10"
 hex = "0.4"
 syn = { version = "2.0", features = ["full", "visit"] }

@@ -1,6 +1,7 @@
 //! Core fuzzing logic: no `tokio`, no `reqwest`. Safe to compile for `wasm32-unknown-unknown`
 //! and load in Cloudflare Workers / Lambda@Edge as a WASM module.
 
+#![forbid(unsafe_code)]
 pub const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 WeissmanFuzzCore/1.0";
 

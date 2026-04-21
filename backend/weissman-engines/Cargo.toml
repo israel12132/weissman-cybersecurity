@@ -10,7 +10,7 @@ weissman-core = { path = "../weissman-core" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
