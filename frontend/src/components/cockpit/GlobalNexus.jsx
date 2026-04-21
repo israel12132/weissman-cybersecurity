@@ -151,11 +151,18 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       <div className="px-3 py-3 border-b border-white/10 space-y-1">
         <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-1 mb-2 font-mono">Quick Nav</div>
         <Link
+          id="nav-platform-hub"
+          to="/platform-hub"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-300/90 hover:bg-cyan-950/40 hover:text-cyan-200 transition-colors font-semibold border border-cyan-500/20"
+        >
+          <span>⬡</span> Platform Hub
+        </Link>
+        <Link
           id="nav-engine-matrix"
           to="/engines"
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
         >
-          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 79)
+          <span className="text-cyan-500/60">⬡</span> Engine Matrix
         </Link>
         <Link id="nav-threat-emulation" to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
           <span>◈</span> APT Emulation
@@ -189,6 +196,9 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         </Link>
         <Link to="/system-core" id="nav-system-core" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/70 hover:bg-slate-800/40 hover:text-slate-300 transition-colors">
           <span>⚙</span> System Core
+        </Link>
+        <Link to="/system-status" id="nav-system-status" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/70 hover:bg-emerald-950/20 hover:text-emerald-300 transition-colors">
+          <span>✓</span> System Status
         </Link>
         {isCeo && (
           <Link to="/admin" id="nav-admin-management" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-300/90 hover:bg-amber-950/40 hover:text-amber-200 transition-colors font-semibold border border-amber-500/20 mt-2">
