@@ -8,6 +8,7 @@
 //! **`WEISSMAN_PUBLIC_BASE_URL`** — public origin for OIDC/SAML redirects (e.g. `https://app.example.com`).
 //! SAML: `WEISSMAN_XMLSEC1_BINARY` (xmlsec1 path) for verified ACS; lab-only `WEISSMAN_SAML_INSECURE_SKIP_VERIFY=1`.
 //! Optional `WEISSMAN_SAML_SP_ISSUER` (defaults to `{PUBLIC_BASE}/saml/metadata`).
+#![forbid(unsafe_code)]
 
 use fingerprint_engine::{
     enum_subdomains, enum_subdomains_default, run_fuzzer, safe_probe,

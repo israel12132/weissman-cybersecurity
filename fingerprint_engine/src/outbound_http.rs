@@ -1,5 +1,6 @@
 //! Central outbound HTTP for third-party APIs (NVD, OSV, GitHub): timeouts, retries, optional cache hooks.
 
+use crate::resilience::jittered_backoff_duration;
 use reqwest::header::HeaderMap;
 use reqwest::StatusCode;
 use std::time::Duration;
@@ -73,15 +74,17 @@ pub async fn get_bytes_with_retry(
                 }
                 return Err(OutboundHttpError::Status(status.as_u16()));
             }
-            let backoff_ms = 800u64.saturating_mul(2u64.saturating_pow(attempt));
-            let extra = resp
+            // Respect Retry-After header if present; otherwise use full-jitter backoff.
+            let retry_after_ms = resp
                 .headers()
                 .get(reqwest::header::RETRY_AFTER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
-                .map(|s| s.saturating_mul(1000))
-                .unwrap_or(0);
-            let wait = Duration::from_millis(backoff_ms.saturating_add(extra).min(60_000));
+                .map(|s| s.saturating_mul(1000));
+            let wait = match retry_after_ms {
+                Some(ms) => Duration::from_millis(ms.min(60_000)),
+                None => jittered_backoff_duration(800, attempt, 60_000),
+            };
             tracing::warn!(
                 target: "outbound_http",
                 url = %url,
