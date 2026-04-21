@@ -324,6 +324,10 @@ export default function SystemStatus() {
           const latencyMs = Math.round(performance.now() - t0)
 
           let detail = null
+          // 401/403 responses mean the endpoint exists and is protected — considered 'ok' for
+          // connectivity purposes (the auth check endpoint itself handles session validation).
+          const isConnectivityOk = r.ok || r.status === 401 || r.status === 403
+          const isError = !r.ok && r.status !== 401 && r.status !== 403
           if (check.id === 'config_public' && r.ok) {
             const d = await r.json().catch(() => ({}))
             setPlatformConfig(d)
@@ -339,10 +343,10 @@ export default function SystemStatus() {
           setResults((prev) => ({
             ...prev,
             [check.id]: {
-              status: r.ok ? 'ok' : r.status === 401 || r.status === 403 ? 'ok' : 'error',
+              status: isConnectivityOk ? 'ok' : 'error',
               latencyMs,
               detail,
-              error: !r.ok && r.status !== 401 && r.status !== 403 ? `HTTP ${r.status}` : null,
+              error: isError ? `HTTP ${r.status}` : null,
             },
           }))
         } catch (err) {
