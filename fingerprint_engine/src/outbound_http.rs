@@ -5,6 +5,18 @@ use reqwest::StatusCode;
 use std::time::Duration;
 use thiserror::Error;
 
+/// Full-jitter helper: returns a random sleep duration in `[0, min(base*2^attempt, cap_ms)]`.
+/// Prevents thundering-herd retry storms (AWS Architecture Blog: "Exponential Backoff And Jitter").
+fn jitter_backoff(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
+    let exp = base_ms.saturating_mul(2u64.saturating_pow(attempt)).min(cap_ms);
+    let entropy = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0) as u64;
+    let jitter_ms = if exp == 0 { 0 } else { entropy % exp };
+    Duration::from_millis(jitter_ms)
+}
+
 /// Default connect timeout for external dependency calls.
 pub const EXTERNAL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Default total request timeout (read + write).
@@ -73,15 +85,17 @@ pub async fn get_bytes_with_retry(
                 }
                 return Err(OutboundHttpError::Status(status.as_u16()));
             }
-            let backoff_ms = 800u64.saturating_mul(2u64.saturating_pow(attempt));
-            let extra = resp
+            // Respect Retry-After header if present; otherwise use full-jitter backoff.
+            let retry_after_ms = resp
                 .headers()
                 .get(reqwest::header::RETRY_AFTER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
-                .map(|s| s.saturating_mul(1000))
-                .unwrap_or(0);
-            let wait = Duration::from_millis(backoff_ms.saturating_add(extra).min(60_000));
+                .map(|s| s.saturating_mul(1000));
+            let wait = match retry_after_ms {
+                Some(ms) => Duration::from_millis(ms.min(60_000)),
+                None => jitter_backoff(800, attempt, 60_000),
+            };
             tracing::warn!(
                 target: "outbound_http",
                 url = %url,

@@ -1,10 +1,24 @@
-//! P0: Retry with exponential backoff and circuit breaker for external APIs.
+//! P0: Retry with exponential backoff + jitter and circuit breaker for external APIs.
 //! Ensures one failing service never crashes the orchestrator; alerts via callback.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
+
+/// Full-jitter: sleep for a random duration in `[0, cap]` where `cap` is the exponential backoff.
+/// This prevents thundering-herd on retry storms (see AWS Architecture Blog: "Exponential Backoff
+/// And Jitter").
+fn jitter_duration(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
+    let exp = base_ms.saturating_mul(2u64.saturating_pow(attempt)).min(cap_ms);
+    // Use the low bits of a cheap wall-clock read as entropy — no crypto quality needed here.
+    let entropy = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0) as u64;
+    let jitter_ms = if exp == 0 { 0 } else { entropy % exp };
+    Duration::from_millis(jitter_ms)
+}
 
 /// Circuit state: Closed = normal, Open = failing (reject fast), HalfOpen = probing.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -86,7 +100,6 @@ where
     if !circuit.allow_request() {
         return Err("Circuit open; request skipped".to_string());
     }
-    let mut backoff_ms = 500u64;
     for attempt in 0..=max_retries {
         match f().await {
             Ok(v) => {
@@ -98,8 +111,9 @@ where
                 if attempt == max_retries {
                     return Err(format!("All retries failed: {}", e));
                 }
-                sleep(Duration::from_millis(backoff_ms)).await;
-                backoff_ms = (backoff_ms * 2).min(30_000);
+                // Exponential backoff with full jitter (base 500 ms, cap 30 s).
+                let wait = jitter_duration(500, attempt, 30_000);
+                sleep(wait).await;
             }
         }
     }

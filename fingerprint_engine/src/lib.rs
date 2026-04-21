@@ -1,5 +1,11 @@
 //! Large HTTP + engine crate: scoped clippy allows so `cargo clippy -- -D warnings` stays green
 //! without mass refactors before release (correctness lints like `unwrap` remain enabled).
+//!
+//! # Safety policy
+//! Unsafe code is denied crate-wide. The sole exception is `hpc_runtime::linux_affinity`, which
+//! calls `libc::sched_setaffinity` for NUMA-aware thread pinning on Linux. That module carries an
+//! explicit `#[allow(unsafe_code)]` with documented SAFETY invariants.
+#![deny(unsafe_code)]
 #![allow(
     clippy::collapsible_if,
     clippy::let_unit_value,
