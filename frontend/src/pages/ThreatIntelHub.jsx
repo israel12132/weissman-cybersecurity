@@ -359,7 +359,7 @@ export default function ThreatIntelHub() {
       <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { to: '/engines',         label: 'Engine Matrix',     color: '#22d3ee', desc: 'Run & manage all engines' },
-          { to: '/findings',        label: 'Findings C2',       color: '#f59e0b', desc: 'Triage & export findings' },
+          { to: '/engine-catalog',  label: 'Client Catalog',    color: '#10b981', desc: 'Engines by client type' },
           { to: '/threat-emulation',label: 'APT Emulation',     color: '#ef4444', desc: 'Nation-state TTP simulation' },
           { to: '/domain-discovery',label: 'Domain Discovery',  color: '#8b5cf6', desc: 'Enumerate attack surface' },
         ].map((link) => (
