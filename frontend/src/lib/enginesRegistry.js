@@ -30,7 +30,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 253 engines in registry order */
+/** All 482 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
