@@ -176,6 +176,20 @@ pub mod timing_sidechannel_engine;
 pub mod typosquatting_monitor_engine;
 pub mod waf_bypass_engine;
 pub mod zero_day_prediction_engine;
+pub mod advanced_recon_engines;
+pub mod advanced_web_engines;
+pub mod advanced_ai_engines;
+pub mod advanced_cloud_engines;
+pub mod advanced_ot_engines;
+pub mod advanced_stealth_engines;
+pub mod advanced_crypto_engines;
+pub mod advanced_network_engines;
+pub mod advanced_supply_chain_engines;
+pub mod advanced_apt_engines;
+pub mod advanced_malware_engines;
+pub mod advanced_social_engines;
+pub mod advanced_mobile_engines;
+pub mod advanced_data_engines;
 pub mod admin_users;
 
 pub use fingerprint::{
