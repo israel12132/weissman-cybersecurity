@@ -75,6 +75,7 @@ import IncidentResponseCenter from './pages/IncidentResponseCenter'
 import VulnIntelDashboard from './pages/VulnIntelDashboard'
 import DarkWebMonitor from './pages/DarkWebMonitor'
 import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
+import EngineClientCatalog from './pages/EngineClientCatalog'
 import App from './App'
 import './index.css'
 
@@ -137,6 +138,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="vuln-intel" element={<VulnIntelDashboard />} />
             <Route path="dark-web" element={<DarkWebMonitor />} />
             <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
+            <Route path="engine-catalog" element={<EngineClientCatalog />} />
             <Route path="admin" element={<AdminManagement />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />

@@ -426,6 +426,10 @@ export default function EngineMatrix() {
               🔍 Domain Discovery
             </Link>
             <span className="text-white/20 text-xs">|</span>
+            <Link to="/engine-catalog" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
+              🗂 Client Catalog
+            </Link>
+            <span className="text-white/20 text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">Engine Matrix</h1>
             <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
               {ENGINES_REGISTRY.length} engines · {ENGINE_GROUP_DEFS.length} groups
