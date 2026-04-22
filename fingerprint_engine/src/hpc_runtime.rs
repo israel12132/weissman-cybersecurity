@@ -90,6 +90,7 @@ pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
 mod linux_affinity {
     // SAFETY: This module is the sole justified exception to the crate-wide `unsafe_code = "deny"`
     // policy. It calls `libc::sched_setaffinity` directly because there is no stable safe Rust API
@@ -98,10 +99,8 @@ mod linux_affinity {
     //   2. `cpu_set_t` is zero-initialized via `std::mem::zeroed` (valid bit pattern: all zeros).
     //   3. Only the current thread (PID 0) is affected; no cross-thread memory is accessed.
     //   4. This code is compiled only on Linux (`#[cfg(target_os = "linux")]`).
-    #[allow(unsafe_code)]
     use std::io;
 
-    #[allow(unsafe_code)]
     pub(super) fn bind_current_thread_to_cpu(cpu: usize) -> io::Result<()> {
         // SAFETY: See module-level safety comment. cpu < CPU_SETSIZE is asserted below.
         unsafe {
