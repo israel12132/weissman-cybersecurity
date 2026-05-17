@@ -2,6 +2,7 @@
 Phase 1: Short-lived cache (5–10 min) for feed results to avoid rate limits (NVD, GitHub, OSV, OTX).
 Cache key MUST include query/technology so Client B does not get Client A's cached result.
 """
+import asyncio
 import hashlib
 import json
 import logging
@@ -120,19 +121,126 @@ def _intel_config_from_env() -> dict[str, Any]:
     }
 
 
-def get_all_feed_results(config):
-    """Fetch from all enabled intelligence feeds."""
+def get_all_feed_results(config, cache_suffix: str | None = None):
+    """
+    Fetch from all enabled intelligence feeds with caching.
+
+    Parameters
+    ----------
+    config : Configuration object
+        Contains intelligence feed settings
+    cache_suffix : str or None
+        Optional cache key suffix for client-specific caching
+
+    Returns
+    -------
+    list[FeedResult]
+        Results from all enabled feeds
+    """
     results = []
+
     if config.intelligence.nvd.enabled:
-        results.append(NVDFeed(api_key=config.intelligence.nvd.api_key).fetch())
+        nvd_feed = NVDFeed(api_key=config.intelligence.nvd.api_key)
+        result = _cached_feed(
+            "nvd",
+            lambda: nvd_feed.fetch(),
+            cache_key_suffix=cache_suffix,
+        )
+        results.append(result)
+
     if config.intelligence.github.enabled:
-        results.append(GitHubFeed(token=config.intelligence.github.token).fetch())
+        github_feed = GitHubFeed(token=config.intelligence.github.token)
+        result = _cached_feed(
+            "github",
+            lambda: github_feed.fetch(),
+            cache_key_suffix=cache_suffix,
+        )
+        results.append(result)
+
     if config.intelligence.osv.enabled:
-        results.append(OSVFeed().fetch())
+        osv_feed = OSVFeed()
+        result = _cached_feed(
+            "osv",
+            lambda: osv_feed.fetch(),
+            cache_key_suffix=cache_suffix,
+        )
+        results.append(result)
+
     if config.intelligence.otx.enabled and config.intelligence.otx.api_key:
-        results.append(OTXFeed(api_key=config.intelligence.otx.api_key).fetch())
+        otx_feed = OTXFeed(api_key=config.intelligence.otx.api_key)
+        result = _cached_feed(
+            "otx",
+            lambda: otx_feed.fetch(),
+            cache_key_suffix=cache_suffix,
+        )
+        results.append(result)
+
     # HIBP is used per-client per-domain below
     return results
+
+
+async def get_all_feed_results_async(config, cache_suffix: str | None = None):
+    """
+    Fetch from all enabled intelligence feeds asynchronously with caching.
+
+    This version uses asyncio.gather() to fetch from multiple feeds in parallel,
+    significantly improving performance when multiple feeds are enabled.
+
+    Parameters
+    ----------
+    config : Configuration object
+        Contains intelligence feed settings
+    cache_suffix : str or None
+        Optional cache key suffix for client-specific caching
+
+    Returns
+    -------
+    list[FeedResult]
+        Results from all enabled feeds
+    """
+    import concurrent.futures
+
+    # Prepare all feed tasks
+    tasks = []
+
+    if config.intelligence.nvd.enabled:
+        nvd_feed = NVDFeed(api_key=config.intelligence.nvd.api_key)
+        tasks.append(("nvd", lambda: nvd_feed.fetch()))
+
+    if config.intelligence.github.enabled:
+        github_feed = GitHubFeed(token=config.intelligence.github.token)
+        tasks.append(("github", lambda: github_feed.fetch()))
+
+    if config.intelligence.osv.enabled:
+        osv_feed = OSVFeed()
+        tasks.append(("osv", lambda: osv_feed.fetch()))
+
+    if config.intelligence.otx.enabled and config.intelligence.otx.api_key:
+        otx_feed = OTXFeed(api_key=config.intelligence.otx.api_key)
+        tasks.append(("otx", lambda: otx_feed.fetch()))
+
+    # Run all feed fetches concurrently
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = [
+            loop.run_in_executor(
+                executor,
+                lambda name=name, fn=fn: _cached_feed(name, fn, cache_suffix),
+            )
+            for name, fn in tasks
+        ]
+        results = await asyncio.gather(*futures, return_exceptions=True)
+
+    # Filter out exceptions and return valid results
+    valid_results = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            feed_name = tasks[i][0]
+            logger.warning("Feed %s failed: %s", feed_name, result)
+        else:
+            valid_results.append(result)
+
+    return valid_results
 
 
 def correlate_findings_to_clients(config_path: str = "config.yaml") -> list[ClientFinding]:
