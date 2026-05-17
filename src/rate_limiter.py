@@ -47,6 +47,13 @@ from typing import Any, Optional
 
 from src.exceptions import RateLimitExceeded
 
+try:
+    from src.metrics import track_rate_limit_exceeded
+except ImportError:
+    # Metrics module not available, use no-op
+    def track_rate_limit_exceeded(identity: str, key_prefix: str):
+        pass
+
 logger = logging.getLogger("weissman.rate_limiter")
 
 REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
@@ -170,6 +177,8 @@ class RateLimiter:
                     self.max_calls,
                     self.window_seconds,
                 )
+                # Track metrics
+                track_rate_limit_exceeded(identity, self.key_prefix)
                 raise RateLimitExceeded(
                     f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s",
                     identity=identity,
@@ -218,6 +227,8 @@ class RateLimiter:
                     self.max_calls,
                     self.window_seconds,
                 )
+                # Track metrics
+                track_rate_limit_exceeded(identity, self.key_prefix)
                 raise RateLimitExceeded(
                     f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s",
                     identity=identity,
