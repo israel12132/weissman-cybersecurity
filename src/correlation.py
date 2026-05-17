@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,26 +23,23 @@ from src.feeds import NVDFeed, GitHubFeed, OSVFeed, OTXFeed, HIBPFeed
 from src.feeds.base import FeedResult
 from src.fingerprint import fingerprint_ip_ranges, fingerprint_urls, merge_fingerprint_into_scope
 
+# Bound per-key lock bookkeeping to prevent unbounded growth for highly dynamic keys.
 _MAX_FEED_FILL_LOCKS = 512
-_feed_fill_locks: dict[str, threading.Lock] = {}
-_feed_fill_lock_order: list[str] = []
+_feed_fill_locks: OrderedDict[str, threading.Lock] = OrderedDict()
 _feed_fill_locks_guard = threading.Lock()
 
 
 def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
     with _feed_fill_locks_guard:
-        lock = _feed_fill_locks.get(cache_key)
+        lock = _feed_fill_locks.pop(cache_key, None)
         if lock is None:
             lock = threading.Lock()
-            _feed_fill_locks[cache_key] = lock
-        if cache_key in _feed_fill_lock_order:
-            _feed_fill_lock_order.remove(cache_key)
-        _feed_fill_lock_order.append(cache_key)
-        while len(_feed_fill_lock_order) > _MAX_FEED_FILL_LOCKS:
-            oldest_key = _feed_fill_lock_order.pop(0)
-            oldest_lock = _feed_fill_locks.get(oldest_key)
-            if oldest_lock is not None and not oldest_lock.locked():
-                _feed_fill_locks.pop(oldest_key, None)
+        _feed_fill_locks[cache_key] = lock
+        while len(_feed_fill_locks) > _MAX_FEED_FILL_LOCKS:
+            oldest_key, oldest_lock = _feed_fill_locks.popitem(last=False)
+            if oldest_lock.locked():
+                _feed_fill_locks[oldest_key] = oldest_lock
+                break
         return lock
 
 

@@ -105,7 +105,7 @@ def get_cached_feed(cache_key: str) -> Optional[list[dict]]:
         if not entry:
             return None
         expires_at, raw = entry
-        if time.monotonic() <= expires_at:
+        if time.monotonic() < expires_at:
             logger.debug("feed_cache HIT (mem): %s", cache_key)
             return _deserialise(raw)
         _mem_cache.pop(full_key, None)
