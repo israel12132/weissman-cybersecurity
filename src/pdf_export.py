@@ -14,12 +14,13 @@ and embedded in the Digital Integrity Stamp. CVSS and severity are taken from th
 from __future__ import annotations
 
 import hashlib
-import html
 import logging
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from src.html_sanitizer import sanitise_text, sanitise_url, sanitise_snippet, escape_basic
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +91,6 @@ def remediation_for_anomaly(anomaly_type: str) -> str:
         "Implement input sanitization for the affected endpoint. Validate and constrain "
         "all user inputs; avoid passing unsanitized data to interpreters or system calls."
     )
-
-
-def _escape(s: str) -> str:
-    return html.escape(str(s) if s is not None else "")
 
 
 def _severity_to_impact(sev: str) -> int:
@@ -274,12 +271,12 @@ def generate_report_pdf(
     global_threats = global_threats or []
     global_threat_rows = []
     for gt in global_threats:
-        title = _escape((gt.get("title") or "Unknown")[:100])
-        url = _escape((gt.get("url") or "")[:200])
+        title = sanitise_text((gt.get("title") or "Unknown")[:100], max_length=150)
+        url = sanitise_url((gt.get("url") or "")[:200])
         techs = ", ".join(gt.get("matched_tech") or [])[:80]
-        desc = _escape((gt.get("description") or "")[:250])
+        desc = sanitise_text((gt.get("description") or "")[:250], max_length=300)
         global_threat_rows.append(
-            f"<tr><td>{title}</td><td>{_escape(techs)}</td><td>{desc}</td><td>{url}</td></tr>"
+            f"<tr><td>{title}</td><td>{escape_basic(techs)}</td><td>{desc}</td><td>{url}</td></tr>"
         )
     global_threat_table = "\n".join(global_threat_rows) if global_threat_rows else "<tr><td colspan=\"4\">None identified for this scope; global monitoring remains active.</td></tr>"
 
@@ -289,13 +286,15 @@ def generate_report_pdf(
     critical_for_multilang: list[dict[str, Any]] = []
     for item in findings:
         f = item.get("finding") or {}
-        title = _escape(f.get("title") or "Finding")
-        desc = _escape((f.get("description") or "")[:500])
+        # Sanitise title and description (allow formatting tags like <code>)
+        title = sanitise_text(f.get("title") or "Finding", max_length=200)
+        desc = sanitise_text((f.get("description") or "")[:500], max_length=600)
+
         sev = (f.get("severity") or "medium")
-        sev_esc = _escape(sev)
+        sev_esc = escape_basic(sev)
         anomaly_hint = desc if "500" in desc or "time" in desc else sev
         cvss = cvss_score_from_anomaly(anomaly_hint, sev)
-        cvss_vector = _escape(severity_to_cvss_vector(sev))
+        cvss_vector = escape_basic(severity_to_cvss_vector(sev))
         src = (f.get("source") or "").lower()
         cve_id = (f.get("id") or f.get("source_id") or "")[:64]
         if src == "fuzzer":
@@ -329,14 +328,20 @@ def generate_report_pdf(
                     remed += "\n\n[IaC] Terraform / K8s / Ansible snippets available; see DevOps section."
             except ImportError:
                 pass
-        remed = _escape(remed[:2000])
-        client = _escape(item.get("client_id") or "")
+        # Sanitise remediation text (allow formatting)
+        remed = sanitise_text(remed[:2000], max_length=2500)
+
+        client = escape_basic(item.get("client_id") or "")
         client_id = item.get("client_id") or ""
         target_base = client_targets.get(str(client_id)) or item.get("target_url") or f.get("target_url") or ""
         proof = item.get("proof") or f.get("proof") or None
         curl_hint = _reproduction_curl(f, target_base, proof)
+
+        # Sanitise curl command (it's a snippet, so use snippet sanitiser)
+        curl_hint_safe = sanitise_snippet(curl_hint, max_length=500)
+
         rows.append(
-            f"<tr><td>{title}</td><td>{sev_esc}</td><td>{cvss:.1f}</td><td>{cvss_vector}</td><td>{client}</td><td>{desc}</td><td>{_escape(curl_hint)}</td><td>{remed}</td></tr>"
+            f"<tr><td>{title}</td><td>{sev_esc}</td><td>{cvss:.1f}</td><td>{cvss_vector}</td><td>{client}</td><td>{desc}</td><td>{curl_hint_safe}</td><td>{remed}</td></tr>"
         )
         if (sev or "").lower() == "critical" and len(critical_for_multilang) < 3:
             critical_for_multilang.append({
@@ -356,13 +361,21 @@ def generate_report_pdf(
             cr.get("target_base") or "",
             cr.get("proof_curl"),
         )
-        t = _escape((cr.get("title") or f"Critical finding {i}")[:80])
+        # Sanitise title (allow formatting)
+        t = sanitise_text((cr.get("title") or f"Critical finding {i}")[:80], max_length=100)
+
+        # Sanitise all code snippets
+        bash_safe = sanitise_snippet(snippets["bash"][:500], max_length=600)
+        python_safe = sanitise_snippet(snippets["python"][:400], max_length=500)
+        js_safe = sanitise_snippet(snippets["javascript"][:400], max_length=500)
+        go_safe = sanitise_snippet(snippets["go"][:400], max_length=500)
+
         multilang_html_parts.append(
             f'<div class="multilang-block"><h3>{i}. {t}</h3>'
-            f'<p><strong>Bash (curl):</strong></p><pre class="snippet">{_escape(snippets["bash"][:500])}</pre>'
-            f'<p><strong>Python (requests):</strong></p><pre class="snippet">{_escape(snippets["python"][:400])}</pre>'
-            f'<p><strong>JavaScript (fetch):</strong></p><pre class="snippet">{_escape(snippets["javascript"][:400])}</pre>'
-            f'<p><strong>Go:</strong></p><pre class="snippet">{_escape(snippets["go"][:400])}</pre></div>'
+            f'<p><strong>Bash (curl):</strong></p><pre class="snippet">{bash_safe}</pre>'
+            f'<p><strong>Python (requests):</strong></p><pre class="snippet">{python_safe}</pre>'
+            f'<p><strong>JavaScript (fetch):</strong></p><pre class="snippet">{js_safe}</pre>'
+            f'<p><strong>Go:</strong></p><pre class="snippet">{go_safe}</pre></div>'
         )
     multilang_section = (
         '<div class="page multilang-page"><h2>Multi-Language Reproduction (Top 3 Critical Findings)</h2>'
@@ -392,8 +405,8 @@ def generate_report_pdf(
     <div class="cover-page">
         <div class="cover-brand">{BRAND}</div>
         <h1 class="cover-title">Security Assessment Report</h1>
-        <p class="cover-target">{_escape(target_display)}</p>
-        <p class="cover-meta">Report ID: {_escape(str(run_id))} | Generated: {_escape(run_created)}</p>
+        <p class="cover-target">{escape_basic(target_display)}</p>
+        <p class="cover-meta">Report ID: {escape_basic(str(run_id))} | Generated: {escape_basic(run_created)}</p>
         <div class="security-score-box {score_css_class}">
             <div class="score-label">Weissman Security Rating</div>
             <div class="score-value">{score}</div>
@@ -411,7 +424,7 @@ def generate_report_pdf(
         <p><strong>Weissman Priority Score (CVSS × EPSS × Asset Criticality):</strong> {weissman_priority}/100. Higher values indicate findings that should be remediated first (exploit likelihood and impact).</p>
         <p>Technical details, one-click remediation snippets, and exact patches are provided in the following sections. All findings are derived from trusted threat intelligence feeds (NVD, GitHub, OSV, OTX, HIBP). <strong>Zero False Positive:</strong> every finding in this report has been verified via a non-destructive Proof-of-Concept (PoC) against your environment; only confirmed (VERIFIED) results are included.</p>
         <p><strong>Data integrity statement:</strong> This report is generated exclusively from live database and threat intelligence feeds. No synthetic, mock, or example data is used. Findings have been verified as described in the platform methodology.</p>
-        <p><strong>Likely Threat Actors (APT Attribution):</strong> Based on Critical/High findings and public threat intelligence, the following advanced persistent threat (APT) groups are known to exploit similar vulnerabilities: {_escape(", ".join(threat_actors) if threat_actors else "— (none identified for this scope)")}.</p>
+        <p><strong>Likely Threat Actors (APT Attribution):</strong> Based on Critical/High findings and public threat intelligence, the following advanced persistent threat (APT) groups are known to exploit similar vulnerabilities: {escape_basic(", ".join(threat_actors) if threat_actors else "— (none identified for this scope)")}.</p>
         <div class="page-footer">{COPYRIGHT_FOOTER}</div>
         <div class="certificate-line">{CERTIFICATE_TEXT}</div>
     </div>
@@ -472,15 +485,15 @@ def generate_report_pdf(
         <p>Comparison of your Weissman Security Rating and EPSS against sector averages (Finance, Tech, Automotive, Healthcare, Retail) for executive decision-making. <strong>Sector averages are industry reference values (aggregated surveys), not your organization's data.</strong></p>
         <table class="benchmark-table">
             <tr><td>Your Weissman Score</td><td><strong>{score}</strong> / 100</td></tr>
-            <tr><td>{_escape(benchmark.get("sector_name", "Industry"))} average</td><td>{benchmark.get("sector_avg_score", 72)} / 100</td></tr>
-            <tr><td>Vs sector</td><td>{_escape(benchmark.get("vs_label", "—"))}</td></tr>
+            <tr><td>{escape_basic(benchmark.get("sector_name", "Industry"))} average</td><td>{benchmark.get("sector_avg_score", 72)} / 100</td></tr>
+            <tr><td>Vs sector</td><td>{escape_basic(benchmark.get("vs_label", "—"))}</td></tr>
             <tr><td>Percentile rank (vs all sectors)</td><td>{benchmark.get("percentile_rank", 50)}%</td></tr>
-            <tr><td>Recommendation</td><td>{_escape(benchmark.get("recommendation", ""))}</td></tr>
+            <tr><td>Recommendation</td><td>{sanitise_text(benchmark.get("recommendation", ""), max_length=500)}</td></tr>
         </table>
         <p class="benchmark-sub">Sector reference (Weissman Score average):</p>
         <table class="benchmark-table">
             <tr><th>Sector</th><th>Avg Score</th><th>Vs you</th></tr>
-            {"".join(f'<tr><td>{_escape(s.get("name", ""))}</td><td>{s.get("avg_score", 0)}</td><td>{_escape("Above you" if s.get("vs_client") == "above" else "Below you" if s.get("vs_client") == "below" else "Equal")}</td></tr>' for s in benchmark.get("all_sectors", []))}
+            {"".join(f'<tr><td>{escape_basic(s.get("name", ""))}</td><td>{s.get("avg_score", 0)}</td><td>{escape_basic("Above you" if s.get("vs_client") == "above" else "Below you" if s.get("vs_client") == "below" else "Equal")}</td></tr>' for s in benchmark.get("all_sectors", []))}
         </table>
         <div class="page-footer">{COPYRIGHT_FOOTER}</div>
         <div class="certificate-line">{CERTIFICATE_TEXT}</div>
@@ -502,7 +515,7 @@ def generate_report_pdf(
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Security Assessment Report - {_escape(target_display)}</title>
+    <title>Security Assessment Report - {escape_basic(target_display)}</title>
     <style>
         @page {{ size: A4; margin: 2cm; }}
         @page {{
