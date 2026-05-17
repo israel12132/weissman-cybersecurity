@@ -91,6 +91,8 @@ import RiskGraphVisualization from './pages/RiskGraphVisualization'
 import ComplianceFrameworks from './pages/ComplianceFrameworks'
 import SBOMBrowser from './pages/SBOMBrowser'
 import IntegrationManager from './pages/IntegrationManager'
+import AlertRulesEngine from './pages/AlertRulesEngine'
+import ScanScheduler from './pages/ScanScheduler'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -171,6 +173,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="compliance" element={<ComplianceFrameworks />} />
             <Route path="sbom" element={<SBOMBrowser />} />
             <Route path="integrations" element={<IntegrationManager />} />
+            <Route path="alert-rules" element={<AlertRulesEngine />} />
+            <Route path="scan-scheduler" element={<ScanScheduler />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

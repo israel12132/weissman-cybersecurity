@@ -1,0 +1,500 @@
+import { useState, useEffect } from 'react';
+import { Bell, Plus, Trash2, Edit, Play, Pause, Filter, AlertTriangle } from 'lucide-react';
+import PageShell from '../components/PageShell';
+import { api } from '../utils/apiFetch';
+
+/**
+ * AlertRulesEngine - Custom alert rule creation and management
+ *
+ * Features:
+ * - Condition-based alerting (severity, CVE, engine, asset)
+ * - Multiple notification channels (email, Slack, PagerDuty, webhook)
+ * - Threshold configuration
+ * - Alert deduplication
+ * - Alert suppression windows
+ * - Rule priority and chaining
+ * - Test mode before activation
+ */
+export default function AlertRulesEngine() {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // all, enabled, disabled
+  const [createModal, setCreateModal] = useState(false);
+  const [editModal, setEditModal] = useState(null);
+
+  useEffect(() => {
+    fetchRules();
+  }, []);
+
+  const fetchRules = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get('/api/alerts/rules');
+      setRules(data.rules || []);
+    } catch (error) {
+      console.error('Failed to fetch alert rules:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleRule = async (ruleId, currentState) => {
+    try {
+      await api.patch(`/api/alerts/rules/${ruleId}`, {
+        enabled: !currentState,
+      });
+      setRules((prev) =>
+        prev.map((r) => (r.id === ruleId ? { ...r, enabled: !currentState } : r))
+      );
+    } catch (error) {
+      console.error('Failed to toggle rule:', error);
+    }
+  };
+
+  const deleteRule = async (ruleId) => {
+    if (!confirm('Are you sure you want to delete this alert rule?')) return;
+
+    try {
+      await api.delete(`/api/alerts/rules/${ruleId}`);
+      setRules((prev) => prev.filter((r) => r.id !== ruleId));
+    } catch (error) {
+      console.error('Failed to delete rule:', error);
+    }
+  };
+
+  const testRule = async (ruleId) => {
+    try {
+      const result = await api.post(`/api/alerts/rules/${ruleId}/test`);
+      alert(
+        result.success
+          ? `Test successful! ${result.matched} findings matched this rule.`
+          : 'Test failed. Check rule conditions.'
+      );
+    } catch (error) {
+      console.error('Failed to test rule:', error);
+    }
+  };
+
+  const filteredRules = rules.filter((rule) => {
+    if (filter === 'all') return true;
+    return filter === 'enabled' ? rule.enabled : !rule.enabled;
+  });
+
+  const stats = {
+    total: rules.length,
+    enabled: rules.filter((r) => r.enabled).length,
+    disabled: rules.filter((r) => !r.enabled).length,
+    triggered: rules.reduce((sum, r) => sum + (r.triggered_count || 0), 0),
+  };
+
+  return (
+    <PageShell title="Alert Rules Engine" icon={<Bell />}>
+      <div className="space-y-6">
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-400">Total Rules</span>
+              <Bell className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="text-2xl font-bold text-white">{stats.total}</div>
+          </div>
+
+          <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-green-400">Enabled</span>
+              <Play className="w-4 h-4 text-green-400" />
+            </div>
+            <div className="text-2xl font-bold text-green-400">{stats.enabled}</div>
+          </div>
+
+          <div className="bg-gray-500/10 backdrop-blur-md border border-gray-500/30 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-400">Disabled</span>
+              <Pause className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="text-2xl font-bold text-gray-400">{stats.disabled}</div>
+          </div>
+
+          <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-purple-400">Triggered (24h)</span>
+              <AlertTriangle className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="text-2xl font-bold text-purple-400">{stats.triggered}</div>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+            {['all', 'enabled', 'disabled'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  filter === f
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Rule
+          </button>
+        </div>
+
+        {/* Rules List */}
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-white/10">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Bell className="w-4 h-4 text-cyan-400" />
+              Alert Rules ({filteredRules.length})
+            </h3>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">
+              <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
+              Loading rules...
+            </div>
+          ) : filteredRules.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No alert rules found. Click "Create Rule" to get started.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {filteredRules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="p-4 hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <button
+                        onClick={() => toggleRule(rule.id, rule.enabled)}
+                        className={`p-2 rounded-lg border transition-colors ${
+                          rule.enabled
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'
+                        }`}
+                      >
+                        {rule.enabled ? (
+                          <Play className="w-4 h-4" />
+                        ) : (
+                          <Pause className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h4 className="text-sm font-semibold text-white">{rule.name}</h4>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              rule.enabled
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                            }`}
+                          >
+                            {rule.enabled ? 'Active' : 'Inactive'}
+                          </span>
+                          {rule.priority && (
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
+                              Priority: {rule.priority}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-gray-400 mb-3">{rule.description}</p>
+
+                        {/* Conditions */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {rule.conditions?.severity && (
+                            <span className="text-xs px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded">
+                              Severity: {rule.conditions.severity.join(', ')}
+                            </span>
+                          )}
+                          {rule.conditions?.cve_pattern && (
+                            <span className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded">
+                              CVE: {rule.conditions.cve_pattern}
+                            </span>
+                          )}
+                          {rule.conditions?.engines && (
+                            <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
+                              {rule.conditions.engines.length} engines
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Channels */}
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <span>Channels:</span>
+                          {rule.channels?.map((channel) => (
+                            <span
+                              key={channel}
+                              className="px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded"
+                            >
+                              {channel}
+                            </span>
+                          ))}
+                          {rule.triggered_count !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span>Triggered: {rule.triggered_count} times</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => testRule(rule.id)}
+                        className="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-medium hover:bg-yellow-500/30 transition-colors"
+                      >
+                        Test
+                      </button>
+                      <button
+                        onClick={() => setEditModal(rule)}
+                        className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteRule(rule.id)}
+                        className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Templates */}
+        <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button
+              onClick={() =>
+                setCreateModal({
+                  template: 'critical-findings',
+                  name: 'Critical Findings Alert',
+                  conditions: { severity: ['critical'] },
+                })
+              }
+              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+            >
+              <div className="text-sm font-medium text-white mb-1">Critical Findings</div>
+              <div className="text-xs text-gray-400">Alert on all critical severity findings</div>
+            </button>
+            <button
+              onClick={() =>
+                setCreateModal({
+                  template: 'new-cve',
+                  name: 'New CVE Alert',
+                  conditions: { cve_pattern: 'CVE-2024-*' },
+                })
+              }
+              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+            >
+              <div className="text-sm font-medium text-white mb-1">New CVE Detection</div>
+              <div className="text-xs text-gray-400">Alert on newly published CVEs</div>
+            </button>
+            <button
+              onClick={() =>
+                setCreateModal({
+                  template: 'high-volume',
+                  name: 'High Volume Alert',
+                  conditions: { threshold: 50 },
+                })
+              }
+              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+            >
+              <div className="text-sm font-medium text-white mb-1">High Volume</div>
+              <div className="text-xs text-gray-400">Alert when findings exceed threshold</div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Create/Edit Modal */}
+      {(createModal || editModal) && (
+        <RuleModal
+          rule={editModal}
+          template={createModal?.template ? createModal : null}
+          onClose={() => {
+            setCreateModal(false);
+            setEditModal(null);
+          }}
+          onSave={() => {
+            fetchRules();
+            setCreateModal(false);
+            setEditModal(null);
+          }}
+        />
+      )}
+    </PageShell>
+  );
+}
+
+/**
+ * Rule Create/Edit Modal
+ */
+function RuleModal({ rule, template, onClose, onSave }) {
+  const [formData, setFormData] = useState({
+    name: rule?.name || template?.name || '',
+    description: rule?.description || '',
+    enabled: rule?.enabled ?? true,
+    priority: rule?.priority || 5,
+    conditions: rule?.conditions || template?.conditions || {},
+    channels: rule?.channels || ['email'],
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      if (rule) {
+        await api.put(`/api/alerts/rules/${rule.id}`, formData);
+      } else {
+        await api.post('/api/alerts/rules', formData);
+      }
+      onSave();
+    } catch (error) {
+      console.error('Failed to save rule:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-white">
+            {rule ? 'Edit Rule' : 'Create Alert Rule'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Rule Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              placeholder="Critical vulnerabilities alert"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              placeholder="Alert when critical findings are detected"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Priority</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={formData.priority}
+                onChange={(e) =>
+                  setFormData({ ...formData, priority: parseInt(e.target.value) })
+                }
+                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+              <select
+                value={formData.enabled ? 'enabled' : 'disabled'}
+                onChange={(e) =>
+                  setFormData({ ...formData, enabled: e.target.value === 'enabled' })
+                }
+                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              >
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Notification Channels
+            </label>
+            <div className="space-y-2">
+              {['email', 'slack', 'teams', 'pagerduty', 'webhook'].map((channel) => (
+                <label key={channel} className="flex items-center gap-2 text-sm text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={formData.channels.includes(channel)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({
+                          ...formData,
+                          channels: [...formData.channels, channel],
+                        });
+                      } else {
+                        setFormData({
+                          ...formData,
+                          channels: formData.channels.filter((c) => c !== channel),
+                        });
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  {channel.charAt(0).toUpperCase() + channel.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !formData.name}
+            className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : rule ? 'Save Changes' : 'Create Rule'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
