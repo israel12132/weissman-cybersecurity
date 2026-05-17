@@ -10,6 +10,8 @@ import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, Optional
 
+from src.redis_client import get_shared_redis_client
+
 try:
     from src.metrics import track_cache_hit
 except ImportError:
@@ -29,36 +31,13 @@ try:
 except (TypeError, ValueError):
     logger.warning("feed_cache: invalid FEED_CACHE TTL value (%r), using default 300", _ttl_raw)
     FEED_CACHE_TTL_SECONDS = 300
-REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
 CACHE_KEY_PREFIX = "weissman:feed:"
 _EMPTY_PAYLOAD = '{"empty_result":true}'
 
-_redis_client: Optional[Any] = None
-_redis_init_lock = threading.Lock()
-
 
 def _get_redis():
-    """Lazy-init Redis client; returns None if unavailable."""
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-    if not REDIS_URL:
-        return None
-
-    with _redis_init_lock:
-        if _redis_client is not None:
-            return _redis_client
-        try:
-            import redis
-
-            _redis_client = redis.from_url(REDIS_URL, socket_timeout=2, decode_responses=True)
-            _redis_client.ping()
-            logger.debug("feed_cache: Redis backend active")
-            return _redis_client
-        except Exception as exc:
-            logger.warning("feed_cache: Redis unavailable (%s) — using in-process cache", exc)
-            _redis_client = None
-            return None
+    """Get shared Redis client; returns None if unavailable."""
+    return get_shared_redis_client()
 
 
 # {cache_key: (expires_at_epoch, payload_json)}
