@@ -153,7 +153,7 @@ class RateLimiter:
 
     def _check_redis(self, r: Any, identity: str) -> None:
         """Redis-based rate limiting using sorted sets for sliding window."""
-        key = self._memory_key(identity)
+        key = self._redis_key(identity)
         now = time.time()
         window_start = now - self.window_seconds
 
@@ -268,19 +268,20 @@ class RateLimiter:
         identity : str
             Unique identifier to reset
         """
-        key = self._memory_key(identity)
+        redis_key = self._redis_key(identity)
+        memory_key = self._memory_key(identity)
         r = _get_redis()
 
         if r is not None:
             try:
-                r.delete(key)
+                r.delete(redis_key)
                 logger.debug("rate_limiter: reset %s for %s (redis)", identity, self.key_prefix)
             except Exception as exc:
                 logger.warning("rate_limiter: Redis delete error (%s)", exc)
 
         with _mem_lock:
-            if key in _mem_windows:
-                del _mem_windows[key]
+            if memory_key in _mem_windows:
+                del _mem_windows[memory_key]
                 logger.debug("rate_limiter: reset %s for %s (memory)", identity, self.key_prefix)
 
     def remaining(self, identity: str) -> int:
