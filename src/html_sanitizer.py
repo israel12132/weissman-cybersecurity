@@ -79,23 +79,25 @@ def sanitise_text(value: Optional[str], max_length: int = _MAX_FIELD_LENGTH) -> 
     escaped = html.escape(value, quote=True)
 
     # Step 2: Re-allow whitelisted tags (without attributes)
-    # We look for patterns like &lt;code&gt; and turn them back into <code>
+    # Match encoded open/close tags that may include attributes: &lt;code ...&gt; or &lt;/code&gt;
+    # Attributes are stripped — only the bare tag is restored.
     def _restore_safe_tag(m: re.Match) -> str:
-        tag = m.group(2).lower()
         closing = m.group(1)  # "/" if closing tag, empty if opening
+        tag = m.group(2).lower()
         if tag in _SAFE_TAGS:
             return f"<{closing}{tag}>"
         # Keep escaped for unsafe tags
         return m.group(0)
 
     safe = re.sub(
-        r"&lt;(/?)(\w+)&gt;",
+        r"&lt;(/?)(\w+)(?:[^&]|&(?!gt;))*&gt;",
         _restore_safe_tag,
         escaped,
         flags=re.IGNORECASE,
     )
 
-    return safe
+    # Enforce final length limit (HTML-encoding can expand characters like < → &lt;)
+    return safe[:max_length]
 
 
 def sanitise_url(url: Optional[str]) -> str:

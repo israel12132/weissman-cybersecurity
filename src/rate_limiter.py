@@ -46,7 +46,6 @@ from threading import Lock
 from typing import Any, Optional
 
 from src.exceptions import RateLimitExceeded
-from src.redis_client import get_shared_redis_client
 
 try:
     from src.metrics import track_rate_limit_exceeded
@@ -59,11 +58,46 @@ logger = logging.getLogger("weissman.rate_limiter")
 
 
 # ---------------------------------------------------------------------------
-# Redis client (shared, lazy) - now uses centralized redis_client module
+# Redis client — module-level, lazy-initialised, patchable in tests.
 # ---------------------------------------------------------------------------
+
+# Patchable URL; defaults to env var read at import time (re-read lazily when "").
+REDIS_URL: str = os.getenv("REDIS_URL", "")
+
+# Cached client — set to None to force re-initialisation (used by tests).
+_redis_client: Optional[Any] = None
+_redis_init_lock = Lock()
+
+
 def _get_redis() -> Optional[Any]:
-    """Get shared Redis client; returns None if unavailable."""
-    return get_shared_redis_client()
+    """Return a live Redis client, initialising lazily on first call.
+
+    The module-level ``REDIS_URL`` attribute is consulted first so that tests
+    can patch it via ``unittest.mock.patch("src.rate_limiter.REDIS_URL", ...)``.
+    If ``REDIS_URL`` is empty, the current environment variable is re-read to
+    support integration-test fixtures that set the env *after* module import.
+    """
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+
+    url = REDIS_URL or os.getenv("REDIS_URL", "")
+    if not url:
+        return None
+
+    with _redis_init_lock:
+        if _redis_client is not None:
+            return _redis_client
+        try:
+            import redis as _redis_lib
+            c = _redis_lib.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+            c.ping()
+            _redis_client = c
+        except Exception as exc:
+            logger.debug("rate_limiter: Redis init failed: %s", exc)
+            return None
+
+    return _redis_client
 
 
 # ---------------------------------------------------------------------------

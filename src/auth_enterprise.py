@@ -82,6 +82,10 @@ def require_role(min_role: str):
         user = getattr(request.state, "user", None)
         if not user:
             raise HTTPException(status_code=401, detail="Not authenticated")
+        # Reject users with no recognised role (e.g. partially-constructed objects
+        # or test mocks that were not assigned a valid role string).
+        if not hasattr(user, "role") or user.role not in ROLE_HIERARCHY:
+            raise HTTPException(status_code=401, detail="Not authenticated")
         u_level = ROLE_HIERARCHY.get(user.role, 0)
         r_level = ROLE_HIERARCHY.get(min_role, 0)
         if u_level < r_level:
