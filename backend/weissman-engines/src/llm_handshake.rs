@@ -30,7 +30,6 @@ pub fn handshake_header_value() -> Option<String> {
     Some(format!("v1;slot={slot};sig={sig}"))
 }
 
-#[must_use]
 pub fn apply_to_request(mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     if let Some(v) = handshake_header_value() {
         req = req.header("X-Weissman-Llm-Handshake", v);
@@ -38,7 +37,6 @@ pub fn apply_to_request(mut req: reqwest::RequestBuilder) -> reqwest::RequestBui
     req
 }
 
-#[must_use]
 pub fn apply_to_blocking_request(
     mut req: reqwest::blocking::RequestBuilder,
 ) -> reqwest::blocking::RequestBuilder {

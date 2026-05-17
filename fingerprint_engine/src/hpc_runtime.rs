@@ -1,4 +1,4 @@
-//! NUMA-aware Tokio worker pinning (Linux + hwloc). Set `WEISSMAN_NUMA_PIN=1` on multi-socket hosts.
+//! NUMA-aware Tokio worker pinning (Linux + hwloc, behind `numa` feature). Set `WEISSMAN_NUMA_PIN=1` on multi-socket hosts.
 //! Optional explicit CPU list: `WEISSMAN_TOKIO_CPU_AFFINITY=0,1,8-11` binds each worker round-robin (libc);
 //! when set, it overrides `WEISSMAN_NUMA_PIN`. Pair with external `taskset` / cgroup for the vLLM process on P-cores.
 
@@ -67,21 +67,24 @@ pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
                 let i = idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n;
                 let _ = linux_affinity::bind_current_thread_to_cpu(cpus[i]);
             });
-        } else if std::env::var("WEISSMAN_NUMA_PIN")
-            .map(|v| matches!(v.trim(), "1" | "true" | "yes"))
-            .unwrap_or(false)
-        {
-            if let Some(plan) = linux_numa::pu_binding_plan() {
-                let idx = std::sync::atomic::AtomicUsize::new(0);
-                let plan = std::sync::Arc::new(plan);
-                builder.on_thread_start(move || {
-                    let n = plan.len();
-                    if n == 0 {
-                        return;
-                    }
-                    let i = idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n;
-                    plan[i].bind_current_thread();
-                });
+        } else {
+            #[cfg(feature = "numa")]
+            if std::env::var("WEISSMAN_NUMA_PIN")
+                .map(|v| matches!(v.trim(), "1" | "true" | "yes"))
+                .unwrap_or(false)
+            {
+                if let Some(plan) = linux_numa::pu_binding_plan() {
+                    let idx = std::sync::atomic::AtomicUsize::new(0);
+                    let plan = std::sync::Arc::new(plan);
+                    builder.on_thread_start(move || {
+                        let n = plan.len();
+                        if n == 0 {
+                            return;
+                        }
+                        let i = idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % n;
+                        plan[i].bind_current_thread();
+                    });
+                }
             }
         }
     }
@@ -126,7 +129,7 @@ mod linux_affinity {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "numa"))]
 mod linux_numa {
     use hwlocality::{
         cpu::binding::CpuBindingFlags,

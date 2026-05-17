@@ -10,21 +10,21 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // React core
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          // Animation
-          'vendor-motion': ['framer-motion'],
-          // Charts
-          'vendor-recharts': ['recharts'],
-          // 3D globe
-          'vendor-three': ['three'],
-          // Flow graph
-          'vendor-xyflow': ['@xyflow/react'],
-          // Icons
-          'vendor-lucide': ['lucide-react'],
-          // Table
-          'vendor-table': ['@tanstack/react-table'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/framer-motion/')) return 'vendor-motion'
+            if (id.includes('/recharts/')) return 'vendor-recharts'
+            if (id.includes('/three/')) return 'vendor-three'
+            if (id.includes('/@xyflow/')) return 'vendor-xyflow'
+            if (id.includes('/lucide-react/')) return 'vendor-lucide'
+            if (id.includes('/@tanstack/')) return 'vendor-table'
+            return 'vendor-core'
+          }
+
+          if (id.includes('/src/pages/')) {
+            const file = id.split('/').pop()?.replace(/\.(jsx?|tsx?)$/, '') || 'page'
+            return `page-${file.toLowerCase()}`
+          }
         },
       },
     },

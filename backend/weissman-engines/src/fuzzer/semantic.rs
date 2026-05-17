@@ -282,7 +282,7 @@ async fn vllm_generate_payloads(
     let before = raw.len();
     let payloads: Vec<Value> = raw
         .into_iter()
-        .filter(|p| semantic_payload_wire_ok(p))
+        .filter(semantic_payload_wire_ok)
         .collect();
     if before > payloads.len() {
         reasoning_log.push_str(&format!(
@@ -402,7 +402,6 @@ fn semantic_payload_wire_ok(payload: &Value) -> bool {
 }
 
 /// Validate JSON or XML wire shape before queueing outbound probes or secondary LLM calls (PoC curl).
-#[must_use]
 pub fn preflight_semantic_probe_body(body: &str, expect_json_wire: bool) -> Result<(), String> {
     let p = body.trim();
     if p.is_empty() {
@@ -903,8 +902,7 @@ pub async fn run_semantic_fuzz_result(
     );
 
     let n_iter = state_nodes.len().min(max_depth);
-    for ni in 0..n_iter {
-        let node = &state_nodes[ni];
+    for node in state_nodes.iter().take(n_iter) {
         let schema_text =
             schema_summary_for_endpoint(&spec, &node.path, &node.method.to_lowercase());
         if schema_text.is_empty() {
@@ -920,8 +918,7 @@ pub async fn run_semantic_fuzz_result(
         .await;
         full_log.push_str(&log_frag);
 
-        for pi in 0..payloads.len() {
-            let payload = &payloads[pi];
+        for payload in &payloads {
             let body_val = payload
                 .get("body")
                 .cloned()
