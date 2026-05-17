@@ -297,7 +297,7 @@ Text: #d4d4d8 (light gray)
 - `/memory-lab/:clientId` - Memory Forensics Lab
 - `/cicd-matrix/:clientId` - CI/CD Threat Matrix
 
-### NEW Pages (May 2026) - 🎉 16 PAGES TOTAL!
+### NEW Pages (May 2026) - 🎉 **19 PAGES TOTAL!** 🏆
 - `/rate-limits` ⭐ - Rate Limit Analytics
 - `/mobile-security` ⭐ - Mobile & Apps Security
 - `/ot-ics` ⭐ - OT/ICS/IoT Security
@@ -309,11 +309,14 @@ Text: #d4d4d8 (light gray)
 - `/metrics` ⭐ - Real-time Metrics Dashboard (Prometheus)
 - `/ceo-vault` ⭐ - CEO Vault (Secrets Management)
 - `/risk-graph` ⭐ - Risk Graph Visualization
-- `/compliance` ⭐ - Compliance Frameworks (CIS/PCI-DSS/NIST/HIPAA/SOC2/GDPR/ISO27001/FedRAMP)
+- `/compliance` ⭐ - Compliance Frameworks (8 frameworks)
 - `/sbom` ⭐ - SBOM Browser (Software Bill of Materials)
-- `/integrations` ⭐ - Integration Manager (SIEM/Ticketing/Communication/Cloud)
-- `/alert-rules` ⭐ - Alert Rules Engine (Custom alerting with multi-channel notifications)
-- `/scan-scheduler` ⭐ - Scan Scheduler (Cron-based automated scanning)
+- `/integrations` ⭐ - Integration Manager (12+ integrations)
+- `/alert-rules` ⭐ - Alert Rules Engine
+- `/scan-scheduler` ⭐ - Scan Scheduler (Cron-based)
+- `/containment-rules` ⭐ - Containment Rules Builder (Network isolation)
+- `/baseline-drift` ⭐ - Baseline & Drift Detection (UEBA)
+- `/identity-context` ⭐ - Identity Context Manager (User behavior analytics)
 
 ### Management
 - `/admin` - Admin Management

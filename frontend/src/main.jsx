@@ -93,6 +93,9 @@ import SBOMBrowser from './pages/SBOMBrowser'
 import IntegrationManager from './pages/IntegrationManager'
 import AlertRulesEngine from './pages/AlertRulesEngine'
 import ScanScheduler from './pages/ScanScheduler'
+import ContainmentRulesBuilder from './pages/ContainmentRulesBuilder'
+import BaselineAndDrift from './pages/BaselineAndDrift'
+import IdentityContextManager from './pages/IdentityContextManager'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -175,6 +178,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="integrations" element={<IntegrationManager />} />
             <Route path="alert-rules" element={<AlertRulesEngine />} />
             <Route path="scan-scheduler" element={<ScanScheduler />} />
+            <Route path="containment-rules" element={<ContainmentRulesBuilder />} />
+            <Route path="baseline-drift" element={<BaselineAndDrift />} />
+            <Route path="identity-context" element={<IdentityContextManager />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
