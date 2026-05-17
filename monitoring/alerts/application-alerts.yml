@@ -1,0 +1,148 @@
+# Prometheus Alert Rules for Weissman Cybersecurity
+
+groups:
+  - name: application_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(weissman_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 10/sec)"
+
+      # Rate limit violations spike
+      - alert: RateLimitViolationsSpike
+        expr: rate(weissman_rate_limit_violations_total[1m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Rate limit violations spike"
+          description: "{{ $value }} violations/min (threshold: 100/min)"
+
+      # Scan duration P99 high
+      - alert: SlowScans
+        expr: histogram_quantile(0.99, rate(weissman_scan_duration_seconds_bucket[10m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Scan P99 latency is high"
+          description: "P99 scan duration is {{ $value }}s (threshold: 300s)"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: |
+          sum(rate(weissman_cache_operations_total{operation="hit"}[5m])) /
+          sum(rate(weissman_cache_operations_total[5m])) < 0.6
+        for: 15m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Cache hit rate is low"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 60%)"
+
+      # Too many active scans
+      - alert: TooManyActiveScans
+        expr: weissman_active_scans > 50
+        for: 5m
+        labels:
+          severity: warning
+          category: capacity
+        annotations:
+          summary: "Too many concurrent scans"
+          description: "{{ $value }} active scans (threshold: 50)"
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Redis is down"
+          description: "Redis server is unreachable"
+
+      # PostgreSQL down
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL server is unreachable"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) /
+          node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+  - name: security_alerts
+    interval: 30s
+    rules:
+      # Multiple authentication failures
+      - alert: MultipleAuthFailures
+        expr: rate(weissman_errors_total{error_type="InvalidCredentialsError"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: high
+          category: security
+        annotations:
+          summary: "Multiple authentication failures"
+          description: "{{ $value }} auth failures/sec (possible brute force attack)"
+
+      # Unusual scan activity
+      - alert: UnusualScanActivity
+        expr: rate(weissman_requests_total{endpoint="api_scan"}[10m]) > 20
+        for: 10m
+        labels:
+          severity: medium
+          category: security
+        annotations:
+          summary: "Unusual scan activity detected"
+          description: "{{ $value }} scans/min (threshold: 20/min)"

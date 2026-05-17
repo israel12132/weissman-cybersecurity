@@ -57,3 +57,13 @@ prometheus-client>=0.17.0
 # --- Secrets Management ---
 hvac>=1.2.0  # HashiCorp Vault client
 cryptography>=41.0.0  # Field-level encryption
+
+# --- API Documentation ---
+flask>=3.0.0
+flask-swagger-ui>=4.11.0
+
+# --- E2E Testing ---
+playwright>=1.40.0
+
+# --- SIEM Integration ---
+elasticsearch>=8.11.0
