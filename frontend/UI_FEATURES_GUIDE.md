@@ -308,6 +308,9 @@ Text: #d4d4d8 (light gray)
 - `/system-config` ⭐ - System Configuration Dashboard
 - `/metrics` ⭐ - Real-time Metrics Dashboard (Prometheus)
 - `/ceo-vault` ⭐ - CEO Vault (Secrets Management)
+- `/risk-graph` ⭐ - Risk Graph Visualization
+- `/compliance` ⭐ - Compliance Frameworks (CIS/PCI-DSS/NIST/HIPAA/SOC2/GDPR/ISO27001)
+- `/sbom` ⭐ - SBOM Browser (Software Bill of Materials)
 
 ### Management
 - `/admin` - Admin Management

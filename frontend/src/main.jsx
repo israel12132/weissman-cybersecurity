@@ -87,6 +87,9 @@ import EngineManagementConsole from './pages/EngineManagementConsole'
 import SystemConfiguration from './pages/SystemConfiguration'
 import MetricsDashboard from './pages/MetricsDashboard'
 import CeoVault from './pages/CeoVault'
+import RiskGraphVisualization from './pages/RiskGraphVisualization'
+import ComplianceFrameworks from './pages/ComplianceFrameworks'
+import SBOMBrowser from './pages/SBOMBrowser'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -163,6 +166,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="system-config" element={<SystemConfiguration />} />
             <Route path="metrics" element={<MetricsDashboard />} />
             <Route path="ceo-vault" element={<CeoVault />} />
+            <Route path="risk-graph" element={<RiskGraphVisualization />} />
+            <Route path="compliance" element={<ComplianceFrameworks />} />
+            <Route path="sbom" element={<SBOMBrowser />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
