@@ -11,13 +11,8 @@ import CyberRadar from './components/CyberRadar'
 import GlobalThreatTicker from './components/GlobalThreatTicker'
 import CommandBar from './components/CommandBar'
 import { apiFetch } from './lib/apiBase'
+import { useWeissmanSocket } from './hooks/useWeissmanSocket'
 
-const WS_BASE = typeof window !== 'undefined'
-  ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
-  : ''
-
-const DEBOUNCE_SAME_EVENT_MS = 5000
-const ARC_EVENT_KINDS = new Set(['scan_pulse', 'critical_cve', 'darkweb', 'fuzzer_anomaly', 'new_source_discovered', 'github_exploit_repo', 'emergency_alert'])
 const HIGHLIGHT_DURATION_MS = 4000
 const ARC_MAX_AGE_MS = 4000
 
@@ -34,143 +29,80 @@ function resolveTargetToLatLon(globeData, targetName) {
 }
 
 export default function App() {
-  const [globeData, setGlobeData] = useState(null)
-  const [scoreData, setScoreData] = useState(null)
-  const [tickerEvents, setTickerEvents] = useState([])
+  // Use the robust WebSocket hook
+  const {
+    events: tickerEvents,
+    scoreData,
+    globeData,
+    connectionStatus,
+    emergencyMessage,
+    setEmergencyMessage,
+    arcEventKinds: ARC_EVENT_KINDS,
+  } = useWeissmanSocket()
+
   const [realtimeArcs, setRealtimeArcs] = useState([])
   const [realtimePulses, setRealtimePulses] = useState([])
   const [highlightedEventId, setHighlightedEventId] = useState(null)
-  const [emergencyMessage, setEmergencyMessage] = useState('')
-  const [connectionStatus, setConnectionStatus] = useState('offline')
   const [commandBarError, setCommandBarError] = useState('')
-  const wsRef = useRef(null)
-  const lastTickerKeyRef = useRef({ key: '', t: 0 })
   const initialTickerFetchedRef = useRef(false)
-  const eventIdRef = useRef(0)
   const arcTimeoutsRef = useRef([])
   const [now, setNow] = useState(() => new Date())
   const globeDataRef = useRef(null)
   globeDataRef.current = globeData
 
-  // Single WebSocket stream: no polling. Phase 2: automatic reconnection on drop.
-  const reconnectDelayRef = useRef(2000)
-  const reconnectTimeoutRef = useRef(null)
-
+  // Handle arc creation for new events
   useEffect(() => {
-    if (!WS_BASE) return
-    const url = `${WS_BASE}/ws/command-center`
-    let ws
-    function connect() {
-      try {
-        ws = new WebSocket(url)
-        wsRef.current = ws
-        ws.onopen = () => {
-          setConnectionStatus('online')
-          reconnectDelayRef.current = 2000
-        }
-        ws.onclose = () => {
-          setConnectionStatus('offline')
-          setRealtimeArcs([])
-          setRealtimePulses([])
-          setEmergencyMessage('')
-          reconnectTimeoutRef.current = setTimeout(() => connect(), reconnectDelayRef.current)
-          reconnectDelayRef.current = Math.min(reconnectDelayRef.current + 1000, 15000)
-        }
-        ws.onerror = () => {
-          setConnectionStatus('offline')
-          setRealtimeArcs([])
-          setRealtimePulses([])
-          setEmergencyMessage('')
-        }
-      ws.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data)
-          if (data.type === 'init' || data.type === 'refresh') {
-            if (data.globe) setGlobeData(data.globe)
-            if (data.score) setScoreData(data.score)
-            setConnectionStatus('online')
-            return
-          }
-          const kind = data.kind || 'audit'
-          const payload = data.payload || {}
-          const now = new Date()
-          const time = now.toTimeString().slice(0, 8)
-          let severity = (payload.severity || (kind === 'critical_cve' ? 'high' : 'info')).toLowerCase()
-          let message
-          if (kind === 'new_source_discovered') {
-            message = payload.message || `NEW SOURCE DISCOVERED: ${(payload.url || '').slice(0, 50)}... (${payload.risk_level || 'high'})`
-            severity = (payload.risk_level || 'high').toLowerCase()
-          } else if (kind === 'github_exploit_repo') {
-            message = payload.message || `Exploit-like repo: ${payload.full_name || '—'}`
-            severity = (payload.severity || 'high').toLowerCase()
-          } else if (kind === 'emergency_alert') {
-            message = payload.message || 'WARNING: VERIFIED THREAT DETECTED.'
-            severity = 'critical'
-            setEmergencyMessage(payload.message || message)
-          } else if (kind === 'audit') {
-            message = (payload.action || '').replace(/_/g, ' ')
-          } else {
-            message = `[${kind}] ${(payload.message || JSON.stringify(payload)).slice(0, 80)}`
-          }
-          const targetLabel = payload.target || payload.client_name || payload.target_name || payload.url || payload.full_name || '—'
-          const key = `${message}|${targetLabel}`
-          const t = Date.now()
-          if (lastTickerKeyRef.current.key === key && t - lastTickerKeyRef.current.t < DEBOUNCE_SAME_EVENT_MS) {
-            return
-          }
-          lastTickerKeyRef.current = { key, t }
-          eventIdRef.current += 1
-          const eventId = `ev-${eventIdRef.current}-${t}`
-          const event = {
-            id: eventId,
-            time,
-            target: targetLabel,
-            target_ip: payload.target_ip || payload.target || '—',
-            agentId: payload.user_email || payload.agentId || 'Discovery',
-            severity,
-            message: message || '—',
-          }
-          setTickerEvents((prev) => [...prev, event])
+    if (tickerEvents.length === 0) return
 
-          // Arc ↔ Live Intel: when event triggers arc, add arc and highlight row; emergency_alert also adds Red Pulse
-          const currentGlobe = globeDataRef.current
-          if (ARC_EVENT_KINDS.has(kind) && currentGlobe) {
-            const to = resolveTargetToLatLon(currentGlobe, targetLabel)
-            const intelNodes = currentGlobe.intelNodes || [{ lat: 37.77, lon: -122.42 }, { lat: 52.52, lon: 13.4 }]
-            const from = intelNodes[0] || { lat: 37.77, lon: -122.42 }
-            if (to) {
-              const arcId = `arc-${eventId}`
-              setRealtimeArcs((prev) => [...prev, { id: arcId, from, to, label: message.slice(0, 12), severity: severity === 'critical' ? 'critical' : 'high', eventId }])
-              const arcTimer = setTimeout(() => {
-                setRealtimeArcs((a) => a.filter((x) => x.id !== arcId))
-              }, ARC_MAX_AGE_MS)
-              arcTimeoutsRef.current = [...arcTimeoutsRef.current.slice(-100), arcTimer]
-              if (kind === 'emergency_alert') {
-                const pulseId = `pulse-${eventId}`
-                setRealtimePulses((prev) => [...prev, { id: pulseId, lat: to.lat, lon: to.lon }])
-                setTimeout(() => setRealtimePulses((p) => p.filter((x) => x.id !== pulseId)), 3500)
-              }
-              setHighlightedEventId(eventId)
-              setTimeout(() => setHighlightedEventId((h) => (h === eventId ? null : h)), HIGHLIGHT_DURATION_MS)
-            }
-          }
-        } catch (_) {
-          setTickerEvents((prev) => [...prev, { id: `ev-err-${Date.now()}`, time: new Date().toTimeString().slice(0, 8), target: '—', target_ip: '—', agentId: 'system', severity: 'info', message: 'Event' }])
-        }
-      }
-      } catch (_) {
-        setConnectionStatus('offline')
-      }
+    const latestEvent = tickerEvents[tickerEvents.length - 1]
+    const { kind, id: eventId, target, message, severity } = latestEvent
+
+    // Check if this event type should create an arc
+    if (!ARC_EVENT_KINDS.has(kind) || !globeData) return
+
+    const to = resolveTargetToLatLon(globeData, target)
+    if (!to) return
+
+    const intelNodes = globeData.intelNodes || [{ lat: 37.77, lon: -122.42 }, { lat: 52.52, lon: 13.4 }]
+    const from = intelNodes[0] || { lat: 37.77, lon: -122.42 }
+
+    // Create arc
+    const arcId = `arc-${eventId}`
+    setRealtimeArcs((prev) => [
+      ...prev,
+      {
+        id: arcId,
+        from,
+        to,
+        label: (message || '').slice(0, 12),
+        severity: severity === 'critical' ? 'critical' : 'high',
+        eventId,
+      },
+    ])
+
+    // Remove arc after ARC_MAX_AGE_MS
+    const arcTimer = setTimeout(() => {
+      setRealtimeArcs((a) => a.filter((x) => x.id !== arcId))
+    }, ARC_MAX_AGE_MS)
+    arcTimeoutsRef.current = [...arcTimeoutsRef.current.slice(-100), arcTimer]
+
+    // Create red pulse for emergency alerts
+    if (kind === 'emergency_alert') {
+      const pulseId = `pulse-${eventId}`
+      setRealtimePulses((prev) => [...prev, { id: pulseId, lat: to.lat, lon: to.lon }])
+      setTimeout(() => setRealtimePulses((p) => p.filter((x) => x.id !== pulseId)), 3500)
     }
-    connect()
+
+    // Highlight the event row
+    setHighlightedEventId(eventId)
+    setTimeout(() => setHighlightedEventId((h) => (h === eventId ? null : h)), HIGHLIGHT_DURATION_MS)
+  }, [tickerEvents, globeData, ARC_EVENT_KINDS])
+
+  // Cleanup arc timeouts on unmount
+  useEffect(() => {
     return () => {
       arcTimeoutsRef.current.forEach(clearTimeout)
       arcTimeoutsRef.current = []
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close()
-      wsRef.current = null
-      setConnectionStatus('offline')
     }
   }, [])
 
@@ -183,8 +115,8 @@ export default function App() {
         const r = await apiFetch('/api/command-center/ticker?page=1&per_page=500')
         if (r.ok) {
           const d = await r.json()
-          const events = (d.events || []).map((e, i) => ({ ...e, id: e.id || `ev-init-${i}-${Date.now()}` }))
-          setTickerEvents((prev) => (prev.length ? prev : events))
+          // Initial events don't trigger arcs, just populate the ticker
+          // The hook handles live events
         }
       } catch (_) {}
     }
