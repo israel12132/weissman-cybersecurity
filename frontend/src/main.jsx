@@ -83,6 +83,10 @@ import OtIcsSecurity from './pages/OtIcsSecurity'
 import NetworkProtocols from './pages/NetworkProtocols'
 import SocialEngineering from './pages/SocialEngineering'
 import RemediationHub from './pages/RemediationHub'
+import EngineManagementConsole from './pages/EngineManagementConsole'
+import SystemConfiguration from './pages/SystemConfiguration'
+import MetricsDashboard from './pages/MetricsDashboard'
+import CeoVault from './pages/CeoVault'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -155,6 +159,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="network-protocols" element={<NetworkProtocols />} />
             <Route path="social-engineering" element={<SocialEngineering />} />
             <Route path="remediation" element={<RemediationHub />} />
+            <Route path="engine-management" element={<EngineManagementConsole />} />
+            <Route path="system-config" element={<SystemConfiguration />} />
+            <Route path="metrics" element={<MetricsDashboard />} />
+            <Route path="ceo-vault" element={<CeoVault />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

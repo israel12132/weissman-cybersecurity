@@ -304,6 +304,10 @@ Text: #d4d4d8 (light gray)
 - `/network-protocols` ⭐ - Network Protocol Analysis
 - `/social-engineering` ⭐ - Phishing Simulator
 - `/remediation` ⭐ - Remediation Hub (SOAR)
+- `/engine-management` ⭐ - Engine Management Console (496 engines)
+- `/system-config` ⭐ - System Configuration Dashboard
+- `/metrics` ⭐ - Real-time Metrics Dashboard (Prometheus)
+- `/ceo-vault` ⭐ - CEO Vault (Secrets Management)
 
 ### Management
 - `/admin` - Admin Management
