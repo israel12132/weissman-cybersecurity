@@ -17,15 +17,29 @@ sys.path.insert(0, str(project_root))
 
 @pytest.fixture(autouse=True)
 def reset_environment():
-    """Reset environment variables before each test."""
+    """Reset environment variables and in-process rate-limiter state before each test."""
     # Save original env
     original_env = dict(os.environ)
+
+    # Clear in-memory rate-limiter sliding windows so tests don't bleed state.
+    try:
+        from src.rate_limiter import _mem_windows
+        _mem_windows.clear()
+    except Exception:
+        pass
 
     yield
 
     # Restore original env
     os.environ.clear()
     os.environ.update(original_env)
+
+    # Clean up again after the test
+    try:
+        from src.rate_limiter import _mem_windows
+        _mem_windows.clear()
+    except Exception:
+        pass
 
 
 @pytest.fixture

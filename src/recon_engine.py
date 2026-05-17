@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,10 @@ def _recon_max_bucket_candidates() -> int | None:
     if v in ("0", "", "none", "unlimited"):
         return None
     return max(0, int(v))
+
+# Maximum worker threads for concurrent subdomain resolution.
+def _recon_dns_workers() -> int:
+    return max(1, int(os.getenv("RECON_DNS_WORKERS", "20")))
 
 # ---------------------------------------------------------------------------
 # Asset model & mapping
@@ -184,6 +189,7 @@ def _run_rust_dns_enum(domain: str, wordlist_path: str | None = None) -> list[st
 def enumerate_subdomains_dns(domain: str, wordlist: list[str] | None = None) -> list[DiscoveredAsset]:
     """
     Subdomain enumeration: try Rust engine first (multi-threaded); fallback to Python.
+    Python fallback uses a ThreadPoolExecutor for concurrent DNS resolution.
     """
     domain = (domain or "").strip().lower()
     if not domain:
@@ -192,16 +198,25 @@ def enumerate_subdomains_dns(domain: str, wordlist: list[str] | None = None) -> 
     # Prefer Rust for speed
     found = _run_rust_dns_enum(domain)
     if not found:
-        # Python fallback: resolve via system or simple socket (avoid heavy deps)
+        # Python fallback: concurrent resolution via ThreadPoolExecutor
+        import socket
+
+        def _resolve(sub: str) -> str | None:
+            host = f"{sub}.{domain}"
+            try:
+                socket.gethostbyname(host)
+                return host
+            except (socket.gaierror, OSError):
+                return None
+
+        workers = _recon_dns_workers()
         try:
-            import socket
-            for sub in wordlist:
-                host = f"{sub}.{domain}"
-                try:
-                    socket.gethostbyname(host)
-                    found.append(host)
-                except (socket.gaierror, OSError):
-                    pass
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {executor.submit(_resolve, sub): sub for sub in wordlist}
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        found.append(result)
         except Exception as e:
             logger.debug("Python DNS enum failed: %s", e)
     return [
@@ -455,15 +470,30 @@ def run_full_recon(
 ) -> list[DiscoveredAsset]:
     """
     Global reconnaissance: CT, WHOIS history, DNS brute, AWS/Azure/GCP buckets.
-    Optionally check exposed API/staging endpoints on discovered subdomains.
+    Passive sources (CT, WHOIS, DNS brute) are run concurrently to reduce wall-clock
+    time. Optionally check exposed API/staging endpoints on discovered subdomains.
     """
     all_assets: list[DiscoveredAsset] = []
+
+    # Run passive subdomain sources concurrently
+    passive_tasks: list[tuple[str, Any]] = []
     if use_ct:
-        all_assets.extend(enumerate_subdomains_ct(domain))
+        passive_tasks.append(("ct", lambda: enumerate_subdomains_ct(domain)))
     if use_whois:
-        all_assets.extend(enumerate_subdomains_whois(domain))
+        passive_tasks.append(("whois", lambda: enumerate_subdomains_whois(domain)))
     if use_dns_brute:
-        all_assets.extend(enumerate_subdomains_dns(domain))
+        passive_tasks.append(("dns", lambda: enumerate_subdomains_dns(domain)))
+
+    if passive_tasks:
+        with ThreadPoolExecutor(max_workers=len(passive_tasks)) as executor:
+            futures = {executor.submit(fn): name for name, fn in passive_tasks}
+            for future in as_completed(futures):
+                task_name = futures[future]
+                try:
+                    all_assets.extend(future.result())
+                except Exception as exc:
+                    logger.warning("Passive recon task %s failed: %s", task_name, exc)
+
     if use_buckets:
         all_assets.extend(scan_cloud_buckets(keywords or [], domain))
     if use_gcp:
