@@ -44,10 +44,7 @@ fn apply_stealth_headers(
 }
 
 /// Run OSINT against a single primary target.
-pub async fn run_osint_result(
-    target: &str,
-    st: Option<&stealth::StealthConfig>,
-) -> EngineResult {
+pub async fn run_osint_result(target: &str, st: Option<&stealth::StealthConfig>) -> EngineResult {
     let domain = target_to_domain(target);
     if domain.is_empty() {
         return EngineResult::error("target required");

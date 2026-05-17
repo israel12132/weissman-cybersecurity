@@ -112,11 +112,12 @@ async fn run_security_events_llm_cycle(
     pool: &PgPool,
     telemetry: &Sender<String>,
 ) -> Result<(), String> {
-    let tid: i64 = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or(1);
+    let tid: i64 =
+        sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or(1);
     let mut tx = crate::db::begin_tenant_tx(pool, tid)
         .await
         .map_err(|e| e.to_string())?;

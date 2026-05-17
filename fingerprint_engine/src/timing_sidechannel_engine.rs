@@ -13,11 +13,17 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        format!("https://{}", t)
+    }
 }
 
 pub async fn run_timing_sidechannel_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let client = build_client().await;
     let base = normalize_target(target);
     let mut findings: Vec<serde_json::Value> = Vec::new();
@@ -51,7 +57,15 @@ pub async fn run_timing_sidechannel_result(target: &str) -> EngineResult {
             "description": format!("Mean baseline: {:.1}ms, mean payload: {:.1}ms — payload response >2x slower.", mean_baseline, mean_payload)
         }));
     }
-    EngineResult::ok(findings.clone(), format!("Timing Side-Channel: {} findings (baseline={:.1}ms, payload={:.1}ms)", findings.len(), mean_baseline, mean_payload))
+    EngineResult::ok(
+        findings.clone(),
+        format!(
+            "Timing Side-Channel: {} findings (baseline={:.1}ms, payload={:.1}ms)",
+            findings.len(),
+            mean_baseline,
+            mean_payload
+        ),
+    )
 }
 
 pub async fn run_timing_sidechannel(target: &str) {

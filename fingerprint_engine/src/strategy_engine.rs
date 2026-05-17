@@ -296,13 +296,7 @@ pub async fn execute_general_mission(
 
     let norm_base = weissman_engines::openai_chat::normalize_openai_base_url(llm_base.trim());
 
-    let plan = fetch_mission_plan(
-        norm_base.as_str(),
-        llm_model.as_str(),
-        tenant_id,
-        domain,
-    )
-    .await;
+    let plan = fetch_mission_plan(norm_base.as_str(), llm_model.as_str(), tenant_id, domain).await;
 
     let target = if plan.primary_target.trim().is_empty() {
         normalize_target(domain)
@@ -335,11 +329,7 @@ pub async fn execute_general_mission(
     )
     .await;
 
-    let run_osint = plan.run_osint
-        || plan
-            .phases
-            .iter()
-            .any(|p| p.eq_ignore_ascii_case("osint"));
+    let run_osint = plan.run_osint || plan.phases.iter().any(|p| p.eq_ignore_ascii_case("osint"));
     let osint_block = if run_osint {
         let r = crate::osint_engine::run_osint_result(&target, Some(&stealth)).await;
         telemetry_send(
@@ -397,7 +387,11 @@ pub async fn execute_general_mission(
         if q.is_empty() {
             continue;
         }
-        let n = if q.starts_with('/') { q } else { format!("/{}", q) };
+        let n = if q.starts_with('/') {
+            q
+        } else {
+            format!("/{}", q)
+        };
         discovered.push(n);
     }
     discovered.sort();
@@ -445,7 +439,11 @@ pub async fn execute_general_mission(
 
     if let Some(cid) = client_id {
         if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await {
-            let log = fuzzy.reasoning_log.chars().take(120_000).collect::<String>();
+            let log = fuzzy
+                .reasoning_log
+                .chars()
+                .take(120_000)
+                .collect::<String>();
             let _ = sqlx::query(
                 "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
             )
@@ -533,13 +531,12 @@ pub async fn run_self_defense_audit(
             .ok()
             .flatten();
 
-    let policy_count: Option<i64> = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM pg_policies WHERE schemaname = 'public'",
-    )
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten();
+    let policy_count: Option<i64> =
+        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM pg_policies WHERE schemaname = 'public'")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
 
     let snapshot = json!({
         "security_events_sample": events.iter().take(40).cloned().collect::<Vec<_>>(),

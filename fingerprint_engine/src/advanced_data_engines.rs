@@ -3,7 +3,9 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_dns_exfil_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "dns_exfil_engine",
@@ -13,7 +15,10 @@ pub async fn run_dns_exfil_engine_result(target: &str) -> EngineResult {
         "description": "Simulated DNS Exfiltration Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_dns_exfil_engine(target: &str) {
@@ -21,7 +26,9 @@ pub async fn run_dns_exfil_engine(target: &str) {
 }
 
 pub async fn run_http_covert_exfil_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "http_covert_exfil",
@@ -31,7 +38,10 @@ pub async fn run_http_covert_exfil_result(target: &str) -> EngineResult {
         "description": "Simulated HTTP Covert Channel Exfiltration finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_http_covert_exfil(target: &str) {
@@ -47,7 +57,10 @@ pub async fn run_cloud_exfil_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1567.002",
         "description": "Simulated Cloud Storage Exfiltration Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_exfil_engine(target: &str) {
@@ -55,7 +68,9 @@ pub async fn run_cloud_exfil_engine(target: &str) {
 }
 
 pub async fn run_encrypted_exfil_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "encrypted_exfil",
@@ -65,7 +80,10 @@ pub async fn run_encrypted_exfil_result(target: &str) -> EngineResult {
         "description": "Simulated Encrypted Covert Exfiltration finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_encrypted_exfil(target: &str) {
@@ -81,7 +99,10 @@ pub async fn run_acoustic_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated Acoustic Side-Channel Exfiltration finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_acoustic_exfil(target: &str) {
@@ -97,7 +118,10 @@ pub async fn run_em_exfil_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated Electromagnetic Emanation Exfiltration finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_em_exfil_engine(target: &str) {
@@ -113,7 +137,10 @@ pub async fn run_optical_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated Optical Covert Channel Exfiltration finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_optical_exfil(target: &str) {
@@ -129,7 +156,10 @@ pub async fn run_cache_timing_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated CPU Cache Side-Channel Exfiltration finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cache_timing_exfil(target: &str) {
@@ -145,7 +175,10 @@ pub async fn run_keyboard_acoustic_result(target: &str) -> EngineResult {
         "mitre_attack": "T1056.001",
         "description": "Simulated Keyboard Acoustic Eavesdropping finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_keyboard_acoustic(target: &str) {
@@ -161,7 +194,10 @@ pub async fn run_screen_capture_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1113",
         "description": "Simulated Screen Capture Exfiltration Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_screen_capture_exfil(target: &str) {
@@ -177,7 +213,10 @@ pub async fn run_clipboard_hijack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1115",
         "description": "Simulated Clipboard Hijacking Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_clipboard_hijack(target: &str) {
@@ -185,7 +224,9 @@ pub async fn run_clipboard_hijack(target: &str) {
 }
 
 pub async fn run_database_exfil_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "database_exfil",
@@ -195,7 +236,10 @@ pub async fn run_database_exfil_result(target: &str) -> EngineResult {
         "description": "Simulated Database Exfiltration Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_database_exfil(target: &str) {
@@ -203,7 +247,9 @@ pub async fn run_database_exfil(target: &str) {
 }
 
 pub async fn run_email_exfil_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "email_exfil",
@@ -213,7 +259,10 @@ pub async fn run_email_exfil_result(target: &str) -> EngineResult {
         "description": "Simulated Email-Based Exfiltration Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_email_exfil(target: &str) {
@@ -229,7 +278,10 @@ pub async fn run_insider_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated Insider Threat Exfiltration Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_insider_exfil(target: &str) {
@@ -245,7 +297,10 @@ pub async fn run_storage_covert_channel_result(target: &str) -> EngineResult {
         "mitre_attack": "T1048",
         "description": "Simulated Storage Covert Channel Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_storage_covert_channel(target: &str) {

@@ -3,7 +3,11 @@
 use sqlx::{Executor, Postgres};
 
 /// Record a BYPASSRLS auth operation (triggers `security_events` + optional auto-mitigation).
-pub async fn record_auth_access<'e, E>(e: E, tenant_id: i64, context: &str) -> Result<(), sqlx::Error>
+pub async fn record_auth_access<'e, E>(
+    e: E,
+    tenant_id: i64,
+    context: &str,
+) -> Result<(), sqlx::Error>
 where
     E: Executor<'e, Database = Postgres>,
 {

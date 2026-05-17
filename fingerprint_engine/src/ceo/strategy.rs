@@ -28,12 +28,10 @@ async fn cfg_get_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     key: &str,
 ) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar::<_, String>(
-        "SELECT value FROM system_configs WHERE key = $1",
-    )
-    .bind(key)
-    .fetch_optional(&mut **tx)
-    .await
+    sqlx::query_scalar::<_, String>("SELECT value FROM system_configs WHERE key = $1")
+        .bind(key)
+        .fetch_optional(&mut **tx)
+        .await
 }
 
 /// Effective Genesis parameters for engines (DB overrides env).
@@ -217,11 +215,7 @@ pub async fn get_ceo_strategy_json(pool: &PgPool, tenant_id: i64) -> Value {
 }
 
 /// Merge `{ "configs": { key: value } }` into `system_configs` (whitelist only).
-pub async fn patch_ceo_strategy(
-    pool: &PgPool,
-    tenant_id: i64,
-    body: &Value,
-) -> Result<(), String> {
+pub async fn patch_ceo_strategy(pool: &PgPool, tenant_id: i64, body: &Value) -> Result<(), String> {
     let obj = body
         .get("configs")
         .and_then(Value::as_object)

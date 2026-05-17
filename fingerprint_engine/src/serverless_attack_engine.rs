@@ -172,7 +172,10 @@ pub async fn run_serverless_attack_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("Serverless Attack: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Serverless Attack: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_serverless_attack(target: &str) {

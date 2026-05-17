@@ -377,7 +377,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
 
 #[must_use]
 pub fn is_known_engine_id(s: &str) -> bool {
-    KNOWN_ENGINE_IDS.iter().any(|&k| k == s.trim()) 
+    KNOWN_ENGINE_IDS.iter().any(|&k| k == s.trim())
         || FULL_ENGINE_REGISTRY_ORDER.iter().any(|&k| k == s.trim())
 }
 

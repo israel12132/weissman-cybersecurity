@@ -109,7 +109,8 @@ fn remediation_priority_score_for_row(desc: &str, severity: &str, poc_exploit: &
         }
         let verified = v.get("verified").and_then(|x| x.as_bool()).unwrap_or(false);
         let ent = v.get("entropy_score").and_then(|x| x.as_f64());
-        let stack = v.get("stack_correlation_score")
+        let stack = v
+            .get("stack_correlation_score")
             .and_then(|x| x.as_f64())
             .unwrap_or(0.0);
         let sev = v

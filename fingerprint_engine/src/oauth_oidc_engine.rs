@@ -50,11 +50,17 @@ pub async fn run_oauth_oidc_result(target: &str) -> EngineResult {
                     }));
 
                     // Check for dangerous response_types_supported (implicit / token in URL)
-                    if let Some(response_types) = doc.get("response_types_supported").and_then(|v| v.as_array()) {
-                        let types: Vec<String> = response_types.iter()
+                    if let Some(response_types) = doc
+                        .get("response_types_supported")
+                        .and_then(|v| v.as_array())
+                    {
+                        let types: Vec<String> = response_types
+                            .iter()
                             .filter_map(|v| v.as_str().map(|s| s.to_string()))
                             .collect();
-                        let has_implicit = types.iter().any(|t| t == "token" || t.contains("token") && t != "code token");
+                        let has_implicit = types
+                            .iter()
+                            .any(|t| t == "token" || t.contains("token") && t != "code token");
                         if has_implicit {
                             findings.push(json!({
                                 "type": "oauth_oidc",
@@ -68,8 +74,11 @@ pub async fn run_oauth_oidc_result(target: &str) -> EngineResult {
                     }
 
                     // Check grant_types_supported for implicit
-                    if let Some(grant_types) = doc.get("grant_types_supported").and_then(|v| v.as_array()) {
-                        let types: Vec<String> = grant_types.iter()
+                    if let Some(grant_types) =
+                        doc.get("grant_types_supported").and_then(|v| v.as_array())
+                    {
+                        let types: Vec<String> = grant_types
+                            .iter()
                             .filter_map(|v| v.as_str().map(|s| s.to_string()))
                             .collect();
                         if types.iter().any(|t| t == "implicit") {
@@ -85,7 +94,8 @@ pub async fn run_oauth_oidc_result(target: &str) -> EngineResult {
                     }
 
                     // Check if PKCE is required
-                    let pkce_required = doc.get("require_pkce")
+                    let pkce_required = doc
+                        .get("require_pkce")
                         .or_else(|| doc.get("code_challenge_methods_supported"))
                         .is_some();
                     if !pkce_required {
@@ -105,7 +115,13 @@ pub async fn run_oauth_oidc_result(target: &str) -> EngineResult {
     }
 
     // Probe common OAuth endpoints even without a discovery doc
-    for path in &["/oauth/authorize", "/oauth/token", "/oauth2/authorize", "/oauth2/token", "/connect/authorize"] {
+    for path in &[
+        "/oauth/authorize",
+        "/oauth/token",
+        "/oauth2/authorize",
+        "/oauth2/token",
+        "/connect/authorize",
+    ] {
         let url = format!("{}{}", base, path);
         if let Ok(resp) = client.get(&url).send().await {
             let status = resp.status().as_u16();

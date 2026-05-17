@@ -65,14 +65,14 @@ pub async fn run_bgp_dns_hijacking_result(target: &str) -> EngineResult {
             "description": format!("Could not resolve A records for {} via Cloudflare DoH. Domain may not exist or DNS may be configured unusually.", domain),
             "value": domain
         }));
-        return EngineResult::ok(findings.clone(), format!("BGPDNSHijacking: {} findings", findings.len()));
+        return EngineResult::ok(
+            findings.clone(),
+            format!("BGPDNSHijacking: {} findings", findings.len()),
+        );
     }
 
     // Cross-check with Google DoH for discrepancies (a sign of DNS poisoning)
-    let google_doh = format!(
-        "https://dns.google/resolve?name={}&type=A",
-        domain
-    );
+    let google_doh = format!("https://dns.google/resolve?name={}&type=A", domain);
     let mut google_ips: Vec<String> = Vec::new();
     if let Ok(resp) = client.get(&google_doh).send().await {
         if let Ok(data) = resp.json::<serde_json::Value>().await {

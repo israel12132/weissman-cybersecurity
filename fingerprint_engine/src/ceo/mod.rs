@@ -21,9 +21,7 @@ pub use vault::{
     export_vault_criticals_csv, get_suspended_graph, get_vault_row, list_suspended_graphs,
     list_vault_rows, match_vault_row, post_resume_suspended_job, post_vault_row, VaultInsertBody,
 };
-pub use war_room::{
-    insert_war_room_event, sse_war_room_stream, WarRoomContext, WarRoomMirror,
-};
+pub use war_room::{insert_war_room_event, sse_war_room_stream, WarRoomContext, WarRoomMirror};
 
 pub mod tenant_engines;
 pub use tenant_engines::{default_tenant_id, patch_tenant_active_engine};

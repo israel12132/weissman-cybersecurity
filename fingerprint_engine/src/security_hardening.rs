@@ -2,12 +2,24 @@
 //! Human-in-the-loop: optional `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET`; caller must send matching `X-Weissman-Destructive-Confirm`.
 
 use axum::http::HeaderMap;
+use sqlx::PgPool;
+use std::collections::HashSet;
+use std::net::{IpAddr, Ipv4Addr};
 use subtle::ConstantTimeEq;
+use tokio::net::lookup_host;
 use url::Url;
 
 const MAX_PATCH_BYTES: usize = 512 * 1024;
 const MAX_URL_BYTES: usize = 2048;
 const MAX_FINDING_ID_LEN: usize = 128;
+const SCAN_SCOPE_BLOCKLIST: &[&str] = &[
+    "localhost",
+    "metadata.google.internal",
+    "metadata.goog",
+    "169.254.169.254",
+    "fd00:ec2::254",
+    "100.100.100.200",
+];
 
 /// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header must match exactly (constant-time on equal lengths).
 pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
@@ -115,6 +127,182 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+fn bypass_ssrf_scope_check() -> bool {
+    std::env::var("BYPASS_SSRF_CHECK")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn allow_private_scan_targets() -> bool {
+    std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn extract_target_host(raw: &str) -> Result<String, &'static str> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Err("target must not be empty");
+    }
+    let parsed = if t.contains("://") {
+        Url::parse(t).map_err(|_| "invalid target URL")?
+    } else {
+        Url::parse(&format!("https://{t}")).map_err(|_| "invalid target host")?
+    };
+    let host = parsed.host_str().ok_or("missing target host")?;
+    Ok(host.to_ascii_lowercase())
+}
+
+fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || (o[0] == 10)
+                || (o[0] == 172 && (16..=31).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 168)
+                || (o[0] == 100 && (64..=127).contains(&o[1]))
+                || (o[0] == 169 && o[1] == 254)
+                || *v4 == Ipv4Addr::new(100, 100, 100, 200)
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
+        }
+    }
+}
+
+fn normalize_scope_domain(s: &str) -> Option<String> {
+    let raw = s.trim().trim_matches('.').trim_start_matches("*.").trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let candidate = if raw.contains("://") {
+        Url::parse(raw)
+            .ok()
+            .and_then(|u| u.host_str().map(ToString::to_string))
+    } else {
+        Url::parse(&format!("https://{raw}"))
+            .ok()
+            .and_then(|u| u.host_str().map(ToString::to_string))
+    };
+    candidate.map(|h| h.to_ascii_lowercase())
+}
+
+fn parse_approved_domains_blob(raw: &str) -> Vec<String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Vec::new();
+    }
+    if t.starts_with('[') {
+        if let Ok(arr) = serde_json::from_str::<Vec<String>>(t) {
+            return arr
+                .into_iter()
+                .filter_map(|x| normalize_scope_domain(&x))
+                .collect();
+        }
+    }
+    t.split(',').filter_map(normalize_scope_domain).collect()
+}
+
+fn target_matches_approved(host: &str, approved: &HashSet<String>) -> bool {
+    if approved.contains(host) {
+        return true;
+    }
+    approved.iter().any(|d| host.ends_with(&format!(".{d}")))
+}
+
+async fn load_tenant_approved_domains(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<HashSet<String>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows: Vec<String> =
+        sqlx::query_scalar("SELECT COALESCE(domains, '[]') FROM clients WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_all(&mut *tx)
+            .await?;
+    let _ = tx.commit().await;
+    let mut approved = HashSet::new();
+    for raw in rows {
+        for d in parse_approved_domains_blob(&raw) {
+            approved.insert(d);
+        }
+    }
+    Ok(approved)
+}
+
+pub async fn validate_scan_target_in_scope(
+    pool: &PgPool,
+    tenant_id: i64,
+    target: &str,
+) -> Result<(), String> {
+    if bypass_ssrf_scope_check() {
+        tracing::warn!(
+            target: "security_hardening",
+            tenant_id,
+            "BYPASS_SSRF_CHECK active: scan target scope checks disabled"
+        );
+        return Ok(());
+    }
+
+    let host = extract_target_host(target).map_err(ToString::to_string)?;
+    let host_trimmed_dot = host.trim_end_matches('.');
+
+    if SCAN_SCOPE_BLOCKLIST.iter().any(|h| *h == host_trimmed_dot) {
+        return Err(format!("target host '{host_trimmed_dot}' is blocked"));
+    }
+
+    let allow_private = allow_private_scan_targets();
+    if let Ok(ip) = host_trimmed_dot.parse::<IpAddr>() {
+        if !allow_private && is_private_or_reserved_ip(&ip) {
+            return Err(format!(
+                "target host '{host_trimmed_dot}' resolves to a private/reserved address and is not allowed"
+            ));
+        }
+    } else {
+        let resolved = lookup_host((host_trimmed_dot, 80))
+            .await
+            .map_err(|_| format!("failed to resolve target host '{host_trimmed_dot}'"))?;
+        let mut saw_addr = false;
+        for addr in resolved {
+            saw_addr = true;
+            let ip = addr.ip();
+            if !allow_private && is_private_or_reserved_ip(&ip) {
+                return Err(format!(
+                    "target host '{host_trimmed_dot}' resolved to blocked address {ip}"
+                ));
+            }
+        }
+        if !saw_addr {
+            return Err(format!(
+                "failed to resolve target host '{host_trimmed_dot}'"
+            ));
+        }
+    }
+
+    let approved = load_tenant_approved_domains(pool, tenant_id)
+        .await
+        .map_err(|e| format!("failed loading approved tenant domains: {e}"))?;
+    if approved.is_empty() {
+        return Err(
+            "no approved client domains found for tenant; define at least one client domain"
+                .to_string(),
+        );
+    }
+    if !target_matches_approved(host_trimmed_dot, &approved) {
+        return Err(format!(
+            "target host '{host_trimmed_dot}' is outside approved tenant scope"
+        ));
+    }
+    Ok(())
+}
+
 /// Finding IDs become Git branch suffixes — restrict charset.
 pub fn validate_git_branch_name(branch: &str) -> Result<(), &'static str> {
     let s = branch.trim();
@@ -170,5 +358,54 @@ mod tests {
     fn poe_blocks_metadata() {
         assert!(validate_poe_target_url("http://169.254.169.254/latest/meta-data/").is_err());
         assert!(validate_poe_target_url("https://example.com/").is_ok());
+    }
+
+    #[test]
+    fn scope_normalize_domain() {
+        assert_eq!(
+            normalize_scope_domain("*.Example.com"),
+            Some("example.com".to_string())
+        );
+        assert_eq!(
+            normalize_scope_domain("https://api.example.com/path"),
+            Some("api.example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn scope_target_matches_subdomain() {
+        let mut approved = HashSet::new();
+        approved.insert("example.com".to_string());
+        assert!(target_matches_approved("example.com", &approved));
+        assert!(target_matches_approved("api.example.com", &approved));
+        assert!(!target_matches_approved("evil-example.com", &approved));
+    }
+
+    #[test]
+    fn scope_private_ip_blocking() {
+        assert!(is_private_or_reserved_ip(
+            &"127.0.0.1".parse::<IpAddr>().expect("ip parse")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"169.254.169.254".parse::<IpAddr>().expect("ip parse")
+        ));
+        assert!(is_private_or_reserved_ip(
+            &"10.1.2.3".parse::<IpAddr>().expect("ip parse")
+        ));
+        assert!(!is_private_or_reserved_ip(
+            &"8.8.8.8".parse::<IpAddr>().expect("ip parse")
+        ));
+    }
+
+    #[test]
+    fn scope_extract_target_host() {
+        assert_eq!(
+            extract_target_host("https://api.example.com/path").expect("host"),
+            "api.example.com".to_string()
+        );
+        assert_eq!(
+            extract_target_host("example.com:443").expect("host"),
+            "example.com".to_string()
+        );
     }
 }

@@ -33,7 +33,14 @@ fn sanitize_preview(raw: &str) -> String {
     let truncated: String = raw.chars().take(MAX_LEN).collect();
     // Case-insensitive check for tokens associated with shell escapes / stager patterns.
     let lower = truncated.to_ascii_lowercase();
-    for bad in &["/bin/sh", "/bin/bash", "cmd.exe", "powershell", "nc -e", "bash -i"] {
+    for bad in &[
+        "/bin/sh",
+        "/bin/bash",
+        "cmd.exe",
+        "powershell",
+        "nc -e",
+        "bash -i",
+    ] {
         if lower.contains(bad) {
             return "[preview redacted — shell keyword detected]".to_string();
         }
@@ -249,14 +256,12 @@ pub async fn reject(
         .await
         .map_err(ApproveError::Db)?;
 
-    let row = sqlx::query(
-        "SELECT status FROM council_hitl_queue WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(ApproveError::Db)?;
+    let row = sqlx::query("SELECT status FROM council_hitl_queue WHERE id = $1 AND tenant_id = $2")
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(ApproveError::Db)?;
 
     let Some(row) = row else {
         let _ = tx.rollback().await;
@@ -395,4 +400,3 @@ pub async fn poll_oast_token(
         "safety_rails_no_shells": true,
     }))
 }
-

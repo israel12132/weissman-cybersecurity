@@ -88,8 +88,13 @@ fn circuit_check(base_url: &str) -> Result<(), LlmError> {
     });
     if let Some(until) = e.open_until {
         if Instant::now() < until {
-            let secs = until.saturating_duration_since(Instant::now()).as_secs().max(1);
-            return Err(LlmError::CircuitOpen { cooldown_secs: secs });
+            let secs = until
+                .saturating_duration_since(Instant::now())
+                .as_secs()
+                .max(1);
+            return Err(LlmError::CircuitOpen {
+                cooldown_secs: secs,
+            });
         }
         e.open_until = None;
         e.failures = 0;
@@ -131,7 +136,9 @@ fn health_cache() -> &'static Mutex<HashMap<String, Instant>> {
 
 /// GET `/v1/models` with short timeout. Throttled per base URL.
 async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Result<(), LlmError> {
-    let base = normalize_openai_base_url(base_url).trim_end_matches('/').to_string();
+    let base = normalize_openai_base_url(base_url)
+        .trim_end_matches('/')
+        .to_string();
     let key = base.clone();
     {
         let c = health_cache().lock().map_err(|_| LlmError::InternalLock)?;
@@ -149,16 +156,13 @@ async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Resu
         .map_err(|e| LlmError::Unreachable(e.to_string()))?
         .get(&url);
     let probe = apply_bearer(probe);
-    let resp = probe
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                LlmError::Timeout
-            } else {
-                LlmError::Unreachable(e.to_string())
-            }
-        })?;
+    let resp = probe.send().await.map_err(|e| {
+        if e.is_timeout() {
+            LlmError::Timeout
+        } else {
+            LlmError::Unreachable(e.to_string())
+        }
+    })?;
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
@@ -199,10 +203,7 @@ pub struct LlmClientErrorBody {
 pub enum LlmError {
     CircuitOpen { cooldown_secs: u64 },
     Unreachable(String),
-    Http {
-        status: u16,
-        body_preview: String,
-    },
+    Http { status: u16, body_preview: String },
     Timeout,
     Decode(String),
     EmptyContent,
@@ -584,10 +585,7 @@ pub async fn chat_completion_detailed_json_object(
     });
     if llm_json_response_format_enabled() {
         if let Some(obj) = body.as_object_mut() {
-            obj.insert(
-                "response_format".into(),
-                json!({ "type": "json_object" }),
-            );
+            obj.insert("response_format".into(), json!({ "type": "json_object" }));
         }
     }
     let mut req = client.post(&url).json(&body);
@@ -790,7 +788,9 @@ pub fn chat_completion_text_blocking(
     sanitize_user_input: bool,
 ) -> Result<String, LlmError> {
     circuit_check(base_url)?;
-    let base = normalize_openai_base_url(base_url).trim_end_matches('/').to_string();
+    let base = normalize_openai_base_url(base_url)
+        .trim_end_matches('/')
+        .to_string();
     let url_models = format!("{}/models", base);
     let url = chat_completions_endpoint(base_url);
     let probe = reqwest::blocking::Client::builder()
@@ -884,12 +884,10 @@ pub fn chat_completion_text_blocking(
             body_preview: txt.chars().take(1024).collect(),
         });
     }
-    let data: Value = resp
-        .json()
-        .map_err(|e| {
-            circuit_on_failure(base_url);
-            LlmError::Decode(e.to_string())
-        })?;
+    let data: Value = resp.json().map_err(|e| {
+        circuit_on_failure(base_url);
+        LlmError::Decode(e.to_string())
+    })?;
     let pt = data
         .pointer("/usage/prompt_tokens")
         .and_then(|v| v.as_u64())

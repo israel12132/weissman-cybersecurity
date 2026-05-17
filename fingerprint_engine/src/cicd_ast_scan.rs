@@ -18,7 +18,10 @@ pub struct CicdFinding {
 fn aws_key_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     // AWS Access Key IDs (AKIA = long-term, ASIA = session)
-    R.get_or_init(|| Regex::new(r"(?:AKIA|ASIA|AROA|AIDA|ANPA|ANVA|AIPA)[0-9A-Z]{16}").unwrap_or_else(|_| never_matches()))
+    R.get_or_init(|| {
+        Regex::new(r"(?:AKIA|ASIA|AROA|AIDA|ANPA|ANVA|AIPA)[0-9A-Z]{16}")
+            .unwrap_or_else(|_| never_matches())
+    })
 }
 
 fn pem_re() -> &'static Regex {
@@ -48,18 +51,14 @@ fn hardcoded_secret_re() -> &'static Regex {
 /// GitHub Personal Access Token (classic and fine-grained)
 fn github_token_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| {
-        Regex::new(r"gh[pousr]_[A-Za-z0-9]{36,}")
-            .unwrap_or_else(|_| never_matches())
-    })
+    R.get_or_init(|| Regex::new(r"gh[pousr]_[A-Za-z0-9]{36,}").unwrap_or_else(|_| never_matches()))
 }
 
 /// GCP service account JSON key (contains "private_key_id")
 fn gcp_service_account_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r#""private_key_id"\s*:\s*"[0-9a-f]{40}""#)
-            .unwrap_or_else(|_| never_matches())
+        Regex::new(r#""private_key_id"\s*:\s*"[0-9a-f]{40}""#).unwrap_or_else(|_| never_matches())
     })
 }
 
@@ -67,8 +66,7 @@ fn gcp_service_account_re() -> &'static Regex {
 fn slack_token_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"xox[baprs]-[0-9A-Za-z\-]{10,}")
-            .unwrap_or_else(|_| never_matches())
+        Regex::new(r"xox[baprs]-[0-9A-Za-z\-]{10,}").unwrap_or_else(|_| never_matches())
     })
 }
 
@@ -76,8 +74,7 @@ fn slack_token_re() -> &'static Regex {
 fn stripe_key_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"(?:sk|pk)_(?:live|test)_[0-9A-Za-z]{24,}")
-            .unwrap_or_else(|_| never_matches())
+        Regex::new(r"(?:sk|pk)_(?:live|test)_[0-9A-Za-z]{24,}").unwrap_or_else(|_| never_matches())
     })
 }
 
@@ -94,8 +91,7 @@ fn jwt_secret_re() -> &'static Regex {
 fn twilio_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"AC[0-9a-f]{32}|SK[0-9a-f]{32}")
-            .unwrap_or_else(|_| never_matches())
+        Regex::new(r"AC[0-9a-f]{32}|SK[0-9a-f]{32}").unwrap_or_else(|_| never_matches())
     })
 }
 

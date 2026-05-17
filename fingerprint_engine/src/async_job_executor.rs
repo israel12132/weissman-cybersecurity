@@ -89,9 +89,13 @@ pub async fn execute_job(
                     .await
                 }
                 "llm_path_fuzz" | "ollama_fuzz" => {
-                    crate::llm_path_fuzz_engine::run_llm_path_fuzz_result_cli(target, None, Some(tid))
-                        .await
-                        .into()
+                    crate::llm_path_fuzz_engine::run_llm_path_fuzz_result_cli(
+                        target,
+                        None,
+                        Some(tid),
+                    )
+                    .await
+                    .into()
                 }
                 "leak_hunter" => {
                     let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
@@ -167,10 +171,9 @@ pub async fn execute_job(
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
                     Err(format!("scan cycle failed: {}", e))
                 }
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "scan cycle panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("scan cycle panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -181,87 +184,182 @@ pub async fn execute_job(
         }
         "scan_all_engines" => {
             // Run all engines for a client in proper order
-            let client_id = p.get("client_id").and_then(Value::as_i64)
+            let client_id = p
+                .get("client_id")
+                .and_then(Value::as_i64)
                 .ok_or_else(|| "payload.client_id required".to_string())?;
-            let target = p.get("target").and_then(Value::as_str).unwrap_or("").to_string();
-            let engines: Vec<String> = p.get("engines")
+            let target = p
+                .get("target")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let engines: Vec<String> = p
+                .get("engines")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            
+
             let telemetry = channels.telemetry.clone();
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
-            
+
             let mut results = Vec::new();
             let mut succeeded = 0usize;
             let mut failed = 0usize;
-            
+
             // Execute engines in order defined by registry
-            let ordered_engines = weissman_core::models::engine::order_engines_by_registry(&engines);
-            
+            let ordered_engines =
+                weissman_core::models::engine::order_engines_by_registry(&engines);
+
             for engine_id in &ordered_engines {
-                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#, job.id, engine_id));
-                
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
+                    job.id, engine_id
+                ));
+
                 let result = match engine_id.as_str() {
                     "osint" => crate::osint_engine::run_osint_result(&target, None).await,
                     "asm" => crate::asm_engine::run_asm_result(&target).await,
-                    "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
-                    "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
-                    "recon" => crate::recon::enum_subdomains_default(&target).await.into_iter().map(|d| json!({"type": "recon", "subdomain": d})).collect::<Vec<_>>().into(),
-                    "supply_chain" => crate::supply_chain_engine::run_supply_chain_result(&target, None).await,
-                    "bola_idor" => crate::bola_idor_engine::run_bola_idor_result(&target, None).await,
-                    "graphql_attack" => crate::graphql_attack_engine::run_graphql_attack_result(&target).await,
+                    "leak_hunter" => {
+                        crate::leak_hunter_engine::run_leak_hunter_result(&target).await
+                    }
+                    "discovery_engine" => {
+                        crate::discovery_engine::run_spider_crawl(
+                            &[target.clone()],
+                            None,
+                            &mut std::collections::HashSet::new(),
+                            &mut Vec::new(),
+                        )
+                        .await
+                    }
+                    "recon" => crate::recon::enum_subdomains_default(&target)
+                        .await
+                        .into_iter()
+                        .map(|d| json!({"type": "recon", "subdomain": d}))
+                        .collect::<Vec<_>>()
+                        .into(),
+                    "supply_chain" => {
+                        crate::supply_chain_engine::run_supply_chain_result(&target, None).await
+                    }
+                    "bola_idor" => {
+                        crate::bola_idor_engine::run_bola_idor_result(&target, None).await
+                    }
+                    "graphql_attack" => {
+                        crate::graphql_attack_engine::run_graphql_attack_result(&target).await
+                    }
                     "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(&target).await,
                     "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(&target).await,
-                    "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(&target).await,
-                    "prototype_pollution" => crate::prototype_pollution_engine::run_prototype_pollution_result(&target).await,
-                    "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result(&target).await,
+                    "http_smuggling" => {
+                        crate::http_smuggling_engine::run_http_smuggling_result(&target).await
+                    }
+                    "prototype_pollution" => {
+                        crate::prototype_pollution_engine::run_prototype_pollution_result(&target)
+                            .await
+                    }
+                    "ssrf_advanced" => {
+                        crate::ssrf_advanced_engine::run_ssrf_advanced_result(&target).await
+                    }
                     "xxe" => crate::xxe_engine::run_xxe_result(&target).await,
                     "ssti" => crate::ssti_engine::run_ssti_result(&target).await,
-                    "file_upload" => crate::file_upload_engine::run_file_upload_result(&target).await,
-                    "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result(&target).await,
-                    "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result(&target).await,
+                    "file_upload" => {
+                        crate::file_upload_engine::run_file_upload_result(&target).await
+                    }
+                    "websocket_attack" => {
+                        crate::websocket_attack_engine::run_websocket_attack_result(&target).await
+                    }
+                    "cache_poisoning" => {
+                        crate::cache_poisoning_engine::run_cache_poisoning_result(&target).await
+                    }
                     "pki_tls" => crate::pki_tls_engine::run_pki_tls_result(&target).await,
-                    "pqc_scanner" => crate::pqc_scanner_engine::run_pqc_scanner_result(&target).await,
-                    "password_spray" => crate::password_spray_engine::run_password_spray_result(&target).await,
-                    "kerberoasting" => crate::kerberoasting_engine::run_kerberoasting_result(&target).await,
-                    "saml_attack" => crate::saml_attack_engine::run_saml_attack_result(&target).await,
-                    "crypto_engine" => crate::crypto_engine::run_crypto_engine_result(&target).await,
-                    "bgp_dns_hijacking" => crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(&target).await,
-                    "ipv6_attack" => crate::ipv6_attack_engine::run_ipv6_attack_result(&target).await,
+                    "pqc_scanner" => {
+                        crate::pqc_scanner_engine::run_pqc_scanner_result(&target).await
+                    }
+                    "password_spray" => {
+                        crate::password_spray_engine::run_password_spray_result(&target).await
+                    }
+                    "kerberoasting" => {
+                        crate::kerberoasting_engine::run_kerberoasting_result(&target).await
+                    }
+                    "saml_attack" => {
+                        crate::saml_attack_engine::run_saml_attack_result(&target).await
+                    }
+                    "crypto_engine" => {
+                        crate::crypto_engine::run_crypto_engine_result(&target).await
+                    }
+                    "bgp_dns_hijacking" => {
+                        crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(&target).await
+                    }
+                    "ipv6_attack" => {
+                        crate::ipv6_attack_engine::run_ipv6_attack_result(&target).await
+                    }
                     "mtls_grpc" => crate::mtls_grpc_engine::run_mtls_grpc_result(&target).await,
-                    "smb_netbios" => crate::smb_netbios_engine::run_smb_netbios_result(&target).await,
-                    "cicd_pipeline" => crate::cicd_pipeline_engine::run_cicd_pipeline_result(&target).await,
-                    "container_registry" => crate::container_registry_engine::run_container_registry_result(&target).await,
-                    "sbom_analyzer" => crate::sbom_analyzer_engine::run_sbom_analyzer_result(&target).await,
-                    "typosquatting_monitor" => crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(&target).await,
+                    "smb_netbios" => {
+                        crate::smb_netbios_engine::run_smb_netbios_result(&target).await
+                    }
+                    "cicd_pipeline" => {
+                        crate::cicd_pipeline_engine::run_cicd_pipeline_result(&target).await
+                    }
+                    "container_registry" => {
+                        crate::container_registry_engine::run_container_registry_result(&target)
+                            .await
+                    }
+                    "sbom_analyzer" => {
+                        crate::sbom_analyzer_engine::run_sbom_analyzer_result(&target).await
+                    }
+                    "typosquatting_monitor" => {
+                        crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(
+                            &target,
+                        )
+                        .await
+                    }
                     "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(&target).await,
                     "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(&target).await,
-                    "deception_honeypot" => crate::deception_honeypot_engine::run_deception_honeypot_result(&target).await,
-                    "digital_twin" => crate::digital_twin_engine::run_digital_twin_result(&target).await,
-                    "threat_emulation" => crate::threat_emulation_engine::run_threat_emulation_result(&target).await,
+                    "deception_honeypot" => {
+                        crate::deception_honeypot_engine::run_deception_honeypot_result(&target)
+                            .await
+                    }
+                    "digital_twin" => {
+                        crate::digital_twin_engine::run_digital_twin_result(&target).await
+                    }
+                    "threat_emulation" => {
+                        crate::threat_emulation_engine::run_threat_emulation_result(&target).await
+                    }
                     "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result(&target).await,
-                    "timing_sidechannel" => crate::timing_sidechannel_engine::run_timing_sidechannel_result(&target).await,
-                    "stealth_engine" => crate::stealth_engine::run_stealth_engine_result(&target).await,
-                    _ => crate::engine_result::EngineResult::ok(vec![], format!("Engine {} not yet integrated", engine_id)),
+                    "timing_sidechannel" => {
+                        crate::timing_sidechannel_engine::run_timing_sidechannel_result(&target)
+                            .await
+                    }
+                    "stealth_engine" => {
+                        crate::stealth_engine::run_stealth_engine_result(&target).await
+                    }
+                    _ => crate::engine_result::EngineResult::ok(
+                        vec![],
+                        format!("Engine {} not yet integrated", engine_id),
+                    ),
                 };
-                
+
                 if result.success {
                     succeeded += 1;
                     let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
                 } else {
                     failed += 1;
-                    let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#, job.id, engine_id, result.summary));
+                    let _ = telemetry.send(format!(
+                        r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#,
+                        job.id, engine_id, result.summary
+                    ));
                 }
-                
+
                 results.push(json!({
                     "engine": engine_id,
                     "success": result.success,
                     "findings_count": result.findings.len(),
                     "summary": result.summary,
                 }));
-                
+
                 // Save findings to DB
                 if !result.findings.is_empty() {
                     if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
@@ -283,9 +381,9 @@ pub async fn execute_job(
                     }
                 }
             }
-            
+
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
-            
+
             Ok(json!({
                 "ok": true,
                 "client_id": client_id,
@@ -297,47 +395,80 @@ pub async fn execute_job(
         }
         "scan_discovered_domains" => {
             // Scan all discovered domains with specified engines
-            let client_id = p.get("client_id").and_then(Value::as_i64)
+            let client_id = p
+                .get("client_id")
+                .and_then(Value::as_i64)
                 .ok_or_else(|| "payload.client_id required".to_string())?;
-            let domains: Vec<String> = p.get("domains")
+            let domains: Vec<String> = p
+                .get("domains")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let engines: Vec<String> = p.get("engines")
+            let engines: Vec<String> = p
+                .get("engines")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_else(|| vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]);
-            
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_else(|| {
+                    vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]
+                });
+
             let telemetry = channels.telemetry.clone();
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning {} domains with {} engines","status":"running"}}"#, job.id, domains.len(), engines.len()));
-            
+
             let mut total_findings = 0usize;
             let mut scanned_domains = 0usize;
-            
+
             for domain in &domains {
-                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning domain: {}","status":"running"}}"#, job.id, domain));
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Scanning domain: {}","status":"running"}}"#,
+                    job.id, domain
+                ));
                 scanned_domains += 1;
-                
+
                 for engine_id in &engines {
-                    let target = if domain.starts_with("http") { domain.clone() } else { format!("https://{}", domain) };
+                    let target = if domain.starts_with("http") {
+                        domain.clone()
+                    } else {
+                        format!("https://{}", domain)
+                    };
                     let result = match engine_id.as_str() {
                         "osint" => crate::osint_engine::run_osint_result(&target, None).await,
                         "asm" => crate::asm_engine::run_asm_result(&target).await,
-                        "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
+                        "leak_hunter" => {
+                            crate::leak_hunter_engine::run_leak_hunter_result(&target).await
+                        }
                         "recon" => {
                             let subs = crate::recon::enum_subdomains_default(domain).await;
                             crate::engine_result::EngineResult::ok(
-                                subs.iter().map(|d| json!({"type": "recon", "subdomain": d})).collect(),
+                                subs.iter()
+                                    .map(|d| json!({"type": "recon", "subdomain": d}))
+                                    .collect(),
                                 format!("{} subdomains found", subs.len()),
                             )
-                        },
-                        "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
+                        }
+                        "discovery_engine" => {
+                            crate::discovery_engine::run_spider_crawl(
+                                &[target.clone()],
+                                None,
+                                &mut std::collections::HashSet::new(),
+                                &mut Vec::new(),
+                            )
+                            .await
+                        }
                         _ => continue,
                     };
-                    
+
                     total_findings += result.findings.len();
-                    
+
                     // Save findings
                     if !result.findings.is_empty() {
                         if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
@@ -360,9 +491,9 @@ pub async fn execute_job(
                     }
                 }
             }
-            
+
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Domain scan completed: {} domains, {} findings","status":"completed"}}"#, job.id, scanned_domains, total_findings));
-            
+
             Ok(json!({
                 "ok": true,
                 "client_id": client_id,
@@ -374,16 +505,14 @@ pub async fn execute_job(
         "ascension_wave" => {
             let app = app_pool.clone();
             let tele = channels.telemetry.clone();
-            let fut = async move {
-                crate::general::run_ascension_wave(app, tid, Some(&tele)).await
-            };
+            let fut =
+                async move { crate::general::run_ascension_wave(app, tid, Some(&tele)).await };
             match crate::panic_shield::catch_unwind_future("ascension_wave_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(v)) => Ok(v),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "ascension wave panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("ascension wave panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -414,10 +543,9 @@ pub async fn execute_job(
             match crate::panic_shield::catch_unwind_future("general_mission_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(v)) => Ok(v),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "general mission panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("general mission panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -529,10 +657,9 @@ pub async fn execute_job(
             match crate::panic_shield::catch_unwind_future("council_debate_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(res)) => Ok(res),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "council debate panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("council debate panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -568,22 +695,27 @@ pub async fn execute_job(
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let merged_paths: Option<Vec<String>> = match (cognitive_dictionary.is_empty(), discovered_paths) {
-                (true, None) => None,
-                (true, Some(paths)) => Some(paths),
-                (false, None) => Some(cognitive_dictionary),
-                (false, Some(mut paths)) => {
-                    let mut m = cognitive_dictionary;
-                    for x in paths.drain(..) {
-                        if !m.contains(&x) {
-                            m.push(x);
+            let merged_paths: Option<Vec<String>> =
+                match (cognitive_dictionary.is_empty(), discovered_paths) {
+                    (true, None) => None,
+                    (true, Some(paths)) => Some(paths),
+                    (false, None) => Some(cognitive_dictionary),
+                    (false, Some(mut paths)) => {
+                        let mut m = cognitive_dictionary;
+                        for x in paths.drain(..) {
+                            if !m.contains(&x) {
+                                m.push(x);
+                            }
                         }
+                        Some(m)
                     }
-                    Some(m)
-                }
-            };
-            let shadow_preflight = p.get("shadow_preflight").and_then(|v| v.as_bool()) == Some(true);
-            let autonomous_pivot = p.get("autonomous_credential_pivot").and_then(|v| v.as_bool()) == Some(true);
+                };
+            let shadow_preflight =
+                p.get("shadow_preflight").and_then(|v| v.as_bool()) == Some(true);
+            let autonomous_pivot = p
+                .get("autonomous_credential_pivot")
+                .and_then(|v| v.as_bool())
+                == Some(true);
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -665,7 +797,11 @@ pub async fn execute_job(
             }
             if let Some(cid) = client_id {
                 if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                    let log = fuzzy.reasoning_log.chars().take(120_000).collect::<String>();
+                    let log = fuzzy
+                        .reasoning_log
+                        .chars()
+                        .take(120_000)
+                        .collect::<String>();
                     let _ = sqlx::query(
                         "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
                     )
@@ -783,9 +919,13 @@ pub async fn execute_job(
             let cfg = crate::council::CouncilConfig::load(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
-            let fb: Vec<crate::eternal_fuzz::SimFeedbackStep> =
-                serde_json::from_value(eternal.get("simulation_feedback").cloned().unwrap_or(json!([])))
-                    .unwrap_or_default();
+            let fb: Vec<crate::eternal_fuzz::SimFeedbackStep> = serde_json::from_value(
+                eternal
+                    .get("simulation_feedback")
+                    .cloned()
+                    .unwrap_or(json!([])),
+            )
+            .unwrap_or_default();
             let war_room = crate::ceo::war_room::WarRoomContext {
                 pool: app_pool.clone(),
                 tenant_id: tid,
@@ -868,8 +1008,7 @@ pub async fn execute_job(
                 }
             });
             let result =
-                crate::timing_engine::run_timing_attack(&target, None, &cfg, Some(tx_stream))
-                    .await;
+                crate::timing_engine::run_timing_attack(&target, None, &cfg, Some(tx_stream)).await;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
@@ -1318,10 +1457,7 @@ pub async fn execute_job(
                 .and_then(Value::as_str)
                 .ok_or_else(|| "target required".to_string())?
                 .to_string();
-            let base_payload = p
-                .get("base_payload")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let base_payload = p.get("base_payload").and_then(Value::as_str).unwrap_or("");
             let client_id = p
                 .get("client_id")
                 .and_then(Value::as_i64)
@@ -1398,7 +1534,10 @@ pub async fn execute_job(
                 };
                 let title: String = v.anomaly_type.chars().take(500).collect();
                 let payload_excerpt: String = v.payload.chars().take(4000).collect();
-                let mut description = format!("{}\n\nPayload excerpt:\n{}", v.baseline_vs_anomaly, payload_excerpt);
+                let mut description = format!(
+                    "{}\n\nPayload excerpt:\n{}",
+                    v.baseline_vs_anomaly, payload_excerpt
+                );
                 if let Some(ref tok) = v.oob_token {
                     description.push_str(&format!("\n\nOAST correlation token: {}", tok));
                 }

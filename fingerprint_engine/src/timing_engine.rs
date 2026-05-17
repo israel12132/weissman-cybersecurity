@@ -159,12 +159,8 @@ async fn baseline_profile(
         if let Some(s) = stealth.as_deref() {
             stealth_engine::apply_jitter(s);
         }
-        let us = measure_request_us(
-            timing_full_url(url.as_str(), None),
-            client,
-            stealth.clone(),
-        )
-        .await;
+        let us =
+            measure_request_us(timing_full_url(url.as_str(), None), client, stealth.clone()).await;
         samples.push(us);
         if let Some(tx) = stream_tx {
             let mean_so_far = mean(&samples);
@@ -260,14 +256,8 @@ async fn run_timing_attack_impl(
     let n_payload = config.payload_sample_size.max(20).min(500);
     let z_threshold = config.z_score_threshold.max(1.0).min(10.0);
 
-    let (baseline_mean, baseline_std) = baseline_profile(
-        url.clone(),
-        n_baseline,
-        &client,
-        stealth.clone(),
-        stream_tx,
-    )
-    .await;
+    let (baseline_mean, baseline_std) =
+        baseline_profile(url.clone(), n_baseline, &client, stealth.clone(), stream_tx).await;
 
     let mut findings = Vec::new();
     for payload in TIMING_PAYLOADS.iter().take(8).copied() {

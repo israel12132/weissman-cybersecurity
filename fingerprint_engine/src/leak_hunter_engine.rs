@@ -204,7 +204,13 @@ fn looks_like_leak(path: &str, status: u16, body: &str) -> bool {
                 || body.len() < 4000);
     }
     // Config files
-    if path.contains("config") || path.contains("settings") || path.contains(".npmrc") || path.contains(".pypirc") || path.contains("application.properties") || path.contains("application.yml") {
+    if path.contains("config")
+        || path.contains("settings")
+        || path.contains(".npmrc")
+        || path.contains(".pypirc")
+        || path.contains("application.properties")
+        || path.contains("application.yml")
+    {
         return (body.contains("=") || body.contains(":"))
             && (body.contains("key")
                 || body.contains("secret")
@@ -223,7 +229,10 @@ fn looks_like_leak(path: &str, status: u16, body: &str) -> bool {
     }
     // Database backups
     if path.ends_with(".sql") || path.ends_with(".zip") || path.ends_with(".tar.gz") {
-        return !body.is_empty() && (body_lower.contains("create table") || body_lower.contains("insert into") || body_lower.contains("pk\x03\x04"));
+        return !body.is_empty()
+            && (body_lower.contains("create table")
+                || body_lower.contains("insert into")
+                || body_lower.contains("pk\x03\x04"));
     }
     // Spring Boot actuator / env
     if path.contains("actuator") {
@@ -244,7 +253,9 @@ fn looks_like_leak(path: &str, status: u16, body: &str) -> bool {
     }
     // API docs that expose internals
     if path.contains("swagger") || path.contains("openapi") || path.contains("api-docs") {
-        return body_lower.contains("\"paths\"") || body_lower.contains("\"openapi\"") || body_lower.contains("swagger");
+        return body_lower.contains("\"paths\"")
+            || body_lower.contains("\"openapi\"")
+            || body_lower.contains("swagger");
     }
     // Apache server-status
     if path.contains("server-status") || path.contains("server-info") {
@@ -256,15 +267,23 @@ fn looks_like_leak(path: &str, status: u16, body: &str) -> bool {
     }
     // Terraform state (contains cloud credentials/resource details)
     if path.contains("terraform") || path.contains(".tfstate") {
-        return body_lower.contains("\"version\"") && (body_lower.contains("\"resources\"") || body_lower.contains("\"terraform_version\""));
+        return body_lower.contains("\"version\"")
+            && (body_lower.contains("\"resources\"")
+                || body_lower.contains("\"terraform_version\""));
     }
     // CI/CD configs
-    if path.contains(".travis") || path.contains("Jenkinsfile") || path.contains("docker-compose") || path.contains("Dockerfile") {
+    if path.contains(".travis")
+        || path.contains("Jenkinsfile")
+        || path.contains("docker-compose")
+        || path.contains("Dockerfile")
+    {
         return !body.is_empty() && body.len() < 50000;
     }
     // WordPress config
     if path.contains("wp-config") {
-        return body_lower.contains("db_name") || body_lower.contains("db_password") || body_lower.contains("define(");
+        return body_lower.contains("db_name")
+            || body_lower.contains("db_password")
+            || body_lower.contains("define(");
     }
     // Generic: non-empty and reasonably short (not a CDN asset)
     !body.is_empty() && body.len() < 10000
@@ -338,7 +357,10 @@ pub async fn github_leak_search(
         .user_agent("Weissman-Security-Scanner")
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
-    let query = format!("{} .env OR api_key OR password OR secret OR token OR credential", domain_or_org);
+    let query = format!(
+        "{} .env OR api_key OR password OR secret OR token OR credential",
+        domain_or_org
+    );
     let url = "https://api.github.com/search/code";
     let resp = client
         .get(url)

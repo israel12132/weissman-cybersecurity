@@ -82,11 +82,12 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
         ));
     }
     let max_c: i32 = r.try_get("max_clients").map_err(|e| e.to_string())?;
-    let count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let count: i64 =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     if count >= max_c as i64 {
         return Err(format!(
             "Client limit reached ({}/{}). Upgrade your plan.",
@@ -156,10 +157,7 @@ pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sq
 }
 
 fn subscription_allows_usage(status: &str) -> bool {
-    matches!(
-        status.to_lowercase().as_str(),
-        "active" | "trialing"
-    )
+    matches!(status.to_lowercase().as_str(), "active" | "trialing")
 }
 
 pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value, String> {
@@ -189,11 +187,12 @@ pub async fn usage_dashboard_json(pool: &PgPool, tenant_id: i64) -> Result<Value
     let paddle_sub: Option<String> = r.try_get("paddle_subscription_id").ok();
     let period_end: Option<chrono::DateTime<Utc>> = r.try_get("current_period_end").ok();
 
-    let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let client_count: i64 =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     let period = period_ym_now();
     let scans_used: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
@@ -247,7 +246,12 @@ pub async fn resolve_paddle_price_id(pool: &PgPool, plan_slug: &str) -> Result<S
         _ => return Err("Invalid plan_slug".to_string()),
     };
     std::env::var(key)
-        .map_err(|_| format!("Set billing_plans.paddle_price_id or environment variable {}", key))
+        .map_err(|_| {
+            format!(
+                "Set billing_plans.paddle_price_id or environment variable {}",
+                key
+            )
+        })
         .and_then(|s| {
             let t = s.trim().to_string();
             if t.is_empty() {
@@ -309,11 +313,7 @@ pub async fn paddle_http_get_json(path: &str, base_override: &str) -> Result<Val
         .timeout(std::time::Duration::from_secs(45))
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!(
-        "{}{}",
-        base_override.trim_end_matches('/'),
-        path
-    );
+    let url = format!("{}{}", base_override.trim_end_matches('/'), path);
     let res = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", key))
@@ -459,12 +459,14 @@ pub async fn create_checkout_session_url(
 ) -> Result<String, String> {
     let _ = paddle_api_key()?;
     let price_id = resolve_paddle_price_id(pool, plan_slug).await?;
-    let row = sqlx::query("SELECT lower(trim(email)) AS email FROM users WHERE id = $1 AND tenant_id = $2")
-        .bind(user_id)
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row = sqlx::query(
+        "SELECT lower(trim(email)) AS email FROM users WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(user_id)
+    .bind(tenant_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
     let email: String = row
         .and_then(|r| r.try_get::<String, _>("email").ok())
         .filter(|e| !e.is_empty())
@@ -570,11 +572,19 @@ pub(crate) fn period_bounds_paddle(
     let starts = period
         .and_then(|p| p.get("starts_at"))
         .and_then(|x| x.as_str())
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc)));
+        .and_then(|s| {
+            DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|d| d.with_timezone(&Utc))
+        });
     let ends = period
         .and_then(|p| p.get("ends_at"))
         .and_then(|x| x.as_str())
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc)));
+        .and_then(|s| {
+            DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|d| d.with_timezone(&Utc))
+        });
     (starts, ends)
 }
 
@@ -634,13 +644,12 @@ pub async fn refresh_subscription_from_paddle_api(
     pool: &PgPool,
     tenant_id: i64,
 ) -> Result<String, String> {
-    let row = sqlx::query(
-        "SELECT paddle_subscription_id FROM tenant_subscriptions WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let row =
+        sqlx::query("SELECT paddle_subscription_id FROM tenant_subscriptions WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     let Some(r) = row else {
         return Err("No subscription row for tenant.".to_string());
     };
@@ -652,10 +661,7 @@ pub async fn refresh_subscription_from_paddle_api(
         );
     };
     let base = paddle_api_base()?;
-    let path = format!(
-        "/subscriptions/{}",
-        urlencoding::encode(sub_id.trim())
-    );
+    let path = format!("/subscriptions/{}", urlencoding::encode(sub_id.trim()));
     let v = paddle_http_get_json(&path, &base).await?;
     let data = v
         .get("data")

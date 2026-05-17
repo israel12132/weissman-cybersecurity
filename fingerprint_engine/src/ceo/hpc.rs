@@ -47,7 +47,8 @@ pub async fn get_hpc_policy(pool: &PgPool, tenant_id: i64) -> Result<HpcPolicyVi
                 .unwrap_or_else(|_| "0-15".into()),
             client_scan_cpu_affinity: std::env::var("WEISSMAN_GENESIS_CLIENT_SCAN_CPU_AFFINITY")
                 .unwrap_or_else(|_| "16-31".into()),
-            routing_note: "No row yet — defaults from environment. Run PUT to persist CEO policy.".into(),
+            routing_note: "No row yet — defaults from environment. Run PUT to persist CEO policy."
+                .into(),
             updated_at: chrono::Utc::now(),
         }
     };
@@ -86,9 +87,8 @@ pub async fn get_hpc_policy(pool: &PgPool, tenant_id: i64) -> Result<HpcPolicyVi
         }
     }
     let total_rc = research_running.saturating_add(client_running);
-    let actual_research_share_percent = (total_rc > 0).then_some(
-        ((research_running.saturating_mul(100)) / total_rc) as i16,
-    );
+    let actual_research_share_percent =
+        (total_rc > 0).then_some(((research_running.saturating_mul(100)) / total_rc) as i16);
 
     let worker_pool = std::env::var("WEISSMAN_WORKER_POOL").unwrap_or_default();
     let effective_routing = json!({

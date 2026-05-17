@@ -84,8 +84,7 @@ async fn process_one(
     let pool_clone = app_pool.clone();
     let jid = job.id;
     let hb_task = tokio::spawn(async move {
-        let mut interval =
-            tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
+        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
         while !hb_stop_bg.load(Ordering::SeqCst) {
             interval.tick().await;
             if hb_stop_bg.load(Ordering::SeqCst) {
@@ -107,16 +106,7 @@ async fn process_one(
     let exec_handle = tokio::spawn(async move {
         match exec_job.kind.as_str() {
             "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
-            _ => {
-                execute_job(
-                    exec_app,
-                    exec_intel,
-                    exec_auth,
-                    &exec_channels,
-                    exec_job,
-                )
-                .await
-            }
+            _ => execute_job(exec_app, exec_intel, exec_auth, &exec_channels, exec_job).await,
         }
     });
 
@@ -157,7 +147,10 @@ async fn process_one(
         Err(msg) => {
             if let Err(e) = job_queue::fail_job(pool, &job, &msg, BASE_BACKOFF_SECS).await {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
-                let note = format!("fail_job failed: {e}; original: {}", msg.chars().take(500).collect::<String>());
+                let note = format!(
+                    "fail_job failed: {e}; original: {}",
+                    msg.chars().take(500).collect::<String>()
+                );
                 let _ = job_queue::force_requeue_running(pool, job.id, &note).await;
             }
         }
@@ -191,8 +184,8 @@ async fn main() {
     };
     fingerprint_engine::observability::register_llm_tenant_metering(app_pool.clone());
 
-    let auth_url = std::env::var("WEISSMAN_AUTH_DATABASE_URL")
-        .unwrap_or_else(|_| database_url.clone());
+    let auth_url =
+        std::env::var("WEISSMAN_AUTH_DATABASE_URL").unwrap_or_else(|_| database_url.clone());
     if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(auth_url.trim()) {
         eprintln!("weissman-worker: WEISSMAN_AUTH_DATABASE_URL: {}", msg);
         std::process::exit(1);

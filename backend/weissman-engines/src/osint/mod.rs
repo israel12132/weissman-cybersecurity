@@ -2,7 +2,7 @@
 
 mod engine;
 
-pub use engine::{run_osint, OsintCyberEngine, run_osint_result};
+pub use engine::{run_osint, run_osint_result, OsintCyberEngine};
 use serde_json::Value;
 use std::collections::HashSet;
 

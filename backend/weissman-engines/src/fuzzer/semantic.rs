@@ -416,8 +416,7 @@ pub fn preflight_semantic_probe_body(body: &str, expect_json_wire: bool) -> Resu
         };
     }
     if p.starts_with('{') || p.starts_with('[') {
-        serde_json::from_str::<serde_json::Value>(p)
-            .map_err(|e| format!("json_syntax:{e}"))?;
+        serde_json::from_str::<serde_json::Value>(p).map_err(|e| format!("json_syntax:{e}"))?;
         return Ok(());
     }
     if expect_json_wire {
@@ -510,7 +509,10 @@ fn normalize_href_to_path(href: &str) -> Option<String> {
     if no_q.starts_with('/') {
         return normalize_probe_path(no_q);
     }
-    if let Some(rest) = no_q.strip_prefix("http://").or_else(|| no_q.strip_prefix("https://")) {
+    if let Some(rest) = no_q
+        .strip_prefix("http://")
+        .or_else(|| no_q.strip_prefix("https://"))
+    {
         let path_start = rest.find('/')?;
         let path = rest.get(path_start..)?;
         return normalize_probe_path(path);
@@ -727,11 +729,7 @@ async fn run_semantic_fallback_paths(
     )
     .await;
 
-    let mut crawl_seeds: Vec<String> = initial
-        .iter()
-        .chain(second_wave.iter())
-        .cloned()
-        .collect();
+    let mut crawl_seeds: Vec<String> = initial.iter().chain(second_wave.iter()).cloned().collect();
     crawl_seeds.sort();
     crawl_seeds.dedup();
     let html_paths =
@@ -864,9 +862,7 @@ pub async fn run_semantic_fuzz_result(
     let spec = match fetch_openapi(&base, &client, st_ref).await {
         Some(s) => s,
         None => {
-            let paths: Vec<String> = paths_opt
-                .clone()
-                .unwrap_or_else(expanded_path_wordlist);
+            let paths: Vec<String> = paths_opt.clone().unwrap_or_else(expanded_path_wordlist);
             let fallback_findings = run_semantic_fallback_paths(
                 &base,
                 &client,

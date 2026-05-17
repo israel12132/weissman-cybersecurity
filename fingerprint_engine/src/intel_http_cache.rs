@@ -45,10 +45,13 @@ fn github_adv_inner() -> Cache<String, Arc<Vec<u8>>> {
         .build()
 }
 
-static NVD_KEYWORD_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> = std::sync::OnceLock::new();
-static NVD_RECENT_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> = std::sync::OnceLock::new();
+static NVD_KEYWORD_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> =
+    std::sync::OnceLock::new();
+static NVD_RECENT_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> =
+    std::sync::OnceLock::new();
 static OSV_CACHE: std::sync::OnceLock<Cache<String, Arc<String>>> = std::sync::OnceLock::new();
-static GITHUB_ADV_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> = std::sync::OnceLock::new();
+static GITHUB_ADV_CACHE: std::sync::OnceLock<Cache<String, Arc<Vec<u8>>>> =
+    std::sync::OnceLock::new();
 
 pub fn nvd_keyword_cache() -> &'static Cache<String, Arc<Vec<u8>>> {
     NVD_KEYWORD_CACHE.get_or_init(nvd_keyword_inner)

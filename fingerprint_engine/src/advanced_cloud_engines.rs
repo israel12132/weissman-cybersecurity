@@ -3,7 +3,9 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_cloud_metadata_ssrf_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "cloud_metadata_ssrf",
@@ -13,7 +15,10 @@ pub async fn run_cloud_metadata_ssrf_result(target: &str) -> EngineResult {
         "description": "Simulated Cloud Metadata SSRF Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_metadata_ssrf(target: &str) {
@@ -29,7 +34,10 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1530",
         "description": "Simulated S3 Bucket Misconfiguration Attack finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_s3_bucket_attack(target: &str) {
@@ -37,7 +45,9 @@ pub async fn run_s3_bucket_attack(target: &str) {
 }
 
 pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "lambda_escape",
@@ -47,7 +57,10 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
         "description": "Simulated Lambda / Serverless Escape finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_lambda_escape(target: &str) {
@@ -63,7 +76,10 @@ pub async fn run_cloud_iam_escalation_result(target: &str) -> EngineResult {
         "mitre_attack": "T1078.004",
         "description": "Simulated Cloud IAM Privilege Escalation finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_iam_escalation(target: &str) {
@@ -71,7 +87,9 @@ pub async fn run_cloud_iam_escalation(target: &str) {
 }
 
 pub async fn run_kubernetes_rbac_escape_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "kubernetes_rbac_escape",
@@ -81,7 +99,10 @@ pub async fn run_kubernetes_rbac_escape_result(target: &str) -> EngineResult {
         "description": "Simulated Kubernetes RBAC Escape finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_kubernetes_rbac_escape(target: &str) {
@@ -89,7 +110,9 @@ pub async fn run_kubernetes_rbac_escape(target: &str) {
 }
 
 pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "azure_devops_attack",
@@ -99,7 +122,10 @@ pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Azure DevOps Pipeline Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_azure_devops_attack(target: &str) {
@@ -115,7 +141,10 @@ pub async fn run_gcp_privilege_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1078.004",
         "description": "Simulated GCP Privilege Escalation Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_gcp_privilege_attack(target: &str) {
@@ -123,7 +152,9 @@ pub async fn run_gcp_privilege_attack(target: &str) {
 }
 
 pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "terraform_state_attack",
@@ -133,7 +164,10 @@ pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Terraform State File Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_terraform_state_attack(target: &str) {
@@ -141,7 +175,9 @@ pub async fn run_terraform_state_attack(target: &str) {
 }
 
 pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "cloudformation_injection",
@@ -151,7 +187,10 @@ pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
         "description": "Simulated CloudFormation / ARM Template Injection finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloudformation_injection(target: &str) {
@@ -159,7 +198,9 @@ pub async fn run_cloudformation_injection(target: &str) {
 }
 
 pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "service_mesh_attack",
@@ -169,7 +210,10 @@ pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Service Mesh Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_service_mesh_attack(target: &str) {
@@ -185,7 +229,10 @@ pub async fn run_cloud_audit_evasion_result(target: &str) -> EngineResult {
         "mitre_attack": "T1562.008",
         "description": "Simulated Cloud Audit Log Evasion finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_audit_evasion(target: &str) {
@@ -193,7 +240,9 @@ pub async fn run_cloud_audit_evasion(target: &str) {
 }
 
 pub async fn run_ecr_registry_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "ecr_registry_attack",
@@ -203,7 +252,10 @@ pub async fn run_ecr_registry_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Container Registry Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_ecr_registry_attack(target: &str) {
@@ -219,7 +271,10 @@ pub async fn run_multi_cloud_pivot_result(target: &str) -> EngineResult {
         "mitre_attack": "T1199",
         "description": "Simulated Multi-Cloud Pivot Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_multi_cloud_pivot(target: &str) {
@@ -235,7 +290,10 @@ pub async fn run_cloud_worm_propagation_result(target: &str) -> EngineResult {
         "mitre_attack": "T1080",
         "description": "Simulated Cloud Worm Propagation Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_worm_propagation(target: &str) {
@@ -243,7 +301,9 @@ pub async fn run_cloud_worm_propagation(target: &str) {
 }
 
 pub async fn run_serverless_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "serverless_injection",
@@ -253,7 +313,10 @@ pub async fn run_serverless_injection_result(target: &str) -> EngineResult {
         "description": "Simulated Serverless Function Injection finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_serverless_injection(target: &str) {
@@ -269,7 +332,10 @@ pub async fn run_cloud_data_exfil_result(target: &str) -> EngineResult {
         "mitre_attack": "T1567.002",
         "description": "Simulated Cloud Storage Exfiltration finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_data_exfil(target: &str) {
@@ -277,7 +343,9 @@ pub async fn run_cloud_data_exfil(target: &str) {
 }
 
 pub async fn run_eks_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "eks_attack",
@@ -287,7 +355,10 @@ pub async fn run_eks_attack_result(target: &str) -> EngineResult {
         "description": "Simulated EKS/AKS/GKE Managed K8s Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_eks_attack(target: &str) {
@@ -303,7 +374,10 @@ pub async fn run_cloud_network_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1557",
         "description": "Simulated Cloud Network Attack Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_network_attack(target: &str) {
@@ -319,7 +393,10 @@ pub async fn run_secrets_manager_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1555",
         "description": "Simulated Cloud Secrets Manager Attack finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_secrets_manager_attack(target: &str) {
@@ -335,7 +412,10 @@ pub async fn run_cloud_privilege_persistence_result(target: &str) -> EngineResul
         "mitre_attack": "T1098",
         "description": "Simulated Cloud Persistence Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_cloud_privilege_persistence(target: &str) {

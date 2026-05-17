@@ -41,7 +41,8 @@ pub async fn run_deception_cloud_deploy(
 
     let client_id: i64 = row.try_get("client_id").map_err(|e| e.to_string())?;
     let status: String = row.try_get("status").map_err(|e| e.to_string())?;
-    let req_json: sqlx::types::Json<Value> = row.try_get("request_json").map_err(|e| e.to_string())?;
+    let req_json: sqlx::types::Json<Value> =
+        row.try_get("request_json").map_err(|e| e.to_string())?;
 
     if status == "active" {
         let _ = tx.commit().await;
@@ -65,7 +66,8 @@ pub async fn run_deception_cloud_deploy(
 
     let _ = tx.commit().await.map_err(|e| e.to_string())?;
 
-    let body: DeployRequest = serde_json::from_value(req_json.0.clone()).map_err(|e| e.to_string())?;
+    let body: DeployRequest =
+        serde_json::from_value(req_json.0.clone()).map_err(|e| e.to_string())?;
 
     let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tenant_id)
         .await
@@ -86,7 +88,13 @@ pub async fn run_deception_cloud_deploy(
             r.try_get::<String, _>("ext").unwrap_or_default(),
         ),
         None => {
-            mark_failed(app_pool.as_ref(), tenant_id, deployment_id, "client not found").await;
+            mark_failed(
+                app_pool.as_ref(),
+                tenant_id,
+                deployment_id,
+                "client not found",
+            )
+            .await;
             return Ok(json!({
                 "ok": false,
                 "deployment_id": deployment_id,
@@ -118,19 +126,20 @@ pub async fn run_deception_cloud_deploy(
         session_name: "weissman-deception-deploy".into(),
     };
 
-    let (sdk, home_region) = match crate::cloud_integration_engine::assume_role_sdk_config(&aws_cfg).await {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = e.to_string();
-            mark_failed(app_pool.as_ref(), tenant_id, deployment_id, &msg).await;
-            return Ok(json!({
-                "ok": false,
-                "deployment_id": deployment_id,
-                "status": "failed",
-                "error": msg,
-            }));
-        }
-    };
+    let (sdk, home_region) =
+        match crate::cloud_integration_engine::assume_role_sdk_config(&aws_cfg).await {
+            Ok(x) => x,
+            Err(e) => {
+                let msg = e.to_string();
+                mark_failed(app_pool.as_ref(), tenant_id, deployment_id, &msg).await;
+                return Ok(json!({
+                    "ok": false,
+                    "deployment_id": deployment_id,
+                    "status": "failed",
+                    "error": msg,
+                }));
+            }
+        };
 
     let region = body
         .s3_region
@@ -145,7 +154,13 @@ pub async fn run_deception_cloud_deploy(
     };
 
     let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await else {
-        mark_failed(app_pool.as_ref(), tenant_id, deployment_id, "database unavailable").await;
+        mark_failed(
+            app_pool.as_ref(),
+            tenant_id,
+            deployment_id,
+            "database unavailable",
+        )
+        .await;
         return Ok(json!({
             "ok": false,
             "deployment_id": deployment_id,
@@ -200,13 +215,7 @@ pub async fn run_deception_cloud_deploy(
     let failed = deployed == 0 && !body.asset_ids.is_empty();
     let new_status = if failed { "failed" } else { "active" };
     let last_err = if failed {
-        Some(
-            errors
-                .join("; ")
-                .chars()
-                .take(4000)
-                .collect::<String>(),
-        )
+        Some(errors.join("; ").chars().take(4000).collect::<String>())
     } else {
         None
     };

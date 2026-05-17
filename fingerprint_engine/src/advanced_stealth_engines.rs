@@ -3,7 +3,9 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_process_hollowing_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "process_hollowing",
@@ -13,7 +15,10 @@ pub async fn run_process_hollowing_result(target: &str) -> EngineResult {
         "description": "Simulated Process Hollowing Detector finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_process_hollowing(target: &str) {
@@ -21,7 +26,9 @@ pub async fn run_process_hollowing(target: &str) {
 }
 
 pub async fn run_dll_hijacking_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "dll_hijacking_engine",
@@ -31,7 +38,10 @@ pub async fn run_dll_hijacking_engine_result(target: &str) -> EngineResult {
         "description": "Simulated DLL Hijacking Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_dll_hijacking_engine(target: &str) {
@@ -39,7 +49,9 @@ pub async fn run_dll_hijacking_engine(target: &str) {
 }
 
 pub async fn run_living_off_land_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "living_off_land",
@@ -49,7 +61,10 @@ pub async fn run_living_off_land_result(target: &str) -> EngineResult {
         "description": "Simulated Living-Off-The-Land Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_living_off_land(target: &str) {
@@ -65,7 +80,10 @@ pub async fn run_sandbox_evasion_result(target: &str) -> EngineResult {
         "mitre_attack": "T1497",
         "description": "Simulated Sandbox Evasion Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_sandbox_evasion(target: &str) {
@@ -81,7 +99,10 @@ pub async fn run_rootkit_simulation_result(target: &str) -> EngineResult {
         "mitre_attack": "T1014",
         "description": "Simulated Kernel Rootkit Simulation finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_rootkit_simulation(target: &str) {
@@ -97,7 +118,10 @@ pub async fn run_memory_forensics_evasion_result(target: &str) -> EngineResult {
         "mitre_attack": "T1055",
         "description": "Simulated Memory Forensics Evasion finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_memory_forensics_evasion(target: &str) {
@@ -113,7 +137,10 @@ pub async fn run_av_bypass_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1562.001",
         "description": "Simulated AV/EDR Bypass Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_av_bypass_engine(target: &str) {
@@ -121,7 +148,9 @@ pub async fn run_av_bypass_engine(target: &str) {
 }
 
 pub async fn run_dns_tunneling_c2_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "dns_tunneling_c2",
@@ -131,7 +160,10 @@ pub async fn run_dns_tunneling_c2_result(target: &str) -> EngineResult {
         "description": "Simulated DNS Tunneling C2 Channel finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_dns_tunneling_c2(target: &str) {
@@ -139,7 +171,9 @@ pub async fn run_dns_tunneling_c2(target: &str) {
 }
 
 pub async fn run_steganography_c2_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "steganography_c2",
@@ -149,7 +183,10 @@ pub async fn run_steganography_c2_result(target: &str) -> EngineResult {
         "description": "Simulated Steganography C2 Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_steganography_c2(target: &str) {
@@ -157,7 +194,9 @@ pub async fn run_steganography_c2(target: &str) {
 }
 
 pub async fn run_https_c2_masquerade_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "https_c2_masquerade",
@@ -167,7 +206,10 @@ pub async fn run_https_c2_masquerade_result(target: &str) -> EngineResult {
         "description": "Simulated HTTPS C2 Domain Fronting finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_https_c2_masquerade(target: &str) {
@@ -175,7 +217,9 @@ pub async fn run_https_c2_masquerade(target: &str) {
 }
 
 pub async fn run_icmp_covert_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "icmp_covert",
@@ -185,7 +229,10 @@ pub async fn run_icmp_covert_result(target: &str) -> EngineResult {
         "description": "Simulated ICMP Covert Channel finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_icmp_covert(target: &str) {
@@ -201,7 +248,10 @@ pub async fn run_rop_chain_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1203",
         "description": "Simulated ROP Chain Construction Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_rop_chain_engine(target: &str) {
@@ -217,7 +267,10 @@ pub async fn run_heap_exploitation_result(target: &str) -> EngineResult {
         "mitre_attack": "T1203",
         "description": "Simulated Heap Exploitation Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_heap_exploitation(target: &str) {
@@ -225,7 +278,9 @@ pub async fn run_heap_exploitation(target: &str) {
 }
 
 pub async fn run_timing_evasion_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "timing_evasion_engine",
@@ -235,7 +290,10 @@ pub async fn run_timing_evasion_engine_result(target: &str) -> EngineResult {
         "description": "Simulated Timing-Based Evasion Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_timing_evasion_engine(target: &str) {
@@ -243,7 +301,9 @@ pub async fn run_timing_evasion_engine(target: &str) {
 }
 
 pub async fn run_log_tampering_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "log_tampering_engine",
@@ -253,7 +313,10 @@ pub async fn run_log_tampering_engine_result(target: &str) -> EngineResult {
         "description": "Simulated Log Tampering & Destruction finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_log_tampering_engine(target: &str) {
@@ -261,7 +324,9 @@ pub async fn run_log_tampering_engine(target: &str) {
 }
 
 pub async fn run_jit_spray_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "jit_spray",
@@ -271,7 +336,10 @@ pub async fn run_jit_spray_result(target: &str) -> EngineResult {
         "description": "Simulated JIT Spray Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_jit_spray(target: &str) {
@@ -287,7 +355,10 @@ pub async fn run_com_hijacking_result(target: &str) -> EngineResult {
         "mitre_attack": "T1546.015",
         "description": "Simulated COM Object Hijacking finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_com_hijacking(target: &str) {
@@ -295,7 +366,9 @@ pub async fn run_com_hijacking(target: &str) {
 }
 
 pub async fn run_network_traffic_masking_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "network_traffic_masking",
@@ -305,7 +378,10 @@ pub async fn run_network_traffic_masking_result(target: &str) -> EngineResult {
         "description": "Simulated Network Traffic Masking Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_network_traffic_masking(target: &str) {
@@ -321,7 +397,10 @@ pub async fn run_anti_debug_evasion_result(target: &str) -> EngineResult {
         "mitre_attack": "T1497.001",
         "description": "Simulated Anti-Debug & Anti-Analysis Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_anti_debug_evasion(target: &str) {
@@ -337,7 +416,10 @@ pub async fn run_parent_pid_spoof_result(target: &str) -> EngineResult {
         "mitre_attack": "T1134.004",
         "description": "Simulated Parent PID Spoofing Engine finding detected.",
     }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Engine: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_parent_pid_spoof(target: &str) {

@@ -12,18 +12,27 @@ async fn build_client() -> reqwest::Client {
 }
 
 fn extract_domain(target: &str) -> String {
-    let t = target.trim().trim_start_matches("http://").trim_start_matches("https://");
+    let t = target
+        .trim()
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
     let t = t.split('/').next().unwrap_or(t);
     t.split(':').next().unwrap_or(t).to_string()
 }
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        format!("https://{}", t)
+    }
 }
 
 pub async fn run_pki_tls_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let client = build_client().await;
     let base = normalize_target(target);
     let domain = extract_domain(target);
@@ -61,7 +70,10 @@ pub async fn run_pki_tls_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("PKI/TLS: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("PKI/TLS: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_pki_tls(target: &str) {

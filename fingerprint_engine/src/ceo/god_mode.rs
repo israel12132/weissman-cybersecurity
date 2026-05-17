@@ -129,7 +129,9 @@ pub async fn default_scan_interval_secs_get(app_pool: &PgPool) -> u64 {
     .await
     .ok()
     .flatten();
-    cell.and_then(|x| x.parse().ok()).unwrap_or(60).clamp(10, 86_400)
+    cell.and_then(|x| x.parse().ok())
+        .unwrap_or(60)
+        .clamp(10, 86_400)
 }
 
 pub async fn default_scan_interval_secs_set(app_pool: &PgPool, secs: u64) -> Result<(), String> {

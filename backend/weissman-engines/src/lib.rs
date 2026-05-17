@@ -22,8 +22,8 @@ pub mod stealth;
 pub use context::{EngineRunOutcome, ScanContext};
 pub use engine_trait::CyberEngine;
 pub use factory::phase2_cyber_engines;
-pub use result::EngineResult;
 pub use llm_json_repair::{deserialize_llm_json, extract_balanced_object, parse_value_from_llm};
+pub use result::EngineResult;
 pub use stealth::StealthConfig;
 
 #[must_use]

@@ -28,7 +28,11 @@ fn looks_like_jwt(value: &str) -> bool {
     if parts.len() != 3 {
         return false;
     }
-    parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '='))
+    parts.iter().all(|p| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '=')
+    })
 }
 
 /// Decode base64url segment (no padding required).
@@ -104,7 +108,10 @@ pub async fn run_jwt_attack_result(target: &str) -> EngineResult {
         for (name, value) in resp.headers().iter() {
             let val_str = value.to_str().unwrap_or("");
             let hname = name.as_str().to_lowercase();
-            if hname.contains("authorization") || hname.contains("token") || hname.contains("cookie") {
+            if hname.contains("authorization")
+                || hname.contains("token")
+                || hname.contains("cookie")
+            {
                 for word in val_str.split_whitespace() {
                     if looks_like_jwt(word) {
                         jwt_candidates.push(word.to_string());

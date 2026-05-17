@@ -40,8 +40,12 @@ fn webhook_hmac_key(secret: &str) -> &[u8] {
 }
 
 /// Verifies `Paddle-Signature` and returns the parsed JSON notification body.
-pub fn verify_paddle_payload(signature_header: &str, body: &[u8]) -> Result<Value, PaddleWebhookError> {
-    let secret = std::env::var("PADDLE_WEBHOOK_SECRET").map_err(|_| PaddleWebhookError::SecretMissing)?;
+pub fn verify_paddle_payload(
+    signature_header: &str,
+    body: &[u8],
+) -> Result<Value, PaddleWebhookError> {
+    let secret =
+        std::env::var("PADDLE_WEBHOOK_SECRET").map_err(|_| PaddleWebhookError::SecretMissing)?;
     let key = webhook_hmac_key(secret.trim());
     if key.is_empty() {
         return Err(PaddleWebhookError::SecretInvalid);
@@ -72,9 +76,9 @@ pub fn verify_paddle_payload(signature_header: &str, body: &[u8]) -> Result<Valu
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| PaddleWebhookError::Signature(e.to_string()))?
         .as_secs() as i64;
-    let tsi: i64 = ts
-        .parse()
-        .map_err(|_| PaddleWebhookError::Signature("Invalid timestamp in Paddle-Signature".into()))?;
+    let tsi: i64 = ts.parse().map_err(|_| {
+        PaddleWebhookError::Signature("Invalid timestamp in Paddle-Signature".into())
+    })?;
     if (now - tsi).abs() > 600 {
         return Err(PaddleWebhookError::Signature(
             "Paddle webhook timestamp outside tolerance".into(),
@@ -86,8 +90,7 @@ pub fn verify_paddle_payload(signature_header: &str, body: &[u8]) -> Result<Valu
     signed.push(b':');
     signed.extend_from_slice(body);
 
-    let mut mac = HmacSha256::new_from_slice(key)
-        .map_err(|_| PaddleWebhookError::SecretInvalid)?;
+    let mut mac = HmacSha256::new_from_slice(key).map_err(|_| PaddleWebhookError::SecretInvalid)?;
     mac.update(&signed);
     let expected = mac.finalize().into_bytes();
 
@@ -241,7 +244,9 @@ async fn apply_event(pool: &PgPool, event_type: &str, event: &Value) -> Result<(
                 .await
                 .map_err(|e| e.to_string())
         }
-        "transaction.completed" | "transaction.paid" => handle_transaction_payment(pool, &data).await,
+        "transaction.completed" | "transaction.paid" => {
+            handle_transaction_payment(pool, &data).await
+        }
         _ => Ok(()),
     }
 }

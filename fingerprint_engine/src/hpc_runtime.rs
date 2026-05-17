@@ -113,11 +113,7 @@ mod linux_affinity {
                 ));
             }
             libc::CPU_SET(cpu, &mut set);
-            let rc = libc::sched_setaffinity(
-                0,
-                std::mem::size_of::<libc::cpu_set_t>(),
-                &set,
-            );
+            let rc = libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set);
             if rc != 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -129,9 +125,7 @@ mod linux_affinity {
 #[cfg(target_os = "linux")]
 mod linux_numa {
     use hwlocality::{
-        cpu::binding::CpuBindingFlags,
-        cpu::cpuset::CpuSet,
-        object::types::ObjectType,
+        cpu::binding::CpuBindingFlags, cpu::cpuset::CpuSet, object::types::ObjectType,
         topology::Topology,
     };
 

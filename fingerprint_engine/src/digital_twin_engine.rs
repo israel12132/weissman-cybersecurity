@@ -37,9 +37,21 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
         let headers = resp.headers().clone();
         let status = resp.status().as_u16();
 
-        let server = headers.get("server").and_then(|v| v.to_str().ok()).unwrap_or("unknown").to_string();
-        let powered_by = headers.get("x-powered-by").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-        let content_type = headers.get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        let server = headers
+            .get("server")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string();
+        let powered_by = headers
+            .get("x-powered-by")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        let content_type = headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
         let has_hsts = headers.contains_key("strict-transport-security");
         let has_csp = headers.contains_key("content-security-policy");
         let has_cors = headers.contains_key("access-control-allow-origin");
@@ -153,7 +165,11 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!("DigitalTwin: {} simulation scenarios generated for {}", findings.len(), base),
+        format!(
+            "DigitalTwin: {} simulation scenarios generated for {}",
+            findings.len(),
+            base
+        ),
     )
 }
 

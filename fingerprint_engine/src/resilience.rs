@@ -10,7 +10,9 @@ use tokio::time::sleep;
 /// This prevents thundering-herd on retry storms (see AWS Architecture Blog: "Exponential Backoff
 /// And Jitter").
 pub fn jittered_backoff_duration(base_ms: u64, attempt: u32, cap_ms: u64) -> Duration {
-    let exp = base_ms.saturating_mul(2u64.saturating_pow(attempt)).min(cap_ms);
+    let exp = base_ms
+        .saturating_mul(2u64.saturating_pow(attempt))
+        .min(cap_ms);
     // Use the low bits of a cheap wall-clock read as entropy — no crypto quality needed here.
     let entropy = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

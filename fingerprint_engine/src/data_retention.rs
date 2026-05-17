@@ -21,10 +21,12 @@ async fn run_intel_ephemeral_retention(pool: &PgPool, days: i64) -> Result<u64, 
 }
 
 async fn run_intel_dynamic_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query(r#"DELETE FROM intel.dynamic_payloads WHERE added_at < now() - make_interval(days => $1)"#)
-        .bind(days)
-        .execute(pool)
-        .await?;
+    let r = sqlx::query(
+        r#"DELETE FROM intel.dynamic_payloads WHERE added_at < now() - make_interval(days => $1)"#,
+    )
+    .bind(days)
+    .execute(pool)
+    .await?;
     Ok(r.rows_affected())
 }
 

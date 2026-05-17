@@ -93,7 +93,8 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
                 }));
             } else if status == 200 || status == 201 || status == 500 {
                 // Endpoint processed the XML — check if it errored on entity expansion
-                let entity_processed = body.contains("xxe") || body.contains("DOCTYPE") || body.contains("ENTITY");
+                let entity_processed =
+                    body.contains("xxe") || body.contains("DOCTYPE") || body.contains("ENTITY");
                 if entity_processed {
                     findings.push(json!({
                         "type": "xxe",

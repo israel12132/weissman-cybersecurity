@@ -27,7 +27,21 @@ pub async fn run_ssrf_advanced_result(target: &str) -> EngineResult {
     let base = base_url(target);
     let mut findings = Vec::new();
 
-    let ssrf_params = ["url", "webhook", "redirect", "callback", "fetch", "endpoint", "uri", "target", "src", "source", "dest", "destination", "load"];
+    let ssrf_params = [
+        "url",
+        "webhook",
+        "redirect",
+        "callback",
+        "fetch",
+        "endpoint",
+        "uri",
+        "target",
+        "src",
+        "source",
+        "dest",
+        "destination",
+        "load",
+    ];
     let metadata_urls = [
         "http://169.254.169.254/latest/meta-data/",
         "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
@@ -87,15 +101,21 @@ pub async fn run_ssrf_advanced_result(target: &str) -> EngineResult {
     }
 
     // Probe open redirectors
-    let redirect_params = ["url", "next", "return", "returnUrl", "return_url", "redirect", "redir", "goto", "forward"];
+    let redirect_params = [
+        "url",
+        "next",
+        "return",
+        "returnUrl",
+        "return_url",
+        "redirect",
+        "redir",
+        "goto",
+        "forward",
+    ];
     let redirect_target = "https://example.com/ssrf-open-redirect-test";
     for param in &redirect_params {
         let probe_url = format!("{}/?{}={}", base, param, redirect_target);
-        if let Ok(resp) = client
-            .get(&probe_url)
-            .send()
-            .await
-        {
+        if let Ok(resp) = client.get(&probe_url).send().await {
             let status = resp.status().as_u16();
             if status == 301 || status == 302 || status == 307 || status == 308 {
                 if let Some(loc) = resp.headers().get("location") {

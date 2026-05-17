@@ -168,7 +168,10 @@ pub async fn run_aws_attack_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("AWS Attack: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("AWS Attack: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_aws_attack(target: &str) {

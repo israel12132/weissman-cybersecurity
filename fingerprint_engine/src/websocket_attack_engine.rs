@@ -27,7 +27,18 @@ pub async fn run_websocket_attack_result(target: &str) -> EngineResult {
     let base = base_url(target);
     let mut findings = Vec::new();
 
-    let ws_paths = ["/ws", "/wss", "/websocket", "/socket.io", "/socket", "/chat", "/live", "/realtime", "/api/ws", "/events"];
+    let ws_paths = [
+        "/ws",
+        "/wss",
+        "/websocket",
+        "/socket.io",
+        "/socket",
+        "/chat",
+        "/live",
+        "/realtime",
+        "/api/ws",
+        "/events",
+    ];
 
     for path in &ws_paths {
         let url = format!("{}{}", base, path);
@@ -122,7 +133,10 @@ pub async fn run_websocket_attack_result(target: &str) -> EngineResult {
     if let Ok(resp) = client.get(&base).send().await {
         if resp.status().as_u16() == 200 {
             let body = resp.text().await.unwrap_or_default();
-            if body.contains("new WebSocket(") || body.contains("io.connect(") || body.contains("socket.io") {
+            if body.contains("new WebSocket(")
+                || body.contains("io.connect(")
+                || body.contains("socket.io")
+            {
                 findings.push(json!({
                     "type": "websocket_attack",
                     "title": "WebSocket Client Code Detected in Page Source",

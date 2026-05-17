@@ -58,7 +58,13 @@ const SENSITIVE_PATHS: &[SensitivePath] = &[
         path: "/inventory",
         label: "Ansible Inventory",
         severity: "high",
-        indicators: &["[all]", "[webservers]", "[defaults]", "ansible_host", "ansible_user"],
+        indicators: &[
+            "[all]",
+            "[webservers]",
+            "[defaults]",
+            "ansible_host",
+            "ansible_user",
+        ],
     },
     SensitivePath {
         path: "/hosts",
@@ -82,7 +88,14 @@ const SENSITIVE_PATHS: &[SensitivePath] = &[
         path: "/.env",
         label: "Environment Variables File",
         severity: "critical",
-        indicators: &["DB_PASSWORD", "SECRET_KEY", "API_KEY", "PASSWORD", "TOKEN", "="],
+        indicators: &[
+            "DB_PASSWORD",
+            "SECRET_KEY",
+            "API_KEY",
+            "PASSWORD",
+            "TOKEN",
+            "=",
+        ],
     },
     SensitivePath {
         path: "/docker-compose.yml",
@@ -199,7 +212,10 @@ pub async fn run_iac_misconfig_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("IaC Misconfig: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("IaC Misconfig: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_iac_misconfig(target: &str) {

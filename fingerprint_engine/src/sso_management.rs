@@ -24,9 +24,9 @@ use serde_json::{json, Value};
 use sqlx::Row;
 use std::sync::Arc;
 
+use crate::auth_jwt::AuthContext;
 use crate::db;
 use crate::http::AppState;
-use crate::auth_jwt::AuthContext;
 
 // ─── Request / response shapes ────────────────────────────────────────────────
 
@@ -162,7 +162,13 @@ pub async fn api_sso_idps_list(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
     let rows = sqlx::query(
         r#"SELECT id, name, provider, vendor_hint, issuer_url, client_id,
@@ -184,7 +190,11 @@ pub async fn api_sso_idps_list(
             let items: Vec<Value> = rows.iter().map(row_to_json).collect();
             Json(json!({"idps": items, "count": items.len()})).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -197,20 +207,44 @@ pub async fn api_sso_idps_create(
 ) -> Response {
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "name required"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "name required"})),
+        )
+            .into_response();
     }
     let Some(provider) = norm_provider(body.provider.trim()) else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "provider must be 'oidc' or 'saml'"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "provider must be 'oidc' or 'saml'"})),
+        )
+            .into_response();
     };
     let vendor_hint = norm_vendor_hint(body.vendor_hint.trim()).to_string();
     let issuer_url = body.issuer_url.as_deref().unwrap_or("").trim().to_string();
     let client_id = body.client_id.as_deref().unwrap_or("").trim().to_string();
-    let redirect_path = body.redirect_path.as_deref().unwrap_or("/api/auth/oidc/callback").trim().to_string();
-    let email_claim = body.email_claim.as_deref().unwrap_or("email").trim().to_string();
+    let redirect_path = body
+        .redirect_path
+        .as_deref()
+        .unwrap_or("/api/auth/oidc/callback")
+        .trim()
+        .to_string();
+    let email_claim = body
+        .email_claim
+        .as_deref()
+        .unwrap_or("email")
+        .trim()
+        .to_string();
 
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
 
     let row = sqlx::query(
@@ -249,10 +283,16 @@ pub async fn api_sso_idps_create(
 
     match row {
         Ok(r) => (StatusCode::CREATED, Json(row_to_json(&r))).into_response(),
-        Err(e) if e.to_string().contains("unique") || e.to_string().contains("duplicate") => {
-            (StatusCode::CONFLICT, Json(json!({"error": "name already exists for this tenant"}))).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) if e.to_string().contains("unique") || e.to_string().contains("duplicate") => (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "name already exists for this tenant"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -265,7 +305,13 @@ pub async fn api_sso_idp_get(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
     let row = sqlx::query(
         r#"SELECT id, name, provider, vendor_hint, issuer_url, client_id,
@@ -285,7 +331,11 @@ pub async fn api_sso_idp_get(
     match row {
         Ok(Some(r)) => Json(row_to_json(&r)).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -299,7 +349,13 @@ pub async fn api_sso_idp_patch(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
 
     // Build dynamic SET clause only for provided fields
@@ -331,7 +387,11 @@ pub async fn api_sso_idp_patch(
 
     if sets.is_empty() {
         let _ = tx.rollback().await;
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "no fields to update"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "no fields to update"})),
+        )
+            .into_response();
     }
 
     let sql = format!(
@@ -347,20 +407,48 @@ pub async fn api_sso_idp_patch(
 
     let mut q = sqlx::query(&sql).bind(idp_id).bind(auth.tenant_id);
 
-    if let Some(v) = body.name.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.vendor_hint.as_deref() { q = q.bind(norm_vendor_hint(v.trim())); }
-    if let Some(v) = body.issuer_url.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.client_id.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.client_secret.as_deref() { q = q.bind(v); }
-    if let Some(v) = body.redirect_path.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.email_claim.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.jwks_uri_override.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.azure_tenant_id.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.okta_domain.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.saml_idp_sso_url.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.saml_idp_cert_pem.as_deref() { q = q.bind(v); }
-    if let Some(v) = body.sp_entity_id.as_deref() { q = q.bind(v.trim()); }
-    if let Some(v) = body.active { q = q.bind(v); }
+    if let Some(v) = body.name.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.vendor_hint.as_deref() {
+        q = q.bind(norm_vendor_hint(v.trim()));
+    }
+    if let Some(v) = body.issuer_url.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.client_id.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.client_secret.as_deref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = body.redirect_path.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.email_claim.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.jwks_uri_override.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.azure_tenant_id.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.okta_domain.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.saml_idp_sso_url.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.saml_idp_cert_pem.as_deref() {
+        q = q.bind(v);
+    }
+    if let Some(v) = body.sp_entity_id.as_deref() {
+        q = q.bind(v.trim());
+    }
+    if let Some(v) = body.active {
+        q = q.bind(v);
+    }
 
     let row = q.fetch_optional(&mut *tx).await;
     let _ = tx.commit().await;
@@ -368,7 +456,11 @@ pub async fn api_sso_idp_patch(
     match row {
         Ok(Some(r)) => Json(row_to_json(&r)).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -381,17 +473,22 @@ pub async fn api_sso_idp_delete(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
-    let deleted: Option<i64> = sqlx::query_scalar(
-        "DELETE FROM tenant_idps WHERE id = $1 AND tenant_id = $2 RETURNING id",
-    )
-    .bind(idp_id)
-    .bind(auth.tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+    let deleted: Option<i64> =
+        sqlx::query_scalar("DELETE FROM tenant_idps WHERE id = $1 AND tenant_id = $2 RETURNING id")
+            .bind(idp_id)
+            .bind(auth.tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten();
     let _ = tx.commit().await;
 
     if deleted.is_some() {
@@ -410,7 +507,13 @@ pub async fn api_sso_idp_toggle(
 ) -> Response {
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
     let new_active: Option<bool> = sqlx::query_scalar(
         "UPDATE tenant_idps SET active = NOT active WHERE id = $1 AND tenant_id = $2 RETURNING active",
@@ -444,7 +547,13 @@ pub async fn api_sso_idp_test(
     // Fetch IdP config
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
-        Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
     let row = sqlx::query(
         "SELECT provider, issuer_url, saml_idp_sso_url FROM tenant_idps WHERE id = $1 AND tenant_id = $2",
@@ -463,7 +572,8 @@ pub async fn api_sso_idp_test(
     let saml_url: Option<String> = row.try_get("saml_idp_sso_url").ok().flatten();
 
     // Perform the connectivity test
-    let (ok, error_msg, detail) = perform_test_connection(&provider, &issuer_url, saml_url.as_deref()).await;
+    let (ok, error_msg, detail) =
+        perform_test_connection(&provider, &issuer_url, saml_url.as_deref()).await;
 
     // Persist the result
     let mut tx2 = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
@@ -486,8 +596,16 @@ pub async fn api_sso_idp_test(
     .await;
     let _ = tx2.commit().await;
 
-    let status = if ok { StatusCode::OK } else { StatusCode::BAD_GATEWAY };
-    (status, Json(json!({"ok": ok, "error": error_msg, "detail": detail}))).into_response()
+    let status = if ok {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_GATEWAY
+    };
+    (
+        status,
+        Json(json!({"ok": ok, "error": error_msg, "detail": detail})),
+    )
+        .into_response()
 }
 
 /// Validates that a URL is a safe HTTPS URL for use in outgoing requests.
@@ -529,7 +647,11 @@ fn validate_outbound_url(url: &str) -> Result<(), String> {
     }
 
     // Block metadata service hostnames commonly used in SSRF
-    let blocked_hosts = ["metadata.google.internal", "169.254.169.254", "fd00:ec2::254"];
+    let blocked_hosts = [
+        "metadata.google.internal",
+        "169.254.169.254",
+        "fd00:ec2::254",
+    ];
     if blocked_hosts.contains(&host) {
         return Err("URL host is not allowed".to_string());
     }
@@ -555,7 +677,11 @@ async fn perform_test_connection(
     if provider == "oidc" {
         // Validate issuer URL before making outbound request (SSRF protection)
         if let Err(e) = validate_outbound_url(issuer_url) {
-            return (false, Some(format!("issuer_url validation failed: {e}")), json!({}));
+            return (
+                false,
+                Some(format!("issuer_url validation failed: {e}")),
+                json!({}),
+            );
         }
         // OIDC discovery
         let discovery_url = format!(
@@ -563,43 +689,61 @@ async fn perform_test_connection(
             issuer_url.trim_end_matches('/')
         );
         match client.get(&discovery_url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<Value>().await {
-                    Ok(doc) => {
-                        let has_issuer = doc.get("issuer").is_some();
-                        let has_jwks = doc.get("jwks_uri").is_some();
-                        if has_issuer && has_jwks {
-                            (true, None, json!({
+            Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
+                Ok(doc) => {
+                    let has_issuer = doc.get("issuer").is_some();
+                    let has_jwks = doc.get("jwks_uri").is_some();
+                    if has_issuer && has_jwks {
+                        (
+                            true,
+                            None,
+                            json!({
                                 "discovery_url": discovery_url,
                                 "issuer": doc.get("issuer"),
                                 "authorization_endpoint": doc.get("authorization_endpoint"),
                                 "token_endpoint": doc.get("token_endpoint"),
                                 "userinfo_endpoint": doc.get("userinfo_endpoint"),
                                 "jwks_uri": doc.get("jwks_uri"),
-                            }))
-                        } else {
-                            (false, Some("discovery document missing issuer or jwks_uri".to_string()), doc)
-                        }
+                            }),
+                        )
+                    } else {
+                        (
+                            false,
+                            Some("discovery document missing issuer or jwks_uri".to_string()),
+                            doc,
+                        )
                     }
-                    Err(e) => (false, Some(format!("invalid JSON: {e}")), json!({})),
                 }
-            }
+                Err(e) => (false, Some(format!("invalid JSON: {e}")), json!({})),
+            },
             Ok(resp) => (
                 false,
                 Some(format!("HTTP {}", resp.status())),
                 json!({"discovery_url": discovery_url}),
             ),
-            Err(e) => (false, Some(e.to_string()), json!({"discovery_url": discovery_url})),
+            Err(e) => (
+                false,
+                Some(e.to_string()),
+                json!({"discovery_url": discovery_url}),
+            ),
         }
     } else {
         // SAML: attempt to fetch metadata / SSO URL
         let url = saml_url.unwrap_or(issuer_url);
         if url.is_empty() {
-            return (false, Some("saml_idp_sso_url not configured".to_string()), json!({}));
+            return (
+                false,
+                Some("saml_idp_sso_url not configured".to_string()),
+                json!({}),
+            );
         }
         // Validate URL before outbound request (SSRF protection)
         if let Err(e) = validate_outbound_url(url) {
-            return (false, Some(format!("URL validation failed: {e}")), json!({}));
+            return (
+                false,
+                Some(format!("URL validation failed: {e}")),
+                json!({}),
+            );
         }
         match client.get(url).send().await {
             Ok(resp) if resp.status().is_success() => {
@@ -612,9 +756,17 @@ async fn perform_test_connection(
                 let body = resp.text().await.unwrap_or_default();
                 let is_xml = body.trim_start().starts_with('<');
                 if is_xml {
-                    (true, None, json!({"url": url, "content_type": content_type, "byte_length": body.len()}))
+                    (
+                        true,
+                        None,
+                        json!({"url": url, "content_type": content_type, "byte_length": body.len()}),
+                    )
                 } else {
-                    (false, Some("response does not look like SAML XML/metadata".to_string()), json!({"url": url}))
+                    (
+                        false,
+                        Some("response does not look like SAML XML/metadata".to_string()),
+                        json!({"url": url}),
+                    )
                 }
             }
             Ok(resp) => (
