@@ -3942,7 +3942,7 @@ export const ENGINES_REGISTRY = [
   {
     id: 'tpm_firmware_attack',
     label: 'TPM Firmware Attack Engine',
-    group: 'ot',
+    group: 'crypto',
     mitre: 'T1600',
     description: 'Trusted Platform Module exploitation: TPM 1.2/2.0 bus sniffing for key extraction (CVE-2018-6622 pattern), TPM-Fail timing attack on ECDSA nonces, ROMhole vulnerability, TPM reset attack via suspend/resume, Infineon RSA keygen flaw simulation, FIDO2 TPM-backed credential attack',
     requiresTarget: false,
@@ -3966,7 +3966,7 @@ export const ENGINES_REGISTRY = [
   {
     id: 'thunderbolt_dma_attack',
     label: 'Thunderbolt / PCIe DMA Attack',
-    group: 'network',
+    group: 'stealth',
     mitre: 'T1200',
     description: 'Direct Memory Access (DMA) attack via Thunderbolt/USB4/PCIe: Thunderbolt SL1 security level bypass (Thunderspy, CVE-2020-15999), PCIe DMA for memory read/write without CPU, IOMMU bypass techniques, macOS/Windows hibernation key extraction via DMA, PCILeech/Inception DMA framework simulation',
     requiresTarget: false,
@@ -4074,7 +4074,7 @@ export const ENGINES_REGISTRY = [
   {
     id: 'synthetic_identity_fraud',
     label: 'AI Synthetic Identity Fraud Engine',
-    group: 'social',
+    group: 'ai',
     mitre: 'T1534',
     description: 'AI-generated synthetic identity for fraud and social engineering: GAN-generated photo-realistic identity document creation, LLM-crafted persona backstory generation, synthetic social media presence establishment, voice clone + deepfake video for video KYC bypass, synthetic fingerprint generation for biometric evasion, AI-generated credit history pattern construction',
     requiresTarget: false,
@@ -4220,7 +4220,7 @@ export const ENGINES_REGISTRY = [
   {
     id: 'behavioral_biometric_attack',
     label: 'Behavioral Biometric Bypass Engine',
-    group: 'crypto',
+    group: 'stealth',
     mitre: 'T1556',
     description: 'Behavioral biometric authentication bypass: typing cadence/rhythm analysis and ML-based forgery, mouse movement Bezier-curve mimicry, gait analysis spoofing via adversarial perturbation, touchscreen pressure pattern replication, eye-tracking pattern synthesis, BioCatch/TypingDNA behavioral authentication evasion, session takeover post-enrollment',
     requiresTarget: true,
@@ -4236,7 +4236,7 @@ export const ENGINES_REGISTRY = [
   {
     id: 'differential_privacy_exploit',
     label: 'Differential Privacy Implementation Attack',
-    group: 'crypto',
+    group: 'recon',
     mitre: 'T1600',
     description: 'Differential privacy (DP) vulnerability exploitation: privacy budget (ε) exhaustion via repeated queries, composition attack on DP mechanisms, Gaussian/Laplace mechanism parameter weakness, local DP reconstruction attack, DP-SGD gradient leakage, membership inference on DP-trained models, reconstruction attack on released aggregate statistics',
     requiresTarget: true,
@@ -4332,7 +4332,7 @@ export const ENGINES_REGISTRY = [
     label: 'PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm',
     group: 'apt',
     mitre: 'T1650',
-    description: 'The world\'s first cross-domain AI adversarial swarm intelligence engine. Uniquely combines: (1) Multi-agent AI orchestration — 14 specialized attack agents run simultaneously across every attack domain, sharing intelligence and coordinating via game-theoretic optimal strategy; (2) Emergent kill-chain synthesis — discovers novel attack chains that arise from the INTERSECTION of vulnerabilities across cloud, AI, mobile, supply chain, social, and OT domains simultaneously; (3) Real-time adaptive evasion — the swarm learns target defenses in real time and mutates its TTPs faster than any SIEM/EDR rule can be written; (4) Quantum-graph path optimization — quantum-inspired Grover search over the vulnerability graph to find the globally optimal attack path in polynomial time; (5) Predictive zero-day modeling — graph neural networks trained on full CVE/NVD/exploit-db history predict likely vulnerabilities before public disclosure; (6) Self-healing infrastructure — C2 rotation, domain generation, and evasion adapt autonomously; (7) Purple team feedback loop — generates real-time detection recommendations as it attacks, enabling simultaneous red/blue team exercises at machine speed',
+    description: 'Cross-domain AI adversarial swarm: 14 specialized attack agents run simultaneously across every domain, sharing intelligence via game-theoretic optimal strategy; emergent kill-chain synthesis from intersecting cloud/AI/mobile/supply-chain/OT vulnerabilities; real-time adaptive evasion that mutates TTPs faster than SIEM/EDR rules; quantum-graph Grover search for globally optimal attack path; GNN-based zero-day prediction from CVE/NVD history; self-healing C2 infrastructure; simultaneous purple-team feedback loop with live detection recommendations',
     requiresTarget: false,
   },
 ]
