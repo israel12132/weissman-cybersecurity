@@ -1,5 +1,5 @@
 /**
- * Master registry of all 482 attack engines.
+ * Master registry of all 529 attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -30,7 +30,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 482 engines in registry order */
+/** All 529 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -3936,6 +3936,404 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1190',
     description: 'API gateway security bypass: direct backend access bypassing API gateway, API key brute force, request signing bypass, IP allowlist circumvention via header injection, gateway WAF bypass via encoding, rate limit bypass via endpoint variation',
     requiresTarget: true,
+  },
+
+  // ── PHYSICAL & HARDWARE SECURITY ─────────────────────────────────────────────
+  {
+    id: 'tpm_firmware_attack',
+    label: 'TPM Firmware Attack Engine',
+    group: 'ot',
+    mitre: 'T1600',
+    description: 'Trusted Platform Module exploitation: TPM 1.2/2.0 bus sniffing for key extraction (CVE-2018-6622 pattern), TPM-Fail timing attack on ECDSA nonces, ROMhole vulnerability, TPM reset attack via suspend/resume, Infineon RSA keygen flaw simulation, FIDO2 TPM-backed credential attack',
+    requiresTarget: false,
+  },
+  {
+    id: 'cold_boot_attack',
+    label: 'Cold Boot / DRAM Remanence Attack',
+    group: 'crypto',
+    mitre: 'T1552.004',
+    description: 'RAM cold boot attack for cryptographic key extraction: DRAM remanence exploitation (memory data persists seconds to minutes after power-off), full-disk encryption key recovery (BitLocker, FileVault, LUKS), memory image analysis for private key extraction, liquid nitrogen cooling for extended remanence, EFI shell-based memory dump',
+    requiresTarget: false,
+  },
+  {
+    id: 'evil_maid_engine',
+    label: 'Evil Maid Hardware Implant Engine',
+    group: 'stealth',
+    mitre: 'T1200',
+    description: 'Evil maid physical access attack simulation: bootloader modification to install keylogger, BIOS/UEFI implant via SPI flash write, hardware keylogger implant detection, encrypted volume password interception, pre-boot authentication bypass, TPM PCR value manipulation to unlock sealed secrets',
+    requiresTarget: false,
+  },
+  {
+    id: 'thunderbolt_dma_attack',
+    label: 'Thunderbolt / PCIe DMA Attack',
+    group: 'network',
+    mitre: 'T1200',
+    description: 'Direct Memory Access (DMA) attack via Thunderbolt/USB4/PCIe: Thunderbolt SL1 security level bypass (Thunderspy, CVE-2020-15999), PCIe DMA for memory read/write without CPU, IOMMU bypass techniques, macOS/Windows hibernation key extraction via DMA, PCILeech/Inception DMA framework simulation',
+    requiresTarget: false,
+  },
+  {
+    id: 'voltage_glitch_attack',
+    label: 'Voltage / Clock Glitch Fault Injection',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'Hardware fault injection via voltage/clock glitching: secure boot bypass by glitching signature verification, AES key extraction via power glitch, microcontroller read-protect bypass (STM32 RDPL bypass), JTAG lock defeat, PIN entry lockout bypass on embedded systems, ChipWhisperer-style analysis simulation',
+    requiresTarget: false,
+  },
+  {
+    id: 'badusb_hid_attack',
+    label: 'BadUSB / HID Injection Engine',
+    group: 'stealth',
+    mitre: 'T1091',
+    description: 'USB-based attack simulation: BadUSB firmware reprogramming emulation, Rubber Ducky keystroke injection payloads, USB Killer power surge simulation, O.MG cable covert channel detection, USB network adapter DHCP hijacking, P4wnP1/WiFi Duck attack automation, USB drive malware auto-run via LNK exploit',
+    requiresTarget: false,
+  },
+  {
+    id: 'hardware_wallet_attack',
+    label: 'Crypto Hardware Wallet Security Engine',
+    group: 'crypto',
+    mitre: 'T1552.004',
+    description: 'Hardware cryptocurrency wallet exploitation: Ledger/Trezor physical attack simulation, seed phrase extraction via side-channel on secure element, supply chain implant in hardware wallet firmware, malicious companion app attack, USB communication protocol fuzzing, MITM of firmware update, blind signing exploit for draining funds',
+    requiresTarget: false,
+  },
+  {
+    id: 'jtag_swd_exploitation',
+    label: 'JTAG/SWD Debug Interface Exploiter',
+    group: 'ot',
+    mitre: 'T1542',
+    description: 'Hardware debug interface exploitation: JTAG/SWD port discovery on PCBs, boundary scan for chip identification, OpenOCD-based firmware extraction, debug lock bypass via fault injection, memory read/write via debug interface, bootloader bypass, cryptographic key recovery from debugging symbols, JTAG over USB tunnel',
+    requiresTarget: false,
+  },
+
+  // ── HEALTHCARE / MEDICAL IOT ──────────────────────────────────────────────────
+  {
+    id: 'medical_device_exploit',
+    label: 'Medical IoT Device Exploit Engine',
+    group: 'ot',
+    mitre: 'T0826',
+    description: 'FDA-regulated medical device exploitation: infusion pump command injection over network (Alaris/Baxter CVE patterns), patient monitor DICOM interface exploitation, MRI/CT scanner embedded OS vulnerability, nurse call system abuse, OR scheduling system manipulation, clinical workstation lateral movement',
+    requiresTarget: true,
+  },
+  {
+    id: 'implantable_device_hack',
+    label: 'Implantable Medical Device Attack',
+    group: 'ot',
+    mitre: 'T0826',
+    description: 'Implantable medical device (IMD) security: cardiac pacemaker/ICD RF attack simulation, insulin pump Bluetooth exploit (Medtronic CVE-2018-10631 pattern), cochlear implant firmware attack, neurostimulator unauthorized command injection, IMD programming tool impersonation, close-range radio eavesdropping on proprietary protocols',
+    requiresTarget: false,
+  },
+  {
+    id: 'hospital_hl7_attack',
+    label: 'HL7 / DICOM Healthcare Protocol Attack',
+    group: 'ot',
+    mitre: 'T0826',
+    description: 'Healthcare-specific protocol attacks: HL7 v2/v3/FHIR REST API injection for patient data manipulation, DICOM image file SSRF/XXE exploitation, PACS (Picture Archiving) unauthorized access, Epic/Cerner EHR API privilege escalation, HL7 ADT message spoofing for patient record tampering, radiology workflow MITM',
+    requiresTarget: true,
+  },
+
+  // ── AI / GENAI ADVANCED ───────────────────────────────────────────────────────
+  {
+    id: 'agentic_framework_attack',
+    label: 'AI Agentic Framework Exploitation',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'LangChain/LlamaIndex/CrewAI/AutoGPT/Semantic Kernel exploitation: chain injection for tool abuse, memory store poisoning, retriever SSRF via malicious documents, Python exec tool sandbox escape, LangGraph state machine hijacking, agent-to-agent trust exploitation, prompt injection through tool outputs, callback handler abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'llm_function_call_hijack',
+    label: 'LLM Function Calling Hijack Engine',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'LLM function calling and tool-use exploitation: function schema injection to forge tool calls, parameter type confusion for sandbox bypass, chained function call escalation (read_file → execute_code), parallel function call race conditions, function result forgery for downstream manipulation, OpenAI tools/Anthropic tool_use protocol abuse',
+    requiresTarget: true,
+  },
+  {
+    id: 'multi_agent_subversion',
+    label: 'Multi-Agent AI Subversion Engine',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'Multi-agent AI system attacks: trust exploitation between AI agents in a pipeline, Byzantine agent injection into collaborative swarms, coordinator agent prompt injection to subvert all sub-agents, shared memory store poisoning across agents, goal misalignment propagation, planner agent manipulation to redirect all tasks, inter-agent authentication bypass',
+    requiresTarget: true,
+  },
+  {
+    id: 'llm_guardrail_bypass',
+    label: 'LLM Safety Guardrail Bypass Engine',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'AI safety classifier and content filter bypass: adversarial suffix generation (GCG/AutoDAN) for policy bypass, many-shot jailbreaking via long context, DAN/roleplay persona bypass, token-level adversarial perturbation, translation-based safety evasion, base64/ROT13 encoded instruction bypass, fine-tuning alignment removal, system prompt override',
+    requiresTarget: true,
+  },
+  {
+    id: 'mcp_server_exploit',
+    label: 'Model Context Protocol (MCP) Exploit',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'Model Context Protocol exploitation: malicious MCP server impersonation for tool poisoning, resource URI SSRF via MCP file:// handler, MCP tool description injection for persistent prompt injection, cross-MCP-server privilege escalation, MCP authentication token theft, stdio transport command injection, SSE (Server-Sent Events) MCP hijacking',
+    requiresTarget: true,
+  },
+  {
+    id: 'synthetic_identity_fraud',
+    label: 'AI Synthetic Identity Fraud Engine',
+    group: 'social',
+    mitre: 'T1534',
+    description: 'AI-generated synthetic identity for fraud and social engineering: GAN-generated photo-realistic identity document creation, LLM-crafted persona backstory generation, synthetic social media presence establishment, voice clone + deepfake video for video KYC bypass, synthetic fingerprint generation for biometric evasion, AI-generated credit history pattern construction',
+    requiresTarget: false,
+  },
+  {
+    id: 'ai_model_provenance_attack',
+    label: 'AI Model Provenance & Lineage Attack',
+    group: 'supply_chain',
+    mitre: 'T1195.001',
+    description: 'AI model supply chain provenance attack: model card metadata forgery to hide backdoors, training dataset lineage falsification, SLSA provenance bypass for ML pipelines, model registry checksum collision, Weights & Biases/MLflow experiment poisoning, DVC data versioning manipulation, model signing bypass (Sigstore for ML)',
+    requiresTarget: false,
+  },
+
+  // ── SDN / NFV / NETWORK VIRTUALIZATION ───────────────────────────────────────
+  {
+    id: 'sdn_controller_exploit',
+    label: 'SDN Controller Exploitation Engine',
+    group: 'network',
+    mitre: 'T1498',
+    description: 'Software-Defined Networking controller exploitation: OpenDaylight REST API authentication bypass, ONOS northbound interface injection, Ryu controller buffer overflow, OpenFlow message replay/injection, SDN controller DoS via table flooding, control plane separation bypass, southbound interface MITM for flow rule manipulation, controller clustering exploit',
+    requiresTarget: true,
+  },
+  {
+    id: 'nfv_mano_attack',
+    label: 'NFV MANO / VNF Exploitation',
+    group: 'network',
+    mitre: 'T1610',
+    description: 'Network Function Virtualization MANO exploitation: NFVO (Network Functions Virtualization Orchestrator) API exploitation, VNFM resource exhaustion DoS, VNF package repository poisoning, OSM/ONAP management platform exploitation, VNF lifecycle API privilege escalation, virtual network function chaining attack, NFV infrastructure hypervisor escape',
+    requiresTarget: false,
+  },
+  {
+    id: 'network_slice_isolation_bypass',
+    label: '5G Network Slice Isolation Bypass',
+    group: 'network',
+    mitre: 'T1190',
+    description: '5G network slicing security bypass: slice isolation policy violation, cross-slice resource exhaustion DoS, NSSAI (Network Slice Selection Assistance Information) spoofing, UPF (User Plane Function) cross-slice data leakage, SMF/AMF signaling manipulation for slice hopping, slice-specific firewall bypass, RAN slice configuration injection',
+    requiresTarget: false,
+  },
+
+  // ── POST-QUANTUM ERA ATTACKS ──────────────────────────────────────────────────
+  {
+    id: 'harvest_now_decrypt_later',
+    label: 'Harvest-Now Decrypt-Later (HNDL) Engine',
+    group: 'crypto',
+    mitre: 'T1040',
+    description: 'Long-term cryptographic threat modeling: identification of quantum-vulnerable encrypted traffic streams (RSA/ECC TLS, VPN tunnels), HNDL strategic data collection prioritization, critical data lifetime vs quantum timeline analysis, forward-secrecy gap identification, long-term secret vs session key exposure assessment, quantum threat timeline forecasting, NIST PQC migration urgency scoring',
+    requiresTarget: true,
+  },
+  {
+    id: 'pqc_implementation_attack',
+    label: 'Post-Quantum Cryptography Implementation Attack',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'PQC algorithm implementation vulnerability analysis: CRYSTALS-Kyber timing side-channel (CVE-2023-33250 pattern), CRYSTALS-Dilithium nonce reuse, SPHINCS+ randomness fault, NTRU implementation lattice attack, Falcon signing key recovery via gradient analysis, hybrid PQC scheme downgrade attack, PQC library memory safety bugs',
+    requiresTarget: false,
+  },
+  {
+    id: 'lattice_crypto_attack',
+    label: 'Lattice Cryptography Attack Engine',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'Lattice-based cryptography weakness exploitation: LWE (Learning With Errors) parameter weakness analysis, RLWE overstretched NTRU attack, lattice basis reduction via BKZ algorithm simulation, shortest vector problem (SVP) approximation for weak parameters, NTRU prime factoring vulnerability, hybrid lattice/classical attack chain',
+    requiresTarget: false,
+  },
+
+  // ── ZERO TRUST ARCHITECTURE BYPASS ───────────────────────────────────────────
+  {
+    id: 'microsegmentation_bypass',
+    label: 'Zero Trust Microsegmentation Bypass',
+    group: 'stealth',
+    mitre: 'T1599',
+    description: 'Microsegmentation and Zero Trust network bypass: lateral movement via allowed application paths, Illumio/vArmour/VMware NSX policy gap exploitation, workload identity spoofing for allowed segment access, segmentation policy drift exploitation, allowed-port covert channel, microseg bypass via shared storage/database paths, shadow IT workload exploitation',
+    requiresTarget: true,
+  },
+  {
+    id: 'continuous_auth_evasion',
+    label: 'Continuous Authentication Evasion Engine',
+    group: 'stealth',
+    mitre: 'T1078',
+    description: 'Continuous/behavioral authentication system evasion: behavioral baseline learning and mimicry for UEBA bypass, BeyondCorp device trust score manipulation, mouse movement/typing cadence spoofing for behavioral auth, risk score flooding to normalize malicious activity, step-up authentication trigger evasion, CARTA (Continuous Adaptive Risk and Trust Assessment) bypass',
+    requiresTarget: false,
+  },
+  {
+    id: 'sase_security_bypass',
+    label: 'SASE / SSE Security Bypass Engine',
+    group: 'network',
+    mitre: 'T1562',
+    description: 'SASE (Secure Access Service Edge) and SSE bypass: Zscaler/Netskope/Palo Alto Prisma tunnel bypass via split DNS, CASB policy evasion via cloud storage direct IP access, SWG (Secure Web Gateway) category bypass, DLP bypass via file encoding/chunking, ZTNA connection broker impersonation, SASE agent MITM via trusted root injection',
+    requiresTarget: true,
+  },
+  {
+    id: 'webauthn_fido2_bypass',
+    label: 'WebAuthn / FIDO2 Bypass Engine',
+    group: 'crypto',
+    mitre: 'T1621',
+    description: 'WebAuthn/FIDO2 passkey security exploitation: authenticator emulation via virtual FIDO2 device, credential ID enumeration for account linking, origin checking bypass via subdomain compromise, attestation verification bypass, credential cloning via exported backup, CTAP2 protocol fuzzing, cross-device authentication relay attack, WebAuthn downgrade to password via fallback',
+    requiresTarget: true,
+  },
+
+  // ── CROSS-DOMAIN ATTACK CHAINS ────────────────────────────────────────────────
+  {
+    id: 'ai_cloud_escalation_chain',
+    label: 'AI Vulnerability → Cloud Escalation Chain',
+    group: 'apt',
+    mitre: 'T1210',
+    description: 'Novel cross-domain attack chain: AI/LLM system compromise → cloud credential extraction → IAM privilege escalation. Exploits SSRF from LLM tool calls to steal cloud metadata credentials, uses RAG vector DB access to enumerate cloud resources, leverages AI agent AWS/GCP SDK calls for lateral movement, AI-to-cloud service identity pivot via workload federation',
+    requiresTarget: true,
+  },
+  {
+    id: 'social_supply_chain_attack',
+    label: 'Social Engineering → Supply Chain Compromise Chain',
+    group: 'apt',
+    mitre: 'T1195',
+    description: 'Social engineering to supply chain kill chain: LinkedIn recruiter persona → developer trust → malicious PR injection → CI/CD pipeline compromise → artifact poisoning → downstream customer infection. Mimics XZ Utils/3CX attack methodology with AI-generated social engineering personas, automated code review manipulation',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_it_lateral_chain',
+    label: 'OT Network → IT Network Lateral Pivot Chain',
+    group: 'apt',
+    mitre: 'T1021',
+    description: 'OT-to-IT network bridging attack chain: ICS network initial access via industrial protocol exploitation → historian database compromise → IT network pivot via shared authentication → credential dumping → domain compromise. Emulates Industroyer2/TRITON attack methodology, targeting purdue model flat networks, and dual-homed engineering workstations',
+    requiresTarget: true,
+  },
+  {
+    id: 'mobile_backend_chain',
+    label: 'Mobile App → Cloud Backend Escalation Chain',
+    group: 'apt',
+    mitre: 'T1190',
+    description: 'Mobile-to-cloud attack chain: mobile app binary analysis for hardcoded credentials → API key extraction → cloud IAM enumeration → privilege escalation to backend infrastructure. Combines APK decompilation, mobile OAuth token theft, backend API exploitation, and cloud lateral movement into a single orchestrated kill chain',
+    requiresTarget: true,
+  },
+
+  // ── PRIVACY ATTACK TECHNIQUES ─────────────────────────────────────────────────
+  {
+    id: 'data_deanonymization',
+    label: 'Data De-anonymization Engine',
+    group: 'recon',
+    mitre: 'T1592',
+    description: 'Advanced data re-identification and de-anonymization: quasi-identifier linkage attack (name+zip+DOB uniqueness), Netflix Prize-style sparse data re-identification, k-anonymity violation via background knowledge, differential privacy implementation flaw exploitation, aggregate statistics inference attack, AOL search log style re-identification, census data cross-reference',
+    requiresTarget: true,
+  },
+  {
+    id: 'behavioral_biometric_attack',
+    label: 'Behavioral Biometric Bypass Engine',
+    group: 'crypto',
+    mitre: 'T1556',
+    description: 'Behavioral biometric authentication bypass: typing cadence/rhythm analysis and ML-based forgery, mouse movement Bezier-curve mimicry, gait analysis spoofing via adversarial perturbation, touchscreen pressure pattern replication, eye-tracking pattern synthesis, BioCatch/TypingDNA behavioral authentication evasion, session takeover post-enrollment',
+    requiresTarget: true,
+  },
+  {
+    id: 'location_pattern_analysis',
+    label: 'Location Pattern De-anonymization Engine',
+    group: 'recon',
+    mitre: 'T1591',
+    description: 'Location data analysis for target identification: mobile location dataset re-identification (4 spatio-temporal points uniquely identify 95% of individuals), GPS trajectory clustering for home/work inference, advertising ID correlation across apps, carrier location data triangulation, Wi-Fi probe request tracking, BLE beacon location fingerprinting, geofence attack for physical surveillance',
+    requiresTarget: false,
+  },
+  {
+    id: 'differential_privacy_exploit',
+    label: 'Differential Privacy Implementation Attack',
+    group: 'crypto',
+    mitre: 'T1600',
+    description: 'Differential privacy (DP) vulnerability exploitation: privacy budget (ε) exhaustion via repeated queries, composition attack on DP mechanisms, Gaussian/Laplace mechanism parameter weakness, local DP reconstruction attack, DP-SGD gradient leakage, membership inference on DP-trained models, reconstruction attack on released aggregate statistics',
+    requiresTarget: true,
+  },
+
+  // ── ADVANCED RED TEAM OPERATIONS ──────────────────────────────────────────────
+  {
+    id: 'c2_rotation_engine',
+    label: 'Automated C2 Infrastructure Rotation Engine',
+    group: 'apt',
+    mitre: 'T1583.001',
+    description: 'Dynamic C2 infrastructure management: automated domain generation and registration, cloud-provider redirector provisioning (AWS CloudFront, Azure CDN), TLS certificate rotation, fast-flux DNS management, JA3/JA3S fingerprint cycling, malleable C2 profile rotation, CDN-fronted domain rotation, dynamic IP allocation with reputation check bypass, onion service rotation',
+    requiresTarget: false,
+  },
+  {
+    id: 'detection_gap_exploiter',
+    label: 'Security Detection Gap Exploitation Engine',
+    group: 'stealth',
+    mitre: 'T1562',
+    description: 'Systematic security detection gap analysis and exploitation: SIEM coverage mapping vs MITRE ATT&CK, EDR telemetry blind spot identification, log source gap analysis, detection latency measurement and exploitation, alert threshold manipulation, network detection bypass via encrypted/covert channels, SOC analyst cognitive load exploitation during peak alert periods',
+    requiresTarget: false,
+  },
+  {
+    id: 'opsec_intelligence_engine',
+    label: 'Attacker OPSEC & Counter-Intelligence Engine',
+    group: 'stealth',
+    mitre: 'T1592',
+    description: 'Operational security (OPSEC) planning for red team operations: attribution prevention techniques, infrastructure reuse risk scoring, fingerprint correlation prevention, counter-threat-intelligence measures, attribution indicator scrubbing, false-flag TTP injection for misdirection, OPSEC failure point detection in attack infrastructure, defender intelligence collection poisoning',
+    requiresTarget: false,
+  },
+  {
+    id: 'tactic_chain_synthesizer',
+    label: 'Novel TTP Attack Chain Synthesizer',
+    group: 'apt',
+    mitre: 'T1650',
+    description: 'AI-powered novel attack chain synthesis: graph neural network-based TTP combination discovery, rare technique pairing for detection evasion, cross-TTP timing optimization for maximum dwell time, tool-agnostic technique implementation suggestion, MITRE ATT&CK coverage gap identification, defender simulation to predict detection likelihood, emergent attack path discovery from vulnerability graph traversal',
+    requiresTarget: true,
+  },
+
+  // ── EMERGING TECHNOLOGY ATTACKS ───────────────────────────────────────────────
+  {
+    id: 'ar_vr_attack_engine',
+    label: 'AR / VR Security Attack Engine',
+    group: 'web',
+    mitre: 'T1185',
+    description: 'Augmented and Virtual Reality security testing: spatial UI redress (3D clickjacking in VR), AR overlay injection for visual deception, VR social engineering in virtual environments, controller input injection for VR application manipulation, WebXR API exploitation for physical location tracking, avatar impersonation in enterprise metaverse, haptic feedback side-channel attack',
+    requiresTarget: true,
+  },
+  {
+    id: 'edge_computing_exploit',
+    label: 'Edge Computing Node Exploitation',
+    group: 'cloud',
+    mitre: 'T1610',
+    description: 'Edge computing security exploitation: AWS Greengrass/Azure IoT Edge/GCP Anthos bare-metal exploitation, edge node physical access combined with software attack, 5G MEC (Multi-Access Edge Compute) tenant isolation bypass, edge Kubernetes cluster escape, CDN edge worker (Cloudflare Workers/Fastly Compute) sandbox escape, edge cache poisoning, offline edge node credential theft via physical access',
+    requiresTarget: true,
+  },
+  {
+    id: 'blockchain_bridge_exploit',
+    label: 'Blockchain Bridge / Cross-Chain Attack',
+    group: 'web',
+    mitre: 'T1496',
+    description: 'Cross-chain bridge exploitation: lock-mint bridge signature validation bypass (Ronin/Wormhole pattern), relay node compromise for double-spend, oracle manipulation for bridge exchange rate attack, cross-chain message replay, bridge smart contract reentrancy, validator private key compromise chain, light client verification bypass, bridge liquidity drain via flash loan',
+    requiresTarget: true,
+  },
+  {
+    id: 'api_all_vectors_engine',
+    label: 'Unified API Attack Orchestration Engine',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Comprehensive API attack orchestration across all paradigms: REST/GraphQL/gRPC/WebSocket/SOAP/OData/JSON-RPC simultaneous multi-vector attack, API schema correlation across versions, hidden business logic inference from multiple API responses, cross-API session sharing exploitation, API attack chain synthesis from discovered endpoints, automated vulnerability severity chaining',
+    requiresTarget: true,
+  },
+  {
+    id: 'threat_model_automation',
+    label: 'Automated Threat Modeling Engine',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'Automated threat model generation from live discovery: STRIDE/PASTA/LINDDUN analysis against discovered assets, data flow diagram reconstruction from network traffic, trust boundary identification and attack surface modeling, MITRE ATT&CK technique probability scoring per asset, automated DREAD/CVSS risk prioritization, attack tree generation, regulatory control gap mapping (PCI/HIPAA/SOC2)',
+    requiresTarget: true,
+  },
+  {
+    id: 'attack_graph_traversal',
+    label: 'Dynamic Attack Graph Traversal Engine',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'Real-time attack graph construction and traversal: asset relationship graph from OSINT + active scanning, Dijkstra/A* algorithm for shortest exploitation path, graph centrality analysis for highest-impact targets, choke point identification in defense topology, BloodHound-style attack path visualization for entire infrastructure, dynamic graph update as new vulnerabilities discovered, Markov-chain based dwell-time modeling',
+    requiresTarget: true,
+  },
+
+  // ── PROMETHEUS HYPERION NEXUS — FLAGSHIP COMBINED ENGINE ─────────────────────
+  {
+    id: 'prometheus_hyperion_nexus',
+    label: 'PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm',
+    group: 'apt',
+    mitre: 'T1650',
+    description: 'The world\'s first cross-domain AI adversarial swarm intelligence engine. Uniquely combines: (1) Multi-agent AI orchestration — 14 specialized attack agents run simultaneously across every attack domain, sharing intelligence and coordinating via game-theoretic optimal strategy; (2) Emergent kill-chain synthesis — discovers novel attack chains that arise from the INTERSECTION of vulnerabilities across cloud, AI, mobile, supply chain, social, and OT domains simultaneously; (3) Real-time adaptive evasion — the swarm learns target defenses in real time and mutates its TTPs faster than any SIEM/EDR rule can be written; (4) Quantum-graph path optimization — quantum-inspired Grover search over the vulnerability graph to find the globally optimal attack path in polynomial time; (5) Predictive zero-day modeling — graph neural networks trained on full CVE/NVD/exploit-db history predict likely vulnerabilities before public disclosure; (6) Self-healing infrastructure — C2 rotation, domain generation, and evasion adapt autonomously; (7) Purple team feedback loop — generates real-time detection recommendations as it attacks, enabling simultaneous red/blue team exercises at machine speed',
+    requiresTarget: false,
   },
 ]
 
