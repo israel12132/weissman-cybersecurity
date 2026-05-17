@@ -96,6 +96,7 @@ import ScanScheduler from './pages/ScanScheduler'
 import ContainmentRulesBuilder from './pages/ContainmentRulesBuilder'
 import BaselineAndDrift from './pages/BaselineAndDrift'
 import IdentityContextManager from './pages/IdentityContextManager'
+import AutonomousDefenseBrain from './pages/AutonomousDefenseBrain'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -181,6 +182,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="containment-rules" element={<ContainmentRulesBuilder />} />
             <Route path="baseline-drift" element={<BaselineAndDrift />} />
             <Route path="identity-context" element={<IdentityContextManager />} />
+            <Route path="autonomous-defense" element={<AutonomousDefenseBrain />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

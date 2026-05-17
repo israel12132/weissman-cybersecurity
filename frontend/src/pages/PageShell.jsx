@@ -61,6 +61,10 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Threat Hunt
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-autonomous-defense" to="/autonomous-defense" className="text-cyan-300/80 hover:text-cyan-200 text-xs font-mono transition-colors">
+            Autonomous Defense
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           {badge && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"

@@ -184,6 +184,9 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         <Link to="/findings" id="nav-findings-c2" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/80 hover:bg-amber-950/30 hover:text-amber-300 transition-colors font-semibold">
           <span>◉</span> Findings C2
         </Link>
+        <Link to="/autonomous-defense" id="nav-autonomous-defense" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-300/80 hover:bg-cyan-950/30 hover:text-cyan-200 transition-colors font-semibold">
+          <span>🧠</span> Autonomous Defense
+        </Link>
         <Link to="/intel-map" id="nav-intel-map" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-sky-400/70 hover:bg-sky-950/20 hover:text-sky-300 transition-colors">
           <span>🌐</span> Global Intel Map
         </Link>

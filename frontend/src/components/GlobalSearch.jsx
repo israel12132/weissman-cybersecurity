@@ -44,6 +44,7 @@ export default function GlobalSearch() {
     const mockResults = [
       { type: 'page', title: 'Dashboard', path: '/', icon: '📊' },
       { type: 'page', title: 'Findings', path: '/findings', icon: '🔍' },
+      { type: 'page', title: 'Autonomous Defense', path: '/autonomous-defense', icon: '🧠' },
       { type: 'engine', title: 'XSS Scanner', id: 'xss_scanner', icon: '⚡' },
       { type: 'client', title: 'Example Corp', id: '1', icon: '🏢' },
     ].filter((item) =>
