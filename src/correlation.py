@@ -22,7 +22,9 @@ from src.feeds import NVDFeed, GitHubFeed, OSVFeed, OTXFeed, HIBPFeed
 from src.feeds.base import FeedResult
 from src.fingerprint import fingerprint_ip_ranges, fingerprint_urls, merge_fingerprint_into_scope
 
+_MAX_FEED_FILL_LOCKS = 512
 _feed_fill_locks: dict[str, threading.Lock] = {}
+_feed_fill_lock_order: list[str] = []
 _feed_fill_locks_guard = threading.Lock()
 
 
@@ -32,6 +34,14 @@ def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
         if lock is None:
             lock = threading.Lock()
             _feed_fill_locks[cache_key] = lock
+        if cache_key in _feed_fill_lock_order:
+            _feed_fill_lock_order.remove(cache_key)
+        _feed_fill_lock_order.append(cache_key)
+        while len(_feed_fill_lock_order) > _MAX_FEED_FILL_LOCKS:
+            oldest_key = _feed_fill_lock_order.pop(0)
+            oldest_lock = _feed_fill_locks.get(oldest_key)
+            if oldest_lock is not None and not oldest_lock.locked():
+                _feed_fill_locks.pop(oldest_key, None)
         return lock
 
 

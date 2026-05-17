@@ -12,9 +12,12 @@ from typing import Any, Optional
 
 logger = logging.getLogger("weissman.feed_cache")
 
-FEED_CACHE_TTL_SECONDS: int = int(
-    os.environ.get("FEED_CACHE_TTL_SECONDS", os.environ.get("WEISSMAN_FEED_CACHE_TTL", "300"))
-)
+# `FEED_CACHE_TTL_SECONDS` is the canonical key; keep `WEISSMAN_FEED_CACHE_TTL`
+# as backward-compatible fallback for existing deployments.
+_ttl_raw = os.environ.get("FEED_CACHE_TTL_SECONDS")
+if _ttl_raw is None:
+    _ttl_raw = os.environ.get("WEISSMAN_FEED_CACHE_TTL", "300")
+FEED_CACHE_TTL_SECONDS: int = int(_ttl_raw)
 REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
 CACHE_KEY_PREFIX = "weissman:feed:"
 _EMPTY_PAYLOAD = '{"__empty_feed_result__":true}'
@@ -102,7 +105,7 @@ def get_cached_feed(cache_key: str) -> Optional[list[dict]]:
         if not entry:
             return None
         expires_at, raw = entry
-        if time.monotonic() < expires_at:
+        if time.monotonic() <= expires_at:
             logger.debug("feed_cache HIT (mem): %s", cache_key)
             return _deserialise(raw)
         _mem_cache.pop(full_key, None)
