@@ -17,7 +17,11 @@ logger = logging.getLogger("weissman.feed_cache")
 _ttl_raw = os.environ.get("FEED_CACHE_TTL_SECONDS")
 if _ttl_raw is None:
     _ttl_raw = os.environ.get("WEISSMAN_FEED_CACHE_TTL", "300")
-FEED_CACHE_TTL_SECONDS: int = int(_ttl_raw)
+try:
+    FEED_CACHE_TTL_SECONDS: int = int(_ttl_raw)
+except (TypeError, ValueError):
+    logger.warning("feed_cache: invalid FEED_CACHE TTL value (%r), using default 300", _ttl_raw)
+    FEED_CACHE_TTL_SECONDS = 300
 REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
 CACHE_KEY_PREFIX = "weissman:feed:"
 _EMPTY_PAYLOAD = '{"empty_result":true}'

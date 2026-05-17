@@ -4,6 +4,7 @@ Cache key MUST include query/technology so Client B does not get Client A's cach
 """
 import hashlib
 import json
+import logging
 import os
 import threading
 from collections import OrderedDict
@@ -23,6 +24,8 @@ from src.feeds import NVDFeed, GitHubFeed, OSVFeed, OTXFeed, HIBPFeed
 from src.feeds.base import FeedResult
 from src.fingerprint import fingerprint_ip_ranges, fingerprint_urls, merge_fingerprint_into_scope
 
+logger = logging.getLogger("weissman.correlation")
+
 # Bound per-key lock bookkeeping to prevent unbounded growth for highly dynamic keys.
 _MAX_FEED_FILL_LOCKS = 512
 _feed_fill_locks: OrderedDict[str, threading.Lock] = OrderedDict()
@@ -39,8 +42,9 @@ def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
             _feed_fill_locks.move_to_end(cache_key)
         while len(_feed_fill_locks) > _MAX_FEED_FILL_LOCKS:
             attempts = len(_feed_fill_locks)
+            max_attempts = min(attempts, 8)
             evicted = False
-            for _ in range(attempts):
+            for _ in range(max_attempts):
                 oldest_key = next(iter(_feed_fill_locks))
                 oldest_lock = _feed_fill_locks[oldest_key]
                 if oldest_lock.locked():
@@ -84,7 +88,8 @@ def _cached_feed(
         for item in payloads:
             try:
                 out.append(Finding.model_validate(item))
-            except Exception:
+            except Exception as exc:
+                logger.debug("Skipping invalid cached finding payload: %s", exc)
                 continue
         return out
 
