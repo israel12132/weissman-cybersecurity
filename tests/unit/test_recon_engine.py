@@ -102,8 +102,8 @@ class TestEnumerateSubdomainsCT:
 
         assets = enumerate_subdomains_ct("example.com")
         values = [a.value for a in assets]
-        assert "api.example.com" in values
-        assert "www.example.com" in values
+        assert any(v == "api.example.com" for v in values)
+        assert any(v == "www.example.com" for v in values)
 
     @patch("src.recon_engine.safe_get")
     def test_empty_on_non_200(self, mock_get):
@@ -175,8 +175,8 @@ class TestEnumerateSubdomainsDns:
     def test_uses_rust_results_when_available(self, mock_rust):
         assets = enumerate_subdomains_dns("example.com")
         values = [a.value for a in assets]
-        assert "api.example.com" in values
-        assert "www.example.com" in values
+        assert any(v == "api.example.com" for v in values)
+        assert any(v == "www.example.com" for v in values)
 
     @patch("src.recon_engine._run_rust_dns_enum", return_value=[])
     @patch("socket.gethostbyname")
@@ -190,8 +190,8 @@ class TestEnumerateSubdomainsDns:
         wordlist = ["api", "unknown"]
         assets = enumerate_subdomains_dns("example.com", wordlist=wordlist)
         values = [a.value for a in assets]
-        assert "api.example.com" in values
-        assert "unknown.example.com" not in values
+        assert any(v == "api.example.com" for v in values)
+        assert not any(v == "unknown.example.com" for v in values)
 
     @patch("src.recon_engine._run_rust_dns_enum", return_value=[])
     @patch("socket.gethostbyname", side_effect=OSError("NXDOMAIN"))
@@ -225,8 +225,8 @@ class TestEnumerateSubdomainsWhois:
 
         assets = enumerate_subdomains_whois("example.com")
         values = [a.value for a in assets]
-        assert "api.example.com" in values
-        assert "www.example.com" in values
+        assert any(v == "api.example.com" for v in values)
+        assert any(v == "www.example.com" for v in values)
 
     @patch("src.recon_engine.safe_get")
     def test_empty_on_non_200(self, mock_get):
