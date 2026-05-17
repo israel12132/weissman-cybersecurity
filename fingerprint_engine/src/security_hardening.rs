@@ -127,12 +127,6 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn bypass_ssrf_scope_check() -> bool {
-    std::env::var("BYPASS_SSRF_CHECK")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-}
-
 fn allow_private_scan_targets() -> bool {
     std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -211,23 +205,36 @@ fn parse_approved_domains_blob(raw: &str) -> Vec<String> {
 }
 
 fn target_matches_approved(host: &str, approved: &HashSet<String>) -> bool {
-    if approved.contains(host) {
-        return true;
-    }
-    approved.iter().any(|d| host.ends_with(&format!(".{d}")))
+    approved.iter().any(|d| {
+        if host == d {
+            return true;
+        }
+        host.strip_suffix(d)
+            .is_some_and(|prefix| prefix.ends_with('.'))
+    })
 }
 
 async fn load_tenant_approved_domains(
     pool: &PgPool,
     tenant_id: i64,
+    client_id: Option<i64>,
 ) -> Result<HashSet<String>, sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    let rows: Vec<String> =
+    let rows: Vec<String> = if let Some(cid) = client_id {
+        sqlx::query_scalar(
+            "SELECT COALESCE(domains, '[]') FROM clients WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(cid)
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
         sqlx::query_scalar("SELECT COALESCE(domains, '[]') FROM clients WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&mut *tx)
-            .await?;
-    let _ = tx.commit().await;
+            .await?
+    };
+    tx.commit().await?;
     let mut approved = HashSet::new();
     for raw in rows {
         for d in parse_approved_domains_blob(&raw) {
@@ -237,20 +244,18 @@ async fn load_tenant_approved_domains(
     Ok(approved)
 }
 
+#[derive(Debug, Clone)]
+pub struct ScopeValidationOutcome {
+    pub normalized_host: String,
+    pub resolved_ips: Vec<String>,
+}
+
 pub async fn validate_scan_target_in_scope(
     pool: &PgPool,
     tenant_id: i64,
     target: &str,
-) -> Result<(), String> {
-    if bypass_ssrf_scope_check() {
-        tracing::warn!(
-            target: "security_hardening",
-            tenant_id,
-            "BYPASS_SSRF_CHECK active: scan target scope checks disabled"
-        );
-        return Ok(());
-    }
-
+    client_id: Option<i64>,
+) -> Result<ScopeValidationOutcome, String> {
     let host = extract_target_host(target).map_err(ToString::to_string)?;
     let host_trimmed_dot = host.trim_end_matches('.');
 
@@ -259,17 +264,20 @@ pub async fn validate_scan_target_in_scope(
     }
 
     let allow_private = allow_private_scan_targets();
+    let mut resolved_ips: Vec<String> = Vec::new();
     if let Ok(ip) = host_trimmed_dot.parse::<IpAddr>() {
         if !allow_private && is_private_or_reserved_ip(&ip) {
             return Err(format!(
                 "target host '{host_trimmed_dot}' resolves to a private/reserved address and is not allowed"
             ));
         }
+        resolved_ips.push(ip.to_string());
     } else {
         let resolved = lookup_host((host_trimmed_dot, 80))
             .await
             .map_err(|_| format!("failed to resolve target host '{host_trimmed_dot}'"))?;
         let mut saw_addr = false;
+        let mut seen = HashSet::new();
         for addr in resolved {
             saw_addr = true;
             let ip = addr.ip();
@@ -277,6 +285,10 @@ pub async fn validate_scan_target_in_scope(
                 return Err(format!(
                     "target host '{host_trimmed_dot}' resolved to blocked address {ip}"
                 ));
+            }
+            let s = ip.to_string();
+            if seen.insert(s.clone()) {
+                resolved_ips.push(s);
             }
         }
         if !saw_addr {
@@ -286,7 +298,7 @@ pub async fn validate_scan_target_in_scope(
         }
     }
 
-    let approved = load_tenant_approved_domains(pool, tenant_id)
+    let approved = load_tenant_approved_domains(pool, tenant_id, client_id)
         .await
         .map_err(|e| format!("failed loading approved tenant domains: {e}"))?;
     if approved.is_empty() {
@@ -300,7 +312,10 @@ pub async fn validate_scan_target_in_scope(
             "target host '{host_trimmed_dot}' is outside approved tenant scope"
         ));
     }
-    Ok(())
+    Ok(ScopeValidationOutcome {
+        normalized_host: host_trimmed_dot.to_string(),
+        resolved_ips,
+    })
 }
 
 /// Finding IDs become Git branch suffixes — restrict charset.
@@ -379,6 +394,7 @@ mod tests {
         assert!(target_matches_approved("example.com", &approved));
         assert!(target_matches_approved("api.example.com", &approved));
         assert!(!target_matches_approved("evil-example.com", &approved));
+        assert!(!target_matches_approved("evilexample.com", &approved));
     }
 
     #[test]

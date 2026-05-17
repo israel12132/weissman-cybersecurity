@@ -538,6 +538,32 @@ fn inject_oast_token(mut payload: Value, token: Uuid) -> Value {
     payload
 }
 
+fn parse_client_id(ctx: &ScanBodyFields) -> Option<i64> {
+    let v = ctx.client_id.as_ref()?;
+    if let Some(id) = v.as_i64() {
+        return Some(id);
+    }
+    v.as_str().and_then(|s| s.trim().parse::<i64>().ok())
+}
+
+fn inject_scope_validation(
+    mut payload: Value,
+    scope: &crate::security_hardening::ScopeValidationOutcome,
+) -> Value {
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "validated_scope".into(),
+            json!({
+                "host": scope.normalized_host,
+                "resolved_ips": scope.resolved_ips,
+            }),
+        );
+    } else {
+        tracing::error!(target: "scan_routing", "inject_scope_validation: payload is not a JSON object");
+    }
+    payload
+}
+
 /// Returns `(job_kind, job_payload)` after registry validation, entitlement check, and optional OAST injection.
 pub async fn route_scan_job(
     body: &Value,
@@ -556,11 +582,21 @@ pub async fn route_scan_job(
     }
 
     let ctx = extract_fields(body);
-    if !ctx.target.is_empty() && enforce_scope_validation_for_engine(engine) {
-        crate::security_hardening::validate_scan_target_in_scope(pool, tenant_id, &ctx.target)
+    let client_id = parse_client_id(&ctx);
+    let scope_outcome = if !ctx.target.is_empty() && enforce_scope_validation_for_engine(engine) {
+        Some(
+            crate::security_hardening::validate_scan_target_in_scope(
+                pool,
+                tenant_id,
+                &ctx.target,
+                client_id,
+            )
             .await
-            .map_err(|detail| RouteError::Forbidden { detail })?;
-    }
+            .map_err(|detail| RouteError::Forbidden { detail })?,
+        )
+    } else {
+        None
+    };
 
     if let Some(def) = find_route_def(engine) {
         validate_requires(def.requires, &ctx, engine)?;
@@ -572,6 +608,9 @@ pub async fn route_scan_job(
             None
         };
         let mut payload = build_payload(def.payload, &ctx, engine)?;
+        if let Some(scope) = scope_outcome.as_ref() {
+            payload = inject_scope_validation(payload, scope);
+        }
         if let Some(t) = oast {
             payload = inject_oast_token(payload, t);
         }
@@ -583,6 +622,9 @@ pub async fn route_scan_job(
     let ent = entitlement_for_fallback_engine(engine);
     check_tenant_entitlement(pool, tenant_id, engine, ent).await?;
 
-    let payload = build_payload(PayloadKind::CommandCenterDefault, &ctx, engine)?;
+    let mut payload = build_payload(PayloadKind::CommandCenterDefault, &ctx, engine)?;
+    if let Some(scope) = scope_outcome.as_ref() {
+        payload = inject_scope_validation(payload, scope);
+    }
     Ok(("command_center_engine".to_string(), payload))
 }
