@@ -14,6 +14,7 @@ MITRE ATT&CK: T1580 (Cloud Infrastructure Discovery)
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
@@ -306,7 +307,6 @@ class CloudAssetDiscovery:
             return assets
 
         try:
-            import os
             subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
             if not subscription_id:
                 logger.warning("cloud_discovery: AZURE_SUBSCRIPTION_ID not set; skipping Azure discovery")
@@ -392,7 +392,6 @@ class CloudAssetDiscovery:
 
         # Implement GCP discovery
         try:
-            import os
             gcp_project_id = project_id or os.environ.get("GCP_PROJECT_ID", "")
             if not gcp_project_id:
                 logger.warning("cloud_discovery: GCP_PROJECT_ID not set; skipping GCP discovery")

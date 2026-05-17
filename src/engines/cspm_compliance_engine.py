@@ -13,6 +13,7 @@ MITRE ATT&CK: T1580 (Cloud Infrastructure Discovery), T1552 (Unsecured Credentia
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
@@ -190,7 +191,6 @@ class CSPMComplianceEngine:
                     # Check if password unused for 90+ days
                     if password_last_used and password_last_used not in ("N/A", "no_information", ""):
                         try:
-                            from datetime import datetime, timezone
                             last_used_dt = datetime.fromisoformat(
                                 password_last_used.replace("Z", "+00:00")
                             )

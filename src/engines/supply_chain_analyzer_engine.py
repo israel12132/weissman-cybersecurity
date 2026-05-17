@@ -22,6 +22,7 @@ MITRE ATT&CK: T1195 (Supply Chain Compromise)
 
 import json
 import logging
+import os
 import re
 import urllib.request
 import urllib.error
@@ -55,6 +56,8 @@ class SupplyChainAnalyzer:
     """
     Analyzes software dependencies for security and compliance issues.
     """
+
+    OSV_API_TIMEOUT: int = int(os.environ.get("WEISSMAN_OSV_TIMEOUT", "10"))
 
     def __init__(self):
         self.dependencies: List[Dependency] = []
@@ -320,7 +323,7 @@ class SupplyChainAnalyzer:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=self.OSV_API_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode())
         except urllib.error.URLError as e:
             logger.warning("supply_chain: OSV API unreachable for %s@%s (%s)", name, version, e)
