@@ -41,11 +41,13 @@ def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
         else:
             _feed_fill_locks.move_to_end(cache_key)
         while len(_feed_fill_locks) > _MAX_FEED_FILL_LOCKS:
-            attempts = len(_feed_fill_locks)
-            max_attempts = min(attempts, 8)
+            current_lock_count = len(_feed_fill_locks)
+            max_attempts = min(current_lock_count, 8)
             evicted = False
-            for _ in range(max_attempts):
-                oldest_key = next(iter(_feed_fill_locks))
+            checked_keys = list(_feed_fill_locks.keys())[:max_attempts]
+            for oldest_key in checked_keys:
+                if oldest_key not in _feed_fill_locks:
+                    continue
                 oldest_lock = _feed_fill_locks[oldest_key]
                 if oldest_lock.locked():
                     _feed_fill_locks.move_to_end(oldest_key)

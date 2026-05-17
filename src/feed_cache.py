@@ -63,6 +63,8 @@ def _serialise(findings: list[Any]) -> str:
     """Convert a list of findings (pydantic/dataclass/dicts) to JSON."""
 
     def _to_dict(item: Any):
+        if isinstance(item, dict):
+            return item
         if hasattr(item, "model_dump"):
             return item.model_dump(mode="json")
         if is_dataclass(item) and not isinstance(item, type):
