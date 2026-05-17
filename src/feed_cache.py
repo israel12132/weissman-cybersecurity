@@ -20,7 +20,7 @@ if _ttl_raw is None:
 FEED_CACHE_TTL_SECONDS: int = int(_ttl_raw)
 REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
 CACHE_KEY_PREFIX = "weissman:feed:"
-_EMPTY_PAYLOAD = '{"__empty_feed_result__":true}'
+_EMPTY_PAYLOAD = '{"empty_result":true}'
 
 _redis_client: Optional[Any] = None
 _redis_init_lock = threading.Lock()
