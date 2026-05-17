@@ -48,7 +48,7 @@ def authenticated_session(api_client, test_tenant):
     return session
 
 
-class TestCompleteS canWorkflow:
+class TestCompleteScanWorkflow:
     """E2E tests for complete scan execution workflow."""
 
     def test_full_scan_workflow(self, api_client, authenticated_session, test_tenant):

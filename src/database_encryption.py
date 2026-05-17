@@ -210,10 +210,30 @@ def rotate_encryption_key(field_name: str = "mfa_secret") -> int:
         client.secrets.transit.rotate_key(name="weissman-encryption-key")
         logger.info("db_encryption: rotated Vault transit key")
 
-        # TODO: Re-encrypt all database records
-        # This requires database access and should be run as a migration
+        # Re-encrypt all database records using the new key version
+        rotated = 0
+        _ENCRYPTED_COLUMNS = [
+            ("users", "mfa_secret"),
+            ("users", "totp_secret"),
+            ("tenant_api_keys", "api_key_hash"),
+            ("integration_credentials", "secret_value"),
+        ]
+        for table_name, column_name in _ENCRYPTED_COLUMNS:
+            try:
+                count = migrate_to_encrypted(table_name, column_name)
+                rotated += count
+                logger.info(
+                    "db_encryption: re-encrypted %d records in %s.%s",
+                    count, table_name, column_name,
+                )
+            except Exception as col_exc:
+                logger.error(
+                    "db_encryption: re-encryption failed for %s.%s (%s)",
+                    table_name, column_name, col_exc,
+                )
 
-        return 0
+        logger.info("db_encryption: key rotation complete — re-encrypted %d total records", rotated)
+        return rotated
 
     except Exception as exc:
         logger.error("db_encryption: key rotation failed (%s)", exc)

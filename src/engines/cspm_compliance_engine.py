@@ -188,7 +188,34 @@ class CSPMComplianceEngine:
                     password_last_used = parts[4]
 
                     # Check if password unused for 90+ days
-                    # TODO: Implement date parsing and comparison
+                    if password_last_used and password_last_used not in ("N/A", "no_information", ""):
+                        try:
+                            from datetime import datetime, timezone
+                            last_used_dt = datetime.fromisoformat(
+                                password_last_used.replace("Z", "+00:00")
+                            )
+                            now = datetime.now(timezone.utc)
+                            days_unused = (now - last_used_dt).days
+                            if days_unused >= 90:
+                                checks.append(ComplianceCheck(
+                                    check_id="CIS-1.12",
+                                    title="Credentials unused for 90+ days disabled",
+                                    severity="medium",
+                                    status=ComplianceStatus.FAIL,
+                                    description=(
+                                        f"User '{username}' password unused for {days_unused} days "
+                                        f"(last used: {password_last_used})"
+                                    ),
+                                    remediation=(
+                                        f"Disable or delete credentials for IAM user '{username}': "
+                                        f"aws iam delete-login-profile --user-name {username}"
+                                    ),
+                                    resource_id=username,
+                                    resource_type="iam_user",
+                                    benchmark="CIS AWS v1.5",
+                                ))
+                        except (ValueError, TypeError):
+                            logger.debug("Could not parse password_last_used date for %s", username)
 
             except Exception as e:
                 logger.error(f"Failed to check credential usage: {e}")
@@ -320,7 +347,91 @@ class CSPMComplianceEngine:
             cloudwatch = session.client('cloudwatch')
 
             # CIS 4.1 - Ensure log metric filter and alarm exist for unauthorized API calls
-            # TODO: Implement metric filter checks
+            _REQUIRED_FILTERS = [
+                {
+                    "check_id": "CIS-4.1",
+                    "title": "Metric filter for unauthorized API calls",
+                    "pattern_fragment": "errorCode",
+                    "description": "No CloudWatch metric filter/alarm for unauthorized API calls",
+                    "remediation": (
+                        "Create a metric filter matching { ($.errorCode = \"*UnauthorizedAccess*\") || "
+                        "($.errorCode = \"AccessDenied\") } and a corresponding alarm"
+                    ),
+                },
+                {
+                    "check_id": "CIS-4.2",
+                    "title": "Metric filter for Console sign-in without MFA",
+                    "pattern_fragment": "ConsoleLogin",
+                    "description": "No CloudWatch metric filter/alarm for console sign-ins without MFA",
+                    "remediation": (
+                        "Create a metric filter matching { ($.eventName = \"ConsoleLogin\") && "
+                        "($.additionalEventData.MFAUsed != \"Yes\") } and a corresponding alarm"
+                    ),
+                },
+                {
+                    "check_id": "CIS-4.3",
+                    "title": "Metric filter for root account usage",
+                    "pattern_fragment": "userIdentity.type = \"Root\"",
+                    "description": "No CloudWatch metric filter/alarm for root account usage",
+                    "remediation": (
+                        "Create a metric filter matching { $.userIdentity.type = \"Root\" && "
+                        "$.userIdentity.invokedBy NOT EXISTS } and a corresponding alarm"
+                    ),
+                },
+            ]
+
+            try:
+                log_groups = logs.describe_log_groups()
+                all_metric_filters = []
+                for lg in log_groups.get("logGroups", []):
+                    lg_name = lg["logGroupName"]
+                    filters_resp = logs.describe_metric_filters(logGroupName=lg_name)
+                    all_metric_filters.extend(filters_resp.get("metricFilters", []))
+
+                # Collect alarm names from all metric transformations
+                alarm_metric_names = set()
+                alarms_resp = cloudwatch.describe_alarms()
+                for alarm in alarms_resp.get("MetricAlarms", []):
+                    alarm_metric_names.add(alarm.get("MetricName", ""))
+
+                for req in _REQUIRED_FILTERS:
+                    pattern_found = any(
+                        req["pattern_fragment"] in (mf.get("filterPattern") or "")
+                        for mf in all_metric_filters
+                    )
+                    alarm_found = False
+                    if pattern_found:
+                        # Verify there is an alarm for at least one transformation metric
+                        for mf in all_metric_filters:
+                            if req["pattern_fragment"] in (mf.get("filterPattern") or ""):
+                                for tr in mf.get("metricTransformations", []):
+                                    if tr.get("metricName") in alarm_metric_names:
+                                        alarm_found = True
+                                        break
+
+                    if pattern_found and alarm_found:
+                        checks.append(ComplianceCheck(
+                            check_id=req["check_id"],
+                            title=req["title"],
+                            severity="medium",
+                            status=ComplianceStatus.PASS,
+                            description=f"{req['title']} is configured",
+                            remediation="No action needed",
+                            benchmark="CIS AWS v1.5",
+                        ))
+                    else:
+                        checks.append(ComplianceCheck(
+                            check_id=req["check_id"],
+                            title=req["title"],
+                            severity="medium",
+                            status=ComplianceStatus.FAIL,
+                            description=req["description"],
+                            remediation=req["remediation"],
+                            benchmark="CIS AWS v1.5",
+                        ))
+
+            except Exception as e:
+                logger.error(f"Metric filter checks failed: {e}")
 
         except Exception as e:
             logger.error(f"Monitoring checks failed: {e}")
