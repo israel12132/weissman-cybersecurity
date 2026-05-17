@@ -76,6 +76,14 @@ import VulnIntelDashboard from './pages/VulnIntelDashboard'
 import DarkWebMonitor from './pages/DarkWebMonitor'
 import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
 import EngineClientCatalog from './pages/EngineClientCatalog'
+// ── New UI improvements ──────────────────────────────────────────────────────
+import RateLimitAnalytics from './pages/RateLimitAnalytics'
+import MobileSecurity from './pages/MobileSecurity'
+import OtIcsSecurity from './pages/OtIcsSecurity'
+import NetworkProtocols from './pages/NetworkProtocols'
+import SocialEngineering from './pages/SocialEngineering'
+import RemediationHub from './pages/RemediationHub'
+// ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
 
@@ -140,6 +148,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
             <Route path="engine-catalog" element={<EngineClientCatalog />} />
             <Route path="admin" element={<AdminManagement />} />
+            {/* ── New UI improvements routes ──────────────────────────────────── */}
+            <Route path="rate-limits" element={<RateLimitAnalytics />} />
+            <Route path="mobile-security" element={<MobileSecurity />} />
+            <Route path="ot-ics" element={<OtIcsSecurity />} />
+            <Route path="network-protocols" element={<NetworkProtocols />} />
+            <Route path="social-engineering" element={<SocialEngineering />} />
+            <Route path="remediation" element={<RemediationHub />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
