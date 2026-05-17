@@ -2,6 +2,7 @@
 //! Human-in-the-loop: optional `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET`; caller must send matching `X-Weissman-Destructive-Confirm`.
 
 use axum::http::HeaderMap;
+use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr};
@@ -318,6 +319,63 @@ pub async fn validate_scan_target_in_scope(
     })
 }
 
+pub async fn enforce_execution_scope_pin(
+    target: &str,
+    validated_scope: &Value,
+) -> Result<(), String> {
+    let pinned_host = validated_scope
+        .get("host")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "validated_scope.host missing".to_string())?
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+
+    let pinned_ips: HashSet<String> = validated_scope
+        .get("resolved_ips")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "validated_scope.resolved_ips missing".to_string())?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    if pinned_ips.is_empty() {
+        return Err("validated_scope.resolved_ips empty".to_string());
+    }
+
+    let target_host = extract_target_host(target)
+        .map_err(ToString::to_string)?
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if target_host != pinned_host {
+        return Err(format!(
+            "validated_scope host mismatch: target '{target_host}' != pinned '{pinned_host}'"
+        ));
+    }
+
+    let current_ips: HashSet<String> = if let Ok(ip) = target_host.parse::<IpAddr>() {
+        std::iter::once(ip.to_string()).collect()
+    } else {
+        lookup_host((target_host.as_str(), 80))
+            .await
+            .map_err(|_| format!("failed to resolve target host '{target_host}'"))?
+            .map(|sa| sa.ip().to_string())
+            .collect()
+    };
+    if current_ips.is_empty() {
+        return Err(format!("failed to resolve target host '{target_host}'"));
+    }
+    if let Some(ip) = current_ips.iter().find(|ip| !pinned_ips.contains(*ip)) {
+        return Err(format!(
+            "validated_scope pin mismatch: resolved ip {ip} was not in pinned set"
+        ));
+    }
+    Ok(())
+}
+
 /// Finding IDs become Git branch suffixes — restrict charset.
 pub fn validate_git_branch_name(branch: &str) -> Result<(), &'static str> {
     let s = branch.trim();
@@ -423,5 +481,35 @@ mod tests {
             extract_target_host("example.com:443").expect("host"),
             "example.com".to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn execution_scope_pin_accepts_matching_ip_literal() {
+        let scope = serde_json::json!({
+            "host": "1.1.1.1",
+            "resolved_ips": ["1.1.1.1"]
+        });
+        let ok = enforce_execution_scope_pin("https://1.1.1.1/login", &scope).await;
+        assert!(ok.is_ok());
+    }
+
+    #[tokio::test]
+    async fn execution_scope_pin_rejects_host_mismatch() {
+        let scope = serde_json::json!({
+            "host": "1.1.1.1",
+            "resolved_ips": ["1.1.1.1"]
+        });
+        let err = enforce_execution_scope_pin("https://8.8.8.8", &scope).await;
+        assert!(err.is_err());
+    }
+
+    #[tokio::test]
+    async fn execution_scope_pin_rejects_unpinned_ip() {
+        let scope = serde_json::json!({
+            "host": "1.1.1.1",
+            "resolved_ips": ["8.8.8.8"]
+        });
+        let err = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
+        assert!(err.is_err());
     }
 }
