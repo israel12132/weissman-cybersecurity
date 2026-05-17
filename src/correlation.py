@@ -31,17 +31,22 @@ _feed_fill_locks_guard = threading.Lock()
 
 def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
     with _feed_fill_locks_guard:
-        lock = _feed_fill_locks.pop(cache_key, None)
+        lock = _feed_fill_locks.get(cache_key)
         if lock is None:
             lock = threading.Lock()
-        _feed_fill_locks[cache_key] = lock
+            _feed_fill_locks[cache_key] = lock
+        else:
+            _feed_fill_locks.move_to_end(cache_key)
         while len(_feed_fill_locks) > _MAX_FEED_FILL_LOCKS:
+            attempts = len(_feed_fill_locks)
             evicted = False
-            for _ in range(len(_feed_fill_locks)):
-                oldest_key, oldest_lock = _feed_fill_locks.popitem(last=False)
+            for _ in range(attempts):
+                oldest_key = next(iter(_feed_fill_locks))
+                oldest_lock = _feed_fill_locks[oldest_key]
                 if oldest_lock.locked():
-                    _feed_fill_locks[oldest_key] = oldest_lock
+                    _feed_fill_locks.move_to_end(oldest_key)
                     continue
+                _feed_fill_locks.pop(oldest_key, None)
                 evicted = True
                 break
             if not evicted:
