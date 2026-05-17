@@ -3,9 +3,7 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_llm_jailbreak_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "llm_jailbreak",
@@ -15,10 +13,7 @@ pub async fn run_llm_jailbreak_result(target: &str) -> EngineResult {
         "description": "Simulated LLM Jailbreak Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_llm_jailbreak(target: &str) {
@@ -26,9 +21,7 @@ pub async fn run_llm_jailbreak(target: &str) {
 }
 
 pub async fn run_prompt_injection_chain_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "prompt_injection_chain",
@@ -38,10 +31,7 @@ pub async fn run_prompt_injection_chain_result(target: &str) -> EngineResult {
         "description": "Simulated Prompt Injection Chain Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_prompt_injection_chain(target: &str) {
@@ -49,9 +39,7 @@ pub async fn run_prompt_injection_chain(target: &str) {
 }
 
 pub async fn run_model_inversion_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "model_inversion_attack",
@@ -61,10 +49,7 @@ pub async fn run_model_inversion_attack_result(target: &str) -> EngineResult {
         "description": "Simulated ML Model Inversion Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_model_inversion_attack(target: &str) {
@@ -80,10 +65,7 @@ pub async fn run_ai_supply_chain_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1195.001",
         "description": "Simulated AI Model Supply Chain Attack finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ai_supply_chain_attack(target: &str) {
@@ -91,9 +73,7 @@ pub async fn run_ai_supply_chain_attack(target: &str) {
 }
 
 pub async fn run_llm_agent_hijack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "llm_agent_hijack",
@@ -103,10 +83,7 @@ pub async fn run_llm_agent_hijack_result(target: &str) -> EngineResult {
         "description": "Simulated LLM Agent & Tool Hijacking finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_llm_agent_hijack(target: &str) {
@@ -114,9 +91,7 @@ pub async fn run_llm_agent_hijack(target: &str) {
 }
 
 pub async fn run_rag_poisoning_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "rag_poisoning_engine",
@@ -126,10 +101,7 @@ pub async fn run_rag_poisoning_engine_result(target: &str) -> EngineResult {
         "description": "Simulated RAG System Poisoning finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_rag_poisoning_engine(target: &str) {
@@ -137,9 +109,7 @@ pub async fn run_rag_poisoning_engine(target: &str) {
 }
 
 pub async fn run_adversarial_examples_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "adversarial_examples",
@@ -149,10 +119,7 @@ pub async fn run_adversarial_examples_result(target: &str) -> EngineResult {
         "description": "Simulated Adversarial Example Generator finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_adversarial_examples(target: &str) {
@@ -168,10 +135,7 @@ pub async fn run_data_poisoning_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1565.001",
         "description": "Simulated Training Data Poisoning Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_data_poisoning_engine(target: &str) {
@@ -187,10 +151,7 @@ pub async fn run_deepfake_synthesis_result(target: &str) -> EngineResult {
         "mitre_attack": "T1660",
         "description": "Simulated Deepfake Synthesis Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_deepfake_synthesis(target: &str) {
@@ -198,9 +159,7 @@ pub async fn run_deepfake_synthesis(target: &str) {
 }
 
 pub async fn run_llm_dos_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "llm_dos_attack",
@@ -210,10 +169,7 @@ pub async fn run_llm_dos_attack_result(target: &str) -> EngineResult {
         "description": "Simulated LLM Denial of Service finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_llm_dos_attack(target: &str) {
@@ -221,9 +177,7 @@ pub async fn run_llm_dos_attack(target: &str) {
 }
 
 pub async fn run_multimodal_ai_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "multimodal_ai_attack",
@@ -233,10 +187,7 @@ pub async fn run_multimodal_ai_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Multimodal AI Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_multimodal_ai_attack(target: &str) {
@@ -244,9 +195,7 @@ pub async fn run_multimodal_ai_attack(target: &str) {
 }
 
 pub async fn run_ai_bias_exploit_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "ai_bias_exploit",
@@ -256,10 +205,7 @@ pub async fn run_ai_bias_exploit_result(target: &str) -> EngineResult {
         "description": "Simulated AI Bias Exploitation Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ai_bias_exploit(target: &str) {
@@ -267,9 +213,7 @@ pub async fn run_ai_bias_exploit(target: &str) {
 }
 
 pub async fn run_gpt_plugin_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "gpt_plugin_attack",
@@ -279,10 +223,7 @@ pub async fn run_gpt_plugin_attack_result(target: &str) -> EngineResult {
         "description": "Simulated GPT Plugin / Action Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_gpt_plugin_attack(target: &str) {
@@ -290,9 +231,7 @@ pub async fn run_gpt_plugin_attack(target: &str) {
 }
 
 pub async fn run_autonomous_ai_escape_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "autonomous_ai_escape",
@@ -302,10 +241,7 @@ pub async fn run_autonomous_ai_escape_result(target: &str) -> EngineResult {
         "description": "Simulated Autonomous AI Agent Sandbox Escape finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_autonomous_ai_escape(target: &str) {
@@ -313,9 +249,7 @@ pub async fn run_autonomous_ai_escape(target: &str) {
 }
 
 pub async fn run_llm_memory_extraction_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "llm_memory_extraction",
@@ -325,10 +259,7 @@ pub async fn run_llm_memory_extraction_result(target: &str) -> EngineResult {
         "description": "Simulated LLM Memory Extraction finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_llm_memory_extraction(target: &str) {
@@ -344,10 +275,7 @@ pub async fn run_neural_backdoor_detect_result(target: &str) -> EngineResult {
         "mitre_attack": "T1588.005",
         "description": "Simulated Neural Network Backdoor Detector finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_neural_backdoor_detect(target: &str) {
@@ -363,10 +291,7 @@ pub async fn run_ai_watermark_bypass_result(target: &str) -> EngineResult {
         "mitre_attack": "T1565",
         "description": "Simulated AI Watermark Bypass Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ai_watermark_bypass(target: &str) {
@@ -382,10 +307,7 @@ pub async fn run_federated_learning_attack_result(target: &str) -> EngineResult 
         "mitre_attack": "T1565.001",
         "description": "Simulated Federated Learning Poisoning finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_federated_learning_attack(target: &str) {
@@ -393,9 +315,7 @@ pub async fn run_federated_learning_attack(target: &str) {
 }
 
 pub async fn run_llm_red_team_advanced_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "llm_red_team_advanced",
@@ -405,10 +325,7 @@ pub async fn run_llm_red_team_advanced_result(target: &str) -> EngineResult {
         "description": "Simulated Advanced LLM Red Teaming finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_llm_red_team_advanced(target: &str) {
@@ -416,9 +333,7 @@ pub async fn run_llm_red_team_advanced(target: &str) {
 }
 
 pub async fn run_model_stealing_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "model_stealing_engine",
@@ -428,10 +343,7 @@ pub async fn run_model_stealing_engine_result(target: &str) -> EngineResult {
         "description": "Simulated ML Model Stealing Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_model_stealing_engine(target: &str) {

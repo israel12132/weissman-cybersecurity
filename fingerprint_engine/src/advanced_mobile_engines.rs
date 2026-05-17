@@ -11,10 +11,7 @@ pub async fn run_android_malware_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1407",
         "description": "Simulated Android Malware Analysis Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_android_malware_engine(target: &str) {
@@ -30,10 +27,7 @@ pub async fn run_ios_exploit_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1404",
         "description": "Simulated iOS Exploitation Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ios_exploit_engine(target: &str) {
@@ -49,10 +43,7 @@ pub async fn run_mobile_mitm_result(target: &str) -> EngineResult {
         "mitre_attack": "T1557",
         "description": "Simulated Mobile MITM Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mobile_mitm(target: &str) {
@@ -60,9 +51,7 @@ pub async fn run_mobile_mitm(target: &str) {
 }
 
 pub async fn run_ssl_pinning_bypass_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "ssl_pinning_bypass",
@@ -72,10 +61,7 @@ pub async fn run_ssl_pinning_bypass_result(target: &str) -> EngineResult {
         "description": "Simulated SSL Pinning Bypass Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ssl_pinning_bypass(target: &str) {
@@ -83,9 +69,7 @@ pub async fn run_ssl_pinning_bypass(target: &str) {
 }
 
 pub async fn run_android_intent_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "android_intent_attack",
@@ -95,10 +79,7 @@ pub async fn run_android_intent_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Android Intent Hijacking Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_android_intent_attack(target: &str) {
@@ -106,9 +87,7 @@ pub async fn run_android_intent_attack(target: &str) {
 }
 
 pub async fn run_ios_url_scheme_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "ios_url_scheme_attack",
@@ -118,10 +97,7 @@ pub async fn run_ios_url_scheme_attack_result(target: &str) -> EngineResult {
         "description": "Simulated iOS URL Scheme Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_ios_url_scheme_attack(target: &str) {
@@ -137,10 +113,7 @@ pub async fn run_mobile_overlay_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1417",
         "description": "Simulated Mobile Overlay Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mobile_overlay_attack(target: &str) {
@@ -156,10 +129,7 @@ pub async fn run_sim_swap_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1621",
         "description": "Simulated SIM Swap Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_sim_swap_engine(target: &str) {
@@ -175,10 +145,7 @@ pub async fn run_mobile_banking_trojan_result(target: &str) -> EngineResult {
         "mitre_attack": "T1417",
         "description": "Simulated Mobile Banking Trojan Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mobile_banking_trojan(target: &str) {
@@ -194,10 +161,7 @@ pub async fn run_app_store_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1475",
         "description": "Simulated App Store Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_app_store_attack(target: &str) {
@@ -213,10 +177,7 @@ pub async fn run_mdm_bypass_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1407",
         "description": "Simulated MDM/EMM Bypass Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mdm_bypass_engine(target: &str) {
@@ -232,10 +193,7 @@ pub async fn run_bluetooth_mobile_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1011.001",
         "description": "Simulated Mobile Bluetooth Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_bluetooth_mobile_attack(target: &str) {
@@ -251,10 +209,7 @@ pub async fn run_nfc_relay_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1606",
         "description": "Simulated NFC Relay Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_nfc_relay_attack(target: &str) {
@@ -270,10 +225,7 @@ pub async fn run_mobile_spyware_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1429",
         "description": "Simulated Mobile Spyware Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mobile_spyware_engine(target: &str) {
@@ -281,9 +233,7 @@ pub async fn run_mobile_spyware_engine(target: &str) {
 }
 
 pub async fn run_react_native_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "react_native_attack",
@@ -293,10 +243,7 @@ pub async fn run_react_native_attack_result(target: &str) -> EngineResult {
         "description": "Simulated React Native / Flutter App Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_react_native_attack(target: &str) {

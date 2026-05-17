@@ -113,15 +113,9 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                 let found = matches!(status, 200 | 301 | 302 | 401);
 
                 let (severity, detection_result) = if blocked {
-                    (
-                        "info",
-                        "BLOCKED — security control detected APT-style request",
-                    )
+                    ("info", "BLOCKED — security control detected APT-style request")
                 } else if found {
-                    (
-                        "high",
-                        "NOT BLOCKED — APT-style request reached target without detection",
-                    )
+                    ("high", "NOT BLOCKED — APT-style request reached target without detection")
                 } else {
                     ("low", "Path not found — attack surface not present")
                 };
@@ -159,13 +153,7 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
         }
     }
 
-    let unblocked = findings
-        .iter()
-        .filter(|f| {
-            f.get("blocked").and_then(|b| b.as_bool()) == Some(false)
-                && f.get("path_exists").and_then(|p| p.as_bool()) == Some(true)
-        })
-        .count();
+    let unblocked = findings.iter().filter(|f| f.get("blocked").and_then(|b| b.as_bool()) == Some(false) && f.get("path_exists").and_then(|p| p.as_bool()) == Some(true)).count();
 
     findings.push(json!({
         "type": "threat_emulation",
@@ -185,12 +173,7 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!(
-            "ThreatEmulation: {}/{} APT scenarios undetected on {}",
-            unblocked,
-            APT_SCENARIOS.len(),
-            base
-        ),
+        format!("ThreatEmulation: {}/{} APT scenarios undetected on {}", unblocked, APT_SCENARIOS.len(), base),
     )
 }
 

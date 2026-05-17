@@ -297,16 +297,12 @@ async fn api_status_plain(
         }
     };
     let body = if row.0 > 0 {
-        env::var("WEISSMAN_OAST_HIT_SUBSTRING").unwrap_or_else(|_| "oob_hit".to_string())
+        env::var("WEISSMAN_OAST_HIT_SUBSTRING")
+            .unwrap_or_else(|_| "oob_hit".to_string())
     } else {
         String::new()
     };
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        body,
-    )
-        .into_response()
+    (StatusCode::OK, [("content-type", "text/plain; charset=utf-8")], body).into_response()
 }
 
 async fn api_hits_json(
@@ -522,10 +518,7 @@ async fn run() -> Result<(), String> {
         .map_err(|e| format!("bind HTTP {http_listen}: {e}"))?;
     info!(target: "oast", %http_listen, domain = %base, "OAST HTTP listening");
 
-    let dns_enable = !matches!(
-        env::var("OAST_DNS_ENABLE").as_deref(),
-        Ok("0") | Ok("false")
-    );
+    let dns_enable = !matches!(env::var("OAST_DNS_ENABLE").as_deref(), Ok("0") | Ok("false"));
     if dns_enable {
         let dns_listen = env::var("OAST_DNS_LISTEN").unwrap_or_else(|_| "0.0.0.0:5353".into());
         if let Ok(sock) = UdpSocket::bind(&dns_listen).await {
@@ -539,20 +532,18 @@ async fn run() -> Result<(), String> {
         }
     }
 
-    let server = axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    );
-    server.await.map_err(|e| format!("HTTP server: {e}"))
+    let server = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>());
+    server
+        .await
+        .map_err(|e| format!("HTTP server: {e}"))
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                tracing_subscriber::EnvFilter::new("info,weissman_oast_server=info")
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,weissman_oast_server=info")),
         )
         .init();
 

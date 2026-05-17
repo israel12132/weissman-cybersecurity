@@ -9,8 +9,8 @@ use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
-use weissman_engines::deserialize_llm_json;
 use weissman_engines::openai_chat::{self, LlmError};
+use weissman_engines::deserialize_llm_json;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProposedAttackChain {
@@ -111,7 +111,12 @@ pub async fn run_genesis_war_room(
     let wall_secs: u64 = std::env::var("WEISSMAN_GENESIS_WALL_SECS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| cfg.http_timeout_secs.saturating_mul(8).max(240).min(2700));
+        .unwrap_or_else(|| {
+            cfg.http_timeout_secs
+                .saturating_mul(8)
+                .max(240)
+                .min(2700)
+        });
     tokio::time::timeout(
         Duration::from_secs(wall_secs),
         run_genesis_war_room_inner(
@@ -154,11 +159,7 @@ async fn run_genesis_war_room_inner(
         "council synthesis: LLM chain proposer → critic → bypass → vaccine (consulting local OpenAI-compatible API)"
     );
     let client = llm_client(cfg);
-    let ctx = eternal_context
-        .to_string()
-        .chars()
-        .take(14_000)
-        .collect::<String>();
+    let ctx = eternal_context.to_string().chars().take(14_000).collect::<String>();
     let fb = serde_json::to_string(&simulation_feedback)
         .unwrap_or_default()
         .chars()
@@ -178,8 +179,8 @@ async fn run_genesis_war_room_inner(
         "genesis_chain_proposer",
     )
     .await?;
-    let proposal: ProposedAttackChain =
-        deserialize_llm_json(&raw1).map_err(|e| LlmError::Decode(format!("proposer: {e}")))?;
+    let proposal: ProposedAttackChain = deserialize_llm_json(&raw1)
+        .map_err(|e| LlmError::Decode(format!("proposer: {e}")))?;
     if let Some(w) = war_room {
         let sev = norm_sev(proposal.estimated_severity.as_str());
         let sev = if sev.is_empty() { "medium".into() } else { sev };
@@ -211,14 +212,10 @@ async fn run_genesis_war_room_inner(
         "genesis_chain_critic",
     )
     .await?;
-    let defense: DefenseConstraint =
-        deserialize_llm_json(&raw2).map_err(|e| LlmError::Decode(format!("critic: {e}")))?;
+    let defense: DefenseConstraint = deserialize_llm_json(&raw2)
+        .map_err(|e| LlmError::Decode(format!("critic: {e}")))?;
     if let Some(w) = war_room {
-        let sev = if defense.breaks_chain {
-            "high"
-        } else {
-            "medium"
-        };
+        let sev = if defense.breaks_chain { "high" } else { "medium" };
         w.emit(
             "critic",
             sev,
@@ -248,8 +245,8 @@ async fn run_genesis_war_room_inner(
         "genesis_chain_bypass",
     )
     .await?;
-    let bypass: BypassResponse =
-        deserialize_llm_json(&raw3).map_err(|e| LlmError::Decode(format!("bypass: {e}")))?;
+    let bypass: BypassResponse = deserialize_llm_json(&raw3)
+        .map_err(|e| LlmError::Decode(format!("bypass: {e}")))?;
     if let Some(w) = war_room {
         let sev = if bypass.bypass_exists { "high" } else { "low" };
         w.emit(
@@ -312,8 +309,8 @@ async fn run_genesis_war_room_inner(
         "genesis_vaccine_synth",
     )
     .await?;
-    let vaccine: VaccineArtifacts =
-        deserialize_llm_json(&raw4).map_err(|e| LlmError::Decode(format!("vaccine: {e}")))?;
+    let vaccine: VaccineArtifacts = deserialize_llm_json(&raw4)
+        .map_err(|e| LlmError::Decode(format!("vaccine: {e}")))?;
     if let Some(w) = war_room {
         let sev = norm_sev(vaccine.severity.as_str());
         let sev = if sev.is_empty() { "medium".into() } else { sev };
@@ -376,10 +373,7 @@ async fn run_genesis_war_room_inner(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| LlmError::Decode(format!("vault insert: {e}")))?;
-    let _ = tx
-        .commit()
-        .await
-        .map_err(|e| LlmError::Decode(e.to_string()))?;
+    let _ = tx.commit().await.map_err(|e| LlmError::Decode(e.to_string()))?;
 
     crate::genesis_vault_cache::vault_cache_put(
         tenant_id,

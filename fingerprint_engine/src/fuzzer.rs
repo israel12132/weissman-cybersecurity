@@ -5,13 +5,15 @@
 
 use crate::fuzz_http_pool::FuzzHttpPool;
 use crate::fuzz_oob::{inject_oob_token, oast_correlation_enabled, verify_oob_token_seen};
-use crate::generative_fuzz_llm::{self, BlockFeedback, GenerativeLlmConfig, GenerativeMutation};
-use futures::stream::{FuturesUnordered, StreamExt};
+use crate::generative_fuzz_llm::{
+    self, BlockFeedback, GenerativeLlmConfig, GenerativeMutation,
+};
 use fuzz_core::{
     append_query_param, build_param_injection_probe_urls, is_anomaly,
     load_guided_payloads_from_file, looks_like_sqli_response, reflected_xss_indicated,
     resolve_mutations, BASELINE_REQUESTS, RATE_LIMIT_DELAY_MS, TIME_ANOMALY_MULTIPLIER,
 };
+use futures::stream::{FuturesUnordered, StreamExt};
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -463,10 +465,11 @@ async fn process_get_anomaly(
     llm_user_prompt: Option<String>,
 ) -> Option<ValidatedAnomaly> {
     if let Some(rule) = crate::signatures::find_matching_rule(payload_echo, signature_rules) {
-        let (_, _, _, resp_body) = match measure_request_get_with_body(pool, get_url).await {
-            Ok(t) => t,
-            Err(_) => return None,
-        };
+        let (_, _, _, resp_body) =
+            match measure_request_get_with_body(pool, get_url).await {
+                Ok(t) => t,
+                Err(_) => return None,
+            };
         if !crate::signatures::response_matches_signature(&resp_body, &rule.expected_signature) {
             return None;
         }
@@ -631,13 +634,9 @@ async fn execute_legacy_feedback_fuzz(
             limiter.clone(),
         )
         .await;
-        let oob_hits = collect_oob_verified_findings(
-            pool.as_ref(),
-            target_url,
-            &oast_tokens,
-            limiter.as_ref(),
-        )
-        .await;
+        let oob_hits =
+            collect_oob_verified_findings(pool.as_ref(), target_url, &oast_tokens, limiter.as_ref())
+                .await;
         collected.extend(oob_hits);
     }
 
@@ -743,7 +742,8 @@ async fn execute_generative_feedback_fuzz(
     let mut oast_material: Vec<GenerativeMutation> = Vec::new();
     let mut pending: Vec<GenerativeMutation> = Vec::new();
     const BATCH: usize = 40;
-    let mut flush_timer = tokio::time::interval(std::time::Duration::from_millis(140));
+    let mut flush_timer =
+        tokio::time::interval(std::time::Duration::from_millis(140));
     flush_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     async fn flush_post(
@@ -895,13 +895,9 @@ async fn execute_generative_feedback_fuzz(
             limiter.clone(),
         )
         .await;
-        let oob_hits = collect_oob_verified_findings(
-            pool.as_ref(),
-            target_url,
-            &oast_tokens,
-            limiter.as_ref(),
-        )
-        .await;
+        let oob_hits =
+            collect_oob_verified_findings(pool.as_ref(), target_url, &oast_tokens, limiter.as_ref())
+                .await;
         collected.extend(oob_hits);
     }
 

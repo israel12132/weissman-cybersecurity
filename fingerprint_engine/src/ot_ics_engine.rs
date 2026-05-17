@@ -232,7 +232,10 @@ async fn probe_enip(host: &str) -> Option<OtFingerprint> {
         meta.insert("product_name".into(), json!(pname));
         meta.insert("firmware_major".into(), json!(maj));
         meta.insert("firmware_minor".into(), json!(min));
-        meta.insert("firmware_revision".into(), json!(format!("{maj}.{min}")));
+        meta.insert(
+            "firmware_revision".into(),
+            json!(format!("{maj}.{min}")),
+        );
         let hint = if pname.is_empty() {
             format!("EtherNet/IP (vendor {vid})")
         } else {
@@ -381,7 +384,10 @@ async fn probe_s7(host: &str) -> Option<OtFingerprint> {
     meta.insert("tpkt_length_field".into(), json!(tpkt_len));
     meta.insert("probe".into(), json!("cotp_connection_request"));
     if let Some(pt) = pdu_type {
-        meta.insert("cotp_pdu_type".into(), json!(format!("0x{pt:02x}")));
+        meta.insert(
+            "cotp_pdu_type".into(),
+            json!(format!("0x{pt:02x}")),
+        );
     }
 
     if let Some(params) = s7_cotp_params_slice(slice) {

@@ -13,29 +13,14 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
-    }
+    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
 }
 
 pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let client = build_client().await;
     let base = normalize_target(target);
-    let paths = [
-        "/cgi-bin/",
-        "/cgi-bin/home.cgi",
-        "/goform/",
-        "/HNAP1/",
-        "/api/system",
-        "/api/device-info",
-        "/api/firmware",
-        "/upgrade.cgi",
-    ];
+    let paths = ["/cgi-bin/", "/cgi-bin/home.cgi", "/goform/", "/HNAP1/", "/api/system", "/api/device-info", "/api/firmware", "/upgrade.cgi"];
     let mut findings: Vec<serde_json::Value> = Vec::new();
     for path in &paths {
         let url = format!("{}{}", base, path);
@@ -43,13 +28,8 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default().to_lowercase();
             if status == 200 {
-                let has_default_creds =
-                    body.contains("admin") || body.contains("password") || body.contains("default");
-                let severity = if has_default_creds {
-                    "critical"
-                } else {
-                    "high"
-                };
+                let has_default_creds = body.contains("admin") || body.contains("password") || body.contains("default");
+                let severity = if has_default_creds { "critical" } else { "high" };
                 findings.push(json!({
                     "type": "iot_firmware",
                     "title": format!("IoT endpoint exposed: {}", path),
@@ -60,10 +40,7 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
             }
         }
     }
-    EngineResult::ok(
-        findings.clone(),
-        format!("IoT Firmware: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("IoT Firmware: {} findings", findings.len()))
 }
 
 pub async fn run_iot_firmware(target: &str) {

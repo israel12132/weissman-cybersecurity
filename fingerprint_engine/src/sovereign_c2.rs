@@ -81,8 +81,8 @@ struct DeceptionJwtClaims {
 }
 
 fn mint_hs256_deception_jwt(trap: &Uuid) -> Result<String, String> {
-    let secret =
-        env::var("WEISSMAN_JWT_SECRET").map_err(|_| "WEISSMAN_JWT_SECRET unset".to_string())?;
+    let secret = env::var("WEISSMAN_JWT_SECRET")
+        .map_err(|_| "WEISSMAN_JWT_SECRET unset".to_string())?;
     let secret = secret.trim();
     if secret.is_empty() {
         return Err("WEISSMAN_JWT_SECRET empty".into());
@@ -107,7 +107,9 @@ fn mint_hs256_deception_jwt(trap: &Uuid) -> Result<String, String> {
 
 fn generate_ed25519_pub() -> Result<String, String> {
     let key = PrivateKey::random(&mut OsRng, SshAlgorithm::Ed25519).map_err(|e| e.to_string())?;
-    key.public_key().to_openssh().map_err(|e| e.to_string())
+    key.public_key()
+        .to_openssh()
+        .map_err(|e| e.to_string())
 }
 
 fn spawn_swarm_consumer(
@@ -145,8 +147,9 @@ async fn cf_set_security_level_under_attack(token: &str, zone_id: &str) -> Resul
         .timeout(Duration::from_secs(25))
         .build()
         .map_err(|e| e.to_string())?;
-    let url =
-        format!("https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/security_level");
+    let url = format!(
+        "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/security_level"
+    );
     let body = json!({ "value": "under_attack" });
     let r = client
         .patch(&url)
@@ -286,13 +289,14 @@ pub fn spawn_sovereign_stack(
                 let tx = swarm_tx.clone();
                 let secret = Arc::new(secret);
                 tokio::spawn(async move {
-                    let mut tick = tokio::time::interval(Duration::from_secs(hop_secs.max(10)));
+                    let mut tick =
+                        tokio::time::interval(Duration::from_secs(hop_secs.max(10)));
                     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                     loop {
                         tick.tick().await;
                         let min_p = env_u64("WEISSMAN_SOVEREIGN_PORT_MIN", 40000).max(1024) as u16;
-                        let max_p = env_u64("WEISSMAN_SOVEREIGN_PORT_MAX", 41000)
-                            .max(u64::from(min_p)) as u16;
+                        let max_p =
+                            env_u64("WEISSMAN_SOVEREIGN_PORT_MAX", 41000).max(u64::from(min_p)) as u16;
                         let port = rand::thread_rng().gen_range(min_p..=max_p);
                         let issued = SystemTime::now()
                             .duration_since(UNIX_EPOCH)

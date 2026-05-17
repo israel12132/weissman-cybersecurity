@@ -60,9 +60,14 @@ pub fn sovereign_trap_oast_url_with_path(trap_id: &Uuid) -> String {
 
 fn generate_ed25519_openssh_pair() -> Result<(String, String), String> {
     let key = PrivateKey::random(&mut OsRng, SshAlgorithm::Ed25519).map_err(|e| e.to_string())?;
-    let priv_z = key.to_openssh(LineEnding::LF).map_err(|e| e.to_string())?;
+    let priv_z = key
+        .to_openssh(LineEnding::LF)
+        .map_err(|e| e.to_string())?;
     let priv_s = priv_z.to_string();
-    let pub_s = key.public_key().to_openssh().map_err(|e| e.to_string())?;
+    let pub_s = key
+        .public_key()
+        .to_openssh()
+        .map_err(|e| e.to_string())?;
     Ok((priv_s, pub_s))
 }
 

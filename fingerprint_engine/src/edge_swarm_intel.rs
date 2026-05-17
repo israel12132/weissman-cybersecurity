@@ -185,9 +185,15 @@ pub async fn resolve_edge_swarm_for_target(
     if nodes.is_empty() {
         return None;
     }
-    let chosen_id = llm_pick_node_id(&nodes, target, llm_base_url, llm_model, llm_tenant_id)
-        .await
-        .or_else(|| deterministic_pick(&nodes, target).map(|n| n.id))?;
+    let chosen_id = llm_pick_node_id(
+        &nodes,
+        target,
+        llm_base_url,
+        llm_model,
+        llm_tenant_id,
+    )
+    .await
+    .or_else(|| deterministic_pick(&nodes, target).map(|n| n.id))?;
     let n = nodes.iter().find(|x| x.id == chosen_id)?;
     Some(json!({
         "edge_swarm_node_id": n.id,
@@ -211,15 +217,14 @@ async fn load_llm_tenant_config(pool: &sqlx::PgPool, tenant_id: i64) -> Option<(
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "http://127.0.0.1:8000/v1".into());
-    let model =
-        sqlx::query("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'")
-            .bind(tenant_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|r| r.try_get::<String, _>("value").ok())
-            .unwrap_or_default();
+    let model = sqlx::query("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'")
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|r| r.try_get::<String, _>("value").ok())
+        .unwrap_or_default();
     let _ = tx.commit().await.ok()?;
     Some((base, model))
 }

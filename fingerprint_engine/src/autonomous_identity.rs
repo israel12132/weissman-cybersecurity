@@ -268,11 +268,7 @@ pub async fn try_provision_identity_matrix(
 
 fn join_url(base: &str, path: &str) -> String {
     let p = path.trim();
-    let p = if p.starts_with('/') {
-        p
-    } else {
-        return format!("{base}/{p}");
-    };
+    let p = if p.starts_with('/') { p } else { return format!("{base}/{p}"); };
     format!("{}{}", base.trim_end_matches('/'), p)
 }
 
@@ -296,7 +292,12 @@ fn synthetic_password() -> String {
         .collect()
 }
 
-fn build_creds_json(email_k: &str, pass_k: &str, email: &str, password: &str) -> Value {
+fn build_creds_json(
+    email_k: &str,
+    pass_k: &str,
+    email: &str,
+    password: &str,
+) -> Value {
     let mut m = serde_json::Map::new();
     m.insert(email_k.to_string(), Value::String(email.to_string()));
     m.insert(pass_k.to_string(), Value::String(password.to_string()));
@@ -343,12 +344,7 @@ fn discover_auth_candidates(spec: Option<&Value>) -> Vec<AuthCandidate> {
                     };
                     let mut hint = path.to_lowercase();
                     hint.push(' ');
-                    hint.push_str(
-                        &op.get("summary")
-                            .and_then(|s| s.as_str())
-                            .unwrap_or("")
-                            .to_lowercase(),
-                    );
+                    hint.push_str(&op.get("summary").and_then(|s| s.as_str()).unwrap_or("").to_lowercase());
                     hint.push(' ');
                     hint.push_str(
                         &op.get("operationId")

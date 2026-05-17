@@ -3,9 +3,7 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_spear_phishing_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "spear_phishing_engine",
@@ -15,10 +13,7 @@ pub async fn run_spear_phishing_engine_result(target: &str) -> EngineResult {
         "description": "Simulated Spear Phishing Campaign Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_spear_phishing_engine(target: &str) {
@@ -34,10 +29,7 @@ pub async fn run_vishing_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1566.003",
         "description": "Simulated Vishing Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_vishing_engine(target: &str) {
@@ -53,10 +45,7 @@ pub async fn run_smishing_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1566.003",
         "description": "Simulated SMS Phishing (Smishing) Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_smishing_engine(target: &str) {
@@ -72,10 +61,7 @@ pub async fn run_qr_phishing_result(target: &str) -> EngineResult {
         "mitre_attack": "T1566.001",
         "description": "Simulated QR Code Phishing (Quishing) Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_qr_phishing(target: &str) {
@@ -91,10 +77,7 @@ pub async fn run_deepfake_voice_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1534",
         "description": "Simulated Deepfake Voice Social Engineering finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_deepfake_voice_engine(target: &str) {
@@ -102,9 +85,7 @@ pub async fn run_deepfake_voice_engine(target: &str) {
 }
 
 pub async fn run_business_email_compromise_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "business_email_compromise",
@@ -114,10 +95,7 @@ pub async fn run_business_email_compromise_result(target: &str) -> EngineResult 
         "description": "Simulated BEC (Business Email Compromise) finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_business_email_compromise(target: &str) {
@@ -125,9 +103,7 @@ pub async fn run_business_email_compromise(target: &str) {
 }
 
 pub async fn run_watering_hole_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "watering_hole_attack",
@@ -137,10 +113,7 @@ pub async fn run_watering_hole_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Watering Hole Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_watering_hole_attack(target: &str) {
@@ -156,10 +129,7 @@ pub async fn run_pretexting_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1534",
         "description": "Simulated Pretexting Scenario Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_pretexting_engine(target: &str) {
@@ -175,10 +145,7 @@ pub async fn run_insider_threat_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1078.001",
         "description": "Simulated Insider Threat Simulation Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_insider_threat_engine(target: &str) {
@@ -186,9 +153,7 @@ pub async fn run_insider_threat_engine(target: &str) {
 }
 
 pub async fn run_brand_impersonation_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "brand_impersonation",
@@ -198,10 +163,7 @@ pub async fn run_brand_impersonation_result(target: &str) -> EngineResult {
         "description": "Simulated Brand Impersonation Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_brand_impersonation(target: &str) {
@@ -217,10 +179,7 @@ pub async fn run_fake_update_engine_result(target: &str) -> EngineResult {
         "mitre_attack": "T1189",
         "description": "Simulated Fake Update Social Engineering finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_fake_update_engine(target: &str) {
@@ -228,9 +187,7 @@ pub async fn run_fake_update_engine(target: &str) {
 }
 
 pub async fn run_linkedin_phishing_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "linkedin_phishing",
@@ -240,10 +197,7 @@ pub async fn run_linkedin_phishing_result(target: &str) -> EngineResult {
         "description": "Simulated LinkedIn Social Engineering Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_linkedin_phishing(target: &str) {
@@ -259,10 +213,7 @@ pub async fn run_callback_phishing_result(target: &str) -> EngineResult {
         "mitre_attack": "T1566.003",
         "description": "Simulated Callback Phishing Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_callback_phishing(target: &str) {
@@ -278,10 +229,7 @@ pub async fn run_physical_social_eng_result(target: &str) -> EngineResult {
         "mitre_attack": "T1534",
         "description": "Simulated Physical Social Engineering Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_physical_social_eng(target: &str) {
@@ -289,9 +237,7 @@ pub async fn run_physical_social_eng(target: &str) {
 }
 
 pub async fn run_typosquatting_phishing_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "typosquatting_phishing",
@@ -301,10 +247,7 @@ pub async fn run_typosquatting_phishing_result(target: &str) -> EngineResult {
         "description": "Simulated Typosquatting Phishing Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_typosquatting_phishing(target: &str) {

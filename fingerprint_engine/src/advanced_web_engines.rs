@@ -3,9 +3,7 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "graphql_deep_attack",
@@ -15,10 +13,7 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
         "description": "Simulated GraphQL Deep Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_graphql_deep_attack(target: &str) {
@@ -26,9 +21,7 @@ pub async fn run_graphql_deep_attack(target: &str) {
 }
 
 pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "grpc_reflection_attack",
@@ -38,10 +31,7 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
         "description": "Simulated gRPC Reflection Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_grpc_reflection_attack(target: &str) {
@@ -49,9 +39,7 @@ pub async fn run_grpc_reflection_attack(target: &str) {
 }
 
 pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "cors_misconfiguration",
@@ -61,10 +49,7 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
         "description": "Simulated CORS Misconfiguration Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_cors_misconfiguration(target: &str) {
@@ -72,9 +57,7 @@ pub async fn run_cors_misconfiguration(target: &str) {
 }
 
 pub async fn run_http2_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "http2_attack",
@@ -84,10 +67,7 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
         "description": "Simulated HTTP/2 & HTTP/3 Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_http2_attack(target: &str) {
@@ -95,9 +75,7 @@ pub async fn run_http2_attack(target: &str) {
 }
 
 pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "swagger_abuse",
@@ -107,10 +85,7 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
         "description": "Simulated Swagger/OpenAPI Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_swagger_abuse(target: &str) {
@@ -118,9 +93,7 @@ pub async fn run_swagger_abuse(target: &str) {
 }
 
 pub async fn run_soap_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "soap_injection",
@@ -130,10 +103,7 @@ pub async fn run_soap_injection_result(target: &str) -> EngineResult {
         "description": "Simulated SOAP/XML Injection Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_soap_injection(target: &str) {
@@ -141,9 +111,7 @@ pub async fn run_soap_injection(target: &str) {
 }
 
 pub async fn run_odata_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "odata_injection",
@@ -153,10 +121,7 @@ pub async fn run_odata_injection_result(target: &str) -> EngineResult {
         "description": "Simulated OData Query Injection finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_odata_injection(target: &str) {
@@ -164,9 +129,7 @@ pub async fn run_odata_injection(target: &str) {
 }
 
 pub async fn run_css_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "css_injection",
@@ -176,10 +139,7 @@ pub async fn run_css_injection_result(target: &str) -> EngineResult {
         "description": "Simulated CSS Injection / Data Theft finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_css_injection(target: &str) {
@@ -187,9 +147,7 @@ pub async fn run_css_injection(target: &str) {
 }
 
 pub async fn run_template_injection_adv_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "template_injection_adv",
@@ -199,10 +157,7 @@ pub async fn run_template_injection_adv_result(target: &str) -> EngineResult {
         "description": "Simulated Advanced Template Injection finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_template_injection_adv(target: &str) {
@@ -210,9 +165,7 @@ pub async fn run_template_injection_adv(target: &str) {
 }
 
 pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "http_parameter_pollution",
@@ -222,10 +175,7 @@ pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
         "description": "Simulated HTTP Parameter Pollution Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_http_parameter_pollution(target: &str) {
@@ -233,9 +183,7 @@ pub async fn run_http_parameter_pollution(target: &str) {
 }
 
 pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "api_mass_assignment",
@@ -245,10 +193,7 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
         "description": "Simulated API Mass Assignment Scanner finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_api_mass_assignment(target: &str) {
@@ -256,9 +201,7 @@ pub async fn run_api_mass_assignment(target: &str) {
 }
 
 pub async fn run_web_cache_poison_adv_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "web_cache_poison_adv",
@@ -268,10 +211,7 @@ pub async fn run_web_cache_poison_adv_result(target: &str) -> EngineResult {
         "description": "Simulated Advanced Web Cache Poisoning finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_web_cache_poison_adv(target: &str) {
@@ -279,9 +219,7 @@ pub async fn run_web_cache_poison_adv(target: &str) {
 }
 
 pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "clickjacking_engine",
@@ -291,10 +229,7 @@ pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
         "description": "Simulated Clickjacking / UI Redress Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_clickjacking_engine(target: &str) {
@@ -302,9 +237,7 @@ pub async fn run_clickjacking_engine(target: &str) {
 }
 
 pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "subdomain_takeover",
@@ -314,10 +247,7 @@ pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
         "description": "Simulated Subdomain Takeover Scanner finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_subdomain_takeover(target: &str) {
@@ -325,9 +255,7 @@ pub async fn run_subdomain_takeover(target: &str) {
 }
 
 pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "file_inclusion_rfi",
@@ -337,10 +265,7 @@ pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
         "description": "Simulated Remote File Inclusion Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_file_inclusion_rfi(target: &str) {
@@ -348,9 +273,7 @@ pub async fn run_file_inclusion_rfi(target: &str) {
 }
 
 pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "deserialization_net",
@@ -360,10 +283,7 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
         "description": "Simulated .NET Deserialization Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_deserialization_net(target: &str) {
@@ -371,9 +291,7 @@ pub async fn run_deserialization_net(target: &str) {
 }
 
 pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "nosql_deep_injection",
@@ -383,10 +301,7 @@ pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
         "description": "Simulated NoSQL Deep Injection Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_nosql_deep_injection(target: &str) {
@@ -394,9 +309,7 @@ pub async fn run_nosql_deep_injection(target: &str) {
 }
 
 pub async fn run_jwt_advanced_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "jwt_advanced_attack",
@@ -406,10 +319,7 @@ pub async fn run_jwt_advanced_attack_result(target: &str) -> EngineResult {
         "description": "Simulated JWT Advanced Attack Suite finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_jwt_advanced_attack(target: &str) {
@@ -417,9 +327,7 @@ pub async fn run_jwt_advanced_attack(target: &str) {
 }
 
 pub async fn run_api_rate_limit_bypass_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "api_rate_limit_bypass",
@@ -429,10 +337,7 @@ pub async fn run_api_rate_limit_bypass_result(target: &str) -> EngineResult {
         "description": "Simulated API Rate Limit Bypass finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_api_rate_limit_bypass(target: &str) {
@@ -440,9 +345,7 @@ pub async fn run_api_rate_limit_bypass(target: &str) {
 }
 
 pub async fn run_idor_advanced_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "idor_advanced",
@@ -452,10 +355,7 @@ pub async fn run_idor_advanced_result(target: &str) -> EngineResult {
         "description": "Simulated Advanced IDOR / BOLA Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_idor_advanced(target: &str) {
@@ -463,9 +363,7 @@ pub async fn run_idor_advanced(target: &str) {
 }
 
 pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "graphql_subscription_attack",
@@ -475,10 +373,7 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
         "description": "Simulated GraphQL Subscription DoS finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_graphql_subscription_attack(target: &str) {
@@ -486,9 +381,7 @@ pub async fn run_graphql_subscription_attack(target: &str) {
 }
 
 pub async fn run_webrtc_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "webrtc_attack",
@@ -498,10 +391,7 @@ pub async fn run_webrtc_attack_result(target: &str) -> EngineResult {
         "description": "Simulated WebRTC Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_webrtc_attack(target: &str) {
@@ -517,10 +407,7 @@ pub async fn run_browser_extension_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1176",
         "description": "Simulated Malicious Browser Extension Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_browser_extension_attack(target: &str) {
@@ -528,9 +415,7 @@ pub async fn run_browser_extension_attack(target: &str) {
 }
 
 pub async fn run_web3_dapp_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "web3_dapp_attack",
@@ -540,10 +425,7 @@ pub async fn run_web3_dapp_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Web3 / DApp Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_web3_dapp_attack(target: &str) {
@@ -551,9 +433,7 @@ pub async fn run_web3_dapp_attack(target: &str) {
 }
 
 pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "api_gateway_bypass",
@@ -563,10 +443,7 @@ pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
         "description": "Simulated API Gateway Security Bypass finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_api_gateway_bypass(target: &str) {

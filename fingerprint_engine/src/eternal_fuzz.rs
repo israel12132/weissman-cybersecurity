@@ -380,11 +380,7 @@ pub async fn run_eternal_fuzz_cycle_with_hibernation(
     }
 
     if root_index >= nroots {
-        let longest = paths_found
-            .iter()
-            .max_by_key(|p| p.len())
-            .cloned()
-            .unwrap_or_default();
+        let longest = paths_found.iter().max_by_key(|p| p.len()).cloned().unwrap_or_default();
         let fp = tech_fingerprint_for_chain(&longest);
         let feedback = synthesize_feedback_from_path(&longest);
         if let Some(sid) = suspended_row_id {
@@ -549,11 +545,7 @@ pub async fn run_eternal_fuzz_cycle_with_hibernation(
         });
     }
 
-    let longest = paths_found
-        .iter()
-        .max_by_key(|p| p.len())
-        .cloned()
-        .unwrap_or_default();
+    let longest = paths_found.iter().max_by_key(|p| p.len()).cloned().unwrap_or_default();
     let fp = tech_fingerprint_for_chain(&longest);
     let feedback = synthesize_feedback_from_path(&longest);
 
@@ -677,11 +669,7 @@ pub fn run_eternal_fuzz_cycle_json() -> Value {
         }
     }
 
-    let longest = paths_found
-        .iter()
-        .max_by_key(|p| p.len())
-        .cloned()
-        .unwrap_or_default();
+    let longest = paths_found.iter().max_by_key(|p| p.len()).cloned().unwrap_or_default();
     let fp = tech_fingerprint_for_chain(&longest);
     let feedback = synthesize_feedback_from_path(&longest);
     let truncated = !stack.is_empty() || root_index < nroots;

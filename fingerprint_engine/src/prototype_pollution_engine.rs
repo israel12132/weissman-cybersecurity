@@ -27,15 +27,12 @@ pub async fn run_prototype_pollution_result(target: &str) -> EngineResult {
     let base = base_url(target);
     let mut findings = Vec::new();
 
-    let api_paths = [
-        "/api", "/api/v1", "/api/v2", "/graphql", "/data", "/submit", "/",
-    ];
+    let api_paths = ["/api", "/api/v1", "/api/v2", "/graphql", "/data", "/submit", "/"];
 
     // Payload 1: __proto__ pollution
     let proto_payload = json!({"__proto__": {"polluted": "weissman_pp_test"}});
     // Payload 2: constructor.prototype pollution
-    let constructor_payload =
-        json!({"constructor": {"prototype": {"polluted": "weissman_pp_test"}}});
+    let constructor_payload = json!({"constructor": {"prototype": {"polluted": "weissman_pp_test"}}});
 
     for path in &api_paths {
         let url = format!("{}{}", base, path);
@@ -107,10 +104,7 @@ pub async fn run_prototype_pollution_result(target: &str) -> EngineResult {
     // Query parameter pollution probes
     let qp_urls = [
         format!("{}/?__proto__[polluted]=weissman_pp_test", base),
-        format!(
-            "{}/?constructor[prototype][polluted]=weissman_pp_test",
-            base
-        ),
+        format!("{}/?constructor[prototype][polluted]=weissman_pp_test", base),
     ];
     for url in &qp_urls {
         if let Ok(resp) = client.get(url).send().await {

@@ -28,7 +28,6 @@ use axum::{
 use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Asia::Jerusalem;
 use dashmap::DashMap;
-use flume::TrySendError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -40,6 +39,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use flume::TrySendError;
 use tower::util::ServiceExt;
 use tower_http::services::ServeDir;
 
@@ -92,8 +92,7 @@ pub struct AppState {
     /// Batched edge swarm heartbeats (30s flush) to reduce Postgres churn.
     pub edge_heartbeat_batcher: crate::edge_heartbeat_batch::EdgeHeartbeatBatcher,
     /// Optional sovereign C2: outbound commands to in-process swarm consumers (`WEISSMAN_SOVEREIGN_MPSC_CAPACITY`).
-    pub sovereign_swarm_tx:
-        Option<Arc<tokio::sync::mpsc::Sender<crate::sovereign_c2::SovereignSwarmCmd>>>,
+    pub sovereign_swarm_tx: Option<Arc<tokio::sync::mpsc::Sender<crate::sovereign_c2::SovereignSwarmCmd>>>,
     sovereign_swarm_rx: std::sync::Mutex<
         Option<tokio::sync::mpsc::Receiver<crate::sovereign_c2::SovereignSwarmCmd>>,
     >,
@@ -941,8 +940,10 @@ pub fn new_app_state(
     });
     let (telemetry_tx, _) = tokio::sync::broadcast::channel::<String>(TELEMETRY_BROADCAST_CAPACITY);
     let telemetry_broadcast_tx = Arc::new(telemetry_tx);
-    let edge_heartbeat_batcher =
-        crate::edge_heartbeat_batch::spawn(app_pool.clone(), Some(telemetry_broadcast_tx.clone()));
+    let edge_heartbeat_batcher = crate::edge_heartbeat_batch::spawn(
+        app_pool.clone(),
+        Some(telemetry_broadcast_tx.clone()),
+    );
     let (swarm_tx, _) = tokio::sync::broadcast::channel::<String>(512);
     let mpsc_cap = std::env::var("WEISSMAN_SOVEREIGN_MPSC_CAPACITY")
         .ok()
@@ -1033,8 +1034,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             {
                 let pool = app_pool.clone();
                 tokio::spawn(async move {
-                    let mut tick =
-                        tokio::time::interval(std::time::Duration::from_secs(secs.max(600)));
+                    let mut tick = tokio::time::interval(std::time::Duration::from_secs(secs.max(600)));
                     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                     loop {
                         tick.tick().await;
@@ -1075,10 +1075,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/dashboard/stats", get(api_dashboard_stats))
         .route("/api/findings", get(api_findings))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
-        .route(
-            "/api/findings/:id/status",
-            patch(api_findings_update_status),
-        )
+        .route("/api/findings/:id/status", patch(api_findings_update_status))
         .route("/api/config/public", get(api_config_public))
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/reports", get(api_reports))
@@ -1106,7 +1103,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/billing/checkout-session",
             post(api_billing_checkout_session),
         )
-        .route("/api/billing/sync-paddle", post(api_billing_sync_paddle))
+        .route(
+            "/api/billing/sync-paddle",
+            post(api_billing_sync_paddle),
+        )
         .route("/api/webhooks/paddle", post(api_paddle_webhook))
         .route("/api/auth/oidc/begin", get(crate::oidc_auth::oidc_begin))
         .route(
@@ -1119,19 +1119,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/auth/me", get(api_auth_me))
         // ── Admin user management (CEO/Superadmin only) ───────────────────────
-        .route(
-            "/api/admin/users",
-            get(crate::admin_users::api_admin_users_list)
-                .post(crate::admin_users::api_admin_users_create),
-        )
-        .route(
-            "/api/admin/users/:id",
-            patch(crate::admin_users::api_admin_users_update),
-        )
-        .route(
-            "/api/admin/users/:id/deactivate",
-            post(crate::admin_users::api_admin_users_deactivate),
-        )
+        .route("/api/admin/users", get(crate::admin_users::api_admin_users_list).post(crate::admin_users::api_admin_users_create))
+        .route("/api/admin/users/:id", patch(crate::admin_users::api_admin_users_update))
+        .route("/api/admin/users/:id/deactivate", post(crate::admin_users::api_admin_users_deactivate))
         .route(
             "/api/enterprise/settings",
             get(api_enterprise_settings_get).patch(api_enterprise_settings_patch),
@@ -1175,10 +1165,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/scan/run-all", post(api_scan_run_all))
         .route("/api/scan/all-engines", post(api_scan_all_engines))
         .route("/api/discovery/domains", post(api_discovery_domains))
-        .route(
-            "/api/scan/discovered-domains",
-            post(api_scan_discovered_domains),
-        )
+        .route("/api/scan/discovered-domains", post(api_scan_discovered_domains))
         .route(
             "/api/system/configs",
             get(api_system_configs_get).post(api_system_configs_post),
@@ -1189,37 +1176,16 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         // ── Council HITL approval queue ───────────────────────────────────────
         .route("/api/council/hitl/propose", post(api_council_hitl_propose))
         .route("/api/council/hitl/queue", get(api_council_hitl_queue))
-        .route(
-            "/api/council/hitl/:id/approve",
-            post(api_council_hitl_approve),
-        )
-        .route(
-            "/api/council/hitl/:id/reject",
-            post(api_council_hitl_reject),
-        )
+        .route("/api/council/hitl/:id/approve", post(api_council_hitl_approve))
+        .route("/api/council/hitl/:id/reject", post(api_council_hitl_reject))
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))
         .route("/api/oast/verify/:token", get(api_oast_probe_verify))
         // ── Enterprise SSO management ─────────────────────────────────────────
-        .route(
-            "/api/sso/idps",
-            get(crate::sso_management::api_sso_idps_list)
-                .post(crate::sso_management::api_sso_idps_create),
-        )
-        .route(
-            "/api/sso/idps/:id",
-            get(crate::sso_management::api_sso_idp_get)
-                .patch(crate::sso_management::api_sso_idp_patch)
-                .delete(crate::sso_management::api_sso_idp_delete),
-        )
-        .route(
-            "/api/sso/idps/:id/test",
-            post(crate::sso_management::api_sso_idp_test),
-        )
-        .route(
-            "/api/sso/idps/:id/toggle",
-            post(crate::sso_management::api_sso_idp_toggle),
-        )
+        .route("/api/sso/idps", get(crate::sso_management::api_sso_idps_list).post(crate::sso_management::api_sso_idps_create))
+        .route("/api/sso/idps/:id", get(crate::sso_management::api_sso_idp_get).patch(crate::sso_management::api_sso_idp_patch).delete(crate::sso_management::api_sso_idp_delete))
+        .route("/api/sso/idps/:id/test", post(crate::sso_management::api_sso_idp_test))
+        .route("/api/sso/idps/:id/toggle", post(crate::sso_management::api_sso_idp_toggle))
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
         .route("/api/timing-scan/run", post(api_timing_scan_run))
@@ -1304,7 +1270,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
-        .route("/api/v1/alerts/aws-canary", post(api_v1_alerts_aws_canary))
+        .route(
+            "/api/v1/alerts/aws-canary",
+            post(api_v1_alerts_aws_canary),
+        )
         .route(
             "/api/clients/:id/deception/deploy-cloud",
             post(api_deception_deploy_cloud),
@@ -1361,10 +1330,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/ceo/global-safe-mode",
             patch(api_ceo_global_safe_patch),
         )
-        .route(
-            "/api/ceo/god-mode/snapshot",
-            get(api_ceo_god_mode_snapshot_get),
-        )
+        .route("/api/ceo/god-mode/snapshot", get(api_ceo_god_mode_snapshot_get))
         .route(
             "/api/ceo/tenant/engines",
             put(api_ceo_tenant_engines_put).patch(api_ceo_tenant_engines_put),
@@ -1393,10 +1359,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             post(api_ceo_vault_match),
         )
         .route("/api/ceo/vault/:id", get(api_ceo_vault_get))
-        .route(
-            "/api/ceo/sovereign/buffer",
-            get(api_ceo_sovereign_buffer_get),
-        )
+        .route("/api/ceo/sovereign/buffer", get(api_ceo_sovereign_buffer_get))
         .route(
             "/api/ceo/sovereign/trigger",
             post(api_ceo_sovereign_trigger_post),
@@ -1417,9 +1380,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::observability::http_metrics_middleware,
         ))
-        .layer(middleware::from_fn(
-            crate::request_trace::trace_http_middleware,
-        ))
+        .layer(middleware::from_fn(crate::request_trace::trace_http_middleware))
         .with_state(state);
     // Frontend is built with base: '/command-center/' so assets at /command-center/assets/...
     let app = if let Some(dir) = static_dir {

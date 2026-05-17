@@ -13,17 +13,11 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
-    }
+    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
 }
 
 pub async fn run_edr_evasion_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let client = build_client().await;
     let base = normalize_target(target);
     let mut findings: Vec<serde_json::Value> = Vec::new();
@@ -31,17 +25,8 @@ pub async fn run_edr_evasion_result(target: &str) -> EngineResult {
     // Check WAF/EDR headers on normal request
     if let Ok(resp) = client.get(&base).send().await {
         let headers = resp.headers();
-        let waf_headers = [
-            "cf-ray",
-            "x-sucuri-id",
-            "x-akamai-transformed",
-            "x-imperva-waf",
-        ];
-        let waf_found: Vec<&str> = waf_headers
-            .iter()
-            .filter(|h| headers.contains_key(**h))
-            .copied()
-            .collect();
+        let waf_headers = ["cf-ray", "x-sucuri-id", "x-akamai-transformed", "x-imperva-waf"];
+        let waf_found: Vec<&str> = waf_headers.iter().filter(|h| headers.contains_key(**h)).copied().collect();
         if !waf_found.is_empty() {
             findings.push(json!({
                 "type": "edr_evasion",
@@ -54,17 +39,11 @@ pub async fn run_edr_evasion_result(target: &str) -> EngineResult {
     }
 
     // Probe with malicious UAs; if all succeed, flag missing protection
-    let malicious_uas = [
-        "sqlmap/1.0",
-        "Nikto/2.1.6",
-        "Mozilla/5.0 (compatible; Googlebot/2.1)",
-    ];
+    let malicious_uas = ["sqlmap/1.0", "Nikto/2.1.6", "Mozilla/5.0 (compatible; Googlebot/2.1)"];
     let mut unblocked = 0usize;
     for ua in &malicious_uas {
         if let Ok(resp) = client.get(&base).header("User-Agent", *ua).send().await {
-            if resp.status().as_u16() == 200 {
-                unblocked += 1;
-            }
+            if resp.status().as_u16() == 200 { unblocked += 1; }
         }
     }
     if unblocked == malicious_uas.len() {
@@ -76,10 +55,7 @@ pub async fn run_edr_evasion_result(target: &str) -> EngineResult {
             "description": format!("All {} malicious UA requests returned 200 — no blocking detected.", unblocked)
         }));
     }
-    EngineResult::ok(
-        findings.clone(),
-        format!("EDR Evasion: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("EDR Evasion: {} findings", findings.len()))
 }
 
 pub async fn run_edr_evasion(target: &str) {

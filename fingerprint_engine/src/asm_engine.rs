@@ -18,13 +18,20 @@ pub const TOP_PORTS: [u16; 63] = [
     // Web / API / reverse proxies
     80, 443, 8080, 8443, 8008, 8888, 9443, 3000, 3001, 4200, 5000, 5001, 8000, 8001, 8181,
     // Monitoring / observability / admin UIs
-    5601, 5602, 6333, 7474, 7687, 9090, 9091, // Classic insecure services
-    22, 21, 23, 25, 53, 111, 135, 139, 445, 1433, 3389, 5900, // SQL databases
-    3306, 5432, 1521, 1434, // NoSQL / cache / search
-    27017, 6379, 9200, 9300, 5984, 11211, 28017, // Message queues / streaming
-    5672, 15672, 4369, 9092, 2181, // Container / orchestration
-    2375, 4243, 6443, 10250, 10255, 2376, // Service mesh / secrets / config
-    8200, 8500, 8300, 8301, // Dev / CI / misc
+    5601, 5602, 6333, 7474, 7687, 9090, 9091,
+    // Classic insecure services
+    22, 21, 23, 25, 53, 111, 135, 139, 445, 1433, 3389, 5900,
+    // SQL databases
+    3306, 5432, 1521, 1434,
+    // NoSQL / cache / search
+    27017, 6379, 9200, 9300, 5984, 11211, 28017,
+    // Message queues / streaming
+    5672, 15672, 4369, 9092, 2181,
+    // Container / orchestration
+    2375, 4243, 6443, 10250, 10255, 2376,
+    // Service mesh / secrets / config
+    8200, 8500, 8300, 8301,
+    // Dev / CI / misc
     9000, 50000, 8161,
 ];
 

@@ -237,7 +237,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, aid, nid, EDGE_EXPOSES).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            aid,
+            nid,
+            EDGE_EXPOSES,
+        )
+        .await?;
     }
 
     let identities: Vec<(String, i32)> = sqlx::query_as(
@@ -273,7 +281,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, iid, aid, EDGE_AUTHENTICATES).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            iid,
+            aid,
+            EDGE_AUTHENTICATES,
+        )
+        .await?;
     }
 
     let asm_nodes: Vec<(String, String, String)> = sqlx::query_as(
@@ -296,7 +312,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, net_id, aid, EDGE_CONNECTS).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            net_id,
+            aid,
+            EDGE_CONNECTS,
+        )
+        .await?;
     }
 
     let ot_rows: Vec<(i64, String, i32, String, String)> = sqlx::query_as(
@@ -329,7 +353,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, pid, aid, EDGE_AFFECTS).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            pid,
+            aid,
+            EDGE_AFFECTS,
+        )
+        .await?;
     }
 
     // --- Omni-source: AWS (inventory table; empty until cloud sync populates rows) ---
@@ -361,7 +393,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, aid, cid, EDGE_CONNECTS).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            aid,
+            cid,
+            EDGE_CONNECTS,
+        )
+        .await?;
     }
 
     // --- Omni-source: Kubernetes ---
@@ -394,7 +434,15 @@ pub async fn build_risk_graph_for_client(
             &mut node_id_by_key,
         )
         .await?;
-        risk_upsert_edge(tx, tenant_id, client_id, aid, kid, EDGE_CONNECTS).await?;
+        risk_upsert_edge(
+            tx,
+            tenant_id,
+            client_id,
+            aid,
+            kid,
+            EDGE_CONNECTS,
+        )
+        .await?;
     }
 
     // IAM-style permission stubs: cap to avoid quadratic blow-up on large tenants.
@@ -412,7 +460,15 @@ pub async fn build_risk_graph_for_client(
         .collect();
     for iid in &identity_ids {
         for cid in &cloud_ids {
-            risk_upsert_edge(tx, tenant_id, client_id, *iid, *cid, EDGE_HAS_PERMISSION).await?;
+            risk_upsert_edge(
+                tx,
+                tenant_id,
+                client_id,
+                *iid,
+                *cid,
+                EDGE_HAS_PERMISSION,
+            )
+            .await?;
         }
     }
 

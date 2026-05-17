@@ -42,11 +42,12 @@ pub async fn run_smb_netbios_result(target: &str) -> EngineResult {
     let mut findings: Vec<serde_json::Value> = Vec::new();
 
     // Probe SMB/NetBIOS ports concurrently
-    let results = futures::future::join_all(SMB_PORTS.iter().map(|&port| {
-        let h = host.clone();
-        async move { (port, port_open(&h, port).await) }
-    }))
-    .await;
+    let results = futures::future::join_all(
+        SMB_PORTS.iter().map(|&port| {
+            let h = host.clone();
+            async move { (port, port_open(&h, port).await) }
+        })
+    ).await;
 
     for (port, open) in results {
         if !open {

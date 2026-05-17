@@ -50,7 +50,12 @@ pub async fn get_bytes_with_retry(
 ) -> Result<Vec<u8>, OutboundHttpError> {
     let mut attempt = 0u32;
     loop {
-        let resp = match client.get(url).headers(headers.clone()).send().await {
+        let resp = match client
+            .get(url)
+            .headers(headers.clone())
+            .send()
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 if let Some(src) = metrics_label {
@@ -94,8 +99,7 @@ pub async fn get_bytes_with_retry(
         }
         if !status.is_success() {
             if let Some(src) = metrics_label {
-                metrics::counter!("weissman_external_api_errors_total", "source" => src)
-                    .increment(1);
+                metrics::counter!("weissman_external_api_errors_total", "source" => src).increment(1);
             }
             return Err(OutboundHttpError::Status(status.as_u16()));
         }
@@ -111,8 +115,7 @@ pub async fn get_bytes_with_retry(
         };
         if bytes.is_empty() {
             if let Some(src) = metrics_label {
-                metrics::counter!("weissman_external_api_errors_total", "source" => src)
-                    .increment(1);
+                metrics::counter!("weissman_external_api_errors_total", "source" => src).increment(1);
             }
             return Err(OutboundHttpError::EmptyBody);
         }

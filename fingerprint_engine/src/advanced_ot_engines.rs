@@ -3,9 +3,7 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 
 pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "modbus_attack",
@@ -15,10 +13,7 @@ pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
         "description": "Simulated Modbus Protocol Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_modbus_attack(target: &str) {
@@ -26,9 +21,7 @@ pub async fn run_modbus_attack(target: &str) {
 }
 
 pub async fn run_dnp3_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "dnp3_attack",
@@ -38,10 +31,7 @@ pub async fn run_dnp3_attack_result(target: &str) -> EngineResult {
         "description": "Simulated DNP3 Protocol Exploiter finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_dnp3_attack(target: &str) {
@@ -49,9 +39,7 @@ pub async fn run_dnp3_attack(target: &str) {
 }
 
 pub async fn run_bacnet_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "bacnet_attack",
@@ -61,10 +49,7 @@ pub async fn run_bacnet_attack_result(target: &str) -> EngineResult {
         "description": "Simulated BACnet Building Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_bacnet_attack(target: &str) {
@@ -72,9 +57,7 @@ pub async fn run_bacnet_attack(target: &str) {
 }
 
 pub async fn run_mqtt_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "mqtt_attack",
@@ -84,10 +67,7 @@ pub async fn run_mqtt_attack_result(target: &str) -> EngineResult {
         "description": "Simulated MQTT Broker Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_mqtt_attack(target: &str) {
@@ -95,9 +75,7 @@ pub async fn run_mqtt_attack(target: &str) {
 }
 
 pub async fn run_coap_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "coap_attack",
@@ -107,10 +85,7 @@ pub async fn run_coap_attack_result(target: &str) -> EngineResult {
         "description": "Simulated CoAP Protocol Exploitation finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_coap_attack(target: &str) {
@@ -126,10 +101,7 @@ pub async fn run_zigbee_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T0836",
         "description": "Simulated Zigbee Network Attack Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_zigbee_attack(target: &str) {
@@ -137,9 +109,7 @@ pub async fn run_zigbee_attack(target: &str) {
 }
 
 pub async fn run_iec61850_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "iec61850_attack",
@@ -149,10 +119,7 @@ pub async fn run_iec61850_attack_result(target: &str) -> EngineResult {
         "description": "Simulated IEC 61850 Substation Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_iec61850_attack(target: &str) {
@@ -160,9 +127,7 @@ pub async fn run_iec61850_attack(target: &str) {
 }
 
 pub async fn run_opcua_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "opcua_attack",
@@ -172,10 +137,7 @@ pub async fn run_opcua_attack_result(target: &str) -> EngineResult {
         "description": "Simulated OPC-UA Industrial Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_opcua_attack(target: &str) {
@@ -183,9 +145,7 @@ pub async fn run_opcua_attack(target: &str) {
 }
 
 pub async fn run_plc_logic_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "plc_logic_attack",
@@ -195,10 +155,7 @@ pub async fn run_plc_logic_attack_result(target: &str) -> EngineResult {
         "description": "Simulated PLC Ladder Logic Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_plc_logic_attack(target: &str) {
@@ -206,9 +163,7 @@ pub async fn run_plc_logic_attack(target: &str) {
 }
 
 pub async fn run_hmi_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "hmi_attack",
@@ -218,10 +173,7 @@ pub async fn run_hmi_attack_result(target: &str) -> EngineResult {
         "description": "Simulated HMI/SCADA UI Attack Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_hmi_attack(target: &str) {
@@ -237,10 +189,7 @@ pub async fn run_satellite_comm_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T0836",
         "description": "Simulated Satellite Communication Attack finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_satellite_comm_attack(target: &str) {
@@ -256,10 +205,7 @@ pub async fn run_firmware_emulation_attack_result(target: &str) -> EngineResult 
         "mitre_attack": "T1542",
         "description": "Simulated IoT Firmware Emulation Attack finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_firmware_emulation_attack(target: &str) {
@@ -267,9 +213,7 @@ pub async fn run_firmware_emulation_attack(target: &str) {
 }
 
 pub async fn run_profinet_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "profinet_attack",
@@ -279,10 +223,7 @@ pub async fn run_profinet_attack_result(target: &str) -> EngineResult {
         "description": "Simulated PROFINET Industrial Attack finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_profinet_attack(target: &str) {
@@ -298,10 +239,7 @@ pub async fn run_rfid_nfc_attack_result(target: &str) -> EngineResult {
         "mitre_attack": "T1606",
         "description": "Simulated RFID/NFC Cloning Engine finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_rfid_nfc_attack(target: &str) {
@@ -309,9 +247,7 @@ pub async fn run_rfid_nfc_attack(target: &str) {
 }
 
 pub async fn run_industrial_protocol_fuzz_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "industrial_protocol_fuzz",
@@ -321,10 +257,7 @@ pub async fn run_industrial_protocol_fuzz_result(target: &str) -> EngineResult {
         "description": "Simulated Industrial Protocol Fuzzer finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_industrial_protocol_fuzz(target: &str) {

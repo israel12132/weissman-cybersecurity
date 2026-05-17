@@ -8,8 +8,8 @@ use axum::{
 };
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use serde_json::json;
-use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::Arc;
 use std::time::Instant;
 
 static PROMETHEUS: OnceLock<Option<PrometheusHandle>> = OnceLock::new();
@@ -130,7 +130,9 @@ pub fn compact_metrics_path(path: &str) -> String {
     if path.starts_with("/api/verify-audit/") {
         return "/api/verify-audit/*".to_string();
     }
-    if path.starts_with("/api/poe-scan/status/") || path.starts_with("/api/poe-scan/stream/") {
+    if path.starts_with("/api/poe-scan/status/")
+        || path.starts_with("/api/poe-scan/stream/")
+    {
         return "/api/poe-scan/*".to_string();
     }
     if path.starts_with("/api/heal-verify/") {
@@ -148,10 +150,7 @@ pub fn compact_metrics_path(path: &str) -> String {
     "/other".to_string()
 }
 
-pub async fn http_metrics_middleware(
-    request: Request<Body>,
-    next: Next,
-) -> axum::response::Response {
+pub async fn http_metrics_middleware(request: Request<Body>, next: Next) -> axum::response::Response {
     let method = request.method().clone();
     let path = request.uri().path().to_string();
     let bucket = compact_metrics_path(path.as_str());
@@ -215,7 +214,8 @@ pub fn spawn_pool_metrics_loop(
             metrics::gauge!("weissman_db_pool_size", "pool" => "app").set(app_pool.size() as f64);
             metrics::gauge!("weissman_db_pool_idle", "pool" => "app")
                 .set(app_pool.num_idle() as f64);
-            metrics::gauge!("weissman_db_pool_size", "pool" => "auth").set(auth_pool.size() as f64);
+            metrics::gauge!("weissman_db_pool_size", "pool" => "auth")
+                .set(auth_pool.size() as f64);
             metrics::gauge!("weissman_db_pool_idle", "pool" => "auth")
                 .set(auth_pool.num_idle() as f64);
             metrics::gauge!("weissman_db_pool_size", "pool" => "intel")
@@ -232,8 +232,9 @@ pub fn spawn_pool_metrics_loop(
                 metrics::gauge!("weissman_async_jobs_pending").set(n as f64);
             }
 
-            metrics::gauge!("weissman_orchestrator_active_tenant_cycles")
-                .set(crate::orchestrator::active_tenant_scan_count() as f64);
+            metrics::gauge!("weissman_orchestrator_active_tenant_cycles").set(
+                crate::orchestrator::active_tenant_scan_count() as f64,
+            );
             metrics::gauge!("weissman_scanning_flag_active").set(
                 if crate::orchestrator::is_scanning_active() {
                     1.0
@@ -372,10 +373,7 @@ pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
     if token.is_empty() {
         return true;
     }
-    if let Some(auth) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(auth) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
         let rest = auth.trim();
         if let Some(b) = rest.strip_prefix("Bearer ") {
             if b.trim() == token {

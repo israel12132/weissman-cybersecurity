@@ -14,10 +14,7 @@ pub enum SessionCookieError {
 }
 
 /// Role + superadmin for JWT (from `auth.v_user_lookup`).
-pub async fn user_rbac_snapshot(
-    pool: &PgPool,
-    user_id: i64,
-) -> Result<(String, bool), sqlx::Error> {
+pub async fn user_rbac_snapshot(pool: &PgPool, user_id: i64) -> Result<(String, bool), sqlx::Error> {
     let row = sqlx::query(
         r#"SELECT COALESCE(NULLIF(trim(role), ''), 'viewer') AS role,
                   COALESCE(is_superadmin, false) AS is_superadmin

@@ -116,18 +116,11 @@ pub async fn run_recursive_waf_feedback(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| LlmError::Decode(format!("learning insert: {e}")))?;
-    let _ = tx
-        .commit()
-        .await
-        .map_err(|e| LlmError::Decode(e.to_string()))?;
+    let _ = tx.commit().await.map_err(|e| LlmError::Decode(e.to_string()))?;
 
     let critic_user = format!(
         "FAILURE_CONTEXT:\n{}\n\nEmit CriticWafAnalysis JSON only.",
-        serde_json::to_string(failure_context)
-            .unwrap_or_default()
-            .chars()
-            .take(12_000)
-            .collect::<String>()
+        serde_json::to_string(failure_context).unwrap_or_default().chars().take(12_000).collect::<String>()
     );
     let raw_c = llm_json_for_evolution(
         &client,
@@ -141,10 +134,9 @@ pub async fn run_recursive_waf_feedback(
         "sovereign_learning_critic",
     )
     .await?;
-    let slice =
-        extract_json_object(&raw_c).ok_or_else(|| LlmError::Decode("critic: no JSON".into()))?;
-    let critic: CriticWafAnalysis =
-        serde_json::from_str(slice).map_err(|e| LlmError::Decode(format!("critic parse: {e}")))?;
+    let slice = extract_json_object(&raw_c).ok_or_else(|| LlmError::Decode("critic: no JSON".into()))?;
+    let critic: CriticWafAnalysis = serde_json::from_str(slice)
+        .map_err(|e| LlmError::Decode(format!("critic parse: {e}")))?;
     let critic_v = serde_json::to_value(&critic).map_err(|e| LlmError::Decode(e.to_string()))?;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
@@ -159,10 +151,7 @@ pub async fn run_recursive_waf_feedback(
     .execute(&mut *tx)
     .await
     .map_err(|e| LlmError::Decode(format!("learning critic update: {e}")))?;
-    let _ = tx
-        .commit()
-        .await
-        .map_err(|e| LlmError::Decode(e.to_string()))?;
+    let _ = tx.commit().await.map_err(|e| LlmError::Decode(e.to_string()))?;
 
     let hacker_user = format!(
         "CRITIC_WAF_ANALYSIS:\n{}\n\nORIGINAL_FAILURE:\n{}\n\nEmit HackerPolymorphicSynthesis JSON only.",
@@ -199,10 +188,7 @@ pub async fn run_recursive_waf_feedback(
     .execute(&mut *tx)
     .await
     .map_err(|e| LlmError::Decode(format!("learning hacker update: {e}")))?;
-    let _ = tx
-        .commit()
-        .await
-        .map_err(|e| LlmError::Decode(e.to_string()))?;
+    let _ = tx.commit().await.map_err(|e| LlmError::Decode(e.to_string()))?;
 
     info!(target: "sovereign_evolution", tenant_id, row_id = id, "recursive WAF feedback synthesized");
     Ok((id, critic, hacker))
@@ -222,10 +208,9 @@ pub struct ShadowPreflightOutput {
 const SYS_SHADOW: &str = "You simulate the target edge (WAF/app) given tech stack + planned probe. Output ONE minified JSON only: detection_risk_0_100 (0-100), predicted_response_class (short string), reroute_recommended (boolean), rationale (short). No markdown.";
 
 fn parse_shadow_json(text: &str) -> Result<ShadowPreflightOutput, LlmError> {
-    let slice =
-        extract_json_object(text).ok_or_else(|| LlmError::Decode("shadow: no JSON".into()))?;
-    let mut v: ShadowPreflightOutput =
-        serde_json::from_str(slice).map_err(|e| LlmError::Decode(format!("shadow: {e}")))?;
+    let slice = extract_json_object(text).ok_or_else(|| LlmError::Decode("shadow: no JSON".into()))?;
+    let mut v: ShadowPreflightOutput = serde_json::from_str(slice)
+        .map_err(|e| LlmError::Decode(format!("shadow: {e}")))?;
     v.detection_risk_0_100 = v.detection_risk_0_100.min(100);
     Ok(v)
 }
@@ -243,10 +228,7 @@ pub async fn shadow_preflight(
         "target_url: {}\ntech_stack: {}\nplanned_attack: {}\nJSON only.",
         target_url.chars().take(2048).collect::<String>(),
         tech_stack_hint.chars().take(4000).collect::<String>(),
-        planned_attack_summary
-            .chars()
-            .take(6000)
-            .collect::<String>()
+        planned_attack_summary.chars().take(6000).collect::<String>()
     );
     let raw = llm_json_for_evolution(
         &client,
@@ -303,10 +285,7 @@ pub async fn shadow_preflight_batch(
 pub fn payload_suggests_readonly_credential_surface(json: &Value) -> bool {
     let s = json.to_string().to_lowercase();
     (s.contains("api_key") || s.contains("apikey") || s.contains("bearer"))
-        && (s.contains("read")
-            || s.contains("readonly")
-            || s.contains("read-only")
-            || s.contains("scope"))
+        && (s.contains("read") || s.contains("readonly") || s.contains("read-only") || s.contains("scope"))
 }
 
 /// If findings look like a low-privilege secret, enqueue `command_center_engine` / `leak_hunter` for escalation hunting.
@@ -330,9 +309,7 @@ pub async fn maybe_enqueue_credential_hunt(
         "engine": "leak_hunter",
         "target": t,
     });
-    let id =
-        weissman_db::job_queue::enqueue(pool, tenant_id, "command_center_engine", payload, None)
-            .await?;
+    let id = weissman_db::job_queue::enqueue(pool, tenant_id, "command_center_engine", payload, None).await?;
     info!(target: "sovereign_evolution", tenant_id, %id, "autonomous credential-hunt pivot enqueued");
     Ok(Some(id))
 }

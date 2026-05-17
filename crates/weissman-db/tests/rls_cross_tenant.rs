@@ -21,8 +21,7 @@ const PROBE_NAME: &str = "__rls_contract_probe_client__";
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL (Postgres superuser or role that can SET ROLE weissman_app); DB must be migrated"]
 async fn weissman_app_cannot_read_other_tenant_clients() {
-    let url =
-        std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set for this test");
+    let url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set for this test");
     let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect(url.trim())
@@ -110,7 +109,10 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     .await
     .expect("count same-tenant");
 
-    assert_eq!(same, 1, "sanity: same tenant must still see its own row");
+    assert_eq!(
+        same, 1,
+        "sanity: same tenant must still see its own row"
+    );
 
     let _ = sqlx::query("RESET ROLE").execute(&pool).await;
     let _ = sqlx::query("DELETE FROM clients WHERE name = $1")

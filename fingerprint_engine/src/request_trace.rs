@@ -11,7 +11,8 @@ use std::sync::LazyLock;
 use tracing::Instrument;
 use uuid::Uuid;
 
-static TRACE_HEADER: LazyLock<HeaderName> = LazyLock::new(|| HeaderName::from_static("x-trace-id"));
+static TRACE_HEADER: LazyLock<HeaderName> =
+    LazyLock::new(|| HeaderName::from_static("x-trace-id"));
 
 fn normalize_incoming_trace(raw: &str) -> Option<String> {
     let t = raw.trim();

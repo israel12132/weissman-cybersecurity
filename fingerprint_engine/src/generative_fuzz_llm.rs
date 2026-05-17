@@ -10,7 +10,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use tokio::sync::mpsc;
 use tracing::warn;
-use weissman_engines::openai_chat::{self, LlmError, DEFAULT_LLM_BASE_URL};
+use weissman_engines::openai_chat::{self, DEFAULT_LLM_BASE_URL, LlmError};
 
 /// After this many seconds without a bypass batch, decay adrenaline (streak −1) toward baseline temperature.
 const ADRENALINE_DECAY_SECS: u64 = 85;
@@ -118,8 +118,7 @@ When the user message includes an "Attempt memory" section, treat it as authorit
 fn tech_stack_line(hint: &str) -> String {
     let t = hint.trim();
     if t.is_empty() {
-        "Technology stack: infer cautiously from URL path, file extensions, and base payload shape."
-            .to_string()
+        "Technology stack: infer cautiously from URL path, file extensions, and base payload shape.".to_string()
     } else {
         format!("Technology stack hints from operator: {t}")
     }
@@ -164,17 +163,14 @@ fn basic_xml_wire_ok(s: &str) -> bool {
 
 /// Drop malformed wire shapes before HTTP to save probes and avoid tripping parser-stage WAFs.
 #[must_use]
-pub fn preflight_payload(
-    tech_stack: &str,
-    base_payload: &str,
-    payload: &str,
-) -> Result<(), String> {
+pub fn preflight_payload(tech_stack: &str, base_payload: &str, payload: &str) -> Result<(), String> {
     let p = payload.trim();
     if json_implied_by_context(tech_stack, base_payload) {
         if !(p.starts_with('{') || p.starts_with('[')) {
             return Err("expected_JSON_body_under_tech_or_base_shape".into());
         }
-        serde_json::from_str::<serde_json::Value>(p).map_err(|e| format!("json_syntax:{e}"))?;
+        serde_json::from_str::<serde_json::Value>(p)
+            .map_err(|e| format!("json_syntax:{e}"))?;
         return Ok(());
     }
     if xml_implied_by_context(tech_stack, base_payload) {
@@ -187,7 +183,8 @@ pub fn preflight_payload(
         return Ok(());
     }
     if p.starts_with('{') || p.starts_with('[') {
-        serde_json::from_str::<serde_json::Value>(p).map_err(|e| format!("json_syntax:{e}"))?;
+        serde_json::from_str::<serde_json::Value>(p)
+            .map_err(|e| format!("json_syntax:{e}"))?;
     } else if p.starts_with('<') && !basic_xml_wire_ok(p) {
         return Err("xml_syntax:ill_formed_stream".into());
     }
@@ -381,7 +378,8 @@ fn strip_code_fence(s: &str) -> String {
 #[must_use]
 pub fn parse_payloads_json(text: &str) -> Result<Vec<String>, String> {
     let cleaned = strip_code_fence(text);
-    let v: serde_json::Value = serde_json::from_str(&cleaned).map_err(|e| format!("json: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(&cleaned).map_err(|e| format!("json: {e}"))?;
     let arr = v
         .get("payloads")
         .and_then(serde_json::Value::as_array)
@@ -404,7 +402,8 @@ pub fn parse_payloads_json(text: &str) -> Result<Vec<String>, String> {
 #[must_use]
 pub fn parse_urls_json(text: &str) -> Result<Vec<String>, String> {
     let cleaned = strip_code_fence(text);
-    let v: serde_json::Value = serde_json::from_str(&cleaned).map_err(|e| format!("json: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(&cleaned).map_err(|e| format!("json: {e}"))?;
     let arr = v
         .get("urls")
         .and_then(serde_json::Value::as_array)
@@ -455,7 +454,14 @@ pub async fn fetch_initial_batch(
     cognitive_osint: &str,
 ) -> Result<Vec<GenerativeMutation>, LlmError> {
     let user = build_initial_user_message(target_url, base_payload, tech_stack, cognitive_osint);
-    let text = llm_completion(client, cfg, SYSTEM_INITIAL, &user, "generative_fuzz_batch").await?;
+    let text = llm_completion(
+        client,
+        cfg,
+        SYSTEM_INITIAL,
+        &user,
+        "generative_fuzz_batch",
+    )
+    .await?;
     let payloads = parse_payloads_json(&text).map_err(LlmError::Decode)?;
     Ok(payloads
         .into_iter()
@@ -475,13 +481,8 @@ pub async fn fetch_followup_batch(
     attempt_memory: &[String],
     cognitive_osint: &str,
 ) -> Result<Vec<GenerativeMutation>, LlmError> {
-    let user = build_followup_user_message(
-        target_url,
-        base_payload,
-        tech_stack,
-        attempt_memory,
-        cognitive_osint,
-    );
+    let user =
+        build_followup_user_message(target_url, base_payload, tech_stack, attempt_memory, cognitive_osint);
     let text = llm_completion(
         client,
         cfg,

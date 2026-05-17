@@ -40,58 +40,15 @@ pub fn target_prefix_for_poc(target: &str) -> String {
 fn detect_typosquat(name: &str) -> Option<String> {
     // Well-known high-value npm packages commonly typosquatted
     const POPULAR_PACKAGES: &[&str] = &[
-        "lodash",
-        "express",
-        "react",
-        "vue",
-        "angular",
-        "axios",
-        "moment",
-        "chalk",
-        "debug",
-        "request",
-        "underscore",
-        "bluebird",
-        "commander",
-        "webpack",
-        "babel",
-        "eslint",
-        "typescript",
-        "jest",
-        "mocha",
-        "passport",
-        "mongoose",
-        "sequelize",
-        "knex",
-        "pg",
-        "mysql",
-        "redis",
-        "socket.io",
-        "ws",
-        "node-fetch",
-        "cross-fetch",
-        "dotenv",
-        "uuid",
-        "path",
-        "fs-extra",
-        "glob",
-        "rimraf",
-        "semver",
-        "minimist",
-        "yargs",
-        "inquirer",
-        "ora",
-        "cli-table",
-        "jsonwebtoken",
-        "bcrypt",
-        "crypto-js",
-        "helmet",
-        "cors",
-        "body-parser",
-        "multer",
-        "nodemailer",
-        "aws-sdk",
-        "azure",
+        "lodash", "express", "react", "vue", "angular", "axios", "moment",
+        "chalk", "debug", "request", "underscore", "bluebird", "commander",
+        "webpack", "babel", "eslint", "typescript", "jest", "mocha",
+        "passport", "mongoose", "sequelize", "knex", "pg", "mysql",
+        "redis", "socket.io", "ws", "node-fetch", "cross-fetch",
+        "dotenv", "uuid", "path", "fs-extra", "glob", "rimraf",
+        "semver", "minimist", "yargs", "inquirer", "ora", "cli-table",
+        "jsonwebtoken", "bcrypt", "crypto-js", "helmet", "cors",
+        "body-parser", "multer", "nodemailer", "aws-sdk", "azure",
     ];
     let name_lower = name.to_lowercase();
     for &popular in POPULAR_PACKAGES {
@@ -121,23 +78,13 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let m = a.len();
     let n = b.len();
-    if m == 0 {
-        return n;
-    }
-    if n == 0 {
-        return m;
-    }
+    if m == 0 { return n; }
+    if n == 0 { return m; }
     // Only compute if lengths are close enough to be typosquats
-    if m.abs_diff(n) > 4 {
-        return usize::MAX;
-    }
+    if m.abs_diff(n) > 4 { return usize::MAX; }
     let mut dp = vec![vec![0usize; n + 1]; m + 1];
-    for i in 0..=m {
-        dp[i][0] = i;
-    }
-    for j in 0..=n {
-        dp[0][j] = j;
-    }
+    for i in 0..=m { dp[i][0] = i; }
+    for j in 0..=n { dp[0][j] = j; }
     for i in 1..=m {
         for j in 1..=n {
             dp[i][j] = if a[i - 1] == b[j - 1] {
@@ -289,11 +236,7 @@ pub async fn run_supply_chain_result(
                     );
                     let typosquat = detect_typosquat(&name);
                     let typosquat_risk = typosquat.is_some();
-                    let severity = if osv.vuln_count > 0 || typosquat_risk {
-                        "high"
-                    } else {
-                        "info"
-                    };
+                    let severity = if osv.vuln_count > 0 || typosquat_risk { "high" } else { "info" };
                     findings.push(json!({
                         "type": "supply_chain",
                         "package": name,

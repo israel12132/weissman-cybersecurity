@@ -33,8 +33,9 @@ pub fn resolve_static_dir() -> Option<PathBuf> {
 }
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    fingerprint_engine::auth_jwt::init_jwt_secret_from_env()
-        .map_err(|msg| std::io::Error::new(std::io::ErrorKind::InvalidInput, msg))?;
+    fingerprint_engine::auth_jwt::init_jwt_secret_from_env().map_err(|msg| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, msg)
+    })?;
     let database_url = std::env::var("DATABASE_URL").unwrap_or_default();
     if database_url.trim().is_empty() {
         return Err("DATABASE_URL is not set (check EnvironmentFile= and weissman_db::env_bootstrap::load_process_environment)".into());
@@ -73,8 +74,11 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             pools.app.clone()
         }
     };
-    let state =
-        fingerprint_engine::http::new_app_state(pools.app.clone(), pools.auth.clone(), intel_pool);
+    let state = fingerprint_engine::http::new_app_state(
+        pools.app.clone(),
+        pools.auth.clone(),
+        intel_pool,
+    );
     fingerprint_engine::http::spawn_http_background_tasks(&state);
     let static_dir = resolve_static_dir();
     let router = api::routes::build_full_router(state, static_dir).await;

@@ -4,18 +4,18 @@
 //! P0: Re-verification before insert; circuit breaker for LLM; attack chain persisted. No panic paths.
 
 use crate::ai_redteam_engine;
+use crate::ceo::war_room::WarRoomMirror;
 use crate::archival_engine;
 use crate::asm_engine;
 use crate::bola_idor_engine;
-use crate::ceo::war_room::WarRoomMirror;
 use crate::crypto_engine;
 use crate::dag_pipeline;
 use crate::discovery_engine;
 use crate::exploit_synthesis_engine;
 use crate::identity_engine;
 use crate::leak_hunter_engine;
-use crate::llm_path_fuzz_engine;
 use crate::notifications;
+use crate::llm_path_fuzz_engine;
 use crate::osint_engine;
 use crate::pipeline_context;
 use crate::resilience;
@@ -35,9 +35,7 @@ use tokio::sync::broadcast;
 
 mod discovery_ui_snapshot;
 
-pub(crate) use weissman_core::{
-    finding_description, finding_title_and_severity, infer_poc_exploit,
-};
+pub(crate) use weissman_core::{finding_description, finding_title_and_severity, infer_poc_exploit};
 
 static SCANNING_ACTIVE: AtomicBool = AtomicBool::new(false);
 static ACTIVE_TENANT_CYCLES: AtomicUsize = AtomicUsize::new(0);
@@ -818,7 +816,9 @@ async fn engine_bola_multi(
         &targets,
         &paths,
         Some(&stealth),
-        identity_contexts.as_deref().filter(|ctx| ctx.len() >= 2),
+        identity_contexts
+            .as_deref()
+            .filter(|ctx| ctx.len() >= 2),
         llm_tenant_id,
     )
     .await
@@ -874,7 +874,10 @@ async fn engine_identity_autoharvest(
     llm_base_h: Option<String>,
     llm_model_h: Option<String>,
     llm_tenant_id: Option<i64>,
-) -> (Vec<identity_engine::HarvestedToken>, Vec<serde_json::Value>) {
+) -> (
+    Vec<identity_engine::HarvestedToken>,
+    Vec<serde_json::Value>,
+) {
     identity_engine::run_autonomous_privilege_escalation(
         &targets,
         &paths,
@@ -893,7 +896,14 @@ pub async fn run_single_tenant_scan_cycle(
     telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
     war_mirror: Option<WarRoomMirror>,
 ) -> Result<(), sqlx::Error> {
-    run_cycle_for_tenant(app_pool, intel_pool, tenant_id, telemetry_tx, war_mirror).await
+    run_cycle_for_tenant(
+        app_pool,
+        intel_pool,
+        tenant_id,
+        telemetry_tx,
+        war_mirror,
+    )
+    .await
 }
 
 /// One full scan cycle for all active tenants (auth pool lists tenants; app pool + RLS per tenant).
@@ -918,9 +928,12 @@ pub async fn run_cycle_async(
         let app = app_pool.clone();
         let intel = intel_pool.clone();
         let tt = telemetry_tx.clone();
-        match crate::panic_shield::catch_unwind_future("orchestrator_tenant_cycle", async move {
-            run_cycle_for_tenant(app, intel, tenant_id, tt, None).await
-        })
+        match crate::panic_shield::catch_unwind_future(
+            "orchestrator_tenant_cycle",
+            async move {
+                run_cycle_for_tenant(app, intel, tenant_id, tt, None).await
+            },
+        )
         .await
         {
             crate::panic_shield::CatchOutcome::Completed(Ok(())) => {}
@@ -1058,7 +1071,7 @@ async fn run_cycle_for_tenant(
         dag_pipeline::GLOBAL_SCOPE_ID,
         dag_pipeline::STAGE_GLOBAL_INTEL,
         "started",
-        wr,
+    wr,
     );
 
     // Stage 0: Global Intel — Zero-Day Radar run once against all client assets (if any client has it enabled).
@@ -1071,7 +1084,7 @@ async fn run_cycle_for_tenant(
             "zero_day_radar",
             "[Zero-Day Radar] Scanning all client assets...",
             None,
-            wr,
+        wr,
         );
         let mut radar_targets: Vec<threat_intel_engine::RadarTarget> = Vec::new();
         for (cid, _name, domains_json, _ipr, _cfg) in clients.clone() {
@@ -1109,7 +1122,7 @@ async fn run_cycle_for_tenant(
                 "zero_day_radar",
                 "[Zero-Day Radar] Scan complete.",
                 None,
-                wr,
+            wr,
             );
             for i in 0..radar_result.findings.len() {
                 let f = radar_result.findings[i].clone();
@@ -1164,7 +1177,7 @@ async fn run_cycle_for_tenant(
         dag_pipeline::GLOBAL_SCOPE_ID,
         dag_pipeline::STAGE_GLOBAL_INTEL,
         "completed",
-        wr,
+    wr,
     );
     let _ = pipeline_set_stage(
         &mut tx,
@@ -1222,7 +1235,7 @@ async fn run_cycle_for_tenant(
             &cid,
             dag_pipeline::STAGE_DEEP_DISCOVERY,
             "started",
-            wr,
+        wr,
         );
         let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
         let mut client_had_crash = false;
@@ -1244,7 +1257,7 @@ async fn run_cycle_for_tenant(
             "discovery",
             "[Spider-Sense] Initial crawl + Archival + AI path prediction...",
             Some(cid.as_str()),
-            wr,
+        wr,
         );
         tx.commit().await?;
         if let Some(edge_meta) = crate::edge_swarm_intel::resolve_edge_swarm_for_target(
@@ -1342,7 +1355,7 @@ async fn run_cycle_for_tenant(
                 "ot_ics",
                 &format!("[OT/ICS] Stored {} fingerprint(s).", fps.len()),
                 Some(cid.as_str()),
-                wr,
+            wr,
             );
         }
 
@@ -1356,7 +1369,7 @@ async fn run_cycle_for_tenant(
                 source.as_str(),
                 &format!("[{}] Scanning...", label),
                 Some(cid.as_str()),
-                wr,
+            wr,
             );
             let (result, semantic_log) = match source.as_str() {
                 "osint" => {
@@ -1411,7 +1424,7 @@ async fn run_cycle_for_tenant(
                         "discovery",
                         "[Spider-Sense] Crawling + Archival + AI prediction...",
                         Some(cid.as_str()),
-                        wr,
+                    wr,
                     );
                     tx.commit().await?;
                     discovery_engine::run_spider_crawl(
@@ -1626,7 +1639,8 @@ async fn run_cycle_for_tenant(
                         });
                     }
                     if !identity_contexts.is_empty() {
-                        let jwt_result = identity_engine::run_jwt_cryptanalysis(&identity_contexts);
+                        let jwt_result =
+                            identity_engine::run_jwt_cryptanalysis(&identity_contexts);
                         for f in jwt_result.findings {
                             r.findings.push(f);
                         }
@@ -1758,7 +1772,7 @@ async fn run_cycle_for_tenant(
                 source.as_str(),
                 &format!("[{}] Done.", label),
                 Some(cid.as_str()),
-                wr,
+            wr,
             );
             if source.as_str() == "llm_path_fuzz" || source.as_str() == "semantic_ai_fuzz" {
                 let mut text = String::new();
@@ -1921,7 +1935,7 @@ async fn run_cycle_for_tenant(
                     &cid,
                     dag_pipeline::STAGE_DEEP_DISCOVERY,
                     "completed",
-                    wr,
+                wr,
                 );
                 let _ = pipeline_set_stage(
                     &mut tx,
@@ -1937,7 +1951,7 @@ async fn run_cycle_for_tenant(
                     &cid,
                     dag_pipeline::STAGE_VULN_SCANNING,
                     "started",
-                    wr,
+                wr,
                 );
             }
             if global_safe_mode {
@@ -1952,7 +1966,7 @@ async fn run_cycle_for_tenant(
             &cid,
             dag_pipeline::STAGE_VULN_SCANNING,
             "completed",
-            wr,
+        wr,
         );
         let _ = pipeline_set_stage(
             &mut tx,
@@ -1970,7 +1984,7 @@ async fn run_cycle_for_tenant(
                 &cid,
                 dag_pipeline::STAGE_KILL_SHOT,
                 "started",
-                wr,
+            wr,
             );
             let roe_weaponized = client_roe_weaponized(client_configs.as_str());
             let poe_config_for_client = if roe_weaponized {
@@ -2036,7 +2050,7 @@ async fn run_cycle_for_tenant(
                         "strategic_analyzer",
                         &e,
                         Some(cid.as_str()),
-                        wr,
+                    wr,
                     );
                 }
             }
@@ -2053,7 +2067,7 @@ async fn run_cycle_for_tenant(
                     client_findings_count
                 ),
                 Some(cid.as_str()),
-                wr,
+            wr,
             );
             tx.commit().await?;
             let poe_result = exploit_synthesis_engine::run_exploit_synthesis_async(
@@ -2183,7 +2197,7 @@ async fn run_cycle_for_tenant(
                 &cid,
                 dag_pipeline::STAGE_KILL_SHOT,
                 "completed",
-                wr,
+            wr,
             );
             let _ = pipeline_set_stage(
                 &mut tx,
@@ -2210,7 +2224,7 @@ async fn run_cycle_for_tenant(
         dag_pipeline::GLOBAL_SCOPE_ID,
         dag_pipeline::STAGE_COMPLIANCE,
         "started",
-        wr,
+    wr,
     );
     let summary = serde_json::json!({
         "by_severity": {},
@@ -2271,7 +2285,7 @@ async fn run_cycle_for_tenant(
         dag_pipeline::GLOBAL_SCOPE_ID,
         dag_pipeline::STAGE_COMPLIANCE,
         "completed",
-        wr,
+    wr,
     );
     eprintln!(
         "[Weissman][Orchestrator] Cycle done tenant={} run_id={} findings={} audit_root_hash={}",
@@ -2358,13 +2372,19 @@ pub fn spawn_single_tenant_full_scan(
 ) {
     tokio::spawn(async move {
         let Ok(permit) = crate::scan_concurrency::acquire_full_scan_permit().await else {
-            metrics::counter!("weissman_scan_rejected_total", "reason" => "concurrency_timeout")
-                .increment(1);
+            metrics::counter!("weissman_scan_rejected_total", "reason" => "concurrency_timeout").increment(1);
             return;
         };
         let _permit = permit;
         let fut = async move {
-            run_single_tenant_scan_cycle(app_pool, intel_pool, tenant_id, telemetry, None).await
+            run_single_tenant_scan_cycle(
+                app_pool,
+                intel_pool,
+                tenant_id,
+                telemetry,
+                None,
+            )
+            .await
         };
         match crate::panic_shield::catch_unwind_future("single_tenant_full_scan", fut).await {
             crate::panic_shield::CatchOutcome::Completed(Ok(())) => {}

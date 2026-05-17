@@ -37,12 +37,8 @@ pub async fn run_cache_poisoning_result(target: &str) -> EngineResult {
     if let Ok(ref resp) = baseline_resp {
         for (name, _value) in resp.headers().iter() {
             let hname = name.as_str().to_lowercase();
-            if hname == "x-cache"
-                || hname == "age"
-                || hname == "cf-cache-status"
-                || hname == "x-varnish"
-                || hname == "x-cache-hits"
-                || hname == "surrogate-key"
+            if hname == "x-cache" || hname == "age" || hname == "cf-cache-status"
+                || hname == "x-varnish" || hname == "x-cache-hits" || hname == "surrogate-key"
                 || hname == "cdn-cache-control"
             {
                 is_cached = true;

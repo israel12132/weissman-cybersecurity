@@ -47,10 +47,7 @@ struct UserInfo {
 
 /// Check if the caller is superadmin or CEO
 fn require_admin_access(auth: &AuthContext) -> Result<(), Response> {
-    if auth.is_superadmin
-        || auth.role.to_lowercase() == "ceo"
-        || auth.role.to_lowercase() == "admin"
-    {
+    if auth.is_superadmin || auth.role.to_lowercase() == "ceo" || auth.role.to_lowercase() == "admin" {
         Ok(())
     } else {
         Err((
@@ -93,9 +90,7 @@ pub async fn api_admin_users_list(
                 .map(|r| UserInfo {
                     id: r.try_get::<i64, _>("id").unwrap_or(0),
                     email: r.try_get::<String, _>("email").unwrap_or_default(),
-                    role: r
-                        .try_get::<String, _>("role")
-                        .unwrap_or_else(|_| "viewer".to_string()),
+                    role: r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".to_string()),
                     is_superadmin: r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
                     is_active: r.try_get::<bool, _>("is_active").unwrap_or(true),
                     created_at: r
@@ -248,14 +243,15 @@ pub async fn api_admin_users_update(
     let pool = state.auth_pool.as_ref();
 
     // Verify user belongs to this tenant
-    let exists: Option<i64> =
-        sqlx::query_scalar("SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1")
-            .bind(user_id)
-            .bind(auth.tenant_id)
-            .fetch_optional(pool)
-            .await
-            .ok()
-            .flatten();
+    let exists: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
 
     if exists.is_none() {
         return (
@@ -266,19 +262,15 @@ pub async fn api_admin_users_update(
     }
 
     // Validate role if provided
-    let valid_role = body
-        .role
-        .as_ref()
-        .map(|r| {
-            let role = r.trim().to_lowercase();
-            let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
-            if valid_roles.contains(&role.as_str()) {
-                Some(role)
-            } else {
-                None
-            }
-        })
-        .flatten();
+    let valid_role = body.role.as_ref().map(|r| {
+        let role = r.trim().to_lowercase();
+        let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
+        if valid_roles.contains(&role.as_str()) {
+            Some(role)
+        } else {
+            None
+        }
+    }).flatten();
 
     // Check if there are any changes to make
     let has_role_change = valid_role.is_some();
@@ -332,9 +324,7 @@ pub async fn api_admin_users_update(
         } else {
             return (
                 StatusCode::FORBIDDEN,
-                Json(
-                    json!({"ok": false, "detail": "Only superadmin can modify superadmin status"}),
-                ),
+                Json(json!({"ok": false, "detail": "Only superadmin can modify superadmin status"})),
             )
                 .into_response();
         }

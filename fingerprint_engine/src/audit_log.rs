@@ -54,20 +54,20 @@ pub async fn list_recent(
 
 /// Resolve email for audit labels (auth pool; `auth.v_user_lookup` + BYPASSRLS audit).
 pub async fn user_email_for_id(auth_pool: &PgPool, user_id: i64) -> String {
-    let row = sqlx::query("SELECT tenant_id, email FROM auth.v_user_lookup WHERE id = $1")
-        .bind(user_id)
-        .fetch_optional(auth_pool)
-        .await
-        .ok()
-        .flatten();
+    let row = sqlx::query(
+        "SELECT tenant_id, email FROM auth.v_user_lookup WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(auth_pool)
+    .await
+    .ok()
+    .flatten();
     let Some(r) = row else {
         return format!("user_id:{}", user_id);
     };
     let tid: i64 = r.try_get("tenant_id").unwrap_or(0);
     if tid > 0 {
-        let _ =
-            weissman_db::auth_access::record_auth_access(auth_pool, tid, "audit_user_email_lookup")
-                .await;
+        let _ = weissman_db::auth_access::record_auth_access(auth_pool, tid, "audit_user_email_lookup").await;
     }
     r.try_get::<String, _>("email")
         .unwrap_or_else(|_| format!("user_id:{}", user_id))

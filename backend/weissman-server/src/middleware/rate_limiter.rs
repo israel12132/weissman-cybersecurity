@@ -83,7 +83,10 @@ fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
         .map(|ci| ci.0.ip())
 }
 
-pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next) -> Response {
+pub async fn edge_multi_rate_limit_middleware(
+    request: Request<Body>,
+    next: Next,
+) -> Response {
     let method = request.method().clone();
     let path = request.uri().path().to_string();
     let Some(ip) = client_ip(&request) else {

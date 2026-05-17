@@ -77,7 +77,8 @@ pub fn circuit_is_open(label: &'static str) -> bool {
     let Ok(g) = cell.value().lock() else {
         return false;
     };
-    g.tripped_until.is_some_and(|until| Instant::now() < until)
+    g.tripped_until
+        .is_some_and(|until| Instant::now() < until)
 }
 
 fn cooldown_remaining(label: &'static str) -> u64 {
@@ -110,8 +111,7 @@ fn record_panic_event(label: &'static str) {
         return;
     };
     let now = Instant::now();
-    st.recent
-        .retain(|t| now.saturating_duration_since(*t) < window);
+    st.recent.retain(|t| now.saturating_duration_since(*t) < window);
     st.recent.push_back(now);
     if st.recent.len() >= threshold {
         st.tripped_until = Some(now + cooldown);

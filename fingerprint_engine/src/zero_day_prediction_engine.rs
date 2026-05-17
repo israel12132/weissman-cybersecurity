@@ -24,150 +24,30 @@ fn normalize_target(target: &str) -> String {
 /// Components historically associated with high CVE frequency and zero-day discovery.
 /// Format: (component, historical_cve_count_estimate, risk_level, mitre_pattern)
 const HIGH_RISK_COMPONENTS: &[(&str, u32, &str, &str)] = &[
-    (
-        "openssl",
-        85,
-        "critical",
-        "Buffer overflow, format string, heap UAF vulnerabilities historically common",
-    ),
-    (
-        "log4j",
-        12,
-        "critical",
-        "Log4Shell class of vulnerabilities; JNDI injection surface",
-    ),
-    (
-        "apache",
-        320,
-        "high",
-        "Large attack surface; mod_* modules frequently have CVEs",
-    ),
-    (
-        "nginx",
-        45,
-        "medium",
-        "Memory corruption and HTTP request handling vulnerabilities",
-    ),
-    (
-        "wordpress",
-        890,
-        "high",
-        "Plugin ecosystem drives constant CVE stream; core has privilege escalation history",
-    ),
-    (
-        "php",
-        430,
-        "high",
-        "Type confusion, deserialization, file inclusion consistently exploited",
-    ),
-    (
-        "spring",
-        38,
-        "high",
-        "Spring4Shell class; SpEL injection; deserialization via Java gadgets",
-    ),
-    (
-        "struts",
-        52,
-        "critical",
-        "Repeated RCE via OGNL injection; Equifax breach vector",
-    ),
-    (
-        "jenkins",
-        67,
-        "high",
-        "Groovy script RCE; Groovy sandbox escapes; SSRF via plugins",
-    ),
-    (
-        "gitlab",
-        89,
-        "high",
-        "Path traversal, SSRF, RCE; frequent critical advisories",
-    ),
-    (
-        "confluence",
-        41,
-        "critical",
-        "Repeated authentication bypass and RCE CVEs (CVE-2022-26134 class)",
-    ),
-    (
-        "jira",
-        56,
-        "high",
-        "SSRF, template injection, auth bypass vulnerabilities",
-    ),
-    (
-        "redis",
-        28,
-        "high",
-        "Unauthenticated access RCE via config manipulation",
-    ),
-    (
-        "elasticsearch",
-        22,
-        "high",
-        "Unauth access enabling data exposure; Groovy scripting RCE history",
-    ),
-    (
-        "iis",
-        98,
-        "high",
-        "HTTP.sys vulnerabilities; kernel pool overflow history",
-    ),
-    (
-        "exchange",
-        67,
-        "critical",
-        "ProxyLogon, ProxyShell, ProxyNotShell class; remote code execution chain",
-    ),
-    (
-        "tomcat",
-        44,
-        "high",
-        "AJP ghostcat, partial PUT deserialization; common Java app server",
-    ),
-    (
-        "drupal",
-        78,
-        "high",
-        "Drupalgeddon class; RCE via form API; active exploitation history",
-    ),
-    (
-        "joomla",
-        65,
-        "high",
-        "SQL injection and RCE; popular CMS with large plugin attack surface",
-    ),
-    (
-        "jquery",
-        15,
-        "medium",
-        "XSS via prototype pollution; DOM-based injection",
-    ),
-    (
-        "vmware",
-        145,
-        "critical",
-        "vCenter, ESXi, Workspace ONE consistently targeted; nation-state exploitation",
-    ),
-    (
-        "citrix",
-        38,
-        "critical",
-        "Netscaler/ADC directory traversal; session fixation; RCE history",
-    ),
-    (
-        "fortinet",
-        42,
-        "critical",
-        "FortiOS SSL-VPN path traversal; heap overflow RCE",
-    ),
-    (
-        "pulse",
-        28,
-        "critical",
-        "Pulse Secure VPN pre-auth RCE; actively exploited by APTs",
-    ),
+    ("openssl", 85, "critical", "Buffer overflow, format string, heap UAF vulnerabilities historically common"),
+    ("log4j", 12, "critical", "Log4Shell class of vulnerabilities; JNDI injection surface"),
+    ("apache", 320, "high", "Large attack surface; mod_* modules frequently have CVEs"),
+    ("nginx", 45, "medium", "Memory corruption and HTTP request handling vulnerabilities"),
+    ("wordpress", 890, "high", "Plugin ecosystem drives constant CVE stream; core has privilege escalation history"),
+    ("php", 430, "high", "Type confusion, deserialization, file inclusion consistently exploited"),
+    ("spring", 38, "high", "Spring4Shell class; SpEL injection; deserialization via Java gadgets"),
+    ("struts", 52, "critical", "Repeated RCE via OGNL injection; Equifax breach vector"),
+    ("jenkins", 67, "high", "Groovy script RCE; Groovy sandbox escapes; SSRF via plugins"),
+    ("gitlab", 89, "high", "Path traversal, SSRF, RCE; frequent critical advisories"),
+    ("confluence", 41, "critical", "Repeated authentication bypass and RCE CVEs (CVE-2022-26134 class)"),
+    ("jira", 56, "high", "SSRF, template injection, auth bypass vulnerabilities"),
+    ("redis", 28, "high", "Unauthenticated access RCE via config manipulation"),
+    ("elasticsearch", 22, "high", "Unauth access enabling data exposure; Groovy scripting RCE history"),
+    ("iis", 98, "high", "HTTP.sys vulnerabilities; kernel pool overflow history"),
+    ("exchange", 67, "critical", "ProxyLogon, ProxyShell, ProxyNotShell class; remote code execution chain"),
+    ("tomcat", 44, "high", "AJP ghostcat, partial PUT deserialization; common Java app server"),
+    ("drupal", 78, "high", "Drupalgeddon class; RCE via form API; active exploitation history"),
+    ("joomla", 65, "high", "SQL injection and RCE; popular CMS with large plugin attack surface"),
+    ("jquery", 15, "medium", "XSS via prototype pollution; DOM-based injection"),
+    ("vmware", 145, "critical", "vCenter, ESXi, Workspace ONE consistently targeted; nation-state exploitation"),
+    ("citrix", 38, "critical", "Netscaler/ADC directory traversal; session fixation; RCE history"),
+    ("fortinet", 42, "critical", "FortiOS SSL-VPN path traversal; heap overflow RCE"),
+    ("pulse", 28, "critical", "Pulse Secure VPN pre-auth RCE; actively exploited by APTs"),
 ];
 
 pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
@@ -195,12 +75,7 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
             .to_lowercase();
         let body = resp.text().await.unwrap_or_default().to_lowercase();
 
-        let all_text = format!(
-            "{} {} {}",
-            server,
-            powered_by,
-            &body[..body.len().min(5000)]
-        );
+        let all_text = format!("{} {} {}", server, powered_by, &body[..body.len().min(5000)]);
 
         // Detect components from server headers and page content
         let detectable: &[(&str, &[&str])] = &[
@@ -267,10 +142,7 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
         if let Ok(resp) = client.get(&nvd_url).send().await {
             if resp.status().as_u16() == 200 {
                 if let Ok(data) = resp.json::<serde_json::Value>().await {
-                    let total = data
-                        .get("totalResults")
-                        .and_then(|t| t.as_u64())
-                        .unwrap_or(0);
+                    let total = data.get("totalResults").and_then(|t| t.as_u64()).unwrap_or(0);
                     if total > 0 {
                         let recent_id = data
                             .get("vulnerabilities")
@@ -316,11 +188,7 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!(
-            "ZeroDayPrediction: {} risk findings for {} detected components",
-            findings.len(),
-            detected_components.len()
-        ),
+        format!("ZeroDayPrediction: {} risk findings for {} detected components", findings.len(), detected_components.len()),
     )
 }
 

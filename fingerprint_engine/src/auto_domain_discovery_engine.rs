@@ -109,7 +109,7 @@ fn extract_root_domain(input: &str) -> Option<String> {
     if input.is_empty() {
         return None;
     }
-
+    
     let host = if input.starts_with("http://") || input.starts_with("https://") {
         reqwest::Url::parse(&input)
             .ok()
@@ -118,20 +118,20 @@ fn extract_root_domain(input: &str) -> Option<String> {
     } else {
         input.clone()
     };
-
+    
     let host = host.split('/').next().unwrap_or(&host).to_string();
     let host = host.split(':').next().unwrap_or(&host).to_string();
-
+    
     let parts: Vec<&str> = host.split('.').collect();
     if parts.len() >= 2 {
         // Handle common TLDs
         let last = *parts.last().unwrap_or(&"");
         let second_last = parts.get(parts.len().saturating_sub(2)).unwrap_or(&"");
-
+        
         // Check for two-part TLDs like .co.uk, .com.br
         let two_part_tlds = ["co.uk", "com.br", "com.au", "org.uk", "net.au", "co.il"];
         let combined = format!("{}.{}", second_last, last);
-
+        
         if two_part_tlds.contains(&combined.as_str()) && parts.len() >= 3 {
             let domain_part = parts.get(parts.len().saturating_sub(3)).unwrap_or(&"");
             Some(format!("{}.{}.{}", domain_part, second_last, last))
@@ -147,7 +147,7 @@ fn extract_root_domain(input: &str) -> Option<String> {
 async fn discover_from_ct_logs(domain: &str) -> Vec<String> {
     let client = build_client(CT_LOGS_TIMEOUT_SECS);
     let mut domains = HashSet::new();
-
+    
     // crt.sh API - URL encode the domain to prevent injection
     let encoded_domain = urlencoding::encode(domain);
     let crtsh_url = format!("https://crt.sh/?q=%.{}&output=json", encoded_domain);
@@ -165,16 +165,19 @@ async fn discover_from_ct_logs(domain: &str) -> Vec<String> {
             }
         }
     }
-
+    
     // Censys / alternative CT sources could be added here
-
+    
     domains.into_iter().collect()
 }
 
 /// Stage 2: DNS subdomain enumeration
 async fn discover_from_dns(domain: &str) -> Vec<String> {
-    let wordlist: Vec<String> = DEFAULT_SUBDOMAINS.iter().map(|s| s.to_string()).collect();
-
+    let wordlist: Vec<String> = DEFAULT_SUBDOMAINS
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    
     enum_subdomains(domain, &wordlist, DNS_CONCURRENCY).await
 }
 
@@ -182,13 +185,13 @@ async fn discover_from_dns(domain: &str) -> Vec<String> {
 async fn discover_from_web_crawl(base_domains: &[String]) -> Vec<String> {
     let client = build_client(HTTP_TIMEOUT_SECS);
     let mut discovered = HashSet::new();
-
+    
     let urls: Vec<String> = base_domains
         .iter()
         .flat_map(|d| vec![format!("https://{}", d), format!("http://{}", d)])
         .take(20)
         .collect();
-
+    
     let results: Vec<Vec<String>> = stream::iter(urls.into_iter().map(|url| {
         let c = client.clone();
         async move {
@@ -217,27 +220,24 @@ async fn discover_from_web_crawl(base_domains: &[String]) -> Vec<String> {
     .buffer_unordered(WEB_CRAWL_CONCURRENCY)
     .collect()
     .await;
-
+    
     for domains in results {
         for d in domains {
             discovered.insert(d);
         }
     }
-
+    
     discovered.into_iter().collect()
 }
 
 /// Stage 4: SPF/DKIM/DMARC record analysis
 async fn discover_from_email_records(domain: &str) -> Vec<String> {
     let mut domains = Vec::new();
-
+    
     // Try TXT records via DNS-over-HTTPS (don't require DNS resolution first)
     let client = build_client(HTTP_TIMEOUT_SECS);
     let encoded_domain = urlencoding::encode(domain);
-    let doh_url = format!(
-        "https://dns.google/resolve?name={}&type=TXT",
-        encoded_domain
-    );
+    let doh_url = format!("https://dns.google/resolve?name={}&type=TXT", encoded_domain);
     if let Ok(resp) = client.get(&doh_url).send().await {
         if let Ok(json) = resp.json::<serde_json::Value>().await {
             if let Some(answers) = json.get("Answer").and_then(|a| a.as_array()) {
@@ -245,21 +245,21 @@ async fn discover_from_email_records(domain: &str) -> Vec<String> {
                     if let Some(data) = ans.get("data").and_then(|d| d.as_str()) {
                         // Parse SPF include: directives
                         if data.contains("v=spf1") {
-                            for part in data.split_whitespace() {
-                                if let Some(include_domain) = part.strip_prefix("include:") {
-                                    domains.push(include_domain.to_lowercase());
-                                }
-                                if let Some(redirect_domain) = part.strip_prefix("redirect=") {
-                                    domains.push(redirect_domain.to_lowercase());
+                                    for part in data.split_whitespace() {
+                                        if let Some(include_domain) = part.strip_prefix("include:") {
+                                            domains.push(include_domain.to_lowercase());
+                                        }
+                                        if let Some(redirect_domain) = part.strip_prefix("redirect=") {
+                                            domains.push(redirect_domain.to_lowercase());
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-    }
-
+    
     domains
 }
 
@@ -268,46 +268,41 @@ fn generate_pattern_domains(base_domain: &str, company_name: Option<&str>) -> Ve
     let mut patterns = Vec::new();
     let root = extract_root_domain(base_domain).unwrap_or_else(|| base_domain.to_string());
     let parts: Vec<&str> = root.split('.').collect();
-
+    
     if parts.len() < 2 {
         return patterns;
     }
-
+    
     let domain_name = parts[0];
     let tld = parts[1..].join(".");
-
+    
     // Common environment patterns
-    let env_prefixes = [
-        "dev", "staging", "test", "qa", "uat", "prod", "api", "app", "www", "mail",
-    ];
+    let env_prefixes = ["dev", "staging", "test", "qa", "uat", "prod", "api", "app", "www", "mail"];
     for prefix in env_prefixes {
         patterns.push(format!("{}.{}.{}", prefix, domain_name, tld));
     }
-
+    
     // Regional patterns
     let regions = ["us", "eu", "asia", "uk", "de", "fr", "jp", "au"];
     for region in regions {
         patterns.push(format!("{}.{}.{}", region, domain_name, tld));
         patterns.push(format!("{}-{}.{}", domain_name, region, tld));
     }
-
+    
     // Service patterns
-    let services = [
-        "cdn", "static", "assets", "media", "images", "files", "docs", "help", "support",
-    ];
+    let services = ["cdn", "static", "assets", "media", "images", "files", "docs", "help", "support"];
     for service in services {
         patterns.push(format!("{}.{}.{}", service, domain_name, tld));
     }
-
+    
     // If company name provided, generate variations
     if let Some(name) = company_name {
-        let name_clean: String = name
-            .to_lowercase()
+        let name_clean: String = name.to_lowercase()
             .chars()
             .filter(|c| c.is_alphanumeric() || *c == ' ')
             .collect();
         let name_parts: Vec<&str> = name_clean.split_whitespace().collect();
-
+        
         if !name_parts.is_empty() {
             let first = name_parts[0];
             patterns.push(format!("{}.{}", first, tld));
@@ -318,30 +313,31 @@ fn generate_pattern_domains(base_domain: &str, company_name: Option<&str>) -> Ve
             patterns.push(format!("{}.dev", first));
         }
     }
-
+    
     patterns
 }
 
 /// Check if a domain is live and get basic info
-async fn check_domain_liveness(
-    domain: &str,
-) -> (bool, Vec<String>, Option<u16>, bool, Option<String>) {
+async fn check_domain_liveness(domain: &str) -> (bool, Vec<String>, Option<u16>, bool, Option<String>) {
     let client = build_client(HTTP_TIMEOUT_SECS);
     let mut ips = Vec::new();
     let mut http_status = None;
     let mut https_available = false;
     let mut title = None;
-
+    
     // DNS resolution
     let addr = format!("{}:80", domain);
     if let Ok(addrs) = tokio::net::lookup_host(&addr).await {
-        ips = addrs.map(|a| a.ip().to_string()).take(5).collect();
+        ips = addrs
+            .map(|a| a.ip().to_string())
+            .take(5)
+            .collect();
     }
-
+    
     if ips.is_empty() {
         return (false, ips, http_status, https_available, title);
     }
-
+    
     // Try HTTPS first
     let https_url = format!("https://{}", domain);
     if let Ok(resp) = client.get(&https_url).send().await {
@@ -351,13 +347,7 @@ async fn check_domain_liveness(
             // Extract title
             if let Some(start) = html.find("<title>") {
                 if let Some(end) = html[start..].find("</title>") {
-                    title = Some(
-                        html[start + 7..start + end]
-                            .trim()
-                            .chars()
-                            .take(100)
-                            .collect(),
-                    );
+                    title = Some(html[start + 7..start + end].trim().chars().take(100).collect());
                 }
             }
         }
@@ -369,19 +359,13 @@ async fn check_domain_liveness(
             if let Ok(html) = resp.text().await {
                 if let Some(start) = html.find("<title>") {
                     if let Some(end) = html[start..].find("</title>") {
-                        title = Some(
-                            html[start + 7..start + end]
-                                .trim()
-                                .chars()
-                                .take(100)
-                                .collect(),
-                        );
+                        title = Some(html[start + 7..start + end].trim().chars().take(100).collect());
                     }
                 }
             }
         }
     }
-
+    
     (true, ips, http_status, https_available, title)
 }
 
@@ -390,13 +374,13 @@ pub async fn run_auto_discovery(
     primary_domain: &str,
     company_name: Option<&str>,
 ) -> DiscoveryResult {
-    let root_domain =
-        extract_root_domain(primary_domain).unwrap_or_else(|| primary_domain.to_string());
-
+    let root_domain = extract_root_domain(primary_domain)
+        .unwrap_or_else(|| primary_domain.to_string());
+    
     let mut all_domains: HashSet<String> = HashSet::new();
     let mut discovered_domains: Vec<DiscoveredDomain> = Vec::new();
     let mut stages_completed = Vec::new();
-
+    
     // Stage 0: Primary domain
     all_domains.insert(root_domain.clone());
     discovered_domains.push(DiscoveredDomain::new(
@@ -405,7 +389,7 @@ pub async fn run_auto_discovery(
         1.0,
     ));
     stages_completed.push(DiscoveryStage::PrimaryDomain);
-
+    
     // Stage 1: Certificate Transparency
     tracing::info!(target: "auto_domain_discovery", "Starting CT log search for {}", root_domain);
     let ct_domains = discover_from_ct_logs(&root_domain).await;
@@ -419,7 +403,7 @@ pub async fn run_auto_discovery(
         }
     }
     stages_completed.push(DiscoveryStage::CertificateTransparency);
-
+    
     // Stage 2: DNS enumeration
     tracing::info!(target: "auto_domain_discovery", "Starting DNS enumeration for {}", root_domain);
     let dns_domains = discover_from_dns(&root_domain).await;
@@ -433,7 +417,7 @@ pub async fn run_auto_discovery(
         }
     }
     stages_completed.push(DiscoveryStage::DnsEnumeration);
-
+    
     // Stage 3: Web crawl (using discovered domains so far)
     tracing::info!(target: "auto_domain_discovery", "Starting web crawl");
     let base_domains: Vec<String> = all_domains.iter().take(10).cloned().collect();
@@ -441,21 +425,29 @@ pub async fn run_auto_discovery(
     for d in crawl_domains {
         // Only add if related to the root domain
         if d.ends_with(&root_domain) && all_domains.insert(d.clone()) {
-            discovered_domains.push(DiscoveredDomain::new(d, DiscoveryStage::WebCrawl, 0.7));
+            discovered_domains.push(DiscoveredDomain::new(
+                d,
+                DiscoveryStage::WebCrawl,
+                0.7,
+            ));
         }
     }
     stages_completed.push(DiscoveryStage::WebCrawl);
-
+    
     // Stage 4: Email records
     tracing::info!(target: "auto_domain_discovery", "Checking email records for {}", root_domain);
     let email_domains = discover_from_email_records(&root_domain).await;
     for d in email_domains {
         if all_domains.insert(d.clone()) {
-            discovered_domains.push(DiscoveredDomain::new(d, DiscoveryStage::EmailRecords, 0.8));
+            discovered_domains.push(DiscoveredDomain::new(
+                d,
+                DiscoveryStage::EmailRecords,
+                0.8,
+            ));
         }
     }
     stages_completed.push(DiscoveryStage::EmailRecords);
-
+    
     // Stage 5: Pattern generation
     tracing::info!(target: "auto_domain_discovery", "Generating pattern-based domains");
     let pattern_domains = generate_pattern_domains(&root_domain, company_name);
@@ -469,21 +461,26 @@ pub async fn run_auto_discovery(
         }
     }
     stages_completed.push(DiscoveryStage::PatternGeneration);
-
+    
     // Check liveness for all domains (concurrent)
     tracing::info!(target: "auto_domain_discovery", "Checking liveness for {} domains", discovered_domains.len());
     let _client = Arc::new(build_client(HTTP_TIMEOUT_SECS));
-
+    
     let checks: Vec<_> = discovered_domains
         .iter()
         .map(|d| {
             let domain = d.domain.clone();
-            async move { check_domain_liveness(&domain).await }
+            async move {
+                check_domain_liveness(&domain).await
+            }
         })
         .collect();
-
-    let results: Vec<_> = stream::iter(checks).buffer_unordered(20).collect().await;
-
+    
+    let results: Vec<_> = stream::iter(checks)
+        .buffer_unordered(20)
+        .collect()
+        .await;
+    
     for (domain, result) in discovered_domains.iter_mut().zip(results.into_iter()) {
         let (live, ips, http_status, https_available, title) = result;
         domain.live = live;
@@ -492,9 +489,9 @@ pub async fn run_auto_discovery(
         domain.https_available = https_available;
         domain.title = title;
     }
-
+    
     let live_count = discovered_domains.iter().filter(|d| d.live).count();
-
+    
     DiscoveryResult {
         primary_domain: root_domain,
         company_name: company_name.map(String::from),
@@ -508,7 +505,7 @@ pub async fn run_auto_discovery(
 /// Engine entrypoint returning EngineResult
 pub async fn run_auto_discovery_engine(target: &str, company_name: Option<&str>) -> EngineResult {
     let result = run_auto_discovery(target, company_name).await;
-
+    
     let findings: Vec<serde_json::Value> = result
         .domains
         .iter()
@@ -527,37 +524,28 @@ pub async fn run_auto_discovery_engine(target: &str, company_name: Option<&str>)
             })
         })
         .collect();
-
+    
     let msg = format!(
         "Auto Discovery: {} total domains found, {} live (from {} stages)",
         result.total_discovered,
         result.live_domains,
         result.stages_completed.len()
     );
-
+    
     EngineResult::ok(findings, msg)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[test]
     fn test_extract_root_domain() {
-        assert_eq!(
-            extract_root_domain("https://www.example.com/path"),
-            Some("example.com".to_string())
-        );
-        assert_eq!(
-            extract_root_domain("api.example.com"),
-            Some("example.com".to_string())
-        );
-        assert_eq!(
-            extract_root_domain("test.example.co.uk"),
-            Some("example.co.uk".to_string())
-        );
+        assert_eq!(extract_root_domain("https://www.example.com/path"), Some("example.com".to_string()));
+        assert_eq!(extract_root_domain("api.example.com"), Some("example.com".to_string()));
+        assert_eq!(extract_root_domain("test.example.co.uk"), Some("example.co.uk".to_string()));
     }
-
+    
     #[test]
     fn test_pattern_generation() {
         let patterns = generate_pattern_domains("example.com", Some("Example Corp"));

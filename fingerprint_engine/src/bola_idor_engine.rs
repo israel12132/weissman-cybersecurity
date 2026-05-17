@@ -36,8 +36,8 @@ const FALLBACK_BOLA_PATHS: [&str; 8] = [
 ];
 
 const SENSITIVE_KEY_FRAGMENTS: &[&str] = &[
-    "email", "phone", "ssn", "password", "secret", "token", "credit", "account", "iban", "address",
-    "dob", "sin", "passport", "license", "apikey", "api_key", "private",
+    "email", "phone", "ssn", "password", "secret", "token", "credit", "account", "iban",
+    "address", "dob", "sin", "passport", "license", "apikey", "api_key", "private",
 ];
 
 static UUID_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
@@ -106,7 +106,10 @@ fn apply_stealth_headers(
     }
 }
 
-fn apply_auth(req: reqwest::RequestBuilder, ctx: Option<&AuthContext>) -> reqwest::RequestBuilder {
+fn apply_auth(
+    req: reqwest::RequestBuilder,
+    ctx: Option<&AuthContext>,
+) -> reqwest::RequestBuilder {
     match ctx {
         Some(c) => req.headers(c.headers()),
         None => req,
@@ -210,13 +213,19 @@ async fn llm_harvest_resource_ids(
 }
 
 fn looks_like_email(s: &str) -> bool {
-    s.contains('@') && s.contains('.') && s.len() > 5 && s.len() < 320
+    s.contains('@')
+        && s.contains('.')
+        && s.len() > 5
+        && s.len() < 320
 }
 
 fn looks_like_high_entropy_token(s: &str) -> bool {
     s.len() >= 28
         && s.len() <= 512
-        && s.chars().filter(|c| c.is_ascii_alphanumeric()).count() * 10 >= s.len() * 7
+        && s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .count() * 10
+            >= s.len() * 7
 }
 
 fn collect_sensitive_strings(v: &Value, out: &mut Vec<String>) {
@@ -224,10 +233,14 @@ fn collect_sensitive_strings(v: &Value, out: &mut Vec<String>) {
         Value::Object(map) => {
             for (k, val) in map {
                 let kl = k.to_lowercase();
-                let key_sensitive = SENSITIVE_KEY_FRAGMENTS.iter().any(|frag| kl.contains(frag));
+                let key_sensitive = SENSITIVE_KEY_FRAGMENTS
+                    .iter()
+                    .any(|frag| kl.contains(frag));
                 match val {
                     Value::String(s) if !s.is_empty() && s.len() <= 4096 => {
-                        if key_sensitive || looks_like_email(s) || looks_like_high_entropy_token(s)
+                        if key_sensitive
+                            || looks_like_email(s)
+                            || looks_like_high_entropy_token(s)
                         {
                             out.push(s.clone());
                         }
@@ -257,7 +270,9 @@ fn sensitive_leak_overlap(baseline: &str, other: &str) -> Option<Vec<String>> {
                 leaks.push(s);
             }
         }
-    } else if let Ok(email_re) = Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}") {
+    } else if let Ok(email_re) =
+        Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+    {
         for cap in email_re.find_iter(baseline) {
             let e = cap.as_str();
             if other.contains(e) {
@@ -452,7 +467,12 @@ fn finding_blind_oast(path_label: &str, token: &str) -> Value {
     })
 }
 
-fn finding_reachable(path: &str, method: &str, status: u16, note: &str) -> Value {
+fn finding_reachable(
+    path: &str,
+    method: &str,
+    status: u16,
+    note: &str,
+) -> Value {
     serde_json::json!({
         "type": "bola_idor",
         "path": path,
@@ -789,7 +809,11 @@ async fn openapi_bola_matrix(
                             {
                                 if (200..300).contains(&st_h) {
                                     extend_harvest_pool(
-                                        &body_h, &path_tpl, &harvested, &llm_http, &llm_sem,
+                                        &body_h,
+                                        &path_tpl,
+                                        &harvested,
+                                        &llm_http,
+                                        &llm_sem,
                                         tenant_id,
                                     )
                                     .await;
@@ -844,7 +868,12 @@ async fn openapi_bola_matrix(
                     {
                         if (200..300).contains(&st) {
                             extend_harvest_pool(
-                                &body, &path_tpl, &harvested, &llm_http, &llm_sem, tenant_id,
+                                &body,
+                                &path_tpl,
+                                &harvested,
+                                &llm_http,
+                                &llm_sem,
+                                tenant_id,
                             )
                             .await;
                             pair_bodies.push((id.clone(), full, body));
@@ -960,15 +989,16 @@ async fn run_bola_idor_result_with_paths_inner(
         }
     }
 
-    let mut identity_bundle: Option<IdentityBundle> = if let Some(ctx) = identity_contexts {
-        if ctx.len() >= 2 {
-            Some(IdentityBundle::from_db_contexts(ctx.to_vec()))
+    let mut identity_bundle: Option<IdentityBundle> =
+        if let Some(ctx) = identity_contexts {
+            if ctx.len() >= 2 {
+                Some(IdentityBundle::from_db_contexts(ctx.to_vec()))
+            } else {
+                None
+            }
         } else {
             None
-        }
-    } else {
-        None
-    };
+        };
     if identity_bundle.is_none() && crate::autonomous_identity::autonomous_identity_enabled() {
         identity_bundle = crate::autonomous_identity::try_provision_identity_matrix(
             client.as_ref(),
@@ -1001,7 +1031,9 @@ async fn run_bola_idor_result_with_paths_inner(
         let n_fb = fb.len();
         (
             fb,
-            format!("BOLA/IDOR: No OpenAPI/Swagger; concurrent fallback probes, {n_fb} signals",),
+            format!(
+                "BOLA/IDOR: No OpenAPI/Swagger; concurrent fallback probes, {n_fb} signals",
+            ),
         )
     } else {
         let Some(spec) = spec else {

@@ -8,7 +8,7 @@ pub use llm_path_fuzz::{
     run_llm_path_fuzz_result, run_llm_path_fuzz_result_multi, LlmPathFuzzCyberEngine,
 };
 pub use semantic::{
-    get_state_machine, parse_state_machine, preflight_semantic_probe_body,
-    run_semantic_fuzz_result, SemanticAiFuzzCyberEngine, SemanticFuzzResult,
+    get_state_machine, parse_state_machine, preflight_semantic_probe_body, run_semantic_fuzz_result,
+    SemanticAiFuzzCyberEngine, SemanticFuzzResult,
 };
 pub use wordlist::{expand_recursive_directory_paths, expanded_path_wordlist};

@@ -17,7 +17,8 @@ pub fn spawn_sovereign_self_scan_loop(app_pool: Arc<PgPool>, telemetry: Arc<Send
     }
     let interval_secs = secs.max(300);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        let mut tick =
+            tokio::time::interval(std::time::Duration::from_secs(interval_secs));
         tick.tick().await;
         loop {
             tick.tick().await;
@@ -28,13 +29,15 @@ pub fn spawn_sovereign_self_scan_loop(app_pool: Arc<PgPool>, telemetry: Arc<Send
     });
 }
 
-async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> Result<(), String> {
-    let tenant_id: i64 =
-        sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "no active tenant".to_string())?;
+async fn run_sovereign_self_scan(
+    pool: &PgPool,
+    telemetry: &Sender<String>,
+) -> Result<(), String> {
+    let tenant_id: i64 = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no active tenant".to_string())?;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -120,8 +123,7 @@ async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> R
         .and_then(|x| x.as_bool())
         .unwrap_or(false);
 
-    if elevated
-        && rotate
+    if elevated && rotate
         && matches!(
             std::env::var("WEISSMAN_SOVEREIGN_EMIT_PORT_ROTATION_HINT").as_deref(),
             Ok("1") | Ok("true") | Ok("yes")

@@ -256,14 +256,13 @@ impl CouncilConfig {
         .map_err(|e| e.to_string())?
         .filter(|s: &String| !s.trim().is_empty())
         .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
-        let default_model: String = sqlx::query_scalar(
-            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
-        )
-        .bind(tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_default();
+        let default_model: String =
+            sqlx::query_scalar("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'")
+                .bind(tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
         let _ = tx.commit().await.map_err(|e| e.to_string())?;
 
         let base = openai_chat::normalize_openai_base_url(base.trim());
@@ -626,19 +625,20 @@ where
         .filter(|s| !s.trim().is_empty())
         .map(std::string::ToString::to_string);
     for r in 0..max_rounds.max(1) {
-        let result =
-            run_adversarial_debate(cfg, tenant_id, target_brief, r, failure.as_deref()).await?;
+        let result = run_adversarial_debate(
+            cfg,
+            tenant_id,
+            target_brief,
+            r,
+            failure.as_deref(),
+        )
+        .await?;
         if probe(&result).await {
             return Ok(result);
         }
         failure = Some(format!(
             "council_round={r}: probe/OAST negative; final_payload_excerpt={}",
-            result
-                .gamma
-                .final_payload
-                .chars()
-                .take(500)
-                .collect::<String>()
+            result.gamma.final_payload.chars().take(500).collect::<String>()
         ));
         warn!(target: "council", "probe failed, re-debating: {}", failure.as_deref().unwrap_or(""));
     }
@@ -787,10 +787,7 @@ async fn fetch_supreme_memory_context(
                 "- prior_win: brief={excerpt} summary={summary} orchestrator={orch}"
             ));
         }
-        return format!(
-            "Semantic memory (recent OAST-validated wins):\n{}",
-            lines.join("\n")
-        );
+        return format!("Semantic memory (recent OAST-validated wins):\n{}", lines.join("\n"));
     }
     let mut scored: Vec<(f32, String)> = Vec::new();
     for row in rows {
@@ -836,12 +833,7 @@ pub async fn persist_supreme_council_win(
         "{} | {} | {}",
         proposer.strategy.id,
         proposer.strategy.name,
-        proposer
-            .strategy
-            .description
-            .chars()
-            .take(2000)
-            .collect::<String>()
+        proposer.strategy.description.chars().take(2000).collect::<String>()
     );
     let embed_input = format!(
         "{}\n{}",
@@ -1083,11 +1075,11 @@ async fn supreme_run_phase1(
 ) -> Result<(ProposerStrategyOut, CriticTargetAssessment), LlmError> {
     #[cfg(target_os = "linux")]
     {
-        let use_aff = cfg.supreme_use_phased_affinity && cfg.supreme_phase1_cpus.len() >= 2;
+        let use_aff =
+            cfg.supreme_use_phased_affinity && cfg.supreme_phase1_cpus.len() >= 2;
         if use_aff {
             let ca = cfg.supreme_phase1_cpus[0];
-            let cb = cfg
-                .supreme_phase1_cpus
+            let cb = cfg.supreme_phase1_cpus
                 .get(1)
                 .copied()
                 .unwrap_or(cfg.supreme_phase1_cpus[0]);
@@ -1130,7 +1122,14 @@ async fn supreme_run_phase1(
         }
     }
     let (rp, rc) = tokio::join!(
-        step_proposer_supreme(client, cfg, tenant_id, brief, memory_ctx, prior_failure,),
+        step_proposer_supreme(
+            client,
+            cfg,
+            tenant_id,
+            brief,
+            memory_ctx,
+            prior_failure,
+        ),
         step_critic_target_surface(client, cfg, tenant_id, brief, prior_failure),
     );
     Ok((rp?, rc?))
@@ -1156,8 +1155,15 @@ async fn supreme_run_phase2_sovereign(
             let cfg = cfg.clone();
             return tokio::task::spawn_blocking(move || {
                 let fut = async move {
-                    step_sovereign_general(&client, &cfg, tenant_id, &proposer, &critic, &brief)
-                        .await
+                    step_sovereign_general(
+                        &client,
+                        &cfg,
+                        tenant_id,
+                        &proposer,
+                        &critic,
+                        &brief,
+                    )
+                    .await
                 };
                 supreme_phase2_on_cpu(cc, fut)
             })
@@ -1311,12 +1317,7 @@ where
         }
         failure = Some(format!(
             "council_round={r}: probe/OAST negative; final_payload_excerpt={}",
-            legacy
-                .gamma
-                .final_payload
-                .chars()
-                .take(500)
-                .collect::<String>()
+            legacy.gamma.final_payload.chars().take(500).collect::<String>()
         ));
         warn!(target: "council", "probe failed, re-debating: {}", failure.as_deref().unwrap_or(""));
     }
@@ -1517,8 +1518,7 @@ pub async fn process_mission(
     }));
 
     // Phase A — General issues MissionBrief to the Hacker track
-    let user_brief =
-        format!(
+    let user_brief = format!(
         "mission_id (exact): \"{}\"\nOPERATIONAL_TARGET_BRIEF:\n{}\nEmit MissionBrief JSON only.",
         mission_id,
         target_operational_brief.chars().take(14_000).collect::<String>()
@@ -1545,8 +1545,7 @@ pub async fn process_mission(
         let mut w = shared.write().await;
         w.brief = Some(mission_brief.clone());
     }
-    let brief_v =
-        serde_json::to_value(&mission_brief).map_err(|e| LlmError::Decode(e.to_string()))?;
+    let brief_v = serde_json::to_value(&mission_brief).map_err(|e| LlmError::Decode(e.to_string()))?;
     council_audit_log_signed(
         pool,
         tenant_id,
@@ -1594,8 +1593,7 @@ pub async fn process_mission(
         )
         .await?;
         let proposal = parse_hacker_proposal_json(&raw_h)?;
-        let prop_v =
-            serde_json::to_value(&proposal).map_err(|e| LlmError::Decode(e.to_string()))?;
+        let prop_v = serde_json::to_value(&proposal).map_err(|e| LlmError::Decode(e.to_string()))?;
         council_audit_log_signed(
             pool,
             tenant_id,

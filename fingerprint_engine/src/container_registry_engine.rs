@@ -19,12 +19,7 @@ fn extract_domain(target: &str) -> String {
         .or_else(|| t.strip_prefix("http://"))
         .unwrap_or(t);
     // Return root domain (e.g. example.com from api.example.com)
-    let parts: Vec<&str> = stripped
-        .split('/')
-        .next()
-        .unwrap_or(stripped)
-        .split('.')
-        .collect();
+    let parts: Vec<&str> = stripped.split('/').next().unwrap_or(stripped).split('.').collect();
     if parts.len() >= 2 {
         format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])
     } else {
@@ -81,9 +76,9 @@ pub async fn run_container_registry_result(target: &str) -> EngineResult {
     let registry_paths = [
         "/v2/_catalog",
         "/v2/",
-        "/api/v2.0/repositories", // Harbor
+        "/api/v2.0/repositories",  // Harbor
         "/api/repositories",
-        "/service/token", // Docker auth token endpoint
+        "/service/token",           // Docker auth token endpoint
     ];
 
     let base = if host.starts_with("http") {
@@ -102,9 +97,7 @@ pub async fn run_container_registry_result(target: &str) -> EngineResult {
 
         if status == 200 {
             let body = resp.text().await.unwrap_or_default();
-            let is_registry = body.contains("repositories")
-                || body.contains("Docker-Distribution")
-                || path.contains("v2");
+            let is_registry = body.contains("repositories") || body.contains("Docker-Distribution") || path.contains("v2");
             if is_registry || path.contains("v2") {
                 findings.push(json!({
                     "type": "container_registry",

@@ -96,9 +96,7 @@ async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) 
                         tracing::error!(target: "verification_sandbox", error = %e, "heal_verification_steps insert");
                     }
                 }
-                Err(e) => {
-                    tracing::error!(target: "verification_sandbox", error = %e, "pool acquire for step log")
-                }
+                Err(e) => tracing::error!(target: "verification_sandbox", error = %e, "pool acquire for step log"),
             }
         }
     }

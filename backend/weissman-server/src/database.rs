@@ -19,9 +19,7 @@ pub struct Pools {
 pub async fn connect_pools() -> Result<Pools, sqlx::Error> {
     let database_url = std::env::var("DATABASE_URL").unwrap_or_default();
     if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(&database_url) {
-        return Err(sqlx::Error::Configuration(
-            format!("DATABASE_URL: {}", msg).into(),
-        ));
+        return Err(sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()));
     }
     let app = fingerprint_engine::db::connect_app(database_url.trim()).await?;
     let auth_url =

@@ -170,10 +170,7 @@ pub async fn run_gcp_attack_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(
-        findings.clone(),
-        format!("GCP Attack: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("GCP Attack: {} findings", findings.len()))
 }
 
 pub async fn run_gcp_attack(target: &str) {

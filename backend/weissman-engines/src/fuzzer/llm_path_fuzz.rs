@@ -191,7 +191,11 @@ pub async fn run_llm_path_fuzz_result_multi(
     let mut payloads: Vec<String> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
-        if line.is_empty() || line.len() > 2000 || line.starts_with('#') || line.starts_with("//") {
+        if line.is_empty()
+            || line.len() > 2000
+            || line.starts_with('#')
+            || line.starts_with("//")
+        {
             continue;
         }
         payloads.push(line.to_string());

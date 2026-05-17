@@ -52,17 +52,8 @@ const CICD_PATHS: &[&str] = &[
 ];
 
 const SECRET_PATTERNS: &[&str] = &[
-    "password",
-    "secret",
-    "token",
-    "api_key",
-    "apikey",
-    "private_key",
-    "access_key",
-    "aws_secret",
-    "github_token",
-    "gh_token",
-    "slack_token",
+    "password", "secret", "token", "api_key", "apikey", "private_key",
+    "access_key", "aws_secret", "github_token", "gh_token", "slack_token",
 ];
 
 pub async fn run_cicd_pipeline_result(target: &str) -> EngineResult {
@@ -86,10 +77,7 @@ pub async fn run_cicd_pipeline_result(target: &str) -> EngineResult {
         let body = resp.text().await.unwrap_or_default();
 
         // Determine CI/CD tool from path
-        let tool = if path.contains("argocd")
-            || path.contains("v1/applications")
-            || path.contains("v1/repositories")
-        {
+        let tool = if path.contains("argocd") || path.contains("v1/applications") || path.contains("v1/repositories") {
             "ArgoCD"
         } else if path.contains("tekton") {
             "Tekton"

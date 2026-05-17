@@ -24,32 +24,19 @@ fn base_url(target: &str) -> String {
 
 /// SSTI payloads and the expected output when evaluated (7*7 = 49).
 const SSTI_PAYLOADS: &[(&str, &str)] = &[
-    ("{{7*7}}", "49"),         // Jinja2, Twig, Pebble
-    ("${7*7}", "49"),          // Freemarker, Spring EL
-    ("<%= 7*7 %>", "49"),      // ERB (Ruby), EJS
-    ("#{7*7}", "49"),          // Thymeleaf, Groovy
-    ("{{7*'7'}}", "7777777"),  // Jinja2 vs Twig differentiator
+    ("{{7*7}}", "49"),       // Jinja2, Twig, Pebble
+    ("${7*7}", "49"),        // Freemarker, Spring EL
+    ("<%= 7*7 %>", "49"),    // ERB (Ruby), EJS
+    ("#{7*7}", "49"),        // Thymeleaf, Groovy
+    ("{{7*'7'}}", "7777777"), // Jinja2 vs Twig differentiator
     ("%7B%7B7*7%7D%7D", "49"), // URL-encoded Jinja2
 ];
 
 /// Common GET parameters that might be rendered in templates.
-const PROBE_PARAMS: &[&str] = &[
-    "q", "search", "query", "name", "input", "msg", "message", "text", "value", "template", "page",
-    "id", "title", "content", "data",
-];
+const PROBE_PARAMS: &[&str] = &["q", "search", "query", "name", "input", "msg", "message", "text", "value", "template", "page", "id", "title", "content", "data"];
 
 /// Common endpoints that may render user input.
-const PROBE_PATHS: &[&str] = &[
-    "/",
-    "/search",
-    "/index",
-    "/home",
-    "/api/render",
-    "/template",
-    "/render",
-    "/preview",
-    "/api/preview",
-];
+const PROBE_PATHS: &[&str] = &["/", "/search", "/index", "/home", "/api/render", "/template", "/render", "/preview", "/api/preview"];
 
 pub async fn run_ssti_result(target: &str) -> EngineResult {
     let client = make_client();

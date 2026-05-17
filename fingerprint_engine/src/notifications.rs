@@ -202,10 +202,7 @@ pub fn spawn_genesis_telegram_alert(text: &str) {
     if token.is_empty() || chat.is_empty() {
         return;
     }
-    let msg = format!(
-        "[Weissman Genesis] {}",
-        text.chars().take(3500).collect::<String>()
-    );
+    let msg = format!("[Weissman Genesis] {}", text.chars().take(3500).collect::<String>());
     let url = format!("https://api.telegram.org/bot{token}/sendMessage");
     tokio::spawn(async move {
         let client = Client::builder()

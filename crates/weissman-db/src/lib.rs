@@ -70,8 +70,9 @@ pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
 
 /// Connect app pool using `DATABASE_URL` from the environment.
 pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = database_url_from_env()
-        .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
+    let url = database_url_from_env().map_err(|e| {
+        sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into())
+    })?;
     let t = url.trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
@@ -97,8 +98,9 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
 
 /// Connect auth pool using `WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`.
 pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = resolve_auth_database_url()
-        .map_err(|e| sqlx::Error::Configuration(format!("auth database URL: {}", e).into()))?;
+    let url = resolve_auth_database_url().map_err(|e| {
+        sqlx::Error::Configuration(format!("auth database URL: {}", e).into())
+    })?;
     let t = url.trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
@@ -137,9 +139,7 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
 
 pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
     let url = intel_database_url_from_env().map_err(|e| {
-        sqlx::Error::Configuration(
-            format!("WEISSMAN_INTEL_DATABASE_URL / DATABASE_URL: {}", e).into(),
-        )
+        sqlx::Error::Configuration(format!("WEISSMAN_INTEL_DATABASE_URL / DATABASE_URL: {}", e).into())
     })?;
     let t = url.trim();
     if t.is_empty() {

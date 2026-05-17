@@ -84,10 +84,7 @@ pub async fn run_saml_attack_result(target: &str) -> EngineResult {
         }));
 
         // Check for weak signature algorithms
-        if body.contains("sha1")
-            || body.contains("SHA1")
-            || body.contains("http://www.w3.org/2000/09/xmldsig#rsa-sha1")
-        {
+        if body.contains("sha1") || body.contains("SHA1") || body.contains("http://www.w3.org/2000/09/xmldsig#rsa-sha1") {
             findings.push(json!({
                 "type": "saml_attack",
                 "title": format!("Weak SAML signature algorithm (SHA-1) detected: {}", url),
@@ -104,10 +101,7 @@ pub async fn run_saml_attack_result(target: &str) -> EngineResult {
         }
 
         // Check for missing NameID encryption
-        if body.contains("NameIDFormat")
-            && !body.contains("EncryptedID")
-            && !body.contains("WantAssertionsEncrypted=\"true\"")
-        {
+        if body.contains("NameIDFormat") && !body.contains("EncryptedID") && !body.contains("WantAssertionsEncrypted=\"true\"") {
             findings.push(json!({
                 "type": "saml_attack",
                 "title": format!("SAML assertions not encrypted: {}", url),
@@ -154,10 +148,7 @@ pub async fn run_saml_attack_result(target: &str) -> EngineResult {
             if let Ok(probe_resp) = client.get(&probe_url).send().await {
                 let probe_body = probe_resp.text().await.unwrap_or_default();
                 // If we get a 500 with XML error detail, it may reveal internal parser info
-                if probe_body.contains("Exception")
-                    || probe_body.contains("stack trace")
-                    || probe_body.contains("xmlsec")
-                {
+                if probe_body.contains("Exception") || probe_body.contains("stack trace") || probe_body.contains("xmlsec") {
                     findings.push(json!({
                         "type": "saml_attack",
                         "title": format!("SAML parser error leaked at: {}", url),

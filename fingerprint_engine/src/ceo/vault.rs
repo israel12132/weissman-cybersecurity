@@ -142,11 +142,7 @@ pub async fn post_vault_row(
 }
 
 /// Same logic as Python `remediation_engine.knowledge_match_sync` — executed in Rust against live DB.
-pub async fn match_vault_row(
-    pool: &PgPool,
-    tenant_id: i64,
-    vault_id: i64,
-) -> Result<Value, String> {
+pub async fn match_vault_row(pool: &PgPool, tenant_id: i64, vault_id: i64) -> Result<Value, String> {
     let row = get_vault_row(pool, tenant_id, vault_id)
         .await
         .map_err(|e| e.to_string())?
@@ -160,10 +156,7 @@ pub async fn match_vault_row(
         .map_err(|e| e.to_string())
 }
 
-pub async fn export_vault_criticals_csv(
-    pool: &PgPool,
-    tenant_id: i64,
-) -> Result<String, sqlx::Error> {
+pub async fn export_vault_criticals_csv(pool: &PgPool, tenant_id: i64) -> Result<String, sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     let rows = sqlx::query(
         r#"SELECT id, tech_fingerprint, component_ref, severity, detection_signature,
@@ -176,9 +169,7 @@ pub async fn export_vault_criticals_csv(
     .fetch_all(&mut *tx)
     .await?;
     let _ = tx.commit().await;
-    let mut w = String::from(
-        "id,tech_fingerprint,component_ref,severity,detection_signature,patch_excerpt,created_at\n",
-    );
+    let mut w = String::from("id,tech_fingerprint,component_ref,severity,detection_signature,patch_excerpt,created_at\n");
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         let tf: String = r.try_get("tech_fingerprint").unwrap_or_default();
@@ -186,9 +177,7 @@ pub async fn export_vault_criticals_csv(
         let sev: String = r.try_get("severity").unwrap_or_default();
         let det: String = r.try_get("detection_signature").unwrap_or_default();
         let pe: String = r.try_get("patch_excerpt").unwrap_or_default();
-        let ct: chrono::DateTime<chrono::Utc> = r
-            .try_get("created_at")
-            .unwrap_or_else(|_| chrono::Utc::now());
+        let ct: chrono::DateTime<chrono::Utc> = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now());
         let esc = |s: &str| {
             let x = s.replace('"', "\"\"");
             format!("\"{}\"", x.replace('\n', " "))

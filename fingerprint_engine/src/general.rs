@@ -24,20 +24,14 @@ pub struct MissionNode {
     pub asm_node_types: Vec<String>,
 }
 
-fn risk_heuristic(
-    node_type: &str,
-    status: &str,
-    label: &str,
-    cname: Option<&str>,
-) -> (f64, Vec<String>) {
+fn risk_heuristic(node_type: &str, status: &str, label: &str, cname: Option<&str>) -> (f64, Vec<String>) {
     let mut score = 10.0_f64;
     let mut reasons = Vec::new();
     let nt = node_type.to_lowercase();
     let st = status.to_lowercase();
     let lb = label.to_lowercase();
 
-    if nt.contains("s3") || nt.contains("azure") || nt.contains("bucket") || nt.contains("storage")
-    {
+    if nt.contains("s3") || nt.contains("azure") || nt.contains("bucket") || nt.contains("storage") {
         score += 35.0;
         reasons.push("cloud_exposure_surface".into());
     }
@@ -57,10 +51,7 @@ fn risk_heuristic(
 }
 
 /// Build mission candidates from latest ASM graph + client registry (tenant RLS).
-pub async fn build_dynamic_mission_map(
-    pool: &PgPool,
-    tenant_id: i64,
-) -> Result<Vec<MissionNode>, String> {
+pub async fn build_dynamic_mission_map(pool: &PgPool, tenant_id: i64) -> Result<Vec<MissionNode>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -118,7 +109,12 @@ pub async fn build_dynamic_mission_map(
         let status: String = r.try_get("status").unwrap_or_default();
         let label: String = r.try_get("label").unwrap_or_default();
         let cname: Option<String> = r.try_get("cname_target").ok();
-        let (add, mut reasons) = risk_heuristic(&node_type, &status, &label, cname.as_deref());
+        let (add, mut reasons) = risk_heuristic(
+            &node_type,
+            &status,
+            &label,
+            cname.as_deref(),
+        );
         let hint = if !label.trim().is_empty() {
             label.clone()
         } else if let Some(d) = client_domains.get(&cid).and_then(|v| v.first()) {
@@ -146,10 +142,7 @@ pub async fn build_dynamic_mission_map(
             })
             .or_insert_with(|| MissionNode {
                 client_id: cid,
-                client_name: client_names
-                    .get(&cid)
-                    .cloned()
-                    .unwrap_or_else(|| format!("client {}", cid)),
+                client_name: client_names.get(&cid).cloned().unwrap_or_else(|| format!("client {}", cid)),
                 target_hint: hint,
                 risk_score: add,
                 reasons,
@@ -193,15 +186,13 @@ async fn llm_rank_clients(
         let _ = tx.commit().await.ok();
         return None;
     }
-    let model: String = sqlx::query_scalar(
-        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'",
-    )
-    .bind(tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or_default();
+    let model: String = sqlx::query_scalar("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_model'")
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
     let _ = tx.commit().await.ok()?;
 
     let catalog: Value = Value::Array(
@@ -354,8 +345,7 @@ pub async fn run_ascension_wave(
                 &mut p,
             )
             .await;
-            match crate::async_jobs::enqueue(pool.as_ref(), tenant_id, kind, p, trace.clone()).await
-            {
+            match crate::async_jobs::enqueue(pool.as_ref(), tenant_id, kind, p, trace.clone()).await {
                 Ok(jid) => {
                     enqueued.push(json!({
                         "job_id": jid.to_string(),

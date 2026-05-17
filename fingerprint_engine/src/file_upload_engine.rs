@@ -86,10 +86,7 @@ pub async fn run_file_upload_result(target: &str) -> EngineResult {
 
         if let Ok(resp) = client
             .post(url)
-            .header(
-                "Content-Type",
-                format!("multipart/form-data; boundary={}", php_as_jpeg_boundary),
-            )
+            .header("Content-Type", format!("multipart/form-data; boundary={}", php_as_jpeg_boundary))
             .body(multipart_body)
             .send()
             .await
@@ -110,11 +107,7 @@ pub async fn run_file_upload_result(target: &str) -> EngineResult {
                 }));
             } else if status == 200 || status == 201 || status == 202 {
                 // Check if a file path/URL is returned in the response
-                if body.contains(".jpg")
-                    || body.contains("url")
-                    || body.contains("path")
-                    || body.contains("file")
-                {
+                if body.contains(".jpg") || body.contains("url") || body.contains("path") || body.contains("file") {
                     findings.push(json!({
                         "type": "file_upload",
                         "title": "File Upload: PHP-in-JPEG Accepted",
@@ -139,10 +132,7 @@ pub async fn run_file_upload_result(target: &str) -> EngineResult {
 
         if let Ok(resp) = client
             .post(url)
-            .header(
-                "Content-Type",
-                format!("multipart/form-data; boundary={}", traversal_boundary),
-            )
+            .header("Content-Type", format!("multipart/form-data; boundary={}", traversal_boundary))
             .body(traversal_body)
             .send()
             .await

@@ -27,13 +27,7 @@ pub async fn run_graphql_attack_result(target: &str) -> EngineResult {
     let base = base_url(target);
     let mut findings = Vec::new();
 
-    let graphql_paths = [
-        "/graphql",
-        "/api/graphql",
-        "/graphql/v1",
-        "/v1/graphql",
-        "/query",
-    ];
+    let graphql_paths = ["/graphql", "/api/graphql", "/graphql/v1", "/v1/graphql", "/query"];
     let introspection_query = json!({"query": "{__schema{types{name}}}"});
 
     for path in &graphql_paths {

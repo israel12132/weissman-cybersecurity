@@ -472,8 +472,8 @@ pub async fn run_graphql_introspection(
         }
     }
     let query_body = INTROSPECTION_QUERY.to_string();
-    let rows: Vec<Option<(String, u16, String)>> =
-        stream::iter(jobs.into_iter().map(|(base, path)| {
+    let rows: Vec<Option<(String, u16, String)>> = stream::iter(jobs.into_iter().map(
+        |(base, path)| {
             let client = Arc::clone(&client);
             let stealth_j = stealth_arc.clone();
             let url = format!("{base}{path}");
@@ -496,10 +496,11 @@ pub async fn run_graphql_introspection(
                 let text = resp.text().await.ok()?;
                 Some((path, status, text))
             }
-        }))
-        .buffer_unordered(GRAPHQL_PROBE_CONCURRENCY)
-        .collect()
-        .await;
+        },
+    ))
+    .buffer_unordered(GRAPHQL_PROBE_CONCURRENCY)
+    .collect()
+    .await;
 
     let mut out = HashSet::new();
     for triple in rows.into_iter().flatten() {

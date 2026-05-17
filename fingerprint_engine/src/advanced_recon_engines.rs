@@ -11,10 +11,7 @@ pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
         "mitre_attack": "T1591.001",
         "description": "Simulated Satellite Imagery OSINT finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_satellite_recon(target: &str) {
@@ -22,9 +19,7 @@ pub async fn run_satellite_recon(target: &str) {
 }
 
 pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "darkweb_intel",
@@ -34,10 +29,7 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         "description": "Simulated Dark Web Intelligence finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_darkweb_intel(target: &str) {
@@ -45,9 +37,7 @@ pub async fn run_darkweb_intel(target: &str) {
 }
 
 pub async fn run_financial_osint_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "financial_osint",
@@ -57,10 +47,7 @@ pub async fn run_financial_osint_result(target: &str) -> EngineResult {
         "description": "Simulated Financial OSINT Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_financial_osint(target: &str) {
@@ -76,10 +63,7 @@ pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
         "mitre_attack": "T1583.006",
         "description": "Simulated Blockchain Transaction Tracer finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_blockchain_trace(target: &str) {
@@ -87,9 +71,7 @@ pub async fn run_blockchain_trace(target: &str) {
 }
 
 pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "metadata_harvest",
@@ -99,10 +81,7 @@ pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
         "description": "Simulated Document Metadata Harvester finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_metadata_harvest(target: &str) {
@@ -110,9 +89,7 @@ pub async fn run_metadata_harvest(target: &str) {
 }
 
 pub async fn run_patent_recon_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "patent_recon",
@@ -122,10 +99,7 @@ pub async fn run_patent_recon_result(target: &str) -> EngineResult {
         "description": "Simulated Patent & IP Intelligence finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_patent_recon(target: &str) {
@@ -133,9 +107,7 @@ pub async fn run_patent_recon(target: &str) {
 }
 
 pub async fn run_telecom_osint_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "telecom_osint",
@@ -145,10 +117,7 @@ pub async fn run_telecom_osint_result(target: &str) -> EngineResult {
         "description": "Simulated Telecom Infrastructure OSINT finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_telecom_osint(target: &str) {
@@ -164,10 +133,7 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
         "mitre_attack": "T1595.001",
         "description": "Simulated IoT/ICS Shodan Deep Scan finding detected.",
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_iot_shodan_scan(target: &str) {
@@ -175,9 +141,7 @@ pub async fn run_iot_shodan_scan(target: &str) {
 }
 
 pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "job_posting_osint",
@@ -187,10 +151,7 @@ pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
         "description": "Simulated Job Posting Tech Stack OSINT finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_job_posting_osint(target: &str) {
@@ -198,9 +159,7 @@ pub async fn run_job_posting_osint(target: &str) {
 }
 
 pub async fn run_github_secret_scan_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "github_secret_scan",
@@ -210,10 +169,7 @@ pub async fn run_github_secret_scan_result(target: &str) -> EngineResult {
         "description": "Simulated GitHub Secret Scanner finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_github_secret_scan(target: &str) {
@@ -221,9 +177,7 @@ pub async fn run_github_secret_scan(target: &str) {
 }
 
 pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "threat_intel_fusion",
@@ -233,10 +187,7 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
         "description": "Simulated Threat Intelligence Fusion Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_threat_intel_fusion(target: &str) {
@@ -244,9 +195,7 @@ pub async fn run_threat_intel_fusion(target: &str) {
 }
 
 pub async fn run_attack_surface_quantify_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "attack_surface_quantify",
@@ -256,10 +205,7 @@ pub async fn run_attack_surface_quantify_result(target: &str) -> EngineResult {
         "description": "Simulated Attack Surface Quantification finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_attack_surface_quantify(target: &str) {
@@ -267,9 +213,7 @@ pub async fn run_attack_surface_quantify(target: &str) {
 }
 
 pub async fn run_adversarial_simulation_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "adversarial_simulation",
@@ -279,10 +223,7 @@ pub async fn run_adversarial_simulation_result(target: &str) -> EngineResult {
         "description": "Simulated Full Adversarial Simulation Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_adversarial_simulation(target: &str) {
@@ -290,9 +231,7 @@ pub async fn run_adversarial_simulation(target: &str) {
 }
 
 pub async fn run_dark_web_monitor_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "dark_web_monitor",
@@ -302,10 +241,7 @@ pub async fn run_dark_web_monitor_result(target: &str) -> EngineResult {
         "description": "Simulated Dark Web Brand Monitor finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_dark_web_monitor(target: &str) {
@@ -313,9 +249,7 @@ pub async fn run_dark_web_monitor(target: &str) {
 }
 
 pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+    if target.trim().is_empty() { return EngineResult::error("target required"); }
     let mut findings: Vec<serde_json::Value> = Vec::new();
     findings.push(json!({
         "type": "passive_dns_forensics",
@@ -325,10 +259,7 @@ pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
         "description": "Simulated Passive DNS Forensics Engine finding detected.",
         "target": target,
     }));
-    EngineResult::ok(
-        findings.clone(),
-        format!("Engine: {} findings", findings.len()),
-    )
+    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
 }
 
 pub async fn run_passive_dns_forensics(target: &str) {
