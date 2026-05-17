@@ -5,6 +5,10 @@ edition = "2021"
 rust-version = "1.91.1"
 description = "Active tech stack fingerprinting for threat intel correlation"
 
+[features]
+default = []
+numa = ["dep:hwlocality"]
+
 [dependencies]
 fuzz_core = { path = "../fuzz_core" }
 weissman-core = { path = "../backend/weissman-core" }
@@ -88,7 +92,7 @@ rand_core = "0.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # System libhwloc via pkg-config (install libhwloc-dev). Vendored build needs autoconf/automake.
-hwlocality = "1.0.0-alpha.12"
+hwlocality = { version = "1.0.0-alpha.12", optional = true }
 libc = "0.2"
 
 [lints.rust]
