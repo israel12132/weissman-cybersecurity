@@ -4,6 +4,7 @@ Roles: super_admin, security_analyst, viewer.
 MFA mandatory for all roles (pyotp, Google Authenticator compatible).
 """
 import os
+import re
 import secrets
 from typing import Annotated
 
@@ -13,13 +14,57 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from src.database import get_session_factory, UserModel
+from src.exceptions import InvalidPasswordError, InsufficientRoleError, AuthenticationError
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ROLE_HIERARCHY = {"super_admin": 3, "security_analyst": 2, "viewer": 1}
 
 
+def validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password strength according to security policy.
+
+    Requirements:
+    - Minimum 12 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character (!@#$%^&*)
+
+    Parameters
+    ----------
+    password : str
+        The password to validate
+
+    Returns
+    -------
+    tuple[bool, str]
+        (is_valid, error_message or "OK")
+    """
+    if len(password) < 12:
+        return False, "Password must be at least 12 characters long"
+
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one digit"
+
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one special character"
+
+    return True, "OK"
+
+
 def hash_password(password: str) -> str:
+    """Hash password using bcrypt. Validates password strength first."""
+    is_valid, error_msg = validate_password(password)
+    if not is_valid:
+        raise InvalidPasswordError(error_msg, password_length=len(password))
     return pwd_ctx.hash(password)
 
 

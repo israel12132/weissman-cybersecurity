@@ -45,7 +45,7 @@ from collections import defaultdict
 from threading import Lock
 from typing import Any, Optional
 
-from fastapi import HTTPException
+from src.exceptions import RateLimitExceeded
 
 logger = logging.getLogger("weissman.rate_limiter")
 
@@ -116,7 +116,7 @@ class RateLimiter:
         """
         Check if *identity* (tenant_id or IP) is within rate limit.
 
-        Raises HTTPException(429) if rate limit exceeded.
+        Raises RateLimitExceeded if rate limit exceeded.
         Logs rate limit violations via logger.warning.
 
         Parameters
@@ -126,8 +126,8 @@ class RateLimiter:
 
         Raises
         ------
-        HTTPException
-            With status_code=429 if rate limit is exceeded
+        RateLimitExceeded
+            If rate limit is exceeded
         """
         r = _get_redis()
 
@@ -170,9 +170,13 @@ class RateLimiter:
                     self.max_calls,
                     self.window_seconds,
                 )
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s"
+                raise RateLimitExceeded(
+                    f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s",
+                    identity=identity,
+                    key_prefix=self.key_prefix,
+                    current_calls=count_before_add,
+                    max_calls=self.max_calls,
+                    window_seconds=self.window_seconds,
                 )
 
             logger.debug(
@@ -183,7 +187,7 @@ class RateLimiter:
                 self.max_calls,
             )
 
-        except HTTPException:
+        except RateLimitExceeded:
             # Re-raise rate limit exceptions
             raise
         except Exception as exc:
@@ -214,9 +218,13 @@ class RateLimiter:
                     self.max_calls,
                     self.window_seconds,
                 )
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s"
+                raise RateLimitExceeded(
+                    f"Rate limit exceeded: {self.max_calls} calls per {self.window_seconds}s",
+                    identity=identity,
+                    key_prefix=self.key_prefix,
+                    current_calls=len(timestamps),
+                    max_calls=self.max_calls,
+                    window_seconds=self.window_seconds,
                 )
 
             # Add current timestamp
