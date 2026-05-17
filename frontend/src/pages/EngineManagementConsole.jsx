@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Settings, Cpu, Play, Pause, Filter, Search, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 import { api } from '../utils/apiFetch';
 
 /**

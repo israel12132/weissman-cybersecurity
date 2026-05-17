@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Smartphone, Shield, AlertTriangle, CheckCircle, Search, Filter } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 
 /**
  * MobileSecurity - Mobile & App Security Analysis Dashboard

@@ -45,8 +45,9 @@ from collections import defaultdict
 from threading import Lock
 from typing import Any, Optional
 
+import redis
+
 from src.exceptions import RateLimitExceeded
-from src.redis_client import get_shared_redis_client
 
 try:
     from src.metrics import track_rate_limit_exceeded
@@ -57,13 +58,36 @@ except ImportError:
 
 logger = logging.getLogger("weissman.rate_limiter")
 
+REDIS_URL = os.getenv("REDIS_URL")
+_redis_client: Optional[Any] = None
+_redis_lock = Lock()
+
 
 # ---------------------------------------------------------------------------
 # Redis client (shared, lazy) - now uses centralized redis_client module
 # ---------------------------------------------------------------------------
 def _get_redis() -> Optional[Any]:
-    """Get shared Redis client; returns None if unavailable."""
-    return get_shared_redis_client()
+    """Get Redis client lazily; returns None if unavailable."""
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+
+    with _redis_lock:
+        if _redis_client is not None:
+            return _redis_client
+
+        if REDIS_URL:
+            try:
+                client = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1.0)
+                client.ping()
+                _redis_client = client
+                return _redis_client
+            except Exception as exc:
+                logger.warning("rate_limiter: REDIS_URL connection failed (%s)", exc)
+                _redis_client = None
+                return None
+
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +117,15 @@ class RateLimiter:
         self.key_prefix = key_prefix
         self.max_calls = max_calls
         self.window_seconds = window_seconds
+        self._memory_instance_ns = f"{key_prefix}:{id(self)}"
 
     def _redis_key(self, identity: str) -> str:
         """Key format: weissman:rl:<prefix>:<identity>"""
         return f"weissman:rl:{self.key_prefix}:{identity}"
+
+    def _memory_key(self, identity: str) -> str:
+        """Per-instance in-memory key to avoid cross-instance leakage in fallback mode."""
+        return f"weissman:rl:mem:{self._memory_instance_ns}:{identity}"
 
     def check(self, identity: str) -> None:
         """
@@ -124,7 +153,7 @@ class RateLimiter:
 
     def _check_redis(self, r: Any, identity: str) -> None:
         """Redis-based rate limiting using sorted sets for sliding window."""
-        key = self._redis_key(identity)
+        key = self._memory_key(identity)
         now = time.time()
         window_start = now - self.window_seconds
 
@@ -185,7 +214,7 @@ class RateLimiter:
 
     def _check_memory(self, identity: str) -> None:
         """In-memory rate limiting using sliding window of timestamps."""
-        key = self._redis_key(identity)
+        key = self._memory_key(identity)
         now = time.monotonic()
         window_start = now - self.window_seconds
 
@@ -239,7 +268,7 @@ class RateLimiter:
         identity : str
             Unique identifier to reset
         """
-        key = self._redis_key(identity)
+        key = self._memory_key(identity)
         r = _get_redis()
 
         if r is not None:
@@ -298,7 +327,7 @@ class RateLimiter:
 
     def _remaining_memory(self, identity: str) -> int:
         """Get remaining calls from memory."""
-        key = self._redis_key(identity)
+        key = self._memory_key(identity)
         now = time.monotonic()
         window_start = now - self.window_seconds
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Network, Globe, Shield, Activity } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 
 /**
  * NetworkProtocols - Deep Network Protocol Analysis

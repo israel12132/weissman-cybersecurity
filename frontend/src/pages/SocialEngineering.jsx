@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Mail, Users, Link, AlertTriangle } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 
 /**
  * SocialEngineering - Phishing & Social Engineering Simulator

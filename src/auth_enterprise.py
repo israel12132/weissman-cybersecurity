@@ -80,9 +80,10 @@ def require_role(min_role: str):
     """Dependency: require at least min_role (super_admin > security_analyst > viewer)."""
     def _inner(request: Request):
         user = getattr(request.state, "user", None)
-        if not user:
+        role = getattr(user, "role", None) if user is not None else None
+        if not user or role not in ROLE_HIERARCHY:
             raise HTTPException(status_code=401, detail="Not authenticated")
-        u_level = ROLE_HIERARCHY.get(user.role, 0)
+        u_level = ROLE_HIERARCHY.get(role, 0)
         r_level = ROLE_HIERARCHY.get(min_role, 0)
         if u_level < r_level:
             raise HTTPException(status_code=403, detail="Insufficient role")

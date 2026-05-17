@@ -67,3 +67,5 @@ playwright>=1.40.0
 
 # --- SIEM Integration ---
 elasticsearch>=8.11.0
+fastapi>=0.110.0
+redis>=5.0.0

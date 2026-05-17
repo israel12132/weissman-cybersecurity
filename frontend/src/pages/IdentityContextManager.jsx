@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Shield, Key, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 import { api } from '../utils/apiFetch';
 
 /**

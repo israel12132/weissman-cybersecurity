@@ -75,6 +75,17 @@ def sanitise_text(value: Optional[str], max_length: int = _MAX_FIELD_LENGTH) -> 
     # Truncate early to bound processing time
     value = str(value)[:max_length]
 
+    # Normalize allowed tags by stripping any attributes before escaping.
+    # Example: <code onclick="x"> -> <code>
+    def _strip_attrs(m: re.Match) -> str:
+        closing = m.group(1) or ""
+        tag = (m.group(2) or "").lower()
+        if tag in _SAFE_TAGS:
+            return f"<{closing}{tag}>"
+        return m.group(0)
+
+    value = re.sub(r"<\s*(/?)\s*([A-Za-z0-9]+)(?:\s+[^>]*)?>", _strip_attrs, value)
+
     # Step 1: HTML-encode the entire string
     escaped = html.escape(value, quote=True)
 
@@ -95,7 +106,8 @@ def sanitise_text(value: Optional[str], max_length: int = _MAX_FIELD_LENGTH) -> 
         flags=re.IGNORECASE,
     )
 
-    return safe
+    # Ensure final output respects max_length even after entity expansion.
+    return safe[:max_length]
 
 
 def sanitise_url(url: Optional[str]) -> str:

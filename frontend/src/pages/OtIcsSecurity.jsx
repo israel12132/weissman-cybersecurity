@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Factory, Cpu, AlertTriangle, Activity, Zap } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell';
 
 /**
  * OtIcsSecurity - OT/ICS/IoT Security Dashboard
