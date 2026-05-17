@@ -44,14 +44,12 @@ def sample_vulnerability():
 def clean_rate_limiter_state():
     """Clean rate limiter state before each test."""
     from src.rate_limiter import _mem_windows
+    from src.redis_client import reset_redis_client
 
     _mem_windows.clear()
-
-    # Clear Redis client cache
-    import src.rate_limiter
-    src.rate_limiter._redis_client = None
+    reset_redis_client()
 
     yield
 
     _mem_windows.clear()
-    src.rate_limiter._redis_client = None
+    reset_redis_client()

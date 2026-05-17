@@ -46,6 +46,7 @@ from threading import Lock
 from typing import Any, Optional
 
 from src.exceptions import RateLimitExceeded
+from src.redis_client import get_shared_redis_client
 
 try:
     from src.metrics import track_rate_limit_exceeded
@@ -56,35 +57,13 @@ except ImportError:
 
 logger = logging.getLogger("weissman.rate_limiter")
 
-REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
-
 
 # ---------------------------------------------------------------------------
-# Redis client (shared, lazy)
+# Redis client (shared, lazy) - now uses centralized redis_client module
 # ---------------------------------------------------------------------------
-_redis_client: Optional[Any] = None
-_redis_lock = Lock()
-
-
 def _get_redis() -> Optional[Any]:
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-    if not REDIS_URL:
-        return None
-    with _redis_lock:
-        if _redis_client is not None:
-            return _redis_client
-        try:
-            import redis
-            r = redis.from_url(REDIS_URL, socket_timeout=2, decode_responses=True)
-            r.ping()
-            _redis_client = r
-            logger.debug("rate_limiter: Redis backend active")
-            return _redis_client
-        except Exception as exc:
-            logger.warning("rate_limiter: Redis unavailable (%s) — falling back to in-process", exc)
-            return None
+    """Get shared Redis client; returns None if unavailable."""
+    return get_shared_redis_client()
 
 
 # ---------------------------------------------------------------------------
