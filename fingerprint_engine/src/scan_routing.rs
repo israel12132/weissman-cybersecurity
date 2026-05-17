@@ -116,10 +116,7 @@ const AI_QUOTA_COUNT_SQL: &str = r#"
     )
 "#;
 
-async fn count_ai_heavy_jobs_today_utc(
-    pool: &PgPool,
-    tenant_id: i64,
-) -> Result<i64, sqlx::Error> {
+async fn count_ai_heavy_jobs_today_utc(pool: &PgPool, tenant_id: i64) -> Result<i64, sqlx::Error> {
     let now = Utc::now();
     let day_start = match now.date_naive().and_hms_opt(0, 0, 0) {
         Some(dt) => dt.and_utc(),
@@ -140,26 +137,14 @@ async fn count_ai_heavy_jobs_today_utc(
         .await
 }
 
-async fn try_audit_entitlement_denial(
-    pool: &PgPool,
-    tenant_id: i64,
-    action: &str,
-    details: &str,
-) {
+async fn try_audit_entitlement_denial(pool: &PgPool, tenant_id: i64, action: &str, details: &str) {
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         tracing::error!(target: "scan_routing", tenant_id, %action, "begin_tenant_tx failed for entitlement audit");
         return;
     };
-    if let Err(e) = crate::audit_log::insert_audit(
-        &mut tx,
-        tenant_id,
-        None,
-        "system",
-        action,
-        details,
-        "",
-    )
-    .await
+    if let Err(e) =
+        crate::audit_log::insert_audit(&mut tx, tenant_id, None, "system", action, details, "")
+            .await
     {
         tracing::error!(target: "scan_routing", tenant_id, error = %e, "insert_audit entitlement denial failed");
     }
@@ -176,17 +161,19 @@ pub async fn check_tenant_entitlement(
     match tier {
         EntitlementTier::Standard => Ok(()),
         EntitlementTier::AiHeavy => {
-            let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.map_err(|e| {
-                tracing::error!(
-                    target: "scan_routing",
-                    tenant_id,
-                    error = %e,
-                    "begin_tenant_tx for ai_heavy_entitled read failed"
-                );
-                RouteError::Internal {
-                    detail: format!("database error (tenant tx): {e}"),
-                }
-            })?;
+            let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        target: "scan_routing",
+                        tenant_id,
+                        error = %e,
+                        "begin_tenant_tx for ai_heavy_entitled read failed"
+                    );
+                    RouteError::Internal {
+                        detail: format!("database error (tenant tx): {e}"),
+                    }
+                })?;
 
             let entitled_raw: Option<String> = sqlx::query_scalar(
                 "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'ai_heavy_entitled'",
@@ -226,10 +213,7 @@ pub async fn check_tenant_entitlement(
 
             let _ = tx.commit().await;
 
-            let explicitly_denied = entitled_raw
-                .as_deref()
-                .and_then(parse_boolish)
-                == Some(false);
+            let explicitly_denied = entitled_raw.as_deref().and_then(parse_boolish) == Some(false);
             if explicitly_denied {
                 let detail = format!(
                     "AI-heavy engine '{engine}' blocked: system_configs.ai_heavy_entitled is false for tenant {tenant_id}"
@@ -253,17 +237,19 @@ pub async fn check_tenant_entitlement(
                 .unwrap_or(0);
 
             if quota_limit > 0 {
-                let used = count_ai_heavy_jobs_today_utc(pool, tenant_id).await.map_err(|e| {
-                    tracing::error!(
-                        target: "scan_routing",
-                        tenant_id,
-                        error = %e,
-                        "ai_daily_scan_quota count query failed"
-                    );
-                    RouteError::Internal {
-                        detail: format!("database error (quota count): {e}"),
-                    }
-                })?;
+                let used = count_ai_heavy_jobs_today_utc(pool, tenant_id)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(
+                            target: "scan_routing",
+                            tenant_id,
+                            error = %e,
+                            "ai_daily_scan_quota count query failed"
+                        );
+                        RouteError::Internal {
+                            detail: format!("database error (quota count): {e}"),
+                        }
+                    })?;
                 let used_u = used.max(0) as u64;
                 if used_u >= quota_limit {
                     let detail = format!(
@@ -325,7 +311,11 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
     }
 }
 
-fn validate_requires(reqs: &[Requires], ctx: &ScanBodyFields, engine_label: &str) -> Result<(), RouteError> {
+fn validate_requires(
+    reqs: &[Requires],
+    ctx: &ScanBodyFields,
+    engine_label: &str,
+) -> Result<(), RouteError> {
     for r in reqs {
         match r {
             Requires::NonEmptyTarget => {
@@ -457,16 +447,19 @@ fn entitlement_for_fallback_engine(engine: &str) -> EntitlementTier {
     }
 }
 
+fn enforce_scope_validation_for_engine(engine: &str) -> bool {
+    !matches!(engine, "pipeline" | "zero_day_radar")
+}
+
 fn build_payload(
     kind: PayloadKind,
     ctx: &ScanBodyFields,
     engine_for_default: &str,
 ) -> Result<Value, RouteError> {
     fn obj_mut(v: &mut Value) -> Result<&mut serde_json::Map<String, Value>, RouteError> {
-        v.as_object_mut()
-            .ok_or_else(|| RouteError::Internal {
-                detail: "scan payload: expected JSON object".into(),
-            })
+        v.as_object_mut().ok_or_else(|| RouteError::Internal {
+            detail: "scan payload: expected JSON object".into(),
+        })
     }
     match kind {
         PayloadKind::DeepFuzz => {
@@ -538,12 +531,35 @@ fn build_payload(
 
 fn inject_oast_token(mut payload: Value, token: Uuid) -> Value {
     if let Some(obj) = payload.as_object_mut() {
-        obj.insert(
-            "oast_interaction_token".into(),
-            json!(token.to_string()),
-        );
+        obj.insert("oast_interaction_token".into(), json!(token.to_string()));
     } else {
         tracing::error!(target: "scan_routing", "inject_oast_token: payload is not a JSON object; OAST token not inserted");
+    }
+    payload
+}
+
+fn parse_client_id(ctx: &ScanBodyFields) -> Option<i64> {
+    let v = ctx.client_id.as_ref()?;
+    if let Some(id) = v.as_i64() {
+        return Some(id);
+    }
+    v.as_str().and_then(|s| s.trim().parse::<i64>().ok())
+}
+
+fn inject_scope_validation(
+    mut payload: Value,
+    scope: &crate::security_hardening::ScopeValidationOutcome,
+) -> Value {
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "validated_scope".into(),
+            json!({
+                "host": scope.normalized_host,
+                "resolved_ips": scope.resolved_ips,
+            }),
+        );
+    } else {
+        tracing::error!(target: "scan_routing", "inject_scope_validation: payload is not a JSON object");
     }
     payload
 }
@@ -566,6 +582,21 @@ pub async fn route_scan_job(
     }
 
     let ctx = extract_fields(body);
+    let client_id = parse_client_id(&ctx);
+    let scope_outcome = if !ctx.target.is_empty() && enforce_scope_validation_for_engine(engine) {
+        Some(
+            crate::security_hardening::validate_scan_target_in_scope(
+                pool,
+                tenant_id,
+                &ctx.target,
+                client_id,
+            )
+            .await
+            .map_err(|detail| RouteError::Forbidden { detail })?,
+        )
+    } else {
+        None
+    };
 
     if let Some(def) = find_route_def(engine) {
         validate_requires(def.requires, &ctx, engine)?;
@@ -577,6 +608,9 @@ pub async fn route_scan_job(
             None
         };
         let mut payload = build_payload(def.payload, &ctx, engine)?;
+        if let Some(scope) = scope_outcome.as_ref() {
+            payload = inject_scope_validation(payload, scope);
+        }
         if let Some(t) = oast {
             payload = inject_oast_token(payload, t);
         }
@@ -588,6 +622,9 @@ pub async fn route_scan_job(
     let ent = entitlement_for_fallback_engine(engine);
     check_tenant_entitlement(pool, tenant_id, engine, ent).await?;
 
-    let payload = build_payload(PayloadKind::CommandCenterDefault, &ctx, engine)?;
+    let mut payload = build_payload(PayloadKind::CommandCenterDefault, &ctx, engine)?;
+    if let Some(scope) = scope_outcome.as_ref() {
+        payload = inject_scope_validation(payload, scope);
+    }
     Ok(("command_center_engine".to_string(), payload))
 }

@@ -51,6 +51,19 @@ async fn cfg_string_tx(
     .filter(|s| !s.is_empty())
 }
 
+async fn enforce_payload_scope_pin_if_present(payload: &Value) -> Result<(), String> {
+    let Some(scope) = payload.get("validated_scope") else {
+        return Ok(());
+    };
+    let target = payload
+        .get("target")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "payload.target required when validated_scope is present".to_string())?;
+    crate::security_hardening::enforce_execution_scope_pin(target, scope)
+        .await
+        .map_err(|e| format!("validated_scope pin validation failed: {e}"))
+}
+
 /// Run one job to completion JSON (success) or error string (failure).
 pub async fn execute_job(
     app_pool: Arc<PgPool>,
@@ -61,6 +74,7 @@ pub async fn execute_job(
 ) -> Result<Value, String> {
     let tid = job.tenant_id;
     let p = &job.payload;
+    enforce_payload_scope_pin_if_present(p).await?;
     match job.kind.as_str() {
         "command_center_engine" => {
             let engine = p
