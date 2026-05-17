@@ -53,3 +53,7 @@ pytest-mock>=3.11.0
 
 # --- Monitoring & Metrics ---
 prometheus-client>=0.17.0
+
+# --- Secrets Management ---
+hvac>=1.2.0  # HashiCorp Vault client
+cryptography>=41.0.0  # Field-level encryption
