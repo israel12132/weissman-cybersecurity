@@ -5,6 +5,7 @@ Cache key MUST include query/technology so Client B does not get Client A's cach
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,13 +16,23 @@ except Exception:
     pass
 
 from src.config import load_config
+from src.feed_cache import get_cached_feed, set_cached_feed
 from src.models import ClientFinding, Finding, FindingType, normalize_tech_stack_to_list
 from src.feeds import NVDFeed, GitHubFeed, OSVFeed, OTXFeed, HIBPFeed
 from src.feeds.base import FeedResult
 from src.fingerprint import fingerprint_ip_ranges, fingerprint_urls, merge_fingerprint_into_scope
 
-FEED_CACHE_TTL_SECONDS = int(os.getenv("WEISSMAN_FEED_CACHE_TTL", "300"))  # 5 min default
-FEED_CACHE_PREFIX = "weissman:feed:"
+_feed_fill_locks: dict[str, threading.Lock] = {}
+_feed_fill_locks_guard = threading.Lock()
+
+
+def _get_feed_fill_lock(cache_key: str) -> threading.Lock:
+    with _feed_fill_locks_guard:
+        lock = _feed_fill_locks.get(cache_key)
+        if lock is None:
+            lock = threading.Lock()
+            _feed_fill_locks[cache_key] = lock
+        return lock
 
 
 def _cache_key_suffix_for_clients(db_clients: list[dict]) -> str:
@@ -45,38 +56,33 @@ def _cached_feed(
     fetch_fn: Callable[[], FeedResult],
     cache_key_suffix: str | None = None,
 ) -> FeedResult:
-    """Return feed result from Redis cache if present and not expired, else fetch and cache.
-    cache_key_suffix MUST be set when correlating so cache differentiates by technology/query.
-    """
+    """Return cached feed results or fetch and cache with per-key anti-stampede locking."""
     suffix = (cache_key_suffix or "global").strip() or "global"
-    key = f"{FEED_CACHE_PREFIX}{feed_name}:{suffix}"
-    try:
-        import redis
-        r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-        raw = r.get(key)
-        if raw is not None:
-            data = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
-            findings = [Finding.model_validate(f) for f in data.get("findings", [])]
-            return FeedResult(
-                findings=findings,
-                source=data.get("source", feed_name),
-                error=data.get("error"),
-            )
-    except Exception:
-        pass
-    result = fetch_fn()
-    try:
-        import redis
-        r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-        payload = {
-            "source": result.source,
-            "error": result.error,
-            "findings": [f.model_dump(mode="json") for f in result.findings],
-        }
-        r.setex(key, FEED_CACHE_TTL_SECONDS, json.dumps(payload, default=str))
-    except Exception:
-        pass
-    return result
+    cache_key = f"{feed_name}:{suffix}"
+
+    def _to_findings(payloads: list[dict]) -> list[Finding]:
+        out: list[Finding] = []
+        for item in payloads:
+            try:
+                out.append(Finding.model_validate(item))
+            except Exception:
+                continue
+        return out
+
+    cached = get_cached_feed(cache_key)
+    if cached is not None:
+        return FeedResult(findings=_to_findings(cached), source=feed_name)
+
+    lock = _get_feed_fill_lock(cache_key)
+    with lock:
+        cached = get_cached_feed(cache_key)
+        if cached is not None:
+            return FeedResult(findings=_to_findings(cached), source=feed_name)
+
+        result = fetch_fn()
+        if not result.error:
+            set_cached_feed(cache_key, result.findings, cache_empty=True)
+        return result
 
 
 def _intel_config_from_env() -> dict[str, Any]:
