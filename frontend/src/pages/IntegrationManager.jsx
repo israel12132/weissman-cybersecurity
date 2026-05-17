@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plug, Check, AlertTriangle, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 
 /**

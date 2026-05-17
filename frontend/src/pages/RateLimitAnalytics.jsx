@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 
 /**
  * RateLimitAnalytics - Comprehensive rate limit monitoring and analytics

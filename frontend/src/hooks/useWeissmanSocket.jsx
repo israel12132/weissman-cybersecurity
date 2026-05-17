@@ -1,5 +1,5 @@
 /**
- * frontend/src/hooks/useWeissmanSocket.js
+ * frontend/src/hooks/useWeissmanSocket.jsx
  * =========================================
  * Robust WebSocket hook that replaces the raw WebSocket usage in App.jsx.
  *

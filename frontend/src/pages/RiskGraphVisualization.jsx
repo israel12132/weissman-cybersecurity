@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { GitBranch, Target, AlertTriangle, Shield, Zap, Filter, Download, Maximize2 } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 
 /**

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit, RefreshCw } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 
 /**

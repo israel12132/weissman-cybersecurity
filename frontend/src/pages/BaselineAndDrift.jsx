@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 
 /**
