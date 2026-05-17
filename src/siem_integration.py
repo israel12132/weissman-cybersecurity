@@ -501,7 +501,21 @@ def _query_file(
                 if user and event.get("user") != user:
                     continue
 
-                # TODO: Add time range filtering
+                # Time range filtering
+                if start_time or end_time:
+                    ts_raw = event.get("timestamp")
+                    if ts_raw:
+                        try:
+                            if isinstance(ts_raw, str):
+                                event_ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                            else:
+                                event_ts = datetime.fromtimestamp(float(ts_raw))
+                            if start_time and event_ts < start_time:
+                                continue
+                            if end_time and event_ts > end_time:
+                                continue
+                        except (ValueError, TypeError, OSError):
+                            pass
 
                 events.append(event)
 

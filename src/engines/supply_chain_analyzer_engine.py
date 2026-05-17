@@ -22,7 +22,10 @@ MITRE ATT&CK: T1195 (Supply Chain Compromise)
 
 import json
 import logging
+import os
 import re
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
@@ -53,6 +56,8 @@ class SupplyChainAnalyzer:
     """
     Analyzes software dependencies for security and compliance issues.
     """
+
+    OSV_API_TIMEOUT: int = int(os.environ.get("WEISSMAN_OSV_TIMEOUT", "10"))
 
     def __init__(self):
         self.dependencies: List[Dependency] = []
@@ -93,8 +98,8 @@ class SupplyChainAnalyzer:
                         # Check for suspicious patterns
                         dep.suspicious_indicators = self._check_suspicious_python_package(name, version)
 
-                        # TODO: Look up vulnerabilities from OSV/NVD
-                        # dep.vulnerabilities = self._lookup_vulnerabilities(name, version, "pypi")
+                        # Look up vulnerabilities from OSV
+                        dep.vulnerabilities = self._lookup_vulnerabilities(name, version, "pypi")
 
                         deps.append(dep)
 
@@ -288,6 +293,87 @@ class SupplyChainAnalyzer:
             previous_row = current_row
 
         return previous_row[-1]
+
+    def _lookup_vulnerabilities(
+        self, name: str, version: str, ecosystem: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Query the OSV (Open Source Vulnerabilities) API for known CVEs.
+
+        Uses the public OSV REST API: https://api.osv.dev/v1/query
+        No API key required.
+        """
+        _OSV_ECOSYSTEM_MAP = {
+            "pypi": "PyPI",
+            "npm": "npm",
+            "crates.io": "crates.io",
+            "maven": "Maven",
+        }
+        osv_ecosystem = _OSV_ECOSYSTEM_MAP.get(ecosystem, ecosystem)
+
+        payload = json.dumps({
+            "version": version,
+            "package": {"name": name, "ecosystem": osv_ecosystem},
+        }).encode()
+
+        try:
+            req = urllib.request.Request(
+                "https://api.osv.dev/v1/query",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=self.OSV_API_TIMEOUT) as resp:
+                data = json.loads(resp.read().decode())
+        except urllib.error.URLError as e:
+            logger.warning("supply_chain: OSV API unreachable for %s@%s (%s)", name, version, e)
+            return []
+        except Exception as e:
+            logger.error("supply_chain: OSV lookup failed for %s@%s (%s)", name, version, e)
+            return []
+
+        vulns = []
+        for vuln in data.get("vulns", []):
+            severity = "unknown"
+            for sev in vuln.get("severity", []):
+                if sev.get("type") == "CVSS_V3":
+                    try:
+                        score = float(sev["score"].split("/")[0].split(":")[-1])
+                        if score >= 9.0:
+                            severity = "critical"
+                        elif score >= 7.0:
+                            severity = "high"
+                        elif score >= 4.0:
+                            severity = "medium"
+                        else:
+                            severity = "low"
+                    except (ValueError, IndexError, KeyError):
+                        pass
+                    break
+
+            aliases = vuln.get("aliases", [])
+            cve_ids = [a for a in aliases if a.startswith("CVE-")]
+
+            vulns.append({
+                "id": vuln.get("id", ""),
+                "summary": vuln.get("summary", ""),
+                "severity": severity,
+                "cve_ids": cve_ids,
+                "published": vuln.get("published", ""),
+                "modified": vuln.get("modified", ""),
+                "references": [
+                    r.get("url", "") for r in vuln.get("references", [])[:3]
+                ],
+            })
+
+        if vulns:
+            logger.info(
+                "supply_chain: found %d vulnerabilities for %s@%s (%s)",
+                len(vulns), name, version, ecosystem,
+            )
+            self.vulnerability_count += len(vulns)
+
+        return vulns
 
     def check_license_compliance(self) -> List[Dict[str, Any]]:
         """

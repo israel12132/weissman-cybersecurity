@@ -14,6 +14,7 @@ MITRE ATT&CK: T1580 (Cloud Infrastructure Discovery)
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
@@ -305,9 +306,67 @@ class CloudAssetDiscovery:
             logger.warning("Azure SDK not installed. Run: pip install azure-identity azure-mgmt-compute azure-mgmt-storage azure-mgmt-resource")
             return assets
 
-        # TODO: Implement Azure discovery
-        logger.info("Azure discovery not yet implemented")
+        try:
+            subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
+            if not subscription_id:
+                logger.warning("cloud_discovery: AZURE_SUBSCRIPTION_ID not set; skipping Azure discovery")
+                return assets
 
+            credential = DefaultAzureCredential()
+
+            # Discover Virtual Machines
+            try:
+                compute_client = ComputeManagementClient(credential, subscription_id)
+                for vm in compute_client.virtual_machines.list_all():
+                    public_ip = False
+                    tags = vm.tags or {}
+                    location = vm.location or "unknown"
+
+                    asset = CloudAsset(
+                        provider="azure",
+                        resource_type="virtual_machine",
+                        resource_id=vm.id or vm.name,
+                        resource_name=vm.name,
+                        region=location,
+                        tags=tags,
+                        public_exposure=public_ip,
+                        encryption_enabled=False,
+                    )
+                    assets.append(asset)
+            except Exception as e:
+                logger.error(f"Azure VM discovery failed: {e}")
+
+            # Discover Storage Accounts
+            try:
+                storage_client = StorageManagementClient(credential, subscription_id)
+                for account in storage_client.storage_accounts.list():
+                    is_public = getattr(account, "allow_blob_public_access", True) is not False
+                    https_only = getattr(account, "enable_https_traffic_only", False)
+                    tags = account.tags or {}
+
+                    asset = CloudAsset(
+                        provider="azure",
+                        resource_type="storage_account",
+                        resource_id=account.id or account.name,
+                        resource_name=account.name,
+                        region=account.location or "unknown",
+                        tags=tags,
+                        public_exposure=is_public,
+                        encryption_enabled=True,  # Azure storage is encrypted by default
+                    )
+                    if is_public:
+                        asset.compliance_issues.append("Storage account allows public blob access")
+                    if not https_only:
+                        asset.compliance_issues.append("Storage account allows HTTP traffic")
+
+                    assets.append(asset)
+            except Exception as e:
+                logger.error(f"Azure Storage discovery failed: {e}")
+
+        except Exception as e:
+            logger.error(f"Azure discovery failed: {e}")
+
+        self.discovered_assets.extend(assets)
         return assets
 
     def discover_gcp_assets(self, project_id: str = None) -> List[CloudAsset]:
@@ -331,9 +390,74 @@ class CloudAssetDiscovery:
             logger.warning("Google Cloud SDK not installed. Run: pip install google-cloud-compute google-cloud-storage")
             return assets
 
-        # TODO: Implement GCP discovery
-        logger.info("GCP discovery not yet implemented")
+        # Implement GCP discovery
+        try:
+            gcp_project_id = project_id or os.environ.get("GCP_PROJECT_ID", "")
+            if not gcp_project_id:
+                logger.warning("cloud_discovery: GCP_PROJECT_ID not set; skipping GCP discovery")
+                return assets
 
+            # Discover Compute Engine instances
+            try:
+                instances_client = compute_v1.InstancesClient()
+                agg_list = instances_client.aggregated_list(project=gcp_project_id)
+                for zone_name, zone_data in agg_list:
+                    for instance in zone_data.instances:
+                        public_ip = any(
+                            ac.nat_ip
+                            for ni in (instance.network_interfaces or [])
+                            for ac in (ni.access_configs or [])
+                            if ac.nat_ip
+                        )
+                        region = zone_name.rsplit("/", 1)[-1] if "/" in zone_name else zone_name
+
+                        asset = CloudAsset(
+                            provider="gcp",
+                            resource_type="compute_instance",
+                            resource_id=str(instance.id) if instance.id else instance.name,
+                            resource_name=instance.name,
+                            region=region,
+                            tags=dict(instance.labels) if instance.labels else {},
+                            public_exposure=public_ip,
+                            encryption_enabled=True,  # GCP Compute encrypted by default
+                        )
+                        if public_ip:
+                            asset.compliance_issues.append("GCE instance has public IP")
+                        assets.append(asset)
+            except Exception as e:
+                logger.error(f"GCP Compute discovery failed: {e}")
+
+            # Discover Cloud Storage buckets
+            try:
+                storage_client = storage.Client(project=gcp_project_id)
+                for bucket in storage_client.list_buckets():
+                    iam_policy = bucket.get_iam_policy()
+                    is_public = any(
+                        "allUsers" in binding.get("members", []) or
+                        "allAuthenticatedUsers" in binding.get("members", [])
+                        for binding in iam_policy.bindings
+                    ) if hasattr(iam_policy, "bindings") else False
+
+                    asset = CloudAsset(
+                        provider="gcp",
+                        resource_type="storage_bucket",
+                        resource_id=bucket.name,
+                        resource_name=bucket.name,
+                        region=bucket.location or "unknown",
+                        tags=dict(bucket.labels) if bucket.labels else {},
+                        public_exposure=is_public,
+                        encryption_enabled=True,  # GCS encrypted by default
+                    )
+                    if is_public:
+                        asset.compliance_issues.append("GCS bucket is publicly accessible")
+                    assets.append(asset)
+            except Exception as e:
+                logger.error(f"GCP Storage discovery failed: {e}")
+
+        except Exception as e:
+            logger.error(f"GCP discovery failed: {e}")
+
+        self.discovered_assets.extend(assets)
         return assets
 
     def generate_report(self) -> Dict[str, Any]:
