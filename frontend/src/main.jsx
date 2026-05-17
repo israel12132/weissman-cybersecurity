@@ -90,6 +90,7 @@ import CeoVault from './pages/CeoVault'
 import RiskGraphVisualization from './pages/RiskGraphVisualization'
 import ComplianceFrameworks from './pages/ComplianceFrameworks'
 import SBOMBrowser from './pages/SBOMBrowser'
+import IntegrationManager from './pages/IntegrationManager'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -169,6 +170,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="risk-graph" element={<RiskGraphVisualization />} />
             <Route path="compliance" element={<ComplianceFrameworks />} />
             <Route path="sbom" element={<SBOMBrowser />} />
+            <Route path="integrations" element={<IntegrationManager />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
