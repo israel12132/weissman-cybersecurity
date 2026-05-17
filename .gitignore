@@ -23,3 +23,10 @@ node_modules/
 result/
 .env
 .venv/
+
+# Runtime scheduler artifacts
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal
+# Downloaded binaries/artifacts
+*.deb

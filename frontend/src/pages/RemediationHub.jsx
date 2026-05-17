@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Wrench, Zap, CheckCircle, Clock } from 'lucide-react';
-import PageShell from '../components/PageShell';
+import PageShell from './PageShell'
 
 /**
  * RemediationHub - Complete SOAR Workflow
