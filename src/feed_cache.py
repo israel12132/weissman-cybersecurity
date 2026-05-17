@@ -10,6 +10,13 @@ import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, Optional
 
+try:
+    from src.metrics import track_cache_hit
+except ImportError:
+    # Metrics module not available, use no-op
+    def track_cache_hit(cache_key: str, hit: bool):
+        pass
+
 logger = logging.getLogger("weissman.feed_cache")
 
 # `FEED_CACHE_TTL_SECONDS` is the canonical key; keep `WEISSMAN_FEED_CACHE_TTL`
@@ -101,20 +108,25 @@ def get_cached_feed(cache_key: str) -> Optional[list[dict]]:
             raw = r.get(full_key)
             if raw is not None:
                 logger.debug("feed_cache HIT (redis): %s", cache_key)
+                track_cache_hit(cache_key, hit=True)
                 return _deserialise(raw)
         except Exception as exc:
             logger.warning("feed_cache: Redis GET error (%s) — bypassing cache", exc)
+        track_cache_hit(cache_key, hit=False)
         return None
 
     with _mem_lock:
         entry = _mem_cache.get(full_key)
         if not entry:
+            track_cache_hit(cache_key, hit=False)
             return None
         expires_at, raw = entry
         if time.monotonic() < expires_at:
             logger.debug("feed_cache HIT (mem): %s", cache_key)
+            track_cache_hit(cache_key, hit=True)
             return _deserialise(raw)
         _mem_cache.pop(full_key, None)
+        track_cache_hit(cache_key, hit=False)
         return None
 
 

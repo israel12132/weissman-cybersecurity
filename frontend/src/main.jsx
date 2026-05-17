@@ -76,6 +76,27 @@ import VulnIntelDashboard from './pages/VulnIntelDashboard'
 import DarkWebMonitor from './pages/DarkWebMonitor'
 import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
 import EngineClientCatalog from './pages/EngineClientCatalog'
+// ── New UI improvements ──────────────────────────────────────────────────────
+import RateLimitAnalytics from './pages/RateLimitAnalytics'
+import MobileSecurity from './pages/MobileSecurity'
+import OtIcsSecurity from './pages/OtIcsSecurity'
+import NetworkProtocols from './pages/NetworkProtocols'
+import SocialEngineering from './pages/SocialEngineering'
+import RemediationHub from './pages/RemediationHub'
+import EngineManagementConsole from './pages/EngineManagementConsole'
+import SystemConfiguration from './pages/SystemConfiguration'
+import MetricsDashboard from './pages/MetricsDashboard'
+import CeoVault from './pages/CeoVault'
+import RiskGraphVisualization from './pages/RiskGraphVisualization'
+import ComplianceFrameworks from './pages/ComplianceFrameworks'
+import SBOMBrowser from './pages/SBOMBrowser'
+import IntegrationManager from './pages/IntegrationManager'
+import AlertRulesEngine from './pages/AlertRulesEngine'
+import ScanScheduler from './pages/ScanScheduler'
+import ContainmentRulesBuilder from './pages/ContainmentRulesBuilder'
+import BaselineAndDrift from './pages/BaselineAndDrift'
+import IdentityContextManager from './pages/IdentityContextManager'
+// ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
 
@@ -140,6 +161,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
             <Route path="engine-catalog" element={<EngineClientCatalog />} />
             <Route path="admin" element={<AdminManagement />} />
+            {/* ── New UI improvements routes ──────────────────────────────────── */}
+            <Route path="rate-limits" element={<RateLimitAnalytics />} />
+            <Route path="mobile-security" element={<MobileSecurity />} />
+            <Route path="ot-ics" element={<OtIcsSecurity />} />
+            <Route path="network-protocols" element={<NetworkProtocols />} />
+            <Route path="social-engineering" element={<SocialEngineering />} />
+            <Route path="remediation" element={<RemediationHub />} />
+            <Route path="engine-management" element={<EngineManagementConsole />} />
+            <Route path="system-config" element={<SystemConfiguration />} />
+            <Route path="metrics" element={<MetricsDashboard />} />
+            <Route path="ceo-vault" element={<CeoVault />} />
+            <Route path="risk-graph" element={<RiskGraphVisualization />} />
+            <Route path="compliance" element={<ComplianceFrameworks />} />
+            <Route path="sbom" element={<SBOMBrowser />} />
+            <Route path="integrations" element={<IntegrationManager />} />
+            <Route path="alert-rules" element={<AlertRulesEngine />} />
+            <Route path="scan-scheduler" element={<ScanScheduler />} />
+            <Route path="containment-rules" element={<ContainmentRulesBuilder />} />
+            <Route path="baseline-drift" element={<BaselineAndDrift />} />
+            <Route path="identity-context" element={<IdentityContextManager />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

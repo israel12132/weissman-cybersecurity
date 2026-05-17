@@ -1,0 +1,55 @@
+# Filebeat configuration for Weissman Cybersecurity
+# Collects logs and sends to Elasticsearch
+
+filebeat.inputs:
+  # Application logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/weissman/*.log
+      - /var/log/weissman/security-events.log
+    fields:
+      application: weissman-cybersecurity
+      environment: ${ENVIRONMENT:production}
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+
+  # Docker container logs
+  - type: container
+    enabled: true
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+
+# Processors
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+# Output to Elasticsearch
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOSTS:http://localhost:9200}"]
+  index: "filebeat-weissman-%{+yyyy.MM.dd}"
+  pipeline: weissman-security-pipeline
+
+# Index lifecycle management
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "filebeat-weissman"
+setup.ilm.pattern: "{now/d}-000001"
+
+# Kibana dashboards
+setup.kibana:
+  host: "${KIBANA_HOST:http://localhost:5601}"
+
+# Logging
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+  keepfiles: 7
