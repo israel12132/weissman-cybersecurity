@@ -20,6 +20,11 @@ NPM_SEARCH = "https://registry.npmjs.org/-/v1/search"
 NPM_REGISTRY = "https://registry.npmjs.org"
 PYPI_SEARCH = "https://pypi.org/search/"
 OSV_QUERY = "https://api.osv.dev/v1/query"
+RUBYGEMS_API = "https://rubygems.org/api/v1"
+MAVEN_SEARCH = "https://search.maven.org/solrsearch/select"
+
+# Default search result limit per ecosystem.
+_ECOSYSTEM_SEARCH_LIMIT = 15
 
 
 @dataclass
@@ -129,6 +134,71 @@ def search_pypi_packages(org_or_prefix: str, limit: int = 20) -> list[PackageInf
     return out[:limit]
 
 
+def search_rubygems_packages(prefix: str, limit: int = 20) -> list[PackageInfo]:
+    """Search RubyGems for gems matching a name prefix via the RubyGems API."""
+    out: list[PackageInfo] = []
+    try:
+        r = safe_get(
+            f"{RUBYGEMS_API}/search.json",
+            params={"query": prefix},
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        if not isinstance(data, list):
+            return []
+        for gem in data[:limit]:
+            name = gem.get("name") or ""
+            if not name:
+                continue
+            out.append(
+                PackageInfo(
+                    name=name,
+                    ecosystem="rubygems",
+                    version=(gem.get("version") or "").strip() or None,
+                    description=(gem.get("info") or "").strip()[:200] or None,
+                    extra=gem,
+                )
+            )
+    except Exception as e:
+        logger.warning("RubyGems search failed: %s", e)
+    return out
+
+
+def search_maven_packages(prefix: str, limit: int = 20) -> list[PackageInfo]:
+    """Search Maven Central for artifacts matching a groupId or artifactId prefix."""
+    out: list[PackageInfo] = []
+    try:
+        r = safe_get(
+            MAVEN_SEARCH,
+            params={"q": prefix, "rows": limit, "wt": "json"},
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        docs = (data.get("response") or {}).get("docs") or []
+        for doc in docs[:limit]:
+            group_id = doc.get("g") or ""
+            artifact_id = doc.get("a") or ""
+            name = f"{group_id}:{artifact_id}" if group_id and artifact_id else (artifact_id or group_id)
+            if not name:
+                continue
+            out.append(
+                PackageInfo(
+                    name=name,
+                    ecosystem="maven",
+                    version=(doc.get("latestVersion") or "").strip() or None,
+                    description=None,
+                    extra=doc,
+                )
+            )
+    except Exception as e:
+        logger.warning("Maven Central search failed: %s", e)
+    return out
+
+
 def check_osv_for_package(ecosystem: str, name: str) -> int:
     """Return count of known vulnerabilities for a package (OSV API)."""
     if not name or not ecosystem:
@@ -154,10 +224,19 @@ def run_supply_chain_scan(
     domain: str | None = None,
     check_typosquat: bool = True,
     check_compromised: bool = True,
+    ecosystems: list[str] | None = None,
 ) -> list[PackageInfo]:
     """
-    For a target org: discover NPM/PyPI footprint, flag typosquatting, and check OSV for vulns.
-    domain: optional root domain (e.g. acme.com -> search acme).
+    For a target org: discover NPM/PyPI/RubyGems/Maven footprint, flag typosquatting,
+    and check OSV for known vulnerabilities.
+
+    Args:
+        org_name: Organisation or package name prefix to search.
+        domain: Optional root domain (e.g. acme.com -> prefix "acme").
+        check_typosquat: Flag packages with names similar to the prefix.
+        check_compromised: Check OSV for known CVEs.
+        ecosystems: Limit to specific ecosystems (npm, pypi, rubygems, maven).
+                    Defaults to all four when None.
     """
     results: list[PackageInfo] = []
     prefix = (org_name or "").strip()[:32]
@@ -165,23 +244,28 @@ def run_supply_chain_scan(
         prefix = domain.split(".")[0][:32]
     if not prefix:
         return results
+
+    active = set(ecosystems) if ecosystems else {"npm", "pypi", "rubygems", "maven"}
     seen_names: set[str] = set()
-    for pkg in search_npm_packages(prefix, limit=15):
-        if pkg.name in seen_names:
+
+    ecosystem_searchers = [
+        ("npm", "npm", lambda p: search_npm_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("pypi", "PyPI", lambda p: search_pypi_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("rubygems", "rubygems", lambda p: search_rubygems_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("maven", "maven", lambda p: search_maven_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+    ]
+
+    for eco_key, osv_eco, searcher in ecosystem_searchers:
+        if eco_key not in active:
             continue
-        seen_names.add(pkg.name)
-        if check_compromised:
-            pkg.vuln_count = check_osv_for_package("npm", pkg.name)
-        if check_typosquat and prefix:
-            pkg.typosquat_risk = _typosquat_similar(pkg.name, prefix)
-        results.append(pkg)
-    for pkg in search_pypi_packages(prefix, limit=15):
-        if pkg.name in seen_names:
-            continue
-        seen_names.add(pkg.name)
-        if check_compromised:
-            pkg.vuln_count = check_osv_for_package("PyPI", pkg.name)
-        if check_typosquat and prefix:
-            pkg.typosquat_risk = _typosquat_similar(pkg.name, prefix)
-        results.append(pkg)
+        for pkg in searcher(prefix):
+            if pkg.name in seen_names:
+                continue
+            seen_names.add(pkg.name)
+            if check_compromised:
+                pkg.vuln_count = check_osv_for_package(osv_eco, pkg.name)
+            if check_typosquat and prefix:
+                pkg.typosquat_risk = _typosquat_similar(pkg.name, prefix)
+            results.append(pkg)
+
     return results

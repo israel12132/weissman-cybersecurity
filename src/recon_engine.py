@@ -456,6 +456,107 @@ def scan_cloud_buckets(
 # Full recon run & Shadow IT detection
 # ---------------------------------------------------------------------------
 
+# Ports considered high-risk when exposed publicly (used in Shodan / Censys risk scoring).
+_HIGH_RISK_PORTS = frozenset({21, 22, 23, 445, 3306, 3389, 5432})
+
+
+def _shodan_recon(domain: str) -> list[DiscoveredAsset]:
+    """Query Shodan for hosts/ports/banners associated with a domain."""
+    api_key = (os.getenv("SHODAN_API_KEY") or "").strip()
+    if not api_key:
+        return []
+    assets: list[DiscoveredAsset] = []
+    try:
+        r = safe_get(
+            "https://api.shodan.io/dns/domain/" + domain,
+            params={"key": api_key},
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        if r.status_code != 200:
+            logger.debug("Shodan DNS lookup returned %s", r.status_code)
+            return []
+        data = r.json()
+        subdomains = data.get("subdomains") or []
+        for sub in subdomains[:500]:
+            fqdn = f"{sub}.{domain}" if sub else domain
+            assets.append(
+                DiscoveredAsset(
+                    asset_type="subdomain",
+                    value=fqdn,
+                    source="shodan",
+                    confidence="high",
+                    risk_impact="medium",
+                )
+            )
+        # Host search for IP/port info
+        r2 = safe_get(
+            "https://api.shodan.io/shodan/host/search",
+            params={"key": api_key, "query": f"hostname:{domain}", "minify": "true"},
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        if r2.status_code == 200:
+            matches = (r2.json().get("matches") or [])[:200]
+            for m in matches:
+                ip = m.get("ip_str") or ""
+                if not ip:
+                    continue
+                ports = m.get("ports") or []
+                banner = (m.get("data") or "")[:200]
+                assets.append(
+                    DiscoveredAsset(
+                        asset_type="ip",
+                        value=ip,
+                        source="shodan",
+                        confidence="high",
+                        risk_impact="high" if any(p in _HIGH_RISK_PORTS for p in ports) else "medium",
+                        extra={"ports": ports, "banner": banner},
+                    )
+                )
+    except Exception as exc:
+        logger.warning("Shodan recon failed for %s: %s", domain, exc)
+    return assets
+
+
+def _censys_recon(domain: str) -> list[DiscoveredAsset]:
+    """Query Censys for hosts associated with a domain."""
+    api_id = (os.getenv("CENSYS_API_ID") or "").strip()
+    api_secret = (os.getenv("CENSYS_API_SECRET") or "").strip()
+    if not api_id or not api_secret:
+        return []
+    assets: list[DiscoveredAsset] = []
+    try:
+        r = safe_get(
+            "https://search.censys.io/api/v2/hosts/search",
+            params={"q": f"dns.reverse_dns.reverse_dns: {domain}", "per_page": 100},
+            auth=(api_id, api_secret),
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        if r.status_code != 200:
+            logger.debug("Censys hosts search returned %s", r.status_code)
+            return []
+        hits = (r.json().get("result") or {}).get("hits") or []
+        for hit in hits:
+            ip = hit.get("ip") or ""
+            if not ip:
+                continue
+            services = hit.get("services") or []
+            ports = [s.get("port") for s in services if s.get("port")]
+            risk = "high" if any(p in _HIGH_RISK_PORTS for p in ports) else "medium"
+            assets.append(
+                DiscoveredAsset(
+                    asset_type="ip",
+                    value=ip,
+                    source="censys",
+                    confidence="high",
+                    risk_impact=risk,
+                    extra={"ports": ports},
+                )
+            )
+    except Exception as exc:
+        logger.warning("Censys recon failed for %s: %s", domain, exc)
+    return assets
+
+
 def run_full_recon(
     domain: str,
     client_id: str,
@@ -467,11 +568,15 @@ def run_full_recon(
     use_buckets: bool = True,
     use_gcp: bool = True,
     use_exposed_api: bool = False,
+    use_shodan: bool = True,
+    use_censys: bool = True,
 ) -> list[DiscoveredAsset]:
     """
-    Global reconnaissance: CT, WHOIS history, DNS brute, AWS/Azure/GCP buckets.
-    Passive sources (CT, WHOIS, DNS brute) are run concurrently to reduce wall-clock
-    time. Optionally check exposed API/staging endpoints on discovered subdomains.
+    Global reconnaissance: CT, WHOIS history, DNS brute, AWS/Azure/GCP buckets,
+    Shodan (SHODAN_API_KEY), and Censys (CENSYS_API_ID + CENSYS_API_SECRET).
+    Passive sources (CT, WHOIS, DNS brute, Shodan, Censys) are run concurrently to
+    reduce wall-clock time. Optionally check exposed API/staging endpoints on discovered
+    subdomains.
     """
     all_assets: list[DiscoveredAsset] = []
 
@@ -483,6 +588,10 @@ def run_full_recon(
         passive_tasks.append(("whois", lambda: enumerate_subdomains_whois(domain)))
     if use_dns_brute:
         passive_tasks.append(("dns", lambda: enumerate_subdomains_dns(domain)))
+    if use_shodan and os.getenv("SHODAN_API_KEY"):
+        passive_tasks.append(("shodan", lambda: _shodan_recon(domain)))
+    if use_censys and os.getenv("CENSYS_API_ID") and os.getenv("CENSYS_API_SECRET"):
+        passive_tasks.append(("censys", lambda: _censys_recon(domain)))
 
     if passive_tasks:
         with ThreadPoolExecutor(max_workers=len(passive_tasks)) as executor:
