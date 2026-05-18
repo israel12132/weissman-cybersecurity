@@ -60,7 +60,7 @@ cryptography>=41.0.0  # Field-level encryption
 
 # --- API Documentation ---
 flask>=3.0.0
-flask-swagger-ui>=4.11.0
+flask-swagger-ui>=5.32.5
 
 # --- E2E Testing ---
 playwright>=1.40.0
