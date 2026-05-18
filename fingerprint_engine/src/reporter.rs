@@ -1,7 +1,7 @@
 //! Local bug bounty report generation. LLM-assisted triage (vLLM) with static fallback;
 //! HackerOne/Bugcrowd-style Markdown to `reports/`, then optional NOTIFY_URL webhook (retries intact).
 
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
@@ -269,6 +269,30 @@ curl -X POST '{target_url}' \
     )
 }
 
+/// Resolve the reports output directory.
+///
+/// Priority:
+///   1. `WEISSMAN_REPORTS_DIR` environment variable (absolute or relative path).
+///   2. A `reports/` directory next to the running binary's location.
+///   3. Fall back to `reports/` relative to the current working directory.
+fn reports_dir() -> std::path::PathBuf {
+    if let Ok(dir) = std::env::var("WEISSMAN_REPORTS_DIR") {
+        let p = std::path::PathBuf::from(dir.trim());
+        if !p.as_os_str().is_empty() {
+            return p;
+        }
+    }
+    // Resolve relative to the binary's own directory so the path is stable
+    // regardless of where the binary is invoked from.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            return parent.join("reports");
+        }
+    }
+    // Last-resort fallback
+    std::path::PathBuf::from("reports")
+}
+
 fn format_timestamp() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -338,12 +362,12 @@ async fn generate_bug_report_worker(
         triage.as_ref(),
     );
 
-    let reports_dir = Path::new("reports");
-    if !reports_dir.exists() {
-        let _ = std::fs::create_dir_all(reports_dir);
+    let reports_dir_path = reports_dir();
+    if !reports_dir_path.exists() {
+        let _ = std::fs::create_dir_all(&reports_dir_path);
     }
     let name = report_filename();
-    let path = reports_dir.join(&name);
+    let path = reports_dir_path.join(&name);
     if std::fs::write(&path, report_md).is_err() {
         tracing::warn!(target: "reporter", path = %path.display(), "failed to write bug report");
         return;
@@ -398,12 +422,12 @@ pub async fn generate_bug_report_blocking(
         triage.as_ref(),
     );
 
-    let reports_dir = Path::new("reports");
-    if !reports_dir.exists() {
-        let _ = std::fs::create_dir_all(reports_dir);
+    let reports_dir_path = reports_dir();
+    if !reports_dir_path.exists() {
+        let _ = std::fs::create_dir_all(&reports_dir_path);
     }
     let name = report_filename();
-    let path = reports_dir.join(&name);
+    let path = reports_dir_path.join(&name);
     if std::fs::write(&path, report_md).is_err() {
         return None;
     }

@@ -6,6 +6,7 @@ Routes all requests through socks5h://127.0.0.1:9050. Never crashes on proxy/sit
 import logging
 import os
 import re
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,10 +24,28 @@ from src.http_client import get_with_retry, ENTERPRISE_HTTP_TIMEOUT
 logger = logging.getLogger(__name__)
 
 TOR_PROXY = "socks5h://127.0.0.1:9050"
+TOR_HOST = "127.0.0.1"
+TOR_PORT = 9050
+TOR_SOCKET_TIMEOUT = 3  # seconds for raw connectivity probe
 REQUEST_TIMEOUT = ENTERPRISE_HTTP_TIMEOUT  # 5–8s fail-fast
 TOR_CHECK_URL = "https://check.torproject.org/api/ip"
 # Tor-Killswitch: if connectivity is lost, terminate all requests immediately to prevent IP leakage
 _tor_dead: bool = False
+
+
+def _is_tor_reachable() -> bool:
+    """
+    Quick raw-socket probe: try to connect to the Tor SOCKS5 port.
+
+    Uses Python's socket module with a short timeout so callers don't need to
+    wait for a full HTTP round-trip when Tor is simply not running.
+    Returns True if the port is open, False on connection-refused or timeout.
+    """
+    try:
+        with socket.create_connection((TOR_HOST, TOR_PORT), timeout=TOR_SOCKET_TIMEOUT):
+            return True
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        return False
 
 # .onion link extraction (v3 56 chars, v2 16 chars)
 ONION_LINK_REGEX = re.compile(
@@ -93,6 +112,15 @@ def _check_tor_connectivity() -> bool:
     """Verify Tor SOCKS5 proxy is reachable. If not, set killswitch and return False."""
     global _tor_dead
     if _tor_dead:
+        return False
+    # Fast raw-socket check before attempting any HTTP traffic
+    if not _is_tor_reachable():
+        logger.warning(
+            "Tor is not running (port %d unreachable). "
+            "Aborting dark web requests to prevent IP leakage.",
+            TOR_PORT,
+        )
+        _tor_dead = True
         return False
     try:
         s = requests.Session()
