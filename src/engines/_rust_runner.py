@@ -25,6 +25,10 @@ def run_rust_engine(engine_id: str, target: str, timeout: int = 120) -> dict:
     Invoke fingerprint_engine <engine_id> <target>; parse JSON from stdout.
     Returns {"status": "ok"|"error", "findings": [...], "message": "..."}.
     """
+    engine_id = (engine_id or "").strip()
+    if not engine_id:
+        return {"status": "error", "findings": [], "message": "engine_id required"}
+
     target = (target or "").strip()
     if not target:
         return {"status": "error", "findings": [], "message": "target required"}

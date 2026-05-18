@@ -12,12 +12,13 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('/framer-motion/')) return 'vendor-motion'
-            if (id.includes('/recharts/')) return 'vendor-recharts'
-            if (id.includes('/three/')) return 'vendor-three'
-            if (id.includes('/@xyflow/')) return 'vendor-xyflow'
-            if (id.includes('/lucide-react/')) return 'vendor-lucide'
-            if (id.includes('/@tanstack/')) return 'vendor-table'
+            const normalizedId = id.replace(/\\/g, '/')
+            if (/(?:^|\/)node_modules\/framer-motion\//.test(normalizedId)) return 'vendor-motion'
+            if (/(?:^|\/)node_modules\/recharts\//.test(normalizedId)) return 'vendor-recharts'
+            if (/(?:^|\/)node_modules\/three\//.test(normalizedId)) return 'vendor-three'
+            if (/(?:^|\/)node_modules\/@xyflow\//.test(normalizedId)) return 'vendor-xyflow'
+            if (/(?:^|\/)node_modules\/lucide-react\//.test(normalizedId)) return 'vendor-lucide'
+            if (/(?:^|\/)node_modules\/@tanstack\//.test(normalizedId)) return 'vendor-table'
             return 'vendor-core'
           }
 

@@ -11,6 +11,7 @@ from src.http_client import safe_get, ENTERPRISE_HTTP_TIMEOUT
 logger = logging.getLogger(__name__)
 
 EPSS_API = "https://api.first.org/data/v1/epss"
+_SEVERITY_TO_NUMERIC = {"critical": 10.0, "high": 8.5, "medium": 5.0, "low": 2.0}
 
 
 def severity_to_cvss_vector(severity: str) -> str:
@@ -50,7 +51,7 @@ def get_epss_score(cve_id: str) -> float | None:
 def cvss_severity_to_numeric(severity: str) -> float:
     """Map severity to numeric (0-10) for scoring. Critical=10, High=8.5, Medium=5, Low=2."""
     s = (severity or "medium").lower()
-    return {"critical": 10.0, "high": 8.5, "medium": 5.0, "low": 2.0}.get(s, 5.0)
+    return _SEVERITY_TO_NUMERIC.get(s, 5.0)
 
 
 def weissman_priority_score(
