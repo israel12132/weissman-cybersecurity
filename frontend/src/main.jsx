@@ -96,6 +96,9 @@ import ScanScheduler from './pages/ScanScheduler'
 import ContainmentRulesBuilder from './pages/ContainmentRulesBuilder'
 import BaselineAndDrift from './pages/BaselineAndDrift'
 import IdentityContextManager from './pages/IdentityContextManager'
+import KillChainOrchestrator from './pages/KillChainOrchestrator'
+import AIAnalysisEngine from './pages/AIAnalysisEngine'
+import ExploitResearchLab from './pages/ExploitResearchLab'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -181,6 +184,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="containment-rules" element={<ContainmentRulesBuilder />} />
             <Route path="baseline-drift" element={<BaselineAndDrift />} />
             <Route path="identity-context" element={<IdentityContextManager />} />
+            <Route path="kill-chain" element={<KillChainOrchestrator />} />
+            <Route path="ai-analysis" element={<AIAnalysisEngine />} />
+            <Route path="exploit-lab" element={<ExploitResearchLab />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

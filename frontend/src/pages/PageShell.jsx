@@ -61,6 +61,18 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Threat Hunt
           </Link>
           <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-kill-chain" to="/kill-chain" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
+            Kill Chain
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-ai-analysis" to="/ai-analysis" className="text-violet-400/70 hover:text-violet-300 text-xs font-mono transition-colors">
+            AI Analysis
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-exploit-lab" to="/exploit-lab" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
+            Exploit Lab
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
           {badge && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"
