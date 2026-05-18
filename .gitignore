@@ -10,7 +10,9 @@ data/
 reports/
 *.db
 logs/
-celerybeat-schedule*
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
