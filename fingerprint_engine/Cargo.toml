@@ -65,7 +65,7 @@ petgraph = "0.6"
 bollard = "0.16"
 # Deception: active cloud injection (AWS). Requires Rust ≥1.91 (aws-smithy-* / aws-sdk-* MSRV).
 aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
-aws-config = "1.1"
+aws-config = "1.8"
 aws-sdk-iam = "1.14"
 aws-sdk-sts = "1.14"
 aws-sdk-s3 = "1.14"
