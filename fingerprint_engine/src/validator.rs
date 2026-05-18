@@ -98,7 +98,6 @@ pub async fn confirm_anomaly(
     let a = anomaly_type.to_lowercase();
     let is_500 = a.contains("500") || a.contains("status 500");
     let is_time = a.contains("time") || a.contains("latency");
-    let is_length = a.contains("content-length") || a.contains("length");
     let time_threshold = baseline.avg_latency_ms * 5.0;
 
     let mut confirm_count = 0u32;
@@ -130,7 +129,9 @@ pub async fn confirm_anomaly(
         if is_time && baseline.avg_latency_ms > 0.0 && latency_ms >= time_threshold {
             confirm_count += 1;
         }
-        if is_length && content_length_discrepancy(baseline.content_length, content_length) {
+        // Always check content-length discrepancy as a third independent condition,
+        // not only when the anomaly_type string mentions "length".
+        if content_length_discrepancy(baseline.content_length, content_length) {
             confirm_count += 1;
         }
         if headers_side_channel_detected(base_headers, &headers) {

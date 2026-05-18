@@ -30,3 +30,21 @@ celerybeat-schedule-shm
 celerybeat-schedule-wal
 # Downloaded binaries/artifacts
 *.deb
+
+# Sensitive config and live environment files
+config.yaml
+.envrc
+
+# Runtime data files
+existing_ids.txt
+
+# Compiled binaries in repo root
+weissman
+weissman-*
+
+# Build output
+fingerprint_engine/target/
+
+# Runtime data directories (already listed above, ensure explicit)
+data/
+reports/
