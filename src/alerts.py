@@ -1,6 +1,16 @@
-"""Telegram alerting with delta filtering: only notify on NEW findings (Target + CVE/Anomaly) in last 24h."""
+"""Alerting with delta filtering: only notify on NEW findings (Target + CVE/Anomaly) in last 24h.
+
+Supported channels:
+  - Telegram  (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)
+  - Slack     (SLACK_WEBHOOK_URL)
+  - Email     (SMTP_HOST + SMTP_PORT + SMTP_USER + SMTP_PASSWORD + ALERT_EMAIL_TO)
+"""
+import logging
 import os
+import smtplib
 from datetime import datetime, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 try:
@@ -14,6 +24,8 @@ import requests
 from src.database import get_session_factory, AlertSentModel
 from src.http_client import safe_post, ENTERPRISE_HTTP_TIMEOUT
 
+logger = logging.getLogger(__name__)
+
 # Only send if we have not sent the same (target, finding_id) in this many hours.
 ALERT_DEDUP_HOURS = 24
 
@@ -25,6 +37,82 @@ def _telegram_config() -> tuple[str, str]:
 
 
 TELEGRAM_PREFIX = "[Weissman-Cyber-Intel] "
+
+# ---------------------------------------------------------------------------
+# Slack alerts
+# ---------------------------------------------------------------------------
+
+def send_slack_alert(message: str) -> bool:
+    """
+    Send a plain-text message to the configured Slack incoming webhook.
+    Returns True on success, False if not configured or request fails.
+    """
+    webhook_url = (os.getenv("SLACK_WEBHOOK_URL") or "").strip()
+    if not webhook_url:
+        return False
+    try:
+        r = safe_post(
+            webhook_url,
+            json={"text": message},
+            timeout=ENTERPRISE_HTTP_TIMEOUT,
+        )
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Email (SMTP) alerts
+# ---------------------------------------------------------------------------
+
+def _smtp_config() -> tuple[str, int, str, str, str] | None:
+    """Return (host, port, user, password, to_addr) or None if not configured."""
+    host = (os.getenv("SMTP_HOST") or "").strip()
+    to_addr = (os.getenv("ALERT_EMAIL_TO") or "").strip()
+    if not host or not to_addr:
+        return None
+    try:
+        port = int(os.getenv("SMTP_PORT") or "587")
+    except ValueError:
+        port = 587
+    user = (os.getenv("SMTP_USER") or "").strip()
+    password = (os.getenv("SMTP_PASSWORD") or "").strip()
+    return host, port, user, password, to_addr
+
+
+def send_email_alert(subject: str, body: str) -> bool:
+    """
+    Send an email alert via SMTP. Uses TLS when port != 465.
+    Returns True on success, False if not configured or send fails.
+    """
+    cfg = _smtp_config()
+    if not cfg:
+        return False
+    host, port, user, password, to_addr = cfg
+    from_addr = user or f"weissman-alerts@{host}"
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.attach(MIMEText(body, "plain"))
+    try:
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=15) as smtp:
+                if user and password:
+                    smtp.login(user, password)
+                smtp.sendmail(from_addr, [to_addr], msg.as_string())
+        else:
+            with smtplib.SMTP(host, port, timeout=15) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                if user and password:
+                    smtp.login(user, password)
+                smtp.sendmail(from_addr, [to_addr], msg.as_string())
+        return True
+    except Exception as exc:
+        logger.warning("Email alert failed: %s", exc)
+        return False
 
 def send_telegram_alert(message: str, parse_mode: str = "Markdown") -> bool:
     """
@@ -96,8 +184,8 @@ def send_cve_alert_if_new(
     message: str,
 ) -> bool:
     """
-    Send a Telegram CVE/finding alert only if (target, finding_id) was not already
-    alerted in the last 24 hours. Returns True if sent, False if skipped or failed.
+    Send CVE/finding alert (Telegram + Slack + email) only if (target, finding_id) was not
+    already alerted in the last 24 hours. Returns True if at least one channel succeeded.
     """
     target = (target or "").strip()[:512]
     finding_id = (finding_id or "").strip()[:512]
@@ -105,7 +193,10 @@ def send_cve_alert_if_new(
         return False
     if _was_alert_sent_recently(target, finding_id):
         return False
-    if not send_telegram_alert(message):
+    tg_ok = send_telegram_alert(message)
+    slack_ok = send_slack_alert(message)
+    email_ok = send_email_alert(f"[Weissman] Security Finding: {finding_id}", message)
+    if not (tg_ok or slack_ok or email_ok):
         return False
     _record_alert_sent(target, finding_id)
     try:
@@ -118,8 +209,8 @@ def send_cve_alert_if_new(
 
 def send_fuzzer_alert_if_new(filename: str) -> bool:
     """
-    Send a Telegram fuzzer zero-day report alert only if this filename was not
-    already alerted in the last 24 hours. Uses target="fuzzer", finding_id=filename.
+    Send fuzzer zero-day report alert (Telegram + Slack + email) only if this filename
+    was not already alerted in the last 24 hours.
     """
     filename = (filename or "").strip()[:512]
     if not filename:
@@ -127,7 +218,10 @@ def send_fuzzer_alert_if_new(filename: str) -> bool:
     if _was_alert_sent_recently("fuzzer", filename):
         return False
     msg = format_fuzzer_report_alert(filename)
-    if not send_telegram_alert(msg):
+    tg_ok = send_telegram_alert(msg)
+    slack_ok = send_slack_alert(msg)
+    email_ok = send_email_alert("[Weissman] New Zero-Day Potential Report", msg)
+    if not (tg_ok or slack_ok or email_ok):
         return False
     _record_alert_sent("fuzzer", filename)
     try:
@@ -183,7 +277,7 @@ def format_darkweb_alert(target: str, snippet: str, source_url: str) -> str:
 
 
 def send_darkweb_alert_if_new(target: str, source_url: str, snippet: str) -> bool:
-    """Send dark web Telegram alert; dedup by (target, source_url) in last 24h."""
+    """Send dark web alert (Telegram + Slack + email); dedup by (target, source_url) in last 24h."""
     target = (target or "").strip()[:512]
     source_url = (source_url or "").strip()[:512]
     if not target or not source_url:
@@ -192,7 +286,10 @@ def send_darkweb_alert_if_new(target: str, source_url: str, snippet: str) -> boo
     if _was_alert_sent_recently(target, finding_id):
         return False
     msg = format_darkweb_alert(target, snippet, source_url)
-    if not send_telegram_alert(msg):
+    tg_ok = send_telegram_alert(msg)
+    slack_ok = send_slack_alert(msg)
+    email_ok = send_email_alert(f"[Weissman] Dark Web Alert: {target}", msg)
+    if not (tg_ok or slack_ok or email_ok):
         return False
     _record_alert_sent(target, finding_id)
     try:
@@ -232,8 +329,8 @@ def send_discovery_alert_if_new(
     confidence: str = "high",
 ) -> bool:
     """
-    Send [Weissman-Discovery] UNKNOWN ASSET FOUND only if (client_id, asset_value) was not
-    already sent in the last 24 hours.
+    Send [Weissman-Discovery] UNKNOWN ASSET FOUND (Telegram + Slack + email) only if
+    (client_id, asset_value) was not already sent in the last 24 hours.
     """
     client_id = (client_id or "").strip()[:512]
     client_name = (client_name or "").strip()[:512]
@@ -245,7 +342,10 @@ def send_discovery_alert_if_new(
     if _was_alert_sent_recently(client_id, finding_id):
         return False
     msg = format_discovery_alert(asset_type, asset_value, client_name, confidence)
-    if not send_telegram_alert(msg):
+    tg_ok = send_telegram_alert(msg)
+    slack_ok = send_slack_alert(msg)
+    email_ok = send_email_alert(f"[Weissman] Unknown Asset Found: {asset_value}", msg)
+    if not (tg_ok or slack_ok or email_ok):
         return False
     _record_alert_sent(client_id, finding_id)
     try:
@@ -258,8 +358,8 @@ def send_discovery_alert_if_new(
 
 def send_exploit_alert_if_new(target_name: str, technology: str, repo_url: str) -> bool:
     """
-    Send exploit-threat Telegram alert only if (target_name, repo_url) was not
-    already sent in the last 24 hours. finding_id = repo_url for dedup.
+    Send exploit-threat alert (Telegram + Slack + email) only if (target_name, repo_url)
+    was not already sent in the last 24 hours.
     """
     target_name = (target_name or "").strip()[:512]
     repo_url = (repo_url or "").strip()[:512]
@@ -268,7 +368,10 @@ def send_exploit_alert_if_new(target_name: str, technology: str, repo_url: str) 
     if _was_alert_sent_recently(target_name, repo_url):
         return False
     msg = format_exploit_threat_alert(technology, target_name, repo_url)
-    if not send_telegram_alert(msg):
+    tg_ok = send_telegram_alert(msg)
+    slack_ok = send_slack_alert(msg)
+    email_ok = send_email_alert(f"[Weissman] Critical Exploit Threat: {technology}", msg)
+    if not (tg_ok or slack_ok or email_ok):
         return False
     _record_alert_sent(target_name, repo_url)
     try:
