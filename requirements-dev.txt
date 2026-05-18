@@ -5,7 +5,7 @@
 pip-audit>=2.7.3
 
 # Linting
-ruff>=0.4.0
+ruff>=0.15.13
 
 # Testing
 pytest>=8.2.0
