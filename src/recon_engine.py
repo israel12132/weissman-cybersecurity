@@ -456,6 +456,10 @@ def scan_cloud_buckets(
 # Full recon run & Shadow IT detection
 # ---------------------------------------------------------------------------
 
+# Ports considered high-risk when exposed publicly (used in Shodan / Censys risk scoring).
+_HIGH_RISK_PORTS = frozenset({21, 22, 23, 445, 3306, 3389, 5432})
+
+
 def _shodan_recon(domain: str) -> list[DiscoveredAsset]:
     """Query Shodan for hosts/ports/banners associated with a domain."""
     api_key = (os.getenv("SHODAN_API_KEY") or "").strip()
@@ -504,7 +508,7 @@ def _shodan_recon(domain: str) -> list[DiscoveredAsset]:
                         value=ip,
                         source="shodan",
                         confidence="high",
-                        risk_impact="high" if any(p in (21, 22, 23, 3389, 445, 3306, 5432) for p in ports) else "medium",
+                        risk_impact="high" if any(p in _HIGH_RISK_PORTS for p in ports) else "medium",
                         extra={"ports": ports, "banner": banner},
                     )
                 )
@@ -537,7 +541,7 @@ def _censys_recon(domain: str) -> list[DiscoveredAsset]:
                 continue
             services = hit.get("services") or []
             ports = [s.get("port") for s in services if s.get("port")]
-            risk = "high" if any(p in (21, 22, 23, 3389, 445, 3306, 5432) for p in ports) else "medium"
+            risk = "high" if any(p in _HIGH_RISK_PORTS for p in ports) else "medium"
             assets.append(
                 DiscoveredAsset(
                     asset_type="ip",

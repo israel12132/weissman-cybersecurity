@@ -23,6 +23,9 @@ OSV_QUERY = "https://api.osv.dev/v1/query"
 RUBYGEMS_API = "https://rubygems.org/api/v1"
 MAVEN_SEARCH = "https://search.maven.org/solrsearch/select"
 
+# Default search result limit per ecosystem.
+_ECOSYSTEM_SEARCH_LIMIT = 15
+
 
 @dataclass
 class PackageInfo:
@@ -246,10 +249,10 @@ def run_supply_chain_scan(
     seen_names: set[str] = set()
 
     ecosystem_searchers = [
-        ("npm", "npm", lambda p: search_npm_packages(p, limit=15)),
-        ("pypi", "PyPI", lambda p: search_pypi_packages(p, limit=15)),
-        ("rubygems", "rubygems", lambda p: search_rubygems_packages(p, limit=15)),
-        ("maven", "maven", lambda p: search_maven_packages(p, limit=15)),
+        ("npm", "npm", lambda p: search_npm_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("pypi", "PyPI", lambda p: search_pypi_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("rubygems", "rubygems", lambda p: search_rubygems_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
+        ("maven", "maven", lambda p: search_maven_packages(p, limit=_ECOSYSTEM_SEARCH_LIMIT)),
     ]
 
     for eco_key, osv_eco, searcher in ecosystem_searchers:

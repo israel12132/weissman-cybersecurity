@@ -89,7 +89,9 @@ def send_email_alert(subject: str, body: str) -> bool:
     if not cfg:
         return False
     host, port, user, password, to_addr = cfg
-    from_addr = user or f"weissman-alerts@{host}"
+    # Use explicitly configured user as the From address; fall back to a
+    # generic address only when SMTP_USER is not set.
+    from_addr = user if user else "weissman-alerts@localhost"
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr
