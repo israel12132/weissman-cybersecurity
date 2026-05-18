@@ -28,6 +28,7 @@ production.
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import os
 import socket
@@ -204,10 +205,13 @@ def check_tenant_scope(target: str, db_session, tenant_id: str) -> None:
         for client in clients:
             scope = client.scope or {}
             if isinstance(scope, str):
-                import json
                 try:
                     scope = json.loads(scope)
-                except Exception:
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        "check_tenant_scope: malformed scope JSON for client %s: %s",
+                        getattr(client, "id", "?"), exc,
+                    )
                     scope = {}
             for domain in scope.get("domains") or []:
                 domain = (domain or "").strip().lower()

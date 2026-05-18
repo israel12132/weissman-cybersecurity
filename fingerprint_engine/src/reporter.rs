@@ -292,6 +292,8 @@ fn reports_dir() -> std::path::PathBuf {
     // Last-resort fallback
     std::path::PathBuf::from("reports")
 }
+
+fn format_timestamp() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| {
