@@ -61,12 +61,12 @@ fn parse_nuclei_yaml_to_native(
 const NUCLEI_RAW_BASE: &str =
     "https://raw.githubusercontent.com/projectdiscovery/nuclei-templates/main";
 const NUCLEI_TEMPLATE_PATHS: &[&str] = &[
+    "http/cves/2024/CVE-2024-0012.yaml",
+    "http/cves/2024/CVE-2024-0195.yaml",
+    "http/cves/2024/CVE-2024-0200.yaml",
+    "http/cves/2024/CVE-2024-0204.yaml",
+    "http/cves/2024/CVE-2024-0235.yaml",
     "http/cves/2024/CVE-2024-3400.yaml",
-    "http/exposures/configs/nginx-status.yaml",
-    "http/cves/2022/CVE-2022-42889.yaml",
-    "http/cves/2017/CVE-2017-7525.yaml",
-    "http/cves/2015/CVE-2015-4852.yaml",
-    "http/cves/2020/CVE-2020-1747.yaml",
 ];
 
 pub(crate) async fn fetch_from_sources_async() -> Vec<PayloadRow> {

@@ -13,7 +13,9 @@ fn env_u64(name: &str, default: u64) -> u64 {
 }
 
 async fn run_intel_ephemeral_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query(r#"DELETE FROM intel.ephemeral_payloads WHERE created_at < now() - make_interval(days => $1)"#)
+    let r = sqlx::query(
+        r#"DELETE FROM intel.ephemeral_payloads WHERE created_at < now() - ($1::bigint * interval '1 day')"#,
+    )
         .bind(days)
         .execute(pool)
         .await?;
@@ -21,7 +23,9 @@ async fn run_intel_ephemeral_retention(pool: &PgPool, days: i64) -> Result<u64, 
 }
 
 async fn run_intel_dynamic_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query(r#"DELETE FROM intel.dynamic_payloads WHERE added_at < now() - make_interval(days => $1)"#)
+    let r = sqlx::query(
+        r#"DELETE FROM intel.dynamic_payloads WHERE added_at < now() - ($1::bigint * interval '1 day')"#,
+    )
         .bind(days)
         .execute(pool)
         .await?;
@@ -32,7 +36,7 @@ async fn run_async_job_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::
     let r = sqlx::query(
         r#"DELETE FROM weissman_async_jobs
            WHERE status IN ('completed', 'failed', 'dead')
-             AND updated_at < now() - make_interval(days => $1)"#,
+             AND updated_at < now() - ($1::bigint * interval '1 day')"#,
     )
     .bind(days)
     .execute(pool)
