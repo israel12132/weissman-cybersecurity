@@ -99,6 +99,11 @@ import IdentityContextManager from './pages/IdentityContextManager'
 import KillChainOrchestrator from './pages/KillChainOrchestrator'
 import AIAnalysisEngine from './pages/AIAnalysisEngine'
 import ExploitResearchLab from './pages/ExploitResearchLab'
+// ── Client Management ─────────────────────────────────────────────────────────
+import Clients from './pages/Clients'
+import ClientNew from './pages/ClientNew'
+import ClientDetail from './pages/ClientDetail'
+import JobsDashboard from './pages/JobsDashboard'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
 import './index.css'
@@ -164,6 +169,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
             <Route path="engine-catalog" element={<EngineClientCatalog />} />
             <Route path="admin" element={<AdminManagement />} />
+            {/* ── Client Management routes ────────────────────────────────────── */}
+            <Route path="clients" element={<Clients />} />
+            <Route path="clients/new" element={<ClientNew />} />
+            <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="jobs" element={<JobsDashboard />} />
             {/* ── New UI improvements routes ──────────────────────────────────── */}
             <Route path="rate-limits" element={<RateLimitAnalytics />} />
             <Route path="mobile-security" element={<MobileSecurity />} />
