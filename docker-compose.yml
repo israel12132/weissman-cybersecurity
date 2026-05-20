@@ -49,7 +49,7 @@ services:
         condition: service_healthy
     healthcheck:
       # PORT env var defaults to 8000 - see backend environment section
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/config/public"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 30
