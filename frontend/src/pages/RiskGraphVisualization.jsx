@@ -252,10 +252,6 @@ export default function RiskGraphVisualization() {
               <canvas
                 ref={canvasRef}
                 className="w-full h-[600px] cursor-move"
-                onClick={(e) => {
-                  // Handle node click detection (simplified)
-                  console.log('Canvas clicked at:', e.clientX, e.clientY);
-                }}
               />
             )}
           </div>
