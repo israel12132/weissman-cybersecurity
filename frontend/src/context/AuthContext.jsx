@@ -68,6 +68,9 @@ export function AuthProvider({ children }) {
           }),
         })
         const data = await r.json().catch(() => ({}))
+        if (r.ok && data.mfa_required && data.mfa_token) {
+          return { ok: false, mfa_required: true, mfa_token: data.mfa_token, detail: data.detail }
+        }
         if (r.ok && data.ok) {
           if (data.access_token) setStoredAccessToken(data.access_token)
           setSession({
@@ -83,6 +86,37 @@ export function AuthProvider({ children }) {
         }
         clearStoredAccessToken()
         return { ok: false, detail: data.detail || 'Invalid email or password' }
+      } catch (_) {
+        return { ok: false, detail: 'Network error' }
+      }
+    },
+    [refreshSession],
+  )
+
+  const verifyMfa = useCallback(
+    async (mfaToken, code) => {
+      try {
+        const r = await fetch(apiUrl('/api/auth/mfa/verify'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ mfa_token: mfaToken, code: code.trim() }),
+        })
+        const data = await r.json().catch(() => ({}))
+        if (r.ok && data.ok) {
+          if (data.access_token) setStoredAccessToken(data.access_token)
+          setSession({
+            ok: true,
+            user_id: data.user_id,
+            tenant_id: data.tenant_id,
+            role: data.role,
+            is_superadmin: data.is_superadmin === true,
+          })
+          setIsAuthenticated(true)
+          await refreshSession()
+          return { ok: true }
+        }
+        return { ok: false, detail: data.detail || 'Invalid code' }
       } catch (_) {
         return { ok: false, detail: 'Network error' }
       }
@@ -109,6 +143,7 @@ export function AuthProvider({ children }) {
     session,
     isCeo,
     login,
+    verifyMfa,
     logout,
     checkAuth,
     refreshSession,

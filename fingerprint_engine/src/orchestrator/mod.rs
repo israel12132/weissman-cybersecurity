@@ -86,18 +86,29 @@ async fn get_config_tx(
     .filter(|s: &String| !s.is_empty())
 }
 
-/// PoE is NOT in this list: it runs only when fuzzer/semantic_fuzzer logged a crash (or via UI).
-const ALL_ENGINES: [&'static str; 9] = [
-    "osint",
-    "asm",
-    "supply_chain",
-    "leak_hunter",
-    "bola_idor",
-    "llm_path_fuzz",
-    "semantic_ai_fuzz",
-    "microsecond_timing",
-    "ai_adversarial_redteam",
-];
+use weissman_core::models::engine::{
+    is_production_engine_id, resolve_engine_id, DEFAULT_ORCHESTRATOR_ENGINES,
+};
+
+fn default_client_enabled_engines() -> Vec<String> {
+    DEFAULT_ORCHESTRATOR_ENGINES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+}
+
+fn filter_production_engine_ids(ids: Vec<String>) -> Vec<String> {
+    ids.into_iter()
+        .filter_map(|s| {
+            let c = resolve_engine_id(canonical_active_engine_id(s.as_str()));
+            if is_production_engine_id(c) {
+                Some(c.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 
 fn engine_display_label(source: &str) -> &'static str {
     match source {
@@ -450,19 +461,16 @@ async fn active_engines_list(
         });
     let arr: Vec<String> = match serde_json::from_str(&json) {
         Ok(a) => a,
-        _ => return ALL_ENGINES.iter().map(|s| (*s).to_string()).collect(),
+        _ => return filter_production_engine_ids(
+            DEFAULT_ORCHESTRATOR_ENGINES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
+        ),
     };
-    let allowed: std::collections::HashSet<&str> = ALL_ENGINES.iter().copied().collect();
-    arr.iter()
-        .filter_map(|s| {
-            let c = canonical_active_engine_id(s.as_str());
-            if allowed.contains(c) {
-                Some(c.to_string())
-            } else {
-                None
-            }
-        })
-        .collect()
+    filter_production_engine_ids(
+        arr.into_iter().map(|x| x.trim().to_string()).collect(),
+    )
 }
 
 /// Load identity contexts for a client from DB (used at start and after auto-harvest).
@@ -502,25 +510,25 @@ fn client_auto_harvest_enabled(client_configs_json: &str) -> bool {
     true
 }
 
-/// Parse client_configs JSON and return enabled_engines list. If missing/invalid, returns full ALL_ENGINES.
+/// Parse client_configs JSON and return enabled_engines (production probes only).
 fn client_enabled_engines(client_configs_json: &str) -> Vec<String> {
     let json = client_configs_json.trim();
     if json.is_empty() {
-        return ALL_ENGINES.iter().map(|s| (*s).to_string()).collect();
+        return default_client_enabled_engines();
     }
     let v: serde_json::Value = match serde_json::from_str(json) {
         Ok(x) => x,
-        _ => return ALL_ENGINES.iter().map(|s| (*s).to_string()).collect(),
+        _ => return default_client_enabled_engines(),
     };
     let arr = match v.get("enabled_engines").and_then(|a| a.as_array()) {
         Some(a) => a,
-        _ => return ALL_ENGINES.iter().map(|s| (*s).to_string()).collect(),
+        _ => return default_client_enabled_engines(),
     };
-    let allowed: std::collections::HashSet<&str> = ALL_ENGINES.iter().copied().collect();
-    arr.iter()
-        .filter_map(|s| s.as_str().map(|x| x.trim().to_string()))
-        .filter(|s| allowed.contains(s.as_str()))
-        .collect::<Vec<_>>()
+    filter_production_engine_ids(
+        arr.iter()
+            .filter_map(|s| s.as_str().map(|x| x.trim().to_string()))
+            .collect(),
+    )
 }
 
 /// Parse client_configs JSON and return roe_mode. "weaponized_god_mode" => true, else false.
@@ -1762,6 +1770,27 @@ async fn run_cycle_for_tenant(
                         Some(tenant_id),
                     )
                     .await;
+                    tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
+                    (r, None)
+                }
+                other if is_production_engine_id(other) => {
+                    let github_token = get_config_tx(&mut tx, tenant_id, "github_token")
+                        .await
+                        .filter(|s| !s.is_empty());
+                    tx.commit().await?;
+                    let ctx = crate::engine_dispatch::EngineRunContext {
+                        stealth: Some(stealth_config.clone()),
+                        discovered_paths: discovered_paths.clone(),
+                        target_list: target_list.clone(),
+                        tenant_id: Some(tenant_id),
+                        github_token,
+                        llm_base_url: semantic_config.llm_base_url.clone(),
+                        llm_model: semantic_config.llm_model.clone(),
+                        recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
+                        asm_ports: asm_ports.clone(),
+                    };
+                    let r =
+                        crate::engine_dispatch::run_engine(other, &target, &ctx).await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                     (r, None)
                 }

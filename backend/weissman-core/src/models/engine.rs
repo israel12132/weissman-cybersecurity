@@ -59,7 +59,7 @@ impl fmt::Display for EngineId {
     }
 }
 
-/// Stable list for validation / defaults (same order as legacy `ALL_ENGINES`).
+/// Stable list for validation / defaults (core orchestrator cycle).
 pub const KNOWN_ENGINE_IDS: &[&str] = &[
     "osint",
     "asm",
@@ -71,6 +71,73 @@ pub const KNOWN_ENGINE_IDS: &[&str] = &[
     "microsecond_timing",
     "ai_adversarial_redteam",
 ];
+
+/// Engines with live Rust/Python probes (no simulated findings). UI Engine Room uses this list.
+pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
+    "osint",
+    "asm",
+    "leak_hunter",
+    "discovery_engine",
+    "recon",
+    "supply_chain",
+    "bola_idor",
+    "graphql_attack",
+    "jwt_attack",
+    "oauth_oidc",
+    "http_smuggling",
+    "prototype_pollution",
+    "ssrf_advanced",
+    "xxe",
+    "ssti",
+    "file_upload",
+    "websocket_attack",
+    "cache_poisoning",
+    "llm_path_fuzz",
+    "semantic_ai_fuzz",
+    "ai_adversarial_redteam",
+    "llm_redteam",
+    "adversarial_ml",
+    "autonomous_pentest",
+    "http_feedback_fuzz",
+    "aws_attack",
+    "azure_attack",
+    "gcp_attack",
+    "k8s_container",
+    "iac_misconfig",
+    "serverless_attack",
+    "scada_ics",
+    "iot_firmware",
+    "ble_rf",
+    "edr_evasion",
+    "waf_bypass",
+    "timing_sidechannel",
+    "antiforensics",
+    "stealth_engine",
+    "pki_tls",
+    "pqc_scanner",
+    "password_spray",
+    "kerberoasting",
+    "saml_attack",
+    "crypto_engine",
+    "bgp_dns_hijacking",
+    "ipv6_attack",
+    "mtls_grpc",
+    "smb_netbios",
+    "cicd_pipeline",
+    "container_registry",
+    "sbom_analyzer",
+    "typosquatting_monitor",
+    "kill_chain",
+    "oast_oob",
+    "deception_honeypot",
+    "digital_twin",
+    "zero_day_prediction",
+    "threat_emulation",
+    "microsecond_timing",
+];
+
+/// Default engines enabled for new clients (core continuous scan).
+pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = KNOWN_ENGINE_IDS;
 
 /// Full ordered registry of all 303 engines in proper execution order.
 /// Matches frontend/src/lib/enginesRegistry.js
@@ -375,9 +442,57 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "api_gateway_bypass",
 ];
 
+/// Map catalog-only registry IDs to a production engine implementation.
+#[must_use]
+pub fn resolve_engine_id(id: &str) -> &str {
+    match id.trim() {
+        "graphql_deep_attack" => "graphql_attack",
+        "jwt_advanced_attack" => "jwt_attack",
+        "grpc_reflection_attack" => "mtls_grpc",
+        "idor_advanced" => "bola_idor",
+        "oauth_advanced_attack" => "oauth_oidc",
+        "saml_advanced_attack" => "saml_attack",
+        "ipv6_advanced_attack" => "ipv6_attack",
+        "cloud_metadata_ssrf" => "ssrf_advanced",
+        "s3_bucket_attack" | "cloud_iam_escalation" | "secrets_manager_attack" => "aws_attack",
+        "gcp_privilege_attack" => "gcp_attack",
+        "kubernetes_rbac_escape" | "eks_attack" => "k8s_container",
+        "azure_devops_attack" => "azure_attack",
+        "modbus_attack" | "mqtt_attack" | "coap_attack" | "opcua_attack" | "plc_logic_attack"
+        | "hmi_attack" | "profinet_attack" | "industrial_protocol_fuzz" | "firmware_emulation_attack" => {
+            "scada_ics"
+        }
+        "dll_hijacking_engine" | "sandbox_evasion" | "rootkit_simulation"
+        | "memory_forensics_evasion" | "av_bypass_engine" | "dns_tunneling_c2"
+        | "steganography_c2" | "https_c2_masquerade" | "icmp_covert" | "rop_chain_engine"
+        | "timing_evasion_engine" | "log_tampering_engine" | "jit_spray" | "com_hijacking"
+        | "network_traffic_masking" | "anti_debug_evasion" | "parent_pid_spoof" => "edr_evasion",
+        "npm_package_attack" | "pypi_supply_chain" | "maven_supply_chain" | "docker_image_poison" => {
+            "supply_chain"
+        }
+        "web_cache_poison_adv" => "cache_poisoning",
+        "nosql_deep_injection" => "bola_idor",
+        "ollama_fuzz" => "llm_path_fuzz",
+        other => other,
+    }
+}
+
+#[must_use]
+pub fn is_production_engine_id(id: &str) -> bool {
+    let canonical = resolve_engine_id(id);
+    PRODUCTION_ENGINE_IDS
+        .iter()
+        .any(|&k| k == canonical)
+}
+
+#[must_use]
+pub fn production_engine_ids() -> &'static [&'static str] {
+    PRODUCTION_ENGINE_IDS
+}
+
 #[must_use]
 pub fn is_known_engine_id(s: &str) -> bool {
-    KNOWN_ENGINE_IDS.iter().any(|&k| k == s.trim()) 
+    is_production_engine_id(s)
         || FULL_ENGINE_REGISTRY_ORDER.iter().any(|&k| k == s.trim())
 }
 

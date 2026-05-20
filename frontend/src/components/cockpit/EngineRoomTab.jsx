@@ -4,7 +4,8 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import RoEPanel from './RoEPanel'
 import EngineCard from './EngineCard'
 import RedTeamSkullSwitch from '../warroom/RedTeamSkullSwitch'
-import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS, getEnginesByGroup } from '../../lib/enginesRegistry'
+import { ENGINE_GROUP_DEFS } from '../../lib/enginesRegistry'
+import { useProductionEngines } from '../../lib/useProductionEngines'
 
 const defaultEngines = []
 
@@ -79,6 +80,8 @@ export default function EngineRoomTab() {
   } = useClient()
   const { confirmCommand, refuseCommand } = useWarRoom()
   const [activeGroup, setActiveGroup] = useState('all')
+  const { engines: productionRegistry, productionCount, catalogCount, loading: productionLoading } =
+    useProductionEngines()
 
   if (clientConfig == null || clientConfig === undefined) {
     return (
@@ -138,7 +141,7 @@ export default function EngineRoomTab() {
     )
   }
 
-  if (configLoading) {
+  if (configLoading || productionLoading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
@@ -149,12 +152,17 @@ export default function EngineRoomTab() {
     )
   }
 
+  const enginesByGroup = (groupId) =>
+    productionRegistry.filter((e) => e.group === groupId)
+
   const visibleGroups = activeGroup === 'all'
     ? ENGINE_GROUP_DEFS
     : ENGINE_GROUP_DEFS.filter((g) => g.id === activeGroup)
 
-  const totalEnabled = enabledList.length
-  const totalEngines = ENGINES_REGISTRY.length
+  const totalEnabled = enabledList.filter((id) =>
+    productionRegistry.some((e) => e.id === id),
+  ).length
+  const totalEngines = productionCount || productionRegistry.length
 
   return (
     <div className="p-6 md:p-8 space-y-6">
@@ -183,7 +191,12 @@ export default function EngineRoomTab() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-[0.2em]">
-            Engine Grid — All {totalEngines} Engines
+            Engine Grid — {totalEngines} Live Engines
+            {catalogCount > totalEngines ? (
+              <span className="text-white/35 font-normal normal-case tracking-normal ml-2">
+                ({catalogCount} catalog entries hidden)
+              </span>
+            ) : null}
           </h3>
           <p className="text-[11px] text-white/40 mt-0.5">
             {totalEnabled} enabled · {totalEngines - totalEnabled} disabled ·{' '}
@@ -206,7 +219,7 @@ export default function EngineRoomTab() {
           All ({totalEngines})
         </button>
         {ENGINE_GROUP_DEFS.map((g) => {
-          const groupEngines = getEnginesByGroup(g.id)
+          const groupEngines = enginesByGroup(g.id)
           return (
             <button
               key={g.id}
@@ -232,7 +245,7 @@ export default function EngineRoomTab() {
       {/* Group sections */}
       <div className="space-y-10">
         {visibleGroups.map((groupDef) => {
-          const engines = getEnginesByGroup(groupDef.id)
+          const engines = enginesByGroup(groupDef.id)
           if (engines.length === 0) return null
           return (
             <GroupSection

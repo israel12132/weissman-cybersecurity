@@ -115,6 +115,76 @@ pub fn create_session_token(
     create_access_token(user_id, tenant_id, "viewer", false)
 }
 
+fn mfa_pending_ttl_secs() -> i64 {
+    std::env::var("WEISSMAN_MFA_PENDING_MINUTES")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(5)
+        .clamp(2, 15)
+        * 60
+}
+
+/// Short-lived JWT after password OK when MFA is enabled.
+pub fn create_mfa_pending_token(
+    user_id: i64,
+    tenant_id: i64,
+    role: &str,
+    is_superadmin: bool,
+) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
+    }
+    let now = chrono::Utc::now();
+    let exp = (now + chrono::Duration::seconds(mfa_pending_ttl_secs())).timestamp();
+    let claims = JwtClaims {
+        sub: user_id,
+        tid: tenant_id,
+        exp,
+        iat: now.timestamp(),
+        typ: Some("mfa_pending".to_string()),
+        role: Some(role.trim().to_string()),
+        is_superadmin: Some(is_superadmin),
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
+}
+
+pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return None;
+    }
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
+        .ok()
+        .and_then(|d| {
+            let c = d.claims;
+            if c.typ.as_deref() != Some("mfa_pending") {
+                return None;
+            }
+            if c.sub > 0 && c.tid > 0 {
+                Some(AuthContext {
+                    user_id: c.sub,
+                    tenant_id: c.tid,
+                    role: c
+                        .role
+                        .as_deref()
+                        .unwrap_or("viewer")
+                        .trim()
+                        .to_string(),
+                    is_superadmin: c.is_superadmin.unwrap_or(false),
+                })
+            } else {
+                None
+            }
+        })
+}
+
 /// Verify access JWT; rejects explicit refresh-type claims and expired tokens.
 /// Returns AuthContext on success, None on any verification failure.
 pub fn verify_access_token(token: &str) -> Option<AuthContext> {
@@ -131,7 +201,7 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
     match decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation) {
         Ok(d) => {
             let c = d.claims;
-            if matches!(c.typ.as_deref(), Some("refresh")) {
+            if matches!(c.typ.as_deref(), Some("refresh") | Some("mfa_pending")) {
                 tracing::debug!(
                     target: "auth_jwt",
                     "Rejected refresh token used as access token"

@@ -82,6 +82,16 @@ async fn api_config_public(Extension(auth): Extension<AuthContext>) -> Response 
     }))).into_response()
 }
 
+async fn api_engines_production() -> Response {
+    let ids = weissman_core::models::engine::production_engine_ids();
+    let catalog_total = weissman_core::models::engine::FULL_ENGINE_REGISTRY_ORDER.len();
+    (StatusCode::OK, Json(json!({
+        "production": ids,
+        "production_count": ids.len(),
+        "catalog_count": catalog_total,
+    }))).into_response()
+}
+
 async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
@@ -135,7 +145,8 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     let row = sqlx::query(
         r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                   COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
-                  COALESCE(u.is_superadmin, false) AS is_superadmin
+                  COALESCE(u.is_superadmin, false) AS is_superadmin,
+                  COALESCE(u.mfa_enabled, false) AS mfa_enabled
            FROM auth.v_user_lookup u
            WHERE u.tenant_id = $1 AND lower(trim(u.email)) = lower(trim($2)) AND u.is_active = true"#,
     )
@@ -145,19 +156,47 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     .await
     .ok()
     .flatten();
-    let (user_id, hash, tenant_id, role, is_superadmin) = match row {
+    let (user_id, hash, tenant_id, role, is_superadmin, mfa_enabled) = match row {
         Some(r) => (
             r.try_get::<i64, _>("id").unwrap_or(0),
             r.try_get::<String, _>("password_hash").unwrap_or_default(),
             r.try_get::<i64, _>("tenant_id").unwrap_or(0),
             r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".into()),
             r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
+            r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
         ),
         None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response(),
     };
     if hash.is_empty() { return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response(); }
     match bcrypt::verify(password, &hash) {
         Ok(true) => {
+            if mfa_enabled {
+                let mfa_token = match crate::auth_jwt::create_mfa_pending_token(
+                    user_id,
+                    tenant_id,
+                    &role,
+                    is_superadmin,
+                ) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"ok": false, "detail": "MFA session failed"})),
+                        )
+                            .into_response();
+                    }
+                };
+                return (
+                    StatusCode::OK,
+                    Json(json!({
+                        "ok": false,
+                        "mfa_required": true,
+                        "mfa_token": mfa_token,
+                        "detail": "Enter authenticator code",
+                    })),
+                )
+                    .into_response();
+            }
             let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await { Ok(t) => t, Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response() };
             let _ = audit_log::insert_audit(&mut tx, tenant_id, Some(user_id), email, "login", "session created", &ip).await;
             let _ = tx.commit().await;

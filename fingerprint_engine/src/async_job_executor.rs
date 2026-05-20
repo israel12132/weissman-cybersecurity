@@ -85,52 +85,25 @@ pub async fn execute_job(
                 .get("target")
                 .and_then(Value::as_str)
                 .ok_or_else(|| "payload.target required".to_string())?;
-            let result = match engine {
-                "supply_chain" => {
-                    crate::supply_chain_engine::run_supply_chain_result(target, None).await
-                }
-                "osint" => crate::osint_engine::run_osint_result(target, None).await,
-                "asm" => crate::asm_engine::run_asm_result(target).await,
-                "bola_idor" => {
-                    let tl = vec![target.to_string()];
-                    crate::bola_idor_engine::run_bola_idor_result_multi(
-                        &tl,
-                        &[],
-                        None,
-                        None,
-                        Some(tid),
-                    )
-                    .await
-                }
-                "llm_path_fuzz" | "ollama_fuzz" => {
-                    crate::llm_path_fuzz_engine::run_llm_path_fuzz_result_cli(target, None, Some(tid))
-                        .await
-                        .into()
-                }
-                "leak_hunter" => {
-                    let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
-                        .await
-                        .map_err(|e| e.to_string())?;
-                    let github_token = cfg_string_tx(&mut tx, tid, "github_token")
-                        .await
-                        .unwrap_or_default();
-                    let _ = tx.commit().await;
-                    let target_list = vec![target.to_string()];
-                    let r = crate::leak_hunter_engine::run_leak_hunter(&target_list, None).await;
-                    let mut all_findings = r.findings.clone();
-                    if !github_token.is_empty() {
-                        let domain = target.split('/').nth(2).unwrap_or(target);
-                        let gh_findings = crate::leak_hunter_engine::github_leak_search(
-                            domain,
-                            Some(github_token.as_str()),
-                        )
-                        .await;
-                        all_findings.extend(gh_findings);
-                    }
-                    crate::engine_result::EngineResult::ok(all_findings, r.message)
-                }
-                _ => return Err(format!("unknown engine {}", engine)),
+            let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
+                .await
+                .map_err(|e| e.to_string())?;
+            let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
+            let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
+            let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
+            let _ = tx.commit().await;
+            let ctx = crate::engine_dispatch::EngineRunContext {
+                tenant_id: Some(tid),
+                target_list: vec![target.to_string()],
+                github_token,
+                llm_base_url: llm_base.unwrap_or_default(),
+                llm_model: llm_model.unwrap_or_default(),
+                ..Default::default()
             };
+            if !weissman_core::models::engine::is_production_engine_id(engine) {
+                return Err(format!("engine '{}' is catalog-only or unknown", engine));
+            }
+            let result = crate::engine_dispatch::run_engine(engine, target, &ctx).await;
             Ok(json!({
                 "engine": engine,
                 "status": result.status,
@@ -211,55 +184,24 @@ pub async fn execute_job(
             let mut succeeded = 0usize;
             let mut failed = 0usize;
             
-            // Execute engines in order defined by registry
-            let ordered_engines = weissman_core::models::engine::order_engines_by_registry(&engines);
+            let production_engines: Vec<String> = engines
+                .iter()
+                .filter(|e| weissman_core::models::engine::is_production_engine_id(e))
+                .cloned()
+                .collect();
+            let ordered_engines =
+                weissman_core::models::engine::order_engines_by_registry(&production_engines);
             
             for engine_id in &ordered_engines {
                 let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#, job.id, engine_id));
                 
-                let result = match engine_id.as_str() {
-                    "osint" => crate::osint_engine::run_osint_result(&target, None).await,
-                    "asm" => crate::asm_engine::run_asm_result(&target).await,
-                    "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
-                    "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
-                    "recon" => crate::recon::enum_subdomains_default(&target).await.into_iter().map(|d| json!({"type": "recon", "subdomain": d})).collect::<Vec<_>>().into(),
-                    "supply_chain" => crate::supply_chain_engine::run_supply_chain_result(&target, None).await,
-                    "bola_idor" => crate::bola_idor_engine::run_bola_idor_result(&target, None).await,
-                    "graphql_attack" => crate::graphql_attack_engine::run_graphql_attack_result(&target).await,
-                    "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(&target).await,
-                    "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(&target).await,
-                    "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(&target).await,
-                    "prototype_pollution" => crate::prototype_pollution_engine::run_prototype_pollution_result(&target).await,
-                    "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result(&target).await,
-                    "xxe" => crate::xxe_engine::run_xxe_result(&target).await,
-                    "ssti" => crate::ssti_engine::run_ssti_result(&target).await,
-                    "file_upload" => crate::file_upload_engine::run_file_upload_result(&target).await,
-                    "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result(&target).await,
-                    "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result(&target).await,
-                    "pki_tls" => crate::pki_tls_engine::run_pki_tls_result(&target).await,
-                    "pqc_scanner" => crate::pqc_scanner_engine::run_pqc_scanner_result(&target).await,
-                    "password_spray" => crate::password_spray_engine::run_password_spray_result(&target).await,
-                    "kerberoasting" => crate::kerberoasting_engine::run_kerberoasting_result(&target).await,
-                    "saml_attack" => crate::saml_attack_engine::run_saml_attack_result(&target).await,
-                    "crypto_engine" => crate::crypto_engine::run_crypto_engine_result(&target).await,
-                    "bgp_dns_hijacking" => crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(&target).await,
-                    "ipv6_attack" => crate::ipv6_attack_engine::run_ipv6_attack_result(&target).await,
-                    "mtls_grpc" => crate::mtls_grpc_engine::run_mtls_grpc_result(&target).await,
-                    "smb_netbios" => crate::smb_netbios_engine::run_smb_netbios_result(&target).await,
-                    "cicd_pipeline" => crate::cicd_pipeline_engine::run_cicd_pipeline_result(&target).await,
-                    "container_registry" => crate::container_registry_engine::run_container_registry_result(&target).await,
-                    "sbom_analyzer" => crate::sbom_analyzer_engine::run_sbom_analyzer_result(&target).await,
-                    "typosquatting_monitor" => crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(&target).await,
-                    "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(&target).await,
-                    "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(&target).await,
-                    "deception_honeypot" => crate::deception_honeypot_engine::run_deception_honeypot_result(&target).await,
-                    "digital_twin" => crate::digital_twin_engine::run_digital_twin_result(&target).await,
-                    "threat_emulation" => crate::threat_emulation_engine::run_threat_emulation_result(&target).await,
-                    "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result(&target).await,
-                    "timing_sidechannel" => crate::timing_sidechannel_engine::run_timing_sidechannel_result(&target).await,
-                    "stealth_engine" => crate::stealth_engine::run_stealth_engine_result(&target).await,
-                    _ => crate::engine_result::EngineResult::ok(vec![], format!("Engine {} not yet integrated", engine_id)),
+                let ctx = crate::engine_dispatch::EngineRunContext {
+                    tenant_id: Some(tid),
+                    target_list: vec![target.clone()],
+                    ..Default::default()
                 };
+                let result =
+                    crate::engine_dispatch::run_engine(engine_id, &target, &ctx).await;
                 
                 if result.success {
                     succeeded += 1;

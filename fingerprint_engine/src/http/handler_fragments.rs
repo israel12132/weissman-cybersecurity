@@ -4,6 +4,10 @@
 
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_mfa.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_auth.inc"
 ));
 include!(concat!(

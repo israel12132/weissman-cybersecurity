@@ -1077,6 +1077,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/findings/export/csv", get(api_findings_export_csv))
         .route("/api/findings/:id/status", patch(api_findings_update_status))
         .route("/api/config/public", get(api_config_public))
+        .route("/api/engines/production", get(api_engines_production))
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
@@ -1092,6 +1093,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/login", post(api_login))
         .route("/api/logout", post(api_logout))
         .route("/api/auth/refresh", post(api_auth_refresh))
+        .route("/api/auth/mfa/verify", post(api_auth_mfa_verify))
+        .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
+        .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
         .route("/api/onboarding/register", post(api_onboarding_register))
         .route("/api/onboarding/target", post(api_onboarding_target))
         .route(

@@ -8,7 +8,9 @@ export default function Login() {
   const [tenantSlug, setTenantSlug] = useState('default')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const { login, isAuthenticated } = useAuth()
+  const [mfaToken, setMfaToken] = useState(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const { login, verifyMfa, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -23,6 +25,11 @@ export default function Login() {
       const result = await login(email, password, tenantSlug)
       if (result.ok) {
         navigate('/', { replace: true })
+        return
+      }
+      if (result.mfa_required && result.mfa_token) {
+        setMfaToken(result.mfa_token)
+        setError('')
         return
       }
       setError(result.detail || 'Access Denied')
@@ -52,6 +59,57 @@ export default function Login() {
           Weissman Cybersecurity
         </h1>
 
+        {mfaToken ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              setError('')
+              setSubmitting(true)
+              try {
+                const result = await verifyMfa(mfaToken, mfaCode)
+                if (result.ok) {
+                  navigate('/', { replace: true })
+                  return
+                }
+                setError(result.detail || 'Invalid code')
+              } catch (_) {
+                setError('Invalid code')
+              } finally {
+                setSubmitting(false)
+              }
+            }}
+            className="space-y-5"
+          >
+            <p className="text-sm text-[#9ca3af] text-center font-mono">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              required
+              className="w-full px-4 py-3 rounded bg-[#0a0a0a] border border-[#222] text-white text-center tracking-[0.5em] font-mono text-lg focus:outline-none focus:border-[#22d3ee]"
+              placeholder="000000"
+            />
+            {error && <p className="text-sm text-red-400 text-center font-mono">{error}</p>}
+            <button
+              type="submit"
+              disabled={submitting || mfaCode.length !== 6}
+              className="w-full py-3 rounded border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] font-mono text-sm uppercase tracking-widest hover:bg-[#22d3ee]/20 disabled:opacity-40"
+            >
+              {submitting ? 'Verifying…' : 'Verify MFA'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMfaToken(null); setMfaCode('') }}
+              className="w-full text-xs text-[#6b7280] hover:text-white font-mono"
+            >
+              ← Back to password
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="tenant" className="block text-[10px] uppercase tracking-widest text-[#6b7280] mb-2 font-mono">
@@ -99,13 +157,12 @@ export default function Login() {
           </div>
 
           {error && (
-            <p id="login-error-message" className="text-sm font-mono text-red-500 text-center py-2 border border-red-500/30 bg-red-500/5 rounded">
+            <p className="text-sm font-mono text-red-500 text-center py-2 border border-red-500/30 bg-red-500/5 rounded">
               {error}
             </p>
           )}
 
           <button
-            id="login-submit-btn"
             type="submit"
             disabled={submitting}
             className="w-full py-3.5 rounded font-semibold text-sm tracking-widest uppercase transition-all border-2 border-[#22d3ee] bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 focus:outline-none focus:ring-2 focus:ring-[#22d3ee] focus:ring-offset-2 focus:ring-offset-[#050505] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -113,11 +170,11 @@ export default function Login() {
             {submitting ? 'Authenticating…' : 'Authenticate'}
           </button>
         </form>
+        )}
 
         <div className="mt-8 space-y-3">
           <p className="text-center text-[10px] uppercase tracking-widest text-[#6b7280] font-mono">Enterprise SSO</p>
           <button
-            id="login-oidc-btn"
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
@@ -128,7 +185,6 @@ export default function Login() {
             Login with OIDC (IdP name: enterprise)
           </button>
           <button
-            id="login-saml-btn"
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
