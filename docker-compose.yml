@@ -58,6 +58,9 @@ services:
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:local
     command: ["/usr/local/bin/weissman-worker"]
     environment:
