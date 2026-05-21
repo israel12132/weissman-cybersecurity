@@ -55,7 +55,7 @@ pytest-mock>=3.11.0
 prometheus-client>=0.17.0
 
 # --- Secrets Management ---
-hvac>=1.2.0  # HashiCorp Vault client
+hvac>=2.4.0  # HashiCorp Vault client
 cryptography>=41.0.0  # Field-level encryption
 
 # NOTE: Flask and flask-swagger-ui removed - Swagger UI now served by Rust backend
