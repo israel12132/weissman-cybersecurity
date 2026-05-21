@@ -67,7 +67,7 @@ pub struct LlmFuzzRunSummary {
 
 fn openai_style_body(model: &str, user_text: &str) -> Value {
     let m = if model.trim().is_empty() {
-        "gpt-4o-mini"
+        "meta-llama/Llama-3.2-3B-Instruct"
     } else {
         model.trim()
     };
