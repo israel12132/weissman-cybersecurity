@@ -11,13 +11,13 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
       className="min-h-[100dvh] text-slate-100"
       style={{ background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
-        <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <Link id="pageshell-nav-dashboard" to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/60 backdrop-blur-md">
+        <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2.5">
+          <Link id="pageshell-nav-dashboard" to="/" className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors">
             ← Dashboard
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-engines" to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-engines" to="/engines" className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors">
             Engine Matrix
           </Link>
           <span className="text-white/20 text-xs">|</span>
@@ -29,7 +29,7 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             Domain Discovery
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/70 hover:text-amber-300 text-xs font-mono transition-colors">
             Findings C2
           </Link>
           <span className="text-white/20 text-xs">|</span>
@@ -72,18 +72,21 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
           <Link id="pageshell-nav-exploit-lab" to="/exploit-lab" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
             Exploit Lab
           </Link>
-          <span className="text-white/20 text-xs">|</span>
           {badge && (
-            <span
-              className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"
-              style={{ color: badgeColor, borderColor: `${badgeColor}40`, backgroundColor: `${badgeColor}10` }}
-            >
-              {badge}
-            </span>
+            <>
+              <span className="text-white/20 text-xs">|</span>
+              <span
+                className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"
+                style={{ color: badgeColor, borderColor: `${badgeColor}40`, backgroundColor: `${badgeColor}10` }}
+              >
+                {badge}
+              </span>
+            </>
           )}
-          <h1 className="text-sm font-bold text-white">{title}</h1>
+          <div className="flex-grow" />
+          <h1 className="text-sm font-bold text-white whitespace-nowrap">{title}</h1>
           {subtitle && (
-            <span className="text-[10px] font-mono text-white/30">{subtitle}</span>
+            <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">{subtitle}</span>
           )}
         </div>
       </header>

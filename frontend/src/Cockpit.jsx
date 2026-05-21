@@ -13,7 +13,7 @@ export default function Cockpit({ ceoIntegrated = false }) {
       <TelemetryProvider>
         <WarRoomProvider>
         <div
-          className="flex flex-col lg:flex-row h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] min-h-0 overflow-hidden min-h-[100dvh]"
+          className="flex flex-col lg:flex-row h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] overflow-hidden"
           style={{
             background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #111827 0%, #09090b 50%, #030712 100%)',
           }}

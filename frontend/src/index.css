@@ -59,18 +59,18 @@ body {
   z-index: 1;
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   font-weight: 600;
   color: var(--accent-strong);
   white-space: nowrap;
 }
 .data-grid td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
 .data-grid tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* iOS-style toggle */
@@ -119,10 +119,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(34, 211, 238, 0.12);
-  padding: 0.5rem 1.25rem;
+  background: rgba(0, 0, 0, 0.80);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.15);
+  padding: 0.75rem 1.25rem;
 }
 
 .nav-link {
@@ -242,10 +242,14 @@ body {
 /* Panel base */
 .soc-panel {
   border-radius: 0.75rem;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  padding: 0.65rem;
+  background: rgba(0, 0, 0, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem;
   overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+.soc-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .soc-panel-killchain { flex: 1.5; min-height: 0; }
 .soc-panel-hex       { flex: 1;   min-height: 0; }
@@ -261,5 +265,27 @@ body {
   .soc-left,
   .soc-right {
     display: none;
+  }
+  .soc-header {
+    padding: 0.5rem 0.75rem;
+  }
+  .soc-header nav {
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .soc-header {
+    padding: 0.5rem;
+  }
+  .nav-link {
+    font-size: 0.65rem;
+  }
+  .soc-branding-frame {
+    margin: 0.25rem 0.5rem 0;
+    padding: 0.4rem 1rem;
+  }
+  .soc-title-ultimate {
+    font-size: 0.75rem;
   }
 }
