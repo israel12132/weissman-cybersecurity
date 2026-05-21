@@ -62,7 +62,7 @@ services:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:local
-    command: ["/usr/local/bin/weissman-worker"]
+    entrypoint: ["/usr/local/bin/weissman-worker"]
     environment:
       DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
       WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
