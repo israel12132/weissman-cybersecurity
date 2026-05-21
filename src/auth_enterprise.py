@@ -1,7 +1,11 @@
 """
-Weissman-cybersecurity Enterprise: RBAC + MFA (TOTP).
+Weissman-cybersecurity Enterprise: Password validation + MFA (TOTP).
 Roles: super_admin, security_analyst, viewer.
 MFA mandatory for all roles (pyotp, Google Authenticator compatible).
+
+NOTE: This module provides password validation and hashing utilities.
+      Authentication and authorization are now handled by the Rust backend (weissman-server).
+      The FastAPI-specific require_role() dependency has been removed.
 """
 import os
 import re
@@ -10,7 +14,6 @@ from typing import Annotated
 
 import pyotp
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from src.database import get_session_factory, UserModel
@@ -76,22 +79,30 @@ def get_user_by_email(db: Session, email: str) -> UserModel | None:
     return db.query(UserModel).filter(UserModel.email == email.strip().lower()).first()
 
 
-def require_role(min_role: str):
-    """Dependency: require at least min_role (super_admin > security_analyst > viewer)."""
-    def _inner(request: Request):
-        user = getattr(request.state, "user", None)
-        if not user:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        # Reject users with no recognised role (e.g. partially-constructed objects
-        # or test mocks that were not assigned a valid role string).
-        if not hasattr(user, "role") or user.role not in ROLE_HIERARCHY:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        u_level = ROLE_HIERARCHY.get(user.role, 0)
-        r_level = ROLE_HIERARCHY.get(min_role, 0)
-        if u_level < r_level:
-            raise HTTPException(status_code=403, detail="Insufficient role")
-        return user
-    return _inner
+def check_role_hierarchy(user_role: str, required_role: str) -> bool:
+    """
+    Check if user_role meets or exceeds required_role based on hierarchy.
+
+    Parameters
+    ----------
+    user_role : str
+        The role of the user
+    required_role : str
+        The minimum required role
+
+    Returns
+    -------
+    bool
+        True if user_role >= required_role in hierarchy
+
+    Note
+    ----
+    Role-based access control is now enforced by the Rust backend.
+    This function is a utility for any Python scripts that need to check roles.
+    """
+    u_level = ROLE_HIERARCHY.get(user_role, 0)
+    r_level = ROLE_HIERARCHY.get(required_role, 0)
+    return u_level >= r_level
 
 
 def ensure_user_exists(db: Session) -> None:

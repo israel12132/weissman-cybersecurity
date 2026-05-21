@@ -4,13 +4,15 @@ src/rate_limiter.py
 Per-tenant / per-IP rate limiting for expensive endpoints
 (scan trigger, deep-fuzz, command-center scan).
 
+NOTE: Rate limiting is now enforced by the Rust backend (weissman-server).
+This Python module provides the RateLimiter class for any remaining Python services
+or standalone utilities that need rate limiting functionality.
+
 Compatible with:
-  - REDIS_URL env var (same as celery_app.py)
-  - FastAPI dependency injection pattern used in app.py
-  - get_tenant_id (src/web/tenant.py)
+  - REDIS_URL env var (falls back to in-memory storage if Redis unavailable)
   - log_action (src/audit.py)
 
-Usage in app.py:
+Usage example (for Python services):
     from src.rate_limiter import RateLimiter
 
     _scan_limiter = RateLimiter(
@@ -19,23 +21,9 @@ Usage in app.py:
         window_seconds=60,   # … per 60 seconds per tenant
     )
 
-    @app.post("/api/scan/run-all")
-    async def run_all(
-        request: Request,
-        tenant_id: str = Depends(get_tenant_id),
-    ):
-        _scan_limiter.check(tenant_id or _client_ip(request))
-        ...
-
-    @app.post("/api/command-center/scan")
-    async def command_center_scan(
-        body: ScanRequest,
-        request: Request,
-        db: Session = Depends(get_db),
-        tenant_id: str = Depends(get_tenant_id),
-    ):
-        _cc_scan_limiter.check(tenant_id or _client_ip(request))
-        ...
+    # In your request handler:
+    _scan_limiter.check(tenant_id or client_ip)
+    # ... proceed with scan ...
 """
 
 import logging
