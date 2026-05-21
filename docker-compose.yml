@@ -66,6 +66,7 @@ services:
     environment:
       DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
       WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
     depends_on:
       backend:
         condition: service_healthy
