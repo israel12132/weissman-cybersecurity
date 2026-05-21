@@ -1,9 +1,10 @@
 """Alerting with delta filtering: only notify on NEW findings (Target + CVE/Anomaly) in last 24h.
 
 Supported channels:
-  - Telegram  (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)
-  - Slack     (SLACK_WEBHOOK_URL)
-  - Email     (SMTP_HOST + SMTP_PORT + SMTP_USER + SMTP_PASSWORD + ALERT_EMAIL_TO)
+  - Telegram   (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)
+  - Slack      (SLACK_WEBHOOK_URL)
+  - Email      (SMTP_HOST + SMTP_PORT + SMTP_USER + SMTP_PASSWORD + ALERT_EMAIL_TO)
+  - PagerDuty  (PAGERDUTY_ROUTING_KEY) — Events API v2 with auto-deduplication
 """
 import logging
 import os
@@ -116,6 +117,116 @@ def send_email_alert(subject: str, body: str) -> bool:
         logger.warning("Email alert failed: %s", exc)
         return False
 
+
+# ---------------------------------------------------------------------------
+# PagerDuty Events API v2
+# ---------------------------------------------------------------------------
+
+def send_pagerduty_alert(
+    summary: str,
+    severity: str = "critical",
+    source: str = "weissman-cybersecurity",
+    dedup_key: str | None = None,
+    custom_details: dict | None = None,
+) -> bool:
+    """
+    Send a trigger event to PagerDuty Events API v2.
+
+    Parameters
+    ----------
+    summary:
+        Brief text summary of the alert (e.g., "Critical XSS vulnerability in example.com").
+    severity:
+        One of: critical, error, warning, info. Defaults to critical.
+    source:
+        Source identifier (defaults to "weissman-cybersecurity").
+    dedup_key:
+        Deduplication key. If provided, PagerDuty will automatically dedupe events
+        with the same key. Recommended format: "{client_id}:{finding_title}".
+    custom_details:
+        Optional dict of additional data to include in the alert payload.
+
+    Returns
+    -------
+    bool
+        True if the event was successfully enqueued, False if not configured or request fails.
+
+    Notes
+    -----
+    Requires PAGERDUTY_ROUTING_KEY environment variable. If not set, returns False silently.
+    See: https://developer.pagerduty.com/docs/ZG9jOjExMDI5NTgw-events-api-v2-overview
+    """
+    routing_key = (os.getenv("PAGERDUTY_ROUTING_KEY") or "").strip()
+    if not routing_key:
+        return False
+    url = "https://events.pagerduty.com/v2/enqueue"
+    payload = {
+        "routing_key": routing_key,
+        "event_action": "trigger",
+        "payload": {
+            "summary": summary[:1024],
+            "severity": severity.lower() if severity.lower() in ("critical", "error", "warning", "info") else "critical",
+            "source": source[:255],
+        },
+    }
+    if dedup_key:
+        payload["dedup_key"] = dedup_key[:255]
+    if custom_details:
+        payload["payload"]["custom_details"] = custom_details
+    try:
+        r = safe_post(url, json=payload, timeout=ENTERPRISE_HTTP_TIMEOUT)
+        return r.status_code == 202  # PagerDuty returns 202 Accepted
+    except Exception as exc:
+        logger.warning("PagerDuty alert failed: %s", exc)
+        return False
+
+
+def resolve_pagerduty_alert(dedup_key: str) -> bool:
+    """
+    Send a resolve event to PagerDuty for a given dedup_key.
+
+    This should be called when a finding status is changed to "fixed" in the database.
+    Integration example (Python webhooks/background job):
+        from src.alerts import resolve_pagerduty_alert
+        from src.database import get_session_factory, VulnerabilityModel
+
+        # Monitor vulnerabilities table for status changes to FIXED
+        session = get_session_factory()()
+        vulns = session.query(VulnerabilityModel).filter(
+            VulnerabilityModel.status == "FIXED",
+            VulnerabilityModel.status_changed_at >= datetime.utcnow() - timedelta(minutes=5)
+        ).all()
+        for v in vulns:
+            dedup_key = f"{v.client_id}:{v.finding_id}"
+            resolve_pagerduty_alert(dedup_key)
+
+    Parameters
+    ----------
+    dedup_key:
+        The same deduplication key used when the alert was triggered.
+
+    Returns
+    -------
+    bool
+        True if the resolve event was successfully enqueued, False otherwise.
+    """
+    routing_key = (os.getenv("PAGERDUTY_ROUTING_KEY") or "").strip()
+    if not routing_key or not dedup_key:
+        return False
+    url = "https://events.pagerduty.com/v2/enqueue"
+    payload = {
+        "routing_key": routing_key,
+        "event_action": "resolve",
+        "dedup_key": dedup_key[:255],
+    }
+    try:
+        r = safe_post(url, json=payload, timeout=ENTERPRISE_HTTP_TIMEOUT)
+        return r.status_code == 202
+    except Exception as exc:
+        logger.warning("PagerDuty resolve failed: %s", exc)
+        return False
+
+
 def send_telegram_alert(message: str, parse_mode: str = "Markdown") -> bool:
     """
     Send a message to the configured Telegram chat via Bot API sendMessage.
@@ -184,10 +295,25 @@ def send_cve_alert_if_new(
     target: str,
     finding_id: str,
     message: str,
+    client_id: str | None = None,
+    severity: str = "critical",
 ) -> bool:
     """
-    Send CVE/finding alert (Telegram + Slack + email) only if (target, finding_id) was not
-    already alerted in the last 24 hours. Returns True if at least one channel succeeded.
+    Send CVE/finding alert (Telegram + Slack + Email + PagerDuty) only if (target, finding_id)
+    was not already alerted in the last 24 hours. Returns True if at least one channel succeeded.
+
+    Parameters
+    ----------
+    target:
+        Target URL or domain.
+    finding_id:
+        Unique identifier for the finding (CVE ID, vulnerability type, etc.).
+    message:
+        Alert message text.
+    client_id:
+        Optional client identifier for PagerDuty deduplication key.
+    severity:
+        Severity level for PagerDuty (critical, error, warning, info). Defaults to critical.
     """
     target = (target or "").strip()[:512]
     finding_id = (finding_id or "").strip()[:512]
@@ -198,7 +324,15 @@ def send_cve_alert_if_new(
     tg_ok = send_telegram_alert(message)
     slack_ok = send_slack_alert(message)
     email_ok = send_email_alert(f"[Weissman] Security Finding: {finding_id}", message)
-    if not (tg_ok or slack_ok or email_ok):
+    # PagerDuty with deduplication key: client_id:finding_id
+    dedup_key = f"{client_id or 'unknown'}:{finding_id}" if client_id else finding_id
+    pd_ok = send_pagerduty_alert(
+        summary=f"Critical security finding: {finding_id} on {target}",
+        severity=severity,
+        dedup_key=dedup_key,
+        custom_details={"target": target, "finding_id": finding_id, "message": message[:500]},
+    )
+    if not (tg_ok or slack_ok or email_ok or pd_ok):
         return False
     _record_alert_sent(target, finding_id)
     try:
