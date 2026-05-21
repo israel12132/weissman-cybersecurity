@@ -5,13 +5,15 @@
  * engine-to-phase mapping, live risk scoring, and chain-of-execution visualization.
  * Route: /kill-chain
  */
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 // ─── Kill Chain Phases ────────────────────────────────────────────────────────
 
-const PHASES = [
+// Fallback phases when API is unavailable
+const FALLBACK_PHASES = [
   {
     id: 'reconnaissance',
     label: 'Reconnaissance',
@@ -93,7 +95,8 @@ const PHASES = [
 
 // ─── Sample Chains ────────────────────────────────────────────────────────────
 
-const SAMPLE_CHAINS = [
+// Fallback chains when API is unavailable
+const FALLBACK_CHAINS = [
   {
     id: 'chain-001',
     name: 'Cloud-to-AD Lateral Movement',
@@ -169,20 +172,78 @@ const SEVERITY_META = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function KillChainOrchestrator() {
-  const [activeChain, setActiveChain] = useState(SAMPLE_CHAINS[0])
+  const [phases, setPhases] = useState([])
+  const [chains, setChains] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [activeChain, setActiveChain] = useState(null)
   const [activePhase, setActivePhase] = useState(null)
   const [filterSeverity, setFilterSeverity] = useState('all')
 
+  // Load kill chain data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Fetch kill chain phases
+        const phasesRes = await apiFetch('/api/kill-chain/phases')
+        if (phasesRes.ok) {
+          const phasesData = await phasesRes.json()
+          setPhases(Array.isArray(phasesData) ? phasesData : phasesData.phases || [])
+        } else if (phasesRes.status === 404) {
+          // API not implemented, use fallback
+          setPhases(FALLBACK_PHASES)
+        } else {
+          throw new Error(`Failed to load phases (HTTP ${phasesRes.status})`)
+        }
+
+        // Fetch attack chains
+        const chainsRes = await apiFetch('/api/kill-chain/chains')
+        if (chainsRes.ok) {
+          const chainsData = await chainsRes.json()
+          const chainsArray = Array.isArray(chainsData) ? chainsData : chainsData.chains || []
+          setChains(chainsArray)
+          if (chainsArray.length > 0) {
+            setActiveChain(chainsArray[0])
+          }
+        } else if (chainsRes.status === 404) {
+          // API not implemented, use fallback
+          setChains(FALLBACK_CHAINS)
+          setActiveChain(FALLBACK_CHAINS[0])
+        } else {
+          throw new Error(`Failed to load attack chains (HTTP ${chainsRes.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load kill chain data')
+        // Use fallback data on error
+        setPhases(FALLBACK_PHASES)
+        setChains(FALLBACK_CHAINS)
+        setActiveChain(FALLBACK_CHAINS[0])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
   const filteredChains = useMemo(
     () => filterSeverity === 'all'
-      ? SAMPLE_CHAINS
-      : SAMPLE_CHAINS.filter((c) => c.severity === filterSeverity),
-    [filterSeverity],
+      ? chains
+      : chains.filter((c) => c.severity === filterSeverity),
+    [chains, filterSeverity],
   )
 
   const overallRisk = useMemo(
-    () => Math.round(SAMPLE_CHAINS.reduce((a, c) => a + c.riskScore, 0) / SAMPLE_CHAINS.length),
-    [],
+    () => chains.length > 0 ? Math.round(chains.reduce((a, c) => a + c.riskScore, 0) / chains.length) : 0,
+    [chains],
+  )
+
+  const totalTechniques = useMemo(
+    () => chains.reduce((a, c) => a + c.techniques.length, 0),
+    [chains],
   )
 
   return (
@@ -192,39 +253,68 @@ export default function KillChainOrchestrator() {
       badge="ATT&CK"
       badgeColor="#ef4444"
     >
+      {/* ── Error Banner ── */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading State ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-red-500/40 border-t-red-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading kill chain data...</p>
+          </div>
+        </div>
+      )}
+
       {/* ── KPI Bar ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Active Chains', value: SAMPLE_CHAINS.length, color: '#22d3ee' },
-          { label: 'Avg Risk Score', value: `${overallRisk}/100`, color: '#ef4444' },
-          { label: 'Techniques Mapped', value: SAMPLE_CHAINS.reduce((a, c) => a + c.techniques.length, 0), color: '#f97316' },
-          { label: 'Phases Covered', value: PHASES.length, color: '#10b981' },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-            <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
-          </div>
-        ))}
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Active Chains', value: chains.length, color: '#22d3ee' },
+            { label: 'Avg Risk Score', value: `${overallRisk}/100`, color: '#ef4444' },
+            { label: 'Techniques Mapped', value: totalTechniques, color: '#f97316' },
+            { label: 'Phases Covered', value: phases.length, color: '#10b981' },
+          ].map((kpi) => (
+            <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+              <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+              <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Left: Chain List ── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-white/80">Attack Chains</h2>
-            <select
-              value={filterSeverity}
-              onChange={(e) => setFilterSeverity(e.target.value)}
-              className="text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white/60 focus:outline-none"
-            >
-              <option value="all">All Severity</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-            </select>
-          </div>
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ── Left: Chain List ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-white/80">Attack Chains</h2>
+              <select
+                value={filterSeverity}
+                onChange={(e) => setFilterSeverity(e.target.value)}
+                className="text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white/60 focus:outline-none"
+              >
+                <option value="all">All Severity</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+              </select>
+            </div>
 
-          {filteredChains.map((chain) => {
+            {filteredChains.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-12 text-center">
+                <p className="text-sm text-white/40">No attack chains found</p>
+              </div>
+            ) : (
+              filteredChains.map((chain) => {
             const sm = SEVERITY_META[chain.severity] ?? SEVERITY_META.medium
             const progress = Math.round((chain.completedPhases / chain.totalPhases) * 100)
             return (
@@ -254,14 +344,15 @@ export default function KillChainOrchestrator() {
                   <span>{chain.completedPhases}/{chain.totalPhases} phases</span>
                   <span>Risk: <span className="font-mono" style={{ color: sm.color }}>{chain.riskScore}</span></span>
                 </div>
-              </motion.button>
-            )
-          })}
-        </div>
+                </motion.button>
+              )
+              })
+            )}
+          </div>
 
-        {/* ── Center: Phase Timeline ── */}
-        <div className="lg:col-span-2 space-y-4">
-          {activeChain && (
+          {/* ── Center: Phase Timeline ── */}
+          <div className="lg:col-span-2 space-y-4">
+            {activeChain && (
             <>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5 mb-2">
                 <div className="flex items-start justify-between gap-4 mb-3">
@@ -290,7 +381,7 @@ export default function KillChainOrchestrator() {
 
               {/* Phase pipeline */}
               <div className="space-y-2">
-                {PHASES.map((phase, idx) => {
+                {phases.map((phase, idx) => {
                   const findings = activeChain.phaseFindings[phase.id] ?? []
                   const isCompleted = idx < activeChain.completedPhases
                   const isActive = idx === activeChain.completedPhases
@@ -395,11 +486,12 @@ export default function KillChainOrchestrator() {
                     </motion.div>
                   )
                 })}
-              </div>
-            </>
-          )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </PageShell>
   )
 }
