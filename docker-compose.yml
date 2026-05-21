@@ -9,9 +9,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: weissman
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-weissman}
     volumes:
       - weissman_pg:/var/lib/postgresql/data
     ports:
@@ -23,15 +23,25 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:local
     environment:
-      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
-      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
-      WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@postgres:5432/weissman
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
+      REDIS_URL: redis://redis:6379/0
       WEISSMAN_PUBLIC_BASE_URL: http://localhost
       WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
@@ -46,6 +56,8 @@ services:
       - "8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       # PORT env var defaults to 8000 - see backend environment section
@@ -64,21 +76,24 @@ services:
     image: weissman-backend:local
     entrypoint: ["/usr/local/bin/weissman-worker"]
     environment:
-      DATABASE_URL: postgresql://weissman_app:weissman_dev_secret@postgres:5432/weissman
-      WEISSMAN_AUTH_DATABASE_URL: postgresql://weissman_auth:weissman_auth_dev@postgres:5432/weissman
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
     depends_on:
       backend:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      # Check that weissman-worker binary is running (not just any matching process)
-      test: ["CMD-SHELL", "pgrep -x weissman-worker"]
+      # Fallback check: verify pgrep exists, otherwise check /proc directly
+      test: ["CMD-SHELL", "pgrep -x weissman-worker || test -d /proc/1 && cat /proc/1/comm | grep -q weissman-worker"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
     restart: unless-stopped
 
   gateway:
