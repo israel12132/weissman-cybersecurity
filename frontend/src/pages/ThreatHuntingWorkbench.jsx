@@ -5,11 +5,12 @@
  * hypothesis-driven hunting with YARA-like queries, hunt results.
  * Route: /threat-hunting
  */
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const HUNT_STATUS_META = {
   active:    { label: 'ACTIVE',    color: '#22d3ee' },
@@ -18,7 +19,8 @@ const HUNT_STATUS_META = {
   queued:    { label: 'QUEUED',    color: '#8b5cf6' },
 }
 
-const CAMPAIGNS = [
+// Fallback campaigns when API is unavailable
+const FALLBACK_CAMPAIGNS = [
   {
     id: 'hunt-007',
     title: 'Living-off-the-land Binaries (LOLBins) Abuse',
