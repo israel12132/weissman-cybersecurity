@@ -1,21 +1,20 @@
-# Celery worker: runs scan + fuzz tasks (invokes Rust when needed)
+# DEPRECATED: Celery worker replaced with Rust-based weissman-worker
+#
+# The Python Celery worker has been removed and replaced with the Rust
+# weissman-worker crate. This Dockerfile is kept for historical reference only.
+#
+# For production, use:
+#   docker build -f deploy/backend.Dockerfile .
+#
+# Or use the Rust worker directly:
+#   cargo run -p weissman-worker
+#
+# This file will be removed in a future cleanup.
+
 FROM python:3.12-slim
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt celery[redis]
-
-COPY . .
-# Optional: build Rust fingerprint_engine here
-# RUN apt-get install -y rustc cargo && cd fingerprint_engine && cargo build --release
-ENV PYTHONPATH=/app
-
-CMD ["celery", "-A", "src.celery_app", "worker", "-l", "info", "-Q", "default,scan,fuzz", "-c", "4"]
+# Intentionally fail with clear error message
+CMD ["sh", "-c", "echo 'ERROR: Dockerfile.worker is deprecated. Use deploy/backend.Dockerfile or cargo run -p weissman-worker' >&2; exit 1"]

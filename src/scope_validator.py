@@ -3,23 +3,26 @@ src/scope_validator.py
 ======================
 Server-Side Request Forgery (SSRF) protection for scan endpoints.
 
+NOTE: SSRF protection is now enforced by the Rust backend (weissman-server).
+This Python module provides the validation logic for any remaining Python services
+or standalone utilities.
+
 Two-layer defence:
   1. Block any target whose hostname resolves to a private/reserved IP address
      (loopback, RFC-1918, link-local, metadata service IPs, IPv6 equivalents).
   2. Verify that the requested hostname belongs to a domain that is in-scope for
      the current tenant's approved clients (exact match or subdomain).
 
-Usage in a route handler::
+Usage example (for Python services)::
 
     from src.scope_validator import validate_scan_target, ScopeViolation
 
-    @app.post("/api/command-center/scan")
-    async def command_center_scan(body: ScanRequest, ...):
-        try:
-            validate_scan_target(body.target, tenant_id=tenant_id, db=db)
-        except ScopeViolation as exc:
-            return JSONResponse({"error": str(exc)}, status_code=403)
-        ...
+    # In your request handler:
+    try:
+        validate_scan_target(target_url, tenant_id=tenant_id, db=db)
+    except ScopeViolation as exc:
+        # Handle the error
+        raise ValueError(str(exc))
 
 Set ``BYPASS_SSRF_CHECK=1`` **only** in isolated lab environments — never in
 production.

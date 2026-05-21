@@ -3,18 +3,21 @@ tests/unit/test_auth_enterprise.py
 ===================================
 Unit tests for authentication and authorization module.
 
+NOTE: FastAPI-specific require_role() dependency has been removed as authentication
+      is now handled by the Rust backend (weissman-server). Tests updated to focus
+      on password validation, hashing, and role hierarchy checking.
+
 Run with: pytest tests/unit/test_auth_enterprise.py -v
 """
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from fastapi import Request, HTTPException
 
 from src.auth_enterprise import (
     validate_password,
     hash_password,
     verify_password,
-    require_role,
+    check_role_hierarchy,
     ROLE_HIERARCHY,
 )
 from src.exceptions import InvalidPasswordError, InsufficientRoleError
@@ -166,82 +169,33 @@ class TestVerifyPassword:
         assert verify_password(similar, hashed) is False
 
 
-class TestRequireRole:
-    """Tests for role-based access control."""
+class TestRoleHierarchy:
+    """Tests for role hierarchy checking."""
 
-    def test_allows_matching_role(self):
+    def test_allows_exact_role(self):
         """Should allow user with exact role."""
-        mock_request = Mock(spec=Request)
-        mock_user = Mock()
-        mock_user.role = "security_analyst"
-        mock_request.state.user = mock_user
-
-        dependency = require_role("security_analyst")
-        result = dependency(mock_request)
-
-        assert result == mock_user
+        assert check_role_hierarchy("security_analyst", "security_analyst") is True
 
     def test_allows_higher_role(self):
         """Should allow user with higher role."""
-        mock_request = Mock(spec=Request)
-        mock_user = Mock()
-        mock_user.role = "super_admin"
-        mock_request.state.user = mock_user
-
-        # super_admin should have access to security_analyst endpoints
-        dependency = require_role("security_analyst")
-        result = dependency(mock_request)
-
-        assert result == mock_user
+        # super_admin should have access to security_analyst level
+        assert check_role_hierarchy("super_admin", "security_analyst") is True
+        # security_analyst should have access to viewer level
+        assert check_role_hierarchy("security_analyst", "viewer") is True
 
     def test_blocks_lower_role(self):
         """Should block user with lower role."""
-        mock_request = Mock(spec=Request)
-        mock_user = Mock()
-        mock_user.role = "viewer"
-        mock_request.state.user = mock_user
+        assert check_role_hierarchy("viewer", "security_analyst") is False
+        assert check_role_hierarchy("viewer", "super_admin") is False
+        assert check_role_hierarchy("security_analyst", "super_admin") is False
 
-        dependency = require_role("security_analyst")
-
-        with pytest.raises(HTTPException) as exc_info:
-            dependency(mock_request)
-
-        assert exc_info.value.status_code == 403
-        assert "Insufficient role" in exc_info.value.detail
-
-    def test_blocks_unauthenticated_user(self):
-        """Should block request with no authenticated user."""
-        mock_request = Mock(spec=Request)
-        mock_request.state.user = None
-
-        dependency = require_role("viewer")
-
-        with pytest.raises(HTTPException) as exc_info:
-            dependency(mock_request)
-
-        assert exc_info.value.status_code == 401
-        assert "Not authenticated" in exc_info.value.detail
-
-    def test_blocks_missing_user_attribute(self):
-        """Should block when user attribute doesn't exist."""
-        mock_request = Mock(spec=Request)
-        # Don't set request.state.user at all
-
-        dependency = require_role("viewer")
-
-        with pytest.raises(HTTPException) as exc_info:
-            dependency(mock_request)
-
-        assert exc_info.value.status_code == 401
-
-    def test_role_hierarchy_order(self):
-        """Should enforce correct role hierarchy."""
-        assert ROLE_HIERARCHY["super_admin"] > ROLE_HIERARCHY["security_analyst"]
-        assert ROLE_HIERARCHY["security_analyst"] > ROLE_HIERARCHY["viewer"]
-
-
-class TestRoleHierarchy:
-    """Tests for role hierarchy values."""
+    def test_unknown_role_returns_false(self):
+        """Should return False for unknown user role, but unknown required role defaults to level 0."""
+        # Unknown user role should return False
+        assert check_role_hierarchy("unknown_role", "viewer") is False
+        # Unknown required role defaults to 0, so any known role passes
+        # This is by design - if a required role is not in hierarchy, it's treated as no requirement
+        assert check_role_hierarchy("viewer", "unknown_role") is True
 
     def test_super_admin_highest(self):
         """Super admin should have highest privilege level."""
@@ -261,6 +215,11 @@ class TestRoleHierarchy:
         assert "super_admin" in ROLE_HIERARCHY
         assert "security_analyst" in ROLE_HIERARCHY
         assert "viewer" in ROLE_HIERARCHY
+
+    def test_role_hierarchy_order(self):
+        """Should enforce correct role hierarchy."""
+        assert ROLE_HIERARCHY["super_admin"] > ROLE_HIERARCHY["security_analyst"]
+        assert ROLE_HIERARCHY["security_analyst"] > ROLE_HIERARCHY["viewer"]
 
 
 class TestPasswordPolicyEdgeCases:
@@ -311,16 +270,14 @@ class TestAuthenticationIntegration:
         assert verify_password("WrongPass123!", hashed) is False
 
     def test_role_escalation_prevention(self):
-        """Should prevent role escalation."""
-        mock_request = Mock(spec=Request)
-        mock_user = Mock()
-        mock_user.role = "viewer"
-        mock_request.state.user = mock_user
+        """Should prevent role escalation via hierarchy check."""
+        # Viewer tries to access admin functionality
+        assert check_role_hierarchy("viewer", "super_admin") is False
 
-        # Viewer tries to access admin endpoint
-        admin_only = require_role("super_admin")
+        # Security analyst tries to access super admin functionality
+        assert check_role_hierarchy("security_analyst", "super_admin") is False
 
-        with pytest.raises(HTTPException) as exc_info:
-            admin_only(mock_request)
-
-        assert exc_info.value.status_code == 403
+        # Super admin can access everything
+        assert check_role_hierarchy("super_admin", "super_admin") is True
+        assert check_role_hierarchy("super_admin", "security_analyst") is True
+        assert check_role_hierarchy("super_admin", "viewer") is True

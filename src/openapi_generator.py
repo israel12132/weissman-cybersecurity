@@ -516,19 +516,36 @@ def save_openapi_spec(output_path: str = "openapi.json"):
     logger.info("openapi: saved specification to %s", output_path)
 
 
+# DEPRECATED: Flask-based Swagger UI server removed
+# Swagger UI is now served by the Rust backend (weissman-server).
+# Access it at: http://localhost:8000/docs or configure with WEISSMAN_SWAGGER_UI_PATH
+#
+# The serve_swagger_ui() function below is kept as a standalone development utility only.
+# It requires: pip install flask flask-swagger-ui
+# Usage: python -c "from src.openapi_generator import serve_swagger_ui; serve_swagger_ui()"
+
+
 def serve_swagger_ui(port: int = 8081):
     """
-    Serve Swagger UI for API documentation.
+    [DEPRECATED - Development utility only]
+    Serve Swagger UI for API documentation using Flask.
+
+    This function is deprecated for production use. The Rust backend now serves Swagger UI.
+    Use this only for standalone development/testing of OpenAPI specs.
 
     Parameters
     ----------
     port : int
-        HTTP server port
+        HTTP server port (default: 8081)
+
+    Requires
+    --------
+    Flask and flask-swagger-ui (not in production requirements.txt)
 
     Examples
     --------
     >>> serve_swagger_ui(port=8081)
-    # Open browser: http://localhost:8081
+    # Open browser: http://localhost:8081/docs
     """
     try:
         from flask import Flask, jsonify
@@ -553,6 +570,7 @@ def serve_swagger_ui(port: int = 8081):
             return jsonify(get_openapi_spec())
 
         logger.info("openapi: Swagger UI available at http://localhost:%d/docs", port)
+        logger.warning("openapi: serve_swagger_ui() is deprecated - use Rust backend for production")
         app.run(port=port)
 
     except ImportError as exc:

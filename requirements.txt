@@ -58,9 +58,8 @@ prometheus-client>=0.17.0
 hvac>=1.2.0  # HashiCorp Vault client
 cryptography>=41.0.0  # Field-level encryption
 
-# --- API Documentation ---
-flask>=3.0.0
-flask-swagger-ui>=4.11.0
+# NOTE: Flask and flask-swagger-ui removed - Swagger UI now served by Rust backend
+# (see openapi_generator.py for optional standalone Flask utility if needed for development)
 
 # --- E2E Testing ---
 playwright>=1.40.0
