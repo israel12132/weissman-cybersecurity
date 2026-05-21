@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Factory, Cpu, AlertTriangle, Activity, Zap } from 'lucide-react';
+import { Factory, Cpu, AlertTriangle, Activity, Zap, CheckCircle } from 'lucide-react';
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 /**
  * OtIcsSecurity - OT/ICS/IoT Security Dashboard
@@ -19,23 +20,33 @@ export default function OtIcsSecurity() {
   const [devices, setDevices] = useState([]);
   const [protocols, setProtocols] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchOtDevices();
   }, []);
 
   const fetchOtDevices = async () => {
+    setLoading(true)
+    setError(null)
+
     try {
-      const response = await fetch('/api/ot-ics/devices', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/ot-ics/devices')
       if (response.ok) {
         const data = await response.json();
         setDevices(data.devices || []);
         setProtocols(data.protocols || []);
+      } else if (response.status === 404) {
+        // API not implemented, use empty state
+        setDevices([]);
+        setProtocols([]);
+      } else {
+        throw new Error(`Failed to load OT devices (HTTP ${response.status})`)
       }
-    } catch (error) {
-      console.error('Failed to fetch OT devices:', error);
+    } catch (err) {
+      setError(err?.message || 'Failed to fetch OT devices')
+      setDevices([]);
+      setProtocols([]);
     } finally {
       setLoading(false);
     }
@@ -51,6 +62,17 @@ export default function OtIcsSecurity() {
   return (
     <PageShell title="OT / ICS / IoT Security" icon={<Factory />}>
       <div className="space-y-6">
+        {/* Error Banner */}
+        {error && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 text-sm">⚠️</span>
+              <span className="text-xs font-mono text-amber-300/80">{error}</span>
+              <span className="text-[10px] text-amber-300/50 ml-auto">Demo mode</span>
+            </div>
+          </div>
+        )}
+
         {/* Device Type Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {deviceTypes.map(({ type, count, icon: Icon, color }) => (

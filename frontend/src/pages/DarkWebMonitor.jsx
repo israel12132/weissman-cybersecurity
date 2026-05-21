@@ -5,13 +5,15 @@
  * ransomware group intelligence, breach feed, dark web forum mentions.
  * Route: /dark-web
  */
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const CREDENTIAL_LEAKS = [
+// Fallback credential leaks when API is unavailable
+const FALLBACK_CREDENTIAL_LEAKS = [
   {
     id: 'leak-001',
     source: 'BreachForums',
@@ -50,7 +52,8 @@ const CREDENTIAL_LEAKS = [
   },
 ]
 
-const RANSOMWARE_GROUPS = [
+// Fallback ransomware groups when API is unavailable
+const FALLBACK_RANSOMWARE_GROUPS = [
   {
     id: 'lockbit',
     name: 'LockBit 3.0',
@@ -105,7 +108,8 @@ const RANSOMWARE_GROUPS = [
   },
 ]
 
-const DARK_WEB_MENTIONS = [
+// Fallback dark web mentions when API is unavailable
+const FALLBACK_DARK_WEB_MENTIONS = [
   { id: 'm-1', ts: '2026-04-20 14:22', source: 'BreachForums',  severity: 'critical', text: '"acmecorp.com" admin panel credentials for sale — $500 BTC. Full DB access.', verified: true },
   { id: 'm-2', ts: '2026-04-20 09:15', source: 'Dread Forum',   severity: 'high',     text: 'Thread: "ACME Corp VPN bypass — works on GlobalProtect 5.2.x, no auth needed"', verified: true },
   { id: 'm-3', ts: '2026-04-19 22:44', source: 'Telegram',      severity: 'high',     text: 'New botnet targeting acmecorp[.]com DNS infra. 2.3k bots active.', verified: false },
@@ -275,21 +279,61 @@ function MentionRow({ mention, index }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DarkWebMonitor() {
+  const [credentialLeaks, setCredentialLeaks] = useState([])
+  const [ransomwareGroups, setRansomwareGroups] = useState([])
+  const [darkWebMentions, setDarkWebMentions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeSection, setActiveSection] = useState('leaks') // 'leaks' | 'ransomware' | 'mentions'
   const [selectedRg, setSelectedRg] = useState(null)
 
-  const metrics = useMemo(() => {
-    const totalRecords = CREDENTIAL_LEAKS.reduce((s, l) => s + l.recordCount, 0)
-    const critLeaks = CREDENTIAL_LEAKS.filter((l) => l.severity === 'critical').length
-    const activeRg = RANSOMWARE_GROUPS.filter((r) => r.status === 'active').length
-    const critMentions = DARK_WEB_MENTIONS.filter((m) => m.severity === 'critical').length
-    return { totalRecords, critLeaks, activeRg, critMentions }
+  // Load dark web data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const res = await apiFetch('/api/dark-web')
+        if (res.ok) {
+          const data = await res.json()
+          setCredentialLeaks(data.credentialLeaks || data.leaks || FALLBACK_CREDENTIAL_LEAKS)
+          setRansomwareGroups(data.ransomwareGroups || data.groups || FALLBACK_RANSOMWARE_GROUPS)
+          setDarkWebMentions(data.darkWebMentions || data.mentions || FALLBACK_DARK_WEB_MENTIONS)
+        } else if (res.status === 404) {
+          // API not implemented, use fallback
+          setCredentialLeaks(FALLBACK_CREDENTIAL_LEAKS)
+          setRansomwareGroups(FALLBACK_RANSOMWARE_GROUPS)
+          setDarkWebMentions(FALLBACK_DARK_WEB_MENTIONS)
+        } else {
+          throw new Error(`Failed to load dark web data (HTTP ${res.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load dark web intelligence')
+        // Use fallback data on error
+        setCredentialLeaks(FALLBACK_CREDENTIAL_LEAKS)
+        setRansomwareGroups(FALLBACK_RANSOMWARE_GROUPS)
+        setDarkWebMentions(FALLBACK_DARK_WEB_MENTIONS)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
   }, [])
 
+  const metrics = useMemo(() => {
+    const totalRecords = credentialLeaks.reduce((s, l) => s + l.recordCount, 0)
+    const critLeaks = credentialLeaks.filter((l) => l.severity === 'critical').length
+    const activeRg = ransomwareGroups.filter((r) => r.status === 'active').length
+    const critMentions = darkWebMentions.filter((m) => m.severity === 'critical').length
+    return { totalRecords, critLeaks, activeRg, critMentions }
+  }, [credentialLeaks, ransomwareGroups, darkWebMentions])
+
   const sections = [
-    { id: 'leaks',      label: '🔑 Credential Leaks',   count: CREDENTIAL_LEAKS.length,    color: '#ef4444' },
-    { id: 'ransomware', label: '💀 Ransomware Groups',  count: RANSOMWARE_GROUPS.length,   color: '#f97316' },
-    { id: 'mentions',   label: '🕵️ Dark Web Mentions', count: DARK_WEB_MENTIONS.length,   color: '#8b5cf6' },
+    { id: 'leaks',      label: '🔑 Credential Leaks',   count: credentialLeaks.length,    color: '#ef4444' },
+    { id: 'ransomware', label: '💀 Ransomware Groups',  count: ransomwareGroups.length,   color: '#f97316' },
+    { id: 'mentions',   label: '🕵️ Dark Web Mentions', count: darkWebMentions.length,   color: '#8b5cf6' },
   ]
 
   return (
@@ -299,6 +343,29 @@ export default function DarkWebMonitor() {
       badge="LIVE"
       badgeColor="#ef4444"
     >
+      {/* Error Banner */}
+      {error && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-6">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading dark web intelligence...</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+        <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <MetricCard label="Exposed Records"     value={metrics.totalRecords.toLocaleString()} sub="Across all monitored leaks"   color="#ef4444" icon="🔑" />
@@ -329,30 +396,44 @@ export default function DarkWebMonitor() {
       <AnimatePresence mode="wait">
         {activeSection === 'leaks' && (
           <motion.div key="leaks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            {CREDENTIAL_LEAKS.map((leak) => (
-              <CredentialLeakCard key={leak.id} leak={leak} />
-            ))}
+            {credentialLeaks.length === 0 ? (
+              <div className="py-12 text-center text-white/40">No credential leaks found</div>
+            ) : (
+              credentialLeaks.map((leak) => (
+                <CredentialLeakCard key={leak.id} leak={leak} />
+              ))
+            )}
           </motion.div>
         )}
 
         {activeSection === 'ransomware' && (
           <motion.div key="ransomware" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            {RANSOMWARE_GROUPS.map((group) => (
-              <RansomwareGroupCard key={group.id} group={group} selected={selectedRg} onSelect={setSelectedRg} />
-            ))}
+            {ransomwareGroups.length === 0 ? (
+              <div className="py-12 text-center text-white/40">No ransomware groups tracked</div>
+            ) : (
+              ransomwareGroups.map((group) => (
+                <RansomwareGroupCard key={group.id} group={group} selected={selectedRg} onSelect={setSelectedRg} />
+              ))
+            )}
           </motion.div>
         )}
 
         {activeSection === 'mentions' && (
           <motion.div key="mentions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 px-5">
-              {DARK_WEB_MENTIONS.map((m, i) => (
-                <MentionRow key={m.id} mention={m} index={i} />
-              ))}
+              {darkWebMentions.length === 0 ? (
+                <div className="py-12 text-center text-white/40">No dark web mentions found</div>
+              ) : (
+                darkWebMentions.map((m, i) => (
+                  <MentionRow key={m.id} mention={m} index={i} />
+                ))
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      </>
+      )}
     </PageShell>
   )
 }

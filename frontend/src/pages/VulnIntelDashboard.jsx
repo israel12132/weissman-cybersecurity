@@ -5,9 +5,10 @@
  * scoring, patch status tracking, risk matrix, and CVE timeline.
  * Route: /vuln-intel
  */
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -18,7 +19,8 @@ const CVSS_COLOR = (score) => {
   return '#22d3ee'
 }
 
-const VULN_DB = [
+// Fallback vulnerability database when API is unavailable
+const FALLBACK_VULN_DB = [
   {
     id: 'CVE-2024-3400',
     title: 'PAN-OS Command Injection (GlobalProtect)',
@@ -289,13 +291,57 @@ function MetricCard({ label, value, sub, color, icon }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function VulnIntelDashboard() {
-  const [selectedId, setSelectedId] = useState(VULN_DB[0].id)
+  const [vulnDb, setVulnDb] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
   const [search, setSearch] = useState('')
   const [filterExploited, setFilterExploited] = useState(false)
   const [filterKev, setFilterKev] = useState(false)
 
+  // Load vulnerability data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const res = await apiFetch('/api/vuln-intel')
+        if (res.ok) {
+          const data = await res.json()
+          const vulnerabilities = Array.isArray(data) ? data : data.vulnerabilities || []
+          setVulnDb(vulnerabilities.length > 0 ? vulnerabilities : FALLBACK_VULN_DB)
+          if (!selectedId && vulnerabilities.length > 0) {
+            setSelectedId(vulnerabilities[0].id)
+          } else if (!selectedId && FALLBACK_VULN_DB.length > 0) {
+            setSelectedId(FALLBACK_VULN_DB[0].id)
+          }
+        } else if (res.status === 404) {
+          // API not implemented, use fallback
+          setVulnDb(FALLBACK_VULN_DB)
+          if (!selectedId) {
+            setSelectedId(FALLBACK_VULN_DB[0].id)
+          }
+        } else {
+          throw new Error(`Failed to load vulnerabilities (HTTP ${res.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load vulnerability intelligence')
+        // Use fallback data on error
+        setVulnDb(FALLBACK_VULN_DB)
+        if (!selectedId) {
+          setSelectedId(FALLBACK_VULN_DB[0].id)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
   const filtered = useMemo(() => {
-    let list = [...VULN_DB].sort((a, b) => b.cvss - a.cvss)
+    let list = [...vulnDb].sort((a, b) => b.cvss - a.cvss)
     if (filterExploited) list = list.filter((v) => v.exploited)
     if (filterKev) list = list.filter((v) => v.kev)
     if (search.trim()) {
@@ -309,17 +355,17 @@ export default function VulnIntelDashboard() {
       )
     }
     return list
-  }, [search, filterExploited, filterKev])
+  }, [vulnDb, search, filterExploited, filterKev])
 
-  const selected = useMemo(() => VULN_DB.find((v) => v.id === selectedId), [selectedId])
+  const selected = useMemo(() => vulnDb.find((v) => v.id === selectedId), [vulnDb, selectedId])
 
   const metrics = useMemo(() => {
-    const critical = VULN_DB.filter((v) => v.cvss >= 9.0).length
-    const exploited = VULN_DB.filter((v) => v.exploited).length
-    const kev = VULN_DB.filter((v) => v.kev).length
-    const avgCvss = (VULN_DB.reduce((s, v) => s + v.cvss, 0) / VULN_DB.length).toFixed(1)
+    const critical = vulnDb.filter((v) => v.cvss >= 9.0).length
+    const exploited = vulnDb.filter((v) => v.exploited).length
+    const kev = vulnDb.filter((v) => v.kev).length
+    const avgCvss = vulnDb.length > 0 ? (vulnDb.reduce((s, v) => s + v.cvss, 0) / vulnDb.length).toFixed(1) : '0.0'
     return { critical, exploited, kev, avgCvss }
-  }, [])
+  }, [vulnDb])
 
   const pm = selected ? (PATCH_STATUS_META[selected.patchStatus] ?? { label: selected.patchStatus.toUpperCase(), color: '#6b7280' }) : null
   const em = selected ? (EXPLOIT_META[selected.exploitMaturity] ?? EXPLOIT_META.theoretical) : null
@@ -327,10 +373,33 @@ export default function VulnIntelDashboard() {
   return (
     <PageShell
       title="Vulnerability Intelligence"
-      subtitle={`${VULN_DB.length} CVEs tracked · CVSS prioritized`}
+      subtitle={`${vulnDb.length} CVEs tracked · CVSS prioritized`}
       badge="CVE"
       badgeColor="#f97316"
     >
+      {/* Error Banner */}
+      {error && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-6">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-red-500/40 border-t-red-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading vulnerability intelligence...</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+        <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <MetricCard label="Critical CVEs"     value={metrics.critical}  sub="CVSS ≥ 9.0"           color="#ef4444" icon="🔴" />
@@ -492,6 +561,8 @@ export default function VulnIntelDashboard() {
           )}
         </AnimatePresence>
       </div>
+      </>
+      )}
     </PageShell>
   )
 }
