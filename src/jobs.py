@@ -1,6 +1,13 @@
 """
 Weissman-cybersecurity: Background job logic (shared by APScheduler in-process or Celery workers).
 Heavy tasks (orchestrator, discovery, supply chain, CVE check) run here for distributed scale.
+
+RECOMMENDED INTERVALS:
+- orchestrator_cycle (dark web, exploit matching, autonomous recon): 10 minutes (600s)
+- autonomous_intel_harvester_job (payload ingestion): 15 minutes (900s)
+- auto_check_job (CVE correlation, delta scan): 5 minutes (300s)
+- discovery_job (subdomain discovery): 12 hours (43200s)
+- supply_chain_job (NPM/PyPI scanning): 24 hours (86400s)
 """
 import json
 import logging
@@ -33,6 +40,13 @@ from src.region_manager import should_process_tenant
 from src.intel_harvester import harvest_and_merge
 
 logger = logging.getLogger(__name__)
+
+# Recommended job intervals (in seconds) for scheduling systems (APScheduler/Celery/cron)
+ORCHESTRATOR_CYCLE_INTERVAL = 600  # 10 minutes - dark web scan, exploit matching, autonomous recon
+INTEL_HARVESTER_INTERVAL = 900     # 15 minutes - payload ingestion from GitHub/Dark Web
+AUTO_CHECK_INTERVAL = 300          # 5 minutes  - CVE correlation, delta scan
+DISCOVERY_INTERVAL = 43200         # 12 hours   - subdomain discovery
+SUPPLY_CHAIN_INTERVAL = 86400      # 24 hours   - NPM/PyPI scanning
 
 
 def _sync_run_findings_to_vulnerabilities(db, run_id: int, tenant_id: int | None, findings_serializable: list) -> None:
@@ -389,6 +403,10 @@ def orchestrator_cycle() -> None:
     """
     One cycle: Dark Web scan (all clients) -> if match: Telegram + Fuzzer;
     then auto_check, recon+fuzz, exploit matching.
+
+    RECOMMENDED INTERVAL: 10 minutes (600 seconds).
+    Dark web scanning includes Tor connectivity check (_check_tor_connectivity)
+    with killswitch to prevent IP leakage if Tor proxy fails.
     """
     port = os.getenv("PORT", "8000")
     notify_url = f"http://127.0.0.1:{port}/internal/fuzzer-report-created"

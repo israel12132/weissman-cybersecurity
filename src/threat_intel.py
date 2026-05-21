@@ -1,7 +1,7 @@
 """
 Exploit Intelligence: monitor GitHub for repos containing exploit/PoC/payload
-keywords combined with tech stack names. Includes legacy repos (no date filter)
-so 2010–2020 "ghost" targets remain in scope.
+keywords combined with tech stack names. Date filtered to last 90 days to show
+only recent/active threats (avoid 2010-2020 "ghost" repos that cause false urgency).
 Phase 3: GITHUB_TOKEN missing → log warning, fallback to unauthenticated (or skip with status).
 """
 import logging
@@ -9,6 +9,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -28,10 +29,23 @@ logger = logging.getLogger(__name__)
 
 EXPLOIT_KEYWORDS = ("exploit", "poc", "payload", "cve", "vuln")
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
-# No created: or pushed: filter – we want legacy (2010–2020) repos too.
 PER_PAGE = 30
 MAX_PAGES = 2
 RATE_DELAY_SEC = 1.2
+# Date filter: only repos created or updated in the last 90 days
+DAYS_BACK = 90
+
+
+def _get_date_filter() -> str:
+    """
+    Return GitHub search date filter for repositories updated in the last 90 days.
+    Format: pushed:>YYYY-MM-DD (ISO 8601)
+
+    This prevents old/abandoned repos from 2010-2020 appearing in results
+    and causing false urgency with customers.
+    """
+    cutoff_date = datetime.now() - timedelta(days=DAYS_BACK)
+    return f"pushed:>{cutoff_date.strftime('%Y-%m-%d')}"
 
 
 @dataclass
@@ -76,6 +90,9 @@ def search_repos(
     Search GitHub for repositories that contain any of `keywords` and any of `tech_terms`
     in name, description, or readme. tech_terms must be List[str]; comma string is split.
     Short/garbage terms (< 3 chars except allowed) are filtered.
+
+    Date filtered to last 90 days to avoid old/abandoned exploits from causing
+    false urgency.
     """
     tech_terms = normalize_tech_stack_to_list(tech_terms if isinstance(tech_terms, list) else (tech_terms or ""))
     if not tech_terms:
@@ -83,10 +100,11 @@ def search_repos(
     session = _session(token)
     seen: set[str] = set()
     results: list[ExploitRepo] = []
+    date_filter = _get_date_filter()
     # One query per keyword + tech (no hard cap on combos; rate-limited by API).
     for kw in keywords:
         for tech in tech_terms:
-            q = f"{kw} {tech} in:name,description,readme"
+            q = f"{kw} {tech} {date_filter} in:name,description,readme"
             params = {"q": q, "sort": "updated", "order": "desc", "per_page": PER_PAGE}
             try:
                 r = get_with_retry(session, GITHUB_SEARCH_URL, params=params, timeout=ENTERPRISE_HTTP_TIMEOUT)
@@ -147,6 +165,7 @@ def fetch_exploit_repos_for_tech_stack(
 
 
 # Global monitoring: fetch ALL new exploit/PoC repos regardless of client (no tech filter in query).
+# Date filtered to last 90 days to show only recent/active threats.
 GLOBAL_EXPLOIT_QUERIES = (
     "exploit in:name,description",
     "poc in:name,description",
@@ -165,19 +184,24 @@ def search_global_exploit_repos(
     Monitor ALL new exploit/PoC tools globally (no client name or tech filter).
     Used for cross-referencing: match returned repos against each client's tech stack
     and trigger CRITICAL alert when a global threat applies to that client.
+
+    Date filtered to last 90 days to focus on recent/active threats only.
     """
     token = token or _token_or_fallback()
     session = _session(token)
     seen: set[str] = set()
     results: list[ExploitRepo] = []
+    date_filter = _get_date_filter()
     for q in GLOBAL_EXPLOIT_QUERIES:
         if len(results) >= max_results:
             break
         for page in range(1, GLOBAL_MAX_PAGES + 1):
             if len(results) >= max_results:
                 break
+            # Add date filter to query
+            q_with_date = f"{q} {date_filter}"
             params = {
-                "q": q,
+                "q": q_with_date,
                 "sort": "updated",
                 "order": "desc",
                 "per_page": min(GLOBAL_PER_PAGE, max_results - len(results)),
