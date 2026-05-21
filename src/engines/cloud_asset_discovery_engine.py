@@ -161,21 +161,24 @@ class CloudAssetDiscovery:
                         public_access['PublicAccessBlockConfiguration']['IgnorePublicAcls'],
                         public_access['PublicAccessBlockConfiguration']['RestrictPublicBuckets'],
                     ])
-                except:
+                except (ClientError, KeyError, TypeError) as e:
+                    logger.debug(f"Could not check public access for bucket {bucket_name}: {e}")
                     is_public = True  # Assume public if can't check
 
                 # Check encryption
                 try:
                     encryption = s3.get_bucket_encryption(Bucket=bucket_name)
                     encrypted = True
-                except:
+                except (ClientError, KeyError) as e:
+                    logger.debug(f"Could not check encryption for bucket {bucket_name}: {e}")
                     encrypted = False
 
                 # Get bucket location
                 try:
                     location = s3.get_bucket_location(Bucket=bucket_name)
                     region = location['LocationConstraint'] or 'us-east-1'
-                except:
+                except (ClientError, KeyError) as e:
+                    logger.debug(f"Could not get location for bucket {bucket_name}: {e}")
                     region = 'unknown'
 
                 asset = CloudAsset(
@@ -273,8 +276,11 @@ class CloudAssetDiscovery:
                         if url_config:
                             asset.public_exposure = True
                             asset.compliance_issues.append("Lambda function has public URL")
-                    except:
-                        pass
+                    except ClientError as e:
+                        # Function may not have a URL configured (ResourceNotFoundException)
+                        logger.debug(f"No URL config for Lambda {func['FunctionName']}: {e}")
+                    except Exception as e:
+                        logger.warning(f"Error checking Lambda URL for {func['FunctionName']}: {e}")
 
                     assets.append(asset)
 
