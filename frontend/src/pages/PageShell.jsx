@@ -1,6 +1,6 @@
 /**
  * Shared page shell for domain-specific intelligence hubs.
- * Wraps a page in consistent header/layout with navigation back to the matrix.
+ * Wraps a page in consistent header/layout with comprehensive navigation.
  */
 import React from 'react'
 import { Link } from 'react-router-dom'
@@ -17,36 +17,32 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
             ← Dashboard
           </Link>
           <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-engines" to="/engines" className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors">
+          <Link id="pageshell-nav-engines" to="/engines" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
             Engine Matrix
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/70 hover:text-amber-300 text-xs font-mono transition-colors">
+            Findings
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-clients" to="/clients" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
+            Clients
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-jobs" to="/jobs" className="text-blue-400/70 hover:text-blue-300 text-xs font-mono transition-colors">
+            Jobs
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-metrics" to="/metrics" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
+            Metrics
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-discovery" to="/domain-discovery" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
+            Discovery
           </Link>
           <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-threat-intel" to="/threat-intel" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
             Threat Intel
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-discovery" to="/domain-discovery" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
-            Domain Discovery
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/70 hover:text-amber-300 text-xs font-mono transition-colors">
-            Findings C2
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-council" to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
-            Council Queue
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-sso" to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
-            SSO Config
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-admin" to="/admin" className="text-amber-300/70 hover:text-amber-200 text-xs font-mono transition-colors font-semibold">
-            Admin
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-incident-response" to="/incident-response" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
-            IR Center
           </Link>
           <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-vuln-intel" to="/vuln-intel" className="text-orange-400/70 hover:text-orange-300 text-xs font-mono transition-colors">
@@ -55,6 +51,10 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
           <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-dark-web" to="/dark-web" className="text-violet-400/70 hover:text-violet-300 text-xs font-mono transition-colors">
             Dark Web
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-incident-response" to="/incident-response" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
+            IR Center
           </Link>
           <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-threat-hunting" to="/threat-hunting" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
@@ -71,6 +71,22 @@ export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3e
           <span className="text-white/20 text-xs">|</span>
           <Link id="pageshell-nav-exploit-lab" to="/exploit-lab" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
             Exploit Lab
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-council" to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
+            Council
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-compliance" to="/compliance" className="text-indigo-400/70 hover:text-indigo-300 text-xs font-mono transition-colors">
+            Compliance
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-sso" to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
+            SSO
+          </Link>
+          <span className="text-white/20 text-xs">|</span>
+          <Link id="pageshell-nav-admin" to="/admin" className="text-amber-300/70 hover:text-amber-200 text-xs font-mono transition-colors font-semibold">
+            Admin
           </Link>
           {badge && (
             <>
