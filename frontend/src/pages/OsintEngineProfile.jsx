@@ -66,17 +66,17 @@ export default function OsintEngineProfile() {
   const [toast, setToast] = useState(null)
   const eventSourceRef = useRef(null)
   const closeStream = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-    }
+    const es = eventSourceRef.current
+    if (!es) return
+    eventSourceRef.current = null
+    if (es.readyState !== EventSource.CLOSED) es.close()
   }, [])
 
   useEffect(() => {
     apiFetch('/api/clients')
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => {})
+      .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
   }, [])
 
   useEffect(() => {
@@ -156,7 +156,9 @@ export default function OsintEngineProfile() {
             setRunning(false)
             closeStream()
           }
-        } catch {}
+        } catch (err) {
+          if (import.meta.env.DEV) console.warn('[OsintEngineProfile] telemetry parse error:', err)
+        }
       }
       es.onerror = () => {
         setRunning(false)
