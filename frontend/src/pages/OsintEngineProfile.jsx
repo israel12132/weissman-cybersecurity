@@ -4,6 +4,7 @@ import PageShell from './PageShell'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
 
 const MAX_LINES = 500
+const ENGINE_ID = 'osint'
 
 const OSINT_CAPABILITIES = [
   'Certificate Transparency harvesting (crt.sh) for subdomain intelligence',
@@ -64,6 +65,12 @@ export default function OsintEngineProfile() {
   const [lines, setLines] = useState([])
   const [toast, setToast] = useState(null)
   const eventSourceRef = useRef(null)
+  const closeStream = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -84,9 +91,7 @@ export default function OsintEngineProfile() {
     if (first) setTarget(first.startsWith('http') ? first : `https://${first}`)
   }, [selectedClientId, clients])
 
-  useEffect(() => () => {
-    if (eventSourceRef.current) eventSourceRef.current.close()
-  }, [])
+  useEffect(() => () => closeStream(), [closeStream])
 
   const showToast = useCallback((severity, message) => {
     const id = Date.now()
@@ -117,7 +122,7 @@ export default function OsintEngineProfile() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          engine: 'osint',
+          engine: ENGINE_ID,
           client_id: Number(selectedClientId),
           target: target.trim(),
         }),
@@ -136,8 +141,10 @@ export default function OsintEngineProfile() {
         return
       }
 
-      if (eventSourceRef.current) eventSourceRef.current.close()
-      const es = new EventSource(apiEventSourceUrl(`/api/telemetry/stream?job_id=${encodeURIComponent(jobId)}`), { withCredentials: true })
+      closeStream()
+      const streamPath = `/api/telemetry/stream?job_id=${encodeURIComponent(jobId)}`
+      const streamUrl = apiEventSourceUrl(streamPath)
+      const es = new EventSource(streamUrl, { withCredentials: true })
       eventSourceRef.current = es
 
       es.onmessage = (e) => {
@@ -147,19 +154,19 @@ export default function OsintEngineProfile() {
           if (line) setLines((prev) => [...prev.slice(-MAX_LINES), `> ${line}`])
           if (data.status === 'completed' || data.status === 'failed') {
             setRunning(false)
-            es.close()
+            closeStream()
           }
         } catch {}
       }
       es.onerror = () => {
         setRunning(false)
-        es.close()
+        closeStream()
       }
     } catch (e) {
       showToast('error', e?.message ?? 'Network error')
       setRunning(false)
     }
-  }, [selectedClientId, target, showToast])
+  }, [closeStream, selectedClientId, target, showToast])
 
   return (
     <PageShell
@@ -185,7 +192,7 @@ export default function OsintEngineProfile() {
           <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-2xl font-bold text-white">OSINT</h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-300">osint</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-300">{ENGINE_ID}</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/50">MITRE T1589</span>
             </div>
             <p className="text-sm text-white/70 leading-relaxed">
