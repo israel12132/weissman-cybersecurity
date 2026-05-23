@@ -5,6 +5,7 @@ import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
 
 const MAX_LINES = 500
 const ENGINE_ID = 'osint'
+const SAFE_JOB_ID_RE = /^[A-Za-z0-9._:-]+$/
 
 const OSINT_CAPABILITIES = [
   'Certificate Transparency harvesting (crt.sh) for subdomain intelligence',
@@ -74,7 +75,13 @@ export default function OsintEngineProfile() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
+      .then(async (r) => {
+        if (!r.ok) {
+          if (import.meta.env.DEV) console.warn(`[OsintEngineProfile] clients load failed: HTTP ${r.status}`)
+          return []
+        }
+        return r.json()
+      })
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
   }, [])
@@ -140,6 +147,11 @@ export default function OsintEngineProfile() {
         setRunning(false)
         return
       }
+      if (!SAFE_JOB_ID_RE.test(String(jobId))) {
+        showToast('error', 'Received invalid job id from server')
+        setRunning(false)
+        return
+      }
 
       closeStream()
       const streamPath = `/api/telemetry/stream?job_id=${encodeURIComponent(jobId)}`
@@ -151,7 +163,15 @@ export default function OsintEngineProfile() {
         try {
           const data = JSON.parse(e.data || '{}')
           const line = data.message || data.error || ''
-          if (line) setLines((prev) => [...prev.slice(-MAX_LINES), `> ${line}`])
+          if (line) {
+            setLines((prev) => {
+              const entry = `> ${line}`
+              if (prev.length >= MAX_LINES) {
+                return [...prev.slice(prev.length - MAX_LINES + 1), entry]
+              }
+              return [...prev, entry]
+            })
+          }
           if (data.status === 'completed' || data.status === 'failed') {
             setRunning(false)
             closeStream()
