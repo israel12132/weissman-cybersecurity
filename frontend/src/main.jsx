@@ -58,6 +58,7 @@ import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
 // ── New enterprise pages ──────────────────────────────────────────────────────
 import EngineMatrix from './pages/EngineMatrix'
 import EngineDetail from './pages/EngineDetail'
+import OsintEngineProfile from './pages/OsintEngineProfile'
 import ThreatEmulation from './pages/ThreatEmulation'
 import SupplyChainHub from './pages/SupplyChainHub'
 import NetworkIntelligence from './pages/NetworkIntelligence'
@@ -148,6 +149,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="attack-chain/:clientId" element={<AttackChainView />} />
             {/* ── Enterprise C2 pages ─────────────────────────────────────────── */}
             <Route path="engines" element={<EngineMatrix />} />
+            <Route path="engines/osint" element={<OsintEngineProfile />} />
             <Route path="engines/:engineId" element={<EngineDetail />} />
             <Route path="domain-discovery" element={<DomainDiscovery />} />
             <Route path="threat-emulation" element={<ThreatEmulation />} />

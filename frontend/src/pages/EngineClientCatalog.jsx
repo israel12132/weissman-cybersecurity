@@ -217,6 +217,13 @@ function EngineRow({ engine, status, selected, onSelect }) {
               GLOBAL
             </span>
           )}
+          <Link
+            to={`/engines/${engine.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/25 text-cyan-300/70 hover:text-cyan-200 hover:border-cyan-400/45 transition-colors"
+          >
+            Profile
+          </Link>
         </div>
         <p className="text-[10px] text-white/35 mt-0.5 leading-relaxed">{engine.description}</p>
       </div>
