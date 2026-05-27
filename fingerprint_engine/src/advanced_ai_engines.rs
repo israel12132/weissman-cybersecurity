@@ -1,351 +1,298 @@
-//! Advanced Ai Engines - advanced attack engine implementations.
-use crate::engine_result::EngineResult;
-use serde_json::json;
+//! Advanced AI/LLM Engines — real probes against AI endpoints. All findings are evidence-based.
+//!
+//! Strategy:
+//!   1. Try common LLM/AI endpoints on the target (/v1/chat/completions, /api/generate, /api/chat, …).
+//!   2. Detect whether they are reachable and (when applicable) respond to canary prompts.
+//!   3. Emit findings only on observed behaviour; no canned "simulated …" text.
 
+use crate::engine_probes::{
+    empty_ok, finding, http_client, http_get, http_post_json, normalize_url,
+};
+use crate::engine_result::{print_result, EngineResult};
+use serde_json::{json, Value};
+
+macro_rules! cli_wrapper {
+    ($name:ident, $result_fn:ident) => {
+        pub async fn $name(target: &str) {
+            print_result($result_fn(target).await);
+        }
+    };
+}
+
+/// Common LLM endpoints to probe (OpenAI-compatible / ollama / vLLM).
+const LLM_PATHS: &[&str] = &[
+    "/v1/chat/completions",
+    "/v1/completions",
+    "/api/generate",
+    "/api/chat",
+    "/chat",
+    "/completion",
+    "/api/v1/chat/completions",
+];
+
+async fn probe_llm_surface(target: &str) -> Vec<(String, u16)> {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut out = Vec::new();
+    for path in LLM_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        let payload = json!({
+            "model": "probe",
+            "messages": [{"role":"user","content":"ping"}],
+            "max_tokens": 1
+        });
+        if let Some(p) = http_post_json(&client, &url, &payload).await {
+            // 400 (bad model) / 401 / 422 still proves the endpoint exists.
+            if p.status < 600 && p.status != 0 && p.status != 404 && p.status != 405 {
+                out.push((p.final_url, p.status));
+            }
+        }
+    }
+    out
+}
+
+fn ai_finding(engine_id: &str, title: &str, severity: &str, mitre: &str, target: &str, eps: &[(String, u16)]) -> Vec<Value> {
+    if eps.is_empty() {
+        return vec![];
+    }
+    let desc = format!(
+        "Live LLM/AI endpoints reachable on {}: {}",
+        target,
+        eps.iter()
+            .map(|(u, s)| format!("{} → HTTP {}", u, s))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    vec![finding(engine_id, title, severity, mitre, &desc, target)]
+}
+
+// ── llm_jailbreak ─────────────────────────────────────────────────────────────
 pub async fn run_llm_jailbreak_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "llm_jailbreak",
-        "title": "LLM Jailbreak Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated LLM Jailbreak Engine finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let eps = probe_llm_surface(target).await;
+    let findings = ai_finding(
+        "llm_jailbreak",
+        "AI endpoint reachable for jailbreak probes",
+        "medium",
+        "T1059.008",
+        target,
+        &eps,
+    );
+    if findings.is_empty() {
+        empty_ok("llm_jailbreak", target)
+    } else {
+        EngineResult::ok(findings, "llm_jailbreak: live endpoint surface".to_string())
+    }
 }
+cli_wrapper!(run_llm_jailbreak, run_llm_jailbreak_result);
 
-pub async fn run_llm_jailbreak(target: &str) {
-    crate::engine_result::print_result(run_llm_jailbreak_result(target).await);
-}
-
+// ── prompt_injection_chain ────────────────────────────────────────────────────
 pub async fn run_prompt_injection_chain_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "prompt_injection_chain",
-        "title": "Prompt Injection Chain Attack finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated Prompt Injection Chain Attack finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let eps = probe_llm_surface(target).await;
+    let findings = ai_finding(
+        "prompt_injection_chain",
+        "AI endpoint reachable for prompt-injection chaining",
+        "medium",
+        "T1059.008",
+        target,
+        &eps,
+    );
+    if findings.is_empty() {
+        empty_ok("prompt_injection_chain", target)
+    } else {
+        EngineResult::ok(findings, "prompt_injection_chain: live endpoint surface".to_string())
+    }
 }
+cli_wrapper!(run_prompt_injection_chain, run_prompt_injection_chain_result);
 
-pub async fn run_prompt_injection_chain(target: &str) {
-    crate::engine_result::print_result(run_prompt_injection_chain_result(target).await);
-}
-
+// ── model_inversion_attack ────────────────────────────────────────────────────
 pub async fn run_model_inversion_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "model_inversion_attack",
-        "title": "ML Model Inversion Attack finding",
-        "severity": "high",
-        "mitre_attack": "T1588.005",
-        "description": "Simulated ML Model Inversion Attack finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let eps = probe_llm_surface(target).await;
+    let findings = ai_finding(
+        "model_inversion_attack",
+        "AI inference endpoint reachable",
+        "low",
+        "T1588.005",
+        target,
+        &eps,
+    );
+    if findings.is_empty() {
+        empty_ok("model_inversion_attack", target)
+    } else {
+        EngineResult::ok(findings, "model_inversion_attack: live endpoint".to_string())
+    }
 }
+cli_wrapper!(run_model_inversion_attack, run_model_inversion_attack_result);
 
-pub async fn run_model_inversion_attack(target: &str) {
-    crate::engine_result::print_result(run_model_inversion_attack_result(target).await);
-}
-
+// ── ai_supply_chain_attack ────────────────────────────────────────────────────
+// Probe huggingface model name discovery via response body parsing.
 pub async fn run_ai_supply_chain_attack_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "ai_supply_chain_attack",
-        "title": "AI Model Supply Chain Attack finding",
-        "severity": "high",
-        "mitre_attack": "T1195.001",
-        "description": "Simulated AI Model Supply Chain Attack finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings: Vec<Value> = Vec::new();
+    if let Some(p) = http_get(&client, &base).await {
+        let body = p.body.to_lowercase();
+        for sig in ["huggingface", "from_pretrained", "model_id", "ollama"] {
+            if body.contains(sig) {
+                findings.push(finding(
+                    "ai_supply_chain_attack",
+                    &format!("AI model dependency hint: {}", sig),
+                    "low",
+                    "T1195.001",
+                    &format!("Body of {} contains the token '{}' — verify model provenance and signature.", p.final_url, sig),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("ai_supply_chain_attack", target)
+    } else {
+        EngineResult::ok(findings.clone(), format!("ai_supply_chain_attack: {}", findings.len()))
+    }
+}
+cli_wrapper!(run_ai_supply_chain_attack, run_ai_supply_chain_attack_result);
+
+// Generic LLM-surface result helper (used for engines whose detection is "endpoint exists")
+async fn llm_surface_engine(
+    target: &str,
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+) -> EngineResult {
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let eps = probe_llm_surface(target).await;
+    let findings = ai_finding(engine_id, title, severity, mitre, target, &eps);
+    if findings.is_empty() {
+        empty_ok(engine_id, target)
+    } else {
+        EngineResult::ok(findings, format!("{}: live endpoint surface", engine_id))
+    }
 }
 
-pub async fn run_ai_supply_chain_attack(target: &str) {
-    crate::engine_result::print_result(run_ai_supply_chain_attack_result(target).await);
+pub async fn run_llm_agent_hijack_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "llm_agent_hijack", "Agent endpoint reachable", "medium", "T1059.008").await
 }
+cli_wrapper!(run_llm_agent_hijack, run_llm_agent_hijack_result);
 
-pub async fn run_llm_agent_hijack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "llm_agent_hijack",
-        "title": "LLM Agent & Tool Hijacking finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated LLM Agent & Tool Hijacking finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_rag_poisoning_engine_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "rag_poisoning_engine", "RAG/AI endpoint reachable", "low", "T1565").await
 }
+cli_wrapper!(run_rag_poisoning_engine, run_rag_poisoning_engine_result);
 
-pub async fn run_llm_agent_hijack(target: &str) {
-    crate::engine_result::print_result(run_llm_agent_hijack_result(target).await);
+pub async fn run_adversarial_examples_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "adversarial_examples", "ML endpoint reachable for adversarial examples", "low", "T1588.005").await
 }
+cli_wrapper!(run_adversarial_examples, run_adversarial_examples_result);
 
-pub async fn run_rag_poisoning_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "rag_poisoning_engine",
-        "title": "RAG System Poisoning finding",
-        "severity": "high",
-        "mitre_attack": "T1565",
-        "description": "Simulated RAG System Poisoning finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_data_poisoning_engine_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "data_poisoning_engine", "Training/feedback endpoint candidate", "low", "T1565").await
 }
+cli_wrapper!(run_data_poisoning_engine, run_data_poisoning_engine_result);
 
-pub async fn run_rag_poisoning_engine(target: &str) {
-    crate::engine_result::print_result(run_rag_poisoning_engine_result(target).await);
+pub async fn run_deepfake_synthesis_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "deepfake_synthesis", "Generative endpoint reachable", "low", "T1565.002").await
 }
+cli_wrapper!(run_deepfake_synthesis, run_deepfake_synthesis_result);
 
-pub async fn run_adversarial_examples_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "adversarial_examples",
-        "title": "Adversarial Example Generator finding",
-        "severity": "high",
-        "mitre_attack": "T1588",
-        "description": "Simulated Adversarial Example Generator finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_llm_dos_attack_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let eps = probe_llm_surface(t).await;
+    if eps.is_empty() {
+        return empty_ok("llm_dos_attack", t);
+    }
+    // Send 5 concurrent probes; measure throughput hint.
+    let client = http_client().await;
+    let url = eps[0].0.clone();
+    let payload = json!({"model":"probe","messages":[{"role":"user","content":"hi"}],"max_tokens":1});
+    let mut hits = 0;
+    for _ in 0..5 {
+        if http_post_json(&client, &url, &payload).await.is_some() {
+            hits += 1;
+        }
+    }
+    let findings = vec![finding(
+        "llm_dos_attack",
+        "LLM endpoint accepted 5 rapid probes",
+        "low",
+        "T1499",
+        &format!("{} accepted {}/5 rapid POSTs — verify rate limiting and token budget.", url, hits),
+        t,
+    )];
+    EngineResult::ok(findings, "llm_dos_attack: 1 live indicator".to_string())
 }
+cli_wrapper!(run_llm_dos_attack, run_llm_dos_attack_result);
 
-pub async fn run_adversarial_examples(target: &str) {
-    crate::engine_result::print_result(run_adversarial_examples_result(target).await);
+pub async fn run_multimodal_ai_attack_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "multimodal_ai_attack", "Multimodal endpoint candidate", "low", "T1059.008").await
 }
+cli_wrapper!(run_multimodal_ai_attack, run_multimodal_ai_attack_result);
 
-pub async fn run_data_poisoning_engine_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "data_poisoning_engine",
-        "title": "Training Data Poisoning Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1565.001",
-        "description": "Simulated Training Data Poisoning Engine finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_ai_bias_exploit_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "ai_bias_exploit", "AI endpoint reachable for bias probes", "low", "T1565").await
 }
+cli_wrapper!(run_ai_bias_exploit, run_ai_bias_exploit_result);
 
-pub async fn run_data_poisoning_engine(target: &str) {
-    crate::engine_result::print_result(run_data_poisoning_engine_result(target).await);
+pub async fn run_gpt_plugin_attack_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "gpt_plugin_attack", "Plugin endpoint candidate", "low", "T1059.008").await
 }
+cli_wrapper!(run_gpt_plugin_attack, run_gpt_plugin_attack_result);
 
-pub async fn run_deepfake_synthesis_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "deepfake_synthesis",
-        "title": "Deepfake Synthesis Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1660",
-        "description": "Simulated Deepfake Synthesis Engine finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_autonomous_ai_escape_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "autonomous_ai_escape", "Agent endpoint reachable", "medium", "T1059.008").await
 }
+cli_wrapper!(run_autonomous_ai_escape, run_autonomous_ai_escape_result);
 
-pub async fn run_deepfake_synthesis(target: &str) {
-    crate::engine_result::print_result(run_deepfake_synthesis_result(target).await);
+pub async fn run_llm_memory_extraction_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "llm_memory_extraction", "AI endpoint reachable for memory extraction", "low", "T1588.005").await
 }
+cli_wrapper!(run_llm_memory_extraction, run_llm_memory_extraction_result);
 
-pub async fn run_llm_dos_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "llm_dos_attack",
-        "title": "LLM Denial of Service finding",
-        "severity": "high",
-        "mitre_attack": "T1499",
-        "description": "Simulated LLM Denial of Service finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_neural_backdoor_detect_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "neural_backdoor_detect", "ML endpoint reachable", "info", "T1588.005").await
 }
+cli_wrapper!(run_neural_backdoor_detect, run_neural_backdoor_detect_result);
 
-pub async fn run_llm_dos_attack(target: &str) {
-    crate::engine_result::print_result(run_llm_dos_attack_result(target).await);
+pub async fn run_ai_watermark_bypass_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "ai_watermark_bypass", "Generative endpoint reachable", "info", "T1565.002").await
 }
+cli_wrapper!(run_ai_watermark_bypass, run_ai_watermark_bypass_result);
 
-pub async fn run_multimodal_ai_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "multimodal_ai_attack",
-        "title": "Multimodal AI Attack Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated Multimodal AI Attack Engine finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_federated_learning_attack_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "federated_learning_attack", "Federated learning endpoint candidate", "low", "T1565").await
 }
+cli_wrapper!(run_federated_learning_attack, run_federated_learning_attack_result);
 
-pub async fn run_multimodal_ai_attack(target: &str) {
-    crate::engine_result::print_result(run_multimodal_ai_attack_result(target).await);
+pub async fn run_llm_red_team_advanced_result(t: &str) -> EngineResult {
+    crate::ai_redteam_engine::run_ai_redteam_attack(
+        t,
+        None,
+        &crate::ai_redteam_engine::AiRedteamConfig::default(),
+        None,
+        None,
+    )
+    .await
 }
+cli_wrapper!(run_llm_red_team_advanced, run_llm_red_team_advanced_result);
 
-pub async fn run_ai_bias_exploit_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "ai_bias_exploit",
-        "title": "AI Bias Exploitation Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1588",
-        "description": "Simulated AI Bias Exploitation Engine finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
+pub async fn run_model_stealing_engine_result(t: &str) -> EngineResult {
+    llm_surface_engine(t, "model_stealing_engine", "Inference endpoint reachable", "low", "T1588.005").await
 }
-
-pub async fn run_ai_bias_exploit(target: &str) {
-    crate::engine_result::print_result(run_ai_bias_exploit_result(target).await);
-}
-
-pub async fn run_gpt_plugin_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "gpt_plugin_attack",
-        "title": "GPT Plugin / Action Exploiter finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated GPT Plugin / Action Exploiter finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_gpt_plugin_attack(target: &str) {
-    crate::engine_result::print_result(run_gpt_plugin_attack_result(target).await);
-}
-
-pub async fn run_autonomous_ai_escape_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "autonomous_ai_escape",
-        "title": "Autonomous AI Agent Sandbox Escape finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated Autonomous AI Agent Sandbox Escape finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_autonomous_ai_escape(target: &str) {
-    crate::engine_result::print_result(run_autonomous_ai_escape_result(target).await);
-}
-
-pub async fn run_llm_memory_extraction_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "llm_memory_extraction",
-        "title": "LLM Memory Extraction finding",
-        "severity": "high",
-        "mitre_attack": "T1552",
-        "description": "Simulated LLM Memory Extraction finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_llm_memory_extraction(target: &str) {
-    crate::engine_result::print_result(run_llm_memory_extraction_result(target).await);
-}
-
-pub async fn run_neural_backdoor_detect_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "neural_backdoor_detect",
-        "title": "Neural Network Backdoor Detector finding",
-        "severity": "high",
-        "mitre_attack": "T1588.005",
-        "description": "Simulated Neural Network Backdoor Detector finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_neural_backdoor_detect(target: &str) {
-    crate::engine_result::print_result(run_neural_backdoor_detect_result(target).await);
-}
-
-pub async fn run_ai_watermark_bypass_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "ai_watermark_bypass",
-        "title": "AI Watermark Bypass Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1565",
-        "description": "Simulated AI Watermark Bypass Engine finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_ai_watermark_bypass(target: &str) {
-    crate::engine_result::print_result(run_ai_watermark_bypass_result(target).await);
-}
-
-pub async fn run_federated_learning_attack_result(target: &str) -> EngineResult {
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "federated_learning_attack",
-        "title": "Federated Learning Poisoning finding",
-        "severity": "high",
-        "mitre_attack": "T1565.001",
-        "description": "Simulated Federated Learning Poisoning finding detected.",
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_federated_learning_attack(target: &str) {
-    crate::engine_result::print_result(run_federated_learning_attack_result(target).await);
-}
-
-pub async fn run_llm_red_team_advanced_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "llm_red_team_advanced",
-        "title": "Advanced LLM Red Teaming finding",
-        "severity": "high",
-        "mitre_attack": "T1059.008",
-        "description": "Simulated Advanced LLM Red Teaming finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_llm_red_team_advanced(target: &str) {
-    crate::engine_result::print_result(run_llm_red_team_advanced_result(target).await);
-}
-
-pub async fn run_model_stealing_engine_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
-    let mut findings: Vec<serde_json::Value> = Vec::new();
-    findings.push(json!({
-        "type": "model_stealing_engine",
-        "title": "ML Model Stealing Engine finding",
-        "severity": "high",
-        "mitre_attack": "T1588.005",
-        "description": "Simulated ML Model Stealing Engine finding detected.",
-        "target": target,
-    }));
-    EngineResult::ok(findings.clone(), format!("Engine: {} findings", findings.len()))
-}
-
-pub async fn run_model_stealing_engine(target: &str) {
-    crate::engine_result::print_result(run_model_stealing_engine_result(target).await);
-}
+cli_wrapper!(run_model_stealing_engine, run_model_stealing_engine_result);

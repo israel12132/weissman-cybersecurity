@@ -1,7 +1,6 @@
 //! Local bug bounty report generation. LLM-assisted triage (vLLM) with static fallback;
 //! HackerOne/Bugcrowd-style Markdown to `reports/`, then optional NOTIFY_URL webhook (retries intact).
 
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;

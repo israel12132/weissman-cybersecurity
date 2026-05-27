@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -319,7 +319,7 @@ function SecuritySettings({ config, onChange }) {
         {/* MFA */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">Multi-Factor Authentication</h4>
-          <label className="flex items-center gap-2 text-sm text-gray-300">
+          <label className="flex items-center gap-2 text-sm text-gray-300 mb-3">
             <input
               type="checkbox"
               checked={config.mfa_required || false}
@@ -328,10 +328,129 @@ function SecuritySettings({ config, onChange }) {
             />
             Require MFA for all users
           </label>
+          <MfaSelfServicePanel />
         </div>
       </div>
     </div>
   );
+}
+
+// Self-service MFA: read /api/auth/mfa/status, allow enroll + disable.
+function MfaSelfServicePanel() {
+  const [status, setStatus] = React.useState(null)
+  const [setup, setSetup] = React.useState(null)
+  const [code, setCode] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
+  const [err, setErr] = React.useState('')
+  const refresh = React.useCallback(async () => {
+    try {
+      const r = await fetch('/api/auth/mfa/status', { credentials: 'include' })
+      const d = await r.json().catch(() => ({}))
+      setStatus(d)
+    } catch (e) {
+      setErr(e?.message || 'status fetch failed')
+    }
+  }, [])
+  React.useEffect(() => { refresh() }, [refresh])
+
+  const startSetup = async () => {
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/auth/mfa/setup', { method: 'POST', credentials: 'include' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || 'setup failed')
+      setSetup(d)
+    } catch (e) { setErr(e?.message || 'setup failed') } finally { setBusy(false) }
+  }
+  const enable = async () => {
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/auth/mfa/enable', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim() }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || 'enable failed')
+      setSetup(null); setCode('')
+      await refresh()
+    } catch (e) { setErr(e?.message || 'enable failed') } finally { setBusy(false) }
+  }
+  const disable = async () => {
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/auth/mfa/disable', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim() }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || 'disable failed')
+      setCode('')
+      await refresh()
+    } catch (e) { setErr(e?.message || 'disable failed') } finally { setBusy(false) }
+  }
+
+  if (!status) return <p className="text-[11px] text-white/40">Loading MFA status…</p>
+  return (
+    <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+      <div className="text-[11px] font-mono text-white/60">
+        Your account: {status.mfa_enabled ? <span className="text-emerald-400">MFA enabled</span> : <span className="text-yellow-400">MFA disabled</span>}
+        {status.mfa_provisioned && !status.mfa_enabled && <span className="text-cyan-400 ml-2">(provisioning in progress)</span>}
+      </div>
+      {err && <div className="text-[11px] text-rose-400">{err}</div>}
+      {!status.mfa_enabled && !setup && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={startSetup}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
+        >
+          {busy ? 'Working…' : status.mfa_provisioned ? 'Re-provision MFA' : 'Set up MFA'}
+        </button>
+      )}
+      {setup && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-white/60">
+            Scan this URI in Authy / Google Authenticator, then enter the 6-digit code:
+          </p>
+          <code className="block break-all text-[10px] font-mono text-cyan-300 bg-black/40 p-2 rounded">
+            {setup.otpauth_url}
+          </code>
+          <div className="flex items-center gap-2">
+            <input
+              type="text" inputMode="numeric" maxLength={6}
+              value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456"
+              className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
+            />
+            <button
+              type="button" onClick={enable} disabled={busy || code.length !== 6}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              {busy ? 'Working…' : 'Enable MFA'}
+            </button>
+          </div>
+        </div>
+      )}
+      {status.mfa_enabled && (
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="text" inputMode="numeric" maxLength={6}
+            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            placeholder="123456"
+            className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
+          />
+          <button
+            type="button" onClick={disable} disabled={busy || code.length !== 6}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-rose-500/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
+          >
+            {busy ? 'Working…' : 'Disable MFA'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Scanning Settings Component

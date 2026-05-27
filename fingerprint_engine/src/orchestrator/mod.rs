@@ -1788,6 +1788,9 @@ async fn run_cycle_for_tenant(
                         llm_model: semantic_config.llm_model.clone(),
                         recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
                         asm_ports: asm_ports.clone(),
+                        app_pool: Some(app_pool.clone()),
+                        agents: None, // orchestrator path: no live registry; tasks queue.
+                        client_id: Some(db_client_id),
                     };
                     let r =
                         crate::engine_dispatch::run_engine(other, &target, &ctx).await;

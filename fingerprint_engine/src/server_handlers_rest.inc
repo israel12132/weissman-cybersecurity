@@ -165,7 +165,15 @@ async fn api_system_backup(
 
 async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "detail": "Database unavailable. Retry shortly.",
+                "code": "db_unavailable",
+            })),
+        )
+            .into_response();
     };
     let rows = sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
@@ -207,6 +215,9 @@ async fn api_clients_create(
     headers: HeaderMap,
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+        return r;
+    }
     let name = body.name.as_deref().unwrap_or("").trim();
     if name.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": "name required"}))).into_response();
@@ -257,9 +268,16 @@ async fn api_clients_create(
     {
         Ok(i) => i,
         Err(e) => {
-            eprintln!("[Weissman][API] Client create failed: {}", e);
+            tracing::error!(target: "api_clients", error = %e, name = %name, "client create failed");
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "detail": format!("Database error while creating client: {e}"),
+                })),
+            )
+                .into_response();
         }
     };
     let ip = extract_client_ip(&headers, addr);
@@ -287,8 +305,15 @@ async fn api_clients_update(
     axum::extract::Path(id): axum::extract::Path<i64>,
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly."})),
+        )
+            .into_response();
     };
     let row = sqlx::query(
         r#"SELECT name,
@@ -405,8 +430,15 @@ async fn api_clients_delete(
     headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::ADMIN) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly."})),
+        )
+            .into_response();
     };
     let row = sqlx::query("SELECT name FROM clients WHERE id = $1")
         .bind(id)
@@ -701,6 +733,9 @@ async fn api_scan(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<Value>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
     let engine = body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
     let target = body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
     let ip = extract_client_ip(&headers, addr);
@@ -715,11 +750,23 @@ async fn api_scan(
         {
             Ok(x) => x,
             Err(e) => {
-                return (
-                    e.status_code(),
-                    Json(json!({"detail": e.detail(), "code": e.error_code()})),
-                )
-                    .into_response();
+                let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
+                let mut response_headers = axum::http::HeaderMap::new();
+                if let Some((reset_at, limit, used)) = e.quota_metadata() {
+                    let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
+                    if let Some(obj) = body_json.as_object_mut() {
+                        obj.insert("reset_at_unix".into(), json!(reset_at));
+                        obj.insert("limit".into(), json!(limit));
+                        obj.insert("used".into(), json!(used));
+                        obj.insert("retry_after_seconds".into(), json!(retry_after));
+                    }
+                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+                        response_headers.insert("Retry-After", v);
+                    }
+                }
+                let mut resp = (e.status_code(), Json(body_json)).into_response();
+                resp.headers_mut().extend(response_headers);
+                return resp;
             }
         };
     if let Some(t) = body
@@ -795,10 +842,29 @@ async fn ws_threat_intel(ws: WebSocketUpgrade, State(state): State<Arc<AppState>
     })
 }
 
-async fn api_telemetry_stream(State(state): State<Arc<AppState>>) -> Response {
+async fn api_telemetry_stream(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Optional `job_id` query param scopes the stream so each client only sees its own job.
+    // Without a filter the SSE was leaking every tenant's telemetry to every connection.
+    let want_job: Option<String> = q
+        .get("job_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     let mut rx = state.telemetry_broadcast_tx.subscribe();
     let event_stream = stream! {
         while let Ok(payload) = rx.recv().await {
+            if let Some(want) = want_job.as_deref() {
+                let matches = serde_json::from_str::<serde_json::Value>(&payload)
+                    .ok()
+                    .and_then(|v| v.get("job_id").and_then(|x| x.as_str()).map(|s| s.to_string()))
+                    .map(|jid| jid == want)
+                    .unwrap_or_else(|| payload.contains(want));
+                if !matches {
+                    continue;
+                }
+            }
             yield Ok::<Event, Infallible>(Event::default().data(payload));
         }
     };

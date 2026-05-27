@@ -1,0 +1,313 @@
+const BASE_URL = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1'
+const LOGIN_EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
+const LOGIN_PASSWORD = process.env.WEISSMAN_SMOKE_LOGIN_PASSWORD || process.env.WEISSMAN_ADMIN_PASSWORD || 'changeme'
+const TENANT_SLUG = process.env.WEISSMAN_TENANT_SLUG || 'default'
+const CLIENT_NAME = process.env.WEISSMAN_SMOKE_CLIENT_NAME || 'CI Smoke Client'
+const POLL_TIMEOUT_MS = Number(process.env.WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS || 180000)
+
+const UI_BUTTON_SCENARIOS = [
+  {
+    source: 'frontend/src/components/CommandBar.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'recon', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/components/cockpit/EngineCard.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'recon', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/BusinessEngineProfile.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'osint', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/CloudControlTower.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'cloud_audit_evasion', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/DigitalTwinSimulator.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'digital_twin', scenario: 'xss_stored', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/EngineClientCatalog.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'recon', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/EngineDetail.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'llm_jailbreak', target: 'https://example.com', timeout: 45 },
+  },
+  {
+    source: 'frontend/src/pages/EngineMatrix.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'recon', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/NetworkIntelligence.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'bgp_dns_hijacking', target: 'example.com' },
+  },
+  {
+    source: 'frontend/src/pages/OastDashboard.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'oast_oob', probe_type: 'dns', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/PqcRadar.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'pqc_scanner', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/SupplyChainHub.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'supply_chain', target: 'https://github.com/octocat/Hello-World' },
+  },
+  {
+    source: 'frontend/src/pages/ThreatEmulation.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'threat_emulation', apt_group: 'apt28', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/TopTierEngineProfile.jsx',
+    kind: 'command-center-scan',
+    payload: { engine: 'kill_chain', target: 'https://example.com' },
+  },
+  {
+    source: 'frontend/src/pages/TopTierEngineHub.jsx',
+    kind: 'top-tier-health-probe',
+    payload: { target: 'https://example.com' },
+  },
+]
+
+const UI_PLACEHOLDER_NOTES = [
+  {
+    source: 'frontend/src/pages/ThreatEmulation.jsx',
+    note: 'After queueing, UI sets optimistic placeholder metrics (`pending: true`) until real results are fetched.',
+  },
+  {
+    source: 'frontend/src/pages/DigitalTwinSimulator.jsx',
+    note: 'After queueing, UI inserts placeholder scenario status text while job runs.',
+  },
+]
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function extractHost(target) {
+  if (!target || typeof target !== 'string') return null
+  try {
+    return new URL(target).hostname
+  } catch {
+    return target
+      .replace(/^https?:\/\//, '')
+      .split('/')[0]
+      .trim()
+  }
+}
+
+function terminalStatus(status) {
+  return ['completed', 'failed', 'error', 'cancelled', 'dead'].includes(String(status || '').toLowerCase())
+}
+
+function terminalErrorText(payload) {
+  return [payload?.error, payload?.last_error, payload?.detail, payload?.message]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join(' | ')
+}
+
+function isCatalogOnlyError(payload) {
+  return /catalog-only|no runner|unknown/i.test(terminalErrorText(payload))
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(`${BASE_URL}${path}`, options)
+  const rawText = await response.text()
+  let body = rawText
+  try {
+    body = rawText ? JSON.parse(rawText) : null
+  } catch {}
+  return { response, body }
+}
+
+async function login() {
+  const { response, body } = await api('/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: LOGIN_EMAIL, password: LOGIN_PASSWORD, tenant_slug: TENANT_SLUG }),
+  })
+  if (!response.ok || !body?.access_token) {
+    throw new Error(`login failed (${response.status}): ${JSON.stringify(body)}`)
+  }
+  return body.access_token
+}
+
+async function ensureClient(headers) {
+  const neededDomains = [...new Set(UI_BUTTON_SCENARIOS
+    .map((scenario) => extractHost(scenario.payload?.target))
+    .filter(Boolean))]
+    .sort()
+  const payload = {
+    name: CLIENT_NAME,
+    domains: JSON.stringify(neededDomains),
+    tech_stack: JSON.stringify(['nginx', 'github-actions']),
+    ip_ranges: JSON.stringify([]),
+  }
+  const list = await api('/api/clients', { headers })
+  if (!list.response.ok || !Array.isArray(list.body)) {
+    throw new Error(`clients list failed (${list.response.status}): ${JSON.stringify(list.body)}`)
+  }
+  const existing = list.body.find((client) => client.name === CLIENT_NAME)
+
+  if (existing?.id) {
+    const updated = await api(`/api/clients/${existing.id}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    })
+    if (!updated.response.ok) {
+      throw new Error(`client update failed (${updated.response.status}): ${JSON.stringify(updated.body)}`)
+    }
+    return existing.id
+  }
+
+  const created = await api('/api/clients', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+  if (!created.response.ok) {
+    throw new Error(`client create failed (${created.response.status}): ${JSON.stringify(created.body)}`)
+  }
+
+  const listAgain = await api('/api/clients', { headers })
+  if (!listAgain.response.ok || !Array.isArray(listAgain.body)) {
+    throw new Error(`clients list-after-create failed (${listAgain.response.status})`)
+  }
+  const createdClient = listAgain.body.find((client) => client.name === CLIENT_NAME)
+  if (!createdClient?.id) throw new Error('smoke client not found after create')
+  return createdClient.id
+}
+
+async function waitForJob(headers, jobId) {
+  const startedAt = Date.now()
+  let last = null
+  while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
+    await sleep(1000)
+    const { response, body } = await api(`/api/jobs/${jobId}`, { headers })
+    if (!response.ok) {
+      last = { status: `http_${response.status}`, error: JSON.stringify(body) }
+      continue
+    }
+    last = body
+    if (terminalStatus(body?.status)) return body
+  }
+  throw new Error(`job ${jobId} timed out; last=${JSON.stringify(last)}`)
+}
+
+function summarize(scenario, jobId, job) {
+  return {
+    source: scenario.source,
+    kind: scenario.kind,
+    engine: scenario.payload?.engine || null,
+    target: scenario.payload?.target || null,
+    jobId,
+    status: job?.status || 'unknown',
+    error: terminalErrorText(job) || null,
+    findingsCount: job?.findings_count ?? job?.result_json?.findings?.length ?? null,
+  }
+}
+
+async function runScenario(headers, clientId, scenario) {
+  if (scenario.kind === 'top-tier-health-probe') {
+    const body = { ...scenario.payload, client_id: clientId }
+    const queued = await api('/api/engines/top-tier/health-probe', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+    if (!queued.response.ok) {
+      throw new Error(`top-tier health probe queue failed (${queued.response.status}): ${JSON.stringify(queued.body)}`)
+    }
+    const jobId = queued.body?.job_id
+    if (!jobId) throw new Error('top-tier health probe missing job_id')
+    const job = await waitForJob(headers, jobId)
+    return summarize(scenario, jobId, job)
+  }
+
+  const body = { ...scenario.payload, client_id: clientId, timeout: 45 }
+  const queued = await api('/api/command-center/scan', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+  if (!queued.response.ok) {
+    throw new Error(`scan queue failed (${queued.response.status}): ${JSON.stringify(queued.body)}`)
+  }
+  const jobId = queued.body?.job_id
+  if (!jobId) throw new Error('scan queue missing job_id')
+  const job = await waitForJob(headers, jobId)
+  return summarize(scenario, jobId, job)
+}
+
+async function main() {
+  const token = await login()
+  const headers = {
+    'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
+  }
+  const clientId = await ensureClient(headers)
+  const results = []
+  const failures = []
+
+  for (const scenario of UI_BUTTON_SCENARIOS) {
+    try {
+      const summary = await runScenario(headers, clientId, scenario)
+      results.push(summary)
+      const failed = String(summary.status).toLowerCase() !== 'completed' || isCatalogOnlyError(summary)
+      if (failed) failures.push(summary)
+      console.log(JSON.stringify(summary))
+    } catch (error) {
+      const summary = {
+        source: scenario.source,
+        kind: scenario.kind,
+        engine: scenario.payload?.engine || null,
+        target: scenario.payload?.target || null,
+        jobId: null,
+        status: 'failed_to_execute',
+        error: error instanceof Error ? error.message : String(error),
+        findingsCount: null,
+      }
+      results.push(summary)
+      failures.push(summary)
+      console.log(JSON.stringify(summary))
+    }
+    await sleep(1200)
+  }
+
+  const output = {
+    baseUrl: BASE_URL,
+    loginEmail: LOGIN_EMAIL,
+    clientId,
+    totalScenarios: results.length,
+    failures: failures.length,
+    placeholderDisplayNotes: UI_PLACEHOLDER_NOTES,
+    results,
+  }
+
+  if (failures.length > 0) {
+    console.error(JSON.stringify(output, null, 2))
+    process.exit(1)
+  }
+
+  console.log(JSON.stringify(output, null, 2))
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack || error.message : String(error))
+  process.exit(1)
+})

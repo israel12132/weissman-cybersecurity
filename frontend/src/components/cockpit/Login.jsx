@@ -1,25 +1,36 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { apiUrl } from '../../lib/apiBase'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [tenantSlug, setTenantSlug] = useState('default')
   const [error, setError] = useState('')
+  const [errorCode, setErrorCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [mfaToken, setMfaToken] = useState(null)
   const [mfaCode, setMfaCode] = useState('')
   const { login, verifyMfa, isAuthenticated } = useAuth()
   const navigate = useNavigate()
+  const mfaInputRef = useRef(null)
 
   useEffect(() => {
     if (isAuthenticated) navigate('/', { replace: true })
   }, [isAuthenticated, navigate])
 
+  // Auto-focus the MFA code input when the MFA step appears.
+  useEffect(() => {
+    if (mfaToken && mfaInputRef.current) {
+      mfaInputRef.current.focus()
+    }
+  }, [mfaToken])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setErrorCode('')
     setSubmitting(true)
     try {
       const result = await login(email, password, tenantSlug)
@@ -32,9 +43,17 @@ export default function Login() {
         setError('')
         return
       }
-      setError(result.detail || 'Access Denied')
+      if (result.code === 'mfa_enrollment_required') {
+        setErrorCode('mfa_enrollment_required')
+        setError(
+          result.detail ||
+            'MFA enrollment is required by tenant policy. Contact your administrator to receive an MFA enrollment link.',
+        )
+        return
+      }
+      setError(result.detail || 'Access denied')
     } catch (_) {
-      setError('Access Denied')
+      setError('Network error — could not reach the API.')
     } finally {
       setSubmitting(false)
     }
@@ -84,6 +103,7 @@ export default function Login() {
               Enter the 6-digit code from your authenticator app.
             </p>
             <input
+              ref={mfaInputRef}
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -157,9 +177,21 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="text-sm font-mono text-red-500 text-center py-2 border border-red-500/30 bg-red-500/5 rounded">
-              {error}
-            </p>
+            <div
+              role="alert"
+              className={`text-sm font-mono text-center py-2 border rounded ${
+                errorCode === 'mfa_enrollment_required'
+                  ? 'border-amber-500/40 bg-amber-500/5 text-amber-300'
+                  : 'border-red-500/30 bg-red-500/5 text-red-500'
+              }`}
+            >
+              <p>{error}</p>
+              {errorCode === 'mfa_enrollment_required' && (
+                <p className="mt-1 text-xs text-amber-200/70">
+                  Ask an administrator to disable tenant MFA enforcement temporarily so you can enroll, or use the SSO buttons below if your IdP already enforces MFA.
+                </p>
+              )}
+            </div>
           )}
 
           <button
@@ -179,7 +211,9 @@ export default function Login() {
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
               const t = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
-              window.location.href = `${window.location.origin}/api/auth/oidc/begin?tenant_slug=${t}&idp_name=enterprise`
+              window.location.href = apiUrl(
+                `/api/auth/oidc/begin?tenant_slug=${t}&idp_name=enterprise`,
+              )
             }}
           >
             Login with OIDC (IdP name: enterprise)
@@ -189,7 +223,9 @@ export default function Login() {
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
               const t = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
-              window.location.href = `${window.location.origin}/api/auth/saml/begin?tenant_slug=${t}&idp_name=enterprise_saml`
+              window.location.href = apiUrl(
+                `/api/auth/saml/begin?tenant_slug=${t}&idp_name=enterprise_saml`,
+              )
             }}
           >
             Login with SAML (IdP name: enterprise_saml)

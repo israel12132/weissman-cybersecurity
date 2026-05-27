@@ -8,6 +8,16 @@
 - (אופציונלי) Rust + Cargo – לבניית מנוע Fingerprinting פעיל
 - הרשאה מפורשת מלקוח לפני כל סריקה/בדיקה על הנכסים שלו
 
+## מה המערכת יודעת לעשות
+
+- לנהל לקוחות, scope מורשה, טווחי IP ו־tech stack.
+- להריץ סריקות ו־jobs בזמן אמת, כולל מעקב סטטוס ודשבורד Jobs.
+- לאסוף מודיעין מ־NVD, GitHub, OSV, OTX ו־HIBP ולהצליב אותו מול ה־scope.
+- לבצע fingerprinting, fuzzing, OAST, supply-chain checks ו־dark web intel.
+- להפיק דוחות PDF/CSV, findings לפי חומרה, והתראות.
+- לתמוך ב־RBAC, MFA, SSO, audit logs ו־multi-tenancy.
+- לעבוד עם Command Center עשיר בזמן אמת דרך WebSocket ו־live events.
+
 ## התקנה
 
 ```bash

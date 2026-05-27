@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import RoEPanel from './RoEPanel'
@@ -80,6 +80,8 @@ export default function EngineRoomTab() {
   } = useClient()
   const { confirmCommand, refuseCommand } = useWarRoom()
   const [activeGroup, setActiveGroup] = useState('all')
+  const [search, setSearch] = useState('')
+  const [onlyEnabled, setOnlyEnabled] = useState(false)
   const { engines: productionRegistry, productionCount, catalogCount, loading: productionLoading } =
     useProductionEngines()
 
@@ -152,8 +154,18 @@ export default function EngineRoomTab() {
     )
   }
 
+  const filteredRegistry = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return productionRegistry.filter((e) => {
+      if (onlyEnabled && !enabledSet.has(e.id)) return false
+      if (!q) return true
+      const hay = `${e.id} ${e.label || ''} ${e.description || ''} ${e.mitre || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [productionRegistry, search, onlyEnabled, enabledSet])
+
   const enginesByGroup = (groupId) =>
-    productionRegistry.filter((e) => e.group === groupId)
+    filteredRegistry.filter((e) => e.group === groupId)
 
   const visibleGroups = activeGroup === 'all'
     ? ENGINE_GROUP_DEFS
@@ -203,6 +215,41 @@ export default function EngineRoomTab() {
             <span className="text-white/50">Toggle to add to orchestrator allow-list. Run to queue immediate async job.</span>
           </p>
         </div>
+      </div>
+
+      {/* Search + filter row */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[260px]">
+          <input
+            type="search"
+            placeholder="Search engines by ID, label, MITRE, or description…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <label className="text-[11px] font-mono text-white/55 inline-flex items-center gap-2 select-none">
+          <input
+            type="checkbox"
+            checked={onlyEnabled}
+            onChange={(e) => setOnlyEnabled(e.target.checked)}
+            className="accent-cyan-500"
+          />
+          Show only enabled
+        </label>
+        <span className="text-[11px] font-mono text-white/35">
+          {filteredRegistry.length} match{filteredRegistry.length === 1 ? '' : 'es'}
+        </span>
       </div>
 
       {/* Group filter tabs */}

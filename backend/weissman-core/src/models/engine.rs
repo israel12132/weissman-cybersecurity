@@ -74,6 +74,7 @@ pub const KNOWN_ENGINE_IDS: &[&str] = &[
 
 /// Engines with live Rust/Python probes (no simulated findings). UI Engine Room uses this list.
 pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
+    // ── Core engines ──────────────────────────────────────────────────────────
     "osint",
     "asm",
     "leak_hunter",
@@ -133,7 +134,214 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "digital_twin",
     "zero_day_prediction",
     "threat_emulation",
+    "poe_synthesis",
     "microsecond_timing",
+    // ── Advanced AI / LLM engines ─────────────────────────────────────────────
+    "llm_jailbreak",
+    "prompt_injection_chain",
+    "model_inversion_attack",
+    "ai_supply_chain_attack",
+    "llm_agent_hijack",
+    "rag_poisoning_engine",
+    "adversarial_examples",
+    "data_poisoning_engine",
+    "deepfake_synthesis",
+    "llm_dos_attack",
+    "multimodal_ai_attack",
+    "ai_bias_exploit",
+    "gpt_plugin_attack",
+    "autonomous_ai_escape",
+    "llm_memory_extraction",
+    "neural_backdoor_detect",
+    "ai_watermark_bypass",
+    "federated_learning_attack",
+    "llm_red_team_advanced",
+    "model_stealing_engine",
+    // ── Advanced APT / Top-Tier engines ───────────────────────────────────────
+    "apt28_techniques",
+    "apt29_techniques",
+    "apt41_techniques",
+    "lazarus_group_ttps",
+    "volt_typhoon_ttps",
+    "scattered_spider_ttps",
+    "salt_typhoon_ttps",
+    "fin7_techniques",
+    "conti_ransomware_ttps",
+    "lockbit_techniques",
+    "cl0p_techniques",
+    "blackcat_alphv_ttps",
+    "midnight_blizzard_ttps",
+    "earth_longzhi_ttps",
+    "equation_group_ttps",
+    "sandworm_techniques",
+    "carbon_spider_ttps",
+    "wizard_spider_ttps",
+    "unc2452_ttps",
+    "unc3944_ttps",
+    "quantum_sovereign_nexus",
+    // ── Advanced Cloud engines ────────────────────────────────────────────────
+    "lambda_escape",
+    "terraform_state_attack",
+    "cloudformation_injection",
+    "service_mesh_attack",
+    "cloud_audit_evasion",
+    "ecr_registry_attack",
+    "multi_cloud_pivot",
+    "cloud_worm_propagation",
+    "serverless_injection",
+    "cloud_data_exfil",
+    "cloud_network_attack",
+    "cloud_privilege_persistence",
+    // ── Advanced Crypto / Identity engines ───────────────────────────────────
+    "padding_oracle_attack",
+    "hash_extension_attack",
+    "ecdsa_nonce_bias",
+    "rsa_timing_attack",
+    "mfa_bypass_engine",
+    "credential_stuffing",
+    "kerberos_attack_suite",
+    "zero_trust_bypass",
+    "pki_hierarchy_attack",
+    "session_fixation_adv",
+    "password_hash_crack",
+    "quantum_key_attack",
+    "password_spray_advanced",
+    // ── Advanced Data Exfiltration engines ───────────────────────────────────
+    "dns_exfil_engine",
+    "http_covert_exfil",
+    "cloud_exfil_engine",
+    "encrypted_exfil",
+    "acoustic_exfil",
+    "em_exfil_engine",
+    "optical_exfil",
+    "cache_timing_exfil",
+    "keyboard_acoustic",
+    "screen_capture_exfil",
+    "clipboard_hijack",
+    "database_exfil",
+    "email_exfil",
+    "insider_exfil",
+    "storage_covert_channel",
+    // ── Advanced Malware / Ransomware engines ─────────────────────────────────
+    "bootkit_uefi",
+    "fileless_malware_engine",
+    "polymorphic_engine",
+    "botnet_c2_engine",
+    "keylogger_engine",
+    "spyware_stalkerware",
+    "worm_propagation",
+    "rce_exploit_engine",
+    "persistence_mechanism",
+    "lateral_movement_engine",
+    "data_staging_engine",
+    "exploit_kit_engine",
+    "trojan_dropper",
+    "macro_malware",
+    // ── Advanced Mobile engines ───────────────────────────────────────────────
+    "android_malware_engine",
+    "ios_exploit_engine",
+    "mobile_mitm",
+    "ssl_pinning_bypass",
+    "android_intent_attack",
+    "ios_url_scheme_attack",
+    "mobile_overlay_attack",
+    "sim_swap_engine",
+    "mobile_banking_trojan",
+    "app_store_attack",
+    "mdm_bypass_engine",
+    "bluetooth_mobile_attack",
+    "nfc_relay_attack",
+    "mobile_spyware_engine",
+    "react_native_attack",
+    // ── Advanced Network / Protocol engines ──────────────────────────────────
+    "arp_spoofing_engine",
+    "vlan_hopping_attack",
+    "dhcp_attack_engine",
+    "dns_cache_poisoning",
+    "ntp_amplification",
+    "snmp_exploitation",
+    "rdp_attack_engine",
+    "ldap_injection_engine",
+    "voip_sip_attack",
+    "ss7_attack_simulation",
+    "wifi_attack_engine",
+    "bluetooth_attack_engine",
+    "ospf_bgp_hijack",
+    "mpls_vpn_attack",
+    "lte_5g_attack",
+    "network_covert_channel",
+    "wpa3_attack_engine",
+    "tor_exit_attack",
+    "protocol_downgrade",
+    "network_baseline_anomaly",
+    "packet_injection_engine",
+    "network_tap_advanced",
+    "multicast_attack",
+    "nat_traversal_attack",
+    // ── Advanced OT / ICS engines ─────────────────────────────────────────────
+    "dnp3_attack",
+    "bacnet_attack",
+    "zigbee_attack",
+    "iec61850_attack",
+    "satellite_comm_attack",
+    "rfid_nfc_attack",
+    // ── Advanced Recon engines ────────────────────────────────────────────────
+    "threat_intel_fusion",
+    "attack_surface_quantify",
+    "adversarial_simulation",
+    "dark_web_monitor",
+    "passive_dns_forensics",
+    // ── Advanced Social Engineering engines ──────────────────────────────────
+    "spear_phishing_engine",
+    "vishing_engine",
+    "smishing_engine",
+    "qr_phishing",
+    "deepfake_voice_engine",
+    "business_email_compromise",
+    "watering_hole_attack",
+    "pretexting_engine",
+    "insider_threat_engine",
+    "brand_impersonation",
+    "fake_update_engine",
+    "linkedin_phishing",
+    "callback_phishing",
+    "physical_social_eng",
+    "typosquatting_phishing",
+    // ── Advanced Stealth / Evasion engines ───────────────────────────────────
+    "process_hollowing",
+    "living_off_land",
+    "heap_exploitation",
+    // ── Advanced Supply Chain engines ────────────────────────────────────────
+    "github_actions_attack",
+    "compiler_backdoor",
+    "open_source_backdoor",
+    "cdn_poisoning_engine",
+    "software_signing_attack",
+    "build_system_compromise",
+    "dependency_confusion",
+    "update_hijacking",
+    "sbom_forgery_engine",
+    "third_party_api_attack",
+    "iac_supply_chain",
+    // ── Advanced Web engines ──────────────────────────────────────────────────
+    "cors_misconfiguration",
+    "swagger_abuse",
+    "soap_injection",
+    "odata_injection",
+    "css_injection",
+    "template_injection_adv",
+    "http_parameter_pollution",
+    "api_mass_assignment",
+    "clickjacking_engine",
+    "subdomain_takeover",
+    "file_inclusion_rfi",
+    "deserialization_net",
+    "api_rate_limit_bypass",
+    "graphql_subscription_attack",
+    "webrtc_attack",
+    "browser_extension_attack",
+    "web3_dapp_attack",
+    "api_gateway_bypass",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -458,6 +666,185 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "gcp_privilege_attack" => "gcp_attack",
         "kubernetes_rbac_escape" | "eks_attack" => "k8s_container",
         "azure_devops_attack" => "azure_attack",
+        // Legacy APT / campaign aliases.
+        "poe_synthesis" => "poe_synthesis",
+        "rce_chain" | "vuln_chaining" => "kill_chain",
+        "c2_emulation" | "apt_c2_infra" | "obfuscated_c2" | "c2_rotation_engine" => {
+            "botnet_c2_engine"
+        }
+        "ransomware_emulation" | "ransomware_sim" | "destructive_wiper" => {
+            "conti_ransomware_ttps"
+        }
+        "active_directory" => "kerberos_attack_suite",
+        "memory_corruption" => "heap_exploitation",
+        "browser_exploitation" => "browser_extension_attack",
+        "log4shell_scan" | "kernel_exploit" => "rce_exploit_engine",
+        "post_exploitation" | "full_breach_sim" => "threat_emulation",
+        "threat_hunting_apt" => "threat_intel_fusion",
+        "advanced_persistence" => "bootkit_uefi",
+        "apt_lateral_movement" | "ot_it_lateral_chain" => "lateral_movement_engine",
+        "nation_state_ttps" | "prometheus_hyperion_nexus" => "quantum_sovereign_nexus",
+        "zero_day_chain" => "zero_day_prediction",
+        "long_haul_exfil" => "storage_covert_channel",
+        "watering_hole" => "watering_hole_attack",
+        "supply_chain_apt" | "social_supply_chain_attack" => "supply_chain",
+        "mobile_backend_chain" | "ai_cloud_escalation_chain" => "kill_chain",
+        // Legacy recon / OSINT aliases.
+        "mobile_attack" | "mobile_pentest" => "mobile_mitm",
+        "active_directory_enum" => "kerberos_attack_suite",
+        "email_spoofing" => "business_email_compromise",
+        "deepweb_intel" => "dark_web_monitor",
+        "compliance_gap_scan" | "network_topology_map" | "threat_model_automation"
+        | "attack_graph_traversal" => "attack_surface_quantify",
+        "social_media_recon" | "github_recon" | "email_harvest" | "geoint"
+        | "employee_profiling" | "data_deanonymization" | "location_pattern_analysis" => {
+            "osint"
+        }
+        "wayback_recon" | "cert_transparency" => "recon",
+        "dns_enum" => "passive_dns_forensics",
+        "shodan_mass_scan" => "asm",
+        "differential_privacy_exploit" => "model_inversion_attack",
+        // Legacy web / appsec aliases.
+        "sqli_advanced" | "api_fuzzing" | "xss_advanced" | "csrf_exploit"
+        | "race_condition_web" | "nosql_injection" | "open_redirect" => {
+            "http_feedback_fuzz"
+        }
+        "graphql_injection" | "graphql_batching" => "graphql_attack",
+        "container_escape" | "container_k8s_escape" | "gke_rbac_exploit" => "k8s_container",
+        "web_cache_poison" | "web_cache_deception" => "cache_poisoning",
+        "xxe_injection" => "xxe",
+        "ldap_injection" => "ldap_injection_engine",
+        "ssrf_chain" | "imds_ssrf" => "ssrf_advanced",
+        "jwt_attacks" => "jwt_attack",
+        "rce_deserialization" | "deserialization_java" => "deserialization_net",
+        "cors_exploit" => "cors_misconfiguration",
+        "js_prototype_pollution" => "prototype_pollution",
+        "oauth_pkce_attack" | "oauth_abuse" => "oauth_oidc",
+        "clickjacking" => "clickjacking_engine",
+        "smart_contract_audit" | "blockchain_bridge_exploit" => "web3_dapp_attack",
+        "path_traversal" => "file_inclusion_rfi",
+        "business_logic_flaw" => "bola_idor",
+        "mass_assignment" => "api_mass_assignment",
+        "api_versioning_attack" | "api_gateway_attack" | "api_all_vectors_engine" => {
+            "api_gateway_bypass"
+        }
+        "host_header_injection" => "http_smuggling",
+        "ar_vr_attack_engine" => "browser_extension_attack",
+        // Legacy AI / LLM aliases.
+        "deepfake_genai" | "synthetic_identity_fraud" => "deepfake_synthesis",
+        "ai_poisoning" => "data_poisoning_engine",
+        "rag_poisoning" => "rag_poisoning_engine",
+        "exfil_ai_inference" => "model_inversion_attack",
+        "ai_model_backdoor" => "neural_backdoor_detect",
+        "llm_context_overflow" | "llm_dos" => "llm_dos_attack",
+        "ai_supply_chain" | "ai_model_provenance_attack" => "ai_supply_chain_attack",
+        "adversarial_image" => "adversarial_examples",
+        "llm_privacy_leak" => "llm_memory_extraction",
+        "agentic_ai_escape" => "autonomous_ai_escape",
+        "agentic_framework_attack" | "llm_function_call_hijack" | "multi_agent_subversion"
+        | "mcp_server_exploit" => "llm_agent_hijack",
+        "llm_system_prompt_leak" => "prompt_injection_chain",
+        "llm_guardrail_bypass" => "llm_jailbreak",
+        // Legacy cloud aliases.
+        "cloud_ransomware" => "cloud_worm_propagation",
+        "cloud_lateral" | "cross_account_pivot" => "multi_cloud_pivot",
+        "serverless_cold_start" => "serverless_attack",
+        "cloud_identity_attack" => "cloud_privilege_persistence",
+        "cloud_storage_audit" | "cloud_trail_disable" | "cloud_logging_blind" => {
+            "cloud_audit_evasion"
+        }
+        "cloud_waf_bypass" => "waf_bypass",
+        "s3_bucket_enum" => "aws_attack",
+        "lambda_layer_inject" | "cloud_function_escape" | "edge_computing_exploit" => {
+            "lambda_escape"
+        }
+        "azure_ad_attack" => "azure_attack",
+        "terraform_state_steal" => "terraform_state_attack",
+        "cloud_cost_dos" | "sdn_controller_exploit" | "nfv_mano_attack"
+        | "sase_security_bypass" => "cloud_network_attack",
+        "ecr_image_poison" => "ecr_registry_attack",
+        // Legacy OT / embedded aliases.
+        "firmware_exploit" | "firmware_emulation" | "medical_device_exploit"
+        | "implantable_device_hack" | "jtag_swd_exploitation" => "iot_firmware",
+        "satellite_attack" => "satellite_comm_attack",
+        "automotive_can_bus" | "can_fd_attack" => "rfid_nfc_attack",
+        "hardware_implant" => "iot_firmware",
+        "modbus_exploit" | "plc_logic_bomb" | "hmi_exploit" | "ics_historian_attack"
+        | "hospital_hl7_attack" => "scada_ics",
+        "lorawan_attack" => "ble_rf",
+        // Legacy stealth / evasion aliases.
+        "data_exfiltration" => "http_covert_exfil",
+        "physical_security" | "evil_maid_engine" | "badusb_hid_attack" => {
+            "physical_social_eng"
+        }
+        "malware_persistence" => "persistence_mechanism",
+        "process_injection" => "process_hollowing",
+        "side_channel" => "timing_sidechannel",
+        "waf_ids_bypass" => "waf_bypass",
+        "siem_evasion" | "wasm_reverse" | "timestomping" | "log_wiping" => {
+            "antiforensics"
+        }
+        "deception_evasion" | "syscall_evasion" | "amsi_bypass" | "detection_gap_exploiter"
+        | "opsec_intelligence_engine" => "edr_evasion",
+        "graphene_os_bypass" => "mdm_bypass_engine",
+        "rootkit_implant" => "bootkit_uefi",
+        "dll_hijacking" => "edr_evasion",
+        "fileless_malware" => "fileless_malware_engine",
+        "polymorphic_payload" => "polymorphic_engine",
+        "thunderbolt_dma_attack" => "physical_social_eng",
+        "continuous_auth_evasion" | "behavioral_biometric_attack" => "mfa_bypass_engine",
+        "microsegmentation_bypass" => "zero_trust_bypass",
+        // Legacy crypto / identity aliases.
+        "biometric_spoofing" | "totp_bruteforce" | "webauthn_fido2_bypass" => {
+            "mfa_bypass_engine"
+        }
+        "quantum_attack" | "harvest_now_decrypt_later" | "pqc_implementation_attack"
+        | "lattice_crypto_attack" => "quantum_key_attack",
+        "active_directory_cs" | "pki_cert_forge" | "hsm_attack" | "hardware_wallet_attack" => {
+            "pki_hierarchy_attack"
+        }
+        "password_crack" => "password_hash_crack",
+        "tls_downgrade" => "pki_tls",
+        "ntlm_relay" => "smb_netbios",
+        "golden_ticket" => "kerberos_attack_suite",
+        "key_derivation_flaw" => "crypto_engine",
+        "tpm_firmware_attack" | "cold_boot_attack" | "voltage_glitch_attack" => {
+            "crypto_engine"
+        }
+        // Legacy network aliases.
+        "lateral_movement" => "lateral_movement_engine",
+        "wireless_attack" | "wifi_attack" => "wifi_attack_engine",
+        "dns_rebinding" => "dns_cache_poisoning",
+        "spear_phishing" => "spear_phishing_engine",
+        "vlan_bypass" => "vlan_hopping_attack",
+        "insider_threat" => "insider_threat_engine",
+        "smb_relay" => "smb_netbios",
+        "bgp_hijacking" => "bgp_dns_hijacking",
+        "ipsec_vpn_audit" => "mpls_vpn_attack",
+        "5g_security" | "network_slice_isolation_bypass" => "lte_5g_attack",
+        "bluetooth_attack" => "bluetooth_attack_engine",
+        "telco_ss7_attack" => "ss7_attack_simulation",
+        "network_tap_implant" => "network_tap_advanced",
+        "arp_spoofing" => "arp_spoofing_engine",
+        "icmp_covert_channel" => "network_covert_channel",
+        "snmp_attack" => "snmp_exploitation",
+        "ospf_bgp_manipulation" => "ospf_bgp_hijack",
+        "rdp_exploit" => "rdp_attack_engine",
+        "dns_tunneling" => "dns_exfil_engine",
+        "dhcp_starvation" => "dhcp_attack_engine",
+        // Legacy supply-chain and orchestration aliases.
+        "devsecops_scan" | "data_pipeline_attack" => "cicd_pipeline",
+        "devsecops_secrets" => "leak_hunter",
+        "ci_cd_poisoning" | "build_artifact_tamper" | "code_review_bypass" => {
+            "build_system_compromise"
+        }
+        "gitops_attack" => "iac_supply_chain",
+        "npm_typosquatting" => "typosquatting_monitor",
+        "package_signing_bypass" => "software_signing_attack",
+        "vendored_code_attack" => "open_source_backdoor",
+        "update_mechanism_hijack" => "update_hijacking",
+        "zero_click_exploit" => "zero_day_prediction",
+        "tactic_chain_synthesizer" => "kill_chain",
         "modbus_attack" | "mqtt_attack" | "coap_attack" | "opcua_attack" | "plc_logic_attack"
         | "hmi_attack" | "profinet_attack" | "industrial_protocol_fuzz" | "firmware_emulation_attack" => {
             "scada_ics"
@@ -472,6 +859,18 @@ pub fn resolve_engine_id(id: &str) -> &str {
         }
         "web_cache_poison_adv" => "cache_poisoning",
         "nosql_deep_injection" => "bola_idor",
+        // Top-tier catalog aliases mapped to stable production engines.
+        "satellite_recon" => "recon",
+        "darkweb_intel" => "leak_hunter",
+        "financial_osint" => "osint",
+        "blockchain_trace" => "osint",
+        "metadata_harvest" => "recon",
+        "patent_recon" => "osint",
+        "telecom_osint" => "osint",
+        "iot_shodan_scan" => "recon",
+        "job_posting_osint" => "osint",
+        "github_secret_scan" => "leak_hunter",
+        "http2_attack" => "http_smuggling",
         "ollama_fuzz" => "llm_path_fuzz",
         other => other,
     }

@@ -512,12 +512,17 @@ export default function FindingsCommandCenter() {
   // Load findings and public config
   useEffect(() => {
     setLoading(true)
-    apiFetch('/api/findings')
+    apiFetch('/api/findings?limit=2000')
       .then((r) => {
         if (!r.ok) throw new Error(`Server returned HTTP ${r.status}`)
         return r.json()
       })
-      .then((d) => setRawFindings(Array.isArray(d) ? d : []))
+      .then((d) => {
+        // Backend was rewritten to return {ok, findings, total, limit, offset}.
+        // Tolerate legacy array shape for older deployments.
+        const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
+        setRawFindings(list)
+      })
       .catch((e) => setError(e?.message || 'Failed to load findings'))
       .finally(() => setLoading(false))
     apiFetch('/api/config/public')

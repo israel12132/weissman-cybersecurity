@@ -58,6 +58,10 @@ import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
 // ── New enterprise pages ──────────────────────────────────────────────────────
 import EngineMatrix from './pages/EngineMatrix'
 import EngineDetail from './pages/EngineDetail'
+import TopTierEngineHub from './pages/TopTierEngineHub'
+import TopTierEngineProfile from './pages/TopTierEngineProfile'
+import StrategicEngineProgram from './pages/StrategicEngineProgram'
+import BusinessEngineProfile from './pages/BusinessEngineProfile'
 import ThreatEmulation from './pages/ThreatEmulation'
 import SupplyChainHub from './pages/SupplyChainHub'
 import NetworkIntelligence from './pages/NetworkIntelligence'
@@ -72,7 +76,8 @@ import AdminManagement from './pages/AdminManagement'
 import DomainDiscovery from './pages/DomainDiscovery'
 import ThreatIntelHub from './pages/ThreatIntelHub'
 import IncidentResponseCenter from './pages/IncidentResponseCenter'
-import VulnIntelDashboard from './pages/VulnIntelDashboard'
+import VulnIntelDashboard from './pages/VulnIntelDashboard.jsx'
+import AgentManagement from './pages/AgentManagement'
 import DarkWebMonitor from './pages/DarkWebMonitor'
 import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
 import EngineClientCatalog from './pages/EngineClientCatalog'
@@ -148,6 +153,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="attack-chain/:clientId" element={<AttackChainView />} />
             {/* ── Enterprise C2 pages ─────────────────────────────────────────── */}
             <Route path="engines" element={<EngineMatrix />} />
+            <Route path="engines/top-tier" element={<TopTierEngineHub />} />
+            <Route path="engines/top-tier/:engineId" element={<TopTierEngineProfile />} />
+            <Route path="engines/strategic" element={<StrategicEngineProgram />} />
+            <Route path="engines/business/:engineId" element={<BusinessEngineProfile />} />
             <Route path="engines/:engineId" element={<EngineDetail />} />
             <Route path="domain-discovery" element={<DomainDiscovery />} />
             <Route path="threat-emulation" element={<ThreatEmulation />} />
@@ -197,6 +206,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="kill-chain" element={<KillChainOrchestrator />} />
             <Route path="ai-analysis" element={<AIAnalysisEngine />} />
             <Route path="exploit-lab" element={<ExploitResearchLab />} />
+            <Route path="agents" element={<AgentManagement />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>

@@ -8,6 +8,10 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_agents.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_auth.inc"
 ));
 include!(concat!(

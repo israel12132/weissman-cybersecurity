@@ -8,6 +8,29 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 
+const TOP_TIER_ENGINES: &[&str] = &[
+    "kill_chain",
+    "oast_oob",
+    "deception_honeypot",
+    "digital_twin",
+    "zero_day_prediction",
+    "threat_emulation",
+    "poe_synthesis",
+    "satellite_recon",
+    "darkweb_intel",
+    "financial_osint",
+    "blockchain_trace",
+    "metadata_harvest",
+    "patent_recon",
+    "telecom_osint",
+    "iot_shodan_scan",
+    "job_posting_osint",
+    "github_secret_scan",
+    "graphql_deep_attack",
+    "grpc_reflection_attack",
+    "http2_attack",
+];
+
 /// Channels for streaming engines; worker supplies minimal broadcast buses.
 #[derive(Clone)]
 pub struct AsyncJobChannels {
@@ -111,6 +134,185 @@ pub async fn execute_job(
                 "message": result.message,
             }))
         }
+        "top_tier_health_probe" => {
+            let target = p
+                .get("target")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| "payload.target required".to_string())?
+                .to_string();
+
+            let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
+                .await
+                .map_err(|e| e.to_string())?;
+            let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
+            let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
+            let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
+            let _ = tx.commit().await;
+
+            let mut entries: Vec<Value> = Vec::new();
+            let mut passed = 0usize;
+            let mut failed = 0usize;
+
+            let poe_cfg = crate::orchestrator::load_poe_config_http(
+                app_pool.as_ref(),
+                tid,
+                intel_pool.clone(),
+            )
+            .await
+            .ok();
+
+            let _ = channels.telemetry.send(
+                json!({
+                    "job_id": job.id.to_string(),
+                    "message": format!("Top-tier health probe started for {} engines", TOP_TIER_ENGINES.len()),
+                    "status": "running"
+                })
+                .to_string(),
+            );
+
+            for engine_id in TOP_TIER_ENGINES {
+                let started = std::time::Instant::now();
+                let canonical = weissman_core::models::engine::resolve_engine_id(engine_id);
+                let (probe_status, findings_count, message, raw_status) = if *engine_id == "poe_synthesis" {
+                    if let Some(cfg) = poe_cfg.as_ref() {
+                        let run = tokio::time::timeout(
+                            Duration::from_secs(180),
+                            crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+                                &target,
+                                cfg,
+                                None,
+                                None,
+                                Some(tid),
+                            ),
+                        )
+                        .await;
+                        match run {
+                            Ok(result) => {
+                                let st = result.status.clone();
+                                let msg = result.message.clone();
+                                let fc = result.findings.len();
+                                if st == "ok" {
+                                    ("pass", fc, msg, st)
+                                } else {
+                                    ("fail", fc, msg, st)
+                                }
+                            }
+                            Err(_) => (
+                                "fail",
+                                0,
+                                "poe_synthesis timed out (180s)".to_string(),
+                                "timeout".to_string(),
+                            ),
+                        }
+                    } else {
+                        (
+                            "fail",
+                            0,
+                            "poe_synthesis config unavailable".to_string(),
+                            "error".to_string(),
+                        )
+                    }
+                } else if !weissman_core::models::engine::is_production_engine_id(engine_id) {
+                    (
+                        "fail",
+                        0,
+                        "catalog-only engine (no production runner)".to_string(),
+                        "catalog_only".to_string(),
+                    )
+                } else {
+                    let ctx = crate::engine_dispatch::EngineRunContext {
+                        tenant_id: Some(tid),
+                        target_list: vec![target.clone()],
+                        github_token: github_token.clone(),
+                        llm_base_url: llm_base.clone().unwrap_or_default(),
+                        llm_model: llm_model.clone().unwrap_or_default(),
+                        ..Default::default()
+                    };
+                    let run = tokio::time::timeout(
+                        Duration::from_secs(180),
+                        crate::engine_dispatch::run_engine(engine_id, &target, &ctx),
+                    )
+                    .await;
+                    match run {
+                        Ok(result) => {
+                            if result.status == "ok" {
+                                (
+                                    "pass",
+                                    result.findings.len(),
+                                    result.message,
+                                    result.status,
+                                )
+                            } else {
+                                (
+                                    "fail",
+                                    result.findings.len(),
+                                    result.message,
+                                    result.status,
+                                )
+                            }
+                        }
+                        Err(_) => (
+                            "fail",
+                            0,
+                            "engine timed out (180s)".to_string(),
+                            "timeout".to_string(),
+                        ),
+                    }
+                };
+
+                let duration_ms = started.elapsed().as_millis() as u64;
+                if probe_status == "pass" {
+                    passed += 1;
+                } else {
+                    failed += 1;
+                }
+
+                entries.push(json!({
+                    "engine_id": engine_id,
+                    "canonical_engine": canonical,
+                    "probe_status": probe_status,
+                    "status": raw_status,
+                    "message": message,
+                    "findings_count": findings_count,
+                    "duration_ms": duration_ms,
+                }));
+
+                let _ = channels.telemetry.send(
+                    json!({
+                        "job_id": job.id.to_string(),
+                        "engine_id": engine_id,
+                        "canonical_engine": canonical,
+                        "probe_status": probe_status,
+                        "findings_count": findings_count,
+                        "duration_ms": duration_ms,
+                        "message": message,
+                        "status": "running",
+                    })
+                    .to_string(),
+                );
+            }
+
+            let _ = channels.telemetry.send(
+                json!({
+                    "job_id": job.id.to_string(),
+                    "message": format!("Top-tier health probe completed: {}/{} passed", passed, TOP_TIER_ENGINES.len()),
+                    "status": "completed",
+                    "passed": passed,
+                    "failed": failed,
+                })
+                .to_string(),
+            );
+
+            Ok(json!({
+                "ok": true,
+                "target": target,
+                "passed": passed,
+                "failed": failed,
+                "engines": entries,
+            }))
+        }
         "tenant_full_scan" | "onboarding_tenant_scan" => {
             let permit = crate::scan_concurrency::acquire_full_scan_permit()
                 .await
@@ -198,6 +400,8 @@ pub async fn execute_job(
                 let ctx = crate::engine_dispatch::EngineRunContext {
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
+                    app_pool: Some(app.clone()),
+                    client_id: Some(client_id),
                     ..Default::default()
                 };
                 let result =

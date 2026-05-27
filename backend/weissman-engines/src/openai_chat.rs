@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fmt;
+use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -24,6 +25,9 @@ const CIRCUIT_OPEN_SECS: u64 = 45;
 const HEALTH_PROBE_TTL: Duration = Duration::from_secs(20);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(2);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
+const LLM_RETRY_ATTEMPTS: u32 = 3;
+const LLM_RETRY_INITIAL_BACKOFF_MS: u64 = 250;
+const LLM_RETRY_MAX_BACKOFF_MS: u64 = 2_000;
 
 /// Optional global hook: `(tenant_id, prompt_tokens, completion_tokens, model, operation)` — typically spawns DB insert.
 pub type LlmUsageReporter = Arc<dyn Fn(i64, u32, u32, String, &'static str) + Send + Sync>;
@@ -272,6 +276,167 @@ impl fmt::Display for LlmError {
     }
 }
 
+fn is_retryable_llm_status(status: u16) -> bool {
+    status == 429 || (500..600).contains(&status)
+}
+
+fn llm_retry_delay(attempt: u32) -> Duration {
+    let exponent = attempt.saturating_sub(1).min(8);
+    let delay_ms = LLM_RETRY_INITIAL_BACKOFF_MS
+        .saturating_mul(2_u64.saturating_pow(exponent))
+        .min(LLM_RETRY_MAX_BACKOFF_MS);
+    Duration::from_millis(delay_ms)
+}
+
+fn record_llm_outcome(started: Instant, outcome: &'static str) {
+    metrics::histogram!("weissman_llm_inference_seconds", "outcome" => outcome)
+        .record(started.elapsed().as_secs_f64());
+}
+
+fn record_llm_error_outcome(started: Instant, error: &LlmError) {
+    let outcome = match error {
+        LlmError::Timeout => "timeout",
+        LlmError::Http { .. } => "http_error",
+        LlmError::Decode(_) => "decode",
+        LlmError::EmptyContent => "empty",
+        _ => "error",
+    };
+    record_llm_outcome(started, outcome);
+}
+
+async fn send_with_llm_retry<F, Fut>(
+    base_url: &str,
+    operation: &'static str,
+    mut make_request: F,
+) -> Result<reqwest::Response, LlmError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+{
+    for attempt in 1..=LLM_RETRY_ATTEMPTS {
+        match make_request().await {
+            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                let body_preview = resp.text().await.unwrap_or_default();
+                let retryable = is_retryable_llm_status(status) && attempt < LLM_RETRY_ATTEMPTS;
+
+                if retryable {
+                    tracing::warn!(
+                        operation,
+                        base_url = %base_url,
+                        attempt,
+                        status,
+                        "LLM request failed; retrying"
+                    );
+                    tokio::time::sleep(llm_retry_delay(attempt)).await;
+                    continue;
+                }
+
+                circuit_on_failure(base_url);
+                return Err(LlmError::Http {
+                    status,
+                    body_preview: body_preview.chars().take(1024).collect(),
+                });
+            }
+            Err(err) => {
+                let retryable = (err.is_timeout() || err.is_connect()) && attempt < LLM_RETRY_ATTEMPTS;
+
+                if retryable {
+                    tracing::warn!(
+                        operation,
+                        base_url = %base_url,
+                        attempt,
+                        error = %err,
+                        "LLM request transport error; retrying"
+                    );
+                    tokio::time::sleep(llm_retry_delay(attempt)).await;
+                    continue;
+                }
+
+                circuit_on_failure(base_url);
+                return Err(if err.is_timeout() {
+                    LlmError::Timeout
+                } else {
+                    LlmError::Unreachable(err.to_string())
+                });
+            }
+        }
+    }
+
+    circuit_on_failure(base_url);
+    Err(LlmError::Unreachable(format!(
+        "{}: request failed after retries",
+        operation
+    )))
+}
+
+fn send_with_llm_retry_blocking<F>(
+    base_url: &str,
+    operation: &'static str,
+    mut make_request: F,
+) -> Result<reqwest::blocking::Response, LlmError>
+where
+    F: FnMut() -> Result<reqwest::blocking::Response, reqwest::Error>,
+{
+    for attempt in 1..=LLM_RETRY_ATTEMPTS {
+        match make_request() {
+            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                let body_preview = resp.text().unwrap_or_default();
+                let retryable = is_retryable_llm_status(status) && attempt < LLM_RETRY_ATTEMPTS;
+
+                if retryable {
+                    tracing::warn!(
+                        operation,
+                        base_url = %base_url,
+                        attempt,
+                        status,
+                        "LLM request failed; retrying"
+                    );
+                    std::thread::sleep(llm_retry_delay(attempt));
+                    continue;
+                }
+
+                circuit_on_failure(base_url);
+                return Err(LlmError::Http {
+                    status,
+                    body_preview: body_preview.chars().take(1024).collect(),
+                });
+            }
+            Err(err) => {
+                let retryable = (err.is_timeout() || err.is_connect()) && attempt < LLM_RETRY_ATTEMPTS;
+
+                if retryable {
+                    tracing::warn!(
+                        operation,
+                        base_url = %base_url,
+                        attempt,
+                        error = %err,
+                        "LLM request transport error; retrying"
+                    );
+                    std::thread::sleep(llm_retry_delay(attempt));
+                    continue;
+                }
+
+                circuit_on_failure(base_url);
+                return Err(if err.is_timeout() {
+                    LlmError::Timeout
+                } else {
+                    LlmError::Unreachable(err.to_string())
+                });
+            }
+        }
+    }
+
+    circuit_on_failure(base_url);
+    Err(LlmError::Unreachable(format!(
+        "{}: request failed after retries",
+        operation
+    )))
+}
+
 /// Normalize base: trim, ensure `/v1` suffix for OpenAI-style paths.
 #[must_use]
 pub fn normalize_openai_base_url(raw: &str) -> String {
@@ -419,35 +584,27 @@ pub async fn chat_completion_detailed(
         "max_tokens": max_tokens,
         "stream": false,
     });
-    let mut req = client.post(&url).json(&body);
-    req = apply_bearer(req);
 
     let t0 = std::time::Instant::now();
-    let resp = match req.send().await {
+    let resp = match send_with_llm_retry(base_url, operation, || {
+        let body = body.clone();
+        let mut req = client.post(&url).json(&body);
+        req = apply_bearer(req);
+        async move { req.send().await }
+    })
+    .await
+    {
         Ok(r) => r,
-        Err(e) => {
-            circuit_on_failure(base_url);
-            if e.is_timeout() {
-                metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "timeout")
-                    .record(t0.elapsed().as_secs_f64());
-                return Err(LlmError::Timeout);
-            }
-            metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "error")
-                .record(t0.elapsed().as_secs_f64());
-            return Err(LlmError::Unreachable(e.to_string()));
+        Err(err) => {
+            record_llm_error_outcome(t0, &err);
+            return Err(err);
         }
     };
 
     if !resp.status().is_success() {
-        circuit_on_failure(base_url);
         let status = resp.status().as_u16();
         let txt = resp.text().await.unwrap_or_default();
         let preview = txt.chars().take(1024).collect();
-        metrics::histogram!(
-            "weissman_llm_inference_seconds",
-            "outcome" => "http_error"
-        )
-        .record(t0.elapsed().as_secs_f64());
         return Err(LlmError::Http {
             status,
             body_preview: preview,
@@ -487,8 +644,7 @@ pub async fn chat_completion_detailed(
     }
 
     circuit_on_success(base_url);
-    metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "ok")
-        .record(t0.elapsed().as_secs_f64());
+    record_llm_outcome(t0, "ok");
     fire_usage_reporter(tenant_id, pt, ct, model, operation);
 
     Ok(ChatCompletionOutput {
@@ -590,35 +746,27 @@ pub async fn chat_completion_detailed_json_object(
             );
         }
     }
-    let mut req = client.post(&url).json(&body);
-    req = apply_bearer(req);
 
     let t0 = std::time::Instant::now();
-    let resp = match req.send().await {
+    let resp = match send_with_llm_retry(base_url, operation, || {
+        let body = body.clone();
+        let mut req = client.post(&url).json(&body);
+        req = apply_bearer(req);
+        async move { req.send().await }
+    })
+    .await
+    {
         Ok(r) => r,
-        Err(e) => {
-            circuit_on_failure(base_url);
-            if e.is_timeout() {
-                metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "timeout")
-                    .record(t0.elapsed().as_secs_f64());
-                return Err(LlmError::Timeout);
-            }
-            metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "error")
-                .record(t0.elapsed().as_secs_f64());
-            return Err(LlmError::Unreachable(e.to_string()));
+        Err(err) => {
+            record_llm_error_outcome(t0, &err);
+            return Err(err);
         }
     };
 
     if !resp.status().is_success() {
-        circuit_on_failure(base_url);
         let status = resp.status().as_u16();
         let txt = resp.text().await.unwrap_or_default();
         let preview = txt.chars().take(1024).collect();
-        metrics::histogram!(
-            "weissman_llm_inference_seconds",
-            "outcome" => "http_error"
-        )
-        .record(t0.elapsed().as_secs_f64());
         return Err(LlmError::Http {
             status,
             body_preview: preview,
@@ -664,8 +812,7 @@ pub async fn chat_completion_detailed_json_object(
     }
 
     circuit_on_success(base_url);
-    metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "ok")
-        .record(t0.elapsed().as_secs_f64());
+    record_llm_outcome(t0, "ok");
     fire_usage_reporter(tenant_id, pt, ct, model, operation);
 
     Ok(ChatCompletionOutput {
@@ -698,32 +845,24 @@ pub async fn create_embedding(
         "model": model,
         "input": input,
     });
-    let mut req = client.post(&url).json(&body);
-    req = apply_bearer(req);
     let t0 = std::time::Instant::now();
-    let resp = match req.send().await {
+    let resp = match send_with_llm_retry(base_url, operation, || {
+        let body = body.clone();
+        let mut req = client.post(&url).json(&body);
+        req = apply_bearer(req);
+        async move { req.send().await }
+    })
+    .await
+    {
         Ok(r) => r,
-        Err(e) => {
-            circuit_on_failure(base_url);
-            if e.is_timeout() {
-                metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "timeout")
-                    .record(t0.elapsed().as_secs_f64());
-                return Err(LlmError::Timeout);
-            }
-            metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "error")
-                .record(t0.elapsed().as_secs_f64());
-            return Err(LlmError::Unreachable(e.to_string()));
+        Err(err) => {
+            record_llm_error_outcome(t0, &err);
+            return Err(err);
         }
     };
     if !resp.status().is_success() {
-        circuit_on_failure(base_url);
         let status = resp.status().as_u16();
         let txt = resp.text().await.unwrap_or_default();
-        metrics::histogram!(
-            "weissman_llm_inference_seconds",
-            "outcome" => "http_error"
-        )
-        .record(t0.elapsed().as_secs_f64());
         return Err(LlmError::Http {
             status,
             body_preview: txt.chars().take(1024).collect(),
@@ -758,8 +897,7 @@ pub async fn create_embedding(
         return Err(LlmError::Decode("embeddings: empty vector".into()));
     }
     circuit_on_success(base_url);
-    metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "ok")
-        .record(t0.elapsed().as_secs_f64());
+    record_llm_outcome(t0, "ok");
     fire_usage_reporter(tenant_id, pt, 0, model, operation);
     Ok(out)
 }
@@ -853,32 +991,22 @@ pub fn chat_completion_text_blocking(
         .timeout(Duration::from_secs(timeout_secs.max(1)))
         .build()
         .map_err(|e| LlmError::Unreachable(e.to_string()))?;
-    let mut req = client.post(&url).json(&body);
-    req = apply_bearer_blocking(req);
     let t0 = std::time::Instant::now();
-    let resp = match req.send() {
+    let resp = match send_with_llm_retry_blocking(base_url, operation, || {
+        let body = body.clone();
+        let mut req = client.post(&url).json(&body);
+        req = apply_bearer_blocking(req);
+        req.send()
+    }) {
         Ok(r) => r,
-        Err(e) => {
-            circuit_on_failure(base_url);
-            if e.is_timeout() {
-                metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "timeout")
-                    .record(t0.elapsed().as_secs_f64());
-                return Err(LlmError::Timeout);
-            }
-            metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "error")
-                .record(t0.elapsed().as_secs_f64());
-            return Err(LlmError::Unreachable(e.to_string()));
+        Err(err) => {
+            record_llm_error_outcome(t0, &err);
+            return Err(err);
         }
     };
     if !resp.status().is_success() {
-        circuit_on_failure(base_url);
         let status = resp.status().as_u16();
         let txt = resp.text().unwrap_or_default();
-        metrics::histogram!(
-            "weissman_llm_inference_seconds",
-            "outcome" => "http_error"
-        )
-        .record(t0.elapsed().as_secs_f64());
         return Err(LlmError::Http {
             status,
             body_preview: txt.chars().take(1024).collect(),
@@ -911,8 +1039,7 @@ pub fn chat_completion_text_blocking(
         return Err(LlmError::EmptyContent);
     }
     circuit_on_success(base_url);
-    metrics::histogram!("weissman_llm_inference_seconds", "outcome" => "ok")
-        .record(t0.elapsed().as_secs_f64());
+    record_llm_outcome(t0, "ok");
     fire_usage_reporter(tenant_id, pt, ct, model, operation);
     Ok(text)
 }

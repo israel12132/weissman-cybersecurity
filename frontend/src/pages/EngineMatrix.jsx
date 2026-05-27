@@ -18,6 +18,17 @@ function severityColor(s) {
   return SEVERITY_COLOR[(s || '').toLowerCase()] ?? '#6b7280'
 }
 
+function firstClientTarget(client) {
+  if (!client) return ''
+  let domains = client.domains
+  if (typeof domains === 'string') {
+    try { domains = JSON.parse(domains) } catch { domains = [] }
+  }
+  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
+  if (!first) return ''
+  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
+}
+
 function MitreBadge({ id }) {
   if (!id) return null
   return (
@@ -324,9 +335,12 @@ export default function EngineMatrix() {
       return
     }
     const engine = ENGINES_BY_ID[engineId]
+    const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
+    const clientTarget = firstClientTarget(selectedClient)
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
       const body = { engine: engineId, client_id: Number(selectedClientId) }
+      if (clientTarget) body.target = clientTarget
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,7 +362,7 @@ export default function EngineMatrix() {
       showToast('error', e?.message ?? 'Network error')
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
     }
-  }, [selectedClientId, showToast])
+  }, [selectedClientId, clients, showToast])
 
   const handleRunGroup = useCallback(async (engineIds) => {
     if (selectedClientId == null) {
@@ -428,6 +442,14 @@ export default function EngineMatrix() {
             <span className="text-white/20 text-xs">|</span>
             <Link to="/engine-catalog" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
               🗂 Client Catalog
+            </Link>
+            <span className="text-white/20 text-xs">|</span>
+            <Link to="/engines/top-tier" className="text-rose-400/70 hover:text-rose-300 text-xs font-mono transition-colors">
+              Top-Tier Hub
+            </Link>
+            <span className="text-white/20 text-xs">|</span>
+            <Link to="/engines/strategic" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
+              Strategic Program
             </Link>
             <span className="text-white/20 text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">Engine Matrix</h1>

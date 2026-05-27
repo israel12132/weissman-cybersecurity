@@ -125,6 +125,17 @@ function getGroupDef(groupId) {
   return ENGINE_GROUP_DEFS.find((g) => g.id === groupId)
 }
 
+function firstClientTarget(client) {
+  if (!client) return ''
+  let domains = client.domains
+  if (typeof domains === 'string') {
+    try { domains = JSON.parse(domains) } catch { domains = [] }
+  }
+  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
+  if (!first) return ''
+  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
+}
+
 /** All engines belonging to a client profile (deduplicated, stable order) */
 function profileEngines(profile) {
   const seen = new Set()
@@ -329,6 +340,9 @@ export default function EngineClientCatalog() {
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
       const body = { engine: engineId, client_id: Number(selectedClientId) }
+      const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
+      const clientTarget = firstClientTarget(selectedClient)
+      if (clientTarget) body.target = clientTarget
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,7 +362,7 @@ export default function EngineClientCatalog() {
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
       return { ok: false, msg: e?.message ?? 'Network error' }
     }
-  }, [selectedClientId])
+  }, [selectedClientId, clients])
 
   const handleRunAll = useCallback(async () => {
     if (!selectedClientId) {

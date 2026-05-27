@@ -55,6 +55,7 @@ pub mod data_retention;
 pub mod db_backup;
 pub mod discovery_engine;
 pub mod engine_dispatch;
+pub mod engine_probes;
 pub mod engine_result;
 pub mod executive_pdf;
 pub mod exploit_synthesis_engine;
@@ -199,6 +200,8 @@ pub mod advanced_mobile_engines;
 pub mod advanced_data_engines;
 pub mod admin_users;
 pub mod auth_mfa;
+pub mod endpoint_agents;
+pub mod rbac;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

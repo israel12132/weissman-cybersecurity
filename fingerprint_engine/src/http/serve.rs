@@ -96,6 +96,8 @@ pub struct AppState {
     sovereign_swarm_rx: std::sync::Mutex<
         Option<tokio::sync::mpsc::Receiver<crate::sovereign_c2::SovereignSwarmCmd>>,
     >,
+    /// Endpoint-agent live session registry (one entry per online agent_uuid).
+    pub endpoint_agents: Arc<crate::endpoint_agents::AgentRegistry>,
 }
 
 impl AppState {
@@ -971,6 +973,7 @@ pub fn new_app_state(
         edge_heartbeat_batcher,
         sovereign_swarm_tx,
         sovereign_swarm_rx,
+        endpoint_agents: crate::endpoint_agents::AgentRegistry::new(),
     })
 }
 
@@ -1081,6 +1084,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
+        .route("/api/engines/top-tier/audit", get(api_engines_top_tier_audit))
+        .route("/api/engines/top-tier/health-probe", post(api_top_tier_health_probe_start))
+        .route("/api/engines/top-tier/:engine_id/history", get(api_top_tier_engine_history))
+        .route("/api/engines/top-tier/:engine_id/export", get(api_top_tier_engine_export))
+        .route("/api/engines/history/:engine_id", get(api_engine_history))
+        .route("/api/engines/export/:engine_id", get(api_engine_export))
         .route("/api/command-center/ticker", get(api_command_center_ticker))
         .route("/hooks/cicd/github", post(hook_cicd_github))
         .route("/hooks/cicd/gitlab", post(hook_cicd_gitlab))
@@ -1096,22 +1105,32 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/auth/mfa/verify", post(api_auth_mfa_verify))
         .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
         .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
-        .route("/api/onboarding/register", post(api_onboarding_register))
-        .route("/api/onboarding/target", post(api_onboarding_target))
-        .route(
-            "/api/onboarding/launch-scan",
-            post(api_onboarding_launch_scan),
-        )
-        .route("/api/billing/usage", get(api_billing_usage))
-        .route(
-            "/api/billing/checkout-session",
-            post(api_billing_checkout_session),
-        )
-        .route(
-            "/api/billing/sync-paddle",
-            post(api_billing_sync_paddle),
-        )
-        .route("/api/webhooks/paddle", post(api_paddle_webhook))
+        .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
+        .route("/api/auth/mfa/status", get(api_auth_mfa_status))
+        // Endpoint Agent
+        .route("/api/agents/enrollment-tokens", post(api_agents_create_token))
+        .route("/api/agents/enroll", post(api_agents_enroll))
+        .route("/api/agents/status", get(api_agents_status))
+        .route("/api/agents/dispatch", post(api_agents_dispatch_task))
+        .route("/install/agent.sh", get(install_agent_sh))
+        .route("/install/agent.ps1", get(install_agent_ps1))
+        .route("/ws/agent", get(ws_agent))
+        // .route("/api/onboarding/register", post(api_onboarding_register))
+        // .route("/api/onboarding/target", post(api_onboarding_target))
+        // .route(
+        //     "/api/onboarding/launch-scan",
+        //     post(api_onboarding_launch_scan),
+        // )
+        // .route("/api/billing/usage", get(api_billing_usage))
+        // .route(
+        //     "/api/billing/checkout-session",
+        //     post(api_billing_checkout_session),
+        // )
+        // .route(
+        //     "/api/billing/sync-paddle",
+        //     post(api_billing_sync_paddle),
+        // )
+        // .route("/api/webhooks/paddle", post(api_paddle_webhook))
         .route("/api/auth/oidc/begin", get(crate::oidc_auth::oidc_begin))
         .route(
             "/api/auth/oidc/callback",
@@ -1163,13 +1182,13 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_client_semantic_reasoning),
         )
         .route("/api/verify-audit/:hash", get(api_verify_audit))
-        .route("/api/scan/status", get(api_scan_status))
-        .route("/api/scan/start", post(api_scan_start))
-        .route("/api/scan/stop", post(api_scan_stop))
-        .route("/api/scan/run-all", post(api_scan_run_all))
-        .route("/api/scan/all-engines", post(api_scan_all_engines))
-        .route("/api/discovery/domains", post(api_discovery_domains))
-        .route("/api/scan/discovered-domains", post(api_scan_discovered_domains))
+        // .route("/api/scan/status", get(api_scan_status))
+        // .route("/api/scan/start", post(api_scan_start))
+        // .route("/api/scan/stop", post(api_scan_stop))
+        // .route("/api/scan/run-all", post(api_scan_run_all))
+        // .route("/api/scan/all-engines", post(api_scan_all_engines))
+        // .route("/api/discovery/domains", post(api_discovery_domains))
+        // .route("/api/scan/discovered-domains", post(api_scan_discovered_domains))
         .route(
             "/api/system/configs",
             get(api_system_configs_get).post(api_system_configs_post),
@@ -1192,12 +1211,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/sso/idps/:id/toggle", post(crate::sso_management::api_sso_idp_toggle))
         .route("/api/general/ascension", post(api_general_ascension))
         .route("/api/general/self-audit", post(api_general_self_audit))
-        .route("/api/timing-scan/run", post(api_timing_scan_run))
-        .route("/ws/timing", get(ws_timing))
-        .route("/api/ai-redteam/run", post(api_ai_redteam_run))
-        .route("/ws/ai-redteam", get(ws_ai_redteam))
-        .route("/api/threat-intel/feed", get(api_threat_intel_feed))
-        .route("/api/threat-intel/run", post(api_threat_intel_run))
+        // .route("/api/timing-scan/run", post(api_timing_scan_run))
+        // .route("/ws/timing", get(ws_timing))
+        // .route("/api/ai-redteam/run", post(api_ai_redteam_run))
+        // .route("/ws/ai-redteam", get(ws_ai_redteam))
+        // .route("/api/threat-intel/feed", get(api_threat_intel_feed))
+        // .route("/api/threat-intel/run", post(api_threat_intel_run))
         .route("/ws/threat-intel", get(ws_threat_intel))
         .route("/ws/swarm", get(ws_swarm))
         .route("/api/pipeline-scan/run", post(api_pipeline_scan_run))

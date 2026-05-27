@@ -195,3 +195,100 @@ async fn api_auth_mfa_enable(
     )
         .into_response()
 }
+
+#[derive(serde::Deserialize)]
+struct MfaDisableBody {
+    code: String,
+}
+
+async fn api_auth_mfa_status(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let row = sqlx::query(
+        "SELECT COALESCE(mfa_enabled, false) AS mfa_enabled, COALESCE(mfa_secret,'') AS mfa_secret
+         FROM users WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(auth.user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(state.app_pool.as_ref())
+    .await
+    .ok()
+    .flatten();
+    let enabled = row
+        .as_ref()
+        .and_then(|r| r.try_get::<bool, _>("mfa_enabled").ok())
+        .unwrap_or(false);
+    let provisioned = row
+        .as_ref()
+        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "mfa_enabled": enabled,
+            "mfa_provisioned": provisioned,
+        })),
+    )
+        .into_response()
+}
+
+async fn api_auth_mfa_disable(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    body: axum::extract::Json<MfaDisableBody>,
+) -> Response {
+    let row = sqlx::query(
+        "SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled,false) AS mfa_enabled
+         FROM users WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(auth.user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(state.app_pool.as_ref())
+    .await
+    .ok()
+    .flatten();
+    let secret: String = row
+        .as_ref()
+        .and_then(|r| r.try_get("mfa_secret").ok())
+        .unwrap_or_default();
+    let enabled: bool = row
+        .as_ref()
+        .and_then(|r| r.try_get("mfa_enabled").ok())
+        .unwrap_or(false);
+    if !enabled {
+        return (
+            StatusCode::OK,
+            Json(json!({"ok": true, "mfa_enabled": false, "detail": "MFA already disabled"})),
+        )
+            .into_response();
+    }
+    if secret.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "No MFA secret on file"})),
+        )
+            .into_response();
+    }
+    if !crate::auth_mfa::verify_code(&secret, body.code.trim()) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok": false, "detail": "Invalid verification code"})),
+        )
+            .into_response();
+    }
+    let _ = sqlx::query(
+        "UPDATE users SET mfa_enabled = false, mfa_secret = '' WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(auth.user_id)
+    .bind(auth.tenant_id)
+    .execute(state.app_pool.as_ref())
+    .await;
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "mfa_enabled": false})),
+    )
+        .into_response()
+}

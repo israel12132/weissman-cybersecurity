@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 fingerprint_engine = { path = "../../fingerprint_engine" }
+weissman-core = { path = "../weissman-core" }
 weissman-db = { path = "../../crates/weissman-db" }
 axum = { version = "0.7", features = ["json", "ws"] }
 tokio = { version = "1", features = ["full"] }

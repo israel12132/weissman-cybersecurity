@@ -69,3 +69,115 @@ jobs:
 
       - name: Build Rust workspace
         run: cargo build --workspace --release
+
+  engine-wiring-and-smoke:
+    name: Engine wiring audit & API smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weissman
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d weissman"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Verify engine wiring coverage
+        run: node scripts/verify_engine_wiring.mjs
+
+      - name: Start weissman-server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: changeme
+          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
+          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          PORT: "18000"
+        run: cargo run -p weissman-server > /tmp/weissman-server.log 2>&1 &
+
+      - name: Start weissman-worker
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+        run: cargo run -p weissman-worker > /tmp/weissman-worker.log 2>&1 &
+
+      - name: Wait for API health
+        env:
+          PORT: "18000"
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:${PORT}/api/health" > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "weissman-server did not become healthy"
+          cat /tmp/weissman-server.log || true
+          exit 1
+
+      - name: Smoke one engine per group
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_TENANT_SLUG: default
+          WEISSMAN_SMOKE_POLL_TIMEOUT_MS: "180000"
+        run: node scripts/smoke_engine_groups.mjs
+
+      - name: Audit UI scan button paths
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_TENANT_SLUG: default
+          WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
+        run: node scripts/audit_ui_button_scan_paths.mjs
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: |
+          echo '--- weissman-server.log ---'
+          cat /tmp/weissman-server.log || true
+          echo '--- weissman-worker.log ---'
+          cat /tmp/weissman-worker.log || true
