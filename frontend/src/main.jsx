@@ -114,6 +114,7 @@ import Clients from './pages/Clients'
 import ClientNew from './pages/ClientNew'
 import ClientDetail from './pages/ClientDetail'
 import ClientEngagements from './pages/ClientEngagements'
+import ClientEvidenceVault from './pages/ClientEvidenceVault'
 import JobsDashboard from './pages/JobsDashboard'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
@@ -194,6 +195,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="clients/new" element={<ClientNew />} />
             <Route path="clients/:id" element={<ClientDetail />} />
             <Route path="clients/:id/engagements" element={<ClientEngagements />} />
+            <Route path="clients/:id/evidence" element={<ClientEvidenceVault />} />
             <Route path="jobs" element={<JobsDashboard />} />
             {/* ── New UI improvements routes ──────────────────────────────────── */}
             <Route path="rate-limits" element={<RateLimitAnalytics />} />
