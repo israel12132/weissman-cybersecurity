@@ -71,7 +71,7 @@ docker compose up --build
 - **API:** http://localhost/api/
 - **WebSocket:** ws://localhost/ws/
 
-> **הערה:** סקריפט `weissman` מפעיל את כל המערכת כולל PostgreSQL, Backend, Worker ו-Gateway.
+> **הערה:** `docker compose up --build` מפעיל את כל המערכת (PostgreSQL, Backend, Worker, Gateway). הסקריפט `./start_weissman.sh` מפעיל רק את `weissman-server` ולכן דורש שירותי DB/Redis חיצוניים.
 
 - **התחבר** עם שם המשתמש והסיסמה (מוגדרים ב־.env).
 - **חברות** – הוסף/ערוך חברות והזן כתובות (דומיינים), טווחי IP ו־Tech Stack.
