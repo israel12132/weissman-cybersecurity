@@ -58,6 +58,7 @@ pub mod engine_dispatch;
 pub mod engine_probes;
 pub mod engine_result;
 pub mod executive_pdf;
+pub mod findings_persist;
 pub mod exploit_synthesis_engine;
 pub mod fingerprint;
 pub mod fuzz_http_pool;

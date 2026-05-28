@@ -208,6 +208,217 @@ async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): E
     (StatusCode::OK, Json(Value::Array(out))).into_response()
 }
 
+/// POST /api/clients/:id/scan/run-all — queue the curated baseline engine bundle against the
+/// client's domains. Uses `command_center_engine` jobs so the new `findings_persist` path
+/// surfaces results in the Findings Command Center end-to-end. Returns the list of queued
+/// job ids so the UI can link the customer to the Jobs Dashboard.
+async fn api_clients_scan_run_all(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    trace_ext: Option<Extension<crate::request_trace::TraceId>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+
+    // Resolve the client's authorized domains.
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "code": "db_unavailable"})),
+        )
+            .into_response();
+    };
+    let row = sqlx::query(
+        "SELECT domains FROM clients WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let domains_raw: String = match row {
+        Some(r) => r.try_get::<String, _>("domains").unwrap_or_default(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "detail": "Client not found"})),
+            )
+                .into_response();
+        }
+    };
+    let domains: Vec<String> = serde_json::from_str::<Vec<String>>(&domains_raw)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if domains.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "code": "no_domains",
+                "detail": "Add at least one authorized domain to this client before running scans.",
+            })),
+        )
+            .into_response();
+    }
+
+    // Curated baseline bundle that produces customer-actionable findings without burning
+    // the AI-heavy quota. Engines are gated by `is_production_engine_id` in the worker.
+    let baseline_engines: &[&str] = &[
+        "osint",
+        "asm",
+        "leak_hunter",
+        "discovery_engine",
+        "supply_chain",
+        "bola_idor",
+        "pki_tls",
+        "waf_bypass",
+    ];
+
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &u,
+            "scan_run_all_initiated",
+            &format!("client_id={id} engines={baseline:?}", id = id, baseline = baseline_engines),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    let mut queued: Vec<Value> = Vec::new();
+    for domain in &domains {
+        let target = if domain.starts_with("http://") || domain.starts_with("https://") {
+            domain.clone()
+        } else {
+            format!("http://{}", domain)
+        };
+        for engine in baseline_engines {
+            let payload = json!({
+                "engine": engine,
+                "target": target,
+                "client_id": id,
+            });
+            match crate::async_jobs::enqueue(
+                state.app_pool.as_ref(),
+                auth.tenant_id,
+                "command_center_engine",
+                payload,
+                trace_ext.as_ref().map(|Extension(t)| t.0.clone()),
+            )
+            .await
+            {
+                Ok(job_id) => {
+                    queued.push(json!({
+                        "engine": engine,
+                        "target": target,
+                        "job_id": job_id.to_string(),
+                        "status_url": format!("/api/jobs/{}", job_id),
+                    }));
+                }
+                Err(e) => {
+                    tracing::error!(
+                        target: "async_jobs",
+                        engine = %engine,
+                        target = %target,
+                        error = %e,
+                        "enqueue baseline scan job failed"
+                    );
+                }
+            }
+        }
+    }
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "ok": true,
+            "client_id": id,
+            "domains_count": domains.len(),
+            "jobs_queued": queued.len(),
+            "engines": baseline_engines,
+            "jobs": queued,
+            "message": format!(
+                "Queued {n} baseline scan jobs across {d} domain(s). Track progress at /api/jobs/<id> or in the Jobs Dashboard.",
+                n = queued.len(),
+                d = domains.len()
+            ),
+        })),
+    )
+        .into_response()
+}
+
+/// GET /api/clients/:id — single-client lookup. The frontend `ClientDetail` page calls this
+/// directly; before this handler existed the route only had POST/DELETE, returning 405 and
+/// rendering "Failed to load client:" for every customer.
+async fn api_clients_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly.", "code": "db_unavailable"})),
+        )
+            .into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT id, name, domains, tech_stack, ip_ranges,
+            COALESCE(contact_email,'') AS contact_email,
+            COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
+            COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
+            COALESCE(aws_external_id,'') AS aws_external_id,
+            COALESCE(gcp_project_id,'') AS gcp_project_id
+           FROM clients WHERE id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "Client not found", "code": "not_found"})),
+        )
+            .into_response();
+    };
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "id": r.try_get::<i64,_>("id").ok(),
+            "name": r.try_get::<String,_>("name").ok(),
+            "domains": r.try_get::<String,_>("domains").ok(),
+            "tech_stack": r.try_get::<String,_>("tech_stack").ok(),
+            "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
+            "contact_email": r.try_get::<String,_>("contact_email").ok(),
+            "auto_detect_tech_stack": r.try_get::<bool,_>("auto_detect_tech_stack").ok(),
+            "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
+            "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
+            "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+        })),
+    )
+        .into_response()
+}
+
 async fn api_clients_create(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

@@ -1156,7 +1156,11 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         )
         .route(
             "/api/clients/:id",
-            post(api_clients_update).delete(api_clients_delete),
+            get(api_clients_get).post(api_clients_update).delete(api_clients_delete),
+        )
+        .route(
+            "/api/clients/:id/scan/run-all",
+            post(api_clients_scan_run_all),
         )
         .route(
             "/api/clients/:id/config",

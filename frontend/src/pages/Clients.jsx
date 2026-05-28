@@ -7,6 +7,8 @@ export default function Clients() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [scanningId, setScanningId] = useState(null)
+  const [scanToast, setScanToast] = useState(null)
 
   useEffect(() => {
     loadClients()
@@ -31,6 +33,31 @@ export default function Clients() {
       setError(`Error loading clients: ${err.message}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function runScan(clientId, clientName) {
+    if (!confirm(`Queue the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) for "${clientName}"?`)) {
+      return
+    }
+    setScanningId(clientId)
+    setScanToast(null)
+    try {
+      const r = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setScanToast({ kind: 'error', message: data.detail || `Scan launch failed (HTTP ${r.status})` })
+        return
+      }
+      setScanToast({
+        kind: 'ok',
+        message: data.message || `Queued ${data.jobs_queued ?? 0} jobs.`,
+        jobs_queued: data.jobs_queued ?? 0,
+      })
+    } catch (err) {
+      setScanToast({ kind: 'error', message: err.message || 'Scan launch failed' })
+    } finally {
+      setScanningId(null)
     }
   }
 
@@ -78,6 +105,25 @@ export default function Clients() {
         {error && (
           <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400">
             {error}
+          </div>
+        )}
+
+        {scanToast && (
+          <div className={`p-4 rounded-lg border ${
+            scanToast.kind === 'ok'
+              ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-300'
+              : 'bg-red-900/20 border-red-500/30 text-red-400'
+          }`}>
+            <div className="font-medium">{scanToast.message}</div>
+            {scanToast.kind === 'ok' && (
+              <div className="mt-1 text-xs text-slate-400">
+                Track progress on the{' '}
+                <Link to="/jobs" className="underline hover:text-emerald-200">Jobs Dashboard</Link>{' '}
+                or open{' '}
+                <Link to="/findings" className="underline hover:text-emerald-200">Findings C2</Link>{' '}
+                once scans complete.
+              </div>
+            )}
           </div>
         )}
 
@@ -171,20 +217,30 @@ export default function Clients() {
                     )}
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-slate-700 flex items-center justify-between">
+                  <div className="mt-4 pt-4 border-t border-slate-700 flex items-center justify-between gap-2">
                     <Link
                       to={`/clients/${client.id}`}
                       className="text-sm text-purple-400 hover:text-purple-300 font-medium"
                     >
                       Manage →
                     </Link>
-                    <button
-                      onClick={() => deleteClient(client.id, client.name)}
-                      className="text-sm text-red-400 hover:text-red-300 transition-colors"
-                      title="Delete client"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => runScan(client.id, client.name)}
+                        disabled={scanningId === client.id || domains.length === 0}
+                        className="text-sm text-emerald-300 hover:text-emerald-200 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors font-medium"
+                        title={domains.length === 0 ? 'Add a domain to enable scanning' : 'Queue baseline scan bundle'}
+                      >
+                        {scanningId === client.id ? 'Queuing…' : '▶ Scan now'}
+                      </button>
+                      <button
+                        onClick={() => deleteClient(client.id, client.name)}
+                        className="text-sm text-red-400 hover:text-red-300 transition-colors"
+                        title="Delete client"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               )

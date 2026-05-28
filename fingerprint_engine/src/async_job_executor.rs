@@ -108,6 +108,9 @@ pub async fn execute_job(
                 .get("target")
                 .and_then(Value::as_str)
                 .ok_or_else(|| "payload.target required".to_string())?;
+            let client_id_opt = p
+                .get("client_id")
+                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -127,10 +130,36 @@ pub async fn execute_job(
                 return Err(format!("engine '{}' is catalog-only or unknown", engine));
             }
             let result = crate::engine_dispatch::run_engine(engine, target, &ctx).await;
+
+            // Persist findings into report_runs + vulnerabilities so the Findings Command
+            // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
+            // this step results live only inside weissman_async_jobs.result_json (effectively
+            // invisible to the customer).
+            let persisted = crate::findings_persist::persist_engine_findings(
+                app_pool.as_ref(),
+                tid,
+                client_id_opt,
+                engine,
+                target,
+                &result.findings,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    target: "findings_persist",
+                    tenant_id = tid,
+                    engine = %engine,
+                    error = %e,
+                    "failed to persist findings"
+                );
+                0
+            });
+
             Ok(json!({
                 "engine": engine,
                 "status": result.status,
                 "findings": result.findings,
+                "findings_persisted": persisted,
                 "message": result.message,
             }))
         }

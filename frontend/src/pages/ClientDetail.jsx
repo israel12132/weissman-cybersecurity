@@ -42,7 +42,7 @@ export default function ClientDetail() {
   }
 
   async function launchScan() {
-    if (!confirm(`Launch a full security scan for "${client.name}"? This will scan all authorized domains and IP ranges.`)) {
+    if (!confirm(`Launch the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) against the authorized domains for "${client.name}"?`)) {
       return
     }
 
@@ -50,33 +50,28 @@ export default function ClientDetail() {
     setScanResult(null)
 
     try {
-      // Use the scan/run-all endpoint or create a job
-      const response = await apiFetch('/api/scan/run-all', {
+      const response = await apiFetch(`/api/clients/${client.id}/scan/run-all`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: client.id,
-        }),
+        headers: { 'Content-Type': 'application/json' },
       })
 
       if (!response.ok) {
-        const text = await response.text().catch(() => 'Failed to launch scan')
+        const data = await response.json().catch(() => null)
+        const text = data?.detail || data?.code || (await response.text().catch(() => null)) || `HTTP ${response.status}`
         setScanResult({
           success: false,
           message: `Failed to launch scan: ${text}`,
         })
-        setLaunchingScan(false)
         return
       }
 
       const data = await response.json()
       setScanResult({
         success: true,
-        message: 'Scan launched successfully!',
-        job_id: data.job_id || data.id,
-        run_id: data.run_id,
+        message: data.message || 'Scan launched successfully!',
+        jobs_queued: data.jobs_queued,
+        engines: data.engines,
+        jobs: data.jobs || [],
       })
     } catch (err) {
       setScanResult({
@@ -210,10 +205,25 @@ export default function ClientDetail() {
             }`}
           >
             <p className="font-medium">{scanResult.message}</p>
-            {scanResult.job_id && (
-              <p className="mt-2 text-sm">
-                Job ID: <code className="font-mono">{scanResult.job_id}</code>
-              </p>
+            {Array.isArray(scanResult.jobs) && scanResult.jobs.length > 0 && (
+              <div className="mt-3 text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto font-mono">
+                {scanResult.jobs.slice(0, 12).map((j) => (
+                  <div key={j.job_id} className="flex justify-between gap-3">
+                    <span className="text-slate-400 truncate" title={j.target}>
+                      {j.engine} → {j.target}
+                    </span>
+                    <Link
+                      to={`/jobs`}
+                      className="text-cyan-300 hover:text-cyan-200 underline shrink-0"
+                    >
+                      {j.job_id.slice(0, 8)}…
+                    </Link>
+                  </div>
+                ))}
+                {scanResult.jobs.length > 12 && (
+                  <div className="text-slate-500">+{scanResult.jobs.length - 12} more queued</div>
+                )}
+              </div>
             )}
           </div>
         )}

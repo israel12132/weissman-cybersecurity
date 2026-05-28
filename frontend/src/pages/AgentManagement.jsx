@@ -31,11 +31,23 @@ export default function AgentManagement() {
   const refresh = useCallback(async () => {
     try {
       const r = await apiFetch('/api/agents/status')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      // 404 / 5xx → render an empty state instead of crashing the entire route. The endpoint
+      // used to require a DB table that wasn't migrated and an empty response body broke the
+      // error handler downstream.
+      if (r.status === 404) {
+        setAgents([])
+        setErr(null)
+        return
+      }
+      const txt = await r.text()
+      let d = {}
+      try { d = txt ? JSON.parse(txt) : {} } catch { d = {} }
+      if (!r.ok) throw new Error(d.detail || `Couldn't load agents (HTTP ${r.status}).`)
       setAgents(Array.isArray(d.agents) ? d.agents : [])
+      setErr(null)
     } catch (e) {
-      setErr(e.message)
+      setErr(e.message || String(e))
+      setAgents([])
     } finally {
       setLoading(false)
     }
