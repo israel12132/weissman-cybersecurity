@@ -253,6 +253,7 @@ async fn api_general_self_audit(
     }
 }
 
+#[allow(dead_code)]
 async fn api_timing_scan_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -302,6 +303,7 @@ async fn api_timing_scan_run(
     }
 }
 
+#[allow(dead_code)]
 async fn api_ai_redteam_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -356,11 +358,13 @@ async fn api_ai_redteam_run(
     }
 }
 
+#[allow(dead_code)]
 async fn api_threat_intel_feed() -> Response {
     let items = threat_intel_engine::fetch_nvd_recent(7).await;
     (StatusCode::OK, Json(json!({ "items": items }))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_threat_intel_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
