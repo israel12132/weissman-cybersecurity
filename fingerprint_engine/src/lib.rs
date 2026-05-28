@@ -45,6 +45,7 @@ pub mod council;
 pub mod council_hitl;
 pub mod council_synthesis;
 pub mod sso_management;
+pub mod saas_idp_discovery;
 pub mod ceo;
 pub mod crypto_engine;
 pub mod eternal_fuzz;

@@ -40,6 +40,14 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_evidence_vault.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_saas_idp_discovery.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_roe_approvals.inc"
 ));
 include!(concat!(

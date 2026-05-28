@@ -1175,6 +1175,16 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_engagement_get).patch(api_engagement_patch),
         )
         .route(
+            "/api/clients/:id/evidence",
+            get(api_client_evidence_list).post(api_client_evidence_upload),
+        )
+        .route(
+            "/api/clients/:id/discovery/saas-idp",
+            get(api_client_saas_idp_discovery),
+        )
+        .route("/api/evidence/:id/download", get(api_evidence_download))
+        .route("/api/evidence/:id", delete(api_evidence_delete))
+        .route(
             "/api/roe/override-requests",
             get(api_roe_override_requests_list),
         )

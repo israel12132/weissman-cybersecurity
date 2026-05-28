@@ -179,6 +179,18 @@ export default function ClientDetail() {
               Engagements
             </Link>
             <Link
+              to={`/clients/${client.id}/evidence`}
+              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              Evidence Vault
+            </Link>
+            <Link
+              to={`/clients/${client.id}/discovery/saas-idp`}
+              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              SaaS / IdP Discovery
+            </Link>
+            <Link
               to={`/findings?client_id=${client.id}`}
               className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
             >
