@@ -90,7 +90,10 @@ fn env_truthy(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn with_env<F: FnOnce()>(set: &[(&str, Option<&str>)], f: F) {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         let prev: Vec<(String, Option<String>)> = set
             .iter()
             .map(|(k, _)| (k.to_string(), std::env::var(k).ok()))
