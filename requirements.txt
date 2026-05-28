@@ -21,7 +21,7 @@ redis>=5.0.0
 
 # --- Auth & security (bcrypt<5 for passlib) ---
 pyotp
-bcrypt<5.0.0
+bcrypt<6.0.0
 passlib[bcrypt]
 itsdangerous
 authlib
