@@ -185,25 +185,74 @@ fn smart_json_object_mutations(json_str: &str) -> Vec<String> {
         let Some(orig) = obj.get(k).cloned() else {
             continue;
         };
-        if let Some(s) = orig.as_str() {
-            let mut m = obj.clone();
-            m.insert(
-                k.clone(),
-                serde_json::Value::String(format!("{s}' OR '1'='1")),
-            );
-            if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m.clone())) {
-                out.push(s2);
+        match orig {
+            serde_json::Value::String(s) => {
+                let mut m = obj.clone();
+                m.insert(
+                    k.clone(),
+                    serde_json::Value::String(format!("{s}' OR '1'='1")),
+                );
+                if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m.clone())) {
+                    out.push(s2);
+                }
+                m.insert(
+                    k.clone(),
+                    serde_json::Value::String(format!(
+                        "<svg onload=alert('{}')>",
+                        XSS_REFLECTION_TOKEN
+                    )),
+                );
+                if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
+                    out.push(s2);
+                }
             }
-            m.insert(
-                k.clone(),
-                serde_json::Value::String(format!(
-                    "<svg onload=alert('{}')>",
-                    XSS_REFLECTION_TOKEN
-                )),
-            );
-            if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
-                out.push(s2);
+            serde_json::Value::Number(_) => {
+                for probe in integer_probe_values() {
+                    let mut m = obj.clone();
+                    m.insert(k.clone(), probe.clone());
+                    if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
+                        out.push(s2);
+                    }
+                }
             }
+            serde_json::Value::Bool(b) => {
+                let mut m = obj.clone();
+                m.insert(k.clone(), serde_json::Value::Bool(!b));
+                if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
+                    out.push(s2);
+                }
+            }
+            serde_json::Value::Null => {
+                let mut m = obj.clone();
+                m.insert(k.clone(), serde_json::json!(0));
+                if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
+                    out.push(s2);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                if arr.is_empty() {
+                    continue;
+                }
+                let mut a = arr.clone();
+                if let Some(first) = a.get_mut(0) {
+                    if first.is_number() {
+                        *first = serde_json::json!(2147483647);
+                    } else if first.is_boolean() {
+                        *first = serde_json::json!(!first.as_bool().unwrap_or(false));
+                    } else if first.is_string() {
+                        *first = serde_json::Value::String(format!(
+                            "<svg onload=alert('{}')>",
+                            XSS_REFLECTION_TOKEN
+                        ));
+                    }
+                    let mut m = obj.clone();
+                    m.insert(k.clone(), serde_json::Value::Array(a));
+                    if let Ok(s2) = serde_json::to_string(&serde_json::Value::Object(m)) {
+                        out.push(s2);
+                    }
+                }
+            }
+            serde_json::Value::Object(_) => {}
         }
     }
 
@@ -246,18 +295,59 @@ fn smart_json_array_mutations(json_str: &str) -> Vec<String> {
     }
     let mut out = Vec::new();
     for (i, item) in arr.iter().enumerate() {
-        if item.is_string() {
-            let mut c = arr.clone();
-            c[i] = serde_json::Value::String(format!(
-                "{}' OR '1'='1",
-                item.as_str().unwrap_or("")
-            ));
-            if let Ok(s) = serde_json::to_string(&c) {
-                out.push(s);
+        let mut c = arr.clone();
+        match item {
+            serde_json::Value::String(s) => {
+                c[i] = serde_json::Value::String(format!("{s}' OR '1'='1"));
+                if let Ok(s) = serde_json::to_string(&c) {
+                    out.push(s);
+                }
+                let mut c2 = arr.clone();
+                c2[i] = serde_json::Value::String(format!(
+                    "<svg onload=alert('{}')>",
+                    XSS_REFLECTION_TOKEN
+                ));
+                if let Ok(s) = serde_json::to_string(&c2) {
+                    out.push(s);
+                }
             }
+            serde_json::Value::Number(_) => {
+                for probe in integer_probe_values() {
+                    c[i] = probe.clone();
+                    if let Ok(s) = serde_json::to_string(&c) {
+                        out.push(s);
+                    }
+                }
+            }
+            serde_json::Value::Bool(b) => {
+                c[i] = serde_json::Value::Bool(!b);
+                if let Ok(s) = serde_json::to_string(&c) {
+                    out.push(s);
+                }
+            }
+            serde_json::Value::Null => {
+                c[i] = serde_json::json!(0);
+                if let Ok(s) = serde_json::to_string(&c) {
+                    out.push(s);
+                }
+            }
+            _ => {}
         }
     }
     out
+}
+
+fn integer_probe_values() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!(-1),
+        serde_json::json!(0),
+        serde_json::json!(1),
+        serde_json::json!(2147483647),
+        serde_json::json!(-2147483648i64),
+        serde_json::json!(9223372036854775807i64),
+        serde_json::json!(i64::MIN),
+        serde_json::json!(9999999999i64),
+    ]
 }
 
 fn smart_form_urlencoded_mutations(form: &str) -> Vec<String> {
