@@ -73,6 +73,7 @@ import TemplateEngineWorkbench from './pages/TemplateEngineWorkbench'
 import AstFuzzingStudio from './pages/AstFuzzingStudio'
 import FeedbackLoopVerification from './pages/FeedbackLoopVerification'
 import CouncilHitlQueue from './pages/CouncilHitlQueue'
+import RoeApprovals from './pages/RoeApprovals'
 import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
@@ -112,6 +113,7 @@ import ExploitResearchLab from './pages/ExploitResearchLab'
 import Clients from './pages/Clients'
 import ClientNew from './pages/ClientNew'
 import ClientDetail from './pages/ClientDetail'
+import ClientEngagements from './pages/ClientEngagements'
 import JobsDashboard from './pages/JobsDashboard'
 // ──────────────────────────────────────────────────────────────────────────────
 import App from './App'
@@ -174,6 +176,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
             <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
             <Route path="council-queue" element={<CouncilHitlQueue />} />
+            <Route path="roe-approvals" element={<RoeApprovals />} />
             <Route path="sso-config" element={<SsoDashboard />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
@@ -190,6 +193,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="clients" element={<Clients />} />
             <Route path="clients/new" element={<ClientNew />} />
             <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="clients/:id/engagements" element={<ClientEngagements />} />
             <Route path="jobs" element={<JobsDashboard />} />
             {/* ── New UI improvements routes ──────────────────────────────────── */}
             <Route path="rate-limits" element={<RateLimitAnalytics />} />

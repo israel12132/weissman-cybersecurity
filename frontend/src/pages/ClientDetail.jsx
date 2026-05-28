@@ -173,6 +173,12 @@ export default function ClientDetail() {
           </button>
           <div className="flex items-center gap-3">
             <Link
+              to={`/clients/${client.id}/engagements`}
+              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              Engagements
+            </Link>
+            <Link
               to={`/findings?client_id=${client.id}`}
               className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
             >

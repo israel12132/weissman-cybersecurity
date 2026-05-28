@@ -1166,6 +1166,26 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/clients/:id/config",
             get(api_client_config_get).patch(api_client_config_patch),
         )
+        .route(
+            "/api/clients/:id/engagements",
+            get(api_client_engagements_list).post(api_client_engagements_create),
+        )
+        .route(
+            "/api/engagements/:id",
+            get(api_engagement_get).patch(api_engagement_patch),
+        )
+        .route(
+            "/api/roe/override-requests",
+            get(api_roe_override_requests_list),
+        )
+        .route(
+            "/api/roe/override-requests/:id/approve",
+            post(api_roe_override_request_approve),
+        )
+        .route(
+            "/api/roe/override-requests/:id/reject",
+            post(api_roe_override_request_reject),
+        )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
