@@ -36,6 +36,10 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_engagements.inc"
+));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_phase3.inc"
 ));
 include!(concat!(
