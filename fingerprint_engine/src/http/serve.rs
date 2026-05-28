@@ -1218,6 +1218,8 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_template_engine_template_get),
         )
         .route("/api/template-engine/run", post(api_template_engine_run))
+        // ── AST smart fuzz preview (no traffic) ─────────────────────────────
+        .route("/api/fuzz/ast-preview", post(api_fuzz_ast_preview))
         // ── Enterprise SSO management ─────────────────────────────────────────
         .route("/api/sso/idps", get(crate::sso_management::api_sso_idps_list).post(crate::sso_management::api_sso_idps_create))
         .route("/api/sso/idps/:id", get(crate::sso_management::api_sso_idp_get).patch(crate::sso_management::api_sso_idp_patch).delete(crate::sso_management::api_sso_idp_delete))

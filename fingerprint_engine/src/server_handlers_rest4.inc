@@ -2224,3 +2224,30 @@ async fn api_template_engine_run(
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
 }
+
+// ════════════════════════════════════════════════════════════════════
+// AST Smart Fuzzing Preview (safe, offline)
+// ════════════════════════════════════════════════════════════════════
+
+/// Request body for POST /api/fuzz/ast-preview
+#[derive(Deserialize)]
+struct AstPreviewBody {
+    payload: String,
+    #[serde(default)]
+    max_mutations: Option<usize>,
+}
+
+/// POST /api/fuzz/ast-preview — return structure-aware mutations without sending traffic.
+async fn api_fuzz_ast_preview(
+    Extension(_auth): Extension<AuthContext>,
+    Json(body): Json<AstPreviewBody>,
+) -> Response {
+    let base = body.payload.trim().to_string();
+    if base.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"payload required"}))).into_response();
+    }
+    let max = body.max_mutations.unwrap_or(200).max(1).min(2000);
+    let muts = fuzz_core::smart_payload_mutations(&base);
+    let limited: Vec<String> = muts.into_iter().take(max).collect();
+    (StatusCode::OK, Json(json!({"count": limited.len(), "mutations": limited}))).into_response()
+}
