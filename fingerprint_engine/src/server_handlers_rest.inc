@@ -944,6 +944,7 @@ async fn api_client_config_patch(
     (StatusCode::OK, Json(json!({"ok": true, "config": new_json}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_start(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -960,6 +961,7 @@ async fn api_scan_start(
     (StatusCode::OK, Json(json!({"ok": true, "message": "Continuous scanning started"}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_stop(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -976,11 +978,13 @@ async fn api_scan_stop(
     (StatusCode::OK, Json(json!({"ok": true, "message": "Scanning stopped"}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_status() -> Response {
     let active = crate::orchestrator::is_scanning_active();
     (StatusCode::OK, Json(json!({ "scanning_active": active }))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_run_all(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1132,6 +1136,7 @@ async fn api_scan(
     }
 }
 
+#[allow(dead_code)]
 async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
@@ -1141,6 +1146,7 @@ async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> 
     })
 }
 
+#[allow(dead_code)]
 async fn ws_ai_redteam(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
@@ -1292,12 +1298,14 @@ async fn api_dag_get() -> Response {
 // ── Auto Domain Discovery ─────────────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct DomainDiscoveryRequest {
     target: String,
     #[serde(default)]
     company_name: Option<String>,
 }
 
+#[allow(dead_code)]
 async fn api_discovery_domains(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1354,6 +1362,7 @@ async fn api_discovery_domains(
 // ── Scan All Engines for Client ───────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct ScanAllEnginesRequest {
     client_id: i64,
     #[serde(default)]
@@ -1362,6 +1371,7 @@ struct ScanAllEnginesRequest {
     engines: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 async fn api_scan_all_engines(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1490,6 +1500,7 @@ async fn api_scan_all_engines(
 // ── Scan All Discovered Domains ───────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct ScanDomainsRequest {
     client_id: i64,
     domains: Vec<String>,
@@ -1497,6 +1508,7 @@ struct ScanDomainsRequest {
     engines: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 async fn api_scan_discovered_domains(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
