@@ -88,6 +88,8 @@ function ExpandedRow({ finding, onClose }) {
   const crimeScene = desc.footprint || finding.description || 'No crime scene report.'
   const remediation = desc.remediation_snippet?.trim() || '—'
   const generatedPatch = desc.generated_patch?.trim() || ''
+  const pocCommit = finding.poc_commitment_sha256?.trim() || ''
+  const findingId = finding.finding_id?.trim() || ''
 
   return (
     <tr className="bg-[#0a0a0a]">
@@ -120,6 +122,8 @@ function ExpandedRow({ finding, onClose }) {
               Recommended Remediation (AI Generated)
             </h4>
             <CopyableBlock label="Remediation / patch" value={remediation} />
+            {findingId ? <CopyableBlock label="finding_id" value={findingId} /> : null}
+            {pocCommit ? <CopyableBlock label="poc_commitment_sha256" value={pocCommit} /> : null}
             {generatedPatch ? (
               <>
                 <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#34d399' }}>
