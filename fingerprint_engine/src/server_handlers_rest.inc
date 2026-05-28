@@ -757,10 +757,116 @@ async fn api_client_config_patch(
             Value::Array(engines.iter().map(|s| Value::String(s.clone())).collect()),
         );
     }
-    if let Some(ref roe) = body.roe_mode {
-        let roe = roe.trim();
-        if roe == "safe_proofs" || roe == "weaponized_god_mode" {
-            config.insert("roe_mode".to_string(), Value::String(roe.to_string()));
+    if let Some(ref roe_raw) = body.roe_mode {
+        let roe = roe_raw.trim();
+        if roe == "safe_proofs" {
+            config.insert("roe_mode".to_string(), Value::String("safe_proofs".to_string()));
+        } else if roe == "weaponized_god_mode" {
+            // Governance: weaponized ROE requires explicit approval trail, unless the server
+            // is configured with a confirm secret and caller provides a matching header.
+            let confirm_secret =
+                std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
+            let header_bypass = !confirm_secret.trim().is_empty()
+                && crate::security_hardening::destructive_action_authorized(&headers);
+
+            if old_roe == "weaponized_god_mode" || header_bypass {
+                config.insert(
+                    "roe_mode".to_string(),
+                    Value::String("weaponized_god_mode".to_string()),
+                );
+            } else {
+                // Check for an existing approved request (2 distinct approvals) or create a pending one.
+                let row = sqlx::query(
+                    r#"SELECT id, status, expires_at, first_approved_by_user_id, second_approved_by_user_id
+                       FROM roe_override_requests
+                       WHERE client_id = $1
+                         AND status IN ('pending','approved')
+                         AND expires_at > now()
+                       ORDER BY requested_at DESC
+                       LIMIT 1
+                       FOR UPDATE"#,
+                )
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(r) = row {
+                    let req_id: i64 = r.try_get("id").unwrap_or(0);
+                    let status: String =
+                        r.try_get("status").unwrap_or_else(|_| "pending".to_string());
+                    let first: Option<i64> = r.try_get("first_approved_by_user_id").ok().flatten();
+                    let second: Option<i64> =
+                        r.try_get("second_approved_by_user_id").ok().flatten();
+                    if status == "approved" && first.is_some() && second.is_some() {
+                        let _ = sqlx::query(
+                            "UPDATE roe_override_requests SET status = 'applied', applied_by_user_id = $1, applied_at = now(), updated_at = now() WHERE id = $2",
+                        )
+                        .bind(auth.user_id)
+                        .bind(req_id)
+                        .execute(&mut *tx)
+                        .await;
+                        config.insert(
+                            "roe_mode".to_string(),
+                            Value::String("weaponized_god_mode".to_string()),
+                        );
+                    } else {
+                        let _ = tx.commit().await;
+                        return (
+                            StatusCode::CONFLICT,
+                            Json(json!({
+                                "ok": false,
+                                "error_code": "roe_approval_required",
+                                "request_id": req_id,
+                                "detail": "Weaponized ROE requires 2 distinct admin approvals. Request is pending.",
+                                "approvals_needed": 2,
+                                "approvals_have": (first.is_some() as i32) + (second.is_some() as i32),
+                                "admin_url": "/roe-approvals"
+                            })),
+                        )
+                            .into_response();
+                    }
+                } else {
+                    let created: Option<(i64,)> = sqlx::query_as(
+                        r#"INSERT INTO roe_override_requests (tenant_id, client_id, desired_roe_mode, status, requested_by_user_id)
+                           VALUES ($1, $2, 'weaponized_god_mode', 'pending', $3)
+                           RETURNING id"#,
+                    )
+                    .bind(auth.tenant_id)
+                    .bind(id)
+                    .bind(auth.user_id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .ok()
+                    .flatten();
+                    let req_id = created.map(|(x,)| x).unwrap_or(0);
+                    let _ = audit_log::insert_audit(
+                        &mut tx,
+                        auth.tenant_id,
+                        Some(auth.user_id),
+                        &actor,
+                        "roe_override_request_created",
+                        &format!("client_id={} request_id={}", id, req_id),
+                        &ip,
+                    )
+                    .await;
+                    let _ = tx.commit().await;
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(json!({
+                            "ok": false,
+                            "error_code": "roe_approval_required",
+                            "request_id": req_id,
+                            "detail": "Weaponized ROE requires 2 distinct admin approvals. A request was created.",
+                            "approvals_needed": 2,
+                            "approvals_have": 0,
+                            "admin_url": "/roe-approvals"
+                        })),
+                    )
+                        .into_response();
+                }
+            }
         }
     }
     if let Some(level) = body.stealth_level {

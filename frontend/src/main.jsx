@@ -73,6 +73,7 @@ import TemplateEngineWorkbench from './pages/TemplateEngineWorkbench'
 import AstFuzzingStudio from './pages/AstFuzzingStudio'
 import FeedbackLoopVerification from './pages/FeedbackLoopVerification'
 import CouncilHitlQueue from './pages/CouncilHitlQueue'
+import RoeApprovals from './pages/RoeApprovals'
 import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
 import FindingsCommandCenter from './pages/FindingsCommandCenter'
@@ -175,6 +176,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
             <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
             <Route path="council-queue" element={<CouncilHitlQueue />} />
+            <Route path="roe-approvals" element={<RoeApprovals />} />
             <Route path="sso-config" element={<SsoDashboard />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />

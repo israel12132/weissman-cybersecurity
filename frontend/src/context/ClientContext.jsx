@@ -116,6 +116,14 @@ export function ClientProvider({ children }) {
         }
         return true
       }
+      if (r.status === 409) {
+        const data = await r.json().catch(() => null)
+        if (data?.error_code === 'roe_approval_required') {
+          const reqId = data.request_id ? `Request #${data.request_id}` : 'Request created'
+          setConfigError(`Weaponized ROE requires 2 admin approvals. ${reqId}. Go to /roe-approvals to approve.`)
+          return false
+        }
+      }
       setConfigError(await formatApiErrorResponse(r))
     } catch (e) {
       setConfigError(e?.message || 'Network error')
