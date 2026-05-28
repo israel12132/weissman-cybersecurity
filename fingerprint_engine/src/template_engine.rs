@@ -19,6 +19,9 @@ pub struct TemplateDoc {
     pub severity: String,
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
+    /// "all" (default), "any", or "last"
+    #[serde(default)]
+    pub success_condition: Option<String>,
     pub steps: Vec<TemplateStep>,
 }
 
@@ -425,7 +428,17 @@ pub async fn run_template(
         });
     }
 
-    let overall_matched = steps_out.iter().all(|s| s.matched);
+    let success = template
+        .success_condition
+        .as_deref()
+        .unwrap_or("all")
+        .trim()
+        .to_lowercase();
+    let overall_matched = match success.as_str() {
+        "any" => steps_out.iter().any(|s| s.matched),
+        "last" => steps_out.last().map(|s| s.matched).unwrap_or(false),
+        _ => steps_out.iter().all(|s| s.matched),
+    };
     let verification = if overall_matched {
         json!({
             "verified": true,
