@@ -1,0 +1,16 @@
+id: http_baseline
+name: HTTP Baseline Probe
+description: "Non-invasive baseline check: GET / and verify HTTP 2xx/3xx."
+severity: info
+steps:
+  - id: root_get
+    request:
+      method: GET
+      path: /
+      headers:
+        User-Agent: "WeissmanTemplateEngine/1.0"
+    matchers_condition: or
+    matchers:
+      - type: status
+        statuses: [200, 201, 202, 204, 301, 302, 303, 307, 308]
+
