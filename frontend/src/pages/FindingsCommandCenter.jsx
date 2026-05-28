@@ -146,6 +146,31 @@ function MitreBadge({ id }) {
   )
 }
 
+function ComplianceBadges({ compliance }) {
+  const list = Array.isArray(compliance) ? compliance : []
+  if (list.length === 0) return <span className="text-white/25 font-mono text-[11px]">—</span>
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {list.slice(0, 12).map((c, idx) => {
+        const raw = typeof c === 'string' ? c : JSON.stringify(c)
+        const label = sanitizeFindingPlainText(raw || '—', 48)
+        return (
+          <span
+            key={`${label}-${idx}`}
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-white/10 text-white/55 tracking-wider"
+            title={sanitizeFindingPlainText(raw || '', 256)}
+          >
+            {label}
+          </span>
+        )
+      })}
+      {list.length > 12 ? (
+        <span className="text-[10px] font-mono text-white/35 px-1.5 py-0.5">+{list.length - 12}</span>
+      ) : null}
+    </div>
+  )
+}
+
 function ScoreBadge({ score }) {
   if (score == null || score === '') return <span className="text-white/25 font-mono text-[11px]">—</span>
   const n = typeof score === 'number' ? score : parseFloat(score)
@@ -169,6 +194,27 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
   const engine = resolveEngine(finding?.source || finding?.engine)
   const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const pocText = finding?.proof_of_concept || finding?.proof || finding?.poc || finding?.poc_text || null
+  const references = useMemo(() => {
+    const refs = finding?.references ?? finding?.refs ?? finding?.reference_urls ?? null
+    if (!refs) return []
+    if (Array.isArray(refs)) return refs.filter(Boolean).map(String)
+    if (typeof refs === 'string') {
+      const s = refs.trim()
+      if (!s) return []
+      try {
+        const parsed = JSON.parse(s)
+        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
+      } catch {
+        // allow comma/newline separated strings
+      }
+      return s
+        .split(/[\n,]+/g)
+        .map((x) => x.trim())
+        .filter(Boolean)
+    }
+    return [String(refs)]
+  }, [finding])
 
   const handleStatusChange = (e) => {
     const newStatus = e.target.value
@@ -235,7 +281,7 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                 </h2>
                 <p className="text-[11px] font-mono text-white/40">
                   {engine.label}
-                  {engine.mitre && ` · ${engine.mitre}`}
+                  {(engine.mitre || finding.mitre_attack) && ` · ${engine.mitre || finding.mitre_attack}`}
                   {finding.finding_id && ` · ${sanitizeFindingPlainText(finding.finding_id, 64)}`}
                 </p>
               </div>
@@ -282,10 +328,15 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                 <dl className="space-y-2">
                   {[
                     ['Score (CVSS)', finding.cvss_score ?? finding.score],
+                    ['Risk Score',   finding.risk_score],
+                    ['CWE',         finding.cwe_id ?? finding.cwe ?? finding.cweId],
                     ['Discovered',  formatDate(finding.discovered_at || finding.created_at)],
+                    ['Affected URL', finding.url ?? finding.affected_url ?? finding.target_url],
                     ['Client ID',   finding.client_id],
                     ['Run ID',      finding.run_id],
                     ['Finding ID',  finding.finding_id],
+                    ['Target',      finding.target],
+                    ['PoC Commitment (SHA-256)', finding.poc_commitment_sha256],
                   ].map(([label, val]) =>
                     val != null && val !== '' ? (
                       <div key={label} className="flex items-start gap-3">
@@ -299,6 +350,14 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                     ) : null,
                   )}
                 </dl>
+                <div className="mt-3 flex items-start gap-3">
+                  <div className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
+                    Compliance
+                  </div>
+                  <div className="min-w-0">
+                    <ComplianceBadges compliance={finding.compliance} />
+                  </div>
+                </div>
               </section>
 
               {/* Description */}
@@ -313,15 +372,63 @@ function FindingDrawer({ finding, onClose, onStatusUpdate }) {
                 </section>
               )}
 
+              {/* Remediation */}
+              {finding.remediation && String(finding.remediation).trim() && (
+                <section>
+                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
+                    Remediation
+                  </h3>
+                  <p className="text-[12px] text-white/65 leading-relaxed whitespace-pre-wrap">
+                    {sanitizeFindingPlainText(String(finding.remediation), 8192)}
+                  </p>
+                </section>
+              )}
+
               {/* Proof */}
-              {finding.proof && (
+              {pocText && (
                 <section>
                   <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
                     Proof / PoC
                   </h3>
                   <pre className="text-[11px] font-mono text-[#4ade80]/80 bg-black/60 border border-white/5 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                    {sanitizeFindingPlainText(finding.proof, 8192)}
+                    {sanitizeFindingPlainText(String(pocText), 8192)}
                   </pre>
+                </section>
+              )}
+
+              {/* References */}
+              {references.length > 0 && (
+                <section>
+                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
+                    References
+                  </h3>
+                  <ul className="space-y-1">
+                    {references.slice(0, 50).map((u, idx) => {
+                      const safe = sanitizeFindingPlainText(u, 2048)
+                      const isHttp = /^https?:\/\//i.test(safe)
+                      return (
+                        <li key={`${safe}-${idx}`} className="text-[12px] font-mono">
+                          {isHttp ? (
+                            <a
+                              href={safe}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-cyan-300/80 hover:text-cyan-200 underline break-all"
+                            >
+                              {safe}
+                            </a>
+                          ) : (
+                            <span className="text-white/60 break-all">{safe}</span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {references.length > 50 && (
+                    <div className="text-[10px] font-mono text-white/35 mt-2">
+                      Showing first 50 references (total {references.length}).
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -408,9 +515,27 @@ function buildColumns() {
       ),
     }),
     columnHelper.accessor(
+      (row) => row.target || row.raw?.target || null,
+      {
+        id: 'target',
+        header: 'Target',
+        size: 220,
+        enableSorting: false,
+        cell: ({ getValue }) => {
+          const v = getValue()
+          if (!v) return <span className="text-white/25 font-mono text-[11px]">—</span>
+          return (
+            <span className="text-[11px] font-mono text-white/55 line-clamp-1" title={sanitizeFindingPlainText(String(v), 512)}>
+              {sanitizeFindingPlainText(String(v), 96)}
+            </span>
+          )
+        },
+      },
+    ),
+    columnHelper.accessor(
       (row) => {
         const eng = resolveEngine(row.source || row.engine)
-        return eng.mitre || row.mitre || row.technique || null
+        return eng.mitre || row.mitre_attack || row.mitre || row.technique || null
       },
       {
         id: 'mitre',
@@ -436,6 +561,24 @@ function buildColumns() {
           return av - bv
         },
         cell: ({ getValue }) => <ScoreBadge score={getValue()} />,
+      },
+    ),
+    columnHelper.accessor(
+      (row) => (Array.isArray(row.compliance) ? row.compliance.length : 0),
+      {
+        id: 'compliance',
+        header: 'Compliance',
+        size: 110,
+        enableSorting: false,
+        cell: ({ row, getValue }) => {
+          const count = getValue()
+          const has = count > 0
+          return (
+            <span className="text-[11px] font-mono" style={{ color: has ? '#a78bfa' : 'rgba(255,255,255,0.25)' }}>
+              {has ? `${count} tag${count === 1 ? '' : 's'}` : '—'}
+            </span>
+          )
+        },
       },
     ),
     columnHelper.accessor('status', {
@@ -480,6 +623,8 @@ function globalFilterFn(row, _columnId, filterValue) {
     (f.title || '').toLowerCase().includes(q) ||
     (f.severity || '').toLowerCase().includes(q) ||
     (f.description || '').toLowerCase().includes(q) ||
+    String(f.cwe_id || f.cwe || '').toLowerCase().includes(q) ||
+    String(f.url || f.affected_url || f.target_url || '').toLowerCase().includes(q) ||
     engine.label.toLowerCase().includes(q) ||
     (engine.mitre || '').toLowerCase().includes(q) ||
     (f.finding_id || '').toLowerCase().includes(q) ||
