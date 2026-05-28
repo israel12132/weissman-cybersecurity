@@ -92,6 +92,7 @@ pub mod stealth_engine;
 pub mod strategic_analyzer;
 pub mod threat_intel_engine;
 pub mod timing_engine;
+pub mod template_engine;
 pub mod validator;
 
 pub mod auto_domain_discovery_engine;

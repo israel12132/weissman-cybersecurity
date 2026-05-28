@@ -40,6 +40,14 @@ export default function ReportView() {
   }
 
   const clientName = client?.name || `Client ${clientId}`
+  const verifiedFindings = findings.filter((f) => !!f?.verified || !!f?.poc_sealed)
+  const verificationBreakdown = verifiedFindings.reduce((acc, f) => {
+    const raw = String(f?.verification_method || (f?.poc_sealed ? 'crypto_seal' : 'verified') || '').trim()
+    const key = raw || 'verified'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+  const breakdownPairs = Object.entries(verificationBreakdown).sort((a, b) => b[1] - a[1])
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-6 max-w-4xl mx-auto">
@@ -69,8 +77,13 @@ export default function ReportView() {
           Security assessment for <strong className="text-slate-300">{clientName}</strong>. Findings are live from the database.
         </p>
         <p className="text-slate-500 text-xs mt-2">
-          Total findings: {findings.length}
+          Total findings: {findings.length} · Verified: {verifiedFindings.length}
         </p>
+        {breakdownPairs.length > 0 && (
+          <p className="text-slate-500 text-xs mt-1">
+            Verified by: {breakdownPairs.map(([k, v]) => `${k}=${v}`).join(' · ')}
+          </p>
+        )}
       </section>
 
       {findings.length > 0 && (
@@ -83,6 +96,8 @@ export default function ReportView() {
                 <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Title</th>
                 <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Severity</th>
                 <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Source</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Verified</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">How</th>
               </tr>
             </thead>
             <tbody>
@@ -92,6 +107,8 @@ export default function ReportView() {
                   <td className="px-3 py-2 text-sm">{f.title || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.severity || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.source || '—'}</td>
+                  <td className="px-3 py-2 text-sm">{(f.verified || f.poc_sealed) ? '✓' : '—'}</td>
+                  <td className="px-3 py-2 text-xs font-mono text-slate-400">{f.verification_method || (f.poc_sealed ? 'crypto_seal' : '—')}</td>
                 </tr>
               ))}
             </tbody>

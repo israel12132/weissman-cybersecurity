@@ -141,8 +141,9 @@ export default function OastDashboard() {
     if (!mintTarget) return
     setMintLoading(true)
     try {
-      const data = await apiFetch('/api/oast/probe', {
+      const r = await apiFetch('/api/oast/probe', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           target_url: mintTarget,
           probe_type: mintProbeType,
@@ -150,6 +151,8 @@ export default function OastDashboard() {
           client_id: selectedClientId ? Number(selectedClientId) : undefined,
         }),
       })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.error || data?.detail || 'Mint failed')
       setMintedTokens(prev => [data, ...prev])
       setMintTarget('')
       setMintLabel('')
@@ -163,7 +166,9 @@ export default function OastDashboard() {
 
   const handlePollToken = useCallback(async (token) => {
     try {
-      const data = await apiFetch(`/api/oast/verify/${token}`)
+      const r = await apiFetch(`/api/oast/verify/${token}`)
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.error || data?.detail || 'Poll failed')
       setMintedTokens(prev => prev.map(t => t.token === token ? { ...t, ...data } : t))
     } catch (e) {
       showToast('error', 'Poll failed: ' + e.message)

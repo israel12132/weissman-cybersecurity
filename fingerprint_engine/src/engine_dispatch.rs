@@ -321,9 +321,12 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
             } else {
                 crate::fuzzer::run_fuzzer_collect(target, "").await
             };
+            let verified_oob = anomalies.iter().filter(|a| a.oob_token.is_some()).count();
             let findings: Vec<serde_json::Value> = anomalies
                 .iter()
                 .map(|a| {
+                    let oob = a.oob_token.clone().filter(|s| !s.trim().is_empty());
+                    let verified = oob.is_some();
                     json!({
                         "type": "http_feedback_fuzz",
                         "title": a.anomaly_type.clone(),
@@ -331,12 +334,20 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                         "description": a.baseline_vs_anomaly.clone(),
                         "url": a.target_url.clone(),
                         "payload": a.payload.clone(),
+                        "verified": verified,
+                        "verification_method": if verified { "oob_oast_callback" } else { "behavioral_feedback_validation" },
+                        "oob_token": oob,
+                        "llm_user_prompt": a.llm_user_prompt,
                     })
                 })
                 .collect();
             EngineResult::ok(
                 findings,
-                format!("HTTP feedback fuzz: {} validated anomalies", anomalies.len()),
+                format!(
+                    "HTTP feedback fuzz: {} validated anomalies ({} OOB-verified)",
+                    anomalies.len(),
+                    verified_oob
+                ),
             )
         }
         // ── Advanced AI / LLM engines ──────────────────────────────────────────

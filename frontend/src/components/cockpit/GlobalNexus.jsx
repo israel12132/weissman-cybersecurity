@@ -175,6 +175,18 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         <Link id="nav-oast" to="/oast" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-[#22d3ee]/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
           <span>⊂</span> OAST / OOB
         </Link>
+        <Link id="nav-oob-verify" to="/verification/oob" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
+          <span>◎</span> OOB Verification
+        </Link>
+        <Link id="nav-template-engine" to="/template-engine" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-blue-400/70 hover:bg-blue-950/20 hover:text-blue-300 transition-colors">
+          <span>⟡</span> Template Engine
+        </Link>
+        <Link id="nav-ast-fuzzing" to="/ast-fuzzing" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/70 hover:bg-amber-950/20 hover:text-amber-300 transition-colors">
+          <span>⧉</span> AST Fuzzing
+        </Link>
+        <Link id="nav-feedback-loop" to="/feedback-loop" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
+          <span>⟲</span> Feedback Loop
+        </Link>
         <Link id="nav-digital-twin" to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
           <span>⟐</span> Digital Twin
         </Link>

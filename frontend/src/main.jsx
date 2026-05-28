@@ -68,6 +68,10 @@ import NetworkIntelligence from './pages/NetworkIntelligence'
 import CloudControlTower from './pages/CloudControlTower'
 import PqcRadar from './pages/PqcRadar'
 import OastDashboard from './pages/OastDashboard'
+import OobVerification from './pages/OobVerification'
+import TemplateEngineWorkbench from './pages/TemplateEngineWorkbench'
+import AstFuzzingStudio from './pages/AstFuzzingStudio'
+import FeedbackLoopVerification from './pages/FeedbackLoopVerification'
 import CouncilHitlQueue from './pages/CouncilHitlQueue'
 import SsoDashboard from './pages/SsoDashboard'
 import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
@@ -165,6 +169,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="cloud" element={<CloudControlTower />} />
             <Route path="pqc-radar" element={<PqcRadar />} />
             <Route path="oast" element={<OastDashboard />} />
+            <Route path="verification/oob" element={<OobVerification />} />
+            <Route path="template-engine" element={<TemplateEngineWorkbench />} />
+            <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
+            <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
             <Route path="council-queue" element={<CouncilHitlQueue />} />
             <Route path="sso-config" element={<SsoDashboard />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />

@@ -2153,3 +2153,101 @@ async fn api_oast_probe_verify(
         }
     }
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Template Engine (YAML) handlers
+// ════════════════════════════════════════════════════════════════════
+
+/// GET /api/template-engine/templates — list built-in templates shipped with the engine.
+async fn api_template_engine_templates_list(
+    Extension(_auth): Extension<AuthContext>,
+) -> Response {
+    let items = crate::template_engine::builtin_catalog();
+    (StatusCode::OK, Json(items)).into_response()
+}
+
+/// GET /api/template-engine/templates/:id — fetch the YAML for a built-in template.
+async fn api_template_engine_template_get(
+    Extension(_auth): Extension<AuthContext>,
+    Path(template_id): Path<String>,
+) -> Response {
+    let Some(yaml) = crate::template_engine::builtin_template_yaml(template_id.trim()) else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error":"not_found"}))).into_response();
+    };
+    (
+        StatusCode::OK,
+        Json(json!({"id": template_id.trim(), "yaml": yaml})),
+    )
+        .into_response()
+}
+
+/// Request body for POST /api/template-engine/run
+#[derive(Deserialize)]
+struct TemplateEngineRunBody {
+    target_url: String,
+    #[serde(default)]
+    template_id: Option<String>,
+    #[serde(default)]
+    template_yaml: Option<String>,
+    #[serde(default)]
+    max_body_bytes: Option<usize>,
+}
+
+/// POST /api/template-engine/run — execute a template (built-in by id, or inline YAML).
+async fn api_template_engine_run(
+    Extension(_auth): Extension<AuthContext>,
+    Json(body): Json<TemplateEngineRunBody>,
+) -> Response {
+    let target = body.target_url.trim().to_string();
+    if target.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"target_url required"}))).into_response();
+    }
+    let yaml = if let Some(y) = body.template_yaml.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        y.to_string()
+    } else if let Some(id) = body.template_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        match crate::template_engine::builtin_template_yaml(id) {
+            Some(s) => s.to_string(),
+            None => return (StatusCode::NOT_FOUND, Json(json!({"error":"unknown_template_id"}))).into_response(),
+        }
+    } else {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"template_id or template_yaml required"}))).into_response();
+    };
+
+    let template = match serde_yaml::from_str::<crate::template_engine::TemplateDoc>(&yaml) {
+        Ok(t) => t,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({"error":"invalid_yaml","detail": e.to_string()}))).into_response(),
+    };
+
+    let max_body = body.max_body_bytes.unwrap_or(200_000).max(1024).min(2_000_000);
+    match crate::template_engine::run_template(template, &target, max_body).await {
+        Ok(r) => (StatusCode::OK, Json(r)).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// AST Smart Fuzzing Preview (safe, offline)
+// ════════════════════════════════════════════════════════════════════
+
+/// Request body for POST /api/fuzz/ast-preview
+#[derive(Deserialize)]
+struct AstPreviewBody {
+    payload: String,
+    #[serde(default)]
+    max_mutations: Option<usize>,
+}
+
+/// POST /api/fuzz/ast-preview — return structure-aware mutations without sending traffic.
+async fn api_fuzz_ast_preview(
+    Extension(_auth): Extension<AuthContext>,
+    Json(body): Json<AstPreviewBody>,
+) -> Response {
+    let base = body.payload.trim().to_string();
+    if base.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error":"payload required"}))).into_response();
+    }
+    let max = body.max_mutations.unwrap_or(200).max(1).min(2000);
+    let muts = fuzz_core::smart_payload_mutations(&base);
+    let limited: Vec<String> = muts.into_iter().take(max).collect();
+    (StatusCode::OK, Json(json!({"count": limited.len(), "mutations": limited}))).into_response()
+}
