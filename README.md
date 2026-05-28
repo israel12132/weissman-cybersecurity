@@ -2,10 +2,15 @@
 
 בוט להערכת אבטחה לחברות: מחובר ל־5 מקורות מודיעין (CVE, GitHub, OSV, OTX, HIBP), מזהה חולשות ופרצות רלוונטיות ללקוח לפי ה־scope שאושר, ומפיק דוחות (כולל דוח שעתי).
 
+> **שימו לב (פערים מול מציאות / מה באמת רץ):** הריפו הזה כולל שני מסלולים:
+> 1) **Weissman Platform (Rust + Frontend)** — שרת API + Worker + Command Center (מומלץ להרצה באמצעות Docker Compose).
+> 2) **Python CLI Bot** (`python main.py`) — כלי קורלציה/דוחות מבוסס פידים, ללא שרת Web (קיים לצרכי כלים/אודיטים/דוחות).
+
 ## דרישות
 
-- Python 3.10+
-- (אופציונלי) Rust + Cargo – לבניית מנוע Fingerprinting פעיל
+- להרצה מלאה של הפלטפורמה: **Docker + Docker Compose**
+- להרצה Native של הפלטפורמה (ללא Docker): **Rust + Cargo** + PostgreSQL (+ Redis אם צריך)
+- לכלי ה־CLI בפייתון: **Python 3.10+**
 - הרשאה מפורשת מלקוח לפני כל סריקה/בדיקה על הנכסים שלו
 
 ## מה המערכת יודעת לעשות
@@ -21,14 +26,13 @@
 ## התקנה
 
 ```bash
-cd security-assessment-bot
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp config.example.yaml config.yaml
 # ערוך config.yaml: הוסף לקוחות, scope, ומפתחות API (אופציונלי)
 
-# אופציונלי – מנוע Fingerprinting (Rust) לזיהוי טכנולוגיות מכתובות ה-scope:
+# אופציונלי לכלי ה־Python: מנוע Fingerprinting (Rust) לזיהוי טכנולוגיות מכתובות ה-scope:
 cd fingerprint_engine && cargo build --release && cd ..
 ```
 
@@ -52,22 +56,14 @@ cd fingerprint_engine && cargo build --release && cd ..
 
 ## שימוש
 
-### הפעלת המערכת (פקודת מאסטר)
+### הפעלת הפלטפורמה (Command Center + API + Worker)
 
 ```bash
 # הפעלה מלאה עם Docker (מומלץ):
-./weissman start
+docker compose up --build
 
-# או הפעלה native (ללא Docker):
-./weissman start native
-```
-
-**פקודות נוספות:**
-```bash
-./weissman status     # בדיקת סטטוס
-./weissman logs -f    # צפייה בלוגים
-./weissman stop       # עצירת המערכת
-./weissman help       # עזרה מלאה
+# או הפעלה native (ללא Docker; דורש DATABASE_URL):
+./start_weissman.sh
 ```
 
 **כתובות:**
@@ -75,7 +71,7 @@ cd fingerprint_engine && cargo build --release && cd ..
 - **API:** http://localhost/api/
 - **WebSocket:** ws://localhost/ws/
 
-> **הערה:** סקריפט `weissman` מפעיל את כל המערכת כולל PostgreSQL, Backend, Worker ו-Gateway.
+> **הערה:** `docker compose up --build` מפעיל את כל המערכת (PostgreSQL, Backend, Worker, Gateway). הסקריפט `./start_weissman.sh` מפעיל רק את `weissman-server` ולכן דורש שירותי DB/Redis חיצוניים.
 
 - **התחבר** עם שם המשתמש והסיסמה (מוגדרים ב־.env).
 - **חברות** – הוסף/ערוך חברות והזן כתובות (דומיינים), טווחי IP ו־Tech Stack.
@@ -87,7 +83,7 @@ cd fingerprint_engine && cargo build --release && cd ..
 
 ---
 
-### שורת פקודה (ללא ממשק)
+### Python CLI (ללא ממשק / ללא שרת Web)
 
 - **ריצה חד־פעמית + דוח:**
   ```bash

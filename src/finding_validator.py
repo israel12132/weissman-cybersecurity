@@ -1,6 +1,10 @@
 """
-Verified-only reporting: run non-destructive PoC (safe_probe) per finding.
-Only findings that pass validation are included in the PDF/Dashboard.
+Validation helper for reporting: runs a non-destructive reachability/safety probe
+(`safe-probe`) per finding.
+
+Important: this probe verifies that the target is reachable and returns a response
+(and can surface basic timing/header anomalies). It does NOT confirm that a specific
+CVE/advisory is exploitable on the target.
 """
 import json
 import logging
@@ -49,10 +53,11 @@ def validate_findings(
     validate_critical_high_only: bool = False,
 ) -> list[ClientFinding]:
     """
-    Run non-destructive PoC (safe_probe) per finding. Only return findings
-    where the probe succeeded (target reachable, response received).
-    If validate_critical_high_only is True, only run validation for Critical/High;
-    others are included without validation (e.g. for low/medium we skip probe).
+    Run `safe-probe` per finding and only return items where the probe succeeded
+    (target reachable, response received).
+
+    If validate_critical_high_only is True, only run the probe for Critical/High;
+    other severities are included without probing.
     """
     validated: list[ClientFinding] = []
     for cf in client_findings:

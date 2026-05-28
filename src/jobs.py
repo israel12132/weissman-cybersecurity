@@ -109,7 +109,8 @@ def auto_check_job() -> None:
             ]
             if not clients_with_changes:
                 return
-            # Verified-only: run non-destructive PoC per finding; only include validated in report
+            # Validation step: run non-destructive `safe-probe` (reachability/timing/header baseline)
+            # per finding; only include probe-success items in the report.
             client_findings = validate_findings(client_findings, db_clients)
             by_severity = {}
             by_client = {}
@@ -122,6 +123,8 @@ def auto_check_job() -> None:
                 findings_serializable.append({
                     "client_id": cf.client_id,
                     "relevance_note": cf.relevance_note,
+                    # "verified" here means "validated by safe-probe" (target reachable / response received),
+                    # not "CVE exploit confirmed".
                     "verified": True,
                     "finding": {
                         "id": f.id,
@@ -156,7 +159,6 @@ def auto_check_job() -> None:
             run_created = format_ist(run.created_at, short=True)
             if client_findings:
                 try:
-                    from pathlib import Path
                     from src.pdf_export import generate_report_pdf_auto
                     client_id_to_name = {str(c.id): (c.name or f"Client_{c.id}") for c in clients}
                     client_targets = {}
