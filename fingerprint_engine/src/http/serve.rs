@@ -1178,6 +1178,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/clients/:id/evidence",
             get(api_client_evidence_list).post(api_client_evidence_upload),
         )
+        .route(
+            "/api/clients/:id/discovery/saas-idp",
+            get(api_client_saas_idp_discovery),
+        )
         .route("/api/evidence/:id/download", get(api_evidence_download))
         .route("/api/evidence/:id", delete(api_evidence_delete))
         .route(
