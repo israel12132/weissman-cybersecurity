@@ -79,7 +79,9 @@ pub struct AppState {
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
     started_at: Instant,
+    #[allow(dead_code)]
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    #[allow(dead_code)]
     redteam_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     radar_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// PoE SSE: registry job_id -> list of bounded client channels; updates_tx feeds distributor that sends only to that job's subscribers.
@@ -739,12 +741,14 @@ struct ClientConfigBody {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct TimingScanRunBody {
     target: Option<String>,
     client_id: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct AiRedteamRunBody {
     target: Option<String>,
     client_id: Option<String>,

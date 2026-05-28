@@ -18,6 +18,7 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_sqlx.inc"
 ));
+#[allow(dead_code)]
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_rest.inc"
@@ -30,6 +31,7 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_rest3.inc"
 ));
+#[allow(dead_code)]
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_rest4.inc"
