@@ -185,18 +185,21 @@ pub fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&
         .map(|(_, v)| v.as_str())
 }
 
-/// DNS TXT record lookup using trust-dns-resolver (already a workspace dep).
+/// DNS TXT record lookup using hickory-resolver.
 pub async fn dns_txt(host: &str) -> Vec<String> {
-    use trust_dns_resolver::TokioAsyncResolver;
-    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
         Ok(r) => r,
         Err(_) => return vec![],
     };
     let mut out = Vec::new();
     if let Ok(txt) = resolver.txt_lookup(host).await {
-        for rec in txt.iter() {
+        for record in txt.answers() {
+            let hickory_resolver::proto::rr::RData::TXT(txt) = &record.data else {
+                continue;
+            };
             let mut joined = String::new();
-            for chunk in rec.iter() {
+            for chunk in txt.txt_data.iter() {
                 joined.push_str(&String::from_utf8_lossy(chunk));
             }
             out.push(joined);
@@ -206,30 +209,36 @@ pub async fn dns_txt(host: &str) -> Vec<String> {
 }
 
 pub async fn dns_mx(host: &str) -> Vec<String> {
-    use trust_dns_resolver::TokioAsyncResolver;
-    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
         Ok(r) => r,
         Err(_) => return vec![],
     };
     let mut out = Vec::new();
     if let Ok(mx) = resolver.mx_lookup(host).await {
-        for rec in mx.iter() {
-            out.push(rec.exchange().to_string());
+        for record in mx.answers() {
+            let hickory_resolver::proto::rr::RData::MX(mx) = &record.data else {
+                continue;
+            };
+            out.push(mx.exchange.to_string());
         }
     }
     out
 }
 
 pub async fn dns_a(host: &str) -> Vec<String> {
-    use trust_dns_resolver::TokioAsyncResolver;
-    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
         Ok(r) => r,
         Err(_) => return vec![],
     };
     let mut out = Vec::new();
     if let Ok(a) = resolver.ipv4_lookup(host).await {
-        for rec in a.iter() {
-            out.push(rec.0.to_string());
+        for record in a.answers() {
+            let hickory_resolver::proto::rr::RData::A(a) = &record.data else {
+                continue;
+            };
+            out.push(a.0.to_string());
         }
     }
     out

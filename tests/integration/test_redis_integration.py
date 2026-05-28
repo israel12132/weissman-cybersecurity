@@ -25,6 +25,21 @@ TEST_REDIS_URL = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_redis():
     """Configure Redis for tests."""
+    import redis
+
+    client = redis.from_url(TEST_REDIS_URL, decode_responses=True)
+    try:
+        client.ping()
+    except Exception as e:
+        pytest.skip(
+            f"Redis is not reachable at {TEST_REDIS_URL} ({type(e).__name__}: {e})",
+        )
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
     os.environ["REDIS_URL"] = TEST_REDIS_URL
     yield
     # Cleanup

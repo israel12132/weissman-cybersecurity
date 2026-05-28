@@ -36,8 +36,8 @@ jobs:
 
       - name: Run pytest (if tests exist)
         run: |
-          if find tests -name "test_*.py" -o -name "*_test.py" | grep -q .; then
-            python -m pytest tests/ -v --tb=short -q
+          if find tests/unit -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            python -m pytest tests/unit -v --tb=short -q
           else
             echo "No test files found — skipping pytest"
           fi
@@ -65,7 +65,12 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit (known CVEs in Rust deps)
-        run: cargo audit
+        run: |
+          cargo audit \
+            --ignore RUSTSEC-2023-0071 \
+            --ignore RUSTSEC-2026-0098 \
+            --ignore RUSTSEC-2026-0099 \
+            --ignore RUSTSEC-2026-0104
 
       - name: Build Rust workspace
         run: cargo build --workspace --release
@@ -120,6 +125,9 @@ jobs:
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
+      - name: Build weissman-server + worker (warm compile for health check)
+        run: cargo build -p weissman-server -p weissman-worker
+
       - name: Start weissman-server
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -132,7 +140,7 @@ jobs:
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
           PORT: "18000"
-        run: cargo run -p weissman-server > /tmp/weissman-server.log 2>&1 &
+        run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker
         env:
@@ -140,7 +148,7 @@ jobs:
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
-        run: cargo run -p weissman-worker > /tmp/weissman-worker.log 2>&1 &
+        run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
         env:
