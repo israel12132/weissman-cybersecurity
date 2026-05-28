@@ -17,6 +17,7 @@ requests
 requests[socks]
 aiohttp
 tenacity
+redis>=5.0.0
 
 # --- Auth & security (bcrypt<5 for passlib) ---
 pyotp
