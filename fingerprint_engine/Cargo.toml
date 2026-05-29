@@ -63,7 +63,7 @@ tempfile = "3"
 # True DAG execution (concurrent engine scheduling)
 petgraph = "0.6"
 # 200% verification: ephemeral Docker container
-bollard = "0.16"
+bollard = "0.21"
 # Deception: active cloud injection (AWS). Requires Rust ≥1.91 (aws-smithy-* / aws-sdk-* MSRV).
 aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
 aws-config = "1.1"
