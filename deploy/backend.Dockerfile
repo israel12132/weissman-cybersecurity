@@ -22,6 +22,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY fuzz_core ./fuzz_core
 COPY fingerprint_engine ./fingerprint_engine
+COPY scripts ./scripts
 COPY backend ./backend
 COPY crates ./crates
 RUN cargo build -p weissman-server -p weissman-worker --release --locked
