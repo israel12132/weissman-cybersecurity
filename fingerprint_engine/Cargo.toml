@@ -48,7 +48,7 @@ openssl = "0.10"
 sha2 = "0.10"
 hmac = "0.12"
 qrcode = "0.14"
-base64 = "0.21"
+base64 = "0.22"
 # Module 3: Graph ASM & Cloud Hunter (DNS CNAME, subdomain takeover, S3/Azure exposure)
 hickory-resolver = { version = "0.26" }
 # Module 8: IaC / CI-CD pipeline analysis (YAML)
