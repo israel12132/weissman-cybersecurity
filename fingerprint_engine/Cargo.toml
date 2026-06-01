@@ -26,7 +26,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 ipnetwork = "0.20"
 urlencoding = "2.1"
-rand = "0.8"
+rand = "0.10"
 # Full-stack server: live API + dashboard, no dummy
 axum = { version = "0.7", features = ["json", "ws"] }
 tower = { version = "0.4", features = ["util"] }
