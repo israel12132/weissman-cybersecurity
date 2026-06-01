@@ -62,7 +62,14 @@ This document summarizes the platform's current security controls and compliance
 - No claim is made here that SOC 2 Type II or ISO 27001 is already certified.
 - This package is intended to accelerate customer due-diligence and security questionnaire completion.
 
-## 10) Evidence references in repository
+## 10) Availability and status policy
+
+- SLA and uptime policy are documented in:
+  - `/tmp/workspace/israel12132/weissman-cybersecurity/SLA_AND_STATUS.md`
+- Public runtime status endpoint:
+  - `/status`
+
+## 11) Evidence references in repository
 
 - `/tmp/workspace/israel12132/weissman-cybersecurity/src/database.py`
 - `/tmp/workspace/israel12132/weissman-cybersecurity/src/audit.py`
