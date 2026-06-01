@@ -317,9 +317,20 @@ fn report_pdf_filename(markdown_name: &str) -> String {
 }
 
 fn pdf_escape(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('(', "\\(")
-        .replace(')', "\\)")
+    let mut escaped = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '(' => escaped.push_str("\\("),
+            ')' => escaped.push_str("\\)"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            c if c.is_control() => escaped.push(' '),
+            c => escaped.push(c),
+        }
+    }
+    escaped
 }
 
 fn cvss_score_from_severity(severity: &str) -> f32 {
@@ -328,7 +339,10 @@ fn cvss_score_from_severity(severity: &str) -> f32 {
         "high" => 8.2,
         "medium" => 6.4,
         "low" => 3.7,
-        _ => 5.0,
+        other => {
+            tracing::warn!(target: "reporter", severity = other, "unknown severity for anomaly pdf; using fallback cvss");
+            5.0
+        }
     }
 }
 
@@ -399,6 +413,8 @@ fn build_anomaly_pdf(
     lines.push("Recommended Remediation".to_string());
     lines.extend(wrap_for_pdf(remediation, 90));
 
+    // Single-page A4-ish layout using 16px line spacing from y=750. Keep hard cap
+    // so content never overflows the page box and corrupts rendering.
     const MAX_LINES: usize = 44;
     if lines.len() > MAX_LINES {
         lines.truncate(MAX_LINES - 1);
@@ -483,10 +499,11 @@ fn write_anomaly_pdf_sidecar(
     );
     let pdf_name = report_pdf_filename(markdown_name);
     let pdf_path = reports_dir_path.join(pdf_name);
-    if std::fs::write(&pdf_path, pdf_bytes).is_err() {
+    if let Err(error) = std::fs::write(&pdf_path, pdf_bytes) {
         tracing::warn!(
             target: "reporter",
             path = %pdf_path.display(),
+            error = %error,
             "failed to write anomaly pdf sidecar"
         );
     }
