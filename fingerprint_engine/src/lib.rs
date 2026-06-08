@@ -35,6 +35,8 @@ pub mod auth_jwt;
 pub mod auth_refresh;
 pub mod billing;
 pub mod observability;
+pub mod api_docs;
+pub mod signup;
 pub mod request_trace;
 pub mod panic_shield;
 pub mod scan_concurrency;

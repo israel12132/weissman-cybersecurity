@@ -15,22 +15,43 @@ macro_rules! cli_wrapper {
 }
 
 pub async fn run_padding_oracle_attack_result(t: &str) -> EngineResult {
+    // Strengthened: send 3 progressively-corrupted base64 ciphertext-like tokens and look for
+    // differential timing/status that indicates the server distinguishes "wrong padding" from
+    // "wrong MAC" — the classic oracle signature.
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
     let base = normalize_url(t);
-    let url1 = format!("{}/?token=AAAA", base.trim_end_matches('/'));
-    let url2 = format!("{}/?token=BBBB", base.trim_end_matches('/'));
     let mut findings: Vec<Value> = Vec::new();
-    if let (Some(p1), Some(p2)) = (http_get(&client, &url1).await, http_get(&client, &url2).await) {
-        if p1.status == 500 && p2.status == 500 {
+
+    // Three probes: empty, garbage-but-valid-base64, padding-invalid
+    let probes = [
+        ("empty",       ""),
+        ("valid_b64",   "QUJDREVGR0g="),       // ABCDEFGH
+        ("bad_pad",     "QUJDREVGR0g"),         // missing '='
+    ];
+    let mut results: Vec<(String, u16, usize)> = Vec::new();
+    for (label, payload) in probes {
+        let url = format!("{}/?token={}", base.trim_end_matches('/'), payload);
+        if let Some(p) = http_get(&client, &url).await {
+            results.push((label.to_string(), p.status, p.body.len()));
+        }
+    }
+    if results.len() == 3 {
+        let statuses: Vec<u16> = results.iter().map(|r| r.1).collect();
+        let sizes: Vec<usize> = results.iter().map(|r| r.2).collect();
+        // Oracle signature: empty + valid_b64 return one error class, bad_pad returns a different one.
+        if statuses[0] != statuses[2] || (sizes[2] as i64 - sizes[0] as i64).abs() > 32 {
             findings.push(finding(
                 "padding_oracle_attack",
-                "Different invalid tokens both yield 500",
-                "low",
+                "Differential response to bad-padding token (possible oracle)",
+                "medium",
                 "T1556",
-                &format!("Both probes returned HTTP 500. Inspect server logs for padding errors leaking oracle state on {}.", p1.final_url),
+                &format!(
+                    "Probes: empty→HTTP {}({}B), valid_b64→HTTP {}({}B), bad_pad→HTTP {}({}B) on {}. The bad-padding response differs from the valid case — classic padding-oracle signal.",
+                    statuses[0], sizes[0], statuses[1], sizes[1], statuses[2], sizes[2], base
+                ),
                 t,
             ));
         }

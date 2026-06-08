@@ -82,7 +82,46 @@ pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
 cli_wrapper!(run_modbus_attack, run_modbus_attack_result);
 
 pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "dnp3_attack", "DNP3 industrial protocol", "high", "T0843", &[20000], "DNP3 standard TCP port.").await
+    // Strengthened: probe with a DNP3 LINK_STATUS request (function code 0x09) — if the device
+    // replies with a valid DNP3 header (start bytes 0x05 0x64), it's a confirmed DNP3 endpoint.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    if tcp_open(&host, 20000).await {
+        // DNP3 LINK_STATUS request frame, src=1 dst=2
+        let probe: [u8; 12] = [
+            0x05, 0x64, 0x05, 0xC9, 0x02, 0x00, 0x01, 0x00, 0xCB, 0x16, 0x00, 0x00,
+        ];
+        let resp = tcp_probe_response(&host, 20000, &probe).await;
+        let confirmed = resp
+            .as_deref()
+            .map(|b| b.len() >= 2 && b[0] == 0x05 && b[1] == 0x64)
+            .unwrap_or(false);
+        findings.push(finding(
+            "dnp3_attack",
+            if confirmed {
+                "DNP3 confirmed (start bytes 0x05 0x64 in reply)"
+            } else {
+                "Port 20000/tcp open (DNP3 candidate)"
+            },
+            "high",
+            "T0843",
+            &format!(
+                "TCP {}:{} reachable. {}",
+                host,
+                20000,
+                if confirmed { "LINK_STATUS reply confirms DNP3." } else { "No protocol confirmation." }
+            ),
+            t,
+        ));
+    }
+    if findings.is_empty() {
+        empty_ok("dnp3_attack", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("dnp3_attack: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_dnp3_attack, run_dnp3_attack_result);
 
@@ -108,7 +147,48 @@ pub async fn run_zigbee_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_zigbee_attack, run_zigbee_attack_result);
 
 pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "iec61850_attack", "IEC 61850 MMS port", "high", "T0843", &[102], "IEC 61850 / MMS over ISO-TSAP.").await
+    // Strengthened: send an ISO-TSAP CR (Connection Request) TPKT — port 102 OT devices reply
+    // with a CC (Connection Confirm) packet starting 03 00 …, the TPKT header. Banner-only port
+    // scans miss this, but a real OT host announces itself.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    if tcp_open(&host, 102).await {
+        // Minimal TPKT-wrapped COTP CR PDU (22 bytes): 03 00 00 16  11 E0 00 00 00 01 00 …
+        let probe: [u8; 22] = [
+            0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0,
+            0x01, 0x0A, 0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
+        ];
+        let resp = tcp_probe_response(&host, 102, &probe).await;
+        let confirmed = resp
+            .as_deref()
+            .map(|b| b.len() >= 4 && b[0] == 0x03 && b[1] == 0x00)
+            .unwrap_or(false);
+        findings.push(finding(
+            "iec61850_attack",
+            if confirmed {
+                "IEC 61850 / MMS confirmed (TPKT reply)"
+            } else {
+                "Port 102/tcp open (IEC 61850 candidate)"
+            },
+            "high",
+            "T0843",
+            &format!(
+                "TCP {}:{} reachable. {}",
+                host,
+                102,
+                if confirmed { "ISO-TSAP CR/CC handshake confirms IEC 61850 / MMS." } else { "No TPKT reply observed." }
+            ),
+            t,
+        ));
+    }
+    if findings.is_empty() {
+        empty_ok("iec61850_attack", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("iec61850_attack: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_iec61850_attack, run_iec61850_attack_result);
 

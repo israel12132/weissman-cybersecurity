@@ -22,6 +22,7 @@ import {
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
+import { useToast } from '../components/ui/Toaster'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -635,6 +636,7 @@ function globalFilterFn(row, _columnId, filterValue) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function FindingsCommandCenter() {
+  const { toast } = useToast()
   const [rawFindings, setRawFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -676,7 +678,6 @@ export default function FindingsCommandCenter() {
       .catch(() => {})
   }, [])
 
-  // Status update handler — updates local state + calls API
   const handleStatusUpdate = useCallback((rawId, newStatus) => {
     if (!rawId) return
     const matchesId = (f) => Number(f.raw_id) === Number(rawId)
@@ -694,17 +695,18 @@ export default function FindingsCommandCenter() {
           setSelectedFinding((prev) =>
             prev && matchesId(prev) ? { ...prev, status: d.status } : prev,
           )
+          toast.success(`Status updated → ${d.status}`)
+        } else {
+          toast.error(`Status update rejected: ${d?.detail || 'unknown error'}`)
         }
       })
-      .catch(() => {})
-  }, [])
+      .catch((e) => toast.error(`Status update failed: ${e?.message || 'network error'}`))
+  }, [toast])
 
-  // CSV export
   const handleExportCsv = useCallback(() => {
     apiFetch('/api/findings/export/csv')
       .then((r) => {
-        if (!r.ok) throw new Error('Export failed')
-        // Use filename from Content-Disposition header when available; fallback to dated name
+        if (!r.ok) throw new Error(`Export failed (HTTP ${r.status})`)
         const disposition = r.headers.get('content-disposition') || ''
         const match = disposition.match(/filename="?([^";\s]+)"?/)
         const filename = match?.[1] ?? `Weissman_findings_${new Date().toISOString().slice(0, 10)}.csv`
@@ -717,9 +719,10 @@ export default function FindingsCommandCenter() {
         a.download = filename
         a.click()
         URL.revokeObjectURL(url)
+        toast.success(`Downloaded ${filename}`)
       })
-      .catch(() => {})
-  }, [])
+      .catch((e) => toast.error(`CSV export failed: ${e?.message || 'network error'}`))
+  }, [toast])
 
   const columns = useMemo(() => buildColumns(), [])
 

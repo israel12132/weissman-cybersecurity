@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import RoEPanel from './RoEPanel'
@@ -68,6 +69,7 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
 }
 
 export default function EngineRoomTab() {
+  const { t } = useTranslation()
   const {
     selectedClient,
     selectedClientId,
@@ -203,16 +205,16 @@ export default function EngineRoomTab() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-[0.2em]">
-            Engine Grid — {totalEngines} Live Engines
+            {t('engines.title')} — {t('engines.live_engines', { count: totalEngines })}
             {catalogCount > totalEngines ? (
-              <span className="text-white/35 font-normal normal-case tracking-normal ml-2">
-                ({catalogCount} catalog entries hidden)
+              <span className="text-white/35 font-normal normal-case tracking-normal ms-2">
+                {t('engines.catalog_hidden', { count: catalogCount })}
               </span>
             ) : null}
           </h3>
           <p className="text-[11px] text-white/40 mt-0.5">
-            {totalEnabled} enabled · {totalEngines - totalEnabled} disabled ·{' '}
-            <span className="text-white/50">Toggle to add to orchestrator allow-list. Run to queue immediate async job.</span>
+            {t('engines.enabled_count', { enabled: totalEnabled, disabled: totalEngines - totalEnabled })} ·{' '}
+            <span className="text-white/50">{t('engines.toggle_hint')}</span>
           </p>
         </div>
       </div>
@@ -222,7 +224,7 @@ export default function EngineRoomTab() {
         <div className="relative flex-1 min-w-[260px]">
           <input
             type="search"
-            placeholder="Search engines by ID, label, MITRE, or description…"
+            placeholder={t('engines.search_placeholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
@@ -231,8 +233,8 @@ export default function EngineRoomTab() {
             <button
               type="button"
               onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
+              aria-label={t('common.close')}
+              className="absolute end-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
             >
               ✕
             </button>
@@ -245,10 +247,10 @@ export default function EngineRoomTab() {
             onChange={(e) => setOnlyEnabled(e.target.checked)}
             className="accent-cyan-500"
           />
-          Show only enabled
+          {t('engines.show_only_enabled')}
         </label>
         <span className="text-[11px] font-mono text-white/35">
-          {filteredRegistry.length} match{filteredRegistry.length === 1 ? '' : 'es'}
+          {t('engines.matches', { count: filteredRegistry.length })}
         </span>
       </div>
 
@@ -263,7 +265,7 @@ export default function EngineRoomTab() {
               : 'text-white/50 border border-white/10 hover:border-white/20 hover:text-white/70'
           }`}
         >
-          All ({totalEngines})
+          {t('engines.all_engines', { count: totalEngines })}
         </button>
         {ENGINE_GROUP_DEFS.map((g) => {
           const groupEngines = enginesByGroup(g.id)

@@ -1,0 +1,8 @@
+# Weissman Cybersecurity — Command Center
+# This is a private, customer-authenticated dashboard. We disallow indexing.
+
+User-agent: *
+Disallow: /
+
+# Status page is the only public surface.
+Allow: /command-center/status

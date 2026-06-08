@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weissman API — Interactive Docs</title>
+  <meta name="description" content="Interactive OpenAPI 3.1 documentation for the Weissman Cybersecurity API." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css" />
+  <style>
+    body { margin: 0; background: #0b1120; }
+    .topbar { background: #020617; padding: 0.75rem 1.25rem; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .topbar a { color: #22d3ee; text-decoration: none;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; letter-spacing: 0.05em; }
+    .topbar strong { color: #22d3ee; letter-spacing: 2px;
+      font-family: 'Orbitron', sans-serif; font-weight: 700; }
+    .swagger-ui .topbar { display: none } /* hide default Swagger banner — we have our own */
+    .swagger-ui { background: #0b1120 !important; }
+    .swagger-ui .info { color: #cbd5e1 }
+    .swagger-ui .scheme-container { background: #0b1120 !important; box-shadow: none }
+    .swagger-ui .opblock-tag { color: #22d3ee !important; border-bottom-color: rgba(34,211,238,0.15) }
+    .swagger-ui .opblock { background: rgba(15,23,42,0.55) !important;
+      border-color: rgba(255,255,255,0.06) !important; }
+    .swagger-ui .opblock .opblock-summary-method { background: #0e7490 !important }
+    .swagger-ui .opblock-summary-description, .swagger-ui .opblock-summary-path { color: #e2e8f0 !important }
+    .swagger-ui .markdown p, .swagger-ui .renderedMarkdown p,
+    .swagger-ui table, .swagger-ui .response-col_status,
+    .swagger-ui .opblock-description-wrapper p { color: #cbd5e1 !important }
+    .swagger-ui input, .swagger-ui textarea, .swagger-ui select { background: #020617 !important;
+      color: #e2e8f0 !important; border-color: rgba(255,255,255,0.1) !important }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/">
+      <strong>WEISSMAN</strong>
+      <span style="color:#94a3b8;margin-left:0.5rem">API DOCS</span>
+    </a>
+    <span style="color:#64748b;font-family:'JetBrains Mono',monospace;font-size:0.75rem">
+      <a href="/api/openapi.json" style="margin-right:1rem">openapi.json</a>
+      <a href="/status">Status</a>
+    </span>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js" crossorigin></script>
+  <script>
+    window.addEventListener('load', function () {
+      window.ui = SwaggerUIBundle({
+        url: '/api/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        docExpansion: 'list',
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 2,
+        displayRequestDuration: true,
+        filter: true,
+        tryItOutEnabled: true,
+        persistAuthorization: true,
+        presets: [SwaggerUIBundle.presets.apis]
+      });
+    });
+  </script>
+</body>
+</html>

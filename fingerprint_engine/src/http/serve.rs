@@ -206,6 +206,15 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
     if path == "/api/openapi.json" && method == Method::GET {
         return next.run(request).await;
     }
+    if (path == "/api/docs" || path == "/api/docs/") && method == Method::GET {
+        return next.run(request).await;
+    }
+    if path == "/api/auth/signup" && method == Method::POST {
+        return next.run(request).await;
+    }
+    if path == "/api/auth/verify" && method == Method::GET {
+        return next.run(request).await;
+    }
     if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
         return next.run(request).await;
     }
@@ -935,12 +944,22 @@ pub fn new_app_state(
     let registry_clone = poe_job_registry.clone();
     tokio::spawn(async move {
         while let Ok((job_id, json)) = poe_updates_rx.recv_async().await {
-            if let Some(mut senders) = registry_clone.get_mut(&job_id) {
+            // Prune disconnected SSE subscribers as we forward. If no subscribers remain
+            // for this job_id after pruning, drop the map entry too — otherwise the
+            // DashMap accumulates one orphan key per scan forever (slow leak).
+            let drop_key = {
+                let Some(mut senders) = registry_clone.get_mut(&job_id) else {
+                    continue;
+                };
                 senders.retain(|tx| match tx.try_send(json.clone()) {
                     Ok(()) => true,
                     Err(TrySendError::Disconnected(_)) => false,
                     Err(TrySendError::Full(_)) => true,
                 });
+                senders.is_empty()
+            };
+            if drop_key {
+                registry_clone.remove(&job_id);
             }
         }
     });
@@ -1080,12 +1099,17 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
     let api = root_routes
         .route("/ws/command-center", get(ws_command_center))
         .route("/api/dashboard/stats", get(api_dashboard_stats))
+        .route("/api/dashboard/exec-kpis", get(api_dashboard_exec_kpis))
         .route("/api/findings", get(api_findings))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
         .route("/api/findings/:id/status", patch(api_findings_update_status))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/openapi.json", get(api_openapi_spec))
+        .route("/api/docs", get(crate::api_docs::api_docs_swagger))
+        .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
+        .route("/api/auth/signup", post(crate::signup::api_signup))
+        .route("/api/auth/verify", get(crate::signup::api_verify))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
         .route("/api/engines/top-tier/audit", get(api_engines_top_tier_audit))
@@ -1119,22 +1143,20 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route("/ws/agent", get(ws_agent))
-        // .route("/api/onboarding/register", post(api_onboarding_register))
-        // .route("/api/onboarding/target", post(api_onboarding_target))
-        // .route(
-        //     "/api/onboarding/launch-scan",
-        //     post(api_onboarding_launch_scan),
-        // )
-        // .route("/api/billing/usage", get(api_billing_usage))
-        // .route(
-        //     "/api/billing/checkout-session",
-        //     post(api_billing_checkout_session),
-        // )
-        // .route(
-        //     "/api/billing/sync-paddle",
-        //     post(api_billing_sync_paddle),
-        // )
-        // .route("/api/webhooks/paddle", post(api_paddle_webhook))
+        // Onboarding + billing stubs (501 with structured body until self-serve flow ships).
+        .route("/api/onboarding/register", post(api_onboarding_register_stub))
+        .route("/api/onboarding/target", post(api_onboarding_target_stub))
+        .route(
+            "/api/onboarding/launch-scan",
+            post(api_onboarding_launch_scan_stub),
+        )
+        .route("/api/billing/usage", get(api_billing_usage_stub))
+        .route(
+            "/api/billing/checkout-session",
+            post(api_billing_checkout_session_stub),
+        )
+        .route("/api/billing/sync-paddle", post(api_billing_sync_paddle_stub))
+        .route("/api/webhooks/paddle", post(api_paddle_webhook_stub))
         .route("/api/auth/oidc/begin", get(crate::oidc_auth::oidc_begin))
         .route(
             "/api/auth/oidc/callback",
@@ -1277,6 +1299,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/telemetry/stream", get(api_telemetry_stream))
         .route("/api/latency-probe", post(api_latency_probe))
         .route("/api/poe-scan/run", post(api_poe_scan_run))
+        .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
@@ -1336,6 +1359,16 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             post(api_client_cloud_scan_run),
         )
         .route("/api/compliance/posture", get(api_compliance_posture))
+        // UI aliases: SystemConfiguration page + ComplianceFrameworks page expect these paths.
+        .route(
+            "/api/system/config",
+            get(api_system_config_alias).put(api_system_config_put_alias),
+        )
+        .route("/api/compliance/frameworks", get(api_compliance_frameworks_list))
+        .route(
+            "/api/compliance/frameworks/:framework_id/controls",
+            get(api_compliance_frameworks_controls),
+        )
         .route("/api/reports/executive", get(api_reports_executive))
         .route(
             "/api/sovereign/phantom-trap",

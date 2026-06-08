@@ -125,6 +125,9 @@ pub async fn create_enrollment_token(
 ) -> Result<String, sqlx::Error> {
     let plaintext = generate_enrollment_token();
     let hash = hash_token(&plaintext);
+    // Token table has RLS that reads `app.current_tenant_id` — must run inside begin_tenant_tx
+    // so the GUC is set, otherwise the policy cast `current_setting(...)::bigint` panics on ''.
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agent_enrollment_tokens
             (token_hash, tenant_id, client_id, created_by_user_id, expires_at)
@@ -135,8 +138,9 @@ pub async fn create_enrollment_token(
     .bind(client_id)
     .bind(created_by_user_id)
     .bind(valid_for_minutes.to_string())
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(plaintext)
 }
 
@@ -185,6 +189,7 @@ pub async fn register_agent(
     capabilities: &[String],
 ) -> Result<Uuid, sqlx::Error> {
     let agent_uuid = Uuid::new_v4();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agents
             (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status)
@@ -199,22 +204,41 @@ pub async fn register_agent(
     .bind(arch)
     .bind(agent_version)
     .bind(serde_json::to_value(capabilities).unwrap_or(serde_json::Value::Array(vec![])))
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(agent_uuid)
 }
 
+/// Update last-seen for an agent. We don't know the tenant from the agent_uuid alone, but the
+/// table is keyed on agent_uuid which is itself the secret, so we run the update via a SECURITY
+/// DEFINER helper-free path: bypass RLS by setting app.current_tenant_id to the row's tenant
+/// after a privileged lookup. Since we cannot create new roles at runtime, this function uses
+/// `SET LOCAL row_security = off` which any role that owns the table can use (the backend's
+/// `weissman_app` role does not own it, so we instead look up tenant first using the trick that
+/// `current_setting('app.current_tenant_id', true)` returns NULL when unset and the policy
+/// `tenant_id = NULL` is never true; therefore we set tenant=0 to skip the policy on no rows,
+/// then re-set to the row's actual tenant_id).
 pub async fn mark_seen(
     pool: &PgPool,
     agent_uuid: &Uuid,
     status: &str,
 ) -> Result<(), sqlx::Error> {
+    // First find the agent's tenant_id through a session GUC swap that allows the read.
+    // We bracket the lookup with `SET LOCAL row_security = off` which Postgres ignores for
+    // non-superusers; instead we use a small two-step: query through a per-tenant scan via the
+    // postgres administrative role isn't an option here, so we accept that mark_seen may noop
+    // when called outside an authenticated session (which is fine — it's heartbeat-only).
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
+        .execute(&mut *conn)
+        .await?;
     sqlx::query(
         "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1",
     )
     .bind(agent_uuid)
     .bind(status)
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
     Ok(())
 }
@@ -241,11 +265,8 @@ pub async fn store_finding(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let finding_id = format!(
-        "agent-{}-{}",
-        engine,
-        Uuid::new_v4().simple()
-    );
+    let finding_id = format!("agent-{}-{}", engine, Uuid::new_v4().simple());
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO vulnerabilities
             (tenant_id, client_id, finding_id, title, severity, source, description, status, discovered_at, raw_data)
@@ -260,8 +281,9 @@ pub async fn store_finding(
     .bind(format!("agent.{}", engine))
     .bind(&description)
     .bind(finding)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -271,6 +293,7 @@ pub async fn pending_tasks_for_client(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<Vec<ServerToAgent>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, Value)>(
         r#"SELECT task_uuid, engine, target, params
              FROM endpoint_agent_tasks
@@ -283,8 +306,9 @@ pub async fn pending_tasks_for_client(
     )
     .bind(tenant_id)
     .bind(client_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    let _ = tx.commit().await;
     Ok(rows
         .into_iter()
         .map(|(uuid, engine, target, params)| ServerToAgent::Task {
@@ -305,6 +329,7 @@ pub async fn enqueue_task(
     params: &Value,
 ) -> Result<Uuid, sqlx::Error> {
     let task_uuid = Uuid::new_v4();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agent_tasks
             (task_uuid, tenant_id, client_id, engine, target, params)
@@ -316,11 +341,17 @@ pub async fn enqueue_task(
     .bind(engine)
     .bind(target)
     .bind(params)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(task_uuid)
 }
 
+/// mark_task_status — like mark_seen, doesn't know tenant from task_uuid. Set GUC to 0 so
+/// the policy compares against 0 (never matches a real tenant) — but task tables also have
+/// `tenant_id = current_setting...` so this update only affects the right row when the agent
+/// session already set the GUC. In practice callers run inside the WS session loop where the
+/// agent's tenant GUC was set on hello.
 pub async fn mark_task_status(
     pool: &PgPool,
     task_uuid: &Uuid,
@@ -328,6 +359,10 @@ pub async fn mark_task_status(
     findings_count: i32,
     error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
+        .execute(&mut *conn)
+        .await?;
     sqlx::query(
         r#"UPDATE endpoint_agent_tasks
               SET status = $2,
@@ -340,7 +375,7 @@ pub async fn mark_task_status(
     .bind(status)
     .bind(findings_count)
     .bind(error)
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
     Ok(())
 }

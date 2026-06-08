@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
 import { apiFetch } from '../../lib/apiBase'
+import Logo from '../Logo'
+import ProfileMenu from '../ui/ProfileMenu'
+import { useToast } from '../ui/Toaster'
 
 export default function GlobalNexus({ ceoIntegrated = false }) {
+  const { t } = useTranslation()
   const { isCeo } = useAuth()
+  const { toast } = useToast()
   const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients } = useClient()
   const [stats, setStats] = useState({ total_vulnerabilities: 0, security_score: 0, active_scans: 0 })
   const [addName, setAddName] = useState('')
@@ -71,13 +77,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         setAddAwsExt('')
         setAddGcp('')
         await refreshClients()
+        toast.success(`Client "${name}" added`)
         setTimeout(() => setAddMessage(null), 2000)
       } else {
         const errMsg = r.status === 401 ? 'Please log in again' : formatApiErrorFromBody(d, r.status)
         setAddMessage({ error: errMsg })
+        toast.error(errMsg)
       }
     } catch (_) {
       setAddMessage({ error: 'Network error' })
+      toast.error('Network error — could not reach API.')
     }
     setAddSubmitting(false)
   }
@@ -117,8 +126,11 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             {ceoIntegrated ? 'Cockpit · mission control' : 'CEO cockpit home'}
           </Link>
         )}
-        <div className="text-[10px] uppercase tracking-[0.2em] text-white/50 mb-3 font-medium">
-          Global Nexus
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <Link to="/" aria-label="Weissman Cybersecurity home" className="block">
+            <Logo size={28} />
+          </Link>
+          <ProfileMenu />
         </div>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
@@ -207,6 +219,9 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             <span>👤</span> Admin Management
           </Link>
         )}
+        <Link to="/audit-log" id="nav-audit-log" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/80 hover:bg-slate-800/40 hover:text-slate-200 transition-colors">
+          <span>📋</span> {t('nav.audit_log', { defaultValue: 'Audit Log' })}
+        </Link>
       </div>
 
       {/* Body: Client list */}

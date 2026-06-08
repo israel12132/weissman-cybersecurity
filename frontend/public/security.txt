@@ -1,0 +1,8 @@
+# RFC 9116 — security disclosure metadata for the public-facing console.
+# Place at /.well-known/security.txt on the reverse-proxy (nginx / Caddy).
+
+Contact: mailto:security@weissman.io
+Expires: 2027-12-31T23:59:59Z
+Preferred-Languages: en, he
+Canonical: https://weissman.io/.well-known/security.txt
+Policy: https://weissman.io/responsible-disclosure

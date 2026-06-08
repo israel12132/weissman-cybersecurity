@@ -102,12 +102,45 @@ pub async fn run_app_store_attack_result(t: &str) -> EngineResult { store_probe(
 cli_wrapper!(run_app_store_attack, run_app_store_attack_result);
 
 pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
-    crate::engine_probes::agent_required_ok(
-        "mdm_bypass_engine",
-        t,
-        "MDM bypass detection requires Intune / Workspace ONE API",
-        "Profile-removal and jailbreak hints come from the MDM management API — connect it in Integrations.",
-    )
+    // Remote-observable: known MDM admin / device-enrollment endpoints exposed publicly.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let mut findings: Vec<Value> = Vec::new();
+    let mdm_paths: &[(&str, &str)] = &[
+        ("/manage/ServerHealth.action",     "VMware Workspace ONE"),
+        ("/enrollmentserver/Discovery.svc", "Microsoft Intune / Windows MDM"),
+        ("/v1/server/health",                "Jamf Pro"),
+        ("/api/users/auth",                  "Jamf Pro"),
+        ("/MDM/Configuration",               "MobileIron"),
+        ("/enroll/ios",                       "Mobile-device enrollment endpoint"),
+        ("/.well-known/airwatch-mdm",        "AirWatch / Workspace ONE"),
+    ];
+    for (path, vendor) in mdm_paths {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status < 500 && (p.body.contains(vendor.split(' ').next().unwrap_or("")) || p.status == 200 || p.status == 401) {
+                findings.push(finding(
+                    "mdm_bypass_engine",
+                    &format!("Public {} endpoint reachable", vendor),
+                    "medium",
+                    "T1556",
+                    &format!(
+                        "{} appears reachable at {} (HTTP {}). MDM admin / enrollment surfaces should be behind VPN + IP allow-list.",
+                        vendor, p.final_url, p.status
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("mdm_bypass_engine", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("mdm_bypass_engine: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_mdm_bypass_engine, run_mdm_bypass_engine_result);
 

@@ -23,6 +23,10 @@ import {
   Cloud,
 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import LiveActivityFeed from './LiveActivityFeed'
+import MitreCoverageHeatmap from './MitreCoverageHeatmap'
+import TopMoversPanel from './TopMoversPanel'
+import SeverityTrendChart from './SeverityTrendChart'
 
 const GLASS_CARD =
   'rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]'
@@ -231,16 +235,32 @@ export default function OverviewTab() {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-8">
+    <div className="p-6 md:p-8 space-y-6">
       {/* Section header */}
-      <div>
-        <h2 className="text-xs font-semibold text-white/60 uppercase tracking-[0.2em] mb-1">
-          Security Overview
-        </h2>
-        <p className="text-white/40 text-sm">
-          {selectedClient?.name || `Client ${selectedClientId}`} — real-time metrics
-        </p>
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xs font-semibold text-white/60 uppercase tracking-[0.2em] mb-1">
+            Security Overview
+          </h2>
+          <p className="text-white/40 text-sm">
+            {selectedClient?.name || `Client ${selectedClientId}`} — real-time metrics
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Live · auto-refresh 30s
+        </span>
       </div>
+
+      {/* ── Realtime executive layer (Wiz / Falcon / Datadog inspired) ────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
+        <SeverityTrendChart />
+        <LiveActivityFeed maxHeight={232} />
+      </div>
+
+      <MitreCoverageHeatmap />
+
+      <TopMoversPanel />
 
       {/* AI Suggested visualization (Ollama / Architect) */}
       {suggestedWidget?.message && (

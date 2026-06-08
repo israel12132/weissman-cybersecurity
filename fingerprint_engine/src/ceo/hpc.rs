@@ -86,9 +86,11 @@ pub async fn get_hpc_policy(pool: &PgPool, tenant_id: i64) -> Result<HpcPolicyVi
         }
     }
     let total_rc = research_running.saturating_add(client_running);
-    let actual_research_share_percent = (total_rc > 0).then_some(
-        ((research_running.saturating_mul(100)) / total_rc) as i16,
-    );
+    // `then_some(expr)` evaluates `expr` eagerly — when `total_rc == 0` the inner division would
+    // panic. Use `then(|| …)` so the expression is lazy.
+    let actual_research_share_percent = (total_rc > 0).then(|| {
+        (research_running.saturating_mul(100) / total_rc) as i16
+    });
 
     let worker_pool = std::env::var("WEISSMAN_WORKER_POOL").unwrap_or_default();
     let effective_routing = json!({

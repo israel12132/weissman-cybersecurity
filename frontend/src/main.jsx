@@ -4,6 +4,10 @@ import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate } from 'rea
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
+import './i18n' // bootstrap i18next before any component renders
+import { ToastProvider } from './components/ui/Toaster'
+import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
+import NotFound from './components/ui/NotFound'
 
 /** Catches render errors above per-route boundaries (e.g. provider / layout bugs). */
 class RootErrorBoundary extends React.Component {
@@ -42,90 +46,105 @@ class RootErrorBoundary extends React.Component {
     return this.props.children
   }
 }
+// Eagerly loaded — needed for first paint or for the route guards above the Suspense boundary.
 import Login from './components/cockpit/Login'
 import Cockpit from './Cockpit'
-import SystemCore from './components/SystemCore'
-import ReportView from './components/ReportView'
-import AttackSurfaceGraph from './components/AttackSurfaceGraph'
-import SemanticLogicEngine from './components/SemanticLogicEngine'
-import QuantumTimingProfiler from './components/QuantumTimingProfiler'
-import AIRedteamArena from './components/AIRedteamArena'
-import ZeroDayRadar from './components/ZeroDayRadar'
-import CICDThreatMatrix from './components/CICDThreatMatrix'
-import MemoryForensicsLab from './components/MemoryForensicsLab'
-import AttackChainView from './components/cockpit/AttackChainView'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
-// ── New enterprise pages ──────────────────────────────────────────────────────
-import EngineMatrix from './pages/EngineMatrix'
-import EngineDetail from './pages/EngineDetail'
-import TopTierEngineHub from './pages/TopTierEngineHub'
-import TopTierEngineProfile from './pages/TopTierEngineProfile'
-import StrategicEngineProgram from './pages/StrategicEngineProgram'
-import BusinessEngineProfile from './pages/BusinessEngineProfile'
-import ThreatEmulation from './pages/ThreatEmulation'
-import SupplyChainHub from './pages/SupplyChainHub'
-import NetworkIntelligence from './pages/NetworkIntelligence'
-import CloudControlTower from './pages/CloudControlTower'
-import PqcRadar from './pages/PqcRadar'
-import OastDashboard from './pages/OastDashboard'
-import OobVerification from './pages/OobVerification'
-import TemplateEngineWorkbench from './pages/TemplateEngineWorkbench'
-import AstFuzzingStudio from './pages/AstFuzzingStudio'
-import FeedbackLoopVerification from './pages/FeedbackLoopVerification'
-import CouncilHitlQueue from './pages/CouncilHitlQueue'
-import RoeApprovals from './pages/RoeApprovals'
-import SsoDashboard from './pages/SsoDashboard'
-import DigitalTwinSimulator from './pages/DigitalTwinSimulator'
-import FindingsCommandCenter from './pages/FindingsCommandCenter'
-import AdminManagement from './pages/AdminManagement'
-import DomainDiscovery from './pages/DomainDiscovery'
-import ThreatIntelHub from './pages/ThreatIntelHub'
-import IncidentResponseCenter from './pages/IncidentResponseCenter'
-import VulnIntelDashboard from './pages/VulnIntelDashboard.jsx'
-import AgentManagement from './pages/AgentManagement'
-import DarkWebMonitor from './pages/DarkWebMonitor'
-import ThreatHuntingWorkbench from './pages/ThreatHuntingWorkbench'
-import EngineClientCatalog from './pages/EngineClientCatalog'
-// ── New UI improvements ──────────────────────────────────────────────────────
-import RateLimitAnalytics from './pages/RateLimitAnalytics'
-import MobileSecurity from './pages/MobileSecurity'
-import OtIcsSecurity from './pages/OtIcsSecurity'
-import NetworkProtocols from './pages/NetworkProtocols'
-import SocialEngineering from './pages/SocialEngineering'
-import RemediationHub from './pages/RemediationHub'
-import EngineManagementConsole from './pages/EngineManagementConsole'
-import SystemConfiguration from './pages/SystemConfiguration'
-import MetricsDashboard from './pages/MetricsDashboard'
-import CeoVault from './pages/CeoVault'
-import RiskGraphVisualization from './pages/RiskGraphVisualization'
-import ComplianceFrameworks from './pages/ComplianceFrameworks'
-import SBOMBrowser from './pages/SBOMBrowser'
-import IntegrationManager from './pages/IntegrationManager'
-import AlertRulesEngine from './pages/AlertRulesEngine'
-import ScanScheduler from './pages/ScanScheduler'
-import ContainmentRulesBuilder from './pages/ContainmentRulesBuilder'
-import BaselineAndDrift from './pages/BaselineAndDrift'
-import IdentityContextManager from './pages/IdentityContextManager'
-import KillChainOrchestrator from './pages/KillChainOrchestrator'
-import AIAnalysisEngine from './pages/AIAnalysisEngine'
-import ExploitResearchLab from './pages/ExploitResearchLab'
-// ── Client Management ─────────────────────────────────────────────────────────
-import Clients from './pages/Clients'
-import ClientNew from './pages/ClientNew'
-import ClientDetail from './pages/ClientDetail'
-import ClientEngagements from './pages/ClientEngagements'
-import ClientEvidenceVault from './pages/ClientEvidenceVault'
-import ClientSaasIdpDiscovery from './pages/ClientSaasIdpDiscovery'
-import JobsDashboard from './pages/JobsDashboard'
-// ──────────────────────────────────────────────────────────────────────────────
-import App from './App'
+
+// Everything else is route-lazy so the initial bundle stays ≈400 KB. React.Suspense renders a
+// branded loader until the chunk arrives.
+const SystemCore = React.lazy(() => import('./components/SystemCore'))
+const ReportView = React.lazy(() => import('./components/ReportView'))
+const AttackSurfaceGraph = React.lazy(() => import('./components/AttackSurfaceGraph'))
+const SemanticLogicEngine = React.lazy(() => import('./components/SemanticLogicEngine'))
+const QuantumTimingProfiler = React.lazy(() => import('./components/QuantumTimingProfiler'))
+const AIRedteamArena = React.lazy(() => import('./components/AIRedteamArena'))
+const ZeroDayRadar = React.lazy(() => import('./components/ZeroDayRadar'))
+const CICDThreatMatrix = React.lazy(() => import('./components/CICDThreatMatrix'))
+const MemoryForensicsLab = React.lazy(() => import('./components/MemoryForensicsLab'))
+const AttackChainView = React.lazy(() => import('./components/cockpit/AttackChainView'))
+const EngineMatrix = React.lazy(() => import('./pages/EngineMatrix'))
+const EngineDetail = React.lazy(() => import('./pages/EngineDetail'))
+const TopTierEngineHub = React.lazy(() => import('./pages/TopTierEngineHub'))
+const TopTierEngineProfile = React.lazy(() => import('./pages/TopTierEngineProfile'))
+const StrategicEngineProgram = React.lazy(() => import('./pages/StrategicEngineProgram'))
+const BusinessEngineProfile = React.lazy(() => import('./pages/BusinessEngineProfile'))
+const ThreatEmulation = React.lazy(() => import('./pages/ThreatEmulation'))
+const SupplyChainHub = React.lazy(() => import('./pages/SupplyChainHub'))
+const NetworkIntelligence = React.lazy(() => import('./pages/NetworkIntelligence'))
+const CloudControlTower = React.lazy(() => import('./pages/CloudControlTower'))
+const PqcRadar = React.lazy(() => import('./pages/PqcRadar'))
+const OastDashboard = React.lazy(() => import('./pages/OastDashboard'))
+const OobVerification = React.lazy(() => import('./pages/OobVerification'))
+const TemplateEngineWorkbench = React.lazy(() => import('./pages/TemplateEngineWorkbench'))
+const AstFuzzingStudio = React.lazy(() => import('./pages/AstFuzzingStudio'))
+const FeedbackLoopVerification = React.lazy(() => import('./pages/FeedbackLoopVerification'))
+const CouncilHitlQueue = React.lazy(() => import('./pages/CouncilHitlQueue'))
+const RoeApprovals = React.lazy(() => import('./pages/RoeApprovals'))
+const SsoDashboard = React.lazy(() => import('./pages/SsoDashboard'))
+const DigitalTwinSimulator = React.lazy(() => import('./pages/DigitalTwinSimulator'))
+const FindingsCommandCenter = React.lazy(() => import('./pages/FindingsCommandCenter'))
+const AdminManagement = React.lazy(() => import('./pages/AdminManagement'))
+const DomainDiscovery = React.lazy(() => import('./pages/DomainDiscovery'))
+const ThreatIntelHub = React.lazy(() => import('./pages/ThreatIntelHub'))
+const IncidentResponseCenter = React.lazy(() => import('./pages/IncidentResponseCenter'))
+const VulnIntelDashboard = React.lazy(() => import('./pages/VulnIntelDashboard.jsx'))
+const AgentManagement = React.lazy(() => import('./pages/AgentManagement'))
+const DarkWebMonitor = React.lazy(() => import('./pages/DarkWebMonitor'))
+const ThreatHuntingWorkbench = React.lazy(() => import('./pages/ThreatHuntingWorkbench'))
+const EngineClientCatalog = React.lazy(() => import('./pages/EngineClientCatalog'))
+const RateLimitAnalytics = React.lazy(() => import('./pages/RateLimitAnalytics'))
+const MobileSecurity = React.lazy(() => import('./pages/MobileSecurity'))
+const OtIcsSecurity = React.lazy(() => import('./pages/OtIcsSecurity'))
+const NetworkProtocols = React.lazy(() => import('./pages/NetworkProtocols'))
+const SocialEngineering = React.lazy(() => import('./pages/SocialEngineering'))
+const RemediationHub = React.lazy(() => import('./pages/RemediationHub'))
+const EngineManagementConsole = React.lazy(() => import('./pages/EngineManagementConsole'))
+const SystemConfiguration = React.lazy(() => import('./pages/SystemConfiguration'))
+const MetricsDashboard = React.lazy(() => import('./pages/MetricsDashboard'))
+const CeoVault = React.lazy(() => import('./pages/CeoVault'))
+const RiskGraphVisualization = React.lazy(() => import('./pages/RiskGraphVisualization'))
+const ComplianceFrameworks = React.lazy(() => import('./pages/ComplianceFrameworks'))
+const SBOMBrowser = React.lazy(() => import('./pages/SBOMBrowser'))
+const IntegrationManager = React.lazy(() => import('./pages/IntegrationManager'))
+const AlertRulesEngine = React.lazy(() => import('./pages/AlertRulesEngine'))
+const ScanScheduler = React.lazy(() => import('./pages/ScanScheduler'))
+const ContainmentRulesBuilder = React.lazy(() => import('./pages/ContainmentRulesBuilder'))
+const BaselineAndDrift = React.lazy(() => import('./pages/BaselineAndDrift'))
+const IdentityContextManager = React.lazy(() => import('./pages/IdentityContextManager'))
+const KillChainOrchestrator = React.lazy(() => import('./pages/KillChainOrchestrator'))
+const AIAnalysisEngine = React.lazy(() => import('./pages/AIAnalysisEngine'))
+const ExploitResearchLab = React.lazy(() => import('./pages/ExploitResearchLab'))
+const Clients = React.lazy(() => import('./pages/Clients'))
+const ClientNew = React.lazy(() => import('./pages/ClientNew'))
+const ClientDetail = React.lazy(() => import('./pages/ClientDetail'))
+const ClientEngagements = React.lazy(() => import('./pages/ClientEngagements'))
+const ClientEvidenceVault = React.lazy(() => import('./pages/ClientEvidenceVault'))
+const ClientSaasIdpDiscovery = React.lazy(() => import('./pages/ClientSaasIdpDiscovery'))
+const JobsDashboard = React.lazy(() => import('./pages/JobsDashboard'))
+const StatusPage = React.lazy(() => import('./pages/StatusPage'))
+const AuditLog = React.lazy(() => import('./pages/AuditLog'))
+const App = React.lazy(() => import('./App'))
 import './index.css'
+
+function RouteLoader() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
+      <div className="text-center">
+        <div className="inline-block w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mb-3" />
+        <p className="text-[11px] font-mono tracking-widest text-white/40 uppercase">Loading module…</p>
+      </div>
+    </div>
+  )
+}
 
 function ProtectedOutlet() {
   const location = useLocation()
   return (
     <RouteErrorBoundary key={location.pathname}>
-      <Outlet />
+      <React.Suspense fallback={<RouteLoader />}>
+        <Outlet />
+      </React.Suspense>
     </RouteErrorBoundary>
   )
 }
@@ -135,8 +154,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <RootErrorBoundary>
     <BrowserRouter basename="/command-center">
       <AuthProvider>
+        <ToastProvider>
+        <KeyboardShortcuts />
         <Routes>
           <Route path="login" element={<Login />} />
+          <Route
+            path="status"
+            element={
+              <React.Suspense fallback={<RouteLoader />}>
+                <StatusPage />
+              </React.Suspense>
+            }
+          />
           <Route path="/" element={<ProtectedRoute><ProtectedOutlet /></ProtectedRoute>}>
             <Route
               index
@@ -223,10 +252,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="ai-analysis" element={<AIAnalysisEngine />} />
             <Route path="exploit-lab" element={<ExploitResearchLab />} />
             <Route path="agents" element={<AgentManagement />} />
+            <Route path="audit-log" element={<AuditLog />} />
+            <Route path="*" element={<NotFound />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
             <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
+          {/* Fallback for any path outside the protected outlet */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
     </RootErrorBoundary>

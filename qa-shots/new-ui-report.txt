@@ -1,0 +1,51 @@
+#01 login_with_logo
+  url:    http://localhost/command-center/login
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-01-login_with_logo.png
+  errors: 2 (Failed to load resource: the server responded with a status of 401 (Unauthorized) | Failed to load resource: the server responded with a status of 401 (Unauthorized))
+
+#02 cockpit_with_new_logo_and_profile_menu
+  url:    http://localhost/command-center
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-02-cockpit_with_new_logo_and_profile_menu.png
+  errors: none
+
+#03 profile_menu_open
+  url:    http://localhost/command-center
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-03-profile_menu_open.png
+  errors: none
+
+#04 kbd_shortcuts_overlay
+  url:    http://localhost/command-center
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-04-kbd_shortcuts_overlay.png
+  errors: none
+
+#05 vuln_intel_with_skeleton_or_data
+  url:    http://localhost/command-center/vuln-intel
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-05-vuln_intel_with_skeleton_or_data.png
+  errors: none
+
+NOTE: no findings yet — empty state should be visible above
+
+#06 audit_log_viewer
+  url:    http://localhost/command-center/audit-log
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-06-audit_log_viewer.png
+  errors: none
+
+#07 audit_log_filtered_login
+  url:    http://localhost/command-center/audit-log
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-07-audit_log_filtered_login.png
+  errors: none
+
+#08 not_found_404
+  url:    http://localhost/command-center/does-not-exist-xyz
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-08-not_found_404.png
+  errors: none
+
+#09 profile_menu_hebrew_active
+  url:    http://localhost/command-center/
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-09-profile_menu_hebrew_active.png
+  errors: none
+
+#10 cockpit_rtl_hebrew
+  url:    http://localhost/command-center
+  shot:   /home/israel/weissman-cybersecurity/qa-shots/new-ui-10-cockpit_rtl_hebrew.png
+  errors: none

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Weissman Cybersecurity</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/_shared.css" />
+  <meta name="robots" content="index,follow" />
+</head>
+<body>
+  <nav><div class="container nav-inner">
+    <a href="/"><strong style="font-family:Orbitron,sans-serif;letter-spacing:2px;color:#22d3ee">WEISSMAN</strong></a>
+    <div class="nav-links">
+      <a href="/pricing.html">Pricing</a><a href="/terms.html">Terms</a>
+      <a href="/privacy.html" style="color:#22d3ee">Privacy</a><a href="/dpa.html">DPA</a>
+      <a href="/command-center/login" class="cta-ghost">Sign in</a>
+    </div>
+  </div></nav>
+  <article class="doc">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Effective: 2026-06-03 · Version 1.0 · GDPR &amp; CCPA aligned</p>
+
+    <h2>1. Who we are</h2>
+    <p>Weissman Cybersecurity Ltd. ("we", "us") — a security platform for SOC teams. Registered in Israel. Data Protection Officer: <a href="mailto:dpo@weissman.io">dpo@weissman.io</a>.</p>
+
+    <h2>2. What we collect</h2>
+    <h3 style="color:#22d3ee;font-size:.95rem;margin:1rem 0 .25rem">Account data</h3>
+    <p>Email, hashed password (bcrypt), MFA seed (encrypted), tenant slug, role, IP at login, last seen.</p>
+    <h3 style="color:#22d3ee;font-size:.95rem;margin:1rem 0 .25rem">Scan data</h3>
+    <p>Your-provided Targets (domains, IPs, repo URLs), scan results, findings (descriptions, evidence, proof-of-concept, severity, MITRE technique), endpoint-agent telemetry (process names, network connections, log integrity). All scan data is tenant-scoped and isolated by Postgres Row-Level Security.</p>
+    <h3 style="color:#22d3ee;font-size:.95rem;margin:1rem 0 .25rem">Operational data</h3>
+    <p>API request logs (path, status, latency, tenant_id, masked auth context), audit logs (immutable append-only), error backtraces (no PII).</p>
+
+    <h2>3. What we DON'T collect</h2>
+    <ul>
+      <li>No advertising / tracking pixels.</li>
+      <li>No third-party analytics (no Google Analytics, no Hotjar, no segment.io).</li>
+      <li>No social-media trackers.</li>
+      <li>No cross-site cookies.</li>
+    </ul>
+
+    <h2>4. Cookies</h2>
+    <p>Only first-party functional cookies are used:</p>
+    <ul>
+      <li><code>weissman_session</code> — JWT for your login session.</li>
+      <li><code>weissman_lang</code> — your UI language preference (en / he).</li>
+      <li><code>weissman_cookie_consent_v1</code> — records that you saw the cookie banner.</li>
+    </ul>
+    <p>No tracking cookies, ever.</p>
+
+    <h2>5. Purpose &amp; legal basis (GDPR Art. 6)</h2>
+    <ul>
+      <li><strong>Contract (6(1)(b))</strong> — running the Service you signed up for.</li>
+      <li><strong>Legitimate interest (6(1)(f))</strong> — fraud prevention, abuse detection, securing the platform.</li>
+      <li><strong>Legal obligation (6(1)(c))</strong> — tax records, lawful disclosure requests.</li>
+      <li><strong>Consent (6(1)(a))</strong> — marketing emails (opt-in, opt-out anytime).</li>
+    </ul>
+
+    <h2>6. Sub-processors</h2>
+    <p>Current production sub-processors:</p>
+    <ul>
+      <li><strong>AWS (eu-west-1)</strong> — primary infrastructure, encrypted at rest (KMS).</li>
+      <li><strong>Paddle Inc.</strong> — payment processing (PCI DSS Level 1).</li>
+      <li><strong>Cloudflare</strong> — DDoS protection, edge TLS.</li>
+      <li><strong>SES / SendGrid</strong> — transactional email (no bulk marketing).</li>
+    </ul>
+    <p>Full sub-processor list (with addition notification) at <a href="/subprocessors.html">/subprocessors.html</a>.</p>
+
+    <h2>7. Data residency</h2>
+    <p>Cloud SaaS: data is stored in EU-West (Ireland) by default. Enterprise customers may select US-East or AU-East. Self-hosted: data never leaves your infrastructure.</p>
+
+    <h2>8. Retention</h2>
+    <ul>
+      <li>Account data: lifetime of account + 90 days after deletion.</li>
+      <li>Scan findings: 12 months by default, configurable per tenant.</li>
+      <li>Audit logs: 24 months (immutable).</li>
+      <li>Backups: 30 days rolling, encrypted.</li>
+    </ul>
+
+    <h2>9. Your rights (GDPR / CCPA / LGPD)</h2>
+    <p>You may request access, rectification, deletion ("right to be forgotten"), portability (JSON export), restriction of processing, or objection. Send requests to <a href="mailto:dpo@weissman.io">dpo@weissman.io</a> — we respond within 30 calendar days. You may also lodge complaints with your supervisory authority (e.g. Israel Privacy Protection Authority, your country's Data Protection Authority).</p>
+
+    <h2>10. Security</h2>
+    <p>Encryption in transit (TLS 1.2+), encryption at rest (AES-256 / KMS), TOTP-based MFA enforcement, signed audit log, RLS-per-tenant data isolation, mandatory pull-request review, ephemeral-sandbox patch verification, automated dependency scanning. Independent penetration test: annual.</p>
+
+    <h2>11. Breach notification</h2>
+    <p>If we become aware of a personal data breach affecting your data, we will notify you and the relevant authority within 72 hours, per GDPR Art. 33.</p>
+
+    <h2>12. Children</h2>
+    <p>Service is not directed at children under 16. We do not knowingly collect data from minors.</p>
+
+    <h2>13. Changes</h2>
+    <p>Material changes will be announced 30 days in advance via email and dashboard banner.</p>
+
+    <h2>14. Contact</h2>
+    <p>DPO: <a href="mailto:dpo@weissman.io">dpo@weissman.io</a> · Security: <a href="mailto:security@weissman.io">security@weissman.io</a></p>
+  </article>
+  <footer><div class="container"><div class="footer-bottom" style="border-top:none">
+    <span>© <span id="y"></span> Weissman Cybersecurity</span>
+    <span><a href="/" style="color:#94a3b8">Home</a></span>
+  </div></div></footer>
+  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+</body>
+</html>

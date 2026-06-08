@@ -10,7 +10,9 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
             false
         }
     };
-    let scanning = crate::orchestrator::is_scanning_active();
+    let scanning_enabled = crate::orchestrator::is_scanning_active();
+    let scan_in_progress = crate::orchestrator::scan_in_progress();
+    let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
     let mut engines: Vec<String> = vec![];
     let mut safe_mode = false;
     if postgres_ok {
@@ -44,7 +46,12 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "ok": true,
         "uptime_secs": uptime_secs,
         "postgres_ok": postgres_ok,
-        "scanning_active": scanning,
+        // Kept for back-compat with older clients that only check `scanning_active`.
+        "scanning_active": scanning_enabled,
+        // Source of truth: operator toggle vs. actual concurrent work.
+        "scanning_enabled": scanning_enabled,
+        "scan_in_progress": scan_in_progress,
+        "active_tenant_cycles": active_tenant_cycles,
         "active_engines": engines,
         "global_safe_mode": safe_mode,
         "process_rss_kb": rss_kb,
@@ -55,11 +62,36 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
 
 #[cfg(target_os = "linux")]
 fn resident_set_kb() -> Option<u64> {
+    // Cache the last sampled value for 5 seconds. /proc/self/statm is tiny, but /api/health
+    // is hammered by Docker / k8s probes (every 5–15s) plus uptime monitors. A blocking
+    // sync read on every request adds avoidable jitter to the async runtime's poll loop
+    // and shows up as latency on the rest of the request handlers sharing that worker.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Instant, Duration};
+    use std::sync::OnceLock;
+
+    static CACHE_VAL: AtomicU64 = AtomicU64::new(0);
+    static CACHE_AT:  OnceLock<std::sync::Mutex<Option<Instant>>> = OnceLock::new();
+    let lock = CACHE_AT.get_or_init(|| std::sync::Mutex::new(None));
+
+    if let Ok(guard) = lock.lock() {
+        if let Some(when) = *guard {
+            if when.elapsed() < Duration::from_secs(5) {
+                let v = CACHE_VAL.load(Ordering::Relaxed);
+                if v > 0 { return Some(v); }
+            }
+        }
+    }
     let s = std::fs::read_to_string("/proc/self/statm").ok()?;
     let mut it = s.split_whitespace();
     let _vsize = it.next()?;
     let resident_pages: u64 = it.next()?.parse().ok()?;
-    Some(resident_pages.saturating_mul(4096) / 1024)
+    let kb = resident_pages.saturating_mul(4096) / 1024;
+    CACHE_VAL.store(kb, Ordering::Relaxed);
+    if let Ok(mut guard) = lock.lock() {
+        *guard = Some(Instant::now());
+    }
+    Some(kb)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -67,14 +99,102 @@ fn resident_set_kb() -> Option<u64> {
     None
 }
 
-async fn api_audit_logs(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+async fn api_audit_logs(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Server-side pagination + optional action / actor filter so the UI doesn't pull 500 rows.
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 1000);
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let action_filter: Option<String> = q
+        .get("action")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let actor_filter: Option<String> = q
+        .get("actor")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "entries": [], "total": 0})),
+        )
+            .into_response();
     };
-    let rows: Vec<serde_json::Value> =
-        audit_log::list_recent(&mut tx, 500).await.unwrap_or_default();
+
+    let rows = sqlx::query(
+        r#"SELECT id,
+                  actor_user_id,
+                  COALESCE(user_label, '')  AS user_label,
+                  COALESCE(action_type, '') AS action_type,
+                  COALESCE(details, '')     AS details,
+                  COALESCE(ip_address, '')  AS ip_address,
+                  created_at
+             FROM audit_logs
+            WHERE tenant_id = $5
+              AND ($3::text IS NULL OR action_type ILIKE '%' || $3::text || '%')
+              AND ($4::text IS NULL OR user_label  ILIKE '%' || $4::text || '%')
+            ORDER BY id DESC
+            LIMIT $1 OFFSET $2"#,
+    )
+    .bind(limit)
+    .bind(offset)
+    .bind(action_filter.as_deref())
+    .bind(actor_filter.as_deref())
+    .bind(auth.tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let total: i64 = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*)::bigint FROM audit_logs
+           WHERE tenant_id = $3
+             AND ($1::text IS NULL OR action_type ILIKE '%' || $1::text || '%')
+             AND ($2::text IS NULL OR user_label  ILIKE '%' || $2::text || '%')"#,
+    )
+    .bind(action_filter.as_deref())
+    .bind(actor_filter.as_deref())
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
     let _ = tx.commit().await;
-    (StatusCode::OK, Json(Value::Array(rows))).into_response()
+
+    let entries: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<i64, _>("id").unwrap_or(0),
+                "user_id": r.try_get::<Option<i64>, _>("actor_user_id").ok().flatten(),
+                "actor_email": r.try_get::<String, _>("user_label").unwrap_or_default(),
+                "action": r.try_get::<String, _>("action_type").unwrap_or_default(),
+                "details": r.try_get::<String, _>("details").unwrap_or_default(),
+                "client_ip": r.try_get::<String, _>("ip_address").unwrap_or_default(),
+                "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
+            })
+        })
+        .collect();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "entries": entries,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        })),
+    )
+        .into_response()
 }
 
 async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {

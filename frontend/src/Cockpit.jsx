@@ -6,23 +6,30 @@ import GlobalNexus from './components/cockpit/GlobalNexus'
 import ClientCockpit from './components/cockpit/ClientCockpit'
 import TargetScopePanel from './components/cockpit/TargetScopePanel'
 import ToastContainer from './components/cockpit/Toast'
+import ExecKpiStrip from './components/cockpit/ExecKpiStrip'
 
 export default function Cockpit({ ceoIntegrated = false }) {
   return (
     <ClientProvider>
       <TelemetryProvider>
         <WarRoomProvider>
-        <div
-          className="flex flex-col lg:flex-row h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] min-h-0 overflow-hidden min-h-[100dvh]"
-          style={{
-            background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #111827 0%, #09090b 50%, #030712 100%)',
-          }}
-        >
-          <GlobalNexus ceoIntegrated={ceoIntegrated} />
-          <ClientCockpit ceoIntegrated={ceoIntegrated} />
-          <TargetScopePanel ceoIntegrated={ceoIntegrated} />
-        </div>
-        <ToastContainer />
+          {/* Top-level layout: KPI strip is a sticky hero band over the original
+              3-column cockpit. Strip uses real-time aggregated data and is visible
+              regardless of which tab the user picks below.  */}
+          <div
+            className="flex flex-col h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] min-h-0 overflow-hidden"
+            style={{
+              background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #111827 0%, #09090b 50%, #030712 100%)',
+            }}
+          >
+            <ExecKpiStrip />
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+              <GlobalNexus ceoIntegrated={ceoIntegrated} />
+              <ClientCockpit ceoIntegrated={ceoIntegrated} />
+              <TargetScopePanel ceoIntegrated={ceoIntegrated} />
+            </div>
+          </div>
+          <ToastContainer />
         </WarRoomProvider>
       </TelemetryProvider>
     </ClientProvider>

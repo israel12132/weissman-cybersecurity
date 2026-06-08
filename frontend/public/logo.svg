@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" fill="none" role="img" aria-label="Weissman Cybersecurity">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="wt" x1="80" y1="0" x2="240" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <!-- shield -->
+  <path d="M32 6 L56 14 V32 C56 46 32 58 32 58 C32 58 8 46 8 32 V14 Z"
+        fill="url(#wg)" stroke="#0e7490" stroke-width="1.5"/>
+  <!-- inner check / W -->
+  <path d="M18 28 L26 40 L34 22 L42 40 L50 24" stroke="#020617" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- wordmark -->
+  <text x="78" y="36" font-family="'Orbitron','Rajdhani',ui-sans-serif,system-ui,-apple-system,sans-serif"
+        font-weight="700" font-size="22" letter-spacing="2.5"
+        fill="url(#wt)">WEISSMAN</text>
+  <text x="78" y="52" font-family="'JetBrains Mono',ui-monospace,monospace"
+        font-size="10" letter-spacing="3" fill="#22d3ee" opacity="0.85">CYBERSECURITY</text>
+</svg>

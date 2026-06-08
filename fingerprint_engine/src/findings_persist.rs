@@ -134,16 +134,45 @@ fn extract_array(f: &Value, keys: &[&str]) -> Value {
     Value::Array(vec![])
 }
 
+/// Build a stable finding identifier. **Must only hash invariants** — the same engine
+/// detecting the same vulnerability on the same target across re-runs must produce the
+/// same `finding_id`, otherwise the `ON CONFLICT (finding_id) DO UPDATE` dedup path
+/// inserts duplicate rows for every scan.
+///
+/// We intentionally exclude every volatile field (timestamps, request IDs, HTTP bodies,
+/// banner text, host headers, response_ms, …) and only hash the *signature* — the
+/// minimal set of fields that uniquely identifies the vulnerability class on this asset.
 fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
+    let cve = extract_string(finding, &["cve", "cve_id", "cveId"]);
+    let cwe = extract_string(finding, &["cwe", "cwe_id"]);
+    let mitre = extract_string(finding, &["mitre_attack", "mitre", "attack_id"]);
+    let signature = extract_string(
+        finding,
+        &["signature", "rule", "rule_id", "vuln_signature", "type"],
+    );
+    let title = extract_title(finding, engine);
+    let normalized_title = title
+        .chars()
+        .filter(|c| !c.is_ascii_digit() && !"./_-?#&=".contains(*c))
+        .collect::<String>()
+        .to_lowercase();
+
     let mut hasher = Sha256::new();
     hasher.update(engine.as_bytes());
     hasher.update(b"|");
-    hasher.update(target.as_bytes());
+    hasher.update(target.trim().to_lowercase().as_bytes());
     hasher.update(b"|");
-    let canonical = serde_json::to_string(finding).unwrap_or_default();
-    hasher.update(canonical.as_bytes());
+    hasher.update(cve.as_bytes());
+    hasher.update(b"|");
+    hasher.update(cwe.as_bytes());
+    hasher.update(b"|");
+    hasher.update(mitre.as_bytes());
+    hasher.update(b"|");
+    hasher.update(signature.as_bytes());
+    hasher.update(b"|");
+    hasher.update(normalized_title.as_bytes());
     let digest = hasher.finalize();
-    let short: String = digest.iter().take(8).map(|b| format!("{:02x}", b)).collect();
+    let short: String = digest.iter().take(12).map(|b| format!("{:02x}", b)).collect();
     format!("{}-{}", engine, short)
 }
 
@@ -244,12 +273,25 @@ pub async fn persist_engine_findings(
 
         let finding_id = build_finding_id(engine, &target_url, f);
 
+        // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
+        // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
+        // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
+        // FALSE_POSITIVE) must survive the next scan. last_seen_at tracks recurrence.
         let res = sqlx::query(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', $9, $10, $11, now())
-               ON CONFLICT DO NOTHING"#,
+               ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
+                   run_id           = EXCLUDED.run_id,
+                   title            = EXCLUDED.title,
+                   severity         = EXCLUDED.severity,
+                   description      = EXCLUDED.description,
+                   proof            = COALESCE(NULLIF(EXCLUDED.proof, ''), vulnerabilities.proof),
+                   raw_data         = EXCLUDED.raw_data,
+                   updated_at       = now(),
+                   last_seen_at     = now(),
+                   seen_count       = vulnerabilities.seen_count + 1"#,
         )
         .bind(run_id)
         .bind(tenant_id)

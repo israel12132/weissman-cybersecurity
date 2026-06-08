@@ -90,12 +90,50 @@ pub async fn run_maven_supply_chain_result(t: &str) -> EngineResult {
 cli_wrapper!(run_maven_supply_chain, run_maven_supply_chain_result);
 
 pub async fn run_compiler_backdoor_result(t: &str) -> EngineResult {
-    crate::engine_probes::agent_required_ok(
-        "compiler_backdoor",
-        t,
-        "Compiler-backdoor detection requires reproducible-build attestation",
-        "Trojaned toolchains are detected by comparing build outputs across two independent build hosts (Reproducible Builds project) — connect a CI feed for full coverage.",
-    )
+    // Remote-observable: published build attestations + provenance docs the target should
+    // expose if they participate in Sigstore / SLSA / Reproducible-Builds.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let mut findings: Vec<Value> = Vec::new();
+    let prov_paths = [
+        "/.well-known/sigstore",
+        "/.well-known/slsa-provenance.json",
+        "/security.txt",
+        "/.well-known/security.txt",
+        "/SHA256SUMS",
+        "/checksums.txt",
+    ];
+    let mut found_any = false;
+    for path in prov_paths.iter() {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status == 200 && !p.body.trim().is_empty() {
+                found_any = true;
+                findings.push(finding(
+                    "compiler_backdoor",
+                    &format!("Build attestation found: {}", path),
+                    "info",
+                    "T1195",
+                    &format!("{} present ({} B). Reproducible-build attestation reduces compiler-backdoor risk.", p.final_url, p.body.len()),
+                    t,
+                ));
+            }
+        }
+    }
+    if !found_any {
+        findings.push(finding(
+            "compiler_backdoor",
+            "No public build attestation",
+            "medium",
+            "T1195",
+            "No SLSA / Sigstore / reproducible-build attestation discovered. Without published provenance, supply-chain trojan detection relies entirely on internal CI.",
+            t,
+        ));
+    }
+    EngineResult::ok(findings.clone(), format!("compiler_backdoor: {}", findings.len()))
 }
 cli_wrapper!(run_compiler_backdoor, run_compiler_backdoor_result);
 

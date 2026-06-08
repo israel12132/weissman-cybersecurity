@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../lib/apiBase'
+import FindingDrawer from '../components/ui/FindingDrawer'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonTable } from '../components/ui/Skeleton'
 
 function severityColor(sev) {
   const s = (sev || '').toLowerCase()
@@ -27,6 +30,7 @@ export default function VulnIntelDashboard() {
   const [filter, setFilter] = useState('')
   const [severityFilter, setSeverityFilter] = useState('all')
   const [total, setTotal] = useState(0)
+  const [selected, setSelected] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -129,39 +133,56 @@ export default function VulnIntelDashboard() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-white/40">Loading findings…</p>
+          <SkeletonTable rows={10} cols={6} />
         ) : error ? (
-          <p className="text-sm text-rose-400">Error: {error}</p>
+          <EmptyState
+            icon="⚠"
+            title="Failed to load findings"
+            body={error}
+            cta={{ label: 'Retry', onClick: load }}
+          />
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-white/40">No findings match the current filter.</p>
+          <EmptyState
+            icon="✅"
+            title="No findings match"
+            body="Nothing matches the current filter. Try widening the severity, clearing the search, or running a scan from the Engine Matrix."
+            secondary={{ label: 'Open Engine Matrix', href: '/command-center/engines' }}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] font-mono">
               <thead>
                 <tr className="text-left text-white/45 border-b border-white/10">
-                  <th className="py-2 pr-3">Severity</th>
-                  <th className="py-2 pr-3">CVE</th>
-                  <th className="py-2 pr-3">Title</th>
-                  <th className="py-2 pr-3">Source</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Discovered</th>
+                  <th className="py-2 pe-3">Severity</th>
+                  <th className="py-2 pe-3">CVE</th>
+                  <th className="py-2 pe-3">Title</th>
+                  <th className="py-2 pe-3">Source</th>
+                  <th className="py-2 pe-3">Status</th>
+                  <th className="py-2 pe-3">Discovered</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filtered.slice(0, 200).map((f, i) => (
-                  <tr key={f.id || i} className="hover:bg-white/[0.02]">
-                    <td className="py-2 pr-3">
+                  <tr
+                    key={f.id || i}
+                    onClick={() => setSelected(f)}
+                    className="hover:bg-cyan-500/[0.04] cursor-pointer focus-within:bg-cyan-500/[0.04]"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelected(f) }}
+                    title="Open evidence drawer"
+                  >
+                    <td className="py-2 pe-3">
                       <span className={`inline-block px-2 py-0.5 rounded border uppercase tracking-wider text-[10px] ${severityColor(f.severity)}`}>
                         {(f.severity || 'info').toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-2 pr-3 text-cyan-400">{f.cve || f.cve_id || '—'}</td>
-                    <td className="py-2 pr-3 text-white/80 max-w-md truncate" title={f.title}>
+                    <td className="py-2 pe-3 text-cyan-400">{f.cve || f.cve_id || '—'}</td>
+                    <td className="py-2 pe-3 text-white/80 max-w-md truncate" title={f.title}>
                       {f.title || f.summary || '—'}
                     </td>
-                    <td className="py-2 pr-3 text-white/55">{f.source || f.engine || '—'}</td>
-                    <td className="py-2 pr-3 text-white/55">{f.status || 'OPEN'}</td>
-                    <td className="py-2 pr-3 text-white/40">
+                    <td className="py-2 pe-3 text-white/55">{f.source || f.engine || '—'}</td>
+                    <td className="py-2 pe-3 text-white/55">{f.status || 'OPEN'}</td>
+                    <td className="py-2 pe-3 text-white/40">
                       {f.discovered_at ? new Date(f.discovered_at).toLocaleString() : ''}
                     </td>
                   </tr>
@@ -174,6 +195,8 @@ export default function VulnIntelDashboard() {
           </div>
         )}
       </div>
+
+      <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
     </div>
   )
 }

@@ -1,0 +1,12 @@
+{
+  "name": "Weissman Cybersecurity Command Center",
+  "short_name": "Weissman",
+  "start_url": "/command-center/",
+  "scope": "/command-center/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#020617",
+  "icons": [
+    { "src": "/command-center/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

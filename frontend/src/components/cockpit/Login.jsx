@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { apiUrl } from '../../lib/apiBase'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from '../LanguageSwitcher'
 
 export default function Login() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [tenantSlug, setTenantSlug] = useState('default')
@@ -51,9 +54,9 @@ export default function Login() {
         )
         return
       }
-      setError(result.detail || 'Access denied')
+      setError(result.detail || t('auth.access_denied'))
     } catch (_) {
-      setError('Network error — could not reach the API.')
+      setError(t('auth.network_error'))
     } finally {
       setSubmitting(false)
     }
@@ -74,6 +77,9 @@ export default function Login() {
       />
 
       <div className="w-full max-w-sm px-6">
+        <div className="flex justify-end mb-4">
+          <LanguageSwitcher />
+        </div>
         <h1 className="text-center text-xl font-light tracking-[0.35em] text-white/90 mb-12 uppercase">
           Weissman Cybersecurity
         </h1>
@@ -100,7 +106,7 @@ export default function Login() {
             className="space-y-5"
           >
             <p className="text-sm text-[#9ca3af] text-center font-mono">
-              Enter the 6-digit code from your authenticator app.
+              {t('auth.mfa_enter_code')}
             </p>
             <input
               ref={mfaInputRef}
@@ -119,21 +125,21 @@ export default function Login() {
               disabled={submitting || mfaCode.length !== 6}
               className="w-full py-3 rounded border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] font-mono text-sm uppercase tracking-widest hover:bg-[#22d3ee]/20 disabled:opacity-40"
             >
-              {submitting ? 'Verifying…' : 'Verify MFA'}
+              {submitting ? t('auth.mfa_verifying') : t('auth.mfa_verify')}
             </button>
             <button
               type="button"
               onClick={() => { setMfaToken(null); setMfaCode('') }}
               className="w-full text-xs text-[#6b7280] hover:text-white font-mono"
             >
-              ← Back to password
+              {t('auth.mfa_back_to_password')}
             </button>
           </form>
         ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="tenant" className="block text-[10px] uppercase tracking-widest text-[#6b7280] mb-2 font-mono">
-              Tenant slug
+              {t('auth.tenant_slug')}
             </label>
             <input
               id="tenant"
@@ -147,7 +153,7 @@ export default function Login() {
           </div>
           <div>
             <label htmlFor="email" className="block text-[10px] uppercase tracking-widest text-[#6b7280] mb-2 font-mono">
-              Email
+              {t('common.email')}
             </label>
             <input
               id="email"
@@ -157,12 +163,12 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full px-4 py-3 rounded bg-[#0a0a0a] border border-[#222] text-white placeholder-[#4b5563] focus:outline-none focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee]/50 transition-colors font-mono text-sm"
-              placeholder="admin@weissman.local"
+              placeholder={t('auth.email_placeholder')}
             />
           </div>
           <div>
             <label htmlFor="password" className="block text-[10px] uppercase tracking-widest text-[#6b7280] mb-2 font-mono">
-              Password
+              {t('common.password')}
             </label>
             <input
               id="password"
@@ -172,7 +178,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full px-4 py-3 rounded bg-[#0a0a0a] border border-[#222] text-white placeholder-[#4b5563] focus:outline-none focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee]/50 transition-colors font-mono text-sm"
-              placeholder="••••••••"
+              placeholder={t('auth.password_placeholder')}
             />
           </div>
 
@@ -199,37 +205,58 @@ export default function Login() {
             disabled={submitting}
             className="w-full py-3.5 rounded font-semibold text-sm tracking-widest uppercase transition-all border-2 border-[#22d3ee] bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 focus:outline-none focus:ring-2 focus:ring-[#22d3ee] focus:ring-offset-2 focus:ring-offset-[#050505] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Authenticating…' : 'Authenticate'}
+            {submitting ? t('auth.authenticating') : t('auth.authenticate')}
           </button>
         </form>
         )}
 
         <div className="mt-8 space-y-3">
-          <p className="text-center text-[10px] uppercase tracking-widest text-[#6b7280] font-mono">Enterprise SSO</p>
+          <p className="text-center text-[10px] uppercase tracking-widest text-[#6b7280] font-mono">{t('auth.enterprise_sso')}</p>
           <button
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
-              const t = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
+              const slug = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
               window.location.href = apiUrl(
-                `/api/auth/oidc/begin?tenant_slug=${t}&idp_name=enterprise`,
+                `/api/auth/oidc/begin?tenant_slug=${slug}&idp_name=enterprise`,
               )
             }}
           >
-            Login with OIDC (IdP name: enterprise)
+            {t('auth.sso_oidc')}
           </button>
           <button
             type="button"
             className="w-full py-3 rounded text-sm font-mono border border-[#374151] text-[#9ca3af] hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-colors"
             onClick={() => {
-              const t = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
+              const slug = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
               window.location.href = apiUrl(
-                `/api/auth/saml/begin?tenant_slug=${t}&idp_name=enterprise_saml`,
+                `/api/auth/saml/begin?tenant_slug=${slug}&idp_name=enterprise_saml`,
               )
             }}
           >
-            Login with SAML (IdP name: enterprise_saml)
+            {t('auth.sso_saml')}
           </button>
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-white/10 text-center space-y-2">
+          <p className="text-[11px] text-white/45">
+            New here?{' '}
+            <a
+              href="/signup.html"
+              className="text-[#22d3ee] hover:underline font-medium"
+            >
+              Create a workspace
+            </a>
+          </p>
+          <p className="text-[10px] text-white/30">
+            <a href="/terms.html" className="hover:text-white/55">Terms</a>
+            {' · '}
+            <a href="/privacy.html" className="hover:text-white/55">Privacy</a>
+            {' · '}
+            <a href="/status" className="hover:text-white/55">Status</a>
+            {' · '}
+            <a href="/api/docs/" className="hover:text-white/55">API docs</a>
+          </p>
         </div>
       </div>
     </div>

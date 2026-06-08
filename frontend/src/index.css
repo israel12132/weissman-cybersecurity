@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ───────────────────────────────────────────────────────────────────────────────
+ * RTL support — activated automatically by i18n/index.js when language === 'he'.
+ * Most of our layout already uses Tailwind logical properties (ms-/me-/ps-/pe-).
+ * These rules cover the few places that still use directional values + flip a
+ * handful of icon-only buttons that need rotating.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+html[dir='rtl'] body { text-align: right; }
+html[dir='rtl'] .ltr-only { direction: ltr; text-align: left; }
+html[dir='rtl'] .number-cell,
+html[dir='rtl'] code,
+html[dir='rtl'] pre,
+html[dir='rtl'] .font-mono {
+  /* Keep code/IDs/JWTs readable left-to-right even inside RTL containers. */
+  direction: ltr;
+  unicode-bidi: embed;
+  text-align: start;
+}
+html[dir='rtl'] .weissman-flip-x { transform: scaleX(-1); }
+
 :root {
   --app-bg: #09090b;
   --card-bg: #18181b;
@@ -262,4 +281,25 @@ body {
   .soc-right {
     display: none;
   }
+}
+
+/* ─── Custom scrollbar (used by ExecKpiStrip / LiveActivityFeed / MITRE matrix /
+   TopMoversPanel). Keeps panels feeling like a SOC tool, not a default browser. */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.18);
+  border-radius: 3px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.32);
+}
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.18) transparent;
 }

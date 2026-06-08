@@ -34,6 +34,432 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
     }))).into_response()
 }
 
+/// `GET /api/dashboard/exec-kpis` — Single aggregated payload for the executive dashboard.
+///
+/// Returns counts, trends, top-N rankings, MITRE coverage, severity-over-time sparkline
+/// data, agent state, and job pipeline status in **one round-trip** so the cockpit hero
+/// doesn't fire 7 parallel requests on every focus change. Wiz / Falcon / Snyk all
+/// expose a similar endpoint — it's table stakes for a real-time dashboard.
+///
+/// Shape (stable contract; new fields are additive):
+/// ```jsonc
+/// {
+///   "severity": { "critical": 12, "high": 47, "medium": 88, "low": 14, "info": 3 },
+///   "severity_delta_24h": { "critical": +3, "high": -1, ... },
+///   "open_vs_resolved": { "open": 160, "acknowledged": 8, "in_progress": 12,
+///                        "fixed": 220, "false_positive": 18 },
+///   "assets": { "total_clients": 7, "with_findings": 5 },
+///   "agents": { "registered": 4, "online": 3, "stale": 1 },
+///   "jobs": { "pending": 0, "running": 1, "failed_24h": 0, "completed_24h": 42 },
+///   "scan_velocity": { "scans_24h": 42, "avg_scan_secs": 18.4 },
+///   "mttr_hours": 6.8,
+///   "security_score": 73,
+///   "scoring": { "method": "weighted_severity", "weights": { ... } },
+///   "trend": { // 24 hourly buckets, newest last
+///     "labels": ["00:00","01:00", ...],
+///     "discovered": [3, 1, 0, ...],
+///     "resolved":   [0, 2, 4, ...]
+///   },
+///   "mitre_top": [ { "id": "T1190", "tactic": "initial_access", "hits": 12 }, ... ],
+///   "engines_top": [ { "id": "asm", "hits": 88, "critical": 4 }, ... ],
+///   "clients_top": [ { "id": 1, "name": "Acme", "open_critical": 3, "score": 62 }, ... ],
+///   "cves_top":    [ { "cve": "CVE-2024-1234", "hits": 5, "severity": "critical" }, ... ],
+///   "last_updated_unix": 1717340000
+/// }
+/// ```
+async fn api_dashboard_exec_kpis(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+        )
+            .into_response();
+    };
+
+    // ── Severity counts (current + 24h-ago snapshot for trend deltas) ──────────────
+    let now_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY s",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let prev_sev: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE discovered_at < now() - interval '24 hours'
+            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY s",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let to_map = |rows: Vec<(String, i64)>| {
+        let mut m: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+        for (k, v) in rows {
+            m.insert(k, v);
+        }
+        m
+    };
+    let sev_now = to_map(now_sev);
+    let sev_prev = to_map(prev_sev);
+    let sev_get = |m: &std::collections::HashMap<String, i64>, k: &str| -> i64 {
+        m.get(k).copied().unwrap_or(0)
+    };
+
+    // ── Status workflow breakdown ──────────────────────────────────────────────────
+    let status_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        "SELECT COALESCE(upper(status),'OPEN'), COUNT(*)::bigint
+           FROM vulnerabilities GROUP BY 1",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let status_map = to_map(status_rows);
+
+    // ── Asset / client counts ──────────────────────────────────────────────────────
+    let total_clients: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM clients")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap_or(0);
+    let clients_with_findings: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT client_id)::bigint FROM vulnerabilities
+          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    // ── Endpoint agent state (registered / online / stale) ─────────────────────────
+    // Tolerate the endpoint_agents table being absent on very old schemas.
+    let agents_registered: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE tenant_id = $1",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let agents_online: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM endpoint_agents
+          WHERE tenant_id = $1 AND last_seen_at > now() - interval '90 seconds'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
+    let jobs_pending: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let jobs_running: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let jobs_completed_24h: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let jobs_failed_24h: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    // ── Average scan duration over the last 24h ────────────────────────────────────
+    let avg_scan_secs: f64 = sqlx::query_scalar::<_, Option<f64>>(
+        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
+           FROM weissman_async_jobs
+          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0.0);
+
+    // ── MTTR (open → fixed, last 30 days) ──────────────────────────────────────────
+    let mttr_hours: f64 = sqlx::query_scalar::<_, Option<f64>>(
+        "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - discovered_at)) / 3600.0)::float8
+           FROM vulnerabilities
+          WHERE upper(status) = 'FIXED'
+            AND updated_at > now() - interval '30 days'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0.0);
+
+    // ── 24-hour bucket trend (discovered vs resolved) ──────────────────────────────
+    let trend_disc: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+        "SELECT EXTRACT(HOUR FROM discovered_at)::int AS h, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE discovered_at > now() - interval '24 hours'
+          GROUP BY h",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let trend_res: Vec<(i32, i64)> = sqlx::query_as::<_, (i32, i64)>(
+        "SELECT EXTRACT(HOUR FROM updated_at)::int AS h, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE upper(status) IN ('FIXED','FALSE_POSITIVE')
+            AND updated_at > now() - interval '24 hours'
+          GROUP BY h",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let bucket_disc = to_map_i(trend_disc);
+    let bucket_res = to_map_i(trend_res);
+    let now_hour = chrono::Timelike::hour(&chrono::Utc::now()) as i32;
+    let mut labels = Vec::with_capacity(24);
+    let mut series_disc = Vec::with_capacity(24);
+    let mut series_res = Vec::with_capacity(24);
+    for i in 0..24 {
+        let h = (now_hour + 1 + i) % 24;
+        labels.push(format!("{:02}:00", h));
+        series_disc.push(bucket_disc.get(&h).copied().unwrap_or(0));
+        series_res.push(bucket_res.get(&h).copied().unwrap_or(0));
+    }
+
+    // ── Top-N rankings ─────────────────────────────────────────────────────────────
+    let engines_top: Vec<(String, i64, i64)> = sqlx::query_as::<_, (String, i64, i64)>(
+        "SELECT source AS engine,
+                COUNT(*)::bigint                              AS hits,
+                COUNT(*) FILTER (WHERE lower(severity)='critical')::bigint AS crit
+           FROM vulnerabilities
+          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY source
+          ORDER BY hits DESC
+          LIMIT 8",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let clients_top: Vec<(i64, String, i64, i64)> =
+        sqlx::query_as::<_, (i64, String, i64, i64)>(
+            "SELECT c.id, c.name,
+                    COUNT(v.id) FILTER (WHERE lower(v.severity)='critical')::bigint AS open_crit,
+                    COUNT(v.id)::bigint AS total_open
+               FROM clients c
+               LEFT JOIN vulnerabilities v
+                 ON v.client_id = c.id
+                AND COALESCE(v.status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              GROUP BY c.id, c.name
+              ORDER BY open_crit DESC, total_open DESC
+              LIMIT 8",
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap_or_default();
+
+    // CVE roll-up — pull from raw_data.cve / raw_data.raw.cve.
+    let cve_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(
+        "SELECT COALESCE(NULLIF(raw_data->>'cve',''),
+                          NULLIF(raw_data->'raw'->>'cve','')) AS cve,
+                MIN(severity)        AS severity,
+                COUNT(*)::bigint     AS hits
+           FROM vulnerabilities
+          WHERE (raw_data->>'cve' IS NOT NULL OR raw_data->'raw'->>'cve' IS NOT NULL)
+            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY 1
+          HAVING COALESCE(NULLIF(raw_data->>'cve',''),
+                          NULLIF(raw_data->'raw'->>'cve','')) IS NOT NULL
+          ORDER BY hits DESC
+          LIMIT 8",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    // MITRE roll-up — `raw_data.mitre_attack` is the ATT&CK technique id (e.g. T1190).
+    let mitre_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        "SELECT raw_data->>'mitre_attack' AS technique, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE COALESCE(raw_data->>'mitre_attack','') <> ''
+            AND COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY technique
+          ORDER BY count DESC
+          LIMIT 12",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    // ── Security score (weighted, clamped 0..100) ──────────────────────────────────
+    let score = {
+        let crit = sev_get(&sev_now, "critical");
+        let high = sev_get(&sev_now, "high");
+        let med = sev_get(&sev_now, "medium");
+        let raw = 100i64 - crit * 25 - high * 10 - med * 3;
+        raw.max(0).min(100)
+    };
+
+    // ── Helpers for the response payload ──────────────────────────────────────────
+    let sev_obj = json!({
+        "critical": sev_get(&sev_now, "critical"),
+        "high":     sev_get(&sev_now, "high"),
+        "medium":   sev_get(&sev_now, "medium"),
+        "low":      sev_get(&sev_now, "low"),
+        "info":     sev_get(&sev_now, "info"),
+    });
+    let sev_delta = json!({
+        "critical": sev_get(&sev_now, "critical") - sev_get(&sev_prev, "critical"),
+        "high":     sev_get(&sev_now, "high")     - sev_get(&sev_prev, "high"),
+        "medium":   sev_get(&sev_now, "medium")   - sev_get(&sev_prev, "medium"),
+        "low":      sev_get(&sev_now, "low")      - sev_get(&sev_prev, "low"),
+        "info":     sev_get(&sev_now, "info")     - sev_get(&sev_prev, "info"),
+    });
+    let status_obj = json!({
+        "open":           status_map.get("OPEN").copied().unwrap_or(0),
+        "acknowledged":   status_map.get("ACKNOWLEDGED").copied().unwrap_or(0),
+        "in_progress":    status_map.get("IN_PROGRESS").copied().unwrap_or(0),
+        "fixed":          status_map.get("FIXED").copied().unwrap_or(0),
+        "false_positive": status_map.get("FALSE_POSITIVE").copied().unwrap_or(0),
+    });
+    let mitre_top: Vec<Value> = mitre_rows
+        .into_iter()
+        .map(|(t, h)| json!({ "id": t.clone(), "tactic": mitre_tactic_for(&t), "hits": h }))
+        .collect();
+    let engines_top: Vec<Value> = engines_top
+        .into_iter()
+        .map(|(e, hits, crit)| json!({ "id": e, "hits": hits, "critical": crit }))
+        .collect();
+    let clients_top: Vec<Value> = clients_top
+        .into_iter()
+        .map(|(id, name, oc, total)| {
+            json!({ "id": id, "name": name, "open_critical": oc, "total_open": total })
+        })
+        .collect();
+    let cves_top: Vec<Value> = cve_rows
+        .into_iter()
+        .map(|(cve, sev, hits)| json!({ "cve": cve, "severity": sev, "hits": hits }))
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "severity": sev_obj,
+            "severity_delta_24h": sev_delta,
+            "open_vs_resolved": status_obj,
+            "assets": {
+                "total_clients": total_clients,
+                "with_findings": clients_with_findings,
+            },
+            "agents": {
+                "registered": agents_registered,
+                "online":     agents_online,
+                "stale":      (agents_registered - agents_online).max(0),
+            },
+            "jobs": {
+                "pending":       jobs_pending,
+                "running":       jobs_running,
+                "completed_24h": jobs_completed_24h,
+                "failed_24h":    jobs_failed_24h,
+            },
+            "scan_velocity": {
+                "scans_24h":     jobs_completed_24h,
+                "avg_scan_secs": (avg_scan_secs * 10.0).round() / 10.0,
+            },
+            "mttr_hours":     (mttr_hours * 10.0).round() / 10.0,
+            "security_score": score,
+            "scoring": {
+                "method":  "weighted_severity",
+                "weights": { "critical": 25, "high": 10, "medium": 3 },
+                "max":     100
+            },
+            "trend": {
+                "labels":     labels,
+                "discovered": series_disc,
+                "resolved":   series_res,
+            },
+            "mitre_top":   mitre_top,
+            "engines_top": engines_top,
+            "clients_top": clients_top,
+            "cves_top":    cves_top,
+            "last_updated_unix": Utc::now().timestamp(),
+        })),
+    )
+        .into_response()
+}
+
+fn to_map_i(rows: Vec<(i32, i64)>) -> std::collections::HashMap<i32, i64> {
+    let mut m = std::collections::HashMap::new();
+    for (k, v) in rows {
+        m.insert(k, v);
+    }
+    m
+}
+
+/// Best-effort tactic mapping for an ATT&CK technique ID. Not exhaustive — covers the
+/// techniques our engines emit most often. Returns `"unknown"` for anything else.
+fn mitre_tactic_for(technique: &str) -> &'static str {
+    let t = technique.trim().to_ascii_uppercase();
+    let prefix = t.split('.').next().unwrap_or("");
+    match prefix {
+        // Reconnaissance
+        "T1589" | "T1590" | "T1591" | "T1592" | "T1593" | "T1594" | "T1595" | "T1596" | "T1597"
+        | "T1598" => "reconnaissance",
+        // Resource Development
+        "T1583" | "T1584" | "T1585" | "T1586" | "T1587" | "T1588" => "resource_development",
+        // Initial Access
+        "T1078" | "T1133" | "T1189" | "T1190" | "T1199" | "T1200" | "T1566" => "initial_access",
+        // Execution
+        "T1059" | "T1106" | "T1127" | "T1129" | "T1203" | "T1204" => "execution",
+        // Persistence
+        "T1098" | "T1136" | "T1137" | "T1547" | "T1574" => "persistence",
+        // Privilege Escalation
+        "T1068" | "T1484" | "T1548" | "T1556" => "privilege_escalation",
+        // Defense Evasion
+        "T1027" | "T1036" | "T1070" | "T1140" | "T1218" | "T1222" | "T1497" | "T1562" | "T1564"
+        | "T1620" => "defense_evasion",
+        // Credential Access
+        "T1003" | "T1110" | "T1187" | "T1212" | "T1552" | "T1555" | "T1557" | "T1606" | "T1649" => {
+            "credential_access"
+        }
+        // Discovery
+        "T1007" | "T1018" | "T1046" | "T1057" | "T1069" | "T1082" | "T1083" | "T1087" | "T1135"
+        | "T1518" => "discovery",
+        // Lateral Movement
+        "T1021" | "T1080" | "T1210" | "T1534" | "T1550" => "lateral_movement",
+        // Collection
+        "T1005" | "T1056" | "T1074" | "T1113" | "T1115" | "T1530" | "T1560" => "collection",
+        // Command & Control
+        "T1071" | "T1090" | "T1095" | "T1102" | "T1104" | "T1219" | "T1572" | "T1571" => {
+            "command_and_control"
+        }
+        // Exfiltration
+        "T1011" | "T1020" | "T1029" | "T1041" | "T1048" | "T1052" | "T1567" => "exfiltration",
+        // Impact
+        "T1485" | "T1486" | "T1489" | "T1490" | "T1491" | "T1495" | "T1498" | "T1499" | "T1561"
+        | "T1565" => "impact",
+        _ => "unknown",
+    }
+}
+
 async fn api_findings(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
