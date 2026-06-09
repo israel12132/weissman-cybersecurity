@@ -4,13 +4,11 @@ NPM, PyPI, RubyGems footprint; typosquatting detection; compromised dependency c
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-import requests
 
 from src.http_client import safe_get, safe_post, ENTERPRISE_HTTP_TIMEOUT
 
