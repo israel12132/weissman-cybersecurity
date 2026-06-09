@@ -20,6 +20,15 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("weissman.cloud_asset_discovery")
 
+try:
+    from botocore.exceptions import ClientError as BotocoreClientError, NoCredentialsError as BotocoreNoCredentialsError
+except Exception:  # pragma: no cover - optional dependency fallback
+    class BotocoreClientError(Exception):
+        pass
+
+    class BotocoreNoCredentialsError(Exception):
+        pass
+
 
 @dataclass
 class CloudAsset:
@@ -70,7 +79,6 @@ class CloudAssetDiscovery:
 
         try:
             import boto3
-            from botocore.exceptions import ClientError, NoCredentialsError
         except ImportError:
             logger.warning("boto3 not installed. Run: pip install boto3")
             return assets
@@ -90,10 +98,8 @@ class CloudAssetDiscovery:
             # Discover Lambda functions
             assets.extend(self._discover_aws_lambda(session))
 
-        except NoCredentialsError:
+        except BotocoreNoCredentialsError:
             logger.error("AWS credentials not found")
-        except ClientError as e:
-            logger.error(f"AWS discovery failed: {e}")
         except Exception as e:
             logger.error(f"Unexpected error during AWS discovery: {e}")
 
@@ -161,15 +167,15 @@ class CloudAssetDiscovery:
                         public_access['PublicAccessBlockConfiguration']['IgnorePublicAcls'],
                         public_access['PublicAccessBlockConfiguration']['RestrictPublicBuckets'],
                     ])
-                except (ClientError, KeyError, TypeError) as e:
+                except (BotocoreClientError, KeyError, TypeError) as e:
                     logger.debug(f"Could not check public access for bucket {bucket_name}: {e}")
                     is_public = True  # Assume public if can't check
 
                 # Check encryption
                 try:
-                    encryption = s3.get_bucket_encryption(Bucket=bucket_name)
+                    s3.get_bucket_encryption(Bucket=bucket_name)
                     encrypted = True
-                except (ClientError, KeyError) as e:
+                except (BotocoreClientError, KeyError) as e:
                     logger.debug(f"Could not check encryption for bucket {bucket_name}: {e}")
                     encrypted = False
 
@@ -177,7 +183,7 @@ class CloudAssetDiscovery:
                 try:
                     location = s3.get_bucket_location(Bucket=bucket_name)
                     region = location['LocationConstraint'] or 'us-east-1'
-                except (ClientError, KeyError) as e:
+                except (BotocoreClientError, KeyError) as e:
                     logger.debug(f"Could not get location for bucket {bucket_name}: {e}")
                     region = 'unknown'
 
@@ -211,7 +217,6 @@ class CloudAssetDiscovery:
         assets = []
 
         try:
-            rds = session.client('rds')
             regions = [r['RegionName'] for r in session.client('ec2').describe_regions()['Regions']]
 
             for region in regions:
@@ -276,7 +281,7 @@ class CloudAssetDiscovery:
                         if url_config:
                             asset.public_exposure = True
                             asset.compliance_issues.append("Lambda function has public URL")
-                    except ClientError as e:
+                    except BotocoreClientError as e:
                         # Function may not have a URL configured (ResourceNotFoundException)
                         logger.debug(f"No URL config for Lambda {func['FunctionName']}: {e}")
                     except Exception as e:
@@ -307,7 +312,6 @@ class CloudAssetDiscovery:
             from azure.identity import DefaultAzureCredential
             from azure.mgmt.compute import ComputeManagementClient
             from azure.mgmt.storage import StorageManagementClient
-            from azure.mgmt.resource import ResourceManagementClient
         except ImportError:
             logger.warning("Azure SDK not installed. Run: pip install azure-identity azure-mgmt-compute azure-mgmt-storage azure-mgmt-resource")
             return assets

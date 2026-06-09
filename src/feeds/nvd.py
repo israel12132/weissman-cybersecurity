@@ -4,7 +4,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-from src.models import Finding, FindingType, Severity
+from src.models import Finding, FindingType
 from src.http_client import get_with_retry, ENTERPRISE_HTTP_TIMEOUT
 from .base import BaseFeed, FeedResult
 

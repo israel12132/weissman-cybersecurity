@@ -20,7 +20,7 @@ except Exception:
 
 from src.config import load_config
 from src.feed_cache import get_cached_feed, set_cached_feed
-from src.models import ClientFinding, Finding, FindingType, normalize_tech_stack_to_list
+from src.models import ClientFinding, Finding, normalize_tech_stack_to_list
 from src.feeds import NVDFeed, GitHubFeed, OSVFeed, OTXFeed, HIBPFeed
 from src.feeds.base import FeedResult
 from src.fingerprint import fingerprint_ip_ranges, fingerprint_urls, merge_fingerprint_into_scope
@@ -252,7 +252,6 @@ def correlate_findings_to_clients(config_path: str = "config.yaml") -> list[Clie
     hibp = HIBPFeed(api_key=config.intelligence.hibp.api_key) if config.intelligence.hibp.enabled else None
 
     for client in config.clients:
-        tech_stack = [t.lower() for t in client.scope.tech_stack]
         domains = [d.strip().lower() for d in client.scope.domains if d and not d.startswith("*")]
 
         for result in feed_results:

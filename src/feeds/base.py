@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
 
-from src.models import Finding, FindingType, Severity
+from src.models import Finding, Severity
 
 
 class FeedResult:

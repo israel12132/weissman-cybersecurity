@@ -19,6 +19,15 @@ from enum import Enum
 
 logger = logging.getLogger("weissman.cspm_compliance")
 
+try:
+    from botocore.exceptions import ClientError as BotocoreClientError, NoCredentialsError as BotocoreNoCredentialsError
+except Exception:  # pragma: no cover - optional dependency fallback
+    class BotocoreClientError(Exception):
+        pass
+
+    class BotocoreNoCredentialsError(Exception):
+        pass
+
 
 class ComplianceStatus(Enum):
     """Compliance check status."""
@@ -68,7 +77,6 @@ class CSPMComplianceEngine:
 
         try:
             import boto3
-            from botocore.exceptions import ClientError, NoCredentialsError
         except ImportError:
             logger.warning("boto3 not installed")
             return checks
@@ -91,7 +99,7 @@ class CSPMComplianceEngine:
             # CIS 5.x - Networking checks
             checks.extend(self._check_aws_networking(session))
 
-        except NoCredentialsError:
+        except BotocoreNoCredentialsError:
             logger.error("AWS credentials not found")
         except Exception as e:
             logger.error(f"CIS benchmark check failed: {e}")
@@ -131,7 +139,7 @@ class CSPMComplianceEngine:
                         remediation="Update IAM password policy: aws iam update-account-password-policy --minimum-password-length 14",
                         benchmark="CIS AWS v1.5"
                     ))
-            except ClientError:
+            except BotocoreClientError:
                 checks.append(ComplianceCheck(
                     check_id="CIS-1.5",
                     title="IAM password policy requires minimum length of 14",
@@ -172,7 +180,7 @@ class CSPMComplianceEngine:
 
             # CIS 1.12 - Ensure credentials unused for 90 days are disabled
             try:
-                cred_report = iam.generate_credential_report()
+                iam.generate_credential_report()
                 report = iam.get_credential_report()['Content'].decode('utf-8')
 
                 # Parse CSV credential report
@@ -269,7 +277,7 @@ class CSPMComplianceEngine:
 
                 # CIS 2.1.2 - Ensure S3 bucket has encryption enabled
                 try:
-                    encryption = s3.get_bucket_encryption(Bucket=bucket_name)
+                    s3.get_bucket_encryption(Bucket=bucket_name)
 
                     checks.append(ComplianceCheck(
                         check_id="CIS-2.1.2",
@@ -282,7 +290,7 @@ class CSPMComplianceEngine:
                         resource_type="s3_bucket",
                         benchmark="CIS AWS v1.5"
                     ))
-                except ClientError:
+                except BotocoreClientError:
                     checks.append(ComplianceCheck(
                         check_id="CIS-2.1.2",
                         title="S3 bucket encryption enabled",

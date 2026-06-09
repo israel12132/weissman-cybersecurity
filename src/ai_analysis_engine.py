@@ -5,7 +5,6 @@ Pattern recognition, attack path simulation, false positive reduction, and threa
 from __future__ import annotations
 
 import logging
-import math
 import random
 from dataclasses import dataclass, field
 from typing import Any
@@ -1073,7 +1072,6 @@ class FalsePositiveReducer:
     @staticmethod
     def _explain_reduction(finding: dict[str, Any], score: float) -> str:
         reasons: list[str] = []
-        vtype = finding.get("vuln_type", "unknown")
         cvss = float(finding.get("cvss_score", 5.0))
         severity = finding.get("severity", "medium").lower()
         cve_refs = finding.get("cve_refs", [])

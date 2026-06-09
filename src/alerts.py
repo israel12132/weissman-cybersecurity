@@ -20,7 +20,6 @@ try:
 except Exception:
     pass
 
-import requests
 
 from src.database import get_session_factory, AlertSentModel
 from src.http_client import safe_post, ENTERPRISE_HTTP_TIMEOUT
