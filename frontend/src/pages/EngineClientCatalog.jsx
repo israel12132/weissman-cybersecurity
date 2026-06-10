@@ -237,31 +237,34 @@ function EngineRow({ engine, status, selected, onSelect }) {
   )
 }
 
-function ProfileCard({ profile, count, active, onClick }) {
+function ProfileCard({ profile, count, active, onClick, enginesLabel }) {
   return (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="w-full text-left rounded-xl border p-4 transition-all"
+      className="w-full text-left rounded-2xl border p-4 transition-all duration-300 hover:shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
       style={{
-        borderColor: active ? `${profile.color}50` : 'rgba(255,255,255,0.06)',
-        background: active ? `${profile.color}12` : 'rgba(0,0,0,0.3)',
+        borderColor: active ? `${profile.color}55` : 'rgba(255,255,255,0.07)',
+        background: active
+          ? `linear-gradient(135deg, ${profile.color}14, rgba(0,0,0,0.45))`
+          : 'linear-gradient(135deg, rgba(255,255,255,0.04), rgba(0,0,0,0.35))',
+        boxShadow: active ? `0 0 20px ${profile.color}18, inset 0 1px 0 ${profile.color}25` : undefined,
       }}
     >
-      <div className="flex items-center gap-2 mb-1.5">
+      <div className="flex items-center gap-2.5 mb-2">
         <span className="text-2xl">{profile.icon}</span>
         <div className="min-w-0">
-          <div className="text-xs font-bold truncate" style={{ color: profile.color }}>
+          <div className="text-xs font-bold truncate tracking-tight" style={{ color: profile.color }}>
             {profile.label}
           </div>
-          <div className="text-[10px] font-mono" style={{ color: `${profile.color}80` }}>
-            {count} engines
+          <div className="text-[10px] font-mono mt-0.5" style={{ color: `${profile.color}90` }}>
+            {enginesLabel}
           </div>
         </div>
       </div>
-      <p className="text-[10px] text-white/35 leading-relaxed line-clamp-2">{profile.description}</p>
+      <p className="text-[10px] text-white/40 leading-relaxed line-clamp-2">{profile.description}</p>
     </motion.button>
   )
 }
@@ -269,6 +272,8 @@ function ProfileCard({ profile, count, active, onClick }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function EngineClientCatalog() {
+  const { t } = useTranslation()
+  const { productionCount } = useProductionEngines()
   const [activeProfileId, setActiveProfileId] = useState('enterprise')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -421,30 +426,31 @@ export default function EngineClientCatalog() {
   const totalSelected = selectedEngines.size
   const totalProfileEngines = profileEngineList.length
 
+  const liveCount = productionCount || profileEngineList.length
+
   return (
     <PageShell
-      title="Engine Client Catalog"
-      subtitle={`${ENGINES_REGISTRY.length} engines · ${CLIENT_PROFILES.length} client profiles`}
+      title={t('engines.catalog_title')}
+      subtitle={t('engines.catalog_subtitle', { live: liveCount, profiles: CLIENT_PROFILES.length })}
       badge="CATALOG"
       badgeColor={activeProfile.color}
     >
-      {/* ── Top bar: client selector + Run All ─────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-white/40">Client:</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-mono text-white/40">{t('engines.client_label')}:</span>
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+            className="bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40"
           >
-            <option value="">— Select client —</option>
+            <option value="">{t('engines.select_client')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           {!selectedClientId && (
-            <span className="text-[10px] font-mono text-amber-400/60">
-              ⚠ Select a client to run engines
+            <span className="text-[10px] font-mono text-amber-400/70">
+              ⚠ {t('engines.catalog_select_client_warn')}
             </span>
           )}
         </div>
@@ -454,22 +460,20 @@ export default function EngineClientCatalog() {
           type="button"
           onClick={handleRunAll}
           disabled={runAllLoading || !selectedClientId || totalSelected === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-mono font-semibold bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           style={
             !runAllLoading && selectedClientId && totalSelected > 0
-              ? { boxShadow: '0 0 16px rgba(34,197,94,0.25)' }
+              ? { boxShadow: '0 0 20px rgba(16,185,129,0.2)' }
               : {}
           }
         >
           {runAllLoading ? (
             <>
-              <span className="w-3.5 h-3.5 border-2 border-green-400/40 border-t-green-400 rounded-full animate-spin" />
-              Running…
+              <span className="w-3.5 h-3.5 border-2 border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
+              {t('engines.catalog_running')}
             </>
           ) : (
-            <>
-              🚀 Run All Selected Engines ({totalSelected})
-            </>
+            <>🚀 {t('engines.catalog_run_selected', { count: totalSelected })}</>
           )}
         </button>
       </div>
