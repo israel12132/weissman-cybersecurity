@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
+import { useJobPoll } from '../lib/useJobPoll'
 
 // ─── APT Group definitions ────────────────────────────────────────────────────
 
@@ -157,6 +158,7 @@ export default function ThreatEmulation() {
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [results, setResults] = useState({})
   const [runningId, setRunningId] = useState(null)
+  const [pendingJobs, setPendingJobs] = useState({})
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -191,11 +193,14 @@ export default function ThreatEmulation() {
         showToast('error', d.detail || d.error || 'Emulation failed')
         return
       }
-      showToast('info', `APT emulation queued: job ${d.job_id ?? ''}`)
-      // Optimistically set placeholder results
+      const jobId = d.job_id ?? ''
+      showToast('info', `APT emulation queued: job ${jobId}`)
+      if (jobId) {
+        setPendingJobs((prev) => ({ ...prev, [groupId]: jobId }))
+      }
       setResults((prev) => ({
         ...prev,
-        [groupId]: { blocked_pct: 0, detected_pct: 0, techniques_tested: 0, gaps: 0, pending: true },
+        [groupId]: { blocked_pct: 0, detected_pct: 0, techniques_tested: 0, gaps: 0, pending: true, job_id: jobId },
       }))
     } catch (e) {
       showToast('error', e?.message ?? 'Network error')
@@ -209,6 +214,39 @@ export default function ThreatEmulation() {
       await runEmulation(group.id)
     }
   }, [runEmulation])
+
+  const activePoll = Object.entries(pendingJobs).find(([, jobId]) => jobId)?.[0] ?? null
+  const activeJobId = activePoll ? pendingJobs[activePoll] : null
+
+  useJobPoll(activeJobId, {
+    enabled: Boolean(activeJobId && activePoll),
+    onComplete: (job) => {
+      const groupId = activePoll
+      if (!groupId) return
+      const payload = job?.result ?? job?.findings_json ?? {}
+      const findings = Array.isArray(payload?.findings) ? payload.findings : (Array.isArray(job?.findings) ? job.findings : [])
+      const blocked = findings.filter((f) => (f?.severity || '').toLowerCase() === 'info').length
+      const detected = findings.length - blocked
+      const total = Math.max(findings.length, 1)
+      setResults((prev) => ({
+        ...prev,
+        [groupId]: {
+          blocked_pct: Math.round((blocked / total) * 100),
+          detected_pct: Math.round((detected / total) * 100),
+          techniques_tested: payload?.techniques_tested ?? findings.length,
+          gaps: payload?.gaps ?? detected,
+          pending: false,
+          job_id: activeJobId,
+          status: job.status,
+        },
+      }))
+      setPendingJobs((prev) => {
+        const next = { ...prev }
+        delete next[groupId]
+        return next
+      })
+    },
+  })
 
   return (
     <PageShell title="APT Threat Emulation" badge="APT / TOP-TIER" badgeColor="#ef4444" subtitle={`${APT_GROUPS.length} adversary groups`}>
