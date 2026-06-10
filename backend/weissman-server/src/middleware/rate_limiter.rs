@@ -96,7 +96,9 @@ pub async fn edge_multi_rate_limit_middleware(
     let key = IpKey(ip);
     let limited = match (method.as_str(), path.as_str()) {
         ("POST", "/api/login") => limiter_login().check_key(&key).is_err(),
-        ("POST", "/api/onboarding/register") => limiter_signup().check_key(&key).is_err(),
+        ("POST", "/api/onboarding/register") | ("POST", "/api/auth/signup") => {
+            limiter_signup().check_key(&key).is_err()
+        }
         ("POST", "/api/webhooks/paddle") => limiter_paddle().check_key(&key).is_err(),
         _ => limiter_default().check_key(&key).is_err(),
     };

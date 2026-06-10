@@ -1,0 +1,27 @@
+[PASS screenshot] #01 cockpit_after_login -> /home/israel/weissman-cybersecurity/qa-shots/e2e-01-cockpit_after_login.png
+[PASS] Login succeeded
+[PASS screenshot] #02 dashboard_overview -> /home/israel/weissman-cybersecurity/qa-shots/e2e-02-dashboard_overview.png
+[PASS] Dashboard loaded
+[PASS screenshot] #03 vuln_intel_with_real_findings -> /home/israel/weissman-cybersecurity/qa-shots/e2e-03-vuln_intel_with_real_findings.png
+[PASS] Vuln Intel shows real findings from testphp.vulnweb.com scan
+[PASS screenshot] #04 finding_drawer -> /home/israel/weissman-cybersecurity/qa-shots/e2e-04-finding_drawer.png
+[PASS] Finding drawer opens on row click
+[PASS screenshot] #05 clients_page -> /home/israel/weissman-cybersecurity/qa-shots/e2e-05-clients_page.png
+[PASS] Clients page loaded
+[PASS screenshot] #06 ask_weissman -> /home/israel/weissman-cybersecurity/qa-shots/e2e-06-ask_weissman.png
+[PASS] Ask Weissman page loaded
+[PASS screenshot] #07 playbooks -> /home/israel/weissman-cybersecurity/qa-shots/e2e-07-playbooks.png
+[PASS] Playbooks page loaded
+[PASS screenshot] #08 audit_log -> /home/israel/weissman-cybersecurity/qa-shots/e2e-08-audit_log.png
+[PASS] Audit log page loaded
+[PASS screenshot] #09 status_page -> /home/israel/weissman-cybersecurity/qa-shots/e2e-09-status_page.png
+[PASS] Status page loaded
+[WARN] 5 console errors during walkthrough
+  console: Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  console: Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  console: Failed to load resource: the server responded with a status of 404 (Not Found)
+  console: Failed to load resource: the server responded with a status of 404 (Not Found)
+  console: Failed to load resource: the server responded with a status of 401 (Unauthorized)
+
+=== E2E VERIFICATION COMPLETE ===
+Findings visible in UI: YES

@@ -7,7 +7,9 @@ import RouteErrorBoundary from './components/RouteErrorBoundary'
 import './i18n' // bootstrap i18next before any component renders
 import { ToastProvider } from './components/ui/Toaster'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
+import SkipToContent from './components/ui/SkipToContent'
 import NotFound from './components/ui/NotFound'
+import RouteLoader from './components/ui/RouteLoader'
 
 /** Catches render errors above per-route boundaries (e.g. provider / layout bugs). */
 class RootErrorBoundary extends React.Component {
@@ -124,19 +126,10 @@ const ClientSaasIdpDiscovery = React.lazy(() => import('./pages/ClientSaasIdpDis
 const JobsDashboard = React.lazy(() => import('./pages/JobsDashboard'))
 const StatusPage = React.lazy(() => import('./pages/StatusPage'))
 const AuditLog = React.lazy(() => import('./pages/AuditLog'))
+const PlaybookBuilder = React.lazy(() => import('./pages/PlaybookBuilder'))
+const AskWeissman = React.lazy(() => import('./pages/AskWeissman'))
 const App = React.lazy(() => import('./App'))
 import './index.css'
-
-function RouteLoader() {
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center bg-[#020617]">
-      <div className="text-center">
-        <div className="inline-block w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mb-3" />
-        <p className="text-[11px] font-mono tracking-widest text-white/40 uppercase">Loading module…</p>
-      </div>
-    </div>
-  )
-}
 
 function ProtectedOutlet() {
   const location = useLocation()
@@ -155,6 +148,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter basename="/command-center">
       <AuthProvider>
         <ToastProvider>
+        <SkipToContent />
         <KeyboardShortcuts />
         <Routes>
           <Route path="login" element={<Login />} />
@@ -253,9 +247,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="exploit-lab" element={<ExploitResearchLab />} />
             <Route path="agents" element={<AgentManagement />} />
             <Route path="audit-log" element={<AuditLog />} />
+            <Route path="playbooks" element={<PlaybookBuilder />} />
+            <Route path="ask" element={<AskWeissman />} />
+            <Route path="ceo" element={<Navigate to="/" replace />} />
             <Route path="*" element={<NotFound />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
-            <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
           {/* Fallback for any path outside the protected outlet */}
           <Route path="*" element={<NotFound />} />

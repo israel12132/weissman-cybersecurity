@@ -7,7 +7,10 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 = official Postgres 16 with pgvector pre-installed.
+    # Drop-in replacement for postgres:16; same data files, same env vars.
+    # Required for: supreme_council_memory.embedding (vector(1536)) RAG retrieval.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -36,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
-    image: weissman-backend:local
+    image: weissman-backend:stable
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
@@ -73,7 +76,7 @@ services:
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
-    image: weissman-backend:local
+    image: weissman-backend:stable
     entrypoint: ["/usr/local/bin/weissman-worker"]
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}

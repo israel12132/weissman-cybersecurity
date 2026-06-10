@@ -1,34 +1,38 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
-const SHORTCUTS = [
-  { keys: '?', desc: 'Show this help', global: true },
-  { keys: '/', desc: 'Focus search', global: true },
-  { keys: 'g h', desc: 'Go to Cockpit (home)' },
-  { keys: 'g e', desc: 'Go to Engines' },
-  { keys: 'g f', desc: 'Go to Findings' },
-  { keys: 'g v', desc: 'Go to Vulnerability Intel' },
-  { keys: 'g a', desc: 'Go to Agents' },
-  { keys: 'g c', desc: 'Go to Clients' },
-  { keys: 'g j', desc: 'Go to Jobs' },
-  { keys: 'g s', desc: 'Go to System Configuration' },
-  { keys: 'Esc', desc: 'Close dialogs / drawers', global: true },
+const SHORTCUT_DEFS = [
+  { keys: '?', descKey: 'shortcuts.show_help', global: true },
+  { keys: '/', descKey: 'shortcuts.focus_search', global: true },
+  { keys: 'g h', descKey: 'shortcuts.go_cockpit' },
+  { keys: 'g e', descKey: 'shortcuts.go_engines' },
+  { keys: 'g f', descKey: 'shortcuts.go_findings' },
+  { keys: 'g v', descKey: 'shortcuts.go_vuln_intel' },
+  { keys: 'g a', descKey: 'shortcuts.go_agents' },
+  { keys: 'g c', descKey: 'shortcuts.go_clients' },
+  { keys: 'g j', descKey: 'shortcuts.go_jobs' },
+  { keys: 'g q', descKey: 'shortcuts.go_ask' },
+  { keys: 'g p', descKey: 'shortcuts.go_playbooks' },
+  { keys: 'g s', descKey: 'shortcuts.go_system_config' },
+  { keys: 'Esc', descKey: 'shortcuts.close_dialogs', global: true },
 ]
 
 /**
  * Global keyboard-shortcut handler. Listens for "g + <letter>" sequences for navigation and
  * single-key shortcuts (?, /). Shows a help overlay on '?'.
- *
- * Mount once near the router root.
  */
 export default function KeyboardShortcuts() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [helpOpen, setHelpOpen] = useState(false)
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, helpOpen)
 
   useEffect(() => {
     let lastG = 0
     const onKey = (e) => {
-      // Ignore when user is typing into an input/textarea/contenteditable.
       const tag = (e.target?.tagName || '').toLowerCase()
       const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable
       if (isInput && e.key !== 'Escape' && e.key !== '?') return
@@ -62,6 +66,8 @@ export default function KeyboardShortcuts() {
           a: '/agents',
           c: '/clients',
           j: '/jobs',
+          q: '/ask',
+          p: '/playbooks',
           s: '/system-config',
         }[e.key]
         if (dest) {
@@ -82,9 +88,10 @@ export default function KeyboardShortcuts() {
         type="button"
         onClick={() => setHelpOpen(false)}
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        aria-label="Close shortcuts"
+        aria-label={t('a11y.close_shortcuts')}
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="kbd-help-title"
@@ -92,33 +99,35 @@ export default function KeyboardShortcuts() {
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id="kbd-help-title" className="text-base font-semibold text-white/90">
-            Keyboard shortcuts
+            {t('a11y.keyboard_shortcuts')}
           </h2>
           <button
             type="button"
             onClick={() => setHelpOpen(false)}
             className="text-white/40 hover:text-white text-2xl leading-none"
-            aria-label="Close"
+            aria-label={t('a11y.close')}
           >×</button>
         </div>
-        <table className="w-full text-[13px] font-mono">
+        <table className="w-full text-[13px] font-mono data-grid">
           <tbody className="divide-y divide-white/5">
-            {SHORTCUTS.map(({ keys, desc }) => (
+            {SHORTCUT_DEFS.map(({ keys, descKey }) => (
               <tr key={keys}>
                 <td className="py-2 pe-4 w-32">
                   {keys.split(' ').map((k, i) => (
                     <React.Fragment key={i}>
-                      {i > 0 && <span className="text-white/30 mx-1">then</span>}
+                      {i > 0 && <span className="text-white/30 mx-1">{t('a11y.then')}</span>}
                       <kbd className="inline-block px-2 py-0.5 rounded border border-white/15 bg-white/5 text-cyan-200 text-[11px]">{k}</kbd>
                     </React.Fragment>
                   ))}
                 </td>
-                <td className="py-2 text-white/70">{desc}</td>
+                <td className="py-2 text-white/70">{t(descKey)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-[10px] text-white/35 mt-4">Press <kbd className="px-1 border border-white/15 rounded">Esc</kbd> to close.</p>
+        <p className="text-[10px] text-white/35 mt-4">
+          {t('a11y.press_esc_to_close')}
+        </p>
       </div>
     </div>
   )

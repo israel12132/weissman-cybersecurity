@@ -78,6 +78,10 @@ pub struct AppState {
     pub app_pool: Arc<PgPool>,
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
+    /// Optional read-only pool (separate role with SELECT-only grants).
+    /// When `Some`, `nl_query::ask` will use this for the compiled SQL execution
+    /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
+    pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
     #[allow(dead_code)]
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
@@ -935,6 +939,26 @@ pub fn new_app_state(
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
 ) -> Arc<AppState> {
+    // Optional read-only pool for /api/ask. Falls back to None if the env var
+    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
+    let read_only_pool: Option<Arc<PgPool>> =
+        match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(url) => match sqlx::postgres::PgPoolOptions::new()
+                .max_connections(5)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect_lazy(&url)
+            {
+                Ok(p) => Some(Arc::new(p)),
+                Err(e) => {
+                    tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
+                    None
+                }
+            },
+            None => None,
+        };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -985,6 +1009,7 @@ pub fn new_app_state(
         app_pool,
         intel_pool,
         auth_pool,
+        read_only_pool,
         started_at: Instant::now(),
         timing_broadcast_tx: Arc::new(timing_tx),
         redteam_broadcast_tx: Arc::new(redteam_tx),
@@ -1035,6 +1060,12 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         state.telemetry_broadcast_tx.clone(),
     );
     crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
+    // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
+    // and gated by env vars so dev/offline runs can skip outbound HTTP.
+    crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
+    crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
+    // UEBA — purge old samples once an hour so the table stays bounded.
+    crate::ueba_detector::spawn_retention_loop(app_pool.clone());
     crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
         app_pool.clone(),
         state.telemetry_broadcast_tx.clone(),
@@ -1101,8 +1132,34 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/dashboard/stats", get(api_dashboard_stats))
         .route("/api/dashboard/exec-kpis", get(api_dashboard_exec_kpis))
         .route("/api/findings", get(api_findings))
+        .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
         .route("/api/findings/:id/status", patch(api_findings_update_status))
+        .route("/api/intel/status", get(api_intel_status))
+        .route("/api/intel/suppressions", get(api_intel_suppressions))
+        .route("/api/intel/suppressions/:id", delete(api_intel_suppression_delete))
+        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        .route("/api/attack-paths/:client_id", get(api_attack_paths_for_client))
+        .route("/api/risk-graph/nodes/:node_id/flags", patch(api_risk_node_flags_patch))
+        // SOAR playbooks (DSL-driven automation; on-event dispatch + run history).
+        .route(
+            "/api/playbooks",
+            get(api_playbooks_list).post(api_playbooks_create),
+        )
+        .route(
+            "/api/playbooks/:id",
+            patch(api_playbooks_update).delete(api_playbooks_delete),
+        )
+        .route("/api/playbooks/fire", post(api_playbooks_fire))
+        .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        // Financial blast-radius
+        .route("/api/financial-risk/:client_id", get(api_financial_risk_for_client))
+        .route("/api/financial-risk/:client_id/apply-tags", post(api_apply_asset_tag_rules))
+        // Ask Weissman (NL → safe SQL)
+        .route("/api/ask", post(api_ask))
+        // UEBA
+        .route("/api/ueba/ingest", post(api_ueba_ingest))
+        .route("/api/ueba/anomalies", get(api_ueba_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/openapi.json", get(api_openapi_spec))
@@ -1143,20 +1200,20 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route("/ws/agent", get(ws_agent))
-        // Onboarding + billing stubs (501 with structured body until self-serve flow ships).
-        .route("/api/onboarding/register", post(api_onboarding_register_stub))
+        // Onboarding + billing (Paddle + self-serve register; target/launch-scan still stubbed).
+        .route("/api/onboarding/register", post(api_onboarding_register))
         .route("/api/onboarding/target", post(api_onboarding_target_stub))
         .route(
             "/api/onboarding/launch-scan",
             post(api_onboarding_launch_scan_stub),
         )
-        .route("/api/billing/usage", get(api_billing_usage_stub))
+        .route("/api/billing/usage", get(api_billing_usage))
         .route(
             "/api/billing/checkout-session",
-            post(api_billing_checkout_session_stub),
+            post(api_billing_checkout_session),
         )
-        .route("/api/billing/sync-paddle", post(api_billing_sync_paddle_stub))
-        .route("/api/webhooks/paddle", post(api_paddle_webhook_stub))
+        .route("/api/billing/sync-paddle", post(api_billing_sync_paddle))
+        .route("/api/webhooks/paddle", post(api_paddle_webhook))
         .route("/api/auth/oidc/begin", get(crate::oidc_auth::oidc_begin))
         .route(
             "/api/auth/oidc/callback",

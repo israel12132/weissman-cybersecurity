@@ -1,7 +1,14 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ArrowLeft, Compass, LayoutDashboard, Radar, ShieldAlert } from 'lucide-react'
 import Logo from '../Logo'
+
+const QUICK_LINKS = [
+  { to: '/', label: 'Dashboard', desc: 'Command Center overview', Icon: LayoutDashboard },
+  { to: '/findings', label: 'Findings', desc: 'Vulnerability findings hub', Icon: ShieldAlert },
+  { to: '/engines', label: 'Engines', desc: 'Scan engine matrix', Icon: Radar },
+]
 
 /**
  * Branded 404 page. Shown whenever the router lands on an unknown route OR a route's
@@ -13,34 +20,68 @@ export default function NotFound() {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col items-center justify-center p-8 text-slate-100"
+      className="min-h-[100dvh] flex flex-col items-center justify-center p-6 sm:p-10 text-slate-100 animate-fade-in"
       style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
     >
-      <div className="text-center max-w-md">
-        <div className="mx-auto mb-6 opacity-90">
-          <Logo size={56} />
+      <div className="w-full max-w-lg">
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-5 opacity-90 inline-block">
+            <Logo size={48} />
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-[10px] font-mono tracking-widest text-white/40 uppercase mb-4">
+            <Compass className="w-3 h-3 text-cyan-400/70" aria-hidden="true" />
+            Route not found
+          </div>
+          <div className="text-[5.5rem] sm:text-7xl font-bold font-mono leading-none text-transparent bg-clip-text bg-gradient-to-b from-cyan-400/50 to-cyan-900/20 mb-3 select-none">
+            404
+          </div>
+          <h1 className="text-xl font-semibold text-white/90 mb-2">
+            {t('errors.unknown_route', { defaultValue: 'Page not found' })}
+          </h1>
+          <p className="text-sm text-white/50 font-mono break-all">
+            <code className="text-cyan-300/75">{location.pathname}</code>
+          </p>
         </div>
-        <div className="text-7xl font-bold font-mono text-cyan-400/40 mb-2">404</div>
-        <h1 className="text-xl font-semibold mb-3">
-          {t('errors.unknown_route', { defaultValue: 'Page not found' })}
-        </h1>
-        <p className="text-sm text-white/55 mb-2 font-mono">
-          <code className="text-cyan-300/80">{location.pathname}</code>
+
+        <p className="text-[13px] text-white/45 text-center mb-8 leading-relaxed max-w-md mx-auto">
+          The page you requested doesn&apos;t exist or was moved. Use the links below to return to an active module.
         </p>
-        <p className="text-[13px] text-white/45 mb-8 leading-relaxed">
-          The page you're looking for doesn't exist or was moved. If you reached this through
-          a saved link, please update it.
-        </p>
+
+        <nav aria-label="Quick navigation" className="grid gap-2.5 mb-8">
+          {QUICK_LINKS.map(({ to, label, desc, Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              className="group flex items-center gap-3.5 px-4 py-3.5 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-cyan-500/[0.06] hover:border-cyan-500/30 transition-all"
+              style={{ transitionDuration: 'var(--duration-standard)' }}
+            >
+              <span className="flex items-center justify-center w-9 h-9 rounded-lg border border-white/10 bg-white/[0.04] group-hover:border-cyan-500/25 group-hover:bg-cyan-500/10 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
+                <Icon className="w-4 h-4 text-cyan-400/80" strokeWidth={2} aria-hidden="true" />
+              </span>
+              <span className="flex-1 min-w-0 text-start">
+                <span className="block text-sm font-medium text-white/85 group-hover:text-cyan-100 transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
+                  {label}
+                </span>
+                <span className="block text-[11px] text-white/40 mt-0.5">{desc}</span>
+              </span>
+              <ArrowLeft className="w-4 h-4 text-white/20 group-hover:text-cyan-400/60 rotate-180 transition-colors shrink-0" style={{ transitionDuration: 'var(--duration-fast)' }} aria-hidden="true" />
+            </Link>
+          ))}
+        </nav>
+
         <div className="flex gap-3 justify-center flex-wrap">
-          <Link
-            to="/"
-            className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25"
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="px-4 py-2 rounded-lg text-sm font-mono border border-white/12 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+            style={{ transitionDuration: 'var(--duration-fast)' }}
           >
-            ← Home
-          </Link>
+            ← Go back
+          </button>
           <Link
             to="/status"
-            className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/30"
+            className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/45 hover:text-white/75 hover:border-white/20 transition-colors"
+            style={{ transitionDuration: 'var(--duration-fast)' }}
           >
             System status
           </Link>

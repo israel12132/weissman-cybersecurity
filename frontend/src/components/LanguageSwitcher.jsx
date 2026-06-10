@@ -7,14 +7,14 @@ import { SUPPORTED_LANGUAGES } from '../i18n'
  * localStorage automatically via i18next-browser-languagedetector.
  */
 export default function LanguageSwitcher({ className = '' }) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const current = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
 
   return (
     <div
       className={`inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 ${className}`}
       role="group"
-      aria-label="Language"
+      aria-label={t('common.language')}
     >
       {SUPPORTED_LANGUAGES.map((lang) => {
         const active = current === lang.code

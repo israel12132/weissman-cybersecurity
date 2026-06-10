@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [launchingScan, setLaunchingScan] = useState(false)
   const [scanResult, setScanResult] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
     loadClient()
@@ -20,31 +25,29 @@ export default function ClientDetail() {
     setLoading(true)
     setError('')
     try {
-      // Try to get client details - the API may return client data directly or in a response wrapper
       const response = await apiFetch(`/api/clients/${id}`)
       if (!response.ok) {
         if (response.status === 404) {
-          setError('Client not found')
+          setError(t('client_detail.not_found'))
         } else {
           const text = await response.text().catch(() => 'Failed to load client')
-          setError(`Failed to load client: ${text}`)
+          setError(`${t('common.error')}: ${text}`)
         }
         setLoading(false)
         return
       }
       const data = await response.json()
       setClient(data)
+      setLastUpdated(new Date())
     } catch (err) {
-      setError(`Error loading client: ${err.message}`)
+      setError(`${t('common.error')}: ${err.message}`)
     } finally {
       setLoading(false)
     }
   }
 
   async function launchScan() {
-    if (!confirm(`Launch the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) against the authorized domains for "${client.name}"?`)) {
-      return
-    }
+    if (!confirm(t('clients_page.scan_confirm', { name: client.name }))) return
 
     setLaunchingScan(true)
     setScanResult(null)
@@ -58,26 +61,20 @@ export default function ClientDetail() {
       if (!response.ok) {
         const data = await response.json().catch(() => null)
         const text = data?.detail || data?.code || (await response.text().catch(() => null)) || `HTTP ${response.status}`
-        setScanResult({
-          success: false,
-          message: `Failed to launch scan: ${text}`,
-        })
+        setScanResult({ success: false, message: `${t('clients_page.scan_error')}: ${text}` })
         return
       }
 
       const data = await response.json()
       setScanResult({
         success: true,
-        message: data.message || 'Scan launched successfully!',
+        message: data.message || t('clients_page.scan_queued', { count: data.jobs_queued ?? 0 }),
         jobs_queued: data.jobs_queued,
         engines: data.engines,
         jobs: data.jobs || [],
       })
     } catch (err) {
-      setScanResult({
-        success: false,
-        message: `Error launching scan: ${err.message}`,
-      })
+      setScanResult({ success: false, message: `${t('clients_page.scan_error')}: ${err.message}` })
     } finally {
       setLaunchingScan(false)
     }
@@ -85,10 +82,11 @@ export default function ClientDetail() {
 
   if (loading) {
     return (
-      <PageShell title="Client Details" subtitle="Loading...">
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">Loading client...</p>
+      <PageShell title={t('client_detail.title')} subtitle={t('client_detail.loading')}>
+        <div className="max-w-5xl mx-auto space-y-5">
+          <SkeletonCard lines={2} className="h-24" />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={6} />
         </div>
       </PageShell>
     )
@@ -96,19 +94,18 @@ export default function ClientDetail() {
 
   if (error) {
     return (
-      <PageShell title="Client Details" subtitle="Error">
-        <div className="max-w-2xl mx-auto">
-          <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400">
+      <PageShell title={t('client_detail.title')} subtitle={t('common.error')}>
+        <div className="max-w-2xl mx-auto space-y-5">
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
             {error}
           </div>
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => navigate('/clients')}
-              className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
-            >
-              ← Back to Clients
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/clients')}
+            className="px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
+          >
+            {t('client_detail.back')}
+          </button>
         </div>
       </PageShell>
     )
@@ -116,14 +113,15 @@ export default function ClientDetail() {
 
   if (!client) {
     return (
-      <PageShell title="Client Details" subtitle="Not Found">
+      <PageShell title={t('client_detail.title')} subtitle={t('client_detail.not_found')}>
         <div className="max-w-2xl mx-auto text-center py-12">
-          <p className="text-slate-400">Client not found</p>
+          <p className="text-white/45">{t('client_detail.not_found')}</p>
           <button
+            type="button"
             onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
+            className="mt-6 px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
           >
-            ← Back to Clients
+            {t('client_detail.back')}
           </button>
         </div>
       </PageShell>
@@ -157,214 +155,209 @@ export default function ClientDetail() {
     }
   })()
 
+  const navBtnClass =
+    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all whitespace-nowrap'
+
   return (
-    <PageShell
-      title={client.name}
-      subtitle="Client Details & Scan Management"
-    >
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header Actions */}
-        <div className="flex items-center justify-between">
+    <PageShell title={client.name} subtitle={t('client_detail.subtitle')}>
+      <div className="max-w-5xl mx-auto space-y-5">
+        <PremiumPageHeader
+          title={client.name}
+          subtitle={t('client_detail.subtitle')}
+          badge={t('findings.live_badge')}
+          badgeColor="#8b5cf6"
+          lastUpdated={lastUpdated}
+          onRefresh={loadClient}
+          refreshLabel={t('common.refresh')}
+        >
           <button
+            type="button"
             onClick={() => navigate('/clients')}
-            className="text-sm text-slate-400 hover:text-slate-300"
+            className={navBtnClass}
           >
-            ← Back to Clients
+            {t('client_detail.back')}
           </button>
-          <div className="flex items-center gap-3">
-            <Link
-              to={`/clients/${client.id}/engagements`}
-              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Engagements
-            </Link>
-            <Link
-              to={`/clients/${client.id}/evidence`}
-              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Evidence Vault
-            </Link>
-            <Link
-              to={`/clients/${client.id}/discovery/saas-idp`}
-              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              SaaS / IdP Discovery
-            </Link>
-            <Link
-              to={`/findings?client_id=${client.id}`}
-              className="px-4 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              View Findings
-            </Link>
-            <button
-              onClick={launchScan}
-              disabled={launchingScan}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              {launchingScan ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Launching...
-                </>
-              ) : (
-                '▶ Launch Scan'
-              )}
-            </button>
-          </div>
+          <Link to={`/findings?client_id=${client.id}`} className={navBtnClass}>
+            {t('client_detail.view_findings')}
+          </Link>
+          <button
+            type="button"
+            onClick={launchScan}
+            disabled={launchingScan}
+            className="px-4 py-2 rounded-xl text-[11px] font-mono border border-violet-500/35 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+          >
+            {launchingScan ? t('client_detail.launching') : t('client_detail.launch_scan')}
+          </button>
+        </PremiumPageHeader>
+
+        <div className="flex flex-wrap gap-2">
+          <Link to={`/clients/${client.id}/engagements`} className={navBtnClass}>
+            {t('client_detail.engagements')}
+          </Link>
+          <Link to={`/clients/${client.id}/evidence`} className={navBtnClass}>
+            {t('client_detail.evidence_vault')}
+          </Link>
+          <Link to={`/clients/${client.id}/discovery/saas-idp`} className={navBtnClass}>
+            {t('client_detail.saas_discovery')}
+          </Link>
         </div>
 
-        {/* Scan Result Notification */}
         {scanResult && (
           <div
-            className={`p-4 rounded-lg border ${
+            className={`rounded-xl border px-4 py-3 ${
               scanResult.success
-                ? 'bg-green-900/20 border-green-500/30 text-green-400'
-                : 'bg-red-900/20 border-red-500/30 text-red-400'
+                ? 'bg-emerald-950/25 border-emerald-500/30 text-emerald-200'
+                : 'bg-rose-950/25 border-rose-500/30 text-rose-300'
             }`}
           >
-            <p className="font-medium">{scanResult.message}</p>
+            <p className="font-medium text-sm">{scanResult.message}</p>
             {Array.isArray(scanResult.jobs) && scanResult.jobs.length > 0 && (
-              <div className="mt-3 text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto font-mono">
+              <div className="mt-3 text-xs text-white/55 space-y-1 max-h-48 overflow-y-auto font-mono custom-scroll">
                 {scanResult.jobs.slice(0, 12).map((j) => (
                   <div key={j.job_id} className="flex justify-between gap-3">
-                    <span className="text-slate-400 truncate" title={j.target}>
+                    <span className="text-white/40 truncate" title={j.target}>
                       {j.engine} → {j.target}
                     </span>
-                    <Link
-                      to={`/jobs`}
-                      className="text-cyan-300 hover:text-cyan-200 underline shrink-0"
-                    >
+                    <Link to="/jobs" className="text-cyan-300 hover:text-cyan-200 underline shrink-0">
                       {j.job_id.slice(0, 8)}…
                     </Link>
                   </div>
                 ))}
                 {scanResult.jobs.length > 12 && (
-                  <div className="text-slate-500">+{scanResult.jobs.length - 12} more queued</div>
+                  <div className="text-white/35">+{scanResult.jobs.length - 12} more queued</div>
                 )}
               </div>
             )}
           </div>
         )}
 
-        {/* Client Overview */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Overview</h3>
-          <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="glass-panel rounded-2xl p-6">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+            {t('client_detail.overview')}
+          </h3>
+          <dl className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <dt className="text-sm text-slate-400">Client Name</dt>
-              <dd className="mt-1 text-white font-medium">{client.name}</dd>
+              <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.client_name')}</dt>
+              <dd className="mt-1 text-white font-semibold">{client.name}</dd>
             </div>
             {client.contact_email && (
               <div>
-                <dt className="text-sm text-slate-400">Contact Email</dt>
-                <dd className="mt-1 text-white">{client.contact_email}</dd>
+                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.contact_email')}</dt>
+                <dd className="mt-1 text-white font-mono text-sm">{client.contact_email}</dd>
               </div>
             )}
             {client.created_at && (
               <div>
-                <dt className="text-sm text-slate-400">Created</dt>
-                <dd className="mt-1 text-white">{new Date(client.created_at).toLocaleString()}</dd>
+                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.created')}</dt>
+                <dd className="mt-1 text-white font-mono text-sm">{new Date(client.created_at).toLocaleString()}</dd>
               </div>
             )}
             {client.updated_at && (
               <div>
-                <dt className="text-sm text-slate-400">Last Updated</dt>
-                <dd className="mt-1 text-white">{new Date(client.updated_at).toLocaleString()}</dd>
+                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.last_updated')}</dt>
+                <dd className="mt-1 text-white font-mono text-sm">{new Date(client.updated_at).toLocaleString()}</dd>
               </div>
             )}
           </dl>
-        </div>
+        </section>
 
-        {/* Authorized Scope */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Authorized Scanning Scope</h3>
-
+        <section className="glass-panel rounded-2xl p-6">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+            {t('client_detail.scope')}
+          </h3>
           <div className="space-y-6">
             <div>
-              <h4 className="text-sm font-medium text-slate-300 mb-2">
-                Domains ({domains.length})
+              <h4 className="text-[11px] font-mono text-white/50 uppercase tracking-wide mb-2">
+                {t('client_detail.domains')} ({domains.length})
               </h4>
               {domains.length > 0 ? (
-                <div className="bg-slate-900 rounded-lg p-4">
-                  <ul className="space-y-1">
-                    {domains.map((domain, idx) => (
-                      <li key={idx} className="text-green-400 font-mono text-sm">
-                        ✓ {domain}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="rounded-xl border border-white/8 bg-black/30 p-4 space-y-1.5">
+                  {domains.map((domain, idx) => (
+                    <li key={idx} className="text-emerald-300/90 font-mono text-sm flex items-center gap-2">
+                      <span className="text-emerald-500/60" aria-hidden="true">✓</span>
+                      {domain}
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <p className="text-slate-500 text-sm">No domains specified</p>
+                <p className="text-white/35 text-sm font-mono">{t('client_detail.no_domains')}</p>
               )}
             </div>
 
             {ipRanges.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-2">
-                  IP Ranges ({ipRanges.length})
+                <h4 className="text-[11px] font-mono text-white/50 uppercase tracking-wide mb-2">
+                  {t('client_detail.ip_ranges')} ({ipRanges.length})
                 </h4>
-                <div className="bg-slate-900 rounded-lg p-4">
-                  <ul className="space-y-1">
-                    {ipRanges.map((range, idx) => (
-                      <li key={idx} className="text-blue-400 font-mono text-sm">
-                        ✓ {range}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="rounded-xl border border-white/8 bg-black/30 p-4 space-y-1.5">
+                  {ipRanges.map((range, idx) => (
+                    <li key={idx} className="text-cyan-300/90 font-mono text-sm flex items-center gap-2">
+                      <span className="text-cyan-500/60" aria-hidden="true">✓</span>
+                      {range}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Technology Stack */}
         {techStack.length > 0 && (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Technology Stack</h3>
+          <section className="glass-panel rounded-2xl p-6">
+            <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+              {t('client_detail.tech_stack')}
+            </h3>
             <div className="flex flex-wrap gap-2">
               {techStack.map((tech, idx) => (
                 <span
                   key={idx}
-                  className="px-3 py-1 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded-full text-sm"
+                  className="px-3 py-1 rounded-full text-sm font-mono border border-violet-500/30 bg-violet-500/10 text-violet-200"
                 >
                   {tech}
                 </span>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Quick Actions */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link
-              to={`/findings?client_id=${client.id}`}
-              className="p-4 bg-slate-900 border border-slate-600 rounded-lg hover:border-purple-500/50 transition-colors text-center"
-            >
-              <div className="text-purple-400 text-2xl mb-2">📊</div>
-              <div className="text-white font-medium">View Findings</div>
-              <div className="text-slate-500 text-sm mt-1">See all vulnerabilities</div>
-            </Link>
-            <Link
-              to={`/report/${client.id}`}
-              className="p-4 bg-slate-900 border border-slate-600 rounded-lg hover:border-purple-500/50 transition-colors text-center"
-            >
-              <div className="text-purple-400 text-2xl mb-2">📄</div>
-              <div className="text-white font-medium">Generate Report</div>
-              <div className="text-slate-500 text-sm mt-1">Export PDF/CSV</div>
-            </Link>
-            <Link
-              to={`/attack-surface-graph/${client.id}`}
-              className="p-4 bg-slate-900 border border-slate-600 rounded-lg hover:border-purple-500/50 transition-colors text-center"
-            >
-              <div className="text-purple-400 text-2xl mb-2">🕸️</div>
-              <div className="text-white font-medium">Attack Surface</div>
-              <div className="text-slate-500 text-sm mt-1">View ASM graph</div>
-            </Link>
+        <section className="glass-panel rounded-2xl p-6">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+            {t('client_detail.quick_actions')}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              {
+                to: `/findings?client_id=${client.id}`,
+                title: t('client_detail.view_findings'),
+                desc: t('client_detail.view_findings_desc'),
+                accent: 'violet',
+              },
+              {
+                to: `/report/${client.id}`,
+                title: t('client_detail.generate_report'),
+                desc: t('client_detail.generate_report_desc'),
+                accent: 'cyan',
+              },
+              {
+                to: `/attack-surface-graph/${client.id}`,
+                title: t('client_detail.attack_surface'),
+                desc: t('client_detail.attack_surface_desc'),
+                accent: 'amber',
+              },
+            ].map((action) => (
+              <Link
+                key={action.to}
+                to={action.to}
+                className="group p-4 rounded-xl border border-white/10 bg-black/25 hover:border-white/20 hover:bg-black/35 transition-all text-center"
+              >
+                <div className="text-white font-semibold text-sm group-hover:text-violet-200 transition-colors">
+                  {action.title}
+                </div>
+                <div className="text-white/40 text-xs mt-1 font-mono">{action.desc}</div>
+              </Link>
+            ))}
           </div>
-        </div>
+        </section>
       </div>
     </PageShell>
   )

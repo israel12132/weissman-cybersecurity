@@ -412,7 +412,15 @@ async fn ws_agent(
                                 }
                                 "finding" => {
                                     let engine = v.get("engine").and_then(Value::as_str).unwrap_or("agent_finding").to_string();
-                                    let finding = v.get("finding").cloned().unwrap_or(Value::Null);
+                                    let mut finding = v.get("finding").cloned().unwrap_or(Value::Null);
+                                    if engine == "ueba_baseline" {
+                                        if let (Some(aid), Value::Object(ref mut map)) =
+                                            (agent_uuid.as_deref(), &mut finding)
+                                        {
+                                            map.entry("agent_id".to_string())
+                                                .or_insert_with(|| json!(aid));
+                                        }
+                                    }
                                     if let Some(cid) = client_id {
                                         let _ = crate::endpoint_agents::store_finding(
                                             app_pool.as_ref(),

@@ -1,0 +1,202 @@
+/**
+ * Weissman Command Center — Design Token System
+ * Enterprise-luxury dark SOC aesthetic. All values consumed via CSS variables
+ * and mirrored in tailwind.config.js for utility-class access.
+ */
+
+:root {
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Space Mono', ui-monospace, monospace;
+  --font-display: 'Instrument Sans', 'Inter', ui-sans-serif, sans-serif;
+  --font-holo: 'Orbitron', 'Instrument Sans', sans-serif;
+
+  --text-xs: 0.6875rem;   /* 11px */
+  --text-sm: 0.8125rem;   /* 13px */
+  --text-base: 0.875rem;  /* 14px */
+  --text-md: 0.9375rem;   /* 15px */
+  --text-lg: 1.0625rem;   /* 17px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-3xl: 1.875rem;   /* 30px */
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-wider: 0.08em;
+
+  /* ── Surfaces (depth hierarchy) ─────────────────────────────────────────── */
+  --bg-0: #06060a;
+  --bg-1: #0a0a0f;
+  --bg-2: #111118;
+  --bg-3: #18181f;
+  --bg-4: #1f1f28;
+  --bg-elevated: #14141c;
+  --bg-overlay: rgba(6, 6, 10, 0.82);
+  --bg-glass: rgba(12, 12, 18, 0.55);
+  --bg-glass-elevated: rgba(18, 18, 26, 0.72);
+
+  /* Legacy aliases — existing components reference these */
+  --app-bg: var(--bg-0);
+  --card-bg: var(--bg-2);
+
+  /* ── Borders ────────────────────────────────────────────────────────────── */
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-accent: rgba(34, 211, 238, 0.22);
+  --border-accent-violet: rgba(139, 92, 246, 0.28);
+  --border-danger: rgba(248, 113, 113, 0.35);
+  --border: var(--border-default);
+
+  /* ── Text hierarchy ─────────────────────────────────────────────────────── */
+  --text-primary: #f0f0f5;
+  --text-secondary: #b4b4c0;
+  --text-tertiary: #8b8b9a;
+  --text-muted: #636372;
+  --text-disabled: #45454f;
+  --text-inverse: #06060a;
+  --text-accent: #67e8f9;
+  --text-accent-violet: #c4b5fd;
+
+  /* Legacy aliases */
+  --text: var(--text-secondary);
+  --accent: var(--text-tertiary);
+  --accent-strong: var(--text-primary);
+
+  /* ── Brand accent (cyan → violet) ───────────────────────────────────────── */
+  --accent-cyan: #22d3ee;
+  --accent-cyan-soft: #67e8f9;
+  --accent-cyan-muted: rgba(34, 211, 238, 0.15);
+  --accent-violet: #8b5cf6;
+  --accent-violet-soft: #a78bfa;
+  --accent-violet-muted: rgba(139, 92, 246, 0.18);
+  --accent-gradient: linear-gradient(135deg, #22d3ee 0%, #6366f1 48%, #8b5cf6 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, rgba(34, 211, 238, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
+  --accent-gradient-border: linear-gradient(135deg, rgba(34, 211, 238, 0.45) 0%, rgba(139, 92, 246, 0.35) 50%, rgba(34, 211, 238, 0.2) 100%);
+
+  /* ── Severity palette ───────────────────────────────────────────────────── */
+  --severity-critical: #f87171;
+  --severity-critical-bg: rgba(248, 113, 113, 0.12);
+  --severity-critical-border: rgba(248, 113, 113, 0.32);
+  --severity-high: #fb923c;
+  --severity-high-bg: rgba(251, 146, 60, 0.12);
+  --severity-high-border: rgba(251, 146, 60, 0.32);
+  --severity-medium: #fbbf24;
+  --severity-medium-bg: rgba(251, 191, 36, 0.12);
+  --severity-medium-border: rgba(251, 191, 36, 0.32);
+  --severity-low: #4ade80;
+  --severity-low-bg: rgba(74, 222, 128, 0.1);
+  --severity-low-border: rgba(74, 222, 128, 0.28);
+  --severity-info: #38bdf8;
+  --severity-info-bg: rgba(56, 189, 248, 0.1);
+  --severity-info-border: rgba(56, 189, 248, 0.28);
+
+  /* Legacy --sev-* aliases (SeverityBadge.jsx and existing pages) */
+  --sev-critical: var(--severity-critical);
+  --sev-critical-bg: var(--severity-critical-bg);
+  --sev-critical-border: var(--severity-critical-border);
+  --sev-high: var(--severity-high);
+  --sev-high-bg: var(--severity-high-bg);
+  --sev-high-border: var(--severity-high-border);
+  --sev-medium: var(--severity-medium);
+  --sev-medium-bg: var(--severity-medium-bg);
+  --sev-medium-border: var(--severity-medium-border);
+  --sev-low: var(--severity-low);
+  --sev-low-bg: var(--severity-low-bg);
+  --sev-low-border: var(--severity-low-border);
+  --sev-info: var(--severity-info);
+  --sev-info-bg: var(--severity-info-bg);
+  --sev-info-border: var(--severity-info-border);
+
+  /* ── Status palette ─────────────────────────────────────────────────────── */
+  --status-active: #34d399;
+  --status-active-bg: rgba(52, 211, 153, 0.12);
+  --status-pending: #fbbf24;
+  --status-pending-bg: rgba(251, 191, 36, 0.1);
+  --status-resolved: #94a3b8;
+  --status-resolved-bg: rgba(148, 163, 184, 0.1);
+  --status-offline: #64748b;
+  --status-offline-bg: rgba(100, 116, 139, 0.1);
+  --status-error: #f87171;
+  --status-error-bg: rgba(248, 113, 113, 0.12);
+
+  /* ── Intel badges (KEV / EPSS) ──────────────────────────────────────────── */
+  --kev: #ef4444;
+  --kev-bg: rgba(239, 68, 68, 0.14);
+  --kev-border: rgba(239, 68, 68, 0.4);
+  --kev-glow: 0 0 12px rgba(239, 68, 68, 0.35);
+  --epss-high: #f97316;
+  --epss-high-bg: rgba(249, 115, 22, 0.12);
+  --epss-high-border: rgba(249, 115, 22, 0.35);
+  --epss-mid: #eab308;
+  --epss-mid-bg: rgba(234, 179, 8, 0.1);
+  --epss-low: #22c55e;
+  --epss-low-bg: rgba(34, 197, 94, 0.1);
+
+  /* ── Shadows (layered, subtle depth) ────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 8px rgba(0, 0, 0, 0.25);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
+  --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  --shadow-glow-cyan: 0 0 20px rgba(34, 211, 238, 0.15), 0 0 40px rgba(34, 211, 238, 0.06);
+  --shadow-glow-violet: 0 0 20px rgba(139, 92, 246, 0.18), 0 0 40px rgba(139, 92, 246, 0.08);
+  --shadow-glow-premium: 0 0 24px rgba(34, 211, 238, 0.2), 0 4px 16px rgba(139, 92, 246, 0.15);
+
+  /* ── Radius scale ───────────────────────────────────────────────────────── */
+  --radius-xs: 0.25rem;   /* 4px */
+  --radius-sm: 0.375rem;  /* 6px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.25rem;  /* 20px */
+  --radius-3xl: 1.5rem;   /* 24px */
+  --radius-full: 9999px;
+
+  /* ── Spacing rhythm (4px base unit) ─────────────────────────────────────── */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem;  /* 2px */
+  --space-1: 0.25rem;     /* 4px */
+  --space-1-5: 0.375rem;  /* 6px */
+  --space-2: 0.5rem;      /* 8px */
+  --space-2-5: 0.625rem;  /* 10px */
+  --space-3: 0.75rem;     /* 12px */
+  --space-3-5: 0.875rem;  /* 14px */
+  --space-4: 1rem;        /* 16px */
+  --space-5: 1.25rem;     /* 20px */
+  --space-6: 1.5rem;      /* 24px */
+  --space-8: 2rem;        /* 32px */
+  --space-10: 2.5rem;     /* 40px */
+  --space-12: 3rem;       /* 48px */
+  --space-16: 4rem;       /* 64px */
+
+  /* ── Motion ─────────────────────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-standard: 300ms;
+  --duration-slow: 320ms;
+  --duration-dramatic: 500ms;
+
+  /* ── Focus & selection ────────────────────────────────────────────────────── */
+  --focus-ring: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(34, 211, 238, 0.55);
+  --focus-ring-danger: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(248, 113, 113, 0.55);
+  --focus-ring-violet: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(139, 92, 246, 0.55);
+  --selection-bg: rgba(34, 211, 238, 0.25);
+  --selection-text: var(--text-primary);
+
+  /* ── Z-index scale ────────────────────────────────────────────────────────── */
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+}

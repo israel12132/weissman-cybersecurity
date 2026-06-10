@@ -1,35 +1,119 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { apiFetch } from '../lib/apiBase'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import EmptyState from '../components/ui/EmptyState'
-import { SkeletonTable } from '../components/ui/Skeleton'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import FilterPills from '../components/ui/FilterPills'
+import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import DataTable from '../components/ui/DataTable'
+import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/SeverityBadge'
+import PageShell from './PageShell'
 
-function severityColor(sev) {
-  const s = (sev || '').toLowerCase()
-  if (s === 'critical') return 'text-rose-400 border-rose-500/40 bg-rose-500/10'
-  if (s === 'high') return 'text-orange-400 border-orange-500/40 bg-orange-500/10'
-  if (s === 'medium') return 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10'
-  if (s === 'low') return 'text-blue-400 border-blue-500/40 bg-blue-500/10'
-  return 'text-slate-400 border-slate-600/40 bg-slate-700/10'
+const STATUS_COLORS = {
+  OPEN: '#ef4444',
+  ACKNOWLEDGED: '#f59e0b',
+  IN_PROGRESS: '#3b82f6',
+  FIXED: '#22c55e',
+  FALSE_POSITIVE: '#6b7280',
 }
 
-function StatCard({ label, value, hint }) {
-  return (
-    <div className="rounded-2xl bg-black/40 border border-white/10 p-5 backdrop-blur-md">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{label}</div>
-      <div className="text-3xl font-bold text-white mt-2">{value}</div>
-      {hint && <div className="text-[11px] text-white/45 mt-1">{hint}</div>}
-    </div>
-  )
+function isKevListed(f) {
+  return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
+}
+
+function formatDate(val) {
+  if (!val) return '—'
+  try {
+    return new Date(val).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
+}
+
+const columnHelper = createColumnHelper()
+
+function buildColumns(t) {
+  return [
+    columnHelper.accessor('severity', {
+      id: 'severity',
+      header: t('common.severity'),
+      size: 110,
+      cell: ({ getValue }) => <SeverityBadge severity={getValue()} showDot />,
+    }),
+    columnHelper.accessor((row) => row.cve || row.cve_id || '—', {
+      id: 'cve',
+      header: t('findings.cve'),
+      size: 140,
+      cell: ({ getValue }) => (
+        <span className="text-cyan-300/90 font-mono text-[11px]">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.title || row.summary || '—', {
+      id: 'title',
+      header: t('common.name'),
+      size: 320,
+      cell: ({ getValue }) => (
+        <span className="text-white/85 text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.source || row.engine || '—', {
+      id: 'source',
+      header: t('findings.source'),
+      size: 140,
+      cell: ({ getValue }) => (
+        <span className="text-white/55 font-mono text-[11px] truncate">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => (row.status || 'OPEN').toUpperCase(), {
+      id: 'status',
+      header: t('common.status'),
+      size: 120,
+      cell: ({ getValue }) => {
+        const v = getValue()
+        const color = STATUS_COLORS[v] || '#6b7280'
+        return (
+          <span
+            className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono border"
+            style={{ color, backgroundColor: `${color}18`, borderColor: `${color}40` }}
+          >
+            {v}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor('discovered_at', {
+      id: 'discovered',
+      header: t('findings.discovered'),
+      size: 160,
+      cell: ({ getValue }) => (
+        <span className="text-white/45 font-mono text-[11px] whitespace-nowrap">
+          {formatDate(getValue())}
+        </span>
+      ),
+    }),
+  ]
 }
 
 export default function VulnIntelDashboard() {
+  const { t } = useTranslation()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
   const [severityFilter, setSeverityFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [kevFilter, setKevFilter] = useState(false)
+  const [filtersExpanded, setFiltersExpanded] = useState(true)
   const [total, setTotal] = useState(0)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [selected, setSelected] = useState(null)
 
   const load = useCallback(async () => {
@@ -47,6 +131,7 @@ export default function VulnIntelDashboard() {
       const arr = Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : []
       setFindings(arr)
       setTotal(Number(data?.total ?? arr.length))
+      setLastUpdated(new Date())
     } catch (e) {
       setError(e.message || 'Failed to load findings')
     } finally {
@@ -55,12 +140,7 @@ export default function VulnIntelDashboard() {
   }, [severityFilter])
 
   useEffect(() => {
-    let cancelled = false
     load().catch(() => {})
-    return () => {
-      cancelled = true
-      void cancelled
-    }
   }, [load])
 
   const summary = useMemo(() => {
@@ -78,125 +158,208 @@ export default function VulnIntelDashboard() {
     return findings.filter((f) => {
       const sev = (f.severity || '').toLowerCase()
       if (severityFilter !== 'all' && sev !== severityFilter) return false
+      if (statusFilter && (f.status || 'OPEN').toUpperCase() !== statusFilter) return false
+      if (kevFilter && !isKevListed(f)) return false
       if (!q) return true
       const hay = `${f.title || ''} ${f.description || ''} ${f.cve || ''} ${f.source || ''}`.toLowerCase()
       return hay.includes(q)
     })
-  }, [findings, filter, severityFilter])
+  }, [findings, filter, severityFilter, statusFilter, kevFilter])
+
+  const tableData = useMemo(() => filtered.slice(0, 200), [filtered])
+
+  const columns = useMemo(() => buildColumns(t), [t])
+
+  const statusCounts = useMemo(() => {
+    const c = {}
+    for (const f of findings) {
+      const s = (f.status || 'OPEN').toUpperCase()
+      c[s] = (c[s] || 0) + 1
+    }
+    return c
+  }, [findings])
+
+  const kevCount = useMemo(() => findings.filter(isKevListed).length, [findings])
+
+  const selectedRowId = selected?.raw_id ?? selected?.id
 
   return (
-    <div
-      className="min-h-[100dvh] text-slate-100 p-6"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+    <PageShell
+      title={t('vuln_intel.title')}
+      badge="CVE"
+      badgeColor="#f97316"
+      subtitle={t('vuln_intel.subtitle')}
     >
-      <header className="mb-6 flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Vulnerability Intelligence</h1>
-          <p className="text-sm text-white/55 mt-1">
-            CVE-correlated findings across all clients. Live data from <code>/api/findings</code>.
-          </p>
-        </div>
-        <div className="text-[11px] font-mono text-white/40">
-          {findings.length} shown / {total} total · {summary.cves} distinct CVEs
-        </div>
-      </header>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <StatCard label="Critical" value={summary.by.critical} />
-        <StatCard label="High" value={summary.by.high} />
-        <StatCard label="Medium" value={summary.by.medium} />
-        <StatCard label="Low" value={summary.by.low} />
-        <StatCard label="Distinct CVEs" value={summary.cves} hint="Unique CVE IDs across findings" />
-      </div>
-
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <input
-            type="search"
-            placeholder="Search title, CVE, description, source…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="flex-1 min-w-[260px] bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-          />
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85"
+      <div className="space-y-5">
+        <PremiumPageHeader
+          title={t('vuln_intel.title')}
+          subtitle={t('vuln_intel.subtitle')}
+          badge={t('vuln_intel.live_badge')}
+          badgeColor="#f97316"
+          count={filtered.length}
+          countLabel={t('findings.title')}
+          lastUpdated={lastUpdated}
+          loading={loading}
+          onRefresh={() => load()}
+          refreshLabel={t('common.refresh')}
+        >
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
           >
-            <option value="all">All severities</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-            <option value="info">Info</option>
-          </select>
+            {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
+          </button>
+        </PremiumPageHeader>
+
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <ExecutiveWidget
+            label={t('vuln_intel.critical')}
+            value={loading ? '—' : summary.by.critical.toLocaleString()}
+            accent="#ef4444"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.high')}
+            value={loading ? '—' : summary.by.high.toLocaleString()}
+            accent="#f97316"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.medium')}
+            value={loading ? '—' : summary.by.medium.toLocaleString()}
+            accent="#f59e0b"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.low')}
+            value={loading ? '—' : summary.by.low.toLocaleString()}
+            accent="#22d3ee"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.distinct_cves')}
+            value={loading ? '—' : summary.cves.toLocaleString()}
+            hint={t('vuln_intel.distinct_cves_hint')}
+            accent="#a78bfa"
+            className="col-span-2 lg:col-span-1"
+          />
         </div>
 
-        {loading ? (
-          <SkeletonTable rows={10} cols={6} />
-        ) : error ? (
-          <EmptyState
-            icon="⚠"
-            title="Failed to load findings"
-            body={error}
-            cta={{ label: 'Retry', onClick: load }}
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon="✅"
-            title="No findings match"
-            body="Nothing matches the current filter. Try widening the severity, clearing the search, or running a scan from the Engine Matrix."
-            secondary={{ label: 'Open Engine Matrix', href: '/command-center/engines' }}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] font-mono">
-              <thead>
-                <tr className="text-left text-white/45 border-b border-white/10">
-                  <th className="py-2 pe-3">Severity</th>
-                  <th className="py-2 pe-3">CVE</th>
-                  <th className="py-2 pe-3">Title</th>
-                  <th className="py-2 pe-3">Source</th>
-                  <th className="py-2 pe-3">Status</th>
-                  <th className="py-2 pe-3">Discovered</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filtered.slice(0, 200).map((f, i) => (
-                  <tr
-                    key={f.id || i}
-                    onClick={() => setSelected(f)}
-                    className="hover:bg-cyan-500/[0.04] cursor-pointer focus-within:bg-cyan-500/[0.04]"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setSelected(f) }}
-                    title="Open evidence drawer"
-                  >
-                    <td className="py-2 pe-3">
-                      <span className={`inline-block px-2 py-0.5 rounded border uppercase tracking-wider text-[10px] ${severityColor(f.severity)}`}>
-                        {(f.severity || 'info').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-2 pe-3 text-cyan-400">{f.cve || f.cve_id || '—'}</td>
-                    <td className="py-2 pe-3 text-white/80 max-w-md truncate" title={f.title}>
-                      {f.title || f.summary || '—'}
-                    </td>
-                    <td className="py-2 pe-3 text-white/55">{f.source || f.engine || '—'}</td>
-                    <td className="py-2 pe-3 text-white/55">{f.status || 'OPEN'}</td>
-                    <td className="py-2 pe-3 text-white/40">
-                      {f.discovered_at ? new Date(f.discovered_at).toLocaleString() : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length > 200 && (
-              <p className="text-[11px] text-white/35 mt-3">Showing first 200 of {filtered.length} findings — refine filter to narrow.</p>
-            )}
+        {filtersExpanded && (
+          <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+            <FilterPills
+              label={t('findings.filter_severity')}
+              pills={[
+                {
+                  id: 'vuln-sev-all',
+                  label: t('vuln_intel.all_severities'),
+                  count: findings.length,
+                  active: severityFilter === 'all',
+                  color: '#94a3b8',
+                  onClick: () => setSeverityFilter('all'),
+                },
+                ...Object.entries(SEVERITY_META).map(([key, meta]) => ({
+                  id: `vuln-sev-${key}`,
+                  label: meta.label,
+                  count: summary.by[key] || 0,
+                  active: severityFilter === key,
+                  color: meta.color,
+                  onClick: () => setSeverityFilter(key),
+                })),
+              ]}
+            />
+
+            <FilterPills
+              label={t('findings.filter_status')}
+              pills={[
+                {
+                  id: 'vuln-status-all',
+                  label: t('vuln_intel.all_statuses'),
+                  count: findings.length,
+                  active: !statusFilter,
+                  color: '#94a3b8',
+                  onClick: () => setStatusFilter(''),
+                },
+                ...Object.entries(STATUS_COLORS).map(([value, color]) => ({
+                  id: `vuln-status-${value}`,
+                  label: value.replace('_', ' '),
+                  count: statusCounts[value] || 0,
+                  active: statusFilter === value,
+                  color,
+                  onClick: () => setStatusFilter(statusFilter === value ? '' : value),
+                })),
+                {
+                  id: 'vuln-kev',
+                  label: t('vuln_intel.kev_only'),
+                  count: kevCount,
+                  active: kevFilter,
+                  color: '#f59e0b',
+                  onClick: () => setKevFilter((v) => !v),
+                },
+              ]}
+            />
+
+            <div className="relative max-w-xl">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+                ⌕
+              </span>
+              <input
+                type="search"
+                placeholder={t('findings.search_placeholder')}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
           </div>
         )}
+
+        {error ? (
+          <EmptyState
+            icon="alert"
+            title={t('vuln_intel.failed_title')}
+            body={error}
+            cta={{ label: t('common.retry'), onClick: load }}
+          />
+        ) : !loading && findings.length === 0 ? (
+          <EmptyState
+            icon="shield"
+            title={t('findings.no_findings_yet')}
+            body={t('findings.no_findings_body')}
+            cta={{ label: t('vuln_intel.empty_cta'), to: '/clients' }}
+          />
+        ) : !loading && filtered.length === 0 ? (
+          <EmptyState
+            icon="search-x"
+            title={t('vuln_intel.no_match_title')}
+            body={t('vuln_intel.no_match_body')}
+            cta={{ label: t('vuln_intel.empty_cta'), to: '/clients' }}
+          />
+        ) : (
+          <>
+            <DataTable
+              id="vuln-intel-table"
+              columns={columns}
+              data={tableData}
+              loading={loading}
+              onRowClick={(row) => setSelected(row.original)}
+              selectedRowId={selectedRowId}
+              getRowAccentColor={(row) => getSeverityMeta(row.severity).border}
+              emptyFilteredMessage={t('vuln_intel.no_match_title')}
+              zebra
+              stickyHeader
+            />
+            {!loading && filtered.length > 200 && (
+              <p className="text-[11px] font-mono text-white/35 text-center">
+                {t('vuln_intel.showing_first', { count: filtered.length })}
+              </p>
+            )}
+          </>
+        )}
+
+        <p className="text-[10px] font-mono text-white/30 text-center">
+          {t('findings.shown_of_total', { shown: filtered.length, total })}
+        </p>
       </div>
 
       <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
-    </div>
+    </PageShell>
   )
 }

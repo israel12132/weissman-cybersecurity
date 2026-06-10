@@ -1,83 +1,166 @@
-# Weissman-cybersecurity — Security & Compliance Overview
+# Weissman Cybersecurity — Security & Compliance Overview
 
-Last updated: 2026-06-01
+Last updated: 2026-06-09 (synced with the autonomous-defence phase-3 rollout)
 
-## 1) Scope
+## 1. Scope
 
-This document summarizes the platform's current security controls and compliance-relevant architecture for customer security reviews and procurement questionnaires.
+This document summarises the platform's current security architecture and
+controls, suitable for customer security reviews and procurement questionnaires.
+Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
+[`SLA_AND_STATUS.md`](SLA_AND_STATUS.md).
 
-## 2) Data handling model
+## 2. Data handling
 
-- The platform is multi-tenant, with tenant-level isolation fields in core entities (`tenant_id` on users, API keys, vulnerabilities, report runs, and related tables).
-- Audit events are captured in an immutable audit table (`system_audit_logs`) with timestamp, user, action, IP, and JSON details.
-- Finding lifecycle state is persisted (`OPEN`, `IN_PROGRESS`, `FIXED`, `FALSE_POSITIVE`) to support remediation workflows and traceability.
+- **Multi-tenant by construction.** Every multi-tenant table carries
+  `tenant_id BIGINT NOT NULL REFERENCES tenants(id)` and has **forced
+  PostgreSQL Row-Level Security** (`USING (tenant_id = current_setting(...)::bigint)`).
+  80+ tables, no exceptions.
+- **Audit trail.** Every authenticated write goes through
+  `audit_log::insert_audit`; rows land in `public.audit_logs` with
+  `(tenant_id, user_id, user_label, action_type, details, ip_address,
+  created_at)`. Append-only by application convention; revisions never
+  modify history.
+- **Finding lifecycle.** Status workflow `OPEN → ACKNOWLEDGED → IN_PROGRESS →
+  FIXED | FALSE_POSITIVE` with timestamps in `vulnerabilities.status_changed_at`.
+  Analyst-set status is preserved across re-scans (the dedup upsert never
+  resets it).
+- **NL-query audit.** Every `/api/ask` call is recorded in `nl_query_audit`:
+  the question, the LLM-generated plan, the compiled SQL, row count, ms,
+  error message (if any).
 
-## 3) Data residency and regional processing
+## 3. Data residency
 
-- Regional control is environment-driven via `WEISSMAN_REGION`.
-- Tenant-region matching logic enforces that processing can be restricted to the deployment region (`should_process_tenant`).
-- Region-aware visibility helpers are implemented for stored report/run access checks.
+- `WEISSMAN_REGION` env var drives the deployment region (default `EU-West`).
+- `region_manager.should_process_tenant` enforces the per-tenant region match
+  before any cross-region work.
+- Cloud SaaS data is stored in EU-West (Ireland) by default; Enterprise
+  customers may select US-East or AU-East. Self-hosted: data never leaves
+  customer infrastructure.
 
-## 4) Identity, authentication, and authorization
+## 4. Identity, authentication, authorization
 
-- Role-based access control (RBAC) model uses three roles:
-  - `super_admin`
-  - `security_analyst`
-  - `viewer`
-- Role hierarchy logic is implemented in enterprise auth utilities.
-- MFA model is based on TOTP (`pyotp`, Google Authenticator compatible) with per-user MFA fields (`mfa_secret`, `mfa_enabled`).
-- Password policy enforcement includes minimum length and complexity checks.
-- User model supports SSO identity mapping fields (`sso_provider`, `sso_id`) for enterprise IdP integration paths.
+- **Roles (5 levels + a flag).**
+  `viewer < analyst < operator < admin < ceo`, plus the boolean
+  `is_superadmin` for cross-tenant CEO operations. Enforced via the
+  `rbac` module + `ceo_rbac_middleware`.
+- **Local password auth.** bcrypt cost-12 hashes (`bcrypt::hash`). Minimum
+  12 chars + character-class diversity at signup.
+- **TOTP MFA.** `auth_mfa.rs` with `totp-rs`. Per-tenant `mfa_required` config
+  rejects logins without enrolled MFA (`403 mfa_enrollment_required`).
+- **SSO (OIDC + SAML).** `oidc_auth.rs` (PKCE, id-token verify) and
+  `saml_auth.rs` (signed assertions, JIT user provisioning). Pluggable per
+  tenant.
+- **Session security.** Two-pool architecture: `weissman_app` (subject to
+  RLS) for app queries, `weissman_auth` (BYPASSRLS) only for the login plane
+  (`auth.v_user_lookup`) — minimises blast radius. A third **read-only role**
+  `weissman_ro` exists for the NL→SQL feature: SELECT-only on 13 whitelisted
+  tables, `statement_timeout=15s`, `idle_in_transaction_session_timeout=30s`.
 
-## 5) Cryptography and secrets
+## 5. Cryptography
 
-- Outbound webhooks are signed with `X-Weissman-Signature` using HMAC-SHA256.
-- Sensitive database fields have an encryption abstraction (`database_encryption.py`) with Vault Transit primary path and Fernet fallback.
-- The encryption module explicitly targets sensitive fields such as MFA secrets, webhook secrets, and API/integration credential material.
+- **Webhook signing.** Outbound integration webhooks signed
+  `X-Weissman-Signature: sha256=…` (HMAC-SHA256); Paddle inbound webhooks
+  verified via `subtle::ct_eq` to prevent timing attacks
+  (`billing/webhook.rs`).
+- **Bearer token comparison.** All bearer-token equality checks use
+  constant-time helpers (`subtle::ConstantTimeEq` with length padding) —
+  see `cicd_interceptor.rs::constant_time_str_eq`.
+- **TLS.** TLS 1.2+ enforced on outbound HTTP via `weissman_core::tls_policy`.
+  `WEISSMAN_ALLOW_INSECURE_TLS=1` refuses to start in production
+  (`WEISSMAN_REGION` non-empty).
+- **At-rest encryption.** Postgres data volume is operator-managed (LUKS / KMS
+  on the deployment platform); MFA secrets are stored encrypted at the
+  application layer (Vault Transit primary, Fernet fallback in
+  `database_encryption.py`).
 
-## 6) Retention and lifecycle controls
+## 6. Threat intelligence integrity
 
-- Security/intel lifecycle controls are environment-configurable:
-  - `WEISSMAN_INTEL_EPHEMERAL_RETENTION_DAYS`
-  - `WEISSMAN_INTEL_DYNAMIC_RETENTION_DAYS`
-  - `WEISSMAN_ASYNC_JOB_RETENTION_DAYS`
-  - `WEISSMAN_BACKUP_RETENTION_DAYS`
-- Retention presentation for trust/compliance pages is supported via `RETENTION_DAYS` template wiring.
+- **CISA KEV mirror.** `intel_kev.rs` downloads the official
+  `known_exploited_vulnerabilities.json` from `cisa.gov` every 6 hours,
+  upserts into `kev_intel`, back-fills `vulnerabilities.kev_*` columns.
+- **FIRST.org EPSS.** `intel_epss.rs` batches CVE lookups against
+  `api.first.org/data/v1/epss`, caches in `epss_intel` (24 h TTL), embeds the
+  score on every CVE-tagged finding at persist time.
+- **No silent failure.** When either feed is unreachable, the finding lands
+  without the enrichment (UI shows "—") and the background worker re-tries on
+  the next cycle. **We never fabricate a score.**
 
-## 7) API and abuse protection
+## 7. Retention & lifecycle controls (env-driven)
 
-- Public API keys are stored hashed (`api_keys.key_hash`) with prefix-based lookup (`key_prefix`).
-- Per-tenant scan enqueue rate limiting exists in Rust HTTP layer (`tenant_scan_limit`).
-- Python services include a reusable Redis-backed/in-memory fallback sliding-window rate limiter (`RateLimiter`) for expensive endpoints.
-- Webhook delivery includes retry with exponential backoff.
+| Var | Default |
+|-----|---------|
+| `WEISSMAN_INTEL_EPHEMERAL_RETENTION_DAYS` | 7 |
+| `WEISSMAN_INTEL_DYNAMIC_RETENTION_DAYS` | 30 |
+| `WEISSMAN_ASYNC_JOB_RETENTION_DAYS` | 14 |
+| `WEISSMAN_BACKUP_RETENTION_DAYS` | 30 |
 
-## 8) Operational security logging
+UEBA-specific:
+- `agent_metric_samples` purged hourly when older than 14 days
+  (`ueba_detector::spawn_retention_loop`).
 
-- Audit helper logs security-relevant actions (including login and scan/report actions) and persists to `system_audit_logs`.
-- Audit events can also be published to command-center event streams for operational monitoring.
+## 8. API & abuse protection
 
-## 9) Current compliance posture (declaration)
+- **Per-tenant scan rate-limit.** `http::tenant_scan_limit` middleware blocks
+  excessive POST `/api/command-center/scan` per tenant.
+- **AI quota.** `scan_routing::DEFAULT_AI_DAILY_SCAN_QUOTA` (50/day per
+  tenant) — exceeded returns `429 quota_exceeded` with `Retry-After`.
+- **API keys.** Stored hashed (`api_keys.key_hash`) with prefix-based lookup
+  for operational use; no plaintext at rest.
+- **Scope validation.** Every scan target is matched against
+  `clients.domains / ip_ranges` *before* the engine runs. Out-of-scope →
+  `403 target outside approved tenant scope`. Private IP ranges
+  (`10/8`, `172.16/12`, `192.168/16`, link-local) are rejected at the
+  default policy.
+- **Auto-suppression.** Three FALSE_POSITIVE marks on the same
+  `(engine, signature_hash)` add a row in `finding_suppressions`; subsequent
+  detections are silently demoted to FALSE_POSITIVE — audit trail preserved.
 
-- This document is a controls overview, not a third-party certification report.
-- No claim is made here that SOC 2 Type II or ISO 27001 is already certified.
-- This package is intended to accelerate customer due-diligence and security questionnaire completion.
+## 9. Operational logging
 
-## 10) Availability and status policy
+- Audit helper logs to `audit_logs`; tracing emits structured JSON
+  (`WEISSMAN_LOG_FORMAT=json`) for SIEM ingestion.
+- Prometheus scrape endpoint at `/api/metrics`.
+- Public status page at `/status` (no auth) for uptime monitors.
 
-- SLA and uptime policy are documented in:
-  - `/tmp/workspace/israel12132/weissman-cybersecurity/SLA_AND_STATUS.md`
-- Public runtime status endpoint:
-  - `/status`
+## 10. Migration safety
 
-## 11) Evidence references in repository
+- `crates/weissman-db/migrations/` is the source of truth.
+- Standard files run inside transactions (`sqlx::migrate!()`).
+- `-- weissman:no-transaction` files (e.g. `CREATE INDEX CONCURRENTLY`) are
+  applied by a pre-runner with **SQLx-compatible SHA-384 checksums** stored in
+  `_sqlx_migrations`. Re-runs are checksum-verified — any post-deploy edit to a
+  migration file is detected at boot and refuses to start
+  (`NoTxMigrateError::ChecksumMismatch`).
 
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/database.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/audit.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/region_manager.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/auth_enterprise.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/database_encryption.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/webhooks.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/src/rate_limiter.py`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/fingerprint_engine/src/http/tenant_scan_limit.rs`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/fingerprint_engine/src/data_retention.rs`
-- `/tmp/workspace/israel12132/weissman-cybersecurity/PRODUCTION.env.template`
+## 11. Compliance posture (declaration)
+
+This document is a technical-controls overview, **not** a third-party
+certification report. SOC 2 Type II / ISO 27001 status is declared by the
+operating entity and its auditor. The Standard Contractual Clauses (Module 2,
+Controller-to-Processor) for EEA / UK / Switzerland data flows are
+incorporated by reference in [`/dpa.html`](deploy/public/dpa.html).
+
+## 12. Evidence references (in this repository)
+
+| Concern | Implementation |
+|---------|----------------|
+| Tenant isolation + RLS | `crates/weissman-db/src/lib.rs` (`begin_tenant_tx`, GUC `app.current_tenant_id`) |
+| Audit trail | `fingerprint_engine/src/audit_log.rs` |
+| RBAC | `fingerprint_engine/src/rbac.rs` + `http/ceo_rbac.rs` |
+| MFA | `fingerprint_engine/src/auth_mfa.rs` |
+| OIDC / SAML | `fingerprint_engine/src/oidc_auth.rs`, `saml_auth.rs` |
+| Scope validation | `fingerprint_engine/src/security_hardening.rs`, `scan_routing.rs` |
+| KEV mirror | `fingerprint_engine/src/intel_kev.rs` |
+| EPSS client | `fingerprint_engine/src/intel_epss.rs` |
+| FP/TP feedback + suppressions | `fingerprint_engine/src/fp_feedback.rs` |
+| Finding cluster dedup | `fingerprint_engine/src/findings_correlator.rs` |
+| FAIR-aligned $-at-risk | `fingerprint_engine/src/financial_risk.rs` |
+| NL → safe SQL | `fingerprint_engine/src/nl_query.rs` (+ migration `20260608140300`) |
+| UEBA detector | `fingerprint_engine/src/ueba_detector.rs` + agent `detections/baseline.rs` |
+| SOAR playbooks | `fingerprint_engine/src/soar_playbook.rs` |
+| Attack-path BFS | `fingerprint_engine/src/attack_path.rs` |
+| Constant-time bearer | `fingerprint_engine/src/cicd_interceptor.rs::constant_time_str_eq` |
+| Rate limiting | `fingerprint_engine/src/http/tenant_scan_limit.rs` |
+| Data retention | `fingerprint_engine/src/data_retention.rs` |
+| Webhook HMAC verify | `fingerprint_engine/src/billing/webhook.rs` |
+| No-transaction migration runner | `crates/weissman-db/src/no_tx_migrations.rs` |

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Activity, TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 /**
  * RateLimitAnalytics - Comprehensive rate limit monitoring and analytics
@@ -36,9 +37,7 @@ export default function RateLimitAnalytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/rate-limits/analytics?range=${timeRange}`, {
-        credentials: 'include',
-      });
+      const response = await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`);
       if (response.ok) {
         const analyticsData = await response.json();
         setData(analyticsData);

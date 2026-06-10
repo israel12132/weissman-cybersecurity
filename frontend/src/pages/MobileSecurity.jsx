@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Smartphone, Shield, AlertTriangle, CheckCircle, Search, Filter } from 'lucide-react';
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 /**
  * MobileSecurity - Mobile & App Security Analysis Dashboard
@@ -26,9 +27,7 @@ export default function MobileSecurity() {
 
   const fetchMobileApps = async () => {
     try {
-      const response = await fetch('/api/mobile-security/apps', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/mobile-security/apps');
       if (response.ok) {
         const data = await response.json();
         setApps(data.apps || []);

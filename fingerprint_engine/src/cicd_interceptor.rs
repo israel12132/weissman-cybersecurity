@@ -52,7 +52,7 @@ fn verify_gitlab_token(headers: &HeaderMap, expected: &str) -> bool {
         .or_else(|| headers.get("X-Gitlab-Token"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    t == expected
+    constant_time_str_eq(t, expected)
 }
 
 fn verify_bitbucket_secret(headers: &HeaderMap, expected: &str) -> bool {

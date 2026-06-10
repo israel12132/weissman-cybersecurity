@@ -9,6 +9,7 @@ members = [
     "backend/weissman-engines",
     "backend/weissman-server",
     "crates/weissman-worker",
+    "crates/weissman-agent",
 ]
 
 # Tuned release for all `cargo build --release` (unwind kept so panic_shield::catch_unwind works).

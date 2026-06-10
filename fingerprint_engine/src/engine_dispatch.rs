@@ -191,6 +191,7 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(target).await,
         "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(target).await,
         "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(target).await,
+        "liminal_boundary" => crate::liminal_boundary_engine::run_liminal_boundary_result(target).await,
         "prototype_pollution" => {
             crate::prototype_pollution_engine::run_prototype_pollution_result(target).await
         }
@@ -317,7 +318,15 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         }
         "http_feedback_fuzz" => {
             let anomalies = if let Some(tid) = ctx.tenant_id {
-                crate::fuzzer::run_fuzzer_collect_tenant(target, "", Some(tid), None, None).await
+                crate::fuzzer::run_fuzzer_collect_tenant(
+                    target,
+                    "",
+                    Some(tid),
+                    None,
+                    None,
+                    ctx.app_pool.as_deref(),
+                )
+                .await
             } else {
                 crate::fuzzer::run_fuzzer_collect(target, "").await
             };

@@ -9,30 +9,25 @@
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  flexRender,
-  createColumnHelper,
-} from '@tanstack/react-table'
+import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import FilterPills from '../components/ui/FilterPills'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonTable } from '../components/ui/Skeleton'
+import DataTable from '../components/ui/DataTable'
+import FindingDrawer from '../components/ui/FindingDrawer'
+import SeverityBadge, {
+  SEVERITY_META,
+  getSeverityMeta,
+  getSeverityOrder,
+} from '../components/ui/SeverityBadge'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const SEVERITY_META = {
-  critical: { color: '#ef4444', bg: '#ef444420', label: 'Critical', order: 0 },
-  high:     { color: '#f97316', bg: '#f9731620', label: 'High',     order: 1 },
-  medium:   { color: '#f59e0b', bg: '#f59e0b20', label: 'Medium',   order: 2 },
-  low:      { color: '#22d3ee', bg: '#22d3ee20', label: 'Low',      order: 3 },
-  info:     { color: '#6b7280', bg: '#6b728020', label: 'Info',     order: 4 },
-}
 
 const FINDING_STATUSES = [
   { value: 'OPEN',          label: 'Open',          color: '#ef4444' },
@@ -76,20 +71,10 @@ function VerifiedBadge({ verified }) {
   )
 }
 
-const UNKNOWN_SEVERITY_ORDER = 5
-
-const MAX_VISIBLE_PAGES = 7
-
 const PAGE_SIZES = [25, 50, 100]
 
-function getSeverityMeta(s) {
-  return SEVERITY_META[(s || '').toLowerCase()] ?? SEVERITY_META.info
-}
-
-/** Returns the numeric sort order for a severity string; unknowns sort last. */
-function getSeverityOrder(s) {
-  const key = (s || '').toLowerCase()
-  return SEVERITY_META[key]?.order ?? UNKNOWN_SEVERITY_ORDER
+function isKevListed(f) {
+  return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
 }
 
 /** Map source/engine-id string → registry label & group */
@@ -125,18 +110,6 @@ function formatDate(val) {
 }
 
 // ─── Small UI pieces ──────────────────────────────────────────────────────────
-
-function SeverityBadge({ severity }) {
-  const meta = getSeverityMeta(severity)
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono"
-      style={{ color: meta.color, backgroundColor: meta.bg, border: `1px solid ${meta.color}40` }}
-    >
-      {meta.label}
-    </span>
-  )
-}
 
 function MitreBadge({ id }) {
   if (!id) return <span className="text-white/25 font-mono text-[11px]">—</span>
@@ -180,273 +153,6 @@ function ScoreBadge({ score }) {
     <span className="font-mono text-[12px] font-semibold" style={{ color }}>
       {isNaN(n) ? sanitizeFindingPlainText(String(score), 8) : n.toFixed(1)}
     </span>
-  )
-}
-
-function SortIndicator({ sorted }) {
-  if (!sorted) return <span className="text-white/20 ml-1">⇅</span>
-  return <span className="ml-1">{sorted === 'asc' ? '↑' : '↓'}</span>
-}
-
-// ─── Detail Drawer ────────────────────────────────────────────────────────────
-
-function FindingDrawer({ finding, onClose, onStatusUpdate }) {
-  const meta = getSeverityMeta(finding?.severity)
-  const engine = resolveEngine(finding?.source || finding?.engine)
-  const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
-  const [statusUpdating, setStatusUpdating] = useState(false)
-  const pocText = finding?.proof_of_concept || finding?.proof || finding?.poc || finding?.poc_text || null
-  const references = useMemo(() => {
-    const refs = finding?.references ?? finding?.refs ?? finding?.reference_urls ?? null
-    if (!refs) return []
-    if (Array.isArray(refs)) return refs.filter(Boolean).map(String)
-    if (typeof refs === 'string') {
-      const s = refs.trim()
-      if (!s) return []
-      try {
-        const parsed = JSON.parse(s)
-        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
-      } catch {
-        // allow comma/newline separated strings
-      }
-      return s
-        .split(/[\n,]+/g)
-        .map((x) => x.trim())
-        .filter(Boolean)
-    }
-    return [String(refs)]
-  }, [finding])
-
-  const handleStatusChange = (e) => {
-    const newStatus = e.target.value
-    if (!newStatus || newStatus === finding?.status) return
-    setStatusUpdating(true)
-    onStatusUpdate?.(finding?.raw_id, newStatus)
-    setTimeout(() => setStatusUpdating(false), 600)
-  }
-
-  const rawJson = useMemo(() => {
-    try {
-      return JSON.stringify(finding, null, 2)
-    } catch {
-      return '{}'
-    }
-  }, [finding])
-
-  return (
-    <AnimatePresence>
-      {finding && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          {/* Drawer */}
-          <motion.aside
-            key="drawer"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 280 }}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-xl flex flex-col border-l border-white/10 bg-[#080f1e]/95 backdrop-blur-xl shadow-2xl"
-          >
-            {/* Drawer header */}
-            <div
-              className="shrink-0 flex items-start justify-between gap-4 px-5 py-4 border-b border-white/10"
-              style={{ borderColor: `${meta.color}30` }}
-            >
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex items-center flex-wrap gap-2">
-                  <SeverityBadge severity={finding.severity} />
-                  {groupDef && (
-                    <span
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider"
-                      style={{
-                        color: groupDef.color,
-                        borderColor: `${groupDef.color}40`,
-                        backgroundColor: `${groupDef.color}10`,
-                      }}
-                    >
-                      {groupDef.label}
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-sm font-semibold text-white leading-snug">
-                  {sanitizeFindingPlainText(finding.title || 'Untitled Finding', 256)}
-                </h2>
-                <p className="text-[11px] font-mono text-white/40">
-                  {engine.label}
-                  {(engine.mitre || finding.mitre_attack) && ` · ${engine.mitre || finding.mitre_attack}`}
-                  {finding.finding_id && ` · ${sanitizeFindingPlainText(finding.finding_id, 64)}`}
-                </p>
-              </div>
-              <button
-                id="findings-drawer-close-btn"
-                type="button"
-                onClick={onClose}
-                aria-label="Close findings drawer"
-                className="shrink-0 text-white/40 hover:text-white/80 transition-colors text-lg leading-none mt-0.5"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-              {/* Verification + Status Update */}
-              <section className="flex flex-wrap items-center gap-3">
-                <VerifiedBadge verified={!!finding.verified || !!finding.poc_sealed} />
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">Status:</span>
-                  <select
-                    id="findings-drawer-status-select"
-                    value={finding.status || 'OPEN'}
-                    onChange={handleStatusChange}
-                    disabled={statusUpdating}
-                    className="bg-black/60 border border-white/15 rounded px-2 py-1 text-[11px] font-mono text-white/70 focus:outline-none focus:border-cyan-500/40 transition-colors disabled:opacity-50"
-                  >
-                    {FINDING_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                  {statusUpdating && (
-                    <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
-                  )}
-                </div>
-              </section>
-
-              {/* Key fields */}
-              <section>
-                <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">
-                  Technical Details
-                </h3>
-                <dl className="space-y-2">
-                  {[
-                    ['Score (CVSS)', finding.cvss_score ?? finding.score],
-                    ['Risk Score',   finding.risk_score],
-                    ['CWE',         finding.cwe_id ?? finding.cwe ?? finding.cweId],
-                    ['Discovered',  formatDate(finding.discovered_at || finding.created_at)],
-                    ['Affected URL', finding.url ?? finding.affected_url ?? finding.target_url],
-                    ['Client ID',   finding.client_id],
-                    ['Run ID',      finding.run_id],
-                    ['Finding ID',  finding.finding_id],
-                    ['Target',      finding.target],
-                    ['PoC Commitment (SHA-256)', finding.poc_commitment_sha256],
-                  ].map(([label, val]) =>
-                    val != null && val !== '' ? (
-                      <div key={label} className="flex items-start gap-3">
-                        <dt className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
-                          {label}
-                        </dt>
-                        <dd className="text-[12px] text-white/75 break-all font-mono">
-                          {sanitizeFindingPlainText(String(val), 256)}
-                        </dd>
-                      </div>
-                    ) : null,
-                  )}
-                </dl>
-                <div className="mt-3 flex items-start gap-3">
-                  <div className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
-                    Compliance
-                  </div>
-                  <div className="min-w-0">
-                    <ComplianceBadges compliance={finding.compliance} />
-                  </div>
-                </div>
-              </section>
-
-              {/* Description */}
-              {finding.description && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Description
-                  </h3>
-                  <p className="text-[12px] text-white/65 leading-relaxed whitespace-pre-wrap">
-                    {sanitizeFindingPlainText(finding.description, 4096)}
-                  </p>
-                </section>
-              )}
-
-              {/* Remediation */}
-              {finding.remediation && String(finding.remediation).trim() && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Remediation
-                  </h3>
-                  <p className="text-[12px] text-white/65 leading-relaxed whitespace-pre-wrap">
-                    {sanitizeFindingPlainText(String(finding.remediation), 8192)}
-                  </p>
-                </section>
-              )}
-
-              {/* Proof */}
-              {pocText && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Proof / PoC
-                  </h3>
-                  <pre className="text-[11px] font-mono text-[#4ade80]/80 bg-black/60 border border-white/5 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                    {sanitizeFindingPlainText(String(pocText), 8192)}
-                  </pre>
-                </section>
-              )}
-
-              {/* References */}
-              {references.length > 0 && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    References
-                  </h3>
-                  <ul className="space-y-1">
-                    {references.slice(0, 50).map((u, idx) => {
-                      const safe = sanitizeFindingPlainText(u, 2048)
-                      const isHttp = /^https?:\/\//i.test(safe)
-                      return (
-                        <li key={`${safe}-${idx}`} className="text-[12px] font-mono">
-                          {isHttp ? (
-                            <a
-                              href={safe}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-cyan-300/80 hover:text-cyan-200 underline break-all"
-                            >
-                              {safe}
-                            </a>
-                          ) : (
-                            <span className="text-white/60 break-all">{safe}</span>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  {references.length > 50 && (
-                    <div className="text-[10px] font-mono text-white/35 mt-2">
-                      Showing first 50 references (total {references.length}).
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {/* Raw JSON */}
-              <section>
-                <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                  Raw JSON
-                </h3>
-                <pre className="text-[10px] font-mono text-white/50 bg-black/60 border border-white/5 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed max-h-96">
-                  {rawJson}
-                </pre>
-              </section>
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
   )
 }
 
@@ -636,11 +342,13 @@ function globalFilterFn(row, _columnId, filterValue) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function FindingsCommandCenter() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [rawFindings, setRawFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [region, setRegion] = useState('')
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   const [selectedFinding, setSelectedFinding] = useState(null)
 
@@ -649,6 +357,8 @@ export default function FindingsCommandCenter() {
   const [severityFilter, setSeverityFilter] = useState('')
   const [engineFilter, setEngineFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [kevFilter, setKevFilter] = useState(false)
+  const [filtersExpanded, setFiltersExpanded] = useState(true)
 
   // Sorting
   const [sorting, setSorting] = useState([{ id: 'severity', desc: false }])
@@ -656,27 +366,31 @@ export default function FindingsCommandCenter() {
   // Pagination
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
 
-  // Load findings and public config
-  useEffect(() => {
+  const loadFindings = useCallback(() => {
     setLoading(true)
-    apiFetch('/api/findings?limit=2000')
+    setError(null)
+    return apiFetch('/api/findings?limit=2000')
       .then((r) => {
         if (!r.ok) throw new Error(`Server returned HTTP ${r.status}`)
         return r.json()
       })
       .then((d) => {
-        // Backend was rewritten to return {ok, findings, total, limit, offset}.
-        // Tolerate legacy array shape for older deployments.
         const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
         setRawFindings(list)
+        setLastUpdated(new Date())
       })
       .catch((e) => setError(e?.message || 'Failed to load findings'))
       .finally(() => setLoading(false))
+  }, [])
+
+  // Load findings and public config
+  useEffect(() => {
+    loadFindings()
     apiFetch('/api/config/public')
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.region) setRegion(d.region) })
       .catch(() => {})
-  }, [])
+  }, [loadFindings])
 
   const handleStatusUpdate = useCallback((rawId, newStatus) => {
     if (!rawId) return
@@ -726,6 +440,11 @@ export default function FindingsCommandCenter() {
 
   const columns = useMemo(() => buildColumns(), [])
 
+  const tableData = useMemo(() => {
+    if (!kevFilter) return rawFindings
+    return rawFindings.filter(isKevListed)
+  }, [rawFindings, kevFilter])
+
   // Column filters built from controlled state
   const columnFilters = useMemo(() => {
     const f = []
@@ -735,28 +454,22 @@ export default function FindingsCommandCenter() {
     return f
   }, [severityFilter, engineFilter, statusFilter])
 
-  const table = useReactTable({
-    data: rawFindings,
-    columns,
-    state: {
-      globalFilter,
-      columnFilters,
-      sorting,
-      pagination,
-    },
-    globalFilterFn,
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    manualFiltering: false,
-  })
-
-  const { rows } = table.getRowModel()
-  const totalFiltered = table.getFilteredRowModel().rows.length
-  const pageCount = table.getPageCount()
+  const totalFiltered = useMemo(() => {
+    let count = 0
+    for (const f of tableData) {
+      if (severityFilter && (f.severity || '').toLowerCase() !== severityFilter) continue
+      if (statusFilter && (f.status || '').toUpperCase() !== statusFilter) continue
+      if (engineFilter) {
+        const eng = resolveEngine(f.source || f.engine)
+        if (eng.group !== engineFilter && !eng.label.toLowerCase().includes(engineFilter.toLowerCase())) {
+          continue
+        }
+      }
+      if (globalFilter && !globalFilterFn({ original: f }, '', globalFilter)) continue
+      count += 1
+    }
+    return count
+  }, [tableData, severityFilter, engineFilter, statusFilter, globalFilter])
 
   const handleRowClick = useCallback((row) => {
     setSelectedFinding(row.original)
@@ -769,12 +482,53 @@ export default function FindingsCommandCenter() {
   // Summary counts
   const countsBySeverity = useMemo(() => {
     const c = {}
-    rawFindings.forEach((f) => {
+    tableData.forEach((f) => {
       const s = (f.severity || 'info').toLowerCase()
       c[s] = (c[s] || 0) + 1
     })
     return c
-  }, [rawFindings])
+  }, [tableData])
+
+  const kevCount = useMemo(() => tableData.filter(isKevListed).length, [tableData])
+
+  const statusCounts = useMemo(() => {
+    const c = {}
+    tableData.forEach((f) => {
+      const s = (f.status || 'OPEN').toUpperCase()
+      c[s] = (c[s] || 0) + 1
+    })
+    return c
+  }, [tableData])
+
+  const selectedRowId = selectedFinding?.raw_id ?? selectedFinding?.id
+
+  const drawerEngineMeta = useMemo(() => {
+    if (!selectedFinding) return { headerExtra: null, subtitle: undefined }
+    const engine = resolveEngine(selectedFinding.source || selectedFinding.engine)
+    const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
+    const headerExtra = groupDef ? (
+      <span
+        className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider"
+        style={{
+          color: groupDef.color,
+          borderColor: `${groupDef.color}40`,
+          backgroundColor: `${groupDef.color}10`,
+        }}
+      >
+        {groupDef.label}
+      </span>
+    ) : null
+    const subtitle = [
+      engine.label,
+      engine.mitre || selectedFinding.mitre_attack,
+      selectedFinding.finding_id
+        ? sanitizeFindingPlainText(selectedFinding.finding_id, 64)
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    return { headerExtra, subtitle }
+  }, [selectedFinding])
 
   return (
     <div
@@ -783,368 +537,218 @@ export default function FindingsCommandCenter() {
         background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
       }}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
-        <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link
-              to="/"
-              className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors shrink-0"
-            >
-              ← Dashboard
-            </Link>
-            <span className="text-white/20 text-xs">|</span>
-            <Link
-              to="/engines"
-              className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors shrink-0"
-            >
-              Engine Matrix
-            </Link>
-            <span className="text-white/20 text-xs">|</span>
-            <span
-              className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-widest shrink-0"
-              style={{ color: '#ef4444', borderColor: '#ef444440', backgroundColor: '#ef444410' }}
-            >
-              Findings
-            </span>
-            <h1 className="text-sm font-bold text-white truncate">Command Center</h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {loading && (
-              <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
-            )}
-            {region && (
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded border"
+        <div className="max-w-screen-2xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-3 text-[11px] font-mono">
+          <Link to="/" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+            ← {t('nav.dashboard')}
+          </Link>
+          <span className="text-white/15">|</span>
+          <Link to="/engines" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+            {t('nav.engine_matrix', { defaultValue: 'Engine Matrix' })}
+          </Link>
+          {region && (
+            <>
+              <span className="text-white/15">|</span>
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full border"
                 style={{ color: '#22d3ee', borderColor: '#22d3ee30', backgroundColor: '#22d3ee08' }}
-                title="Data residency region">
+                title="Data residency region"
+              >
                 🌐 {region}
               </span>
-            )}
-            <span className="text-[11px] font-mono text-white/35">
-              {rawFindings.length} total · {totalFiltered} shown
-            </span>
-            <button
-              id="findings-export-csv-btn"
-              type="button"
-              onClick={handleExportCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
-              title="Export all findings as CSV"
-            >
-              ↓ Export CSV
-            </button>
-          </div>
+            </>
+          )}
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
-        {/* ── Severity summary bar ──────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(SEVERITY_META).map(([key, meta]) => {
-            const count = countsBySeverity[key] || 0
-            const active = severityFilter === key
-            return (
-              <button
-                id={`findings-filter-severity-${key}`}
-                key={key}
-                type="button"
-                onClick={() => setSeverityFilter(active ? '' : key)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-150 hover:scale-[1.03] active:scale-100"
-                style={{
-                  borderColor: active ? meta.color : `${meta.color}30`,
-                  backgroundColor: active ? `${meta.color}15` : 'transparent',
-                }}
-              >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: meta.color, boxShadow: `0 0 6px ${meta.color}70` }}
-                />
-                <span className="text-[11px] font-mono" style={{ color: meta.color }}>
-                  {meta.label}
-                </span>
-                <span className="text-[10px] font-mono text-white/40">{count}</span>
-              </button>
-            )
-          })}
-        </div>
+      <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+        <PremiumPageHeader
+          title={t('findings.command_center_title')}
+          subtitle={t('findings.command_center_subtitle')}
+          badge={t('findings.live_badge')}
+          badgeColor="#ef4444"
+          count={totalFiltered}
+          countLabel={t('findings.title')}
+          lastUpdated={lastUpdated}
+          loading={loading}
+          onRefresh={loadFindings}
+          onExport={handleExportCsv}
+          exportLabel={t('common.export_csv')}
+          refreshLabel={t('common.refresh')}
+        >
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
+          >
+            {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
+          </button>
+        </PremiumPageHeader>
 
-        {/* ── Filter bar ───────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Global search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
-              ⌕
-            </span>
-            <input
-              type="text"
-              value={globalFilter}
-              onChange={(e) => {
-                setGlobalFilter(e.target.value)
-                setPagination((p) => ({ ...p, pageIndex: 0 }))
-              }}
-              placeholder="Search findings…"
-              className="w-full bg-black/50 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs text-white/80 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+        {filtersExpanded && (
+          <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+            <FilterPills
+              label={t('findings.filter_severity')}
+              pills={Object.entries(SEVERITY_META).map(([key, meta]) => ({
+                id: `findings-filter-severity-${key}`,
+                label: meta.label,
+                count: countsBySeverity[key] || 0,
+                active: severityFilter === key,
+                color: meta.color,
+                onClick: () => {
+                  setSeverityFilter(severityFilter === key ? '' : key)
+                  setPagination((p) => ({ ...p, pageIndex: 0 }))
+                },
+              }))}
             />
-            {globalFilter && (
-              <button
-                type="button"
-                onClick={() => setGlobalFilter('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+
+            <FilterPills
+              label={t('findings.filter_status')}
+              pills={[
+                {
+                  id: 'findings-filter-status-all',
+                  label: t('findings.all_statuses'),
+                  count: tableData.length,
+                  active: !statusFilter,
+                  color: '#94a3b8',
+                  onClick: () => {
+                    setStatusFilter('')
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
+                ...FINDING_STATUSES.map((s) => ({
+                  id: `findings-filter-status-${s.value}`,
+                  label: s.label,
+                  count: statusCounts[s.value] || 0,
+                  active: statusFilter === s.value,
+                  color: s.color,
+                  onClick: () => {
+                    setStatusFilter(statusFilter === s.value ? '' : s.value)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                })),
+                {
+                  id: 'findings-filter-kev',
+                  label: t('findings.filter_kev'),
+                  count: kevCount,
+                  active: kevFilter,
+                  color: '#f59e0b',
+                  onClick: () => {
+                    setKevFilter((v) => !v)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
+              ]}
+            />
+
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/8">
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+                  ⌕
+                </span>
+                <input
+                  type="text"
+                  value={globalFilter}
+                  onChange={(e) => {
+                    setGlobalFilter(e.target.value)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  }}
+                  placeholder={t('findings.search_findings')}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-8 py-2.5 text-xs text-white/80 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                />
+                {globalFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setGlobalFilter('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                    aria-label={t('common.close')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={engineFilter}
+                onChange={(e) => {
+                  setEngineFilter(e.target.value)
+                  setPagination((p) => ({ ...p, pageIndex: 0 }))
+                }}
+                className="bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
               >
-                ✕
-              </button>
-            )}
+                <option value="">{t('findings.all_engine_groups')}</option>
+                {ENGINE_GROUP_DEFS.map((g) => (
+                  <option key={g.id} value={g.id}>{g.label}</option>
+                ))}
+              </select>
+
+              {(globalFilter || severityFilter || engineFilter || statusFilter || kevFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGlobalFilter('')
+                    setSeverityFilter('')
+                    setEngineFilter('')
+                    setStatusFilter('')
+                    setKevFilter(false)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  }}
+                  className="px-3 py-2.5 rounded-xl text-xs font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
+                >
+                  {t('common.clear_filters')}
+                </button>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Engine / group filter */}
-          <select
-            value={engineFilter}
-            onChange={(e) => {
-              setEngineFilter(e.target.value)
-              setPagination((p) => ({ ...p, pageIndex: 0 }))
-            }}
-            className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
-          >
-            <option value="">All Engine Groups</option>
-            {ENGINE_GROUP_DEFS.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Status filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value)
-              setPagination((p) => ({ ...p, pageIndex: 0 }))
-            }}
-            className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
-          >
-            <option value="">All Statuses</option>
-            {FINDING_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-
-          {/* Clear filters */}
-          {(globalFilter || severityFilter || engineFilter || statusFilter) && (
-            <button
-              type="button"
-              onClick={() => {
-                setGlobalFilter('')
-                setSeverityFilter('')
-                setEngineFilter('')
-                setStatusFilter('')
-                setPagination((p) => ({ ...p, pageIndex: 0 }))
-              }}
-              className="px-3 py-2 rounded-lg text-xs font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {/* ── Error ────────────────────────────────────────────────────────── */}
         {error && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
             {error}
           </div>
         )}
 
-        {/* ── Empty state ───────────────────────────────────────────────────── */}
         {!loading && !error && rawFindings.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-8 py-16 text-center space-y-3">
-            <div className="text-4xl">🛡️</div>
-            <p className="text-sm font-semibold text-white/60">No findings yet</p>
-            <p className="text-xs text-white/35 font-mono">
-              Run engines from the Engine Matrix to populate findings here.
-            </p>
-            <Link
-              to="/engines"
-              className="inline-block mt-2 px-4 py-2 rounded-lg border border-cyan-500/30 text-cyan-300/80 text-xs font-mono hover:bg-cyan-950/30 transition-colors"
-            >
-              Go to Engine Matrix →
-            </Link>
-          </div>
+          <EmptyState
+            icon="shield"
+            title={t('findings.no_findings_yet')}
+            body={t('findings.no_findings_body')}
+            cta={{ label: t('findings.run_scan_cta'), to: '/clients' }}
+            secondary={{ label: t('nav.engine_matrix', { defaultValue: 'Engine Matrix' }), to: '/engines' }}
+          />
         )}
 
-        {/* ── Table ────────────────────────────────────────────────────────── */}
-        {(rawFindings.length > 0 || loading) && (
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id} className="border-b border-white/10">
-                      {headerGroup.headers.map((header) => (
-                        <th
-                          key={header.id}
-                          style={{ width: header.getSize() }}
-                          className="px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-white/40 bg-white/[0.02] select-none whitespace-nowrap"
-                        >
-                          {header.column.getCanSort() ? (
-                            <button
-                              type="button"
-                              onClick={header.column.getToggleSortingHandler()}
-                              className="flex items-center gap-0.5 hover:text-white/70 transition-colors"
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <SortIndicator sorted={header.column.getIsSorted()} />
-                            </button>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-
-                <tbody>
-                  {loading && rows.length === 0 && (
-                    <tr>
-                      <td colSpan={columns.length} className="px-4 py-12 text-center">
-                        <div className="flex items-center justify-center gap-2 text-white/40 text-xs font-mono">
-                          <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
-                          Loading findings…
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {!loading && rows.length === 0 && rawFindings.length > 0 && (
-                    <tr>
-                      <td colSpan={columns.length} className="px-4 py-10 text-center text-white/35 text-xs font-mono">
-                        No findings match the current filters.
-                      </td>
-                    </tr>
-                  )}
-                  {rows.map((row, i) => {
-                    const sev = row.original.severity?.toLowerCase() ?? 'info'
-                    const meta = getSeverityMeta(sev)
-                    return (
-                      <motion.tr
-                        key={row.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.1, delay: Math.min(i * 0.01, 0.3) }}
-                        onClick={() => handleRowClick(row)}
-                        className="border-b border-white/5 cursor-pointer transition-all duration-100 hover:bg-white/[0.04] group"
-                        style={{
-                          borderLeftWidth: 2,
-                          borderLeftColor: `${meta.color}50`,
-                          borderLeftStyle: 'solid',
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-3 align-middle">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </motion.tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ── Pagination ──────────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/5 bg-white/[0.01]">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/35">Rows:</span>
-                <select
-                  value={pagination.pageSize}
-                  onChange={(e) =>
-                    setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })
-                  }
-                  className="bg-black/50 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono text-white/60 focus:outline-none focus:border-cyan-500/40"
-                >
-                  {PAGE_SIZES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <span className="text-[10px] font-mono text-white/30">
-                  {totalFiltered === 0
-                    ? '0'
-                    : `${pagination.pageIndex * pagination.pageSize + 1}–${Math.min(
-                        (pagination.pageIndex + 1) * pagination.pageSize,
-                        totalFiltered,
-                      )}`}{' '}
-                  of {totalFiltered}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  id="findings-pagination-first"
-                  type="button"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  «
-                </button>
-                <button
-                  id="findings-pagination-prev"
-                  type="button"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  ‹
-                </button>
-
-                {/* Page number pills */}
-                {Array.from({ length: Math.min(pageCount, MAX_VISIBLE_PAGES) }, (_, i) => {
-                  const startPage = Math.max(0, Math.min(pagination.pageIndex - 3, pageCount - MAX_VISIBLE_PAGES))
-                  const p = startPage + i
-                  if (p >= pageCount) return null
-                  const active = p === pagination.pageIndex
-                  return (
-                    <button
-                      id={`findings-pagination-page-${p + 1}`}
-                      key={p}
-                      type="button"
-                      onClick={() => table.setPageIndex(p)}
-                      className="px-2.5 py-1 rounded text-[10px] font-mono border transition-colors"
-                      style={
-                        active
-                          ? { borderColor: '#22d3ee50', color: '#22d3ee', backgroundColor: '#22d3ee15' }
-                          : { borderColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.35)' }
-                      }
-                    >
-                      {p + 1}
-                    </button>
-                  )
-                })}
-
-                <button
-                  id="findings-pagination-next"
-                  type="button"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  ›
-                </button>
-                <button
-                  id="findings-pagination-last"
-                  type="button"
-                  onClick={() => table.setPageIndex(pageCount - 1)}
-                  disabled={!table.getCanNextPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  »
-                </button>
-              </div>
-            </div>
-          </div>
+        {(tableData.length > 0 || loading) && (
+          <DataTable
+            id="findings-command-table"
+            columns={columns}
+            data={tableData}
+            loading={loading}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            pagination={pagination}
+            onPaginationChange={setPagination}
+            columnFilters={columnFilters}
+            globalFilter={globalFilter}
+            globalFilterFn={globalFilterFn}
+            pageSizes={PAGE_SIZES}
+            onRowClick={handleRowClick}
+            selectedRowId={selectedRowId}
+            getRowAccentColor={(row) => getSeverityMeta(row.severity).border ?? getSeverityMeta(row.severity).color}
+            emptyFilteredMessage={t('findings.no_filter_match')}
+            zebra
+          />
         )}
       </main>
 
-      {/* ── Detail Drawer ──────────────────────────────────────────────────── */}
-      <FindingDrawer finding={selectedFinding} onClose={handleCloseDrawer} onStatusUpdate={handleStatusUpdate} />
+      <FindingDrawer
+        finding={selectedFinding}
+        onClose={handleCloseDrawer}
+        onStatusUpdate={handleStatusUpdate}
+        statusOptions={FINDING_STATUSES.map(({ value, label }) => ({ value, label }))}
+        headerExtra={drawerEngineMeta.headerExtra}
+        subtitle={drawerEngineMeta.subtitle}
+      />
     </div>
   )
 }
