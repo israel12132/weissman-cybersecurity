@@ -4,7 +4,6 @@ Enterprise: streaming/paginated recon — no hard caps; batch processing for mas
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -159,7 +158,6 @@ COMMON_SUBDOMAINS = [
 def _run_rust_dns_enum(domain: str, wordlist_path: str | None = None) -> list[str]:
     """Call Rust fingerprint_engine subdomains for fast multi-threaded DNS enumeration."""
     root = Path(__file__).resolve().parent.parent
-    bin_dir = root / "fingerprint_engine" / "target" / "release"
     for subdir in ("release", "debug"):
         binary = (root / "fingerprint_engine" / "target" / subdir / "fingerprint_engine")
         if not binary.exists():

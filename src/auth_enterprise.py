@@ -9,15 +9,13 @@ NOTE: This module provides password validation and hashing utilities.
 """
 import os
 import re
-import secrets
-from typing import Annotated
 
 import pyotp
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from src.database import get_session_factory, UserModel
-from src.exceptions import InvalidPasswordError, InsufficientRoleError, AuthenticationError
+from src.database import UserModel
+from src.exceptions import InvalidPasswordError
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

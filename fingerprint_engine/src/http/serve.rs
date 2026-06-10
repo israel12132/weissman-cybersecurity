@@ -1370,6 +1370,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
+        .route(
+            "/api/tenant/engines",
+            get(api_tenant_engines_get)
+                .put(api_tenant_engines_put)
+                .patch(api_tenant_engines_put),
+        )
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/docs", get(crate::api_docs::api_docs_swagger))
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
@@ -1521,9 +1527,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_client_semantic_reasoning),
         )
         .route("/api/verify-audit/:hash", get(api_verify_audit))
-        // .route("/api/scan/status", get(api_scan_status))
-        // .route("/api/scan/start", post(api_scan_start))
-        // .route("/api/scan/stop", post(api_scan_stop))
+        .route("/api/scan/status", get(api_scan_status))
+        .route("/api/scan/start", post(api_scan_start))
+        .route("/api/scan/stop", post(api_scan_stop))
         .route("/api/scan/run-all", post(api_scan_run_all))
         .route("/api/scan/all-engines", post(api_scan_all_engines))
         .route("/api/discovery/domains", post(api_discovery_domains))

@@ -1,5 +1,6 @@
 //! OpenAI-compatible HTTP client (local vLLM: `/v1/chat/completions`).
 //! Circuit breaker, health probes, structured errors, token metering hook, prompt sanitization.
+//! Model fallback: if primary model unavailable, tries fallback list automatically.
 //!
 //! **Transport:** Sub-millisecond zero-copy shared memory between this client and Python vLLM
 //! would need a bespoke colocated plugin plus a non-HTTP wire format on both sides. The supported
@@ -1054,4 +1055,95 @@ fn apply_bearer_blocking(
         );
     }
     crate::llm_handshake::apply_to_blocking_request(req)
+}
+
+/// List of fallback models when primary model is unavailable
+const FALLBACK_MODELS: &[&str] = &[
+    "meta-llama/Llama-3.2-3B-Instruct",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+];
+
+/// Check if a model is available on the vLLM/OpenAI server
+pub async fn check_model_available(
+    client: &reqwest::Client,
+    base_url: &str,
+    model: &str,
+) -> Result<bool, LlmError> {
+    let base = normalize_openai_base_url(base_url).trim_end_matches('/').to_string();
+    let url = format!("{}/models", base);
+
+    let probe = client
+        .get(&url)
+        .timeout(HEALTH_TIMEOUT);
+    let probe = apply_bearer(probe);
+
+    let resp = probe
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                LlmError::Timeout
+            } else {
+                LlmError::Unreachable(e.to_string())
+            }
+        })?;
+
+    if !resp.status().is_success() {
+        return Ok(false);
+    }
+
+    let data: Value = resp
+        .json()
+        .await
+        .map_err(|e| LlmError::Decode(e.to_string()))?;
+
+    // Check if model exists in the list
+    if let Some(models_arr) = data.pointer("/data").and_then(|v| v.as_array()) {
+        for model_entry in models_arr {
+            if let Some(id) = model_entry.pointer("/id").and_then(|v| v.as_str()) {
+                if id == model || id.contains(model) || model.contains(id) {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Resolve model with fallback: tries primary model, then fallbacks if unavailable
+pub async fn resolve_model_with_fallback(
+    client: &reqwest::Client,
+    base_url: &str,
+    primary_model: &str,
+) -> Result<String, LlmError> {
+    let resolved = resolve_llm_model(primary_model);
+
+    // Try primary model first
+    if check_model_available(client, base_url, &resolved).await.unwrap_or(false) {
+        return Ok(resolved);
+    }
+
+    // Try fallback models
+    for fallback in FALLBACK_MODELS {
+        if check_model_available(client, base_url, fallback).await.unwrap_or(false) {
+            tracing::warn!(
+                "Primary model '{}' not available, using fallback '{}'",
+                resolved,
+                fallback
+            );
+            return Ok(fallback.to_string());
+        }
+    }
+
+    // If no model is available, return the original resolved model
+    // The actual API call will fail with a proper error message
+    tracing::error!(
+        "No models available on vLLM server at {}, falling back to '{}'",
+        base_url,
+        resolved
+    );
+    Ok(resolved)
 }

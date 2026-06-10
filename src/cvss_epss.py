@@ -2,10 +2,7 @@
 Weissman-cybersecurity Enterprise: CVSS 3.1 vector and EPSS (Exploit Prediction Scoring).
 """
 import logging
-import re
-from typing import Any
 
-import requests
 
 from src.http_client import safe_get, ENTERPRISE_HTTP_TIMEOUT
 

@@ -27,7 +27,7 @@ import re
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger("weissman.supply_chain_analyzer")
@@ -85,7 +85,6 @@ class SupplyChainAnalyzer:
                     match = re.match(r'^([a-zA-Z0-9_-]+)\s*(==|>=|<=|>|<|~=)\s*([0-9.]+)', line)
                     if match:
                         name = match.group(1)
-                        operator = match.group(2)
                         version = match.group(3)
 
                         dep = Dependency(
@@ -387,7 +386,6 @@ class SupplyChainAnalyzer:
         issues = []
 
         copyleft_licenses = ['GPL', 'AGPL', 'LGPL']
-        permissive_licenses = ['MIT', 'Apache', 'BSD', 'ISC']
 
         for dep in self.dependencies:
             if dep.license:
