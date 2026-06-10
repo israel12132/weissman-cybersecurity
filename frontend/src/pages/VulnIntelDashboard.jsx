@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import PageShell from './PageShell'
 
 function severityColor(sev) {
   const s = (sev || '').toLowerCase()
@@ -24,6 +26,7 @@ function StatCard({ label, value, hint }) {
 }
 
 export default function VulnIntelDashboard() {
+  const { t } = useTranslation()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -85,22 +88,29 @@ export default function VulnIntelDashboard() {
   }, [findings, filter, severityFilter])
 
   return (
-    <div
-      className="min-h-[100dvh] text-slate-100 p-6"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+    <PageShell
+      title={t('nav.vuln_intel')}
+      badge="CVE"
+      badgeColor="#f97316"
+      subtitle="CVE-correlated findings across all clients · live from /api/findings"
+      actions={
+        <>
+          {loading && (
+            <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+          )}
+          <span className="text-[11px] font-mono text-white/40 hidden sm:inline">
+            {findings.length} shown / {total} total · {summary.cves} CVEs
+          </span>
+          <button
+            type="button"
+            onClick={() => load()}
+            className="px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+          >
+            ↻ Refresh
+          </button>
+        </>
+      }
     >
-      <header className="mb-6 flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Vulnerability Intelligence</h1>
-          <p className="text-sm text-white/55 mt-1">
-            CVE-correlated findings across all clients. Live data from <code>/api/findings</code>.
-          </p>
-        </div>
-        <div className="text-[11px] font-mono text-white/40">
-          {findings.length} shown / {total} total · {summary.cves} distinct CVEs
-        </div>
-      </header>
-
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <StatCard label="Critical" value={summary.by.critical} />
         <StatCard label="High" value={summary.by.high} />
@@ -197,6 +207,6 @@ export default function VulnIntelDashboard() {
       </div>
 
       <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
-    </div>
+    </PageShell>
   )
 }

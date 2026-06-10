@@ -10,8 +10,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
+import { useTranslation } from 'react-i18next'
+import { ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
+import { useProductionEngines } from '../lib/useProductionEngines'
 import PageShell from './PageShell'
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────

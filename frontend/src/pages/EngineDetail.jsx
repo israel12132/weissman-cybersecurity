@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { ENGINES_BY_ID, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { downloadBytes } from '../lib/pdfExport'
+import { useProductionEngines } from '../lib/useProductionEngines'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 
@@ -185,6 +187,7 @@ function getEngineParams(engine) {
 // ─── Terminal ──────────────────────────────────────────────────────────────────
 
 function Terminal({ lines }) {
+  const { t } = useTranslation()
   const termRef = useRef(null)
   useEffect(() => {
     if (termRef.current) {
@@ -206,7 +209,7 @@ function Terminal({ lines }) {
       )}
       <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-black/80 border border-white/5 p-3 font-mono text-[11px] leading-relaxed">
         {lines.length === 0 ? (
-          <span className="text-white/20">{'> Engine idle — press Run Engine to start.'}</span>
+          <span className="text-white/20">{t('engines.detail_terminal_idle')}</span>
         ) : (
           lines.map((line, i) => (
             <div key={i} className={
@@ -366,9 +369,28 @@ function saveRun(engineId, { target, status, findingsCount, jobId }) {
   localStorage.setItem(HISTORY_KEY(engineId), JSON.stringify(history.slice(0, MAX_HISTORY)))
 }
 
-function RunHistoryPanel({ engineId }) {
+function StatCard({ label, value, sub, accent = '#22d3ee', icon }) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 backdrop-blur-xl p-4 transition-all duration-300 hover:border-white/15"
+      style={{ boxShadow: `inset 0 1px 0 ${accent}15` }}
+    >
+      <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}50, transparent)` }} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1.5">{label}</p>
+          <p className="text-xl font-bold text-white tracking-tight truncate">{value}</p>
+          {sub && <p className="text-[10px] font-mono text-white/35 mt-1 truncate">{sub}</p>}
+        </div>
+        {icon && <span className="text-lg opacity-60 shrink-0">{icon}</span>}
+      </div>
+    </div>
+  )
+}
+
+function RunHistoryPanel({ engineId, emptyLabel }) {
   const [history] = useState(() => loadHistory(engineId))
-  if (!history.length) return <p className="text-[11px] font-mono text-white/25">No runs recorded yet.</p>
+  if (!history.length) return <p className="text-[11px] font-mono text-white/25">{emptyLabel}</p>
   return (
     <div className="space-y-2">
       {history.map((r, i) => (
@@ -387,12 +409,16 @@ function RunHistoryPanel({ engineId }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function EngineDetail() {
+  const { t } = useTranslation()
   const { engineId } = useParams()
+  const { isProduction } = useProductionEngines()
   const engine        = ENGINES_BY_ID[engineId] ?? null
   const groupDef      = engine ? ENGINE_GROUPS[engine.group] : null
   const engineType    = getEngineType(engineId || '')
   const engineTypeMeta= ENGINE_TYPE_META[engineType] || ENGINE_TYPE_META.live_probe
   const extraParamDefs= useMemo(() => getEngineParams(engine), [engine])
+  const runHistory    = useMemo(() => loadHistory(engineId || ''), [engineId])
+  const lastHistoryRun= runHistory[0] ?? null
 
   const [target, setTarget]               = useState('')
   const [timeoutSec, setTimeoutSec]       = useState(120)
@@ -526,11 +552,35 @@ export default function EngineDetail() {
 
   useEffect(() => () => { if (esRef.current) esRef.current.close() }, [])
 
+  const handleExport = useCallback(() => {
+    const payload = {
+      engine: engineId,
+      label: engine?.label,
+      exported_at: new Date().toISOString(),
+      job_id: jobId,
+      last_run_status: lastRunStatus,
+      findings,
+      run_history: runHistory,
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2))
+    downloadBytes(bytes, `${engineId}-export.json`, 'application/json')
+    showToast('info', 'Export downloaded')
+  }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, showToast])
+
+  const healthLabel = isProduction(engineId)
+    ? t('engines.detail_health_live')
+    : t('engines.detail_health_catalog')
+  const healthAccent = isProduction(engineId) ? '#4ade80' : '#9ca3af'
+  const lastRunDisplay = lastHistoryRun
+    ? new Date(lastHistoryRun.ts).toLocaleString()
+    : t('engines.detail_never_run')
+  const totalFindings = findings.length || (lastHistoryRun?.findingsCount ?? 0)
+
   if (!engine) {
     return (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-slate-300 font-mono p-8">
-        <p className="text-red-400 text-lg mb-4">Unknown engine: <code>{engineId}</code></p>
-        <Link to="/engines" className="text-cyan-400 hover:underline">← Engine Matrix</Link>
+        <p className="text-red-400 text-lg mb-4">{t('engines.detail_unknown')}: <code>{engineId}</code></p>
+        <Link to="/engines" className="text-cyan-400 hover:underline">{t('engines.detail_back_matrix')}</Link>
       </div>
     )
   }
@@ -538,31 +588,31 @@ export default function EngineDetail() {
   return (
     <div
       className="min-h-[100dvh] text-slate-100"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+      style={{ background: 'radial-gradient(ellipse 120% 80% at 50% -5%, #1e293b 0%, #0f172a 40%, #020617 70%, #000 100%)' }}
     >
-      {/* ── Sticky header ──────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/60 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
-          <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">← Matrix</Link>
-          <span className="text-white/20 text-xs">|</span>
+      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-black/65 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+          <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+            {t('engines.detail_back_matrix')}
+          </Link>
+          <span className="text-white/15 text-xs">|</span>
           {groupDef && (
             <span
-              className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"
+              className="text-[10px] font-mono px-2 py-0.5 rounded-md uppercase tracking-widest border"
               style={{ color: groupDef.color, borderColor: `${groupDef.color}40`, backgroundColor: `${groupDef.color}10` }}
             >
               {groupDef.label}
             </span>
           )}
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border ${engineTypeMeta.bg} ${engineTypeMeta.border}`} style={{ color: engineTypeMeta.color }}>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md uppercase tracking-widest border ${engineTypeMeta.bg} ${engineTypeMeta.border}`} style={{ color: engineTypeMeta.color }}>
             {engineTypeMeta.icon} {engineTypeMeta.label}
           </span>
           {isTopTierEngine(engineId) && (
-            <Link to={`/engines/top-tier/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10">Top-Tier</Link>
+            <Link to={`/engines/top-tier/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10">Top-Tier</Link>
           )}
           {DEDICATED_ENGINE_IDS.has(engineId) && (
-            <Link to={`/engines/business/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">Business Profile</Link>
+            <Link to={`/engines/business/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">Business Profile</Link>
           )}
-          <span className="text-sm font-bold text-white ml-auto">{engine.label}</span>
         </div>
       </header>
 
@@ -578,24 +628,30 @@ export default function EngineDetail() {
         )}
       </AnimatePresence>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
-        {/* ── Engine identity card ───────────────────────────────────────── */}
+        {/* ── Hero header ─────────────────────────────────────────────────── */}
         <motion.section
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4"
+          className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.07] via-black/45 to-black/70 backdrop-blur-xl p-6 md:p-8"
         >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3 min-w-0 flex-1">
+          <div
+            className="absolute inset-x-0 top-0 h-px"
+            style={{ background: `linear-gradient(90deg, transparent, ${groupDef?.color ?? '#22d3ee'}70, transparent)` }}
+          />
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+            <div className="space-y-4 min-w-0 flex-1">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-bold text-white">{engine.label}</h1>
-                <code className="text-[11px] font-mono text-white/30 bg-white/5 px-2 py-0.5 rounded border border-white/10">{engine.id}</code>
+                <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">{engine.label}</h1>
+                <code className="text-[11px] font-mono text-white/35 bg-black/40 px-2 py-0.5 rounded-md border border-white/[0.08]">{engine.id}</code>
                 {running && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 animate-pulse">⟳ RUNNING</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 animate-pulse">
+                    ⟳ {t('engines.running')}
+                  </span>
                 )}
                 {lastRunStatus && !running && (
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                  <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
                     lastRunStatus === 'completed' ? 'bg-green-500/10 border-green-500/30 text-green-400'
                     : lastRunStatus === 'stopped'  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                     : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
@@ -603,27 +659,73 @@ export default function EngineDetail() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-white/60 leading-relaxed max-w-2xl">{engine.description}</p>
+              <p className="text-sm md:text-base text-white/55 leading-relaxed max-w-3xl">{engine.description}</p>
               <div className="flex flex-wrap gap-2">
-                {groupDef && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border" style={{ color: groupDef.color, borderColor: `${groupDef.color}30`, backgroundColor: `${groupDef.color}08` }}>
-                    {groupDef.label}
-                  </span>
-                )}
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${engineTypeMeta.bg} ${engineTypeMeta.border}`} style={{ color: engineTypeMeta.color }}>
-                  {engineTypeMeta.icon} {engineTypeMeta.label}
-                </span>
                 {engine.requiresTarget && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/40 bg-white/5">Requires Target</span>
-                )}
-                {findings.length > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10">
-                    {findings.length} Finding{findings.length !== 1 ? 's' : ''}
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10 text-white/40 bg-white/[0.04]">
+                    {t('engines.detail_requires_target')}
                   </span>
+                )}
+                {engine.mitre && (
+                  <a
+                    href={`https://attack.mitre.org/techniques/${engine.mitre.replace('.', '/')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10 text-cyan-400/80 hover:text-cyan-300 bg-cyan-500/[0.04]"
+                  >
+                    {engine.mitre}
+                  </a>
                 )}
               </div>
             </div>
-            {engine.mitre && <MitreCard technique={engine.mitre} />}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleRun}
+                disabled={running}
+                className="px-5 py-2.5 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {running ? t('engines.running') : `▶ ${t('engines.detail_run_engine')}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('history')}
+                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-white/12 text-white/55 hover:text-white/85 hover:border-white/25 hover:bg-white/[0.04] transition-all"
+              >
+                {t('engines.detail_view_history')}
+              </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-emerald-500/30 text-emerald-300/90 hover:bg-emerald-500/10 hover:border-emerald-400/40 transition-all"
+              >
+                ↓ {t('engines.detail_export')}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+            <StatCard
+              label={t('engines.detail_stat_last_run')}
+              value={lastRunDisplay}
+              sub={lastHistoryRun?.status ? String(lastHistoryRun.status) : (jobId ? `Job ${jobId}` : undefined)}
+              accent="#a78bfa"
+              icon="⏱"
+            />
+            <StatCard
+              label={t('engines.detail_stat_findings')}
+              value={String(totalFindings)}
+              sub={findings.length > 0 ? `${findings.length} this session` : undefined}
+              accent="#f59e0b"
+              icon="⚠"
+            />
+            <StatCard
+              label={t('engines.detail_stat_health')}
+              value={healthLabel}
+              sub={isProduction(engineId) ? 'GET /api/engines/production' : 'Registry entry'}
+              accent={healthAccent}
+              icon={isProduction(engineId) ? '●' : '○'}
+            />
           </div>
         </motion.section>
 
@@ -632,9 +734,9 @@ export default function EngineDetail() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-5"
+          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/[0.08] p-6 space-y-5"
         >
-          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">Run Configuration</h2>
+          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('engines.detail_run_config')}</h2>
 
           {/* Client */}
           <div>
@@ -645,7 +747,7 @@ export default function EngineDetail() {
               disabled={running}
               className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
             >
-              <option value="">— Select client —</option>
+              <option value="">{t('engines.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
@@ -653,7 +755,7 @@ export default function EngineDetail() {
           {/* Target */}
           <div>
             <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
-              Target URL / Host {!engine.requiresTarget && <span className="normal-case text-white/30">(optional)</span>}
+              {t('engines.detail_target_optional')}
             </label>
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder={engine.requiresTarget ? 'https://target.com' : 'Optional — uses client scope'}
@@ -663,7 +765,7 @@ export default function EngineDetail() {
 
           {/* Timeout */}
           <div>
-            <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">Timeout (seconds)</label>
+            <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('engines.detail_timeout')}</label>
             <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Number(e.target.value))}
               min={10} max={3600} disabled={running}
               className="w-36 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
@@ -672,7 +774,7 @@ export default function EngineDetail() {
           {/* Dynamic engine parameters */}
           {extraParamDefs.length > 0 && (
             <div className="border-t border-white/5 pt-4 space-y-4">
-              <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Engine Parameters</div>
+              <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest">{t('engines.detail_engine_params')}</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {extraParamDefs.map((def) => (
                   <ParamField key={def.key} def={def}
@@ -691,7 +793,7 @@ export default function EngineDetail() {
               disabled={running}
               className="px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {running ? '⟳ Running…' : '▶ Run Engine'}
+              {running ? t('engines.running') : `▶ ${t('engines.run_engine')}`}
             </button>
             {running && (
               <button
@@ -699,13 +801,13 @@ export default function EngineDetail() {
                 onClick={handleStop}
                 className="px-4 py-2 rounded-xl font-mono text-sm border border-red-500/30 text-red-300 hover:bg-red-950/30 transition-all"
               >
-                ⏹ Stop
+                ⏹ {t('engines.stop')}
               </button>
             )}
             {lines.length > 0 && !running && (
               <button type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null) }}
                 className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/30 hover:text-white/60 transition-all">
-                Clear
+                {t('engines.detail_clear')}
               </button>
             )}
           </div>
@@ -720,9 +822,9 @@ export default function EngineDetail() {
         >
           <div className="flex border-b border-white/10">
             {[
-              { id:'output',   label:'Live Output',  badge: lines.length > 0 ? lines.length : null },
-              { id:'findings', label:'Findings',     badge: findings.length > 0 ? findings.length : null },
-              { id:'history',  label:'Run History',  badge: null },
+              { id:'output',   label: t('engines.live_output'),  badge: lines.length > 0 ? lines.length : null },
+              { id:'findings', label: t('engines.findings_tab'), badge: findings.length > 0 ? findings.length : null },
+              { id:'history',  label: t('engines.run_history'),  badge: runHistory.length > 0 ? runHistory.length : null },
             ].map((tab) => (
               <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-[11px] font-mono uppercase tracking-widest transition-colors flex items-center gap-2 ${
@@ -742,9 +844,9 @@ export default function EngineDetail() {
             {activeTab === 'findings' && (
               findings.length > 0
                 ? <FindingsTable findings={findings} />
-                : <p className="text-[11px] font-mono text-white/25">No structured findings yet — run the engine to collect results.</p>
+                : <p className="text-[11px] font-mono text-white/25">{t('engines.detail_no_findings')}</p>
             )}
-            {activeTab === 'history'  && <RunHistoryPanel engineId={engineId} />}
+            {activeTab === 'history'  && <RunHistoryPanel engineId={engineId} emptyLabel={t('engines.detail_no_history')} />}
           </div>
         </motion.section>
 
@@ -756,7 +858,7 @@ export default function EngineDetail() {
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Engine Metadata</h3>
+            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_metadata')}</h3>
             <table className="w-full text-[12px] font-mono">
               <tbody className="divide-y divide-white/5">
                 {[
@@ -776,7 +878,7 @@ export default function EngineDetail() {
             </table>
           </div>
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">API Reference</h3>
+            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_api_ref')}</h3>
             <p className="text-[10px] font-mono text-white/30">Trigger via REST API:</p>
             <pre className="text-[10px] font-mono text-cyan-300/80 bg-black/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap border border-white/5">{`POST /api/command-center/scan
 {

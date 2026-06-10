@@ -1,18 +1,40 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import {
+  ChevronDown,
+  LogOut,
+  MessageSquare,
+  Zap,
+  Building2,
+  Settings,
+  Users,
+  ScrollText,
+  Activity,
+} from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 
+const QUICK_LINKS = [
+  { to: '/ask', labelKey: 'nav.ask_weissman', icon: MessageSquare },
+  { to: '/playbooks', labelKey: 'nav.playbooks', icon: Zap },
+  { to: '/clients', labelKey: 'nav.clients', icon: Building2 },
+  { to: '/system-config', labelKey: 'nav.system_config', icon: Settings },
+  { to: '/admin', labelKey: 'nav.admin', icon: Users },
+  { to: '/audit-log', labelKey: 'nav.audit_log', icon: ScrollText },
+  { to: '/status', labelKey: 'nav.status', icon: Activity },
+]
+
 /**
- * Top-right profile dropdown — avatar (initial), email, role, language picker, logout.
- * Closes on Escape and on outside click.
+ * Profile dropdown — avatar, email, role, language picker, quick links, logout.
+ * `variant="sidebar"` renders a full-width footer trigger for GlobalNexus.
  */
-export default function ProfileMenu() {
+export default function ProfileMenu({ variant = 'header' }) {
   const { t, i18n } = useTranslation()
   const { session, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const isSidebar = variant === 'sidebar'
 
   useEffect(() => {
     if (!open) return undefined
@@ -32,29 +54,47 @@ export default function ProfileMenu() {
   const isSuper = session?.is_superadmin === true
   const lang = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
 
+  const triggerClass = isSidebar
+    ? 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/20 hover:bg-white/[0.05] transition-colors'
+    : 'inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-white/10 bg-black/30 text-white/80 hover:border-white/30 hover:text-white'
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${isSidebar ? 'w-full' : ''}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-white/10 bg-black/30 text-white/80 hover:border-white/30 hover:text-white"
+        className={triggerClass}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-[11px] font-bold text-black flex items-center justify-center">
+        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-[11px] font-bold text-black flex items-center justify-center shrink-0">
           {initial}
         </span>
-        <span className="hidden sm:inline text-[11px] font-mono uppercase tracking-widest">
-          {isSuper ? 'CEO' : role}
-        </span>
-        <span aria-hidden="true" className="text-[10px] opacity-60">▾</span>
+        {isSidebar ? (
+          <span className="flex-1 min-w-0 text-start">
+            <span className="block text-[11px] text-white/85 font-mono truncate">{email}</span>
+            <span className="block text-[9px] uppercase tracking-widest text-white/35 mt-0.5">
+              {isSuper ? 'CEO' : role}
+            </span>
+          </span>
+        ) : (
+          <span className="hidden sm:inline text-[11px] font-mono uppercase tracking-widest">
+            {isSuper ? 'CEO' : role}
+          </span>
+        )}
+        <ChevronDown
+          className={`w-3.5 h-3.5 shrink-0 opacity-50 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          strokeWidth={2}
+        />
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label="Account menu"
-          className="absolute end-0 mt-2 w-64 rounded-xl border border-white/10 bg-[#0b1120]/98 backdrop-blur-md shadow-2xl z-50 p-3 space-y-3"
+          className={`${
+            isSidebar ? 'absolute bottom-full mb-2 start-0 end-0' : 'absolute end-0 mt-2'
+          } w-64 rounded-xl border border-white/10 bg-[#0b1120]/98 backdrop-blur-md shadow-2xl z-50 p-3 space-y-3`}
         >
           <div className="px-1">
             <div className="text-[13px] text-white/85 font-mono truncate">{email}</div>
@@ -89,23 +129,26 @@ export default function ProfileMenu() {
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-3 space-y-1">
-            <MenuLink to="/ask" label={t('nav.ask_weissman')} icon="💬" onClick={() => setOpen(false)} />
-            <MenuLink to="/playbooks" label={t('nav.playbooks')} icon="⚡" onClick={() => setOpen(false)} />
-            <MenuLink to="/clients" label={t('nav.clients')} icon="🏢" onClick={() => setOpen(false)} />
-            <MenuLink to="/system-config" label={t('nav.system_config')} icon="⚙" onClick={() => setOpen(false)} />
-            <MenuLink to="/admin" label={t('nav.admin')} icon="👥" onClick={() => setOpen(false)} />
-            <MenuLink to="/audit-log" label={t('nav.audit_log')} icon="📋" onClick={() => setOpen(false)} />
-            <MenuLink to="/status" label={t('nav.status')} icon="✔" external onClick={() => setOpen(false)} />
+          <div className="border-t border-white/10 pt-3 space-y-0.5">
+            {QUICK_LINKS.map(({ to, labelKey, icon: Icon }) => (
+              <MenuLink
+                key={to}
+                to={to}
+                label={t(labelKey)}
+                icon={Icon}
+                onClick={() => setOpen(false)}
+              />
+            ))}
           </div>
 
           <div className="border-t border-white/10 pt-3">
             <button
               type="button"
               onClick={() => { setOpen(false); logout() }}
-              className="w-full text-left px-2 py-1.5 rounded text-[12px] font-mono text-rose-300 hover:bg-rose-500/10"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-rose-300 hover:bg-rose-500/10"
             >
-              ↩ {t('common.logout')}
+              <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
+              {t('common.logout')}
             </button>
           </div>
         </div>
@@ -114,7 +157,7 @@ export default function ProfileMenu() {
   )
 }
 
-function MenuLink({ to, label, icon, onClick }) {
+function MenuLink({ to, label, icon: Icon, onClick }) {
   return (
     <Link
       to={to}
@@ -122,7 +165,7 @@ function MenuLink({ to, label, icon, onClick }) {
       className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-white/70 hover:bg-white/5 hover:text-white"
       role="menuitem"
     >
-      <span className="opacity-60 w-4 text-center" aria-hidden="true">{icon}</span>
+      <Icon className="w-3.5 h-3.5 shrink-0 text-white/40" strokeWidth={1.75} />
       <span className="flex-1 truncate">{label}</span>
     </Link>
   )

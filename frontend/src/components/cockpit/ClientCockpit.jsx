@@ -175,11 +175,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   if (!selectedClientId) {
     if (ceoIntegrated) {
       return (
-        <main className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-black/20 backdrop-blur-sm relative isolate overflow-hidden">
+        <main className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-black/15 backdrop-blur-sm relative isolate overflow-hidden border-s border-white/[0.04]">
           <WarRoomSoundscape />
-          <header className="shrink-0 bg-black/40 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-3 z-10">
+          <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 py-3 z-10">
             <h1 className="text-sm font-semibold text-white tracking-tight">CEO secured cockpit</h1>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mt-1">
+            <p className="text-[9px] text-white/35 font-mono uppercase tracking-[0.2em] mt-1">
               Mission control below · pick a client in Global Nexus for target-scoped tabs
             </p>
           </header>
@@ -190,10 +190,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       )
     }
     return (
-      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-black/20 backdrop-blur-sm overflow-auto">
-        <div className="text-center px-6 py-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 shadow-xl">
+      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-black/15 backdrop-blur-sm overflow-auto border-s border-white/[0.04]">
+        <div className="text-center px-6 py-8 rounded-xl bg-[#080c14]/60 backdrop-blur-md border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-sm font-medium text-white/90 mb-1 tracking-wide">No client selected</p>
-          <p className="text-xs text-white/50 uppercase tracking-widest">Select a client from the sidebar</p>
+          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">Select a client from the sidebar</p>
         </div>
       </main>
     )
@@ -204,7 +204,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
   return (
     <main
-      className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full bg-black/20 backdrop-blur-sm relative isolate overflow-hidden"
+      className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full bg-black/15 backdrop-blur-sm relative isolate overflow-hidden border-s border-white/[0.04]"
       style={{ mixBlendMode: 'normal' }}
     >
       <WarRoomSoundscape />
@@ -235,8 +235,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       )}
       <TacticalFindingOverlay />
       {/* Header: glass */}
-      <header className="shrink-0 bg-black/40 backdrop-blur-md border-b border-white/10 shadow-lg relative z-10 max-w-full">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-4 max-w-full">
+      <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-white/[0.06] relative z-10 max-w-full">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3.5 max-w-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-3 sm:gap-6 min-w-0">
             <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate min-w-0 max-w-full">
               {selectedClient?.name || `Client ${selectedClientId}`}
@@ -290,17 +290,17 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         </div>
 
         {/* Tab nav */}
-        <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/10 overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
+        <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/[0.06] overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {tabs.map((tab) => (
             <button
               id={`cockpit-tab-${tab.id}`}
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-sm font-medium border-b-2 transition-all uppercase tracking-widest whitespace-nowrap shrink-0 ${
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 text-[10px] sm:text-[11px] font-medium border-b-2 transition-all uppercase tracking-[0.15em] whitespace-nowrap shrink-0 ${
                 activeTab === tab.id
-                  ? 'border-[#22d3ee] text-white'
-                  : 'border-transparent text-white/50 hover:text-white/80'
+                  ? 'border-cyan-400 text-white shadow-[0_4px_12px_rgba(34,211,238,0.08)]'
+                  : 'border-transparent text-white/45 hover:text-white/75'
               }`}
             >
               {tab.label}
@@ -310,7 +310,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       </header>
 
       {/* War Room: Satellite Map + Neural Web */}
-      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-3 px-3 sm:px-4 py-3 border-b border-white/10 relative z-10 w-full max-w-full min-w-0">
+      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 px-3 sm:px-4 py-2.5 border-b border-white/[0.06] relative z-10 w-full max-w-full min-w-0">
         <motion.div
           className="lg:col-span-4 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-slate-950/90 w-full max-w-full min-w-0"
           initial={{ opacity: 0 }}
@@ -338,7 +338,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       </div>
 
       {/* System Pulse EKG */}
-      <div className="shrink-0 px-4 py-3 border-t border-white/10 relative z-10">
+      <div className="shrink-0 px-4 py-2.5 border-t border-white/[0.06] relative z-10">
         <SystemPulseEKG />
       </div>
     </main>

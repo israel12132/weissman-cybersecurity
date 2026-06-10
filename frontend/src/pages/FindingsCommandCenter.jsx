@@ -9,30 +9,21 @@
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  flexRender,
-  createColumnHelper,
-} from '@tanstack/react-table'
+import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
+import DataTable from '../components/ui/DataTable'
+import EmptyState from '../components/ui/EmptyState'
+import FindingDrawer from '../components/ui/FindingDrawer'
+import SeverityBadge, {
+  SEVERITY_META,
+  getSeverityMeta,
+  getSeverityOrder,
+} from '../components/ui/SeverityBadge'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const SEVERITY_META = {
-  critical: { color: '#ef4444', bg: '#ef444420', label: 'Critical', order: 0 },
-  high:     { color: '#f97316', bg: '#f9731620', label: 'High',     order: 1 },
-  medium:   { color: '#f59e0b', bg: '#f59e0b20', label: 'Medium',   order: 2 },
-  low:      { color: '#22d3ee', bg: '#22d3ee20', label: 'Low',      order: 3 },
-  info:     { color: '#6b7280', bg: '#6b728020', label: 'Info',     order: 4 },
-}
 
 const FINDING_STATUSES = [
   { value: 'OPEN',          label: 'Open',          color: '#ef4444' },
@@ -76,21 +67,7 @@ function VerifiedBadge({ verified }) {
   )
 }
 
-const UNKNOWN_SEVERITY_ORDER = 5
-
-const MAX_VISIBLE_PAGES = 7
-
 const PAGE_SIZES = [25, 50, 100]
-
-function getSeverityMeta(s) {
-  return SEVERITY_META[(s || '').toLowerCase()] ?? SEVERITY_META.info
-}
-
-/** Returns the numeric sort order for a severity string; unknowns sort last. */
-function getSeverityOrder(s) {
-  const key = (s || '').toLowerCase()
-  return SEVERITY_META[key]?.order ?? UNKNOWN_SEVERITY_ORDER
-}
 
 /** Map source/engine-id string → registry label & group */
 function resolveEngine(sourceOrId) {
@@ -125,18 +102,6 @@ function formatDate(val) {
 }
 
 // ─── Small UI pieces ──────────────────────────────────────────────────────────
-
-function SeverityBadge({ severity }) {
-  const meta = getSeverityMeta(severity)
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono"
-      style={{ color: meta.color, backgroundColor: meta.bg, border: `1px solid ${meta.color}40` }}
-    >
-      {meta.label}
-    </span>
-  )
-}
 
 function MitreBadge({ id }) {
   if (!id) return <span className="text-white/25 font-mono text-[11px]">—</span>
@@ -180,273 +145,6 @@ function ScoreBadge({ score }) {
     <span className="font-mono text-[12px] font-semibold" style={{ color }}>
       {isNaN(n) ? sanitizeFindingPlainText(String(score), 8) : n.toFixed(1)}
     </span>
-  )
-}
-
-function SortIndicator({ sorted }) {
-  if (!sorted) return <span className="text-white/20 ml-1">⇅</span>
-  return <span className="ml-1">{sorted === 'asc' ? '↑' : '↓'}</span>
-}
-
-// ─── Detail Drawer ────────────────────────────────────────────────────────────
-
-function FindingDrawer({ finding, onClose, onStatusUpdate }) {
-  const meta = getSeverityMeta(finding?.severity)
-  const engine = resolveEngine(finding?.source || finding?.engine)
-  const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
-  const [statusUpdating, setStatusUpdating] = useState(false)
-  const pocText = finding?.proof_of_concept || finding?.proof || finding?.poc || finding?.poc_text || null
-  const references = useMemo(() => {
-    const refs = finding?.references ?? finding?.refs ?? finding?.reference_urls ?? null
-    if (!refs) return []
-    if (Array.isArray(refs)) return refs.filter(Boolean).map(String)
-    if (typeof refs === 'string') {
-      const s = refs.trim()
-      if (!s) return []
-      try {
-        const parsed = JSON.parse(s)
-        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
-      } catch {
-        // allow comma/newline separated strings
-      }
-      return s
-        .split(/[\n,]+/g)
-        .map((x) => x.trim())
-        .filter(Boolean)
-    }
-    return [String(refs)]
-  }, [finding])
-
-  const handleStatusChange = (e) => {
-    const newStatus = e.target.value
-    if (!newStatus || newStatus === finding?.status) return
-    setStatusUpdating(true)
-    onStatusUpdate?.(finding?.raw_id, newStatus)
-    setTimeout(() => setStatusUpdating(false), 600)
-  }
-
-  const rawJson = useMemo(() => {
-    try {
-      return JSON.stringify(finding, null, 2)
-    } catch {
-      return '{}'
-    }
-  }, [finding])
-
-  return (
-    <AnimatePresence>
-      {finding && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          {/* Drawer */}
-          <motion.aside
-            key="drawer"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 280 }}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-xl flex flex-col border-l border-white/10 bg-[#080f1e]/95 backdrop-blur-xl shadow-2xl"
-          >
-            {/* Drawer header */}
-            <div
-              className="shrink-0 flex items-start justify-between gap-4 px-5 py-4 border-b border-white/10"
-              style={{ borderColor: `${meta.color}30` }}
-            >
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex items-center flex-wrap gap-2">
-                  <SeverityBadge severity={finding.severity} />
-                  {groupDef && (
-                    <span
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider"
-                      style={{
-                        color: groupDef.color,
-                        borderColor: `${groupDef.color}40`,
-                        backgroundColor: `${groupDef.color}10`,
-                      }}
-                    >
-                      {groupDef.label}
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-sm font-semibold text-white leading-snug">
-                  {sanitizeFindingPlainText(finding.title || 'Untitled Finding', 256)}
-                </h2>
-                <p className="text-[11px] font-mono text-white/40">
-                  {engine.label}
-                  {(engine.mitre || finding.mitre_attack) && ` · ${engine.mitre || finding.mitre_attack}`}
-                  {finding.finding_id && ` · ${sanitizeFindingPlainText(finding.finding_id, 64)}`}
-                </p>
-              </div>
-              <button
-                id="findings-drawer-close-btn"
-                type="button"
-                onClick={onClose}
-                aria-label="Close findings drawer"
-                className="shrink-0 text-white/40 hover:text-white/80 transition-colors text-lg leading-none mt-0.5"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-              {/* Verification + Status Update */}
-              <section className="flex flex-wrap items-center gap-3">
-                <VerifiedBadge verified={!!finding.verified || !!finding.poc_sealed} />
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">Status:</span>
-                  <select
-                    id="findings-drawer-status-select"
-                    value={finding.status || 'OPEN'}
-                    onChange={handleStatusChange}
-                    disabled={statusUpdating}
-                    className="bg-black/60 border border-white/15 rounded px-2 py-1 text-[11px] font-mono text-white/70 focus:outline-none focus:border-cyan-500/40 transition-colors disabled:opacity-50"
-                  >
-                    {FINDING_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                  {statusUpdating && (
-                    <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
-                  )}
-                </div>
-              </section>
-
-              {/* Key fields */}
-              <section>
-                <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">
-                  Technical Details
-                </h3>
-                <dl className="space-y-2">
-                  {[
-                    ['Score (CVSS)', finding.cvss_score ?? finding.score],
-                    ['Risk Score',   finding.risk_score],
-                    ['CWE',         finding.cwe_id ?? finding.cwe ?? finding.cweId],
-                    ['Discovered',  formatDate(finding.discovered_at || finding.created_at)],
-                    ['Affected URL', finding.url ?? finding.affected_url ?? finding.target_url],
-                    ['Client ID',   finding.client_id],
-                    ['Run ID',      finding.run_id],
-                    ['Finding ID',  finding.finding_id],
-                    ['Target',      finding.target],
-                    ['PoC Commitment (SHA-256)', finding.poc_commitment_sha256],
-                  ].map(([label, val]) =>
-                    val != null && val !== '' ? (
-                      <div key={label} className="flex items-start gap-3">
-                        <dt className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
-                          {label}
-                        </dt>
-                        <dd className="text-[12px] text-white/75 break-all font-mono">
-                          {sanitizeFindingPlainText(String(val), 256)}
-                        </dd>
-                      </div>
-                    ) : null,
-                  )}
-                </dl>
-                <div className="mt-3 flex items-start gap-3">
-                  <div className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
-                    Compliance
-                  </div>
-                  <div className="min-w-0">
-                    <ComplianceBadges compliance={finding.compliance} />
-                  </div>
-                </div>
-              </section>
-
-              {/* Description */}
-              {finding.description && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Description
-                  </h3>
-                  <p className="text-[12px] text-white/65 leading-relaxed whitespace-pre-wrap">
-                    {sanitizeFindingPlainText(finding.description, 4096)}
-                  </p>
-                </section>
-              )}
-
-              {/* Remediation */}
-              {finding.remediation && String(finding.remediation).trim() && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Remediation
-                  </h3>
-                  <p className="text-[12px] text-white/65 leading-relaxed whitespace-pre-wrap">
-                    {sanitizeFindingPlainText(String(finding.remediation), 8192)}
-                  </p>
-                </section>
-              )}
-
-              {/* Proof */}
-              {pocText && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    Proof / PoC
-                  </h3>
-                  <pre className="text-[11px] font-mono text-[#4ade80]/80 bg-black/60 border border-white/5 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                    {sanitizeFindingPlainText(String(pocText), 8192)}
-                  </pre>
-                </section>
-              )}
-
-              {/* References */}
-              {references.length > 0 && (
-                <section>
-                  <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                    References
-                  </h3>
-                  <ul className="space-y-1">
-                    {references.slice(0, 50).map((u, idx) => {
-                      const safe = sanitizeFindingPlainText(u, 2048)
-                      const isHttp = /^https?:\/\//i.test(safe)
-                      return (
-                        <li key={`${safe}-${idx}`} className="text-[12px] font-mono">
-                          {isHttp ? (
-                            <a
-                              href={safe}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-cyan-300/80 hover:text-cyan-200 underline break-all"
-                            >
-                              {safe}
-                            </a>
-                          ) : (
-                            <span className="text-white/60 break-all">{safe}</span>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  {references.length > 50 && (
-                    <div className="text-[10px] font-mono text-white/35 mt-2">
-                      Showing first 50 references (total {references.length}).
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {/* Raw JSON */}
-              <section>
-                <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">
-                  Raw JSON
-                </h3>
-                <pre className="text-[10px] font-mono text-white/50 bg-black/60 border border-white/5 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed max-h-96">
-                  {rawJson}
-                </pre>
-              </section>
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
   )
 }
 
@@ -735,28 +433,22 @@ export default function FindingsCommandCenter() {
     return f
   }, [severityFilter, engineFilter, statusFilter])
 
-  const table = useReactTable({
-    data: rawFindings,
-    columns,
-    state: {
-      globalFilter,
-      columnFilters,
-      sorting,
-      pagination,
-    },
-    globalFilterFn,
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    manualFiltering: false,
-  })
-
-  const { rows } = table.getRowModel()
-  const totalFiltered = table.getFilteredRowModel().rows.length
-  const pageCount = table.getPageCount()
+  const totalFiltered = useMemo(() => {
+    let count = 0
+    for (const f of rawFindings) {
+      if (severityFilter && (f.severity || '').toLowerCase() !== severityFilter) continue
+      if (statusFilter && (f.status || '').toUpperCase() !== statusFilter) continue
+      if (engineFilter) {
+        const eng = resolveEngine(f.source || f.engine)
+        if (eng.group !== engineFilter && !eng.label.toLowerCase().includes(engineFilter.toLowerCase())) {
+          continue
+        }
+      }
+      if (globalFilter && !globalFilterFn({ original: f }, '', globalFilter)) continue
+      count += 1
+    }
+    return count
+  }, [rawFindings, severityFilter, engineFilter, statusFilter, globalFilter])
 
   const handleRowClick = useCallback((row) => {
     setSelectedFinding(row.original)
@@ -775,6 +467,34 @@ export default function FindingsCommandCenter() {
     })
     return c
   }, [rawFindings])
+
+  const drawerEngineMeta = useMemo(() => {
+    if (!selectedFinding) return { headerExtra: null, subtitle: undefined }
+    const engine = resolveEngine(selectedFinding.source || selectedFinding.engine)
+    const groupDef = engine.group ? ENGINE_GROUPS[engine.group] : null
+    const headerExtra = groupDef ? (
+      <span
+        className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider"
+        style={{
+          color: groupDef.color,
+          borderColor: `${groupDef.color}40`,
+          backgroundColor: `${groupDef.color}10`,
+        }}
+      >
+        {groupDef.label}
+      </span>
+    ) : null
+    const subtitle = [
+      engine.label,
+      engine.mitre || selectedFinding.mitre_attack,
+      selectedFinding.finding_id
+        ? sanitizeFindingPlainText(selectedFinding.finding_id, 64)
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    return { headerExtra, subtitle }
+  }, [selectedFinding])
 
   return (
     <div
@@ -955,196 +675,43 @@ export default function FindingsCommandCenter() {
 
         {/* ── Empty state ───────────────────────────────────────────────────── */}
         {!loading && !error && rawFindings.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-8 py-16 text-center space-y-3">
-            <div className="text-4xl">🛡️</div>
-            <p className="text-sm font-semibold text-white/60">No findings yet</p>
-            <p className="text-xs text-white/35 font-mono">
-              Run engines from the Engine Matrix to populate findings here.
-            </p>
-            <Link
-              to="/engines"
-              className="inline-block mt-2 px-4 py-2 rounded-lg border border-cyan-500/30 text-cyan-300/80 text-xs font-mono hover:bg-cyan-950/30 transition-colors"
-            >
-              Go to Engine Matrix →
-            </Link>
-          </div>
+          <EmptyState
+            icon="shield"
+            title="No findings yet"
+            body="Run engines from the Engine Matrix to populate findings here."
+            secondary={{ label: 'Go to Engine Matrix →', href: '/engines' }}
+          />
         )}
 
         {/* ── Table ────────────────────────────────────────────────────────── */}
         {(rawFindings.length > 0 || loading) && (
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id} className="border-b border-white/10">
-                      {headerGroup.headers.map((header) => (
-                        <th
-                          key={header.id}
-                          style={{ width: header.getSize() }}
-                          className="px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-white/40 bg-white/[0.02] select-none whitespace-nowrap"
-                        >
-                          {header.column.getCanSort() ? (
-                            <button
-                              type="button"
-                              onClick={header.column.getToggleSortingHandler()}
-                              className="flex items-center gap-0.5 hover:text-white/70 transition-colors"
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <SortIndicator sorted={header.column.getIsSorted()} />
-                            </button>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-
-                <tbody>
-                  {loading && rows.length === 0 && (
-                    <tr>
-                      <td colSpan={columns.length} className="px-4 py-12 text-center">
-                        <div className="flex items-center justify-center gap-2 text-white/40 text-xs font-mono">
-                          <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
-                          Loading findings…
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {!loading && rows.length === 0 && rawFindings.length > 0 && (
-                    <tr>
-                      <td colSpan={columns.length} className="px-4 py-10 text-center text-white/35 text-xs font-mono">
-                        No findings match the current filters.
-                      </td>
-                    </tr>
-                  )}
-                  {rows.map((row, i) => {
-                    const sev = row.original.severity?.toLowerCase() ?? 'info'
-                    const meta = getSeverityMeta(sev)
-                    return (
-                      <motion.tr
-                        key={row.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.1, delay: Math.min(i * 0.01, 0.3) }}
-                        onClick={() => handleRowClick(row)}
-                        className="border-b border-white/5 cursor-pointer transition-all duration-100 hover:bg-white/[0.04] group"
-                        style={{
-                          borderLeftWidth: 2,
-                          borderLeftColor: `${meta.color}50`,
-                          borderLeftStyle: 'solid',
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-3 align-middle">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </motion.tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ── Pagination ──────────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/5 bg-white/[0.01]">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/35">Rows:</span>
-                <select
-                  value={pagination.pageSize}
-                  onChange={(e) =>
-                    setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })
-                  }
-                  className="bg-black/50 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono text-white/60 focus:outline-none focus:border-cyan-500/40"
-                >
-                  {PAGE_SIZES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <span className="text-[10px] font-mono text-white/30">
-                  {totalFiltered === 0
-                    ? '0'
-                    : `${pagination.pageIndex * pagination.pageSize + 1}–${Math.min(
-                        (pagination.pageIndex + 1) * pagination.pageSize,
-                        totalFiltered,
-                      )}`}{' '}
-                  of {totalFiltered}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  id="findings-pagination-first"
-                  type="button"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  «
-                </button>
-                <button
-                  id="findings-pagination-prev"
-                  type="button"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  ‹
-                </button>
-
-                {/* Page number pills */}
-                {Array.from({ length: Math.min(pageCount, MAX_VISIBLE_PAGES) }, (_, i) => {
-                  const startPage = Math.max(0, Math.min(pagination.pageIndex - 3, pageCount - MAX_VISIBLE_PAGES))
-                  const p = startPage + i
-                  if (p >= pageCount) return null
-                  const active = p === pagination.pageIndex
-                  return (
-                    <button
-                      id={`findings-pagination-page-${p + 1}`}
-                      key={p}
-                      type="button"
-                      onClick={() => table.setPageIndex(p)}
-                      className="px-2.5 py-1 rounded text-[10px] font-mono border transition-colors"
-                      style={
-                        active
-                          ? { borderColor: '#22d3ee50', color: '#22d3ee', backgroundColor: '#22d3ee15' }
-                          : { borderColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.35)' }
-                      }
-                    >
-                      {p + 1}
-                    </button>
-                  )
-                })}
-
-                <button
-                  id="findings-pagination-next"
-                  type="button"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  ›
-                </button>
-                <button
-                  id="findings-pagination-last"
-                  type="button"
-                  onClick={() => table.setPageIndex(pageCount - 1)}
-                  disabled={!table.getCanNextPage()}
-                  className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  »
-                </button>
-              </div>
-            </div>
-          </div>
+          <DataTable
+            id="findings-command-table"
+            columns={columns}
+            data={rawFindings}
+            loading={loading}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            pagination={pagination}
+            onPaginationChange={setPagination}
+            columnFilters={columnFilters}
+            globalFilter={globalFilter}
+            globalFilterFn={globalFilterFn}
+            pageSizes={PAGE_SIZES}
+            onRowClick={handleRowClick}
+            getRowAccentColor={(row) => getSeverityMeta(row.severity).border}
+            emptyFilteredMessage="No findings match the current filters."
+          />
         )}
       </main>
-
-      {/* ── Detail Drawer ──────────────────────────────────────────────────── */}
-      <FindingDrawer finding={selectedFinding} onClose={handleCloseDrawer} onStatusUpdate={handleStatusUpdate} />
+      <FindingDrawer
+        finding={selectedFinding}
+        onClose={handleCloseDrawer}
+        onStatusUpdate={handleStatusUpdate}
+        statusOptions={FINDING_STATUSES.map(({ value, label }) => ({ value, label }))}
+        headerExtra={drawerEngineMeta.headerExtra}
+        subtitle={drawerEngineMeta.subtitle}
+      />
     </div>
   )
 }
