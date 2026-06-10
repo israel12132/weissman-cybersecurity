@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Cpu, Play, Pause, Filter, Search, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { ENGINES_BY_ID } from '../lib/enginesRegistry';
 
 /**
  * EngineManagementConsole - Complete control over all 496 engines
@@ -52,13 +53,40 @@ export default function EngineManagementConsole() {
     applyFilters();
   }, [engines, searchTerm, categoryFilter, statusFilter]);
 
+  const mapSnapshotEngine = (e) => ({
+    id: e.id,
+    name: e.label || e.id,
+    enabled: !!e.tenant_policy_includes,
+    category: ENGINES_BY_ID[e.id]?.group || 'misc',
+    description: ENGINES_BY_ID[e.id]?.description,
+  });
+
+  const applyActiveEngines = (activeEngines) => {
+    const activeSet = new Set(activeEngines || []);
+    setEngines((prev) => prev.map((e) => ({ ...e, enabled: activeSet.has(e.id) })));
+  };
+
   const fetchEngines = async () => {
     try {
       setLoading(true);
-      const data = await api.get('/api/ceo/tenant/engines');
-      setEngines(data.engines || []);
+      const data = await api.get('/api/ceo/god-mode/snapshot');
+      const core = data?.engine_matrix?.core_engines || [];
+      setEngines(core.map(mapSnapshotEngine));
     } catch (error) {
       console.error('Failed to fetch engines:', error);
+      try {
+        const health = await api.get('/api/health');
+        const activeSet = new Set(health.active_engines || []);
+        setEngines([...activeSet].map((id) => ({
+          id,
+          name: ENGINES_BY_ID[id]?.label || id,
+          enabled: true,
+          category: ENGINES_BY_ID[id]?.group || 'misc',
+          description: ENGINES_BY_ID[id]?.description,
+        })));
+      } catch (fallbackErr) {
+        console.error('Failed to fetch active engines:', fallbackErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -93,13 +121,17 @@ export default function EngineManagementConsole() {
 
   const toggleEngine = async (engineId, currentState) => {
     try {
-      await api.patch(`/api/ceo/tenant/engines/${engineId}`, {
+      const data = await api.put('/api/ceo/tenant/engines', {
+        engine_id: engineId,
         enabled: !currentState,
       });
-      // Update local state
-      setEngines((prev) =>
-        prev.map((e) => (e.id === engineId ? { ...e, enabled: !currentState } : e))
-      );
+      if (Array.isArray(data.active_engines)) {
+        applyActiveEngines(data.active_engines);
+      } else {
+        setEngines((prev) =>
+          prev.map((e) => (e.id === engineId ? { ...e, enabled: !currentState } : e))
+        );
+      }
     } catch (error) {
       console.error('Failed to toggle engine:', error);
     }
@@ -111,17 +143,20 @@ export default function EngineManagementConsole() {
         .filter((e) => e.category === category)
         .map((e) => e.id);
 
-      await api.patch('/api/ceo/tenant/engines/bulk', {
-        engine_ids: engineIds,
-        enabled: enable,
-      });
+      let lastActive = null;
+      for (const engineId of engineIds) {
+        const data = await api.put('/api/ceo/tenant/engines', {
+          engine_id: engineId,
+          enabled: enable,
+        });
+        if (Array.isArray(data.active_engines)) {
+          lastActive = data.active_engines;
+        }
+      }
 
-      // Update local state
-      setEngines((prev) =>
-        prev.map((e) =>
-          engineIds.includes(e.id) ? { ...e, enabled: enable } : e
-        )
-      );
+      if (lastActive) {
+        applyActiveEngines(lastActive);
+      }
     } catch (error) {
       console.error('Failed to bulk toggle:', error);
     }
@@ -134,9 +169,13 @@ export default function EngineManagementConsole() {
 
   const saveEngineConfig = async (engineId, config) => {
     try {
-      await api.put(`/api/ceo/tenant/engines/${engineId}/config`, config);
+      await api.put('/api/system/config', {
+        extra: {
+          [`engine_config_${engineId}`]: config,
+        },
+      });
       setConfigModal(false);
-      fetchEngines(); // Refresh
+      fetchEngines();
     } catch (error) {
       console.error('Failed to save config:', error);
     }

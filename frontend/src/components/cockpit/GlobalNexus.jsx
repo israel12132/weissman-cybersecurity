@@ -19,11 +19,13 @@ import {
   ScrollText,
   Settings,
   Shield,
+  CreditCard,
   ChevronDown,
   PanelLeftClose,
   PanelLeft,
   Trash2,
 } from 'lucide-react'
+import { PRIMARY_NAV } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
@@ -59,7 +61,7 @@ function isRouteActive(pathname, to, matchPaths) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 
-function NavLink({ to, label, icon: Icon, id, matchPaths, badge }) {
+function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel }) {
   const { pathname } = useLocation()
   const active = isRouteActive(pathname, to, matchPaths)
 
@@ -85,7 +87,12 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge }) {
         }`}
         strokeWidth={active ? 2.25 : 1.75}
       />
-      <span className="flex-1 truncate">{label}</span>
+      <span className="flex-1 truncate min-w-0">{label}</span>
+      {beta && betaLabel && (
+        <span className="shrink-0 text-[8px] font-mono px-1 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300/85 uppercase tracking-wider">
+          {betaLabel}
+        </span>
+      )}
       {badge != null && (
         <span className="shrink-0 text-[9px] font-mono tabular-nums px-1.5 py-0.5 rounded border border-cyan-500/25 bg-cyan-500/10 text-cyan-300/80">
           {badge}
@@ -170,6 +177,30 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     })
   }
 
+  const primaryNavItems = useMemo(() => {
+    const meta = {
+      '/clients': { icon: Building2, id: 'nav-clients' },
+      '/vuln-intel': { icon: Bug, id: 'nav-vuln-intel' },
+      '/engines': { icon: Cpu, id: 'nav-engine-matrix', badge: engineCountLabel },
+      '/billing': { icon: CreditCard, id: 'nav-billing' },
+      '/playbooks': { icon: Zap, id: 'nav-playbooks' },
+      '/ask': { icon: MessageSquare, id: 'nav-ask-weissman' },
+    }
+    return PRIMARY_NAV.map((item) => {
+      const m = meta[item.to]
+      if (!m) return null
+      return {
+        to: item.to,
+        label: t(item.labelKey),
+        icon: m.icon,
+        id: m.id,
+        badge: m.badge,
+        beta: item.beta,
+        betaLabel: t('nav.beta'),
+      }
+    }).filter(Boolean)
+  }, [t, engineCountLabel])
+
   const navSections = useMemo(() => {
     const sections = [
       {
@@ -179,7 +210,6 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         items: [
           { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, id: 'nav-dashboard', matchPaths: ['/', '/operations'] },
           { to: '/findings', label: t('nav.findings'), icon: ShieldAlert, id: 'nav-findings-c2' },
-          { to: '/vuln-intel', label: t('nav.vuln_intel'), icon: Bug, id: 'nav-vuln-intel' },
           { to: '/jobs', label: t('nav.jobs'), icon: Clock, id: 'nav-jobs' },
         ],
       },
@@ -188,7 +218,6 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         title: t('nav.groups.intelligence'),
         defaultOpen: true,
         items: [
-          { to: '/ask', label: t('nav.ask_weissman'), icon: MessageSquare, id: 'nav-ask-weissman' },
           { to: '/threat-intel', label: t('nav.threat_intel'), icon: Radar, id: 'nav-threat-intel' },
           { to: '/risk-graph', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
         ],
@@ -197,7 +226,6 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         id: 'automation',
         title: t('nav.groups.automation'),
         items: [
-          { to: '/playbooks', label: t('nav.playbooks'), icon: Zap, id: 'nav-playbooks' },
           { to: '/scan-scheduler', label: t('nav.scan_scheduler'), icon: CalendarClock, id: 'nav-scan-scheduler' },
           { to: '/alert-rules', label: t('nav.alert_rules'), icon: Bell, id: 'nav-alert-rules' },
         ],
@@ -207,15 +235,14 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         title: t('nav.groups.clients_agents'),
         defaultOpen: true,
         items: [
-          { to: '/clients', label: t('nav.clients'), icon: Building2, id: 'nav-clients' },
           { to: '/agents', label: t('nav.agent_management'), icon: Server, id: 'nav-agents' },
+          { to: '/nexus-swarm', label: t('nav.nexus_swarm', 'Nexus Sovereign Swarm'), icon: Zap, id: 'nav-nexus-swarm' },
         ],
       },
       {
         id: 'platform',
         title: t('nav.groups.platform'),
         items: [
-          { to: '/engines', label: t('nav.engines'), icon: Cpu, id: 'nav-engine-matrix', badge: engineCountLabel },
           { to: '/audit-log', label: t('nav.audit_log'), icon: ScrollText, id: 'nav-audit-log' },
           { to: '/system-config', label: t('nav.system_config'), icon: Settings, id: 'nav-system-config' },
           ...(isCeo ? [{ to: '/admin', label: t('nav.admin'), icon: Shield, id: 'nav-admin-management' }] : []),
@@ -223,7 +250,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       },
     ]
     return sections
-  }, [t, isCeo, engineCountLabel])
+  }, [t, isCeo])
 
   const handleAddClient = async (e) => {
     if (e) e.preventDefault()
@@ -359,6 +386,17 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
 
       {/* Grouped navigation */}
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 scrollbar-thin" aria-label={t('a11y.nav_label')}>
+        <div className="mb-2 pb-2 border-b border-white/[0.06]">
+          <div className="px-2 py-1.5 text-[9px] font-mono uppercase tracking-[0.22em] text-white/35">
+            {t('nav.groups.primary')}
+          </div>
+          <div className="space-y-0.5 pb-1">
+            {primaryNavItems.map((item) => (
+              <NavLink key={item.id} {...item} />
+            ))}
+          </div>
+        </div>
+
         {navSections.map((section) => (
           <NavSection
             key={section.id}

@@ -1,4 +1,4 @@
--- Mirror weissman-db migration for sqlx migrate from fingerprint_engine.
+-- Sovereign auth: restricted user lookup view, BYPASSRLS audit + abuse mitigation, TRUNCATE hardening.
 
 CREATE SCHEMA IF NOT EXISTS auth;
 
@@ -32,8 +32,10 @@ CREATE INDEX IF NOT EXISTS ix_security_events_pid_time ON security_events (backe
 
 COMMENT ON TABLE security_events IS 'Auth/BYPASSRLS telemetry; consumed by predictive_analyzer + operators.';
 
+-- App role can read for LLM / analytics (no RLS — treat as security telemetry plane).
 GRANT SELECT ON security_events TO weissman_app;
 
+-- Log BYPASSRLS auth-plane access; mitigate cross-tenant burst from same IP or same backend session.
 CREATE OR REPLACE FUNCTION auth.audit_auth_access(p_tenant_id BIGINT, p_context TEXT DEFAULT '')
     RETURNS VOID
     LANGUAGE plpgsql
@@ -118,10 +120,12 @@ $$;
 REVOKE ALL ON FUNCTION auth.auth_insert_user(BIGINT, TEXT, TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth.auth_insert_user(BIGINT, TEXT, TEXT, TEXT) TO weissman_auth;
 
+-- Narrow auth role: no direct access to users heap (inserts via SECURITY DEFINER function only).
 REVOKE SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON TABLE users FROM weissman_auth;
 GRANT SELECT ON auth.v_user_lookup TO weissman_auth;
 GRANT USAGE ON SCHEMA auth TO weissman_auth;
 
+-- TRUNCATE is distinct from DELETE; ensure auth role cannot truncate tenant tables.
 DO
 $$
     BEGIN
@@ -141,6 +145,8 @@ $$
     END
 $$;
 
+-- Document role intent (password supplied via URL / peer auth / rotation — not in-repo).
 COMMENT ON ROLE weissman_auth IS 'BYPASSRLS login plane; SELECT auth.v_user_lookup only; use auth.audit_auth_access + auth.auth_insert_user; connect via WEISSMAN_AUTH_DATABASE_URL (peer or rotated secret).';
 
+-- Direct INSERT uses SECURITY DEFINER function; auth role no longer needs sequence mutation.
 REVOKE UPDATE ON SEQUENCE users_id_seq FROM weissman_auth;

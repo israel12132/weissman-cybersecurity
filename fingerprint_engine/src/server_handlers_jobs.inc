@@ -30,27 +30,33 @@ async fn api_async_jobs_list(
     let rows = sqlx::query(
         r#"SELECT id, kind, status,
                   COALESCE(payload, '{}'::jsonb) AS payload,
-                  COALESCE(result, '{}'::jsonb)  AS result,
-                  COALESCE(error, '')            AS error,
-                  COALESCE(attempts, 0)          AS attempts,
-                  created_at, started_at, completed_at,
-                  COALESCE(locked_by, '')        AS locked_by
+                  result_json,
+                  last_error,
+                  attempt_count,
+                  worker_id,
+                  heartbeat_at,
+                  created_at,
+                  updated_at
              FROM weissman_async_jobs
-            WHERE ($3::text IS NULL OR status = $3)
+            WHERE tenant_id = $4
+              AND ($3::text IS NULL OR status = $3)
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2"#,
     )
     .bind(limit)
     .bind(offset)
     .bind(status_filter.as_deref())
+    .bind(auth.tenant_id)
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
 
     let total: i64 = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE ($1::text IS NULL OR status = $1)",
+        r#"SELECT COUNT(*)::bigint FROM weissman_async_jobs
+            WHERE tenant_id = $2 AND ($1::text IS NULL OR status = $1)"#,
     )
     .bind(status_filter.as_deref())
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -64,19 +70,30 @@ async fn api_async_jobs_list(
             let target = payload.get("target").and_then(Value::as_str).map(|s| s.to_string());
             let engine = payload.get("engine").and_then(Value::as_str).map(|s| s.to_string());
             let client_id = payload.get("client_id").and_then(Value::as_i64);
+            let status = r.try_get::<String, _>("status").unwrap_or_default();
+            let updated_at = r
+                .try_get::<chrono::DateTime<Utc>, _>("updated_at")
+                .ok()
+                .map(|d| d.to_rfc3339());
+            let completed_at = if status == "completed" {
+                updated_at.clone()
+            } else {
+                None
+            };
             json!({
                 "id": id_uuid.to_string(),
                 "kind": r.try_get::<String, _>("kind").unwrap_or_default(),
-                "status": r.try_get::<String, _>("status").unwrap_or_default(),
+                "status": status,
                 "engine": engine,
                 "target": target,
                 "client_id": client_id,
-                "attempts": r.try_get::<i32, _>("attempts").unwrap_or(0),
-                "error": r.try_get::<String, _>("error").unwrap_or_default(),
-                "locked_by": r.try_get::<String, _>("locked_by").unwrap_or_default(),
+                "attempt_count": r.try_get::<i32, _>("attempt_count").unwrap_or(0),
+                "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
+                "worker_id": r.try_get::<Option<String>, _>("worker_id").ok().flatten(),
+                "heartbeat_at": r.try_get::<chrono::DateTime<Utc>, _>("heartbeat_at").ok().map(|d| d.to_rfc3339()),
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
-                "started_at": r.try_get::<chrono::DateTime<Utc>, _>("started_at").ok().map(|d| d.to_rfc3339()),
-                "completed_at": r.try_get::<chrono::DateTime<Utc>, _>("completed_at").ok().map(|d| d.to_rfc3339()),
+                "updated_at": updated_at,
+                "completed_at": completed_at,
             })
         })
         .collect();

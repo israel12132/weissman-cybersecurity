@@ -232,6 +232,9 @@ async fn api_playbooks_fire(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<PlaybookFireBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let mut event = body.event;
     // Force the caller's tenant onto the event — never trust the request body
     // for tenant identity.
@@ -369,6 +372,209 @@ async fn api_ueba_anomalies(
         "detected_at":   r.try_get::<chrono::DateTime<Utc>, _>("detected_at").ok().map(|d| d.to_rfc3339()),
     })).collect();
     (StatusCode::OK, Json(json!({"ok": true, "anomalies": list}))).into_response()
+}
+
+// ─── Baseline & drift (UEBA tables → BaselineAndDrift.jsx) ───────────────────
+
+fn baseline_range_interval(range: &str) -> &'static str {
+    let r = range.trim();
+    if r.eq_ignore_ascii_case("24h") {
+        "24 hours"
+    } else if r.eq_ignore_ascii_case("30d") {
+        "30 days"
+    } else {
+        "7 days"
+    }
+}
+
+fn baseline_range_bucket(range: &str) -> &'static str {
+    if range.trim().eq_ignore_ascii_case("24h") {
+        "hour"
+    } else {
+        "day"
+    }
+}
+
+/// GET /api/baseline/summary — aggregate posture from agent_metric_baselines + recent anomalies.
+async fn api_baseline_summary(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+
+    let baseline_row = sqlx::query(
+        r#"SELECT COUNT(DISTINCT agent_id)::bigint AS total_assets,
+                  MAX(last_updated_at) AS last_updated,
+                  COALESCE(SUM(n), 0)::bigint AS sample_count,
+                  COUNT(*)::bigint AS baseline_rows
+             FROM agent_metric_baselines"#,
+    )
+    .fetch_one(&mut *tx)
+    .await;
+
+    let drift_row = sqlx::query(
+        r#"SELECT COALESCE(
+                  LEAST(
+                      100.0,
+                      COUNT(*)::double precision * 2.0
+                          + COALESCE(AVG(ABS(z_score)), 0.0) * 8.0
+                  ),
+                  0.0
+              ) AS drift_score
+             FROM agent_anomalies
+            WHERE detected_at >= now() - interval '7 days'"#,
+    )
+    .fetch_one(&mut *tx)
+    .await;
+
+    let _ = tx.commit().await;
+
+    let (total_assets, last_updated, sample_count, baseline_rows) = match baseline_row {
+        Ok(r) => (
+            r.try_get::<i64, _>("total_assets").unwrap_or(0),
+            r.try_get::<Option<chrono::DateTime<Utc>>, _>("last_updated")
+                .ok()
+                .flatten()
+                .map(|d| d.to_rfc3339()),
+            r.try_get::<i64, _>("sample_count").unwrap_or(0),
+            r.try_get::<i64, _>("baseline_rows").unwrap_or(0),
+        ),
+        Err(_) => (0, None, 0, 0),
+    };
+    let drift_score = drift_row
+        .ok()
+        .and_then(|r| r.try_get::<f64, _>("drift_score").ok())
+        .unwrap_or(0.0);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "total_assets": total_assets,
+            "drift_score": drift_score,
+            "last_updated": last_updated,
+            "sample_count": sample_count,
+            "baseline_rows": baseline_rows,
+        })),
+    )
+        .into_response()
+}
+
+/// GET /api/baseline/drift?range=24h|7d|30d — time-series drift from agent_anomalies.
+async fn api_baseline_drift(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let range = q.get("range").map(String::as_str).unwrap_or("7d");
+    let interval = baseline_range_interval(range);
+    let bucket = baseline_range_bucket(range);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+
+    let sql = format!(
+        r#"SELECT date_trunc('{bucket}', detected_at AT TIME ZONE 'UTC') AS bucket,
+                  COUNT(*)::int AS anomaly_count,
+                  COALESCE(AVG(ABS(z_score)), 0.0) AS avg_z
+             FROM agent_anomalies
+            WHERE detected_at >= now() - interval '{interval}'
+            GROUP BY 1
+            ORDER BY 1 ASC"#
+    );
+    let rows = sqlx::query(&sql).fetch_all(&mut *tx).await.unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .filter_map(|r| {
+            let bucket_ts = r
+                .try_get::<chrono::DateTime<Utc>, _>("bucket")
+                .ok()?;
+            let anomaly_count = r.try_get::<i32, _>("anomaly_count").unwrap_or(0);
+            let avg_z = r.try_get::<f64, _>("avg_z").unwrap_or(0.0);
+            let drift = (anomaly_count as f64 * 2.0 + avg_z * 8.0).min(100.0);
+            let time = if bucket == "hour" {
+                bucket_ts.format("%H:%M").to_string()
+            } else {
+                bucket_ts.format("%b %d").to_string()
+            };
+            Some(json!({
+                "time": time,
+                "drift": (drift * 10.0).round() / 10.0,
+                "anomalies": anomaly_count,
+            }))
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({ "data": data, "range": range })),
+    )
+        .into_response()
+}
+
+/// GET /api/baseline/anomalies?range=24h|7d|30d — recent UEBA anomalies for the UI list.
+async fn api_baseline_anomalies(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let range = q.get("range").map(String::as_str).unwrap_or("7d");
+    let interval = baseline_range_interval(range);
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 500);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+
+    let sql = format!(
+        r#"SELECT id, agent_id, metric_name, observed, baseline_mean,
+                  z_score, severity, detail, detected_at
+             FROM agent_anomalies
+            WHERE detected_at >= now() - interval '{interval}'
+            ORDER BY detected_at DESC
+            LIMIT $1"#
+    );
+    let rows = sqlx::query(&sql)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let anomalies: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let z = r.try_get::<f64, _>("z_score").unwrap_or(0.0);
+            json!({
+                "id": r.try_get::<i64, _>("id").unwrap_or(0),
+                "type": r.try_get::<String, _>("metric_name").unwrap_or_default(),
+                "score": ((z.abs() * 10.0).round() / 10.0),
+                "description": r.try_get::<String, _>("detail").unwrap_or_default(),
+                "agent_id": r.try_get::<String, _>("agent_id").unwrap_or_default(),
+                "observed": r.try_get::<f64, _>("observed").unwrap_or(0.0),
+                "baseline_mean": r.try_get::<f64, _>("baseline_mean").unwrap_or(0.0),
+                "severity": r.try_get::<String, _>("severity").unwrap_or_default(),
+                "detected_at": r
+                    .try_get::<chrono::DateTime<Utc>, _>("detected_at")
+                    .ok()
+                    .map(|d| d.to_rfc3339()),
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({ "anomalies": anomalies, "range": range })),
+    )
+        .into_response()
 }
 
 async fn api_playbook_runs(

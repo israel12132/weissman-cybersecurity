@@ -41,7 +41,14 @@ async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap
             let (role, is_superadmin) =
                 match crate::auth_refresh::user_rbac_snapshot(state.auth_pool.as_ref(), user_id).await
                 {
-                    Ok(p) => p,
+                    Ok(Some(p)) => p,
+                    Ok(None) => {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({"ok": false, "detail": "account inactive or not found"})),
+                        )
+                            .into_response();
+                    }
                     Err(e) => {
                         tracing::error!(target: "auth", error = %e, "rbac snapshot failed on refresh");
                         return (

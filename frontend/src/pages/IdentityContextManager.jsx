@@ -3,6 +3,7 @@ import { Users, Shield, Key, AlertTriangle, CheckCircle, Clock, X } from 'lucide
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 /**
  * IdentityContextManager - User identity and access context tracking
@@ -17,20 +18,31 @@ import { api } from '../utils/apiFetch';
  * - Insider threat detection
  */
 export default function IdentityContextManager() {
+  const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [identities, setIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedIdentity, setSelectedIdentity] = useState(null);
 
   useEffect(() => {
-    fetchIdentities();
-  }, []);
+    if (clientLoading) return;
+    if (clientId == null) {
+      setIdentities([]);
+      setLoading(false);
+      return;
+    }
+    fetchIdentities(clientId);
+  }, [clientId, clientLoading]);
 
-  const fetchIdentities = async () => {
+  const fetchIdentities = async (cid) => {
     try {
       setLoading(true);
+<<<<<<< HEAD
+      const data = await api.get(withClientId('/api/identity/contexts', cid));
+=======
       setError(null);
       const data = await api.get('/api/identity/contexts');
+>>>>>>> origin/main
       setIdentities(data.identities || []);
     } catch (err) {
       console.error('Failed to fetch identities:', err);

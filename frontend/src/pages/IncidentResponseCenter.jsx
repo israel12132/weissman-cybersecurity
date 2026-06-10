@@ -5,8 +5,15 @@
  * real-time timelines, containment / eradication actions, MTTR metrics.
  * Route: /incident-response
  */
+<<<<<<< HEAD
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+=======
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
+>>>>>>> origin/main
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiFetch } from '../lib/apiBase'
+import EmptyState from '../components/ui/EmptyState'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
@@ -20,6 +27,8 @@ const SEVERITY_COLOR = {
   info: '#6b7280',
 }
 
+<<<<<<< HEAD
+=======
 // Fallback incidents when API is unavailable or returns empty
 const FALLBACK_INCIDENTS = [
   {
@@ -41,6 +50,7 @@ const FALLBACK_INCIDENTS = [
   },
 ]
 
+>>>>>>> origin/main
 const PLAYBOOKS = {
   ransomware: {
     label: 'Ransomware Playbook',
@@ -114,6 +124,24 @@ function durationHuman(created, updated) {
   const h = Math.floor(ms / 3_600_000)
   const m = Math.floor((ms % 3_600_000) / 60_000)
   return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function normalizeIncident(raw) {
+  return {
+    id: raw.id ?? '',
+    title: raw.title ?? 'Untitled incident',
+    severity: String(raw.severity ?? 'high').toLowerCase(),
+    status: String(raw.status ?? 'active').toLowerCase(),
+    assignee: raw.assignee ?? 'SOC Analyst',
+    created: raw.created ?? new Date().toISOString(),
+    updated: raw.updated ?? raw.created ?? new Date().toISOString(),
+    source: raw.source ?? '—',
+    affectedAssets: Array.isArray(raw.affectedAssets) ? raw.affectedAssets : [],
+    mitre: raw.mitre ?? null,
+    description: raw.description ?? '',
+    playbook: raw.playbook ?? 'credential_stuffing',
+    timeline: Array.isArray(raw.timeline) ? raw.timeline : [],
+  }
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -281,12 +309,43 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function IncidentResponseCenter() {
+<<<<<<< HEAD
+  const { t } = useTranslation()
+  const [incidents, setIncidents] = useState([])
+=======
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+>>>>>>> origin/main
   const [selectedId, setSelectedId] = useState(null)
   const [localSteps, setLocalSteps] = useState({})
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    apiFetch('/api/soc/incidents')
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Failed to load incidents (${r.status})`)
+        return r.json()
+      })
+      .then((data) => {
+        if (cancelled) return
+        const list = (data?.incidents ?? []).map(normalizeIncident)
+        setIncidents(list)
+        setSelectedId(list[0]?.id ?? null)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message ?? 'Failed to load incidents')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   // Load incidents from API
   useEffect(() => {
@@ -342,15 +401,23 @@ export default function IncidentResponseCenter() {
     const crit = incidents.filter((i) => i.severity === 'critical').length
     const resolved = incidents.filter((i) => i.status === 'resolved').length
     const totalMs = incidents.reduce((sum, i) => sum + (new Date(i.updated) - new Date(i.created)), 0)
-    const avgH = (totalMs / incidents.length / 3_600_000).toFixed(1)
+    const avgH = incidents.length
+      ? (totalMs / incidents.length / 3_600_000).toFixed(1)
+      : '0.0'
     return { active, crit, resolved, avgH }
   }, [incidents])
 
   return (
     <PageShell
+<<<<<<< HEAD
+      title={t('pages.incidentResponseCenter.title')}
+      subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
+      badge={t('pages.incidentResponseCenter.badge')}
+=======
       title="Incident Response Center"
       subtitle={loading ? 'Loading...' : `${incidents.length} incidents tracked`}
       badge="IR"
+>>>>>>> origin/main
       badgeColor="#ef4444"
     >
       {/* ── Error Banner ─────────────────────────────────────────────────── */}
@@ -377,18 +444,37 @@ export default function IncidentResponseCenter() {
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       {!loading && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Active Incidents"  value={metrics.active}  sub="Requiring immediate action" color="#ef4444" icon="🔥" />
-        <MetricCard label="Critical Severity" value={metrics.crit}    sub="P0 — C-suite notification"  color="#f97316" icon="⚠️" />
-        <MetricCard label="Avg MTTR"          value={`${metrics.avgH}h`} sub="Mean time to resolve"   color="#22d3ee" icon="⏱️" />
-        <MetricCard label="Resolved (7d)"     value={metrics.resolved} sub="Closed incidents"          color="#4ade80" icon="✅" />
+        <MetricCard label={t('pages.incidentResponseCenter.active_incidents')} value={metrics.active} sub={t('pages.incidentResponseCenter.active_sub')} color="#ef4444" icon="🔥" />
+        <MetricCard label={t('pages.incidentResponseCenter.critical_severity')} value={metrics.crit} sub={t('pages.incidentResponseCenter.critical_sub')} color="#f97316" icon="⚠️" />
+        <MetricCard label={t('pages.incidentResponseCenter.avg_mttr')} value={`${metrics.avgH}h`} sub={t('pages.incidentResponseCenter.mttr_sub')} color="#22d3ee" icon="⏱️" />
+        <MetricCard label={t('pages.incidentResponseCenter.resolved_7d')} value={metrics.resolved} sub={t('pages.incidentResponseCenter.resolved_sub')} color="#4ade80" icon="✅" />
       </div>
       )}
 
+<<<<<<< HEAD
+      {error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono mb-6">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && incidents.length === 0 && (
+        <EmptyState
+          icon="shield"
+          title={t('pages.incidentResponseCenter.empty_title')}
+          body={t('pages.incidentResponseCenter.empty_body')}
+          cta={{ label: t('pages.incidentResponseCenter.view_findings'), to: '/findings' }}
+        />
+      )}
+
+      {!loading && !error && incidents.length > 0 && (
+=======
       {!loading && (
+>>>>>>> origin/main
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Incident Queue</h2>
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.incidentResponseCenter.incident_queue')}</h2>
           {incidents.map((inc) => (
             <IncidentRow
               key={inc.id}

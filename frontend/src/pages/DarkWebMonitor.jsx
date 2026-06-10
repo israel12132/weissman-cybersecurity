@@ -8,6 +8,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
@@ -32,6 +33,7 @@ function severityBadge(sev) {
 }
 
 export default function DarkWebMonitor() {
+  const { t } = useTranslation()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -73,29 +75,29 @@ export default function DarkWebMonitor() {
   }, [findings])
 
   return (
-    <PageShell title="Dark Web Monitor" subtitle="Credential leaks, typosquats, and dark-web mentions">
+    <PageShell title={t('pages.darkWebMonitor.title')} subtitle={t('pages.darkWebMonitor.subtitle')}>
       <div className="space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <StatCard label="Total Hits" value={stats.total} />
-          <StatCard label="Critical" value={stats.critical} accent="text-rose-300" />
-          <StatCard label="High" value={stats.high} accent="text-orange-300" />
-          <StatCard label="Medium" value={stats.medium} accent="text-yellow-300" />
-          <StatCard label="Low / Info" value={stats.low + stats.info} accent="text-slate-300" />
+          <StatCard label={t('pages.darkWebMonitor.total_hits')} value={stats.total} />
+          <StatCard label={t('pages.darkWebMonitor.critical')} value={stats.critical} accent="text-rose-300" />
+          <StatCard label={t('pages.darkWebMonitor.high')} value={stats.high} accent="text-orange-300" />
+          <StatCard label={t('pages.darkWebMonitor.medium')} value={stats.medium} accent="text-yellow-300" />
+          <StatCard label={t('pages.darkWebMonitor.low_info')} value={stats.low + stats.info} accent="text-slate-300" />
         </div>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            Couldn't load findings: {error}.
+            {t('pages.darkWebMonitor.load_error', { error })}
           </div>
         )}
 
         <section className="bg-black/40 border border-white/10 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-white">Dark-web findings</h3>
-            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">Open Findings C2 →</Link>
+            <h3 className="text-sm font-semibold text-white">{t('pages.darkWebMonitor.findings_heading')}</h3>
+            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">{t('pages.darkWebMonitor.open_findings')}</Link>
           </div>
           {loading ? (
-            <div className="text-sm text-white/40">Loading…</div>
+            <div className="text-sm text-white/40">{t('pages.darkWebMonitor.loading')}</div>
           ) : findings.length === 0 ? (
             <EmptyState />
           ) : (
@@ -103,11 +105,11 @@ export default function DarkWebMonitor() {
               <table className="w-full text-[12px] font-mono">
                 <thead>
                   <tr className="text-left text-white/45 border-b border-white/10">
-                    <th className="py-2 pr-3">Severity</th>
-                    <th className="py-2 pr-3">Title</th>
-                    <th className="py-2 pr-3">Source</th>
-                    <th className="py-2 pr-3">Target</th>
-                    <th className="py-2 pr-3">Discovered</th>
+                    <th className="py-2 pr-3">{t('pages.darkWebMonitor.col_severity')}</th>
+                    <th className="py-2 pr-3">{t('pages.darkWebMonitor.col_title')}</th>
+                    <th className="py-2 pr-3">{t('pages.darkWebMonitor.col_source')}</th>
+                    <th className="py-2 pr-3">{t('pages.darkWebMonitor.col_target')}</th>
+                    <th className="py-2 pr-3">{t('pages.darkWebMonitor.col_discovered')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -140,24 +142,21 @@ function StatCard({ label, value, accent }) {
 }
 
 function EmptyState() {
+  const { t } = useTranslation()
   return (
     <div className="text-sm text-white/55 space-y-3">
-      <div>No dark-web intelligence yet for this tenant.</div>
+      <div>{t('pages.darkWebMonitor.empty_title')}</div>
       <ul className="list-disc pl-5 space-y-1 text-xs text-white/45">
         <li>
-          Add a client and{' '}
-          <Link to="/clients" className="underline text-cyan-300">run the baseline scan</Link>{' '}
-          (Leak Hunter is included in the bundle).
+          {t('pages.darkWebMonitor.empty_step_scan_before')}{' '}
+          <Link to="/clients" className="underline text-cyan-300">{t('pages.darkWebMonitor.empty_step_scan_link')}</Link>{' '}
+          {t('pages.darkWebMonitor.empty_step_scan_after')}
         </li>
+        <li>{t('pages.darkWebMonitor.empty_step_keys')}</li>
         <li>
-          For richer breach feeds, set <code className="text-cyan-300">HIBP_API_KEY</code>{' '}
-          / <code className="text-cyan-300">OTX_API_KEY</code> in System Configuration; the
-          engine is wired but degrades gracefully without keys.
-        </li>
-        <li>
-          Run the <code className="text-cyan-300">darkweb_intel</code> engine from the{' '}
-          <Link to="/engines" className="underline text-cyan-300">Engine Matrix</Link>{' '}
-          (requires an authorized domain).
+          {t('pages.darkWebMonitor.empty_step_engine_before')}{' '}
+          <Link to="/engines" className="underline text-cyan-300">{t('pages.darkWebMonitor.empty_step_engine_link')}</Link>{' '}
+          {t('pages.darkWebMonitor.empty_step_engine_after')}
         </li>
       </ul>
     </div>

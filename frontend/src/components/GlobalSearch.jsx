@@ -1,23 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Command, Search, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiFetch } from '../lib/apiBase';
 
 /**
  * GlobalSearch - Universal search with keyboard shortcuts (Ctrl+K)
- *
- * Searches:
- * - Pages
- * - Engines
- * - Findings
- * - Clients
- * - Commands
+ * Backed by GET /api/search?q=
  */
 export default function GlobalSearch() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Keyboard shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -33,25 +30,38 @@ export default function GlobalSearch() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Search logic
   useEffect(() => {
-    if (!query.trim()) {
+    if (!query.trim() || query.trim().length < 2) {
       setResults([]);
-      return;
+      return undefined;
     }
-
-    // Simulate search (replace with actual API call)
-    const mockResults = [
-      { type: 'page', title: 'Dashboard', path: '/', icon: '📊' },
-      { type: 'page', title: 'Findings', path: '/findings', icon: '🔍' },
-      { type: 'engine', title: 'XSS Scanner', id: 'xss_scanner', icon: '⚡' },
-      { type: 'client', title: 'Example Corp', id: '1', icon: '🏢' },
-    ].filter((item) =>
-      item.title.toLowerCase().includes(query.toLowerCase())
-    );
-
-    setResults(mockResults);
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
+          signal: ctrl.signal,
+        });
+        const d = await r.json().catch(() => ({}));
+        setResults(Array.isArray(d.results) ? d.results : []);
+      } catch {
+        if (!ctrl.signal.aborted) setResults([]);
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false);
+      }
+    }, 200);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
   }, [query]);
+
+  const goTo = useCallback((result) => {
+    const path = result.path || (result.type === 'engine' && result.id ? `/engines/${result.id}` : '/');
+    setIsOpen(false);
+    setQuery('');
+    navigate(path.startsWith('/') ? path : `/${path}`);
+  }, [navigate]);
 
   if (!isOpen) return null;
 
@@ -71,7 +81,6 @@ export default function GlobalSearch() {
           className="w-full max-w-2xl bg-gray-900/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Search Input */}
           <div className="flex items-center gap-3 p-4 border-b border-white/10">
             <Search className="w-5 h-5 text-gray-400" />
             <input
@@ -85,29 +94,28 @@ export default function GlobalSearch() {
             <kbd className="px-2 py-1 bg-white/10 rounded text-xs text-gray-400">Esc</kbd>
           </div>
 
-          {/* Results */}
           <div className="max-h-[60vh] overflow-y-auto">
-            {results.length === 0 && query ? (
+            {loading && query.length >= 2 ? (
+              <div className="p-8 text-center text-gray-500">Searching…</div>
+            ) : results.length === 0 && query.length >= 2 ? (
               <div className="p-8 text-center text-gray-500">
-                No results found for "{query}"
+                No results found for &quot;{query}&quot;
               </div>
             ) : results.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Command className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                Start typing to search...
+                Start typing to search…
               </div>
             ) : (
               <div className="divide-y divide-white/5">
                 {results.map((result, index) => (
                   <button
-                    key={index}
+                    key={`${result.type}-${result.id || result.path || index}`}
+                    type="button"
                     className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
-                    onClick={() => {
-                      // Navigate to result
-                      setIsOpen(false);
-                    }}
+                    onClick={() => goTo(result)}
                   >
-                    <span className="text-2xl">{result.icon}</span>
+                    <span className="text-2xl">{result.icon || '🔎'}</span>
                     <div className="flex-1">
                       <div className="text-sm font-medium text-white">{result.title}</div>
                       <div className="text-xs text-gray-500 capitalize">{result.type}</div>
@@ -119,17 +127,13 @@ export default function GlobalSearch() {
             )}
           </div>
 
-          {/* Footer */}
           <div className="flex items-center justify-between p-3 border-t border-white/10 bg-white/5 text-xs text-gray-500">
             <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded">↑↓</kbd> Navigate
-              </span>
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-white/10 rounded">Enter</kbd> Select
               </span>
             </div>
-            <span>Powered by Weissman Search</span>
+            <span>Weissman Global Search</span>
           </div>
         </motion.div>
       </motion.div>

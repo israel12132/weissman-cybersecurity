@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, Filter } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { apiFetch } from '../lib/apiBase';
 
 /**
  * ComplianceFrameworks - Multi-framework compliance mapping and tracking
@@ -24,6 +26,7 @@ import { api } from '../utils/apiFetch';
  * - Audit report generation
  */
 export default function ComplianceFrameworks() {
+  const { t } = useTranslation();
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
@@ -77,9 +80,9 @@ export default function ComplianceFrameworks() {
 
   const generateReport = async (frameworkId) => {
     try {
-      const blob = await api.get(`/api/compliance/frameworks/${frameworkId}/report`, {
-        responseType: 'blob',
-      });
+      const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`);
+      if (!r.ok) throw new Error(`Report failed (${r.status})`);
+      const blob = await r.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -134,7 +137,7 @@ export default function ComplianceFrameworks() {
     : { total: 0, compliant: 0, nonCompliant: 0, partial: 0, score: 0 };
 
   return (
-    <PageShell title="Compliance Frameworks" icon={<Shield />}>
+    <PageShell title={t('pages.complianceFrameworks.title')} subtitle={t('pages.complianceFrameworks.subtitle')} icon={<Shield />}>
       <div className="space-y-6">
         {/* Framework Selector */}
         <div className="flex items-center gap-3 overflow-x-auto pb-2">

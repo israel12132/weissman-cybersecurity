@@ -39,8 +39,8 @@ fn verify_github_signature(secret: &str, signature_256: Option<&str>, body: &[u8
         return false;
     };
     mac.update(body);
-    let expected = hex::encode(mac.finalize().into_bytes());
-    expected.eq_ignore_ascii_case(sig)
+    let expected = mac.finalize().into_bytes();
+    crate::security_hardening::constant_time_hmac_hex_eq(&expected, sig)
 }
 
 fn verify_gitlab_token(headers: &HeaderMap, expected: &str) -> bool {

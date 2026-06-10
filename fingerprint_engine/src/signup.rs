@@ -17,6 +17,7 @@ use axum::extract::{ConnectInfo, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use chrono::{Datelike, Utc};
 use rand::RngCore;
 use serde::Deserialize;
 use serde_json::json;
@@ -377,7 +378,7 @@ pub async fn api_verify(
 
     let user_insert_sql = r#"
         INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active, created_at)
-        VALUES ($1, $2, $3, 'admin', true, true, now())
+        VALUES ($1, $2, $3, 'admin', false, true, now())
         ON CONFLICT (tenant_id, email) DO UPDATE SET is_active = true, updated_at = now()
         RETURNING id
     "#;
@@ -395,6 +396,42 @@ pub async fn api_verify(
             return invalid("could not provision user");
         }
     };
+
+    // Mirror billing::register_tenant_and_admin — starter plan + usage counter for the month.
+    let sub_status = if crate::billing::billing_strict_enabled() {
+        "trialing"
+    } else {
+        "active"
+    };
+    if let Err(e) = sqlx::query(
+        "INSERT INTO tenant_subscriptions (tenant_id, plan_slug, status) VALUES ($1, $2, $3)",
+    )
+    .bind(tenant_id)
+    .bind("starter")
+    .bind(sub_status)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::warn!(target: "signup", error = %e, "subscription insert failed");
+        let _ = tx.rollback().await;
+        return invalid("could not provision subscription");
+    }
+    let period = {
+        let n = Utc::now().naive_utc().date();
+        format!("{:04}-{:02}", n.year(), n.month())
+    };
+    if let Err(e) = sqlx::query(
+        "INSERT INTO tenant_usage_counters (tenant_id, period_ym, scans_started) VALUES ($1, $2, 0)",
+    )
+    .bind(tenant_id)
+    .bind(&period)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::warn!(target: "signup", error = %e, "usage counter insert failed");
+        let _ = tx.rollback().await;
+        return invalid("could not provision usage tracking");
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::warn!(target: "signup", error = %e, "verify commit failed");

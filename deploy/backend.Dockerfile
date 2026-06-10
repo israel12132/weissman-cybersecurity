@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -r -s /bin/false -u 65532 weissman
 COPY --from=build /build/target/release/weissman-server /usr/local/bin/weissman-server
 COPY --from=build /build/target/release/weissman-worker /usr/local/bin/weissman-worker
+# No-tx migration pre-runner reads SQL from disk at runtime (compile-time CARGO_MANIFEST_DIR is /build/...).
+COPY --from=build /build/crates/weissman-db/migrations /srv/migrations
+ENV WEISSMAN_MIGRATIONS_DIR=/srv/migrations
 USER weissman
 WORKDIR /srv
 EXPOSE 8000

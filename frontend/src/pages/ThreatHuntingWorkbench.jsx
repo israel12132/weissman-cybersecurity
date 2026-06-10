@@ -6,6 +6,10 @@
  * Route: /threat-hunting
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
+<<<<<<< HEAD
+import { useTranslation } from 'react-i18next'
+=======
+>>>>>>> origin/main
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
@@ -19,6 +23,23 @@ const HUNT_STATUS_META = {
   queued:    { label: 'QUEUED',    color: '#8b5cf6' },
 }
 
+<<<<<<< HEAD
+function normalizeCampaign(raw) {
+  return {
+    id: raw.id ?? '',
+    title: raw.title ?? 'Untitled hunt',
+    hypothesis: raw.hypothesis ?? '',
+    status: raw.status ?? 'queued',
+    analyst: raw.analyst ?? 'Unassigned',
+    started: raw.started ?? '—',
+    mitre: Array.isArray(raw.mitre) ? raw.mitre : [],
+    hitsFound: Number(raw.hitsFound) || 0,
+    dataSources: Array.isArray(raw.dataSources) ? raw.dataSources : [],
+    priority: raw.priority ?? 'medium',
+    color: raw.color ?? '#22d3ee',
+  }
+}
+=======
 // Fallback campaigns when API is unavailable
 const FALLBACK_CAMPAIGNS = [
   {
@@ -87,6 +108,7 @@ const FALLBACK_CAMPAIGNS = [
     color: '#8b5cf6',
   },
 ]
+>>>>>>> origin/main
 
 const IOC_LIST = [
   { id: 'ioc-1',  type: 'ip',     value: '185.220.101.45',                  source: 'Threat Intel Feed', severity: 'critical', tags: ['tor-exit', 'c2'], added: '2026-04-20' },
@@ -362,6 +384,55 @@ function IocTable({ iocs }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ThreatHuntingWorkbench() {
+<<<<<<< HEAD
+  const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState('campaigns') // 'campaigns' | 'queries' | 'iocs'
+  const [campaigns, setCampaigns] = useState([])
+  const [campaignsLoading, setCampaignsLoading] = useState(true)
+  const [campaignsError, setCampaignsError] = useState(null)
+  const [selectedCampaign, setSelectedCampaign] = useState(null)
+
+  const loadCampaigns = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/soc/hunts')
+      if (!r.ok) {
+        setCampaigns([])
+        setCampaignsError(`Couldn't load hunts (HTTP ${r.status})`)
+        return
+      }
+      const data = await r.json().catch(() => ({}))
+      const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map(normalizeCampaign)
+      setCampaigns(list)
+      setCampaignsError(null)
+      setSelectedCampaign((prev) => {
+        if (prev && list.some((c) => c.id === prev)) return prev
+        return list[0]?.id ?? null
+      })
+    } catch (e) {
+      setCampaigns([])
+      setCampaignsError(e.message || String(e))
+    } finally {
+      setCampaignsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadCampaigns()
+  }, [loadCampaigns])
+
+  const selectedCampaignObj = useMemo(
+    () => campaigns.find((c) => c.id === selectedCampaign),
+    [campaigns, selectedCampaign],
+  )
+
+  const metrics = useMemo(() => {
+    const active = campaigns.filter((c) => c.status === 'active').length
+    const totalHits = campaigns.reduce((s, c) => s + c.hitsFound, 0)
+    const totalIOCs = IOC_LIST.length
+    const critIOCs = IOC_LIST.filter((i) => i.severity === 'critical').length
+    return { active, totalHits, totalIOCs, critIOCs }
+  }, [campaigns])
+=======
   const [campaigns, setCampaigns] = useState([])
   const [iocs, setIocs] = useState([])
   const [queries, setQueries] = useState([])
@@ -429,6 +500,7 @@ export default function ThreatHuntingWorkbench() {
 
     loadData()
   }, [])
+>>>>>>> origin/main
 
   const selectedCampaignObj = useMemo(() => campaigns.find((c) => c.id === selectedCampaign), [selectedCampaign, campaigns])
 
@@ -442,14 +514,19 @@ export default function ThreatHuntingWorkbench() {
 
   const tabs = [
     { id: 'campaigns', label: '🎯 Hunt Campaigns', count: campaigns.length },
+<<<<<<< HEAD
+    { id: 'queries',   label: '🔎 Hunt Queries',   count: HUNT_QUERIES.length },
+    { id: 'iocs',      label: '🧲 IOC Library',    count: IOC_LIST.length },
+=======
     { id: 'queries',   label: '🔎 Hunt Queries',   count: queries.length },
     { id: 'iocs',      label: '🧲 IOC Library',    count: iocs.length },
+>>>>>>> origin/main
   ]
 
   return (
     <PageShell
-      title="Threat Hunting Workbench"
-      subtitle="Hypothesis-driven hunting · IOC management · Query library"
+      title={t('pages.threatHuntingWorkbench.title')}
+      subtitle={t('pages.threatHuntingWorkbench.subtitle')}
       badge="HUNT"
       badgeColor="#8b5cf6"
     >
@@ -505,6 +582,39 @@ export default function ThreatHuntingWorkbench() {
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
+<<<<<<< HEAD
+      <AnimatePresence mode="wait">
+        {activeTab === 'campaigns' && (
+          <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Hunt Campaigns</h2>
+            {campaignsLoading ? (
+              <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.loading_campaigns')}</p>
+            ) : campaigns.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center">
+                <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.no_campaigns')}</p>
+                {campaignsError ? (
+                  <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
+                ) : (
+                  <p className="text-[11px] text-white/25 font-mono mt-2">
+                    Campaigns appear when correlated finding clusters are detected from scan data.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+                <div className="space-y-2">
+                  {campaigns.map((c) => (
+                    <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} />
+                  ))}
+                </div>
+                <AnimatePresence mode="wait">
+                  {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} />}
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
+        )}
+=======
       {!loading && (
         <AnimatePresence mode="wait">
           {activeTab === 'campaigns' && (
@@ -528,6 +638,7 @@ export default function ThreatHuntingWorkbench() {
               )}
             </motion.div>
           )}
+>>>>>>> origin/main
 
           {activeTab === 'queries' && (
             <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">

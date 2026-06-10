@@ -1,5 +1,44 @@
 // Endpoint-agent HTTP + WebSocket handlers (included from handler_fragments.rs).
 
+fn agent_bin_root() -> std::path::PathBuf {
+    if let Ok(dir) = std::env::var("WEISSMAN_AGENT_BIN_DIR") {
+        if !dir.trim().is_empty() {
+            return std::path::PathBuf::from(dir.trim());
+        }
+    }
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        let workspace = std::path::Path::new(&manifest).join("..").join("..");
+        let packaged = workspace.join("bin").join("agents");
+        if packaged.is_dir() {
+            return packaged;
+        }
+        let release = workspace.join("target").join("release").join("weissman-agent");
+        if release.is_file() {
+            return release.parent().unwrap_or(&release).to_path_buf();
+        }
+    }
+    std::path::PathBuf::from("./bin/agents")
+}
+
+fn resolve_agent_binary(platform: &str) -> std::path::PathBuf {
+    let platform = platform.trim().to_lowercase();
+    let root = agent_bin_root();
+    let sub = root.join(&platform);
+    let named = if platform.contains("windows") {
+        sub.join("weissman-agent.exe")
+    } else {
+        sub.join("weissman-agent")
+    };
+    if named.is_file() {
+        return named;
+    }
+    if platform.contains("windows") {
+        root.join("weissman-agent.exe")
+    } else {
+        root.join("weissman-agent")
+    }
+}
+
 /// Return the bash installer. Path: GET /install/agent.sh.
 async fn install_agent_sh() -> Response {
     let script = include_str!("../../scripts/agent/install.sh");
@@ -21,13 +60,78 @@ async fn install_agent_ps1() -> Response {
     (StatusCode::OK, h, script).into_response()
 }
 
+async fn install_agent_binary(axum::extract::Path(platform): axum::extract::Path<String>) -> Response {
+    let file_path = resolve_agent_binary(&platform);
+    if !file_path.is_file() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "ok": false,
+                "detail": format!(
+                    "Agent binary not found for platform '{}'. Build with: cargo build -p weissman-agent --release && mkdir -p bin/agents/{platform} && cp target/release/weissman-agent bin/agents/{platform}/",
+                    platform
+                ),
+            })),
+        )
+            .into_response();
+    }
+    match tokio::fs::read(&file_path).await {
+        Ok(bytes) => {
+            let mut h = axum::http::HeaderMap::new();
+            h.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/octet-stream"),
+            );
+            h.insert(
+                axum::http::header::CONTENT_DISPOSITION,
+                axum::http::HeaderValue::from_static("attachment; filename=\"weissman-agent\""),
+            );
+            (StatusCode::OK, h, bytes).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": format!("read binary: {}", e)})),
+        )
+            .into_response(),
+    }
+}
+
+async fn install_agent_binary_sha256(
+    axum::extract::Path(platform): axum::extract::Path<String>,
+) -> Response {
+    let file_path = resolve_agent_binary(&platform);
+    if !file_path.is_file() {
+        return (StatusCode::NOT_FOUND, "binary missing").into_response();
+    }
+    match tokio::fs::read(&file_path).await {
+        Ok(bytes) => {
+            let mut h = sha2::Sha256::new();
+            sha2::Digest::update(&mut h, &bytes);
+            let digest = hex::encode(sha2::Digest::finalize(h));
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/plain; charset=utf-8"),
+            );
+            (StatusCode::OK, headers, format!("{digest}  weissman-agent\n")).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": format!("{}", e)})),
+        )
+            .into_response(),
+    }
+}
+
 //
 // Routes:
-//   POST /api/agents/enrollment-tokens       → admin creates a one-time enrollment token (JSON: client_id, valid_minutes)
+//   POST /api/agents/enrollment-tokens       → admin creates a one-time enrollment token
 //   POST /api/agents/enroll                  → agent exchanges plaintext token for session JWT (unauth)
-//   GET  /api/agents/status                  → list of agents per tenant, with online flag + last_seen
-//   GET  /ws/agent                           → WebSocket session (token=session_jwt)
-//   POST /api/agents/:agent_id/task          → admin queues an immediate detection task
+//   GET  /api/agents/status                  → list of agents per tenant
+//   POST /api/agents/dispatch                → analyst queues detection task (fleet round-robin)
+//   GET  /ws/agent                           → WebSocket session (agent JWT only)
+//       Auth: prefer `Authorization: Bearer <session_jwt>`; `?token=<session_jwt>` is allowed for
+//       agents that cannot set WS headers. Human user access JWTs are rejected from query strings.
 
 #[derive(serde::Deserialize)]
 struct CreateAgentTokenBody {
@@ -46,6 +150,16 @@ async fn api_agents_create_token(
 ) -> Response {
     if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
+    }
+    if !crate::endpoint_agents::client_exists(state.app_pool.as_ref(), auth.tenant_id, body.client_id)
+        .await
+        .unwrap_or(false)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "client_id not found for tenant"})),
+        )
+            .into_response();
     }
     let validity = body.valid_minutes.clamp(5, 1440);
     let plaintext = match crate::endpoint_agents::create_enrollment_token(
@@ -126,6 +240,15 @@ async fn api_agents_enroll(
                 .into_response();
         }
     }
+    let caps = if body.capabilities.is_empty() {
+        crate::engine_dispatch::AGENT_REQUIRED_ENGINES
+            .iter()
+            .map(|s| (*s).to_string())
+            .chain(std::iter::once("ueba_baseline".to_string()))
+            .collect::<Vec<_>>()
+    } else {
+        body.capabilities.clone()
+    };
     let agent_uuid = match crate::endpoint_agents::register_agent(
         state.app_pool.as_ref(),
         consumed.tenant_id,
@@ -135,7 +258,7 @@ async fn api_agents_enroll(
         &body.os,
         &body.arch,
         &body.agent_version,
-        &body.capabilities,
+        &caps,
     )
     .await
     {
@@ -149,11 +272,9 @@ async fn api_agents_enroll(
                 .into_response();
         }
     };
-    let session_jwt = match crate::auth_jwt::create_access_token(
-        0, // user_id 0 = agent (no human owner)
+    let session_jwt = match crate::auth_jwt::create_agent_session_token(
+        &agent_uuid.to_string(),
         consumed.tenant_id,
-        "agent",
-        false,
     ) {
         Ok(t) => t,
         Err(e) => {
@@ -180,6 +301,9 @@ async fn api_agents_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
     let online: std::collections::HashSet<String> = state
         .endpoint_agents
         .online_agents()
@@ -193,8 +317,9 @@ async fn api_agents_status(
                           agent_version, capabilities, enrolled_at, last_seen_at, status
                      FROM endpoint_agents
                     ORDER BY last_seen_at DESC
-                    LIMIT 500"#,
+                    LIMIT $1"#,
             )
+            .bind(crate::endpoint_agents::AGENT_STATUS_LIMIT)
             .fetch_all(&mut *tx)
             .await
             .unwrap_or_default();
@@ -224,7 +349,16 @@ async fn api_agents_status(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({"ok": true, "agents": out, "online_count": online.len()}))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "agents": out,
+            "online_count": online.len(),
+            "fleet_max": crate::endpoint_agents::FLEET_MAX_AGENTS,
+        })),
+    )
+        .into_response()
 }
 
 #[derive(serde::Deserialize)]
@@ -235,6 +369,8 @@ struct DispatchAgentTaskBody {
     target: Option<String>,
     #[serde(default)]
     params: Value,
+    #[serde(default)]
+    fleet_broadcast: bool,
 }
 
 async fn api_agents_dispatch_task(
@@ -250,8 +386,43 @@ async fn api_agents_dispatch_task(
     } else {
         body.params.clone()
     };
-    let task_uuid = match crate::endpoint_agents::enqueue_task(
+    if body.fleet_broadcast {
+        let engines = crate::endpoint_agents::NSSI_BRIDGE_ENGINES;
+        let mut dispatched = 0u32;
+        for (i, engine) in engines.iter().enumerate() {
+            if let Ok((_, live)) = crate::endpoint_agents::enqueue_and_dispatch_fleet(
+                state.app_pool.as_ref(),
+                &state.endpoint_agents,
+                auth.tenant_id,
+                body.client_id,
+                engine,
+                body.target.as_deref(),
+                &params,
+            )
+            .await
+            {
+                if live {
+                    dispatched += 1;
+                }
+            }
+            if (i as i32) >= crate::endpoint_agents::FLEET_MAX_AGENTS {
+                break;
+            }
+        }
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "fleet_broadcast": true,
+                "engines_dispatched": engines.len(),
+                "live_dispatched": dispatched,
+            })),
+        )
+            .into_response();
+    }
+    let (task_uuid, live) = match crate::endpoint_agents::enqueue_and_dispatch_fleet(
         state.app_pool.as_ref(),
+        &state.endpoint_agents,
         auth.tenant_id,
         body.client_id,
         &body.engine,
@@ -260,7 +431,7 @@ async fn api_agents_dispatch_task(
     )
     .await
     {
-        Ok(u) => u,
+        Ok(pair) => pair,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -269,86 +440,35 @@ async fn api_agents_dispatch_task(
                 .into_response();
         }
     };
-    // Best-effort live delivery: if any agent for this client is online, push the task.
-    let dispatched = dispatch_to_first_live_agent(
-        state.app_pool.as_ref(),
-        &state.endpoint_agents,
-        auth.tenant_id,
-        body.client_id,
-        crate::endpoint_agents::ServerToAgent::Task {
-            task_id: task_uuid.to_string(),
-            engine: body.engine.clone(),
-            target: body.target.clone(),
-            params,
-        },
-    )
-    .await;
     (
         StatusCode::OK,
         Json(json!({
             "ok": true,
             "task_id": task_uuid.to_string(),
-            "live_dispatched": dispatched,
+            "live_dispatched": live,
         })),
     )
         .into_response()
 }
 
-async fn dispatch_to_first_live_agent(
-    pool: &PgPool,
-    registry: &Arc<crate::endpoint_agents::AgentRegistry>,
-    tenant_id: i64,
-    client_id: i64,
-    msg: crate::endpoint_agents::ServerToAgent,
-) -> bool {
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        let row = sqlx::query_scalar::<_, String>(
-            r#"SELECT agent_uuid::text FROM endpoint_agents
-                WHERE tenant_id = $1 AND client_id = $2
-                  AND status IN ('online','enrolled')
-                ORDER BY last_seen_at DESC
-                LIMIT 1"#,
-        )
-        .bind(tenant_id)
-        .bind(client_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        let _ = tx.commit().await;
-        if let Some(uuid) = row {
-            if registry.send(&uuid, msg).await.is_ok() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-// WebSocket handler. Authentication uses `access_token` from the query string (JWT). We treat
-// `agent_id` as the next URL path segment (?agent_id=…). The agent's first frame must be a
-// `hello` containing the agent_id; we verify it matches the JWT-bound tenant_id.
+// WebSocket handler. Authentication uses agent session JWT (`typ: agent`) via header or `?token=`.
 async fn ws_agent(
     ws: axum::extract::WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    if auth.role != "agent" {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"ok": false, "detail": "agent JWT required"})),
-        )
-            .into_response();
+    if let Err(r) = crate::rbac::require_agent(&auth) {
+        return r;
     }
+    let expected_agent_id = auth.agent_id.clone();
     let app_pool = state.app_pool.clone();
     let registry = state.endpoint_agents.clone();
     let tenant_id = auth.tenant_id;
     ws.on_upgrade(move |mut socket| async move {
         let (tx_to_agent, mut rx_to_agent) =
-            tokio::sync::mpsc::channel::<crate::endpoint_agents::ServerToAgent>(128);
+            tokio::sync::mpsc::channel::<crate::endpoint_agents::ServerToAgent>(256);
         let mut agent_uuid: Option<String> = None;
         let mut client_id: Option<i64> = None;
-        // Welcome message will be sent after we see the hello frame.
 
         loop {
             tokio::select! {
@@ -373,28 +493,55 @@ async fn ws_agent(
                             match kind {
                                 "hello" => {
                                     let aid = v.get("agent_id").and_then(Value::as_str).unwrap_or("").to_string();
-                                    let cid = v.get("client_id").and_then(Value::as_i64).unwrap_or(0);
                                     if aid.is_empty() {
                                         let _ = socket.send(Message::Close(None)).await;
                                         return;
                                     }
-                                    agent_uuid = Some(aid.clone());
-                                    client_id = Some(cid);
-                                    registry.attach(&aid, tx_to_agent.clone()).await;
-                                    if let Ok(u) = uuid::Uuid::parse_str(&aid) {
-                                        let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), &u, "online").await;
+                                    if let Some(ref expected) = expected_agent_id {
+                                        if expected != &aid {
+                                            let _ = socket.send(Message::Close(None)).await;
+                                            return;
+                                        }
                                     }
-                                    // Welcome + replay pending tasks.
+                                    let Ok(agent_u) = uuid::Uuid::parse_str(&aid) else {
+                                        let _ = socket.send(Message::Close(None)).await;
+                                        return;
+                                    };
+                                    let db_cid = match crate::endpoint_agents::registered_client_id(
+                                        app_pool.as_ref(),
+                                        tenant_id,
+                                        &agent_u,
+                                    )
+                                    .await
+                                    {
+                                        Ok(Some(c)) => c,
+                                        _ => {
+                                            let _ = socket.send(Message::Close(None)).await;
+                                            return;
+                                        }
+                                    };
+                                    let hello_cid = v.get("client_id").and_then(Value::as_i64).unwrap_or(0);
+                                    if hello_cid != 0 && hello_cid != db_cid {
+                                        let _ = socket.send(Message::Close(None)).await;
+                                        return;
+                                    }
+                                    agent_uuid = Some(aid.clone());
+                                    client_id = Some(db_cid);
+                                    registry.attach(&aid, tenant_id, tx_to_agent.clone()).await;
+                                    if let Ok(u) = uuid::Uuid::parse_str(&aid) {
+                                        let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
+                                        registry.notify_status(&aid, tenant_id, "online").await;
+                                    }
                                     let welcome = crate::endpoint_agents::ServerToAgent::Welcome {
-                                        scan_concurrency: Some(2),
-                                        heartbeat_secs: Some(30),
+                                        scan_concurrency: Some(8),
+                                        heartbeat_secs: Some(20),
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;
                                     if let Ok(pending) = crate::endpoint_agents::pending_tasks_for_client(
                                         app_pool.as_ref(),
                                         tenant_id,
-                                        cid,
+                                        db_cid,
                                     )
                                     .await
                                     {
@@ -406,20 +553,19 @@ async fn ws_agent(
                                 "heartbeat" => {
                                     if let Some(aid) = agent_uuid.as_deref() {
                                         if let Ok(u) = uuid::Uuid::parse_str(aid) {
-                                            let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), &u, "online").await;
+                                            let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
+                                            registry.notify_status(aid, tenant_id, "online").await;
                                         }
                                     }
                                 }
                                 "finding" => {
                                     let engine = v.get("engine").and_then(Value::as_str).unwrap_or("agent_finding").to_string();
                                     let mut finding = v.get("finding").cloned().unwrap_or(Value::Null);
-                                    if engine == "ueba_baseline" {
-                                        if let (Some(aid), Value::Object(ref mut map)) =
-                                            (agent_uuid.as_deref(), &mut finding)
-                                        {
-                                            map.entry("agent_id".to_string())
-                                                .or_insert_with(|| json!(aid));
-                                        }
+                                    if let (Some(aid), Value::Object(ref mut map)) =
+                                        (agent_uuid.as_deref(), &mut finding)
+                                    {
+                                        map.entry("agent_id".to_string())
+                                            .or_insert_with(|| json!(aid));
                                     }
                                     if let Some(cid) = client_id {
                                         let _ = crate::endpoint_agents::store_finding(
@@ -440,6 +586,7 @@ async fn ws_agent(
                                     if let Ok(u) = uuid::Uuid::parse_str(&task_id) {
                                         let _ = crate::endpoint_agents::mark_task_status(
                                             app_pool.as_ref(),
+                                            tenant_id,
                                             &u,
                                             status,
                                             count,
@@ -458,11 +605,11 @@ async fn ws_agent(
             }
         }
 
-        // Cleanup.
         if let Some(aid) = agent_uuid.as_deref() {
             registry.detach(aid).await;
             if let Ok(u) = uuid::Uuid::parse_str(aid) {
-                let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), &u, "offline").await;
+                let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "offline").await;
+                registry.notify_status(aid, tenant_id, "offline").await;
             }
         }
     })

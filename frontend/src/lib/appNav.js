@@ -3,8 +3,25 @@
  * Only routes registered in main.jsx — no fake nav items.
  */
 
-/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean }} NavItem */
+/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean }} NavItem */
 /** @typedef {{ id: string, labelKey: string, items: NavItem[] }} NavGroup */
+
+/** Production-ready surfaces — always visible at the top of the sidebar. */
+export const PRIMARY_NAV = [
+  { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
+  { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
+  { to: '/engines', labelKey: 'nav.engines', icon: '⬡' },
+  { to: '/billing', labelKey: 'nav.billing', icon: '💳' },
+  { to: '/playbooks', labelKey: 'nav.playbooks', icon: '⚡' },
+  { to: '/ask', labelKey: 'nav.ask_weissman', icon: '💬' },
+]
+
+/** @type {NavGroup} */
+export const PRIMARY_NAV_GROUP = {
+  id: 'primary',
+  labelKey: 'nav.groups.primary',
+  items: PRIMARY_NAV,
+}
 
 /** @type {NavGroup[]} */
 export const NAV_GROUPS = [
@@ -13,19 +30,14 @@ export const NAV_GROUPS = [
     labelKey: 'nav.groups.command',
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
-      { to: '/engines', labelKey: 'nav.engine_matrix', icon: '⬡' },
-      { to: '/clients', labelKey: 'nav.clients', icon: '🏢' },
+      { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
       { to: '/jobs', labelKey: 'nav.jobs', icon: '⏱' },
-      { to: '/ask', labelKey: 'nav.ask_weissman', icon: '💬' },
-      { to: '/playbooks', labelKey: 'nav.playbooks', icon: '⚡' },
     ],
   },
   {
     id: 'intelligence',
     labelKey: 'nav.groups.intelligence',
     items: [
-      { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
-      { to: '/vuln-intel', labelKey: 'nav.vuln_intel', icon: '🔬' },
       { to: '/threat-intel', labelKey: 'nav.threat_intel', icon: '🎯' },
       { to: '/threat-hunting', labelKey: 'nav.threat_hunting', icon: '🔭' },
       { to: '/dark-web', labelKey: 'nav.dark_web', icon: '🕸' },
@@ -45,6 +57,7 @@ export const NAV_GROUPS = [
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
+      { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
     ],
   },
   {
@@ -95,6 +108,7 @@ export const NAV_GROUPS = [
       { to: '/system-config', labelKey: 'nav.system_config', icon: '⚙' },
       { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
       { to: '/admin', labelKey: 'nav.admin', icon: '👑' },
+      { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
@@ -103,17 +117,26 @@ export const NAV_GROUPS = [
 
 /** Path-prefix overrides for dynamic routes not listed in the sidebar. */
 const PATH_OVERRIDES = [
-  { prefix: '/clients/new', groupId: 'command', labelKey: 'nav.client_new' },
-  { prefix: '/clients/', groupId: 'command', labelKey: 'nav.client_detail' },
+  { prefix: '/clients/new', groupId: 'primary', labelKey: 'nav.client_new' },
+  { prefix: '/clients/', groupId: 'primary', labelKey: 'nav.client_detail' },
+  { prefix: '/billing', groupId: 'primary', labelKey: 'nav.billing' },
   { prefix: '/engines/top-tier/', groupId: 'engines', labelKey: 'nav.engine_profile' },
   { prefix: '/engines/top-tier', groupId: 'engines', labelKey: 'nav.top_tier_engines' },
   { prefix: '/engines/strategic', groupId: 'engines', labelKey: 'nav.strategic_engines' },
   { prefix: '/engines/business/', groupId: 'engines', labelKey: 'nav.business_engine' },
-  { prefix: '/engines/', groupId: 'command', labelKey: 'nav.engine_detail' },
+  { prefix: '/engines/', groupId: 'engines', labelKey: 'nav.engine_detail' },
   { prefix: '/digital-twin/', groupId: 'engines', labelKey: 'nav.digital_twin' },
+  { prefix: '/ceo', groupId: 'administration', labelKey: 'nav.ceo' },
   { prefix: '/operations', groupId: 'command', labelKey: 'nav.operations_view' },
   { prefix: '/system-core', groupId: 'administration', labelKey: 'nav.system_core' },
 ]
+
+const ALL_NAV_GROUPS = [PRIMARY_NAV_GROUP, ...NAV_GROUPS]
+
+function groupById(id) {
+  if (id === 'primary') return PRIMARY_NAV_GROUP
+  return NAV_GROUPS.find((g) => g.id === id)
+}
 
 /**
  * @param {string} pathname
@@ -130,8 +153,9 @@ export function isNavActive(pathname, to, exact = false) {
 /** @returns {{ group: NavGroup, item: NavItem } | null} */
 export function findNavMatch(pathname) {
   const p = pathname.replace(/\/$/, '') || '/'
-  for (const group of NAV_GROUPS) {
+  for (const group of ALL_NAV_GROUPS) {
     for (const item of group.items) {
+      if (item.hideFromNav) continue
       if (isNavActive(p, item.to, item.exact)) {
         return { group, item }
       }
@@ -140,7 +164,7 @@ export function findNavMatch(pathname) {
   for (const ov of PATH_OVERRIDES) {
     const prefix = ov.prefix.replace(/\/$/, '')
     if (p === prefix || p.startsWith(`${prefix}/`)) {
-      const group = NAV_GROUPS.find((g) => g.id === ov.groupId)
+      const group = groupById(ov.groupId)
       if (group) {
         return {
           group,
@@ -196,4 +220,13 @@ function dedupeCrumbs(crumbs) {
     out.push(c)
   }
   return out
+}
+
+/** Gate restricted nav targets (admin / CEO vault). */
+export function canAccessNavItem(item, session) {
+  if (item?.hideFromNav) return false
+  const restricted = item?.to === '/admin' || item?.to === '/ceo-vault' || item?.to === '/ceo'
+  if (!restricted) return true
+  const role = (session?.role || '').toLowerCase()
+  return session?.is_superadmin === true || session?.is_ceo === true || role === 'ceo'
 }

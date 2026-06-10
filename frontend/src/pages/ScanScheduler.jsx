@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -17,6 +18,7 @@ import { api } from '../utils/apiFetch';
  * - Execution history
  */
 export default function ScanScheduler() {
+  const { t } = useTranslation();
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, active, paused
@@ -34,6 +36,7 @@ export default function ScanScheduler() {
       setSchedules(data.schedules || []);
     } catch (error) {
       console.error('Failed to fetch schedules:', error);
+      setSchedules([]);
     } finally {
       setLoading(false);
     }
@@ -44,16 +47,15 @@ export default function ScanScheduler() {
       await api.patch(`/api/scans/schedules/${scheduleId}`, {
         enabled: !currentState,
       });
-      setSchedules((prev) =>
-        prev.map((s) => (s.id === scheduleId ? { ...s, enabled: !currentState } : s))
-      );
+      await fetchSchedules();
     } catch (error) {
       console.error('Failed to toggle schedule:', error);
+      alert(error?.message || t('pages.scanScheduler.toggle_failed'));
     }
   };
 
   const deleteSchedule = async (scheduleId) => {
-    if (!confirm('Are you sure you want to delete this schedule?')) return;
+    if (!confirm(t('pages.scanScheduler.delete_confirm'))) return;
 
     try {
       await api.delete(`/api/scans/schedules/${scheduleId}`);
@@ -65,10 +67,16 @@ export default function ScanScheduler() {
 
   const runNow = async (scheduleId) => {
     try {
-      await api.post(`/api/scans/schedules/${scheduleId}/run`);
-      alert('Scan started successfully!');
+      const result = await api.post(`/api/scans/schedules/${scheduleId}/run`);
+      alert(
+        result?.jobs_queued
+          ? t('pages.scanScheduler.scan_started', { count: result.jobs_queued })
+          : t('pages.scanScheduler.scan_started_ok')
+      );
+      await fetchSchedules();
     } catch (error) {
       console.error('Failed to start scan:', error);
+      alert(error?.message || t('pages.scanScheduler.scan_start_failed'));
     }
   };
 
@@ -87,13 +95,13 @@ export default function ScanScheduler() {
   };
 
   return (
-    <PageShell title="Scan Scheduler" icon={<Calendar />}>
+    <PageShell title={t('pages.scanScheduler.title')} icon={<Calendar />}>
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Schedules</span>
+              <span className="text-sm text-gray-400">{t('pages.scanScheduler.total_schedules')}</span>
               <Calendar className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -101,7 +109,7 @@ export default function ScanScheduler() {
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-green-400">Active</span>
+              <span className="text-sm text-green-400">{t('pages.scanScheduler.active')}</span>
               <Play className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-400">{stats.active}</div>
@@ -109,7 +117,7 @@ export default function ScanScheduler() {
 
           <div className="bg-gray-500/10 backdrop-blur-md border border-gray-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Paused</span>
+              <span className="text-sm text-gray-400">{t('pages.scanScheduler.paused')}</span>
               <Pause className="w-4 h-4 text-gray-400" />
             </div>
             <div className="text-2xl font-bold text-gray-400">{stats.paused}</div>
@@ -117,11 +125,11 @@ export default function ScanScheduler() {
 
           <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-purple-400">Next Run</span>
+              <span className="text-sm text-purple-400">{t('pages.scanScheduler.next_run')}</span>
               <Clock className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-sm font-bold text-purple-400">
-              {stats.nextRun ? new Date(stats.nextRun.next_run).toLocaleString() : 'None'}
+              {stats.nextRun ? new Date(stats.nextRun.next_run).toLocaleString() : t('pages.scanScheduler.none')}
             </div>
           </div>
         </div>
@@ -139,7 +147,7 @@ export default function ScanScheduler() {
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {t(`pages.scanScheduler.filter_${f}`)}
               </button>
             ))}
           </div>
@@ -149,7 +157,7 @@ export default function ScanScheduler() {
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Create Schedule
+            {t('pages.scanScheduler.create_schedule')}
           </button>
         </div>
 
@@ -158,7 +166,7 @@ export default function ScanScheduler() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-cyan-400" />
-              Scan Schedules ({filteredSchedules.length})
+              {t('pages.scanScheduler.schedules_heading', { count: filteredSchedules.length })}
             </h3>
           </div>
 
@@ -360,28 +368,51 @@ export default function ScanScheduler() {
  * Schedule Create/Edit Modal
  */
 function ScheduleModal({ schedule, template, onClose, onSave }) {
+  const [clients, setClients] = useState([]);
   const [formData, setFormData] = useState({
     name: schedule?.name || template?.name || '',
     description: schedule?.description || '',
     enabled: schedule?.enabled ?? true,
     type: schedule?.type || template?.frequency || 'daily',
     cron: schedule?.cron || '',
+    client_id: schedule?.client_id ?? '',
     target_client: schedule?.target_client || '',
     engines: schedule?.engines || [],
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .get('/api/clients')
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.clients || [];
+        setClients(list);
+      })
+      .catch((err) => console.error('Failed to load clients:', err));
+  }, []);
 
   const handleSave = async () => {
     try {
       setSaving(true);
+      setError('');
+      const payload = {
+        ...formData,
+        client_id: formData.client_id ? Number(formData.client_id) : null,
+        target_client:
+          formData.client_id
+            ? clients.find((c) => String(c.id) === String(formData.client_id))?.name || ''
+            : '',
+      };
       if (schedule) {
-        await api.put(`/api/scans/schedules/${schedule.id}`, formData);
+        await api.put(`/api/scans/schedules/${schedule.id}`, payload);
       } else {
-        await api.post('/api/scans/schedules', formData);
+        await api.post('/api/scans/schedules', payload);
       }
       onSave();
-    } catch (error) {
-      console.error('Failed to save schedule:', error);
+    } catch (err) {
+      console.error('Failed to save schedule:', err);
+      setError(err?.message || 'Failed to save schedule');
     } finally {
       setSaving(false);
     }
@@ -476,16 +507,29 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Target Client (optional)
+              Target Client
             </label>
-            <input
-              type="text"
-              value={formData.target_client}
-              onChange={(e) => setFormData({ ...formData, target_client: e.target.value })}
+            <select
+              value={formData.client_id}
+              onChange={(e) =>
+                setFormData({ ...formData, client_id: e.target.value, target_client: '' })
+              }
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Leave empty for all clients"
-            />
+            >
+              <option value="">All clients (manual run requires a client)</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {error && (
+            <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 mt-6">

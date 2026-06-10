@@ -66,10 +66,32 @@ pub fn require_admin(auth: &AuthContext) -> Result<(), Response> {
     require_role(auth, roles::ADMIN)
 }
 
+/// Reject anything below operator (operator, admin, ceo, or superadmin).
+#[inline]
+pub fn require_operator(auth: &AuthContext) -> Result<(), Response> {
+    require_role(auth, roles::OPERATOR)
+}
+
 /// Reject anything below analyst (analyst, operator, admin, ceo, or superadmin).
 #[inline]
 pub fn require_analyst(auth: &AuthContext) -> Result<(), Response> {
     require_role(auth, roles::ANALYST)
+}
+
+/// Only CEO or superadmin may grant the CEO role to another user.
+#[inline]
+#[must_use]
+pub fn can_assign_ceo_role(auth: &AuthContext) -> bool {
+    auth.is_superadmin || auth.role.eq_ignore_ascii_case(roles::CEO)
+}
+
+/// Endpoint-agent WebSocket / fleet APIs — only JWTs with `role=agent` (not human RBAC ranks).
+#[inline]
+pub fn require_agent(auth: &AuthContext) -> Result<(), Response> {
+    if auth.role.eq_ignore_ascii_case("agent") {
+        return Ok(());
+    }
+    Err(forbidden(auth, "agent JWT required"))
 }
 
 fn forbidden(auth: &AuthContext, detail: &str) -> Response {
@@ -116,11 +138,28 @@ mod tests {
     fn rank_ordering() {
         assert!(require_role(&ctx("admin", false), "analyst").is_ok());
         assert!(require_role(&ctx("viewer", false), "operator").is_err());
+        assert!(require_operator(&ctx("operator", false)).is_ok());
+        assert!(require_operator(&ctx("analyst", false)).is_err());
     }
 
     #[test]
     fn any_role() {
         assert!(require_any_role(&ctx("operator", false), &["operator", "admin"]).is_ok());
         assert!(require_any_role(&ctx("viewer", false), &["operator", "admin"]).is_err());
+    }
+
+    #[test]
+    fn agent_role() {
+        assert!(require_agent(&ctx("agent", false)).is_ok());
+        assert!(require_agent(&ctx("admin", false)).is_err());
+        assert!(require_agent(&ctx("agent", true)).is_ok());
+    }
+
+    #[test]
+    fn ceo_assignment_gate() {
+        assert!(can_assign_ceo_role(&ctx("ceo", false)));
+        assert!(can_assign_ceo_role(&ctx("admin", true)));
+        assert!(!can_assign_ceo_role(&ctx("admin", false)));
+        assert!(!can_assign_ceo_role(&ctx("operator", false)));
     }
 }

@@ -14,15 +14,6 @@ use crate::db;
 
 type HmacSha256 = Hmac<Sha256>;
 
-fn hex_lower(data: &[u8]) -> String {
-    let mut s = String::with_capacity(data.len() * 2);
-    for b in data {
-        use std::fmt::Write;
-        let _ = write!(s, "{:02x}", b);
-    }
-    s
-}
-
 pub fn verify_webhook_hmac(secret: &str, body: &[u8], sig_header: Option<&str>) -> bool {
     let Some(sig_raw) = sig_header else {
         return false;
@@ -33,8 +24,8 @@ pub fn verify_webhook_hmac(secret: &str, body: &[u8], sig_header: Option<&str>) 
         return false;
     };
     mac.update(body);
-    let expected = hex_lower(&mac.finalize().into_bytes());
-    expected.eq_ignore_ascii_case(sig)
+    let expected = mac.finalize().into_bytes();
+    crate::security_hardening::constant_time_hmac_hex_eq(&expected, sig)
 }
 
 pub fn collect_access_key_ids(v: &Value, out: &mut Vec<String>) {

@@ -995,6 +995,146 @@ pub fn build_executive_board_pdf(
     Ok(out)
 }
 
+/// Framework-specific compliance audit PDF from live control status rows.
+pub fn build_compliance_framework_pdf(
+    org_label: &str,
+    framework_label: &str,
+    compliance_pct: u8,
+    controls: &[(String, String, bool)],
+) -> Result<Vec<u8>, String> {
+    let date = israel_now();
+    let mut b = PdfBuilder::new();
+    b.set_fill_rgb(0.06, 0.09, 0.14);
+    b.text(22, "WEISSMAN — COMPLIANCE AUDIT REPORT");
+    b.set_fill_rgb(0.55, 0.62, 0.72);
+    b.text(11, &format!("Organization: {}", truncate_ascii(org_label, 80)));
+    b.text(11, &format!("Framework: {}", truncate_ascii(framework_label, 80)));
+    b.text(10, &format!("Generated (Israel): {}", date));
+    b.y -= 8.0;
+
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(14, "Executive summary");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(
+        11,
+        &format!(
+            "Overall alignment: {}%  |  Controls assessed: {}",
+            compliance_pct,
+            controls.len()
+        ),
+    );
+    let compliant = controls.iter().filter(|(_, _, ok)| *ok).count();
+    let non_compliant = controls.len().saturating_sub(compliant);
+    b.text(
+        11,
+        &format!(
+            "Compliant: {}  |  Non-compliant: {}",
+            compliant, non_compliant
+        ),
+    );
+
+    b.y -= 10.0;
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(14, "Control assessment");
+    for (id, title, ok) in controls {
+        b.ensure_space(28.0);
+        if *ok {
+            b.set_fill_rgb(0.35, 0.85, 0.55);
+        } else {
+            b.set_fill_rgb(0.95, 0.45, 0.45);
+        }
+        b.text(
+            11,
+            &format!(
+                "{} — {} [{}]",
+                truncate_ascii(id, 24),
+                truncate_ascii(title, 52),
+                if *ok { "COMPLIANT" } else { "NON-COMPLIANT" }
+            ),
+        );
+    }
+
+    b.y -= 14.0;
+    b.set_fill_rgb(0.45, 0.5, 0.58);
+    b.text(
+        9,
+        "Assessment derived from live findings (vulnerabilities + agentless cloud rules) against compliance_mappings.",
+    );
+    b.text(
+        9,
+        "Confidential — authorized audit and risk distribution only.",
+    );
+
+    let streams = b.finish();
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+    let n = streams.len();
+    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
+    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
+    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
+    out.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
+            pages_refs.trim(),
+            n
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let font_obj = 3 + 2 * n;
+    for (i, stream_body) in streams.iter().enumerate() {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
+                page_objects[i],
+                contents_objects[i],
+                font_obj
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
+                contents_objects[i],
+                stream_body.len(),
+                stream_body
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+    }
+    out.extend_from_slice(
+        format!(
+            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            font_obj
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let xref_start = out.len();
+    let num_objs = font_obj;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(num_objs) {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            num_objs + 1,
+            xref_start
+        )
+        .as_bytes(),
+    );
+    Ok(out)
+}
+
 /// Build HTML report (unchanged structure). Strictly live from DB. Israel time. Rating, heatmap, cURL, integrity.
 pub fn build_client_report_html(
     client_name: &str,

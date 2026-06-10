@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Package, Search, AlertTriangle, Shield, Filter, Download, FileText, ExternalLink } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { apiFetch } from '../lib/apiBase';
+import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 /**
  * SBOMBrowser - Software Bill of Materials analysis and vulnerability tracking
@@ -16,6 +18,7 @@ import { api } from '../utils/apiFetch';
  * - Dependency graph visualization
  */
 export default function SBOMBrowser() {
+  const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [components, setComponents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,13 +26,19 @@ export default function SBOMBrowser() {
   const [licenseFilter, setLicenseFilter] = useState('all');
 
   useEffect(() => {
-    fetchSBOM();
-  }, []);
+    if (clientLoading) return;
+    if (clientId == null) {
+      setComponents([]);
+      setLoading(false);
+      return;
+    }
+    fetchSBOM(clientId);
+  }, [clientId, clientLoading]);
 
-  const fetchSBOM = async () => {
+  const fetchSBOM = async (cid) => {
     try {
       setLoading(true);
-      const data = await api.get('/api/sbom/components');
+      const data = await api.get(withClientId('/api/sbom/components', cid));
       setComponents(data.components || []);
     } catch (error) {
       console.error('Failed to fetch SBOM:', error);
@@ -39,10 +48,11 @@ export default function SBOMBrowser() {
   };
 
   const exportSBOM = async (format) => {
+    if (clientId == null) return;
     try {
-      const blob = await api.get(`/api/sbom/export?format=${format}`, {
-        responseType: 'blob',
-      });
+      const r = await apiFetch(withClientId(`/api/sbom/export?format=${format}`, clientId));
+      if (!r.ok) throw new Error(`Export failed (${r.status})`);
+      const blob = await r.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

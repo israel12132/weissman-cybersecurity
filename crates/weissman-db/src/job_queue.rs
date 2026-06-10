@@ -339,6 +339,26 @@ pub async fn fail_job(
     Ok(())
 }
 
+/// Mark `running` rows with expired locks or stale heartbeats as failed (worker crash / hung job).
+pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+           SET status = 'failed',
+               last_error = 'stale lock reclaimed',
+               locked_until = NULL,
+               worker_id = NULL,
+               updated_at = now()
+           WHERE status = 'running'
+             AND (
+               heartbeat_at < now() - interval '30 minutes'
+               OR locked_until < now()
+             )"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 /// When [`complete_job_with_result`] or [`fail_job`] fails (e.g. transient DB error), clear the worker
 /// lock and return the row to `pending` so the queue does not stay jammed on `running` forever.
 pub async fn force_requeue_running(

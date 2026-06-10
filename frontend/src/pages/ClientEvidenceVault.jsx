@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch, apiUrl } from '../lib/apiBase'
 
 async function fileToBase64(file) {
   const buf = await file.arrayBuffer()
@@ -141,7 +141,7 @@ export default function ClientEvidenceVault() {
   }
 
   function downloadEvidence(item) {
-    window.open(`/api/evidence/${item.id}/download`, '_blank', 'noopener,noreferrer')
+    window.open(apiUrl(`/api/evidence/${item.id}/download`), '_blank', 'noopener,noreferrer')
   }
 
   if (loading) {

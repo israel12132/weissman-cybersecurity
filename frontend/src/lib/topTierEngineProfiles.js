@@ -1,6 +1,7 @@
 import { ENGINES_BY_ID } from './enginesRegistry'
 
 export const TOP_TIER_ENGINE_IDS = [
+  'nexus_sovereign_swarm',
   'kill_chain',
   'oast_oob',
   'deception_honeypot',
@@ -30,6 +31,21 @@ const BASE_EXPECTED_OUTPUTS = [
 ]
 
 const PROFILES = {
+  nexus_sovereign_swarm: {
+    mission: 'Deploy thousands of autonomous AI micro-agents across the full attack surface with emergent hive-mind consensus — breakthrough swarm intelligence no competitor offers.',
+    intelligenceFocus: 'Multi-archetype agent coordination (Scout/Exploiter/Correlator/Stealth/Oracle), cross-signal consensus, endpoint agent bridging, edge POP distribution, Swarm IQ scoring.',
+    expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'Swarm metrics with SIQ score', 'Hive-mind consensus findings', 'Oracle LLM strategic synthesis'],
+    samplePayload: {
+      engine: 'nexus_sovereign_swarm',
+      target: 'https://target.example',
+      agent_count: 2048,
+      hive_mode: 'emergent',
+      llm_strategy: 'adaptive',
+      endpoint_bridge: 'true',
+      edge_distribution: 'true',
+      convergence_threshold: '0.85',
+    },
+  },
   kill_chain: {
     mission: 'Build full adversary path from recon to impact to prioritize breakpoints.',
     intelligenceFocus: 'Attack-path sequencing, choke points, lateral movement opportunities.',

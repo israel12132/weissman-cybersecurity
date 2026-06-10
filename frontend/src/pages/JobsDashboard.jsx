@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch, apiUrl } from '../lib/apiBase'
+import { normalizeJobStatus } from '../lib/useJobPoll'
+import { useAuth } from '../context/AuthContext'
 
 const STATUS_COLORS = {
   queued: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30',
@@ -12,6 +15,8 @@ const STATUS_COLORS = {
 }
 
 export default function JobsDashboard() {
+  const { t } = useTranslation()
+  const { isCeo } = useAuth()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -35,15 +40,14 @@ export default function JobsDashboard() {
       // For now, we'll try different possible endpoints
       let response = await apiFetch('/api/jobs?limit=50')
 
-      if (!response.ok) {
-        // Try alternative endpoint
+      if (!response.ok && isCeo) {
         response = await apiFetch('/api/ceo/jobs/live')
       }
 
       if (!response.ok) {
         if (!loading) return // Don't show error on refresh if already loaded
         const text = await response.text().catch(() => 'Failed to load jobs')
-        setError(`Failed to load jobs: ${text}`)
+        setError(t('pages.jobsDashboard.load_failed', { detail: text }))
         setLoading(false)
         return
       }
@@ -55,14 +59,14 @@ export default function JobsDashboard() {
       setError('')
     } catch (err) {
       if (!loading) return // Don't show error on refresh
-      setError(`Error loading jobs: ${err.message}`)
+      setError(t('pages.jobsDashboard.load_error', { detail: err.message }))
     } finally {
       setLoading(false)
     }
   }
 
   function getStatusBadgeClass(status) {
-    const statusLower = (status || '').toLowerCase()
+    const statusLower = normalizeJobStatus(status)
     return STATUS_COLORS[statusLower] || 'text-slate-400 bg-slate-900/20 border-slate-500/30'
   }
 
@@ -81,8 +85,8 @@ export default function JobsDashboard() {
 
   return (
     <PageShell
-      title="Jobs Dashboard"
-      subtitle="Monitor scan jobs and background tasks"
+      title={t('pages.jobsDashboard.title')}
+      subtitle={t('pages.jobsDashboard.subtitle')}
       actions={
         <>
           <label className="flex items-center gap-2 text-[11px] font-mono text-white/55">
@@ -92,21 +96,23 @@ export default function JobsDashboard() {
               onChange={(e) => setAutoRefresh(e.target.checked)}
               className="w-3.5 h-3.5 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
             />
-            Auto-refresh (5s)
+            {t('pages.jobsDashboard.auto_refresh')}
           </label>
           <button
             type="button"
             onClick={() => loadJobs()}
             className="px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
           >
-            ↻ Refresh
+            ↻ {t('common.refresh')}
           </button>
         </>
       }
     >
       <div className="space-y-6">
         <p className="text-sm text-white/45 font-mono">
-          {jobs.length} job{jobs.length !== 1 ? 's' : ''} tracked
+          {jobs.length === 1
+            ? t('pages.jobsDashboard.jobs_tracked', { count: jobs.length })
+            : t('pages.jobsDashboard.jobs_tracked_plural', { count: jobs.length })}
         </p>
 
         {/* Error State */}
@@ -120,7 +126,7 @@ export default function JobsDashboard() {
         {loading && (
           <div className="text-center py-12 text-slate-400">
             <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-4">Loading jobs...</p>
+            <p className="mt-4">{t('pages.jobsDashboard.loading')}</p>
           </div>
         )}
 
@@ -130,13 +136,13 @@ export default function JobsDashboard() {
             <svg className="mx-auto h-12 w-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 48 48">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v28m8-28v28m8-28v28m8-28v28" />
             </svg>
-            <h3 className="mt-4 text-lg font-medium text-slate-300">No jobs yet</h3>
-            <p className="mt-2 text-sm text-slate-500">Launch your first scan from a client detail page.</p>
+            <h3 className="mt-4 text-lg font-medium text-slate-300">{t('pages.jobsDashboard.empty_title')}</h3>
+            <p className="mt-2 text-sm text-slate-500">{t('pages.jobsDashboard.empty_body')}</p>
             <Link
               to="/clients"
               className="mt-6 inline-block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
             >
-              Go to Clients
+              {t('pages.jobsDashboard.go_to_clients')}
             </Link>
           </div>
         )}
@@ -149,22 +155,22 @@ export default function JobsDashboard() {
                 <thead>
                   <tr className="border-b border-slate-700">
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Job ID
+                      {t('pages.jobsDashboard.col_job_id')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Kind
+                      {t('pages.jobsDashboard.col_kind')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Status
+                      {t('pages.jobsDashboard.col_status')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Created
+                      {t('pages.jobsDashboard.col_created')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Duration
+                      {t('pages.jobsDashboard.col_duration')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Attempt
+                      {t('pages.jobsDashboard.col_attempt')}
                     </th>
                   </tr>
                 </thead>
@@ -183,7 +189,7 @@ export default function JobsDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(job.status)}`}>
-                          {job.status || 'unknown'}
+                          {normalizeJobStatus(job.status) || 'unknown'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
@@ -209,7 +215,7 @@ export default function JobsDashboard() {
         {!loading && !error && jobs.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => {
-              const count = jobs.filter((j) => (j.status || '').toLowerCase() === status).length
+              const count = jobs.filter((j) => normalizeJobStatus(j.status) === status).length
               return (
                 <div
                   key={status}
@@ -218,7 +224,9 @@ export default function JobsDashboard() {
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
                     {count}
                   </div>
-                  <div className="text-sm text-slate-400 capitalize mt-1">{status}</div>
+                  <div className="text-sm text-slate-400 capitalize mt-1">
+                    {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
+                  </div>
                 </div>
               )
             })}

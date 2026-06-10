@@ -99,6 +99,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "llm_redteam",
     "adversarial_ml",
     "autonomous_pentest",
+    "nexus_sovereign_swarm",
     "http_feedback_fuzz",
     "aws_attack",
     "azure_attack",
@@ -343,6 +344,287 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "web3_dapp_attack",
     "api_gateway_bypass",
     "liminal_boundary",
+    // ── Catalog-tier engines promoted to production (dedicated live probes) ──
+    "anti_debug_evasion",
+    "av_bypass_engine",
+    "azure_devops_attack",
+    "blockchain_trace",
+    "cloud_iam_escalation",
+    "cloud_metadata_ssrf",
+    "coap_attack",
+    "com_hijacking",
+    "darkweb_intel",
+    "dll_hijacking_engine",
+    "dns_tunneling_c2",
+    "docker_image_poison",
+    "eks_attack",
+    "financial_osint",
+    "firmware_emulation_attack",
+    "gcp_privilege_attack",
+    "github_secret_scan",
+    "graphql_deep_attack",
+    "grpc_reflection_attack",
+    "hmi_attack",
+    "http2_attack",
+    "https_c2_masquerade",
+    "icmp_covert",
+    "idor_advanced",
+    "industrial_protocol_fuzz",
+    "iot_shodan_scan",
+    "ipv6_advanced_attack",
+    "jit_spray",
+    "job_posting_osint",
+    "jwt_advanced_attack",
+    "kubernetes_rbac_escape",
+    "log_tampering_engine",
+    "maven_supply_chain",
+    "memory_forensics_evasion",
+    "metadata_harvest",
+    "modbus_attack",
+    "mqtt_attack",
+    "network_traffic_masking",
+    "nosql_deep_injection",
+    "npm_package_attack",
+    "oauth_advanced_attack",
+    "ollama_fuzz",
+    "opcua_attack",
+    "parent_pid_spoof",
+    "patent_recon",
+    "plc_logic_attack",
+    "profinet_attack",
+    "pypi_supply_chain",
+    "ransomware_emulation",
+    "rootkit_simulation",
+    "rop_chain_engine",
+    "s3_bucket_attack",
+    "saml_advanced_attack",
+    "sandbox_evasion",
+    "satellite_recon",
+    "secrets_manager_attack",
+    "steganography_c2",
+    "telecom_osint",
+    "timing_evasion_engine",
+    "web_cache_poison_adv",
+    // ── Frontend registry aliases (dedicated alias probes) ──
+    "rce_chain",
+    "active_directory",
+    "c2_emulation",
+    "lateral_movement",
+    "data_exfiltration",
+    "memory_corruption",
+    "browser_exploitation",
+    "deepfake_genai",
+    "container_escape",
+    "wireless_attack",
+    "mobile_attack",
+    "cloud_ransomware",
+    "firmware_exploit",
+    "dns_rebinding",
+    "physical_security",
+    "vuln_chaining",
+    "sqli_advanced",
+    "log4shell_scan",
+    "kernel_exploit",
+    "spear_phishing",
+    "vlan_bypass",
+    "malware_persistence",
+    "insider_threat",
+    "post_exploitation",
+    "cloud_lateral",
+    "process_injection",
+    "api_fuzzing",
+    "smb_relay",
+    "graphql_injection",
+    "container_k8s_escape",
+    "web_cache_poison",
+    "xxe_injection",
+    "ldap_injection",
+    "side_channel",
+    "ssrf_chain",
+    "jwt_attacks",
+    "bgp_hijacking",
+    "rce_deserialization",
+    "active_directory_enum",
+    "ransomware_sim",
+    "waf_ids_bypass",
+    "siem_evasion",
+    "mobile_pentest",
+    "cors_exploit",
+    "js_prototype_pollution",
+    "ipsec_vpn_audit",
+    "5g_security",
+    "firmware_emulation",
+    "cloud_storage_audit",
+    "devsecops_scan",
+    "wasm_reverse",
+    "bluetooth_attack",
+    "oauth_abuse",
+    "clickjacking",
+    "email_spoofing",
+    "satellite_attack",
+    "ai_poisoning",
+    "smart_contract_audit",
+    "automotive_can_bus",
+    "zero_click_exploit",
+    "biometric_spoofing",
+    "quantum_attack",
+    "devsecops_secrets",
+    "threat_hunting_apt",
+    "cloud_identity_attack",
+    "ci_cd_poisoning",
+    "api_gateway_attack",
+    "deception_evasion",
+    "rag_poisoning",
+    "graphene_os_bypass",
+    "obfuscated_c2",
+    "hardware_implant",
+    "serverless_cold_start",
+    "active_directory_cs",
+    "data_pipeline_attack",
+    "exfil_ai_inference",
+    "cloud_waf_bypass",
+    "telco_ss7_attack",
+    "deepweb_intel",
+    "network_tap_implant",
+    "gitops_attack",
+    "compliance_gap_scan",
+    "dns_enum",
+    "social_media_recon",
+    "shodan_mass_scan",
+    "cert_transparency",
+    "email_harvest",
+    "github_recon",
+    "geoint",
+    "network_topology_map",
+    "employee_profiling",
+    "wayback_recon",
+    "xss_advanced",
+    "csrf_exploit",
+    "path_traversal",
+    "business_logic_flaw",
+    "race_condition_web",
+    "oauth_pkce_attack",
+    "mass_assignment",
+    "web_cache_deception",
+    "api_versioning_attack",
+    "nosql_injection",
+    "deserialization_java",
+    "open_redirect",
+    "host_header_injection",
+    "graphql_batching",
+    "ai_model_backdoor",
+    "llm_context_overflow",
+    "ai_supply_chain",
+    "adversarial_image",
+    "llm_dos",
+    "llm_privacy_leak",
+    "agentic_ai_escape",
+    "llm_system_prompt_leak",
+    "s3_bucket_enum",
+    "imds_ssrf",
+    "lambda_layer_inject",
+    "cloud_trail_disable",
+    "cross_account_pivot",
+    "gke_rbac_exploit",
+    "azure_ad_attack",
+    "terraform_state_steal",
+    "cloud_cost_dos",
+    "cloud_logging_blind",
+    "ecr_image_poison",
+    "cloud_function_escape",
+    "modbus_exploit",
+    "plc_logic_bomb",
+    "lorawan_attack",
+    "hmi_exploit",
+    "can_fd_attack",
+    "ics_historian_attack",
+    "rootkit_implant",
+    "timestomping",
+    "log_wiping",
+    "dll_hijacking",
+    "fileless_malware",
+    "syscall_evasion",
+    "amsi_bypass",
+    "polymorphic_payload",
+    "password_crack",
+    "tls_downgrade",
+    "totp_bruteforce",
+    "ntlm_relay",
+    "golden_ticket",
+    "hsm_attack",
+    "pki_cert_forge",
+    "key_derivation_flaw",
+    "arp_spoofing",
+    "icmp_covert_channel",
+    "snmp_attack",
+    "ospf_bgp_manipulation",
+    "rdp_exploit",
+    "dns_tunneling",
+    "dhcp_starvation",
+    "wifi_attack",
+    "npm_typosquatting",
+    "build_artifact_tamper",
+    "package_signing_bypass",
+    "vendored_code_attack",
+    "code_review_bypass",
+    "update_mechanism_hijack",
+    "advanced_persistence",
+    "apt_lateral_movement",
+    "nation_state_ttps",
+    "zero_day_chain",
+    "apt_c2_infra",
+    "long_haul_exfil",
+    "full_breach_sim",
+    "watering_hole",
+    "supply_chain_apt",
+    "destructive_wiper",
+    "tpm_firmware_attack",
+    "cold_boot_attack",
+    "evil_maid_engine",
+    "thunderbolt_dma_attack",
+    "voltage_glitch_attack",
+    "badusb_hid_attack",
+    "hardware_wallet_attack",
+    "jtag_swd_exploitation",
+    "medical_device_exploit",
+    "implantable_device_hack",
+    "hospital_hl7_attack",
+    "agentic_framework_attack",
+    "llm_function_call_hijack",
+    "multi_agent_subversion",
+    "llm_guardrail_bypass",
+    "mcp_server_exploit",
+    "synthetic_identity_fraud",
+    "ai_model_provenance_attack",
+    "sdn_controller_exploit",
+    "nfv_mano_attack",
+    "network_slice_isolation_bypass",
+    "harvest_now_decrypt_later",
+    "pqc_implementation_attack",
+    "lattice_crypto_attack",
+    "microsegmentation_bypass",
+    "continuous_auth_evasion",
+    "sase_security_bypass",
+    "webauthn_fido2_bypass",
+    "ai_cloud_escalation_chain",
+    "social_supply_chain_attack",
+    "ot_it_lateral_chain",
+    "mobile_backend_chain",
+    "data_deanonymization",
+    "behavioral_biometric_attack",
+    "location_pattern_analysis",
+    "differential_privacy_exploit",
+    "c2_rotation_engine",
+    "detection_gap_exploiter",
+    "opsec_intelligence_engine",
+    "tactic_chain_synthesizer",
+    "ar_vr_attack_engine",
+    "edge_computing_exploit",
+    "blockchain_bridge_exploit",
+    "api_all_vectors_engine",
+    "threat_model_automation",
+    "attack_graph_traversal",
+    "prometheus_hyperion_nexus",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -378,6 +660,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "llm_redteam",
     "adversarial_ml",
     "autonomous_pentest",
+    "nexus_sovereign_swarm",
     // Cloud / Infra
     "aws_attack",
     "azure_attack",
@@ -657,27 +940,25 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
 #[must_use]
 pub fn resolve_engine_id(id: &str) -> &str {
     match id.trim() {
-        "graphql_deep_attack" => "graphql_attack",
-        "jwt_advanced_attack" => "jwt_attack",
-        "grpc_reflection_attack" => "mtls_grpc",
-        "idor_advanced" => "bola_idor",
-        "oauth_advanced_attack" => "oauth_oidc",
-        "saml_advanced_attack" => "saml_attack",
-        "ipv6_advanced_attack" => "ipv6_attack",
-        "cloud_metadata_ssrf" => "ssrf_advanced",
-        "s3_bucket_attack" | "cloud_iam_escalation" | "secrets_manager_attack" => "aws_attack",
-        "gcp_privilege_attack" => "gcp_attack",
-        "kubernetes_rbac_escape" | "eks_attack" => "k8s_container",
-        "azure_devops_attack" => "azure_attack",
+        // dedicated probe: graphql_deep_attack
+        // dedicated probe: jwt_advanced_attack
+        // dedicated probe: grpc_reflection_attack
+        // dedicated probe: idor_advanced
+        // dedicated probe: oauth_advanced_attack
+        // dedicated probe: saml_advanced_attack
+        // dedicated probe: ipv6_advanced_attack
+        // dedicated probe: cloud_metadata_ssrf
+        "cloud_iam_escalation" | "secrets_manager_attack" => "aws_attack",
+        // dedicated probe: gcp_privilege_attack
+        // dedicated probes: kubernetes_rbac_escape, eks_attack
+        // dedicated probe: azure_devops_attack
         // Legacy APT / campaign aliases.
         "poe_synthesis" => "poe_synthesis",
         "rce_chain" | "vuln_chaining" => "kill_chain",
         "c2_emulation" | "apt_c2_infra" | "obfuscated_c2" | "c2_rotation_engine" => {
             "botnet_c2_engine"
         }
-        "ransomware_emulation" | "ransomware_sim" | "destructive_wiper" => {
-            "conti_ransomware_ttps"
-        }
+        "ransomware_sim" | "destructive_wiper" => "conti_ransomware_ttps",
         "active_directory" => "kerberos_attack_suite",
         "memory_corruption" => "heap_exploitation",
         "browser_exploitation" => "browser_extension_attack",
@@ -848,44 +1129,48 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "update_mechanism_hijack" => "update_hijacking",
         "zero_click_exploit" => "zero_day_prediction",
         "tactic_chain_synthesizer" => "kill_chain",
-        "modbus_attack" | "mqtt_attack" | "coap_attack" | "opcua_attack" | "plc_logic_attack"
-        | "hmi_attack" | "profinet_attack" | "industrial_protocol_fuzz" | "firmware_emulation_attack" => {
-            "scada_ics"
-        }
-        "dll_hijacking_engine" | "sandbox_evasion" | "rootkit_simulation"
-        | "memory_forensics_evasion" | "av_bypass_engine" | "dns_tunneling_c2"
-        | "steganography_c2" | "https_c2_masquerade" | "icmp_covert" | "rop_chain_engine"
-        | "timing_evasion_engine" | "log_tampering_engine" | "jit_spray" | "com_hijacking"
-        | "network_traffic_masking" | "anti_debug_evasion" | "parent_pid_spoof" => "edr_evasion",
-        "npm_package_attack" | "pypi_supply_chain" | "maven_supply_chain" | "docker_image_poison" => {
-            "supply_chain"
-        }
-        "web_cache_poison_adv" => "cache_poisoning",
-        "nosql_deep_injection" => "bola_idor",
+        // OT engines: dedicated probes (modbus_attack, mqtt_attack, …)
+        // Stealth engines: dedicated probes
+        // Supply chain engines: dedicated probes
+        // dedicated probe: web_cache_poison_adv
+        // dedicated probe: nosql_deep_injection
         // Top-tier catalog aliases mapped to stable production engines.
-        "satellite_recon" => "recon",
-        "darkweb_intel" => "leak_hunter",
-        "financial_osint" => "osint",
-        "blockchain_trace" => "osint",
-        "metadata_harvest" => "recon",
-        "patent_recon" => "osint",
-        "telecom_osint" => "osint",
-        "iot_shodan_scan" => "recon",
-        "job_posting_osint" => "osint",
-        "github_secret_scan" => "leak_hunter",
-        "http2_attack" => "http_smuggling",
+        // Recon engines: dedicated probes (satellite_recon, darkweb_intel, …)
+        // dedicated probe: http2_attack
         "protocol_schism_oracle" | "cache_vary_oracle" => "liminal_boundary",
-        "ollama_fuzz" => "llm_path_fuzz",
         other => other,
     }
 }
 
+/// True when `id` is a marketing/catalog alias that maps to a different canonical probe.
+#[must_use]
+pub fn is_engine_alias(id: &str) -> bool {
+    let s = id.trim();
+    resolve_engine_id(s) != s
+}
+
+/// Engine id used for dispatch: alias IDs keep their identity (dedicated alias runner);
+/// dedicated production IDs run directly; unknown IDs resolve via legacy alias table.
+#[must_use]
+pub fn dispatch_engine_id(id: &str) -> &str {
+    let s = id.trim();
+    if is_engine_alias(s) {
+        return s;
+    }
+    if PRODUCTION_ENGINE_IDS.iter().any(|&k| k == s) {
+        return s;
+    }
+    resolve_engine_id(s)
+}
+
 #[must_use]
 pub fn is_production_engine_id(id: &str) -> bool {
-    let canonical = resolve_engine_id(id);
-    PRODUCTION_ENGINE_IDS
-        .iter()
-        .any(|&k| k == canonical)
+    let s = id.trim();
+    if PRODUCTION_ENGINE_IDS.iter().any(|&k| k == s) {
+        return true;
+    }
+    let canonical = resolve_engine_id(s);
+    PRODUCTION_ENGINE_IDS.iter().any(|&k| k == canonical)
 }
 
 #[must_use]

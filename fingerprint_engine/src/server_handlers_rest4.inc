@@ -253,7 +253,6 @@ async fn api_general_self_audit(
     }
 }
 
-#[allow(dead_code)]
 async fn api_timing_scan_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -303,7 +302,6 @@ async fn api_timing_scan_run(
     }
 }
 
-#[allow(dead_code)]
 async fn api_ai_redteam_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -358,7 +356,6 @@ async fn api_ai_redteam_run(
     }
 }
 
-#[allow(dead_code)]
 async fn api_threat_intel_feed() -> Response {
     let items = threat_intel_engine::fetch_nvd_recent(7).await;
     (StatusCode::OK, Json(json!({ "items": items }))).into_response()
@@ -2136,6 +2133,73 @@ async fn api_oast_probe_mint(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
         }
     }
+}
+
+/// GET /api/oast/callbacks — recent OOB interaction hits for the tenant (last 100).
+async fn api_oast_callbacks(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"callbacks": []})),
+        )
+            .into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT h.id, h.interaction_token, h.channel, h.source_ip::text AS source_ip,
+                  h.http_method, h.http_path, h.host_header, h.dns_qname, h.dns_qtype,
+                  h.user_agent, h.created_at, COALESCE(p.probe_type, h.channel) AS probe_type
+           FROM oast_interaction_hits h
+           INNER JOIN oast_probe_tokens p
+                   ON p.token = h.interaction_token AND p.tenant_id = $1
+           ORDER BY h.created_at DESC
+           LIMIT 100"#,
+    )
+    .bind(auth.tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let callbacks: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let payload = r
+                .try_get::<Option<String>, _>("http_path")
+                .ok()
+                .flatten()
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    r.try_get::<Option<String>, _>("dns_qname")
+                        .ok()
+                        .flatten()
+                        .filter(|s| !s.is_empty())
+                })
+                .or_else(|| {
+                    r.try_get::<Option<String>, _>("host_header")
+                        .ok()
+                        .flatten()
+                        .filter(|s| !s.is_empty())
+                })
+                .unwrap_or_default();
+            json!({
+                "id": r.try_get::<i64, _>("id").unwrap_or(0),
+                "interaction_token": r.try_get::<uuid::Uuid, _>("interaction_token").map(|u| u.to_string()).unwrap_or_default(),
+                "channel": r.try_get::<String, _>("channel").unwrap_or_default(),
+                "source_ip": r.try_get::<Option<String>, _>("source_ip").ok().flatten(),
+                "probe_type": r.try_get::<String, _>("probe_type").unwrap_or_default(),
+                "payload": payload,
+                "http_method": r.try_get::<Option<String>, _>("http_method").ok().flatten(),
+                "user_agent": r.try_get::<Option<String>, _>("user_agent").ok().flatten(),
+                "timestamp": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                    .map(|d| d.to_rfc3339())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect();
+    (StatusCode::OK, Json(json!({ "callbacks": callbacks }))).into_response()
 }
 
 /// GET /api/oast/verify/:token — poll OOB callback status for a structured probe token.

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 /**
  * ContainmentRulesBuilder - Network containment and isolation rules
@@ -16,19 +17,26 @@ import { api } from '../utils/apiFetch';
  * - Integration with firewall/SDN
  */
 export default function ContainmentRulesBuilder() {
+  const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [createModal, setCreateModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
 
   useEffect(() => {
-    fetchRules();
-  }, []);
+    if (clientLoading) return;
+    if (clientId == null) {
+      setRules([]);
+      setLoading(false);
+      return;
+    }
+    fetchRules(clientId);
+  }, [clientId, clientLoading]);
 
-  const fetchRules = async () => {
+  const fetchRules = async (cid) => {
     try {
       setLoading(true);
-      const data = await api.get('/api/containment/rules');
+      const data = await api.get(withClientId('/api/containment/rules', cid));
       setRules(data.rules || []);
     } catch (error) {
       console.error('Failed to fetch containment rules:', error);
@@ -38,8 +46,9 @@ export default function ContainmentRulesBuilder() {
   };
 
   const toggleRule = async (ruleId, currentState) => {
+    if (clientId == null) return;
     try {
-      await api.patch(`/api/containment/rules/${ruleId}`, {
+      await api.patch(withClientId(`/api/containment/rules/${ruleId}`, clientId), {
         enabled: !currentState,
       });
       setRules((prev) =>
@@ -52,9 +61,10 @@ export default function ContainmentRulesBuilder() {
 
   const deleteRule = async (ruleId) => {
     if (!confirm('Are you sure you want to delete this containment rule?')) return;
+    if (clientId == null) return;
 
     try {
-      await api.delete(`/api/containment/rules/${ruleId}`);
+      await api.delete(withClientId(`/api/containment/rules/${ruleId}`, clientId));
       setRules((prev) => prev.filter((r) => r.id !== ruleId));
     } catch (error) {
       console.error('Failed to delete rule:', error);
@@ -264,12 +274,14 @@ export default function ContainmentRulesBuilder() {
       {(createModal || editModal) && (
         <RuleModal
           rule={editModal}
+          clientId={clientId}
           onClose={() => {
             setCreateModal(false);
             setEditModal(null);
           }}
+          clientId={clientId}
           onSave={() => {
-            fetchRules();
+            if (clientId != null) fetchRules(clientId);
             setCreateModal(false);
             setEditModal(null);
           }}
@@ -282,7 +294,7 @@ export default function ContainmentRulesBuilder() {
 /**
  * Rule Modal
  */
-function RuleModal({ rule, onClose, onSave }) {
+function RuleModal({ rule, clientId, onClose, onSave }) {
   const [formData, setFormData] = useState({
     name: rule?.name || '',
     description: rule?.description || '',
@@ -294,12 +306,13 @@ function RuleModal({ rule, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    if (clientId == null) return;
     try {
       setSaving(true);
       if (rule) {
-        await api.put(`/api/containment/rules/${rule.id}`, formData);
+        await api.put(withClientId(`/api/containment/rules/${rule.id}`, clientId), formData);
       } else {
-        await api.post('/api/containment/rules', formData);
+        await api.post(withClientId('/api/containment/rules', clientId), formData);
       }
       onSave();
     } catch (error) {

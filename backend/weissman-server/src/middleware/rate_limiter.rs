@@ -94,13 +94,30 @@ pub async fn edge_multi_rate_limit_middleware(
         return next.run(request).await;
     };
     let key = IpKey(ip);
+    let ip_str = ip.to_string();
     let limited = match (method.as_str(), path.as_str()) {
-        ("POST", "/api/login") => limiter_login().check_key(&key).is_err(),
+        ("POST", "/api/login") => {
+            if limiter_login().check_key(&key).is_err() {
+                fingerprint_engine::http::rate_limit_metrics::record_login_denied(&ip_str);
+                true
+            } else {
+                fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);
+                false
+            }
+        }
         ("POST", "/api/onboarding/register") | ("POST", "/api/auth/signup") => {
             limiter_signup().check_key(&key).is_err()
         }
         ("POST", "/api/webhooks/paddle") => limiter_paddle().check_key(&key).is_err(),
-        _ => limiter_default().check_key(&key).is_err(),
+        _ => {
+            if limiter_default().check_key(&key).is_err() {
+                fingerprint_engine::http::rate_limit_metrics::record_api_denied(&ip_str);
+                true
+            } else {
+                fingerprint_engine::http::rate_limit_metrics::record_api_allowed(&ip_str);
+                false
+            }
+        }
     };
     if limited {
         tracing::warn!(

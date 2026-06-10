@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bell, Plus, Trash2, Edit, Play, Pause, Filter, AlertTriangle } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -16,6 +17,7 @@ import { api } from '../utils/apiFetch';
  * - Test mode before activation
  */
 export default function AlertRulesEngine() {
+  const { t } = useTranslation();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, enabled, disabled
@@ -52,7 +54,7 @@ export default function AlertRulesEngine() {
   };
 
   const deleteRule = async (ruleId) => {
-    if (!confirm('Are you sure you want to delete this alert rule?')) return;
+    if (!confirm(t('pages.alertRulesEngine.delete_confirm'))) return;
 
     try {
       await api.delete(`/api/alerts/rules/${ruleId}`);
@@ -67,8 +69,8 @@ export default function AlertRulesEngine() {
       const result = await api.post(`/api/alerts/rules/${ruleId}/test`);
       alert(
         result.success
-          ? `Test successful! ${result.matched} findings matched this rule.`
-          : 'Test failed. Check rule conditions.'
+          ? t('pages.alertRulesEngine.test_success', { count: result.matched })
+          : t('pages.alertRulesEngine.test_failed')
       );
     } catch (error) {
       console.error('Failed to test rule:', error);
@@ -88,13 +90,13 @@ export default function AlertRulesEngine() {
   };
 
   return (
-    <PageShell title="Alert Rules Engine" icon={<Bell />}>
+    <PageShell title={t('pages.alertRulesEngine.title')} icon={<Bell />}>
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Rules</span>
+              <span className="text-sm text-gray-400">{t('pages.alertRulesEngine.total_rules')}</span>
               <Bell className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -102,7 +104,7 @@ export default function AlertRulesEngine() {
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-green-400">Enabled</span>
+              <span className="text-sm text-green-400">{t('pages.alertRulesEngine.enabled')}</span>
               <Play className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-400">{stats.enabled}</div>
@@ -110,7 +112,7 @@ export default function AlertRulesEngine() {
 
           <div className="bg-gray-500/10 backdrop-blur-md border border-gray-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Disabled</span>
+              <span className="text-sm text-gray-400">{t('pages.alertRulesEngine.disabled')}</span>
               <Pause className="w-4 h-4 text-gray-400" />
             </div>
             <div className="text-2xl font-bold text-gray-400">{stats.disabled}</div>
@@ -118,7 +120,7 @@ export default function AlertRulesEngine() {
 
           <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-purple-400">Triggered (24h)</span>
+              <span className="text-sm text-purple-400">{t('pages.alertRulesEngine.triggered_24h')}</span>
               <AlertTriangle className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-400">{stats.triggered}</div>
@@ -138,7 +140,7 @@ export default function AlertRulesEngine() {
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {t(`pages.alertRulesEngine.filter_${f}`)}
               </button>
             ))}
           </div>
@@ -148,7 +150,7 @@ export default function AlertRulesEngine() {
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Create Rule
+            {t('pages.alertRulesEngine.create_rule')}
           </button>
         </div>
 
@@ -157,7 +159,7 @@ export default function AlertRulesEngine() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-cyan-400" />
-              Alert Rules ({filteredRules.length})
+              {t('pages.alertRulesEngine.rules_heading', { count: filteredRules.length })}
             </h3>
           </div>
 

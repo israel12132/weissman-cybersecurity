@@ -10,7 +10,7 @@ import AssetHexGrid from './components/AssetHexGrid'
 import CyberRadar from './components/CyberRadar'
 import GlobalThreatTicker from './components/GlobalThreatTicker'
 import CommandBar from './components/CommandBar'
-import { apiFetch } from './lib/apiBase'
+import { apiFetch, apiUrl } from './lib/apiBase'
 import { useWeissmanSocket } from './hooks/useWeissmanSocket'
 
 const HIGHLIGHT_DURATION_MS = 4000
@@ -160,8 +160,12 @@ export default function App() {
           <Link to="/sso-config" className="nav-link" style={{ color: 'rgba(168,85,247,0.7)' }}>SSO</Link>
           <Link to="/admin" className="nav-link" style={{ color: 'rgba(251,191,36,0.9)' }}>Admin</Link>
           <Link to="/system-core" className="nav-link">System Core</Link>
+<<<<<<< HEAD
+          <a href={apiUrl('/api/export/findings')} className="nav-link" download>Export CSV</a>
+=======
           <span className="text-white/10">|</span>
           <a href="/api/export/findings" className="nav-link" download>Export CSV</a>
+>>>>>>> origin/main
           <a href="/logout" className="nav-link nav-link-danger">Logout</a>
         </nav>
       </header>

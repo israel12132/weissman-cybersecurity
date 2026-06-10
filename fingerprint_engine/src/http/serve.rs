@@ -1,5 +1,7 @@
 //! Full-stack live server: API + dashboard from Rust. Live data only; no dummy.
 //! Auth: POST /api/login returns JWT in HttpOnly cookie (+ `access_token` in JSON for SPA Bearer fallback).
+//! API/WS use cookie or `Authorization` header; query JWT is limited to SSE (`?access_token=`) and
+//! `/ws/agent` agent sessions (`?token=` agent JWT only). See [`crate::auth_jwt`].
 //! Set `WEISSMAN_COOKIE_SECURE=1` when serving only over HTTPS; default is off so `http://127.0.0.1` dev accepts cookies.
 //!
 //! Environment (Postgres):
@@ -136,15 +138,33 @@ fn utc_str_to_israel(utc_str: &str) -> String {
     s.to_string()
 }
 
-/// Extract token from Cookie (weissman_token=...) or Authorization: Bearer <token>.
-fn extract_token_from_request<B>(req: &Request<B>) -> Option<String> {
+/// Where a bearer token was read from (for path-specific validation).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TokenSource {
+    HeaderOrCookie,
+    QuerySseAccessToken,
+    QueryAgentWsToken,
+}
+
+/// SSE routes where EventSource cannot send `Authorization` (user JWT in query is deprecated).
+fn sse_accepts_query_access_token(path: &str) -> bool {
+    path == "/api/telemetry/stream"
+        || path == "/api/ceo/war-room/stream"
+        || (path.starts_with("/api/ceo/council/sessions/") && path.ends_with("/stream"))
+}
+
+/// Extract JWT from Cookie (`weissman_token`), `Authorization: Bearer`, or path-scoped query params.
+fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String, TokenSource)> {
     if let Some(cookie_h) = req.headers().get(axum::http::header::COOKIE) {
         if let Ok(s) = cookie_h.to_str() {
             for part in s.split(';') {
                 let part = part.trim();
                 let prefix = format!("{}=", auth_jwt::WEISSMAN_COOKIE_NAME);
                 if part.starts_with(&prefix) {
-                    return Some(part[prefix.len()..].trim().to_string());
+                    let t = part[prefix.len()..].trim();
+                    if !t.is_empty() {
+                        return Some((t.to_string(), TokenSource::HeaderOrCookie));
+                    }
                 }
             }
         }
@@ -152,22 +172,62 @@ fn extract_token_from_request<B>(req: &Request<B>) -> Option<String> {
     if let Some(auth_h) = req.headers().get(axum::http::header::AUTHORIZATION) {
         if let Ok(s) = auth_h.to_str() {
             if let Some(t) = s.strip_prefix("Bearer ") {
-                return Some(t.trim().to_string());
+                let t = t.trim();
+                if !t.is_empty() {
+                    return Some((t.to_string(), TokenSource::HeaderOrCookie));
+                }
             }
         }
     }
-    // EventSource cannot set Authorization; optional `access_token` query (same-origin only recommended).
-    if let Some(q) = req.uri().query() {
+    let Some(q) = req.uri().query() else {
+        return None;
+    };
+    if path == "/ws/agent" {
+        for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
+            if k == "token" {
+                let t = v.trim();
+                if !t.is_empty() {
+                    return Some((t.to_owned(), TokenSource::QueryAgentWsToken));
+                }
+            }
+        }
+        return None;
+    }
+    if sse_accepts_query_access_token(path) {
         for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
             if k == "access_token" {
                 let t = v.trim();
                 if !t.is_empty() {
-                    return Some(t.to_owned());
+                    return Some((t.to_owned(), TokenSource::QuerySseAccessToken));
                 }
             }
         }
     }
     None
+}
+
+fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Option<AuthContext> {
+    match source {
+        TokenSource::HeaderOrCookie => auth_jwt::verify_access_token(token)
+            .filter(auth_jwt::is_user_access_context),
+        TokenSource::QueryAgentWsToken => {
+            if path != "/ws/agent" {
+                return None;
+            }
+            auth_jwt::verify_agent_session_token(token)
+        }
+        TokenSource::QuerySseAccessToken => {
+            if !sse_accepts_query_access_token(path) {
+                return None;
+            }
+            tracing::warn!(
+                target: "auth_guard",
+                path = %path,
+                "Deprecated: JWT passed via ?access_token= query (EventSource only; prefer cookie auth)"
+            );
+            auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
+        }
+    }
 }
 
 /// Auth middleware: allow only POST /api/login; all other /api/* require valid JWT.
@@ -222,10 +282,16 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
     if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
         return next.run(request).await;
     }
+    if path == "/api/agents/enroll" && method == Method::POST {
+        return next.run(request).await;
+    }
+    if path == "/api/auth/mfa/verify" && method == Method::POST {
+        return next.run(request).await;
+    }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
-        let token = extract_token_from_request(&request);
-        if let Some(t) = token {
-            if let Some(ctx) = auth_jwt::verify_access_token(&t) {
+        let extracted = extract_token_from_request(&request, path);
+        if let Some((t, source)) = extracted {
+            if let Some(ctx) = verify_token_for_request(&t, path, source) {
                 request.extensions_mut().insert(ctx);
                 return next.run(request).await;
             }
@@ -234,6 +300,7 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
                 target: "auth_guard",
                 path = %path,
                 method = %method,
+                token_source = ?source,
                 "JWT token validation failed for request"
             );
         } else {
@@ -242,7 +309,7 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
                 target: "auth_guard",
                 path = %path,
                 method = %method,
-                "No auth token found in request (cookie, header, or query)"
+                "No auth token found in request (cookie or Authorization header; query only on SSE/agent WS)"
             );
         }
         return (
@@ -620,20 +687,91 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     Html(html).into_response()
 }
 
-/// WebSocket: on connect send init with globe + score so frontend shows "online" and has data.
-async fn ws_command_center(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+/// Normalize internal telemetry JSON to Command Center `{ kind, payload, ts }` shape.
+fn normalize_cc_event(raw: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(raw).ok()?;
+    if v.get("kind").is_some() {
+        return Some(raw.to_string());
+    }
+    let ts = chrono::Utc::now().timestamp_millis();
+    if let Some(event) = v.get("event").and_then(Value::as_str) {
+        let kind = match event {
+            "finding_created" => {
+                let sev = v
+                    .get("severity")
+                    .and_then(Value::as_str)
+                    .unwrap_or("info")
+                    .to_ascii_lowercase();
+                if sev == "critical" || sev == "high" {
+                    "critical_cve"
+                } else {
+                    "scan_pulse"
+                }
+            }
+            "new_target" => "new_source_discovered",
+            "progress" => "scan_pulse",
+            "engine_error" | "error" => "emergency_alert",
+            _ => "audit",
+        };
+        let payload = if event == "finding_created" {
+            json!({
+                "message": format!(
+                    "Finding: {}",
+                    v.get("title").and_then(Value::as_str).unwrap_or("—")
+                ),
+                "severity": v.get("severity").cloned().unwrap_or(json!("info")),
+                "client_id": v.get("client_id").cloned().unwrap_or(Value::Null),
+                "target": v.get("client_id").cloned().unwrap_or(Value::Null),
+                "finding_id": v.get("finding_id").cloned().unwrap_or(Value::Null),
+            })
+        } else {
+            v.clone()
+        };
+        return Some(json!({ "kind": kind, "payload": payload, "ts": ts }).to_string());
+    }
+    if v.get("message").is_some() || v.get("job_id").is_some() {
+        let msg = v
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("job update");
+        return Some(
+            json!({
+                "kind": "audit",
+                "payload": {
+                    "action": msg,
+                    "message": msg,
+                    "severity": v.get("status").and_then(Value::as_str).unwrap_or("info"),
+                    "job_id": v.get("job_id").cloned().unwrap_or(Value::Null),
+                },
+                "ts": ts,
+            })
+            .to_string(),
+        );
+    }
+    None
+}
+
+/// WebSocket: init handshake + live telemetry stream for Command Center.
+async fn ws_command_center(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
     let pool = state.app_pool.clone();
-    let auth = state.auth_pool.clone();
+    let telemetry = state.telemetry_broadcast_tx.clone();
+    let tenant_id = auth.tenant_id;
     ws.on_upgrade(move |socket| async move {
-        handle_ws(socket, pool, auth).await;
+        handle_ws_command_center(socket, pool, tenant_id, telemetry).await;
     })
 }
 
-async fn handle_ws(mut socket: WebSocket, pool: Arc<PgPool>, auth: Arc<PgPool>) {
-    let Some(tid) = default_tenant_id(auth.as_ref()).await else {
-        return;
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tid).await else {
+async fn handle_ws_command_center(
+    mut socket: WebSocket,
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    telemetry: Arc<tokio::sync::broadcast::Sender<String>>,
+) {
+    let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else {
         return;
     };
     let vuln_count: i64 =
@@ -674,13 +812,73 @@ async fn handle_ws(mut socket: WebSocket, pool: Arc<PgPool>, auth: Arc<PgPool>) 
         "total_vulnerabilities": vuln_count,
         "assets_monitored": client_count,
     });
+    let score_payload_ticker = score_payload.clone();
     let init = json!({ "type": "init", "globe": globe, "score": score_payload });
     if let Ok(s) = serde_json::to_string(&init) {
         let _ = socket.send(Message::Text(s)).await;
     }
+
+    let mut rx = telemetry.subscribe();
+    let mut ticker = tokio::time::interval(Duration::from_secs(15));
+
     loop {
-        if socket.recv().await.is_none() {
-            break;
+        tokio::select! {
+            inbound = socket.recv() => {
+                match inbound {
+                    None => break,
+                    Some(Ok(Message::Text(text))) => {
+                        if text.contains("\"type\":\"ping\"") || text.contains("\"ping\"") {
+                            let _ = socket.send(Message::Text(json!({"type":"pong"}).to_string())).await;
+                        }
+                    }
+                    Some(Ok(Message::Ping(p))) => {
+                        let _ = socket.send(Message::Pong(p)).await;
+                    }
+                    Some(Ok(Message::Close(_))) => break,
+                    Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+            telemetry_msg = rx.recv() => {
+                if let Ok(raw) = telemetry_msg {
+                    if let Some(normalized) = normalize_cc_event(&raw) {
+                        if socket.send(Message::Text(normalized)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ = ticker.tick() => {
+                let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else { continue; };
+                let row = sqlx::query(
+                    "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                if let Some(r) = row {
+                    let title: String = r.try_get("title").unwrap_or_default();
+                    let severity: String = r.try_get("severity").unwrap_or_else(|_| "info".into());
+                    let client_id: String = r.try_get("client_id").unwrap_or_else(|_| "—".into());
+                    let kind = if severity == "critical" || severity == "high" { "critical_cve" } else { "scan_pulse" };
+                    let pulse = json!({
+                        "type": "refresh",
+                        "kind": kind,
+                        "payload": {
+                            "message": title,
+                            "severity": severity,
+                            "target": client_id,
+                            "client_id": client_id,
+                        },
+                        "score": score_payload_ticker,
+                    });
+                    if let Ok(s) = serde_json::to_string(&pulse) {
+                        let _ = socket.send(Message::Text(s)).await;
+                    }
+                }
+            }
         }
     }
 }
@@ -1021,7 +1219,7 @@ pub fn new_app_state(
         edge_heartbeat_batcher,
         sovereign_swarm_tx,
         sovereign_swarm_rx,
-        endpoint_agents: crate::endpoint_agents::AgentRegistry::new(),
+        endpoint_agents: crate::endpoint_agents::AgentRegistry::global(),
     })
 }
 
@@ -1029,6 +1227,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     let app_pool = state.app_pool.clone();
     let intel_pool = state.intel_pool.clone();
     let auth_pool = state.auth_pool.clone();
+    crate::endpoint_agents::spawn_pending_task_pusher(
+        app_pool.clone(),
+        state.endpoint_agents.clone(),
+    );
+    crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
     crate::observability::register_llm_tenant_metering(app_pool.clone());
     crate::observability::spawn_pool_metrics_loop(
         app_pool.clone(),
@@ -1060,6 +1263,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         state.telemetry_broadcast_tx.clone(),
     );
     crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
+    crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
     // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
     // and gated by env vars so dev/offline runs can skip outbound HTTP.
     crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
@@ -1134,6 +1338,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/export/findings", get(api_findings_export_csv))
         .route("/api/findings/:id/status", patch(api_findings_update_status))
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -1157,9 +1362,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/financial-risk/:client_id/apply-tags", post(api_apply_asset_tag_rules))
         // Ask Weissman (NL → safe SQL)
         .route("/api/ask", post(api_ask))
-        // UEBA
+        // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
+        .route("/api/baseline/summary", get(api_baseline_summary))
+        .route("/api/baseline/drift", get(api_baseline_drift))
+        .route("/api/baseline/anomalies", get(api_baseline_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/openapi.json", get(api_openapi_spec))
@@ -1184,6 +1392,15 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/metrics",
             get(crate::observability::api_prometheus_metrics_endpoint),
         )
+        .route("/api/metrics/dashboard", get(api_metrics_dashboard))
+        .route(
+            "/api/rate-limits/status",
+            get(crate::http::rate_limit_metrics::api_rate_limits_status),
+        )
+        .route(
+            "/api/rate-limits/analytics",
+            get(crate::http::rate_limit_metrics::api_rate_limits_analytics),
+        )
         .route("/api/login", post(api_login))
         .route("/api/logout", post(api_logout))
         .route("/api/auth/refresh", post(api_auth_refresh))
@@ -1199,14 +1416,19 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
-        .route("/ws/agent", get(ws_agent))
-        // Onboarding + billing (Paddle + self-serve register; target/launch-scan still stubbed).
-        .route("/api/onboarding/register", post(api_onboarding_register))
-        .route("/api/onboarding/target", post(api_onboarding_target_stub))
         .route(
-            "/api/onboarding/launch-scan",
-            post(api_onboarding_launch_scan_stub),
+            "/install/binaries/:platform/weissman-agent",
+            get(install_agent_binary),
         )
+        .route(
+            "/install/binaries/:platform/weissman-agent.sha256",
+            get(install_agent_binary_sha256),
+        )
+        .route("/ws/agent", get(ws_agent))
+        // Onboarding + billing (Paddle + self-serve register).
+        .route("/api/onboarding/register", post(api_onboarding_register))
+        .route("/api/onboarding/target", post(api_onboarding_target))
+        .route("/api/onboarding/launch-scan", post(api_onboarding_launch_scan))
         .route("/api/billing/usage", get(api_billing_usage))
         .route(
             "/api/billing/checkout-session",
@@ -1299,9 +1521,15 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_client_semantic_reasoning),
         )
         .route("/api/verify-audit/:hash", get(api_verify_audit))
+<<<<<<< HEAD
+        // .route("/api/scan/status", get(api_scan_status))
+        // .route("/api/scan/start", post(api_scan_start))
+        // .route("/api/scan/stop", post(api_scan_stop))
+=======
         .route("/api/scan/status", get(api_scan_status))
         .route("/api/scan/start", post(api_scan_start))
         .route("/api/scan/stop", post(api_scan_stop))
+>>>>>>> origin/main
         .route("/api/scan/run-all", post(api_scan_run_all))
         .route("/api/scan/all-engines", post(api_scan_all_engines))
         .route("/api/discovery/domains", post(api_discovery_domains))
@@ -1320,6 +1548,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/council/hitl/:id/reject", post(api_council_hitl_reject))
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))
+        .route("/api/oast/callbacks", get(api_oast_callbacks))
         .route("/api/oast/verify/:token", get(api_oast_probe_verify))
         // ── Template Engine (YAML) ──────────────────────────────────────────
         .route(
@@ -1368,6 +1597,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/clients/:id/attack-chain",
             get(api_client_attack_chain),
         )
+        .route("/api/identity/contexts", get(api_identity_contexts_alias))
         .route(
             "/api/clients/:id/identity-contexts",
             get(api_identity_contexts_list).post(api_identity_contexts_add),
@@ -1385,6 +1615,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/pipeline/state",
             get(api_pipeline_state_get).patch(api_pipeline_state_patch),
         )
+        .route("/api/risk/graph", get(api_risk_graph_alias))
         .route(
             "/api/clients/:id/risk-graph",
             get(api_risk_graph_get).post(api_risk_graph_build),
@@ -1426,6 +1657,48 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/compliance/frameworks/:framework_id/controls",
             get(api_compliance_frameworks_controls),
         )
+        .route(
+            "/api/compliance/frameworks/:framework_id/report",
+            get(api_compliance_frameworks_report),
+        )
+        .route("/api/search", get(api_global_search))
+        .route(
+            "/api/scans/schedules",
+            get(api_scan_schedules_list).post(api_scan_schedules_create),
+        )
+        .route(
+            "/api/scans/schedules/:id",
+            put(api_scan_schedules_update)
+                .patch(api_scan_schedules_patch)
+                .delete(api_scan_schedules_delete),
+        )
+        .route("/api/scans/schedules/:id/run", post(api_scan_schedules_run))
+        .route(
+            "/api/alerts/rules",
+            get(api_alert_rules_list).post(api_alert_rules_create),
+        )
+        .route(
+            "/api/alerts/rules/:id",
+            put(api_alert_rules_put)
+                .patch(api_alert_rules_patch)
+                .delete(api_alert_rules_delete),
+        )
+        .route("/api/alerts/rules/:id/test", post(api_alert_rules_test))
+        .route(
+            "/api/integrations",
+            get(api_integrations_list).post(api_integrations_post),
+        )
+        .route("/api/integrations/:id/test", post(api_integrations_test))
+        .route("/api/integrations/:id", delete(api_integrations_delete))
+        .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/mobile-security/apps", get(api_mobile_security_apps))
+        .route("/api/soc/incidents", get(api_soc_incidents))
+        .route("/api/soc/hunts", get(api_soc_hunts))
+        .route("/api/soc/kill-chains", get(api_soc_kill_chains))
+        .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
+        .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
+        .route("/api/soc/social-engineering", get(api_soc_social_engineering))
+        .route("/api/soc/network-protocols", get(api_soc_network_protocols))
         .route("/api/reports/executive", get(api_reports_executive))
         .route(
             "/api/sovereign/phantom-trap",
@@ -1444,9 +1717,23 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/heal-verify/:job_id/steps", get(api_heal_verify_steps))
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))
+        .route("/api/sbom/components", get(api_sbom_components_alias))
+        .route("/api/sbom/export", get(api_sbom_export_alias))
         .route(
             "/api/clients/:id/sbom/components",
             get(api_client_sbom_list).post(api_client_sbom_post),
+        )
+        .route("/api/clients/:id/sbom/export", get(api_client_sbom_export))
+        .route(
+            "/api/containment/rules",
+            get(api_containment_rules_alias)
+                .post(api_containment_rules_post_alias),
+        )
+        .route(
+            "/api/containment/rules/:id",
+            patch(api_containment_rules_patch_alias)
+                .put(api_containment_rules_patch_alias)
+                .delete(api_containment_rules_delete_alias),
         )
         .route(
             "/api/clients/:id/containment-rules",
@@ -1496,7 +1783,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/ceo/god-mode/snapshot", get(api_ceo_god_mode_snapshot_get))
         .route(
             "/api/ceo/tenant/engines",
-            put(api_ceo_tenant_engines_put).patch(api_ceo_tenant_engines_put),
+            get(api_ceo_tenant_engines_get)
+                .put(api_ceo_tenant_engines_put)
+                .patch(api_ceo_tenant_engines_put),
         )
         .route(
             "/api/ceo/god-mode/scan-interval",
@@ -1511,6 +1800,22 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route(
             "/api/ceo/vault/export/criticals",
             get(api_ceo_vault_export_criticals),
+        )
+        .route(
+            "/api/ceo/vault/secrets",
+            get(api_ceo_vault_secrets_alias).post(api_ceo_vault_secrets_post),
+        )
+        .route(
+            "/api/ceo/vault/secrets/:id/access",
+            post(api_ceo_vault_secrets_access),
+        )
+        .route(
+            "/api/ceo/vault/secrets/:id/copy",
+            post(api_ceo_vault_secrets_copy),
+        )
+        .route(
+            "/api/ceo/vault/secrets/:id",
+            put(api_ceo_vault_secrets_put).delete(api_ceo_vault_secrets_delete),
         )
         .route(
             "/api/ceo/vault",
@@ -1533,6 +1838,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             post(api_ceo_suspended_resume),
         )
         .route("/api/ceo/suspended-graphs/:id", get(api_ceo_suspended_get))
+        .layer(middleware::from_fn(
+            crate::http::login_rate_limit::login_rate_limit_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::tenant_scan_limit::tenant_scan_rate_limit_middleware,
         ))

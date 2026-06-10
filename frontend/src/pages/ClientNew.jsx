@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
 export default function ClientNew() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
     name: '',
@@ -30,15 +32,15 @@ export default function ClientNew() {
 
     // Validation
     if (!formData.name.trim()) {
-      setError('Client name is required')
+      setError(t('pages.clientNew.name_required'))
       return
     }
     if (!formData.contact_email.trim()) {
-      setError('Contact email is required')
+      setError(t('pages.clientNew.email_required'))
       return
     }
     if (!formData.domains.trim()) {
-      setError('At least one domain must be specified for authorized scope')
+      setError(t('pages.clientNew.domain_required'))
       return
     }
 
@@ -128,15 +130,15 @@ export default function ClientNew() {
       // Redirect to client detail page
       navigate(clientId ? `/clients/${clientId}` : '/clients')
     } catch (err) {
-      setError(`Error creating client: ${err.message}`)
+      setError(t('pages.clientNew.create_error', { detail: err.message }))
       setSubmitting(false)
     }
   }
 
   return (
     <PageShell
-      title="Add New Client"
-      subtitle="Onboard a new client organization with authorized scanning scope"
+      title={t('pages.clientNew.title')}
+      subtitle={t('pages.clientNew.subtitle')}
     >
       <div className="max-w-3xl mx-auto">
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -153,7 +155,7 @@ export default function ClientNew() {
             <div className="space-y-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
-                  Client Name <span className="text-red-400">*</span>
+                  {t('pages.clientNew.client_name')} <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -169,7 +171,7 @@ export default function ClientNew() {
 
               <div>
                 <label htmlFor="contact_email" className="block text-sm font-medium text-slate-300 mb-2">
-                  Contact Email <span className="text-red-400">*</span>
+                  {t('pages.clientNew.contact_email')} <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="email"
@@ -195,7 +197,7 @@ export default function ClientNew() {
             <div className="space-y-4">
               <div>
                 <label htmlFor="domains" className="block text-sm font-medium text-slate-300 mb-2">
-                  Authorized Domains <span className="text-red-400">*</span>
+                  {t('pages.clientNew.authorized_domains')} <span className="text-red-400">*</span>
                 </label>
                 <textarea
                   id="domains"
@@ -212,7 +214,7 @@ export default function ClientNew() {
 
               <div>
                 <label htmlFor="ip_ranges" className="block text-sm font-medium text-slate-300 mb-2">
-                  Authorized IP Ranges <span className="text-slate-500">(Optional)</span>
+                  {t('pages.clientNew.authorized_ips')} <span className="text-slate-500">(Optional)</span>
                 </label>
                 <textarea
                   id="ip_ranges"
@@ -230,7 +232,7 @@ export default function ClientNew() {
 
           {/* Section 3: Tech Stack */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-2">Technology Stack</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">{t('pages.clientNew.tech_stack')}</h3>
             <p className="text-sm text-slate-400 mb-4">
               Specify known technologies for more accurate vulnerability correlation, or enable auto-detection.
             </p>
@@ -276,7 +278,7 @@ export default function ClientNew() {
               className="px-6 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
               disabled={submitting}
             >
-              Cancel
+              {t('pages.clientNew.cancel')}
             </button>
             <button
               type="submit"
@@ -286,10 +288,10 @@ export default function ClientNew() {
               {submitting ? (
                 <>
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Creating...
+                  {t('pages.clientNew.creating')}
                 </>
               ) : (
-                'Create Client'
+                t('pages.clientNew.create_client')
               )}
             </button>
           </div>

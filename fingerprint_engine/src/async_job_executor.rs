@@ -9,6 +9,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 
 const TOP_TIER_ENGINES: &[&str] = &[
+    "nexus_sovereign_swarm",
     "kill_chain",
     "oast_oob",
     "deception_honeypot",
@@ -87,6 +88,80 @@ async fn enforce_payload_scope_pin_if_present(payload: &Value) -> Result<(), Str
         .map_err(|e| format!("validated_scope pin validation failed: {e}"))
 }
 
+fn payload_client_id(p: &Value) -> Option<i64> {
+    p.get("client_id")
+        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+}
+
+async fn persist_findings_best_effort(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    engine: &str,
+    target: &str,
+    findings: &[Value],
+) -> u64 {
+    if findings.is_empty() || client_id.is_none() {
+        return 0;
+    }
+    crate::findings_persist::persist_engine_findings(
+        app_pool,
+        tenant_id,
+        client_id,
+        engine,
+        target,
+        findings,
+    )
+    .await
+    .unwrap_or_else(|e| {
+        tracing::error!(
+            target: "findings_persist",
+            tenant_id,
+            engine = %engine,
+            error = %e,
+            "failed to persist findings"
+        );
+        0
+    })
+}
+
+async fn persist_findings_grouped_by_client_field(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    engine: &str,
+    default_target: &str,
+    findings: &[Value],
+) -> u64 {
+    use std::collections::HashMap;
+    let mut groups: HashMap<i64, Vec<Value>> = HashMap::new();
+    for f in findings {
+        let Some(cid) = f
+            .get("client_id")
+            .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        else {
+            continue;
+        };
+        groups.entry(cid).or_default().push(f.clone());
+    }
+    let mut total = 0u64;
+    for (cid, group) in groups {
+        let target = group
+            .first()
+            .and_then(|f| f.get("target_url").and_then(Value::as_str))
+            .unwrap_or(default_target);
+        total += persist_findings_best_effort(
+            app_pool,
+            tenant_id,
+            Some(cid),
+            engine,
+            target,
+            &group,
+        )
+        .await;
+    }
+    total
+}
+
 /// Run one job to completion JSON (success) or error string (failure).
 pub async fn execute_job(
     app_pool: Arc<PgPool>,
@@ -118,24 +193,63 @@ pub async fn execute_job(
             let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
             let _ = tx.commit().await;
+            let job_params = p.clone();
             let ctx = crate::engine_dispatch::EngineRunContext {
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
                 github_token,
                 llm_base_url: llm_base.unwrap_or_default(),
                 llm_model: llm_model.unwrap_or_default(),
+                app_pool: Some(app_pool.clone()),
+                agents: Some(crate::endpoint_agents::AgentRegistry::global()),
+                client_id: client_id_opt,
+                job_params,
                 ..Default::default()
             };
             if !weissman_core::models::engine::is_production_engine_id(engine) {
                 return Err(format!("engine '{}' is catalog-only or unknown", engine));
             }
-            let result = crate::engine_dispatch::run_engine(engine, target, &ctx).await;
+            // poe_synthesis has no engine_dispatch runner; route through exploit_synthesis like
+            // poe_synthesis_run jobs (scan_routing already uses that kind for direct enqueue).
+            let result = if engine == "poe_synthesis" {
+                let cfg = crate::orchestrator::load_poe_config_http(
+                    app_pool.as_ref(),
+                    tid,
+                    intel_pool.clone(),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+                let wall_secs: u64 = std::env::var("WEISSMAN_POE_JOB_WALL_SECS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(900)
+                    .clamp(120, 7200);
+                match tokio::time::timeout(
+                    Duration::from_secs(wall_secs),
+                    crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+                        target,
+                        &cfg,
+                        None,
+                        None,
+                        Some(tid),
+                    ),
+                )
+                .await
+                {
+                    Ok(r) => r,
+                    Err(_) => crate::engine_result::EngineResult::error(
+                        "PoE synthesis exceeded wall-clock budget; check vLLM health and target reachability",
+                    ),
+                }
+            } else {
+                crate::engine_dispatch::run_engine(engine, target, &ctx).await
+            };
 
             // Persist findings into report_runs + vulnerabilities so the Findings Command
             // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
             // this step results live only inside weissman_async_jobs.result_json (effectively
             // invisible to the customer).
-            let persisted = crate::findings_persist::persist_engine_findings(
+            let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),
                 tid,
                 client_id_opt,
@@ -143,17 +257,7 @@ pub async fn execute_job(
                 target,
                 &result.findings,
             )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!(
-                    target: "findings_persist",
-                    tenant_id = tid,
-                    engine = %engine,
-                    error = %e,
-                    "failed to persist findings"
-                );
-                0
-            });
+            .await;
 
             Ok(json!({
                 "engine": engine,
@@ -430,6 +534,7 @@ pub async fn execute_job(
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
                     app_pool: Some(app.clone()),
+                    agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                     client_id: Some(client_id),
                     ..Default::default()
                 };
@@ -866,9 +971,19 @@ pub async fn execute_job(
                     let _ = tx.commit().await;
                 }
             }
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                client_id,
+                "semantic_ai_fuzz",
+                &target,
+                &fuzzy.result.findings,
+            )
+            .await;
             Ok(json!({
                 "status": fuzzy.result.status,
                 "findings": fuzzy.result.findings,
+                "findings_persisted": persisted,
                 "message": fuzzy.result.message,
                 "state_nodes": fuzzy.state_nodes,
                 "state_edges": fuzzy.state_edges,
@@ -1059,9 +1174,19 @@ pub async fn execute_job(
             let result =
                 crate::timing_engine::run_timing_attack(&target, None, &cfg, Some(tx_stream))
                     .await;
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                payload_client_id(p),
+                "microsecond_timing",
+                &target,
+                &result.findings,
+            )
+            .await;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
+                "findings_persisted": persisted,
                 "message": result.message,
                 "client_id": client_id,
             }))
@@ -1127,9 +1252,19 @@ pub async fn execute_job(
                 Some(tid),
             )
             .await;
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                payload_client_id(p),
+                "ai_adversarial_redteam",
+                &target,
+                &result.findings,
+            )
+            .await;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
+                "findings_persisted": persisted,
                 "message": result.message,
                 "client_id": client_id,
                 "oast_interaction_token": oast_interaction_token,
@@ -1197,9 +1332,18 @@ pub async fn execute_job(
                 Some(tid),
             )
             .await;
+            let persisted = persist_findings_grouped_by_client_field(
+                app_pool.as_ref(),
+                tid,
+                "zero_day_radar",
+                "tenant-wide radar scan",
+                &result.findings,
+            )
+            .await;
             Ok(json!({
                 "status": result.status,
                 "findings": result.findings,
+                "findings_persisted": persisted,
                 "message": result.message,
             }))
         }
@@ -1241,9 +1385,19 @@ pub async fn execute_job(
             })
             .await
             .map_err(|e| format!("join: {}", e))?;
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                payload_client_id(p),
+                "pipeline",
+                repo,
+                &res.findings,
+            )
+            .await;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
+                "findings_persisted": persisted,
                 "message": res.message,
                 "client_id": client_id,
             }))
@@ -1373,9 +1527,19 @@ pub async fn execute_job(
                     "poe_synthesis_run finished with zero findings — check logs (poe_llm) if UI stuck on Awaiting PoE; often no crash-like probe fired"
                 );
             }
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                payload_client_id(p),
+                "poe_synthesis",
+                &target,
+                &res.findings,
+            )
+            .await;
             Ok(json!({
                 "status": res.status,
                 "findings": res.findings,
+                "findings_persisted": persisted,
                 "message": res.message,
             }))
         }

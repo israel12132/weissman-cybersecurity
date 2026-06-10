@@ -141,6 +141,84 @@ pub async fn post_vault_row(
     Ok(id)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct VaultSecretBody {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default = "default_secret_type")]
+    pub r#type: String,
+    pub value: String,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+}
+
+fn default_secret_type() -> String {
+    "api_key".to_string()
+}
+
+pub fn secret_body_to_vault_insert(body: &VaultSecretBody) -> VaultInsertBody {
+    VaultInsertBody {
+        tech_fingerprint: format!("{}:{}", body.r#type.trim(), body.description.trim()),
+        component_ref: body.name.trim().to_string(),
+        attack_chain_json: json!({
+            "secret_type": body.r#type,
+            "expires_at": body.expires_at,
+        }),
+        remediation_patch: body.description.trim().to_string(),
+        detection_signature: body.value.clone(),
+        severity: body.r#type.trim().to_lowercase(),
+        preemptive_validated: false,
+        simulation_feedback: json!({}),
+        council_transcript: json!({}),
+    }
+}
+
+pub async fn update_vault_row(
+    pool: &PgPool,
+    tenant_id: i64,
+    id: i64,
+    body: &VaultSecretBody,
+) -> Result<bool, sqlx::Error> {
+    let insert = secret_body_to_vault_insert(body);
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let res = sqlx::query(
+        r#"UPDATE genesis_vaccine_vault
+              SET tech_fingerprint = $1, component_ref = $2, attack_chain_json = $3,
+                  remediation_patch = $4, detection_signature = $5, severity = $6
+            WHERE id = $7"#,
+    )
+    .bind(insert.tech_fingerprint.trim())
+    .bind(insert.component_ref.trim())
+    .bind(&insert.attack_chain_json)
+    .bind(insert.remediation_patch.trim())
+    .bind(insert.detection_signature.trim())
+    .bind(
+        insert
+            .severity
+            .trim()
+            .to_lowercase()
+            .chars()
+            .take(32)
+            .collect::<String>(),
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(res.rows_affected() > 0)
+}
+
+pub async fn delete_vault_row(pool: &PgPool, tenant_id: i64, id: i64) -> Result<bool, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let res = sqlx::query("DELETE FROM genesis_vaccine_vault WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(res.rows_affected() > 0)
+}
+
 /// Same logic as Python `remediation_engine.knowledge_match_sync` — executed in Rust against live DB.
 pub async fn match_vault_row(pool: &PgPool, tenant_id: i64, vault_id: i64) -> Result<Value, String> {
     let row = get_vault_row(pool, tenant_id, vault_id)

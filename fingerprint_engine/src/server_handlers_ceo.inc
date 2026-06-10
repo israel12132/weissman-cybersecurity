@@ -528,6 +528,38 @@ struct CeoTenantEnginesBody {
     enabled: bool,
 }
 
+/// GET /api/ceo/tenant/engines — list known engines with tenant `active_engines` policy.
+async fn api_ceo_tenant_engines_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let policy_tid = match crate::ceo::default_tenant_id(state.auth_pool.as_ref()).await {
+        Ok(Some(id)) => id,
+        Ok(None) => auth.tenant_id,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+            )
+                .into_response();
+        }
+    };
+    match crate::ceo::tenant_engines::load_tenant_active_engines(state.app_pool.as_ref(), policy_tid)
+        .await
+    {
+        Ok(active) => (
+            StatusCode::OK,
+            Json(crate::ceo::tenant_engines::tenant_engines_list_json(&active)),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e, "engines": [], "active_engines": [] })),
+        )
+            .into_response(),
+    }
+}
+
 /// PUT/PATCH body: `{ "engine_id": "asm", "enabled": true }` — updates `system_configs.active_engines` for **`tenants.slug = default`** (orchestrator policy).
 async fn api_ceo_tenant_engines_put(
     State(state): State<Arc<AppState>>,

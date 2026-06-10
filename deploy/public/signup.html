@@ -46,7 +46,7 @@
         <p style="font-size:.7rem;color:#64748b;margin:0 0 1.25rem">Min 12 characters · mix letters and numbers/symbols</p>
 
         <label style="display:flex;align-items:flex-start;gap:.6rem;font-size:.8rem;color:#cbd5e1;cursor:pointer;margin-bottom:1.5rem">
-          <input type="checkbox" id="accept_terms" required style="margin-top:.2rem" />
+          <input type="checkbox" id="accept_terms" name="accept_terms" required style="margin-top:.2rem" />
           <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:#22d3ee">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener" style="color:#22d3ee">Privacy Policy</a>.</span>
         </label>
 
@@ -73,11 +73,16 @@
       e.preventDefault()
       status.textContent = ''
       status.style.color = ''
+      if (!form.accept_terms.checked) {
+        status.style.color = '#f87171'
+        status.textContent = 'You must accept the Terms of Service and Privacy Policy.'
+        return
+      }
       const payload = {
         workspace_name: form.workspace_name.value.trim(),
         email: form.email.value.trim(),
         password: form.password.value,
-        accept_terms: form.accept_terms.checked,
+        accept_terms: true,
       }
       btn.disabled = true
       btn.textContent = 'Creating…'

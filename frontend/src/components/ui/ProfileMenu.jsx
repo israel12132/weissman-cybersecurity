@@ -11,6 +11,7 @@ import {
   Users,
   ScrollText,
   Activity,
+  CreditCard,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
@@ -55,6 +56,7 @@ export default function ProfileMenu({ variant = 'header' }) {
   const initial = (email[0] || '?').toUpperCase()
   const role = (session?.role || 'viewer').toLowerCase()
   const isSuper = session?.is_superadmin === true
+  const isAdmin = isSuper || role === 'admin'
   const lang = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
 
   const triggerClass = isSidebar
@@ -144,6 +146,14 @@ export default function ProfileMenu({ variant = 'header' }) {
                 onClick={() => setOpen(false)}
               />
             ))}
+            {isAdmin && (
+              <MenuLink
+                to="/billing"
+                label={t('nav.billing')}
+                icon={CreditCard}
+                onClick={() => setOpen(false)}
+              />
+            )}
           </div>
 
           <div className="border-t border-white/10 pt-3">

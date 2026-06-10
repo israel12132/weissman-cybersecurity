@@ -186,3 +186,94 @@ pub fn compute_posture(
         })
         .collect()
 }
+
+/// Map UI framework slug (e.g. `soc2`, `pci-dss`) to the catalog `framework` column value.
+pub fn normalize_framework_slug(slug: &str) -> Option<String> {
+    let s = slug.trim().to_lowercase().replace('_', "-");
+    match s.as_str() {
+        "soc2" | "soc-2" => Some("SOC2".into()),
+        "iso27001" | "iso-27001" => Some("ISO27001".into()),
+        "gdpr" => Some("GDPR".into()),
+        "nis2" => Some("NIS2".into()),
+        "pci" | "pci-dss" => Some("PCI".into()),
+        "iec62443" => Some("IEC62443".into()),
+        "csa-ccm" => Some("CSA-CCM".into()),
+        "cis" => Some("CIS".into()),
+        "nist" | "nist-csf" => Some("NIST".into()),
+        "hipaa" => Some("HIPAA".into()),
+        "fedramp" => Some("FedRAMP".into()),
+        _ => None,
+    }
+}
+
+pub fn framework_display_name(slug: &str) -> &'static str {
+    match slug.trim().to_lowercase().replace('_', "-").as_str() {
+        "iso27001" | "iso-27001" => "ISO/IEC 27001:2022",
+        "soc2" | "soc-2" => "SOC 2 Type II",
+        "nis2" => "NIS 2 Directive",
+        "gdpr" => "GDPR",
+        "iec62443" => "IEC 62443",
+        "pci" | "pci-dss" => "PCI DSS 4.0",
+        "csa-ccm" => "CSA CCM",
+        "cis" => "CIS Benchmarks",
+        "nist" | "nist-csf" => "NIST CSF",
+        "hipaa" => "HIPAA",
+        "fedramp" => "FedRAMP",
+        _ => "Compliance Framework",
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ControlStatusRow {
+    pub control_id: String,
+    pub control_title: String,
+    pub status: String,
+}
+
+/// Per-control compliance derived from mapped findings (cloud rules + vulnerabilities).
+pub fn compute_control_statuses(
+    mappings: &[ComplianceMappingRow],
+    framework_db: &str,
+    cloud_rule_ids: &[String],
+    vulnerabilities: &[(String, String, String)],
+) -> Vec<ControlStatusRow> {
+    let cloud_set: HashSet<&str> = cloud_rule_ids.iter().map(|s| s.as_str()).collect();
+    let fw_upper = framework_db.to_uppercase();
+
+    type ControlKey = (String, String);
+    let mut violated: HashMap<ControlKey, bool> = HashMap::new();
+
+    for m in mappings {
+        if m.framework.to_uppercase() != fw_upper {
+            continue;
+        }
+        let ck = (m.control_id.clone(), m.control_title.clone());
+        let cloud_hit = m
+            .cloud_rule_id
+            .as_deref()
+            .map(|r| cloud_set.contains(r))
+            .unwrap_or(false);
+        let vuln_hit = vulnerabilities
+            .iter()
+            .any(|(src, tit, sev)| mapping_matches_vulnerability(m, src, tit, sev));
+        let entry = violated.entry(ck).or_insert(false);
+        if cloud_hit || vuln_hit {
+            *entry = true;
+        }
+    }
+
+    let mut out: Vec<ControlStatusRow> = violated
+        .into_iter()
+        .map(|((control_id, control_title), is_violated)| ControlStatusRow {
+            control_id,
+            control_title,
+            status: if is_violated {
+                "non-compliant".into()
+            } else {
+                "compliant".into()
+            },
+        })
+        .collect();
+    out.sort_by(|a, b| a.control_id.cmp(&b.control_id));
+    out
+}

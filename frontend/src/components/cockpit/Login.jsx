@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useId } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Loader2, AlertCircle, Shield, CheckCircle2, Globe2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
@@ -557,11 +557,11 @@ export default function Login() {
                     {t('auth.privacy')}
                   </a>
                   {' · '}
-                  <a href="/status" className="transition-colors hover:text-white/55">
+                  <Link to="/status" className="transition-colors hover:text-white/55">
                     {t('auth.status_link')}
-                  </a>
+                  </Link>
                   {' · '}
-                  <a href="/api/docs/" className="transition-colors hover:text-white/55">
+                  <a href={apiUrl('/api/docs/')} className="transition-colors hover:text-white/55">
                     {t('auth.api_docs')}
                   </a>
                 </p>

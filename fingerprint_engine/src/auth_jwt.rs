@@ -1,5 +1,12 @@
 //! JWT access tokens (short-lived) for API and WebSocket auth. Refresh uses opaque DB-backed tokens
 //! ([`crate::auth_refresh`]).
+//!
+//! **Transport:** Prefer `Authorization: Bearer` or the HttpOnly `weissman_token` cookie. User JWTs
+//! must not appear in query strings (logs, referrers, browser history). Exceptions:
+//! - **SSE** (`/api/telemetry/stream`, CEO war-room/council streams): `?access_token=` only because
+//!   `EventSource` cannot set headers — deprecated; migrate to cookie auth where possible.
+//! - **`/ws/agent`**: `?token=` accepts only agent session JWTs (`typ: agent`), not human access JWTs.
+//!   Agents should prefer `Authorization: Bearer` when the client supports it.
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -313,6 +320,19 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
 #[inline]
 pub fn verify_session_token(token: &str) -> Option<AuthContext> {
     verify_access_token(token)
+}
+
+/// True when `ctx` is a human user access session (not an endpoint agent).
+#[inline]
+pub fn is_user_access_context(ctx: &AuthContext) -> bool {
+    ctx.agent_id.is_none() && !ctx.role.eq_ignore_ascii_case("agent")
+}
+
+/// Verify endpoint-agent session JWT (`typ: agent`). Rejects human user access tokens.
+pub fn verify_agent_session_token(token: &str) -> Option<AuthContext> {
+    verify_access_token(token).filter(|ctx| {
+        ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent")
+    })
 }
 
 /// `Set-Cookie` for access token. Max-Age tracks JWT lifetime.

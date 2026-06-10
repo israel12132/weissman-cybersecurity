@@ -1,4 +1,4 @@
--- Mirror weissman-db migration for standalone fingerprint_engine migrate runs.
+-- Winning payloads from vLLM-driven generative feedback fuzzing (prompt provenance for audit).
 
 CREATE TABLE generative_fuzz_winning_payloads (
     id              BIGSERIAL PRIMARY KEY,

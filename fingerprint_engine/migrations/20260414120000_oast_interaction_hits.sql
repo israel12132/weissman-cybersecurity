@@ -1,4 +1,4 @@
--- Mirror weissman-db migration for fingerprint_engine migrate runs.
+-- Weissman OAST listener: out-of-band HTTP/DNS interaction hits (global service; not tenant-scoped).
 
 CREATE TABLE oast_interaction_hits (
     id              BIGSERIAL PRIMARY KEY,
