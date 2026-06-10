@@ -1,7 +1,25 @@
-/** API origin: Vite dev uses '' + proxy; production uses current origin. */
+/**
+ * API origin.
+ *
+ * Precedence:
+ *   1. `import.meta.env.VITE_API_BASE_URL` — set at build time (e.g. https://api.weissman.io).
+ *   2. `window.__WEISSMAN_API_BASE__` — set at runtime by index.html for self-hosted deploys.
+ *   3. Empty string when running on the Vite dev server (port 5173 / 4173) so requests go through
+ *      the dev proxy in vite.config.js.
+ *   4. `window.location.origin` for production / same-origin deploys.
+ *
+ * No port is hardcoded. Returning an empty string defers to relative URLs.
+ */
 export function getApiBase() {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const env = import.meta.env.VITE_API_BASE_URL
+    if (env && String(env).trim()) return String(env).trim().replace(/\/+$/, '')
+  }
   if (typeof window === 'undefined') return ''
-  if (window.location.port === '5173') return ''
+  const runtime = window.__WEISSMAN_API_BASE__
+  if (runtime && String(runtime).trim()) return String(runtime).trim().replace(/\/+$/, '')
+  const port = window.location?.port
+  if (port === '5173' || port === '4173') return '' // Vite dev/preview → use proxy
   return window.location?.origin || ''
 }
 

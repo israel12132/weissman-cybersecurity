@@ -20,6 +20,14 @@ use crate::audit_log;
 use crate::db;
 use crate::http::AppState;
 
+fn oidc_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 #[derive(Deserialize)]
 pub struct OidcBeginQuery {
     pub tenant_slug: String,
@@ -120,8 +128,9 @@ pub async fn oidc_begin(
             Json(json!({"ok": false, "detail": "invalid issuer_url in DB"})),
         )
     })?;
+    let http_client = oidc_http_client();
     let metadata =
-        CoreProviderMetadata::discover_async(issuer_url, &oauth2::reqwest::async_http_client)
+        CoreProviderMetadata::discover_async(issuer_url, &http_client)
             .await
             .map_err(|e| {
                 (
@@ -241,8 +250,9 @@ pub async fn oidc_callback(
             Json(json!({"ok": false, "detail": "issuer"})),
         )
     })?;
+    let http_client = oidc_http_client();
     let metadata =
-        CoreProviderMetadata::discover_async(issuer_url, &oauth2::reqwest::async_http_client)
+        CoreProviderMetadata::discover_async(issuer_url, &http_client)
             .await
             .map_err(|e| {
                 (
@@ -264,10 +274,17 @@ pub async fn oidc_callback(
         client_secret.map(ClientSecret::new),
     )
     .set_redirect_uri(redirect_url);
-    let token_res = client
+    let token_req = client
         .exchange_code(AuthorizationCode::new(q.code.clone()))
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": format!("token request: {}", e)})),
+            )
+        })?;
+    let token_res = token_req
         .set_pkce_verifier(oauth2::PkceCodeVerifier::new(state_data.pkce_verifier))
-        .request_async(&oauth2::reqwest::async_http_client)
+        .request_async(&http_client)
         .await
         .map_err(|e| {
             (

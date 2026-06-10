@@ -149,6 +149,8 @@ export default function DigitalTwinSimulator() {
 
   const handleSimulate = useCallback(async (scenarioId) => {
     if (!selectedClientId) { showToast('error', 'Select a client first'); return }
+    const primaryTarget = envProfile?.domains?.[0]
+    if (!primaryTarget) { showToast('error', 'Client has no approved domain target'); return }
     setRunningId(scenarioId)
     try {
       const r = await apiFetch('/api/command-center/scan', {
@@ -158,6 +160,7 @@ export default function DigitalTwinSimulator() {
           engine: 'digital_twin',
           client_id: Number(selectedClientId),
           scenario: scenarioId,
+          target: primaryTarget.startsWith('http://') || primaryTarget.startsWith('https://') ? primaryTarget : `https://${primaryTarget}`,
         }),
       })
       const d = await r.json().catch(() => ({}))
@@ -172,7 +175,7 @@ export default function DigitalTwinSimulator() {
     } finally {
       setRunningId(null)
     }
-  }, [selectedClientId, showToast])
+  }, [selectedClientId, envProfile, showToast])
 
   const handleRunAll = useCallback(async () => {
     for (const s of SIMULATION_SCENARIOS) {

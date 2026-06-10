@@ -84,8 +84,21 @@ export function AuthProvider({ children }) {
           await refreshSession()
           return { ok: true }
         }
+        // BLOCKER #3 — server returns 403 + code=mfa_enrollment_required when tenant
+        // policy demands MFA but user hasn't enrolled.
+        if (r.status === 403 && data.code === 'mfa_enrollment_required') {
+          clearStoredAccessToken()
+          return {
+            ok: false,
+            code: 'mfa_enrollment_required',
+            detail: data.detail || 'MFA enrollment required by tenant policy.',
+          }
+        }
         clearStoredAccessToken()
-        return { ok: false, detail: data.detail || 'Invalid email or password' }
+        return {
+          ok: false,
+          detail: data.detail || data.error || `Login failed (HTTP ${r.status})`,
+        }
       } catch (_) {
         return { ok: false, detail: 'Network error' }
       }

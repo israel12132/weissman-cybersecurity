@@ -3,9 +3,9 @@
 //! Produces nodes and edges for the Attack Surface Graph. No mock data.
 
 use serde::{Deserialize, Serialize};
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::proto::rr::RecordType;
-use trust_dns_resolver::TokioAsyncResolver;
+use hickory_resolver::config::ResolverConfig;
+use hickory_resolver::proto::rr::RecordType;
+use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
 
 /// Known CNAME suffixes that are common subdomain takeover targets when the target service is gone.
 const TAKEOVER_CNAME_SUFFIXES: &[&str] = &[
@@ -115,21 +115,27 @@ pub async fn resolve_cname(domain: &str) -> Option<String> {
     if domain.is_empty() {
         return None;
     }
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        TokioRuntimeProvider::default(),
+    )
+    .build()
+    .ok()?;
     let lookup = match resolver.lookup(domain.as_str(), RecordType::CNAME).await {
         Ok(l) => l,
         Err(_) => return None,
     };
-    for record in lookup.record_iter() {
-        if let Some(trust_dns_resolver::proto::rr::RData::CNAME(cname)) = record.data() {
-            let target = cname
-                .to_string()
-                .to_lowercase()
-                .trim_end_matches('.')
-                .to_string();
-            if !target.is_empty() {
-                return Some(target);
-            }
+    for record in lookup.answers() {
+        let hickory_resolver::proto::rr::RData::CNAME(cname) = &record.data else {
+            continue;
+        };
+        let target = cname
+            .to_string()
+            .to_lowercase()
+            .trim_end_matches('.')
+            .to_string();
+        if !target.is_empty() {
+            return Some(target);
         }
     }
     None
@@ -149,7 +155,15 @@ pub async fn resolve_a(host: &str) -> bool {
     if host.is_empty() {
         return false;
     }
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+    let resolver = match TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        TokioRuntimeProvider::default(),
+    )
+    .build()
+    {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
     match resolver.lookup_ip(host).await {
         Ok(lookup) => lookup.iter().next().is_some(),
         Err(_) => false,

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pricing — Weissman Cybersecurity</title>
+  <meta name="description" content="Transparent pricing for Weissman Cybersecurity. Self-hosted is free forever. Cloud SaaS starts at $0 with a free tier." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="canonical" href="/pricing.html" />
+  <link rel="stylesheet" href="/_shared.css" />
+</head>
+<body>
+  <nav>
+    <div class="container nav-inner">
+      <a href="/" aria-label="Weissman home"><strong style="font-family:Orbitron,sans-serif;letter-spacing:2px;color:#22d3ee">WEISSMAN</strong></a>
+      <div class="nav-links">
+        <a href="/#engines">Engines</a>
+        <a href="/#how">How it works</a>
+        <a href="/pricing.html" aria-current="page" style="color:#22d3ee">Pricing</a>
+        <a href="/api/docs/" target="_blank" rel="noopener">API</a>
+        <a href="/command-center/login" class="cta-ghost">Sign in</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero" style="padding:5rem 0 3rem">
+    <div class="container">
+      <span class="pill">Honest pricing · cancel any time</span>
+      <h1 style="font-size:clamp(2rem,4.5vw,3rem)">Pay for outcomes, not features.</h1>
+      <p class="lead">Self-hosted is free forever. Cloud SaaS scales with usage — no per-user fees, no consultant-required onboarding.</p>
+    </div>
+  </header>
+
+  <section style="padding-top:2rem">
+    <div class="container">
+      <div class="pricing-grid">
+        <div class="price-card">
+          <div class="price-tier">Open</div>
+          <h2 class="price-name">Self-hosted</h2>
+          <div class="price-amount">$0<span class="unit">/forever</span></div>
+          <p style="color:#94a3b8;font-size:.85rem;margin:.5rem 0 0">Run on your own infra, your own VPC.</p>
+          <ul class="price-list">
+            <li>All 253 engines</li>
+            <li>Endpoint agent (Linux / macOS / Windows)</li>
+            <li>Multi-tenant Postgres + RLS</li>
+            <li>Auto-PR remediation</li>
+            <li>SMTP + webhook alerts</li>
+            <li>Community support (GitHub Discussions)</li>
+            <li>BYO LLM (Ollama / vLLM / OpenAI)</li>
+          </ul>
+          <a href="https://github.com/weissman/cybersecurity" class="cta-ghost" style="text-align:center">Get it on GitHub →</a>
+        </div>
+
+        <div class="price-card featured">
+          <div class="price-tier">Most popular</div>
+          <h2 class="price-name">Cloud SaaS</h2>
+          <div class="price-amount">$499<span class="unit">/month</span></div>
+          <p style="color:#94a3b8;font-size:.85rem;margin:.5rem 0 0">For SOC teams that don't want to babysit infra.</p>
+          <ul class="price-list">
+            <li>Everything in Self-hosted</li>
+            <li>Hosted in EU-West (data residency)</li>
+            <li>Up to 25 clients, 100 assets</li>
+            <li>50 AI-heavy scans / day</li>
+            <li>SSO (OIDC + SAML)</li>
+            <li>SLA: 99.5% uptime</li>
+            <li>Email + Slack support, 24h response</li>
+            <li>14-day free trial — no card required</li>
+          </ul>
+          <a href="/command-center/login" class="cta" style="text-align:center">Start free trial →</a>
+        </div>
+
+        <div class="price-card">
+          <div class="price-tier">Custom</div>
+          <h2 class="price-name">Enterprise</h2>
+          <div class="price-amount" style="font-size:1.6rem;line-height:2.6rem">Talk to us</div>
+          <p style="color:#94a3b8;font-size:.85rem;margin:.5rem 0 0">For MSSPs, regulated industries, and large attack surfaces.</p>
+          <ul class="price-list">
+            <li>Unlimited clients &amp; assets</li>
+            <li>Single-tenant deployment option</li>
+            <li>Custom data residency</li>
+            <li>Custom engine development</li>
+            <li>Audit log export to your SIEM</li>
+            <li>SLA: 99.9%, 4h response</li>
+            <li>Named CSM + onboarding workshop</li>
+            <li>Signed MSA + DPA + SOC2 Type II evidence</li>
+          </ul>
+          <a href="mailto:sales@weissman.io?subject=Enterprise%20inquiry" class="cta-ghost" style="text-align:center">Contact sales →</a>
+        </div>
+      </div>
+
+      <div style="margin-top:4rem;text-align:center">
+        <h3 style="font-family:Orbitron,sans-serif;font-size:1.25rem;color:#fff">Frequently asked questions</h3>
+        <div style="max-width:760px;margin:2rem auto 0;text-align:left">
+          <details style="border:1px solid rgba(255,255,255,0.08);border-radius:.5rem;padding:1rem 1.25rem;margin-bottom:.75rem;background:rgba(15,23,42,0.5)">
+            <summary style="cursor:pointer;color:#22d3ee;font-weight:600">Is anything ever simulated?</summary>
+            <p style="margin:.75rem 0 0;color:#94a3b8;font-size:.9rem">No. Every one of the 253 production engines hits a real endpoint, parses real evidence, and only fires on observed behavior. Engines that need on-host visibility (process memory, registry, etc.) are deferred to our endpoint agent and explicitly marked <code>agent_required</code> in the registry.</p>
+          </details>
+          <details style="border:1px solid rgba(255,255,255,0.08);border-radius:.5rem;padding:1rem 1.25rem;margin-bottom:.75rem;background:rgba(15,23,42,0.5)">
+            <summary style="cursor:pointer;color:#22d3ee;font-weight:600">Can I run this offline / air-gapped?</summary>
+            <p style="margin:.75rem 0 0;color:#94a3b8;font-size:.9rem">Yes. Self-hosted ships as a single binary + Postgres + Redis + optional Ollama. Threat-intel feeds, NVD, and OSV can be mirrored locally. CI/CD validates each release runs with all outbound calls blocked.</p>
+          </details>
+          <details style="border:1px solid rgba(255,255,255,0.08);border-radius:.5rem;padding:1rem 1.25rem;margin-bottom:.75rem;background:rgba(15,23,42,0.5)">
+            <summary style="cursor:pointer;color:#22d3ee;font-weight:600">What about my LLM bill?</summary>
+            <p style="margin:.75rem 0 0;color:#94a3b8;font-size:.9rem">Every AI-heavy engine respects a per-tenant daily quota (configurable, defaults to 50). Cloud plan includes the LLM cost; self-hosted lets you point at Ollama / vLLM / OpenAI / Anthropic and pay them directly.</p>
+          </details>
+          <details style="border:1px solid rgba(255,255,255,0.08);border-radius:.5rem;padding:1rem 1.25rem;margin-bottom:.75rem;background:rgba(15,23,42,0.5)">
+            <summary style="cursor:pointer;color:#22d3ee;font-weight:600">Will Weissman scan things I didn't authorise?</summary>
+            <p style="margin:.75rem 0 0;color:#94a3b8;font-size:.9rem">Never. Every scan target is validated against the client's approved scope (domains, IP ranges, AWS account IDs). Out-of-scope probes are rejected at the API edge with <code>403</code>, before a packet leaves the network.</p>
+          </details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-bottom" style="border-top:none">
+        <span>© <span id="y"></span> Weissman Cybersecurity</span>
+        <span><a href="/terms.html" style="color:#94a3b8">Terms</a> · <a href="/privacy.html" style="color:#94a3b8">Privacy</a> · <a href="/dpa.html" style="color:#94a3b8">DPA</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+</body>
+</html>

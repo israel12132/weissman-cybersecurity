@@ -5,7 +5,7 @@ use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use governor::clock::DefaultClock;
+use governor::clock::{Clock, DefaultClock};
 use governor::state::keyed::DefaultKeyedStateStore;
 use governor::{Quota, RateLimiter};
 use std::net::SocketAddr;
@@ -81,21 +81,39 @@ pub async fn tenant_scan_rate_limit_middleware(
     let Some(ctx) = request.extensions().get::<AuthContext>().cloned() else {
         return next.run(request).await;
     };
-    if scan_limiter().check_key(&ctx.tenant_id).is_err() {
+    if let Err(neg) = scan_limiter().check_key(&ctx.tenant_id) {
+        let clock = DefaultClock::default();
+        let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
+        let limit = per_tenant_scan_per_minute().get();
+        let burst = tenant_scan_burst().get();
         tracing::warn!(
             target: "rate_limit",
             tenant_id = ctx.tenant_id,
             path = %path,
+            retry_after_secs,
+            limit,
+            burst,
             "tenant scan POST rate limit exceeded"
         );
-        return (
+        let mut resp = (
             StatusCode::TOO_MANY_REQUESTS,
             axum::Json(serde_json::json!({
                 "ok": false,
-                "detail": "scan rate limit exceeded for this tenant; retry shortly",
+                "code": "rate_limited",
+                "detail": format!(
+                    "Scan rate limit hit ({burst} burst / {limit} per minute per tenant). \
+                     Retry in {retry_after_secs}s, or batch your engine launches."
+                ),
+                "retry_after_seconds": retry_after_secs,
+                "limit_per_minute": limit,
+                "burst": burst,
             })),
         )
             .into_response();
+        if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+            resp.headers_mut().insert("Retry-After", v);
+        }
+        return resp;
     }
     next.run(request).await
 }

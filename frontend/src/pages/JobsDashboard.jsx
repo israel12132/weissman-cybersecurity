@@ -80,34 +80,34 @@ export default function JobsDashboard() {
   }
 
   return (
-    <PageShell title="Jobs Dashboard" subtitle="Monitor scan jobs and background tasks">
+    <PageShell
+      title="Jobs Dashboard"
+      subtitle="Monitor scan jobs and background tasks"
+      actions={
+        <>
+          <label className="flex items-center gap-2 text-[11px] font-mono text-white/55">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
+            />
+            Auto-refresh (5s)
+          </label>
+          <button
+            type="button"
+            onClick={() => loadJobs()}
+            className="px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/60 hover:text-white/90 hover:border-white/30 transition-colors"
+          >
+            ↻ Refresh
+          </button>
+        </>
+      }
+    >
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-white">Active & Recent Jobs</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              {jobs.length} job{jobs.length !== 1 ? 's' : ''} tracked
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
-              />
-              Auto-refresh (5s)
-            </label>
-            <button
-              onClick={() => loadJobs()}
-              className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
-            >
-              ↻ Refresh Now
-            </button>
-          </div>
-        </div>
+        <p className="text-sm text-white/45 font-mono">
+          {jobs.length} job{jobs.length !== 1 ? 's' : ''} tracked
+        </p>
 
         {/* Error State */}
         {error && (

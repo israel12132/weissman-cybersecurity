@@ -78,8 +78,14 @@ pub struct AppState {
     pub app_pool: Arc<PgPool>,
     pub intel_pool: Arc<PgPool>,
     pub auth_pool: Arc<PgPool>,
+    /// Optional read-only pool (separate role with SELECT-only grants).
+    /// When `Some`, `nl_query::ask` will use this for the compiled SQL execution
+    /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
+    pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
+    #[allow(dead_code)]
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    #[allow(dead_code)]
     redteam_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     radar_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// PoE SSE: registry job_id -> list of bounded client channels; updates_tx feeds distributor that sends only to that job's subscribers.
@@ -96,6 +102,8 @@ pub struct AppState {
     sovereign_swarm_rx: std::sync::Mutex<
         Option<tokio::sync::mpsc::Receiver<crate::sovereign_c2::SovereignSwarmCmd>>,
     >,
+    /// Endpoint-agent live session registry (one entry per online agent_uuid).
+    pub endpoint_agents: Arc<crate::endpoint_agents::AgentRegistry>,
 }
 
 impl AppState {
@@ -200,6 +208,15 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
         return next.run(request).await;
     }
     if path == "/api/openapi.json" && method == Method::GET {
+        return next.run(request).await;
+    }
+    if (path == "/api/docs" || path == "/api/docs/") && method == Method::GET {
+        return next.run(request).await;
+    }
+    if path == "/api/auth/signup" && method == Method::POST {
+        return next.run(request).await;
+    }
+    if path == "/api/auth/verify" && method == Method::GET {
         return next.run(request).await;
     }
     if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
@@ -737,12 +754,14 @@ struct ClientConfigBody {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct TimingScanRunBody {
     target: Option<String>,
     client_id: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct AiRedteamRunBody {
     target: Option<String>,
     client_id: Option<String>,
@@ -920,6 +939,26 @@ pub fn new_app_state(
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
 ) -> Arc<AppState> {
+    // Optional read-only pool for /api/ask. Falls back to None if the env var
+    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
+    let read_only_pool: Option<Arc<PgPool>> =
+        match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(url) => match sqlx::postgres::PgPoolOptions::new()
+                .max_connections(5)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect_lazy(&url)
+            {
+                Ok(p) => Some(Arc::new(p)),
+                Err(e) => {
+                    tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
+                    None
+                }
+            },
+            None => None,
+        };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -929,12 +968,22 @@ pub fn new_app_state(
     let registry_clone = poe_job_registry.clone();
     tokio::spawn(async move {
         while let Ok((job_id, json)) = poe_updates_rx.recv_async().await {
-            if let Some(mut senders) = registry_clone.get_mut(&job_id) {
+            // Prune disconnected SSE subscribers as we forward. If no subscribers remain
+            // for this job_id after pruning, drop the map entry too — otherwise the
+            // DashMap accumulates one orphan key per scan forever (slow leak).
+            let drop_key = {
+                let Some(mut senders) = registry_clone.get_mut(&job_id) else {
+                    continue;
+                };
                 senders.retain(|tx| match tx.try_send(json.clone()) {
                     Ok(()) => true,
                     Err(TrySendError::Disconnected(_)) => false,
                     Err(TrySendError::Full(_)) => true,
                 });
+                senders.is_empty()
+            };
+            if drop_key {
+                registry_clone.remove(&job_id);
             }
         }
     });
@@ -960,6 +1009,7 @@ pub fn new_app_state(
         app_pool,
         intel_pool,
         auth_pool,
+        read_only_pool,
         started_at: Instant::now(),
         timing_broadcast_tx: Arc::new(timing_tx),
         redteam_broadcast_tx: Arc::new(redteam_tx),
@@ -971,6 +1021,7 @@ pub fn new_app_state(
         edge_heartbeat_batcher,
         sovereign_swarm_tx,
         sovereign_swarm_rx,
+        endpoint_agents: crate::endpoint_agents::AgentRegistry::new(),
     })
 }
 
@@ -1009,6 +1060,12 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         state.telemetry_broadcast_tx.clone(),
     );
     crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
+    // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
+    // and gated by env vars so dev/offline runs can skip outbound HTTP.
+    crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
+    crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
+    // UEBA — purge old samples once an hour so the table stays bounded.
+    crate::ueba_detector::spawn_retention_loop(app_pool.clone());
     crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
         app_pool.clone(),
         state.telemetry_broadcast_tx.clone(),
@@ -1073,14 +1130,51 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
     let api = root_routes
         .route("/ws/command-center", get(ws_command_center))
         .route("/api/dashboard/stats", get(api_dashboard_stats))
+        .route("/api/dashboard/exec-kpis", get(api_dashboard_exec_kpis))
         .route("/api/findings", get(api_findings))
+        .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
         .route("/api/findings/:id/status", patch(api_findings_update_status))
+        .route("/api/intel/status", get(api_intel_status))
+        .route("/api/intel/suppressions", get(api_intel_suppressions))
+        .route("/api/intel/suppressions/:id", delete(api_intel_suppression_delete))
+        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        .route("/api/attack-paths/:client_id", get(api_attack_paths_for_client))
+        .route("/api/risk-graph/nodes/:node_id/flags", patch(api_risk_node_flags_patch))
+        // SOAR playbooks (DSL-driven automation; on-event dispatch + run history).
+        .route(
+            "/api/playbooks",
+            get(api_playbooks_list).post(api_playbooks_create),
+        )
+        .route(
+            "/api/playbooks/:id",
+            patch(api_playbooks_update).delete(api_playbooks_delete),
+        )
+        .route("/api/playbooks/fire", post(api_playbooks_fire))
+        .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        // Financial blast-radius
+        .route("/api/financial-risk/:client_id", get(api_financial_risk_for_client))
+        .route("/api/financial-risk/:client_id/apply-tags", post(api_apply_asset_tag_rules))
+        // Ask Weissman (NL → safe SQL)
+        .route("/api/ask", post(api_ask))
+        // UEBA
+        .route("/api/ueba/ingest", post(api_ueba_ingest))
+        .route("/api/ueba/anomalies", get(api_ueba_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/openapi.json", get(api_openapi_spec))
+        .route("/api/docs", get(crate::api_docs::api_docs_swagger))
+        .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
+        .route("/api/auth/signup", post(crate::signup::api_signup))
+        .route("/api/auth/verify", get(crate::signup::api_verify))
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
+        .route("/api/engines/top-tier/audit", get(api_engines_top_tier_audit))
+        .route("/api/engines/top-tier/health-probe", post(api_top_tier_health_probe_start))
+        .route("/api/engines/top-tier/:engine_id/history", get(api_top_tier_engine_history))
+        .route("/api/engines/top-tier/:engine_id/export", get(api_top_tier_engine_export))
+        .route("/api/engines/history/:engine_id", get(api_engine_history))
+        .route("/api/engines/export/:engine_id", get(api_engine_export))
         .route("/api/command-center/ticker", get(api_command_center_ticker))
         .route("/hooks/cicd/github", post(hook_cicd_github))
         .route("/hooks/cicd/gitlab", post(hook_cicd_gitlab))
@@ -1096,21 +1190,29 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/auth/mfa/verify", post(api_auth_mfa_verify))
         .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
         .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
+        .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
+        .route("/api/auth/mfa/status", get(api_auth_mfa_status))
+        // Endpoint Agent
+        .route("/api/agents/enrollment-tokens", post(api_agents_create_token))
+        .route("/api/agents/enroll", post(api_agents_enroll))
+        .route("/api/agents/status", get(api_agents_status))
+        .route("/api/agents/dispatch", post(api_agents_dispatch_task))
+        .route("/install/agent.sh", get(install_agent_sh))
+        .route("/install/agent.ps1", get(install_agent_ps1))
+        .route("/ws/agent", get(ws_agent))
+        // Onboarding + billing (Paddle + self-serve register; target/launch-scan still stubbed).
         .route("/api/onboarding/register", post(api_onboarding_register))
-        .route("/api/onboarding/target", post(api_onboarding_target))
+        .route("/api/onboarding/target", post(api_onboarding_target_stub))
         .route(
             "/api/onboarding/launch-scan",
-            post(api_onboarding_launch_scan),
+            post(api_onboarding_launch_scan_stub),
         )
         .route("/api/billing/usage", get(api_billing_usage))
         .route(
             "/api/billing/checkout-session",
             post(api_billing_checkout_session),
         )
-        .route(
-            "/api/billing/sync-paddle",
-            post(api_billing_sync_paddle),
-        )
+        .route("/api/billing/sync-paddle", post(api_billing_sync_paddle))
         .route("/api/webhooks/paddle", post(api_paddle_webhook))
         .route("/api/auth/oidc/begin", get(crate::oidc_auth::oidc_begin))
         .route(
@@ -1137,11 +1239,45 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         )
         .route(
             "/api/clients/:id",
-            post(api_clients_update).delete(api_clients_delete),
+            get(api_clients_get).post(api_clients_update).delete(api_clients_delete),
+        )
+        .route(
+            "/api/clients/:id/scan/run-all",
+            post(api_clients_scan_run_all),
         )
         .route(
             "/api/clients/:id/config",
             get(api_client_config_get).patch(api_client_config_patch),
+        )
+        .route(
+            "/api/clients/:id/engagements",
+            get(api_client_engagements_list).post(api_client_engagements_create),
+        )
+        .route(
+            "/api/engagements/:id",
+            get(api_engagement_get).patch(api_engagement_patch),
+        )
+        .route(
+            "/api/clients/:id/evidence",
+            get(api_client_evidence_list).post(api_client_evidence_upload),
+        )
+        .route(
+            "/api/clients/:id/discovery/saas-idp",
+            get(api_client_saas_idp_discovery),
+        )
+        .route("/api/evidence/:id/download", get(api_evidence_download))
+        .route("/api/evidence/:id", delete(api_evidence_delete))
+        .route(
+            "/api/roe/override-requests",
+            get(api_roe_override_requests_list),
+        )
+        .route(
+            "/api/roe/override-requests/:id/approve",
+            post(api_roe_override_request_approve),
+        )
+        .route(
+            "/api/roe/override-requests/:id/reject",
+            post(api_roe_override_request_reject),
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
@@ -1185,6 +1321,18 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))
         .route("/api/oast/verify/:token", get(api_oast_probe_verify))
+        // ── Template Engine (YAML) ──────────────────────────────────────────
+        .route(
+            "/api/template-engine/templates",
+            get(api_template_engine_templates_list),
+        )
+        .route(
+            "/api/template-engine/templates/:id",
+            get(api_template_engine_template_get),
+        )
+        .route("/api/template-engine/run", post(api_template_engine_run))
+        // ── AST smart fuzz preview (no traffic) ─────────────────────────────
+        .route("/api/fuzz/ast-preview", post(api_fuzz_ast_preview))
         // ── Enterprise SSO management ─────────────────────────────────────────
         .route("/api/sso/idps", get(crate::sso_management::api_sso_idps_list).post(crate::sso_management::api_sso_idps_create))
         .route("/api/sso/idps/:id", get(crate::sso_management::api_sso_idp_get).patch(crate::sso_management::api_sso_idp_patch).delete(crate::sso_management::api_sso_idp_delete))
@@ -1208,6 +1356,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/telemetry/stream", get(api_telemetry_stream))
         .route("/api/latency-probe", post(api_latency_probe))
         .route("/api/poe-scan/run", post(api_poe_scan_run))
+        .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
         .route("/api/poe-scan/stream/:job_id", get(api_poe_scan_stream))
@@ -1267,6 +1416,16 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             post(api_client_cloud_scan_run),
         )
         .route("/api/compliance/posture", get(api_compliance_posture))
+        // UI aliases: SystemConfiguration page + ComplianceFrameworks page expect these paths.
+        .route(
+            "/api/system/config",
+            get(api_system_config_alias).put(api_system_config_put_alias),
+        )
+        .route("/api/compliance/frameworks", get(api_compliance_frameworks_list))
+        .route(
+            "/api/compliance/frameworks/:framework_id/controls",
+            get(api_compliance_frameworks_controls),
+        )
         .route("/api/reports/executive", get(api_reports_executive))
         .route(
             "/api/sovereign/phantom-trap",

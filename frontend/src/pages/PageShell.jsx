@@ -1,114 +1,35 @@
 /**
  * Shared page shell for domain-specific intelligence hubs.
- * Wraps a page in consistent header/layout with comprehensive navigation.
+ * Thin wrapper around AppShell — backward compatible props.
  */
 import React from 'react'
-import { Link } from 'react-router-dom'
+import AppShell from '../components/layout/AppShell'
 
-export default function PageShell({ title, subtitle, badge, badgeColor = '#22d3ee', children }) {
+export default function PageShell({
+  title,
+  subtitle,
+  badge,
+  badgeColor = '#22d3ee',
+  icon,
+  actions,
+  breadcrumbs,
+  children,
+  contentClassName,
+  maxWidth,
+}) {
   return (
-    <div
-      className="min-h-[100dvh] text-slate-100"
-      style={{ background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+    <AppShell
+      title={title}
+      subtitle={subtitle}
+      badge={badge}
+      badgeColor={badgeColor}
+      icon={icon}
+      actions={actions}
+      breadcrumbs={breadcrumbs}
+      contentClassName={contentClassName}
+      maxWidth={maxWidth}
     >
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/60 backdrop-blur-md">
-        <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2.5">
-          <Link id="pageshell-nav-dashboard" to="/" className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors">
-            ← Dashboard
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-engines" to="/engines" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
-            Engine Matrix
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-findings" to="/findings" className="text-amber-400/70 hover:text-amber-300 text-xs font-mono transition-colors">
-            Findings
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-clients" to="/clients" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
-            Clients
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-jobs" to="/jobs" className="text-blue-400/70 hover:text-blue-300 text-xs font-mono transition-colors">
-            Jobs
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-metrics" to="/metrics" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
-            Metrics
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-discovery" to="/domain-discovery" className="text-cyan-400/70 hover:text-cyan-300 text-xs font-mono transition-colors">
-            Discovery
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-threat-intel" to="/threat-intel" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
-            Threat Intel
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-vuln-intel" to="/vuln-intel" className="text-orange-400/70 hover:text-orange-300 text-xs font-mono transition-colors">
-            Vuln Intel
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-dark-web" to="/dark-web" className="text-violet-400/70 hover:text-violet-300 text-xs font-mono transition-colors">
-            Dark Web
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-incident-response" to="/incident-response" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
-            IR Center
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-threat-hunting" to="/threat-hunting" className="text-purple-400/70 hover:text-purple-300 text-xs font-mono transition-colors">
-            Threat Hunt
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-kill-chain" to="/kill-chain" className="text-red-400/70 hover:text-red-300 text-xs font-mono transition-colors">
-            Kill Chain
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-ai-analysis" to="/ai-analysis" className="text-violet-400/70 hover:text-violet-300 text-xs font-mono transition-colors">
-            AI Analysis
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-exploit-lab" to="/exploit-lab" className="text-emerald-400/70 hover:text-emerald-300 text-xs font-mono transition-colors">
-            Exploit Lab
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-council" to="/council-queue" className="text-amber-400/60 hover:text-amber-300 text-xs font-mono transition-colors">
-            Council
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-compliance" to="/compliance" className="text-indigo-400/70 hover:text-indigo-300 text-xs font-mono transition-colors">
-            Compliance
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-sso" to="/sso-config" className="text-purple-400/60 hover:text-purple-300 text-xs font-mono transition-colors">
-            SSO
-          </Link>
-          <span className="text-white/20 text-xs">|</span>
-          <Link id="pageshell-nav-admin" to="/admin" className="text-amber-300/70 hover:text-amber-200 text-xs font-mono transition-colors font-semibold">
-            Admin
-          </Link>
-          {badge && (
-            <>
-              <span className="text-white/20 text-xs">|</span>
-              <span
-                className="text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-widest border"
-                style={{ color: badgeColor, borderColor: `${badgeColor}40`, backgroundColor: `${badgeColor}10` }}
-              >
-                {badge}
-              </span>
-            </>
-          )}
-          <div className="flex-grow" />
-          <h1 className="text-sm font-bold text-white whitespace-nowrap">{title}</h1>
-          {subtitle && (
-            <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">{subtitle}</span>
-          )}
-        </div>
-      </header>
-      <main className="max-w-screen-2xl mx-auto px-4 py-8">
-        {children}
-      </main>
-    </div>
+      {children}
+    </AppShell>
   )
 }

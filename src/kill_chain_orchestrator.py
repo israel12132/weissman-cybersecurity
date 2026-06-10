@@ -6,7 +6,6 @@ Maps engine IDs to kill chain phases, auto-chains findings, computes risk scores
 from __future__ import annotations
 
 import logging
-import math
 import random
 from dataclasses import dataclass, field
 from typing import Any

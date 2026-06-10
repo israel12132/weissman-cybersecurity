@@ -50,16 +50,21 @@ fn target_to_host(target: &str) -> Option<String> {
 }
 
 async fn port_open(host: &str, port: u16) -> bool {
-    let addr: SocketAddr = match format!("{}:{}", host, port).parse() {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
-    match tokio::time::timeout(
-        Duration::from_millis(PORT_TIMEOUT_MS),
-        TcpStream::connect(addr),
-    )
-    .await
-    {
+    // Previously this used `format!("{host}:{port}").parse::<SocketAddr>()` which only
+    // succeeds for *literal* IPs — hostnames like `testphp.vulnweb.com` returned `Err` and
+    // we silently reported "0 open ports" on every domain target. Use the `(host, port)`
+    // tuple so `TcpStream::connect` performs DNS resolution itself.
+    let timeout = Duration::from_millis(PORT_TIMEOUT_MS);
+
+    // Fast-path literal IP (skip resolver hop).
+    if let Ok(addr) = format!("{}:{}", host, port).parse::<SocketAddr>() {
+        return matches!(
+            tokio::time::timeout(timeout, TcpStream::connect(addr)).await,
+            Ok(Ok(_))
+        );
+    }
+
+    match tokio::time::timeout(timeout, TcpStream::connect((host, port))).await {
         Ok(Ok(_)) => true,
         _ => false,
     }

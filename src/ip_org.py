@@ -8,7 +8,6 @@ import logging
 import re
 from typing import Any
 
-import requests
 
 from src.http_client import safe_get, ENTERPRISE_HTTP_TIMEOUT
 

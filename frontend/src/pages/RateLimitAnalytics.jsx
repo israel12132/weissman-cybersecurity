@@ -14,22 +14,18 @@ import { apiFetch } from '../lib/apiBase'
  * - Per-endpoint breakdown
  * - Tenant comparison
  */
-// Fallback data when API is unavailable
-const FALLBACK_DATA = {
-  current: {
-    scans: { current: 0, max: 24 },
-    logins: { current: 0, max: 8 },
-    api: { current: 0, max: 30 },
-  },
-  history: [],
-  violations: [],
-  endpoints: [],
-}
-
 export default function RateLimitAnalytics() {
-  const [data, setData] = useState(FALLBACK_DATA);
+  const [data, setData] = useState({
+    current: {
+      scans: { current: 0, max: 24 },
+      logins: { current: 0, max: 8 },
+      api: { current: 0, max: 30 },
+    },
+    history: [],
+    violations: [],
+    endpoints: [],
+  });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('1h'); // 1h, 6h, 24h, 7d
 
   useEffect(() => {
@@ -39,23 +35,15 @@ export default function RateLimitAnalytics() {
   }, [timeRange]);
 
   const fetchAnalytics = async () => {
-    setLoading(true);
-    setError(null);
-
     try {
-      const response = await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`)
+      setLoading(true);
+      const response = await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`);
       if (response.ok) {
         const analyticsData = await response.json();
         setData(analyticsData);
-      } else if (response.status === 404) {
-        // API not implemented, use fallback
-        setData(FALLBACK_DATA);
-      } else {
-        throw new Error(`Failed to load analytics (HTTP ${response.status})`)
       }
-    } catch (err) {
-      setError(err?.message || 'Failed to fetch analytics')
-      setData(FALLBACK_DATA);
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error);
     } finally {
       setLoading(false);
     }
@@ -71,17 +59,6 @@ export default function RateLimitAnalytics() {
   return (
     <PageShell title="Rate Limit Analytics" icon={<BarChart3 />}>
       <div className="space-y-6">
-        {/* Error Banner */}
-        {error && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-amber-400 text-sm">⚠️</span>
-              <span className="text-xs font-mono text-amber-300/80">{error}</span>
-              <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
-            </div>
-          </div>
-        )}
-
         {/* Header Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -29,6 +29,19 @@ fn worker_id() -> String {
     format!("{}:{}", host, std::process::id())
 }
 
+/// Wall-clock budget per job-kind. Heavier kinds get more time. Default 5 min.
+fn job_kind_timeout(kind: &str) -> Duration {
+    match kind {
+        "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
+        "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
+        "command_center_engine" => Duration::from_secs(15 * 60),
+        "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
+        "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
+        "noop" | "ping" => Duration::from_secs(30),
+        _ => Duration::from_secs(5 * 60),
+    }
+}
+
 fn job_is_heavy(kind: &str) -> bool {
     matches!(
         kind,
@@ -104,6 +117,7 @@ async fn process_one(
     let exec_auth = auth_pool.clone();
     let exec_channels = channels.clone();
     let exec_job = job.clone();
+    let job_kind_for_timeout = exec_job.kind.clone();
     let exec_handle = tokio::spawn(async move {
         match exec_job.kind.as_str() {
             "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
@@ -120,15 +134,22 @@ async fn process_one(
         }
     });
 
-    let outcome: Result<serde_json::Value, String> = match exec_handle.await {
-        Ok(inner) => inner,
-        Err(join_err) => Err(if join_err.is_cancelled() {
+    // Hard wall-clock cap per job kind so a stuck engine cannot park a worker forever.
+    let timeout = job_kind_timeout(&job_kind_for_timeout);
+    let outcome: Result<serde_json::Value, String> = match tokio::time::timeout(timeout, exec_handle).await {
+        Ok(Ok(inner)) => inner,
+        Ok(Err(join_err)) => Err(if join_err.is_cancelled() {
             "job task cancelled".to_string()
         } else if join_err.is_panic() {
             "job task panicked".to_string()
         } else {
             format!("job task join error: {join_err}")
         }),
+        Err(_) => Err(format!(
+            "job timed out after {}s ({})",
+            timeout.as_secs(),
+            job_kind_for_timeout
+        )),
     };
 
     hb_stop.store(true, Ordering::SeqCst);
@@ -169,6 +190,12 @@ async fn main() {
     weissman_db::env_bootstrap::load_process_environment();
     fingerprint_engine::observability::init_tracing_from_env();
     fingerprint_engine::observability::init_prometheus_recorder();
+
+    // BLOCKER #5: TLS policy guard in production. Worker also runs scans, so this matters here too.
+    if let Err(msg) = weissman_core::tls_policy::enforce_production_tls_policy() {
+        eprintln!("[startup] worker TLS policy refusal: {msg}");
+        std::process::exit(2);
+    }
 
     let database_url = match std::env::var("DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,

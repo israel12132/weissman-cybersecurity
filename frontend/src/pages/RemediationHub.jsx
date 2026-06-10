@@ -1,185 +1,195 @@
-import { useState, useEffect } from 'react';
-import { Wrench, Zap, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
 /**
- * RemediationHub - Complete SOAR Workflow
- *
- * Security Orchestration, Automation & Response
- *
- * Features:
- * - Auto-remediation workflows
- * - Playbook execution
- * - Ticket integration (Jira, ServiceNow)
- * - Patch management
- * - Configuration rollback
- * - Verification & testing
+ * RemediationHub — derives the workflow board entirely from real `/api/findings`
+ * data so it reflects the customer's actual posture. There are no hard-coded
+ * workflows or fabricated "auto-fixed" totals.
  */
 
-// Fallback workflows when API is unavailable
-const FALLBACK_WORKFLOWS = [
-  { id: 1, name: 'XSS Auto-Patch', status: 'pending', findings: 15, type: 'security' },
-  { id: 2, name: 'SQL Injection Fix', status: 'running', findings: 8, type: 'security' },
-  { id: 3, name: 'Dependency Update', status: 'completed', findings: 23, type: 'maintenance' },
+const STATUS_FROM_FINDING = (status) => {
+  const s = (status || '').toUpperCase()
+  if (s === 'FIXED') return 'completed'
+  if (s === 'IN_PROGRESS') return 'running'
+  if (s === 'FALSE_POSITIVE') return 'completed'
+  return 'pending'
+}
+
+const FAMILY_RULES = [
+  { id: 'xss', label: 'Cross-Site Scripting (XSS)', match: (f) => /xss|cross.site|script.injection/i.test(`${f.title} ${f.description} ${f.cwe ?? ''}`) },
+  { id: 'sqli', label: 'SQL Injection', match: (f) => /sql.?injection|sqli/i.test(`${f.title} ${f.description} ${f.cwe ?? ''}`) },
+  { id: 'ssrf', label: 'SSRF / Server-Side Forgery', match: (f) => /ssrf|server.side.request/i.test(`${f.title} ${f.description}`) },
+  { id: 'idor', label: 'BOLA / IDOR', match: (f) => /idor|bola|broken.object|insecure direct/i.test(`${f.title} ${f.description}`) },
+  { id: 'tls', label: 'TLS / Certificate Hygiene', match: (f) => /tls|certificate|ssl|hsts/i.test(`${f.title} ${f.description}`) },
+  { id: 'deps', label: 'Vulnerable Dependencies', match: (f) => /dependency|outdated package|cve-\d/i.test(`${f.title} ${f.description}`) },
+  { id: 'ports', label: 'Exposed Services / Ports', match: (f) => /exposed.+port|open port|asm/i.test(`${f.title} ${f.description} ${f.source ?? ''}`) },
+  { id: 'auth', label: 'Authentication Weaknesses', match: (f) => /(auth|password|jwt|oauth|saml)/i.test(`${f.title} ${f.description}`) },
 ]
 
+function summarizeFamilies(findings) {
+  const buckets = new Map()
+  for (const f of findings) {
+    const family = FAMILY_RULES.find((r) => r.match(f))
+    const key = family?.id || 'other'
+    const label = family?.label || 'Other Findings'
+    const status = STATUS_FROM_FINDING(f.status)
+    const cur = buckets.get(key) || { id: key, label, total: 0, statuses: {} }
+    cur.total += 1
+    cur.statuses[status] = (cur.statuses[status] || 0) + 1
+    buckets.set(key, cur)
+  }
+  return Array.from(buckets.values()).map((b) => ({
+    ...b,
+    status:
+      (b.statuses.running || 0) > 0
+        ? 'running'
+        : (b.statuses.pending || 0) > 0
+        ? 'pending'
+        : (b.statuses.completed || 0) > 0
+        ? 'completed'
+        : 'pending',
+  })).sort((a, b) => b.total - a.total)
+}
+
+function StatusBadge({ status }) {
+  const colors = {
+    completed: 'text-green-400 bg-green-500/10 border-green-500/30',
+    running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+    pending: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
+  }
+  const Icon = status === 'completed' ? CheckCircle : status === 'running' ? Clock : AlertTriangle
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}>
+      <Icon className={`w-3.5 h-3.5 ${status === 'running' ? 'animate-spin' : ''}`} />
+      {status}
+    </span>
+  )
+}
+
 export default function RemediationHub() {
-  const [workflows, setWorkflows] = useState([])
+  const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Load remediation workflows from API
   useEffect(() => {
-    const loadData = async () => {
+    let cancelled = false
+    ;(async () => {
       setLoading(true)
       setError(null)
-
       try {
-        const res = await apiFetch('/api/remediation/workflows')
-        if (res.ok) {
-          const data = await res.json()
-          setWorkflows(Array.isArray(data) ? data : data.workflows || [])
-        } else if (res.status === 404) {
-          // API not implemented, use fallback
-          setWorkflows(FALLBACK_WORKFLOWS)
-        } else {
-          throw new Error(`Failed to load workflows (HTTP ${res.status})`)
-        }
-      } catch (err) {
-        setError(err?.message || 'Failed to load remediation workflows')
-        // Use fallback data on error
-        setWorkflows(FALLBACK_WORKFLOWS)
+        const r = await apiFetch('/api/findings?limit=2000')
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const d = await r.json()
+        if (cancelled) return
+        const arr = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
+        setFindings(arr)
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Failed to load findings')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
-    }
-
-    loadData()
+    })()
+    return () => { cancelled = true }
   }, [])
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      case 'running': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'pending': return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-      case 'failed': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-    }
-  };
+  const workflows = useMemo(() => summarizeFamilies(findings), [findings])
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'completed': return <CheckCircle className="w-4 h-4" />;
-      case 'running': return <Clock className="w-4 h-4 animate-spin" />;
-      case 'pending': return <Clock className="w-4 h-4" />;
-      default: return <AlertTriangle className="w-4 h-4" />;
+  const totals = useMemo(() => {
+    let completed = 0, running = 0, pending = 0
+    for (const f of findings) {
+      const s = STATUS_FROM_FINDING(f.status)
+      if (s === 'completed') completed += 1
+      else if (s === 'running') running += 1
+      else pending += 1
     }
-  };
+    return { completed, running, pending, total: findings.length }
+  }, [findings])
 
   return (
     <PageShell title="Remediation Hub" icon={<Wrench />}>
       <div className="space-y-6">
-        {/* Error Banner */}
-        {error && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-amber-400 text-sm">⚠️</span>
-              <span className="text-xs font-mono text-amber-300/80">{error}</span>
-              <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
-            </div>
-          </div>
-        )}
+        <p className="text-xs text-white/45 font-mono">
+          Workflow board derived from <code>/api/findings</code> in real time. Each row groups
+          live findings by remediation family so you can drive fixes from where the vulnerabilities
+          actually live.
+        </p>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center space-y-3">
-              <div className="w-8 h-8 border-2 border-orange-500/40 border-t-orange-500 rounded-full animate-spin mx-auto" />
-              <p className="text-sm font-mono text-white/40">Loading remediation workflows...</p>
-            </div>
+        {error && (
+          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
+            Couldn't load findings: {error}.
           </div>
         )}
 
         {/* Stats */}
-        {!loading && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Active Workflows</span>
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {workflows.filter(w => w.status === 'running').length}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <StatCard label="Total findings" value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} />
+          <StatCard label="Pending fix" value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} />
+          <StatCard label="In progress" value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} />
+          <StatCard label="Resolved" value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} />
+        </div>
+
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Zap className="w-4 h-4 text-cyan-400" />
+              Remediation families ({workflows.length})
+            </h3>
+            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">Open Findings C2 →</Link>
+          </div>
+
+          <div className="divide-y divide-white/5">
+            {loading ? (
+              <div className="p-6 text-sm text-white/45">Loading findings…</div>
+            ) : workflows.length === 0 ? (
+              <div className="p-6 text-sm text-white/45 space-y-2">
+                <div>No findings yet. Workflows will appear here automatically as engines complete.</div>
+                <div className="text-xs text-white/35">
+                  Start by{' '}
+                  <Link to="/clients" className="underline">scanning a client</Link>{' '}
+                  or running the Engine Matrix.
                 </div>
               </div>
-
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Completed</span>
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {workflows.filter(w => w.status === 'completed').length}
-                </div>
-              </div>
-
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Pending</span>
-                  <Clock className="w-4 h-4 text-yellow-400" />
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {workflows.filter(w => w.status === 'pending').length}
-                </div>
-              </div>
-
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">Total Findings</span>
-                  <Wrench className="w-4 h-4 text-purple-400" />
-                </div>
-                <div className="text-2xl font-bold text-white">
-                  {workflows.reduce((a, w) => a + (w.findings || 0), 0)}
-                </div>
-              </div>
-            </div>
-
-            {/* Workflows List */}
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-sm font-semibold text-white">Remediation Workflows</h3>
-              </div>
-
-              {workflows.length === 0 ? (
-                <div className="p-12 text-center">
-                  <p className="text-sm text-white/40">No workflows found</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-white/5">
-                  {workflows.map((workflow) => (
-                    <div key={workflow.id} className="p-4 hover:bg-white/5 transition-colors">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(workflow.status)}
-                          <h4 className="text-sm font-semibold text-white">{workflow.name}</h4>
-                        </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(workflow.status)}`}>
-                          {workflow.status}
-                        </span>
+            ) : (
+              workflows.map((w) => (
+                <div key={w.id} className="p-4 hover:bg-white/5 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h4 className="text-sm font-semibold text-white truncate">{w.label}</h4>
+                        <StatusBadge status={w.status} />
                       </div>
                       <div className="text-xs text-gray-400">
-                        {workflow.findings} findings · Type: {workflow.type || 'unknown'}
+                        {w.total} finding{w.total === 1 ? '' : 's'} · pending {w.statuses.pending || 0} · running {w.statuses.running || 0} · resolved {w.statuses.completed || 0}
                       </div>
                     </div>
-                  ))}
+                    <Link
+                      to={`/findings?q=${encodeURIComponent(w.label)}`}
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
+                    >
+                      View findings
+                    </Link>
+                  </div>
                 </div>
-              )}
-            </div>
-          </>
-        )}
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </PageShell>
-  );
+  )
+}
+
+function StatCard({ label, value, icon }) {
+  return (
+    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-gray-400">{label}</span>
+        {icon}
+      </div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+    </div>
+  )
 }

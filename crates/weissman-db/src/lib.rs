@@ -10,6 +10,7 @@ pub mod auth_rotation;
 pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
+pub mod no_tx_migrations;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Executor, Postgres, Transaction};
@@ -39,12 +40,48 @@ pub fn resolve_auth_database_url() -> Result<String, std::env::VarError> {
 }
 
 /// Superuser or owner URL to run embedded migrations (optional at runtime).
+///
+/// Two-phase application:
+///   1. [`no_tx_migrations::apply_no_tx_migrations`] handles any file whose first
+///      line is `-- weissman:no-transaction` — these are executed OUTSIDE a
+///      transaction (CREATE INDEX CONCURRENTLY etc.) and their rows are recorded
+///      in `_sqlx_migrations` manually with the SQLx-compatible SHA-384 checksum.
+///   2. `sqlx::migrate!()` then runs as usual; it sees the no-tx files as
+///      already applied and skips them.
+///
+/// On a CI/CD pipeline this means: zero downtime, zero manual intervention,
+/// zero "did we remember to apply the index" tickets. Failure modes:
+///   - DB unreachable → propagated as `MigrateError::Database`.
+///   - File checksum drift → propagated with a clear "edit detected" message.
+///   - Concurrent index creation failure → the row is NOT inserted; next boot
+///     re-attempts (the file uses `IF NOT EXISTS` / `IF EXISTS` for idempotency).
 pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::MigrateError> {
     let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect(database_url)
         .await
         .map_err(sqlx::migrate::MigrateError::from)?;
+
+    // Phase 1 — no-transaction migrations (CONCURRENTLY index builds, etc.).
+    // The macro `concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")` evaluates
+    // to the crate-local migrations directory at compile time, matching the
+    // path that `sqlx::migrate!("./migrations")` reads below.
+    let migrations_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+    match no_tx_migrations::apply_no_tx_migrations(&pool, migrations_dir).await {
+        Ok(n) if n > 0 => tracing::info!(
+            target: "weissman_db",
+            applied = n,
+            "applied no-transaction migrations"
+        ),
+        Ok(_) => {}
+        Err(e) => {
+            tracing::error!(target: "weissman_db", error = %e, "no-tx migration failed");
+            // Surface as a generic MigrateError so the caller's error path is unchanged.
+            return Err(sqlx::migrate::MigrateError::Source(Box::new(e)));
+        }
+    }
+
+    // Phase 2 — standard transactional migrations.
     sqlx::migrate!("./migrations").run(&pool).await
 }
 

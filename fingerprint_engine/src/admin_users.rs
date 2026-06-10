@@ -67,7 +67,22 @@ pub async fn api_admin_users_list(
         return r;
     }
 
-    let pool = state.auth_pool.as_ref();
+    // `users` is RLS-forced — the policy compares to `current_setting('app.current_tenant_id')`.
+    // We MUST open a tenant-scoped transaction so the GUC is set, otherwise even superuser hits
+    // "permission denied" because the row simply isn't visible. Use the app_pool which goes
+    // through begin_tenant_tx; users live in the same DB.
+    let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "Database unavailable"})),
+            )
+                .into_response();
+        }
+    };
+
     let query = r#"
         SELECT id, email, COALESCE(role, 'viewer') AS role,
                COALESCE(is_superadmin, false) AS is_superadmin,
@@ -81,10 +96,11 @@ pub async fn api_admin_users_list(
 
     match sqlx::query(query)
         .bind(auth.tenant_id)
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await
     {
         Ok(rows) => {
+            let _ = tx.commit().await;
             let users: Vec<UserInfo> = rows
                 .into_iter()
                 .map(|r| UserInfo {
@@ -167,20 +183,30 @@ pub async fn api_admin_users_create(
         false
     };
 
-    let pool = state.auth_pool.as_ref();
+    let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "Database unavailable"})),
+            )
+                .into_response();
+        }
+    };
 
-    // Check if user already exists
     let exists: Option<i64> = sqlx::query_scalar(
         "SELECT id FROM users WHERE tenant_id = $1 AND lower(trim(email)) = $2 LIMIT 1",
     )
     .bind(auth.tenant_id)
     .bind(&email)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
 
     if exists.is_some() {
+        let _ = tx.rollback().await;
         return (
             StatusCode::CONFLICT,
             Json(json!({"ok": false, "detail": "User with this email already exists"})),
@@ -188,7 +214,6 @@ pub async fn api_admin_users_create(
             .into_response();
     }
 
-    // Insert user
     let query = r#"
         INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active)
         VALUES ($1, $2, $3, $4, $5, true)
@@ -201,10 +226,11 @@ pub async fn api_admin_users_create(
         .bind(&hash)
         .bind(&role)
         .bind(is_superadmin)
-        .fetch_one(pool)
+        .fetch_one(&mut *tx)
         .await
     {
         Ok(user_id) => {
+            let _ = tx.commit().await;
             tracing::info!(target: "admin", user_id = user_id, email = %email, "User created by admin");
             (
                 StatusCode::CREATED,
@@ -240,20 +266,30 @@ pub async fn api_admin_users_update(
         return r;
     }
 
-    let pool = state.auth_pool.as_ref();
+    let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "Database unavailable"})),
+            )
+                .into_response();
+        }
+    };
 
-    // Verify user belongs to this tenant
     let exists: Option<i64> = sqlx::query_scalar(
         "SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     )
     .bind(user_id)
     .bind(auth.tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
 
     if exists.is_none() {
+        let _ = tx.rollback().await;
         return (
             StatusCode::NOT_FOUND,
             Json(json!({"ok": false, "detail": "User not found"})),
@@ -295,14 +331,14 @@ pub async fn api_admin_users_update(
                 .bind(is_sa)
                 .bind(user_id)
                 .bind(auth.tenant_id)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
             } else {
                 sqlx::query("UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3")
                     .bind(role)
                     .bind(user_id)
                     .bind(auth.tenant_id)
-                    .execute(pool)
+                    .execute(&mut *tx)
                     .await
             }
         } else {
@@ -310,7 +346,7 @@ pub async fn api_admin_users_update(
                 .bind(role)
                 .bind(user_id)
                 .bind(auth.tenant_id)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
         }
     } else if let Some(is_sa) = body.is_superadmin {
@@ -319,7 +355,7 @@ pub async fn api_admin_users_update(
                 .bind(is_sa)
                 .bind(user_id)
                 .bind(auth.tenant_id)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
         } else {
             return (
@@ -371,15 +407,27 @@ pub async fn api_admin_users_deactivate(
             .into_response();
     }
 
-    let pool = state.auth_pool.as_ref();
+    let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "begin_tenant_tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "Database unavailable"})),
+            )
+                .into_response();
+        }
+    };
 
-    match sqlx::query("UPDATE users SET is_active = false WHERE id = $1 AND tenant_id = $2")
+    let result = sqlx::query("UPDATE users SET is_active = false WHERE id = $1 AND tenant_id = $2")
         .bind(user_id)
         .bind(auth.tenant_id)
-        .execute(pool)
-        .await
-    {
+        .execute(&mut *tx)
+        .await;
+
+    match result {
         Ok(result) => {
+            let _ = tx.commit().await;
             if result.rows_affected() > 0 {
                 tracing::info!(target: "admin", user_id = user_id, "User deactivated by admin");
                 (StatusCode::OK, Json(json!({"ok": true}))).into_response()
@@ -392,6 +440,7 @@ pub async fn api_admin_users_deactivate(
             }
         }
         Err(e) => {
+            let _ = tx.rollback().await;
             tracing::error!(target: "admin", error = %e, "Failed to deactivate user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

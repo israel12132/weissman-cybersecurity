@@ -328,6 +328,7 @@ pub async fn api_sso_idp_patch(
     push_field!(body.saml_idp_cert_pem, "saml_idp_cert_pem");
     push_field!(body.sp_entity_id, "sp_entity_id");
     push_field!(body.active, "active");
+    let _ = idx;
 
     if sets.is_empty() {
         let _ = tx.rollback().await;

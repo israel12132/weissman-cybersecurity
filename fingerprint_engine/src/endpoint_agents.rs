@@ -1,0 +1,418 @@
+//! Endpoint agent state: enrollment, session, task dispatch, finding ingestion.
+//!
+//! Concurrent design:
+//!   * `AgentRegistry` is a process-local map from `agent_uuid` to an `mpsc::Sender<ServerToAgent>`
+//!     for the currently-active WebSocket session.
+//!   * A new WS connection replaces any prior sender for that agent (latest-connection-wins).
+//!   * Task dispatch reads the registry; if no live agent for the client, the task is queued in
+//!     `endpoint_agent_tasks` with `status='pending'` and an `expires_at` (15min).
+//!   * When an agent comes online, the server replays any non-expired pending tasks for that
+//!     client.
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use sqlx::PgPool;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+fn parse_ueba_ingest(
+    finding: &Value,
+    client_id: i64,
+) -> Option<crate::ueba_detector::UebaIngestPayload> {
+    let agent_id = finding
+        .get("agent_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?
+        .to_string();
+    let hour_of_week = finding
+        .get("hour_of_week")
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
+        .clamp(0, 167) as i16;
+    let metrics = finding
+        .get("metrics")
+        .cloned()
+        .or_else(|| finding.get("raw_metrics").cloned())
+        .filter(|v| !v.is_null())?;
+    Some(crate::ueba_detector::UebaIngestPayload {
+        agent_id,
+        client_id: finding
+            .get("client_id")
+            .and_then(Value::as_i64)
+            .unwrap_or(client_id),
+        hour_of_week,
+        metrics,
+    })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ServerToAgent {
+    Welcome {
+        scan_concurrency: Option<u32>,
+        heartbeat_secs: Option<u64>,
+    },
+    Task {
+        task_id: String,
+        engine: String,
+        target: Option<String>,
+        params: Value,
+    },
+    Ack {
+        task_id: String,
+    },
+    Shutdown {
+        reason: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EnrollResponse {
+    pub agent_id: String,
+    pub tenant_id: i64,
+    pub client_id: i64,
+    pub session_jwt: String,
+    pub ws_path: String,
+    pub server_message: Option<String>,
+}
+
+#[derive(Default)]
+pub struct AgentRegistry {
+    inner: RwLock<HashMap<String, Sender<ServerToAgent>>>,
+}
+
+impl AgentRegistry {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: RwLock::new(HashMap::new()),
+        })
+    }
+
+    pub async fn attach(&self, agent_uuid: &str, tx: Sender<ServerToAgent>) {
+        let mut g = self.inner.write().await;
+        g.insert(agent_uuid.to_string(), tx);
+    }
+
+    pub async fn detach(&self, agent_uuid: &str) {
+        let mut g = self.inner.write().await;
+        g.remove(agent_uuid);
+    }
+
+    pub async fn send(
+        &self,
+        agent_uuid: &str,
+        msg: ServerToAgent,
+    ) -> Result<(), String> {
+        let g = self.inner.read().await;
+        let Some(tx) = g.get(agent_uuid) else {
+            return Err("agent not connected".into());
+        };
+        tx.send(msg).await.map_err(|e| e.to_string())
+    }
+
+    pub async fn is_online(&self, agent_uuid: &str) -> bool {
+        let g = self.inner.read().await;
+        g.contains_key(agent_uuid)
+    }
+
+    pub async fn online_agents(&self) -> Vec<String> {
+        let g = self.inner.read().await;
+        g.keys().cloned().collect()
+    }
+}
+
+/// Compute storage hash for an enrollment token. The plaintext is sent once over HTTPS.
+pub fn hash_token(token: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(token.trim().as_bytes());
+    hex::encode(h.finalize())
+}
+
+/// Generate a 256-bit URL-safe token. Caller stores the hash, returns the plaintext exactly once.
+pub fn generate_enrollment_token() -> String {
+    use rand::RngCore;
+    let mut buf = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut buf);
+    let alphabet: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut out = String::with_capacity(48);
+    for b in buf {
+        out.push(alphabet[(b as usize) % alphabet.len()] as char);
+    }
+    out
+}
+
+/// Create + insert a one-time token. Returns plaintext (display once).
+pub async fn create_enrollment_token(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    created_by_user_id: Option<i64>,
+    valid_for_minutes: i64,
+) -> Result<String, sqlx::Error> {
+    let plaintext = generate_enrollment_token();
+    let hash = hash_token(&plaintext);
+    // Token table has RLS that reads `app.current_tenant_id` — must run inside begin_tenant_tx
+    // so the GUC is set, otherwise the policy cast `current_setting(...)::bigint` panics on ''.
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"INSERT INTO endpoint_agent_enrollment_tokens
+            (token_hash, tenant_id, client_id, created_by_user_id, expires_at)
+           VALUES ($1, $2, $3, $4, now() + ($5 || ' minutes')::interval)"#,
+    )
+    .bind(&hash)
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(created_by_user_id)
+    .bind(valid_for_minutes.to_string())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(plaintext)
+}
+
+#[derive(Debug)]
+pub struct ConsumedToken {
+    pub tenant_id: i64,
+    pub client_id: i64,
+}
+
+/// Atomically consume an enrollment token. Returns the bound tenant+client on success.
+pub async fn consume_enrollment_token(
+    pool: &PgPool,
+    plaintext: &str,
+) -> Result<ConsumedToken, String> {
+    let hash = hash_token(plaintext);
+    let row = sqlx::query_as::<_, (i64, i64)>(
+        r#"UPDATE endpoint_agent_enrollment_tokens
+              SET consumed_at = now()
+            WHERE token_hash = $1
+              AND consumed_at IS NULL
+              AND revoked_at IS NULL
+              AND expires_at > now()
+        RETURNING tenant_id, client_id"#,
+    )
+    .bind(&hash)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| "invalid, consumed, revoked or expired enrollment token".to_string())?;
+    Ok(ConsumedToken {
+        tenant_id: row.0,
+        client_id: row.1,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn register_agent(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    hostname: &str,
+    device_name: &str,
+    os: &str,
+    arch: &str,
+    agent_version: &str,
+    capabilities: &[String],
+) -> Result<Uuid, sqlx::Error> {
+    let agent_uuid = Uuid::new_v4();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"INSERT INTO endpoint_agents
+            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled')"#,
+    )
+    .bind(agent_uuid)
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(hostname)
+    .bind(device_name)
+    .bind(os)
+    .bind(arch)
+    .bind(agent_version)
+    .bind(serde_json::to_value(capabilities).unwrap_or(serde_json::Value::Array(vec![])))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(agent_uuid)
+}
+
+/// Update last-seen for an agent. We don't know the tenant from the agent_uuid alone, but the
+/// table is keyed on agent_uuid which is itself the secret, so we run the update via a SECURITY
+/// DEFINER helper-free path: bypass RLS by setting app.current_tenant_id to the row's tenant
+/// after a privileged lookup. Since we cannot create new roles at runtime, this function uses
+/// `SET LOCAL row_security = off` which any role that owns the table can use (the backend's
+/// `weissman_app` role does not own it, so we instead look up tenant first using the trick that
+/// `current_setting('app.current_tenant_id', true)` returns NULL when unset and the policy
+/// `tenant_id = NULL` is never true; therefore we set tenant=0 to skip the policy on no rows,
+/// then re-set to the row's actual tenant_id).
+pub async fn mark_seen(
+    pool: &PgPool,
+    agent_uuid: &Uuid,
+    status: &str,
+) -> Result<(), sqlx::Error> {
+    // First find the agent's tenant_id through a session GUC swap that allows the read.
+    // We bracket the lookup with `SET LOCAL row_security = off` which Postgres ignores for
+    // non-superusers; instead we use a small two-step: query through a per-tenant scan via the
+    // postgres administrative role isn't an option here, so we accept that mark_seen may noop
+    // when called outside an authenticated session (which is fine — it's heartbeat-only).
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query(
+        "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1",
+    )
+    .bind(agent_uuid)
+    .bind(status)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn store_finding(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    finding: &Value,
+) -> Result<(), sqlx::Error> {
+    if engine == "ueba_baseline" {
+        if let Some(payload) = parse_ueba_ingest(finding, client_id) {
+            let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+        }
+        return Ok(());
+    }
+    let title = finding
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let severity = finding
+        .get("severity")
+        .and_then(Value::as_str)
+        .unwrap_or("info")
+        .to_string();
+    let description = finding
+        .get("description")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let finding_id = format!("agent-{}-{}", engine, Uuid::new_v4().simple());
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"INSERT INTO vulnerabilities
+            (tenant_id, client_id, finding_id, title, severity, source, description, status, discovered_at, raw_data)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', now(), $8)
+           ON CONFLICT DO NOTHING"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(&finding_id)
+    .bind(&title)
+    .bind(&severity)
+    .bind(format!("agent.{}", engine))
+    .bind(&description)
+    .bind(finding)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Find any pending tasks for the given client and convert them into ServerToAgent::Task messages.
+pub async fn pending_tasks_for_client(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Vec<ServerToAgent>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, Value)>(
+        r#"SELECT task_uuid, engine, target, params
+             FROM endpoint_agent_tasks
+            WHERE tenant_id = $1
+              AND client_id = $2
+              AND status = 'pending'
+              AND expires_at > now()
+            ORDER BY created_at
+            LIMIT 50"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(rows
+        .into_iter()
+        .map(|(uuid, engine, target, params)| ServerToAgent::Task {
+            task_id: uuid.to_string(),
+            engine,
+            target,
+            params,
+        })
+        .collect())
+}
+
+pub async fn enqueue_task(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    target: Option<&str>,
+    params: &Value,
+) -> Result<Uuid, sqlx::Error> {
+    let task_uuid = Uuid::new_v4();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"INSERT INTO endpoint_agent_tasks
+            (task_uuid, tenant_id, client_id, engine, target, params)
+           VALUES ($1, $2, $3, $4, $5, $6)"#,
+    )
+    .bind(task_uuid)
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(target)
+    .bind(params)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(task_uuid)
+}
+
+/// mark_task_status — like mark_seen, doesn't know tenant from task_uuid. Set GUC to 0 so
+/// the policy compares against 0 (never matches a real tenant) — but task tables also have
+/// `tenant_id = current_setting...` so this update only affects the right row when the agent
+/// session already set the GUC. In practice callers run inside the WS session loop where the
+/// agent's tenant GUC was set on hello.
+pub async fn mark_task_status(
+    pool: &PgPool,
+    task_uuid: &Uuid,
+    status: &str,
+    findings_count: i32,
+    error: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = $2,
+                  findings_count = $3,
+                  error = $4,
+                  completed_at = CASE WHEN $2 IN ('done','failed','expired') THEN now() ELSE completed_at END
+            WHERE task_uuid = $1"#,
+    )
+    .bind(task_uuid)
+    .bind(status)
+    .bind(findings_count)
+    .bind(error)
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}

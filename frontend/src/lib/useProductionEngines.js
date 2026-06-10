@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ENGINES_REGISTRY } from './enginesRegistry'
+import { apiFetch } from './apiBase'
 
 let cachedProductionIds = null
 let fetchPromise = null
@@ -7,7 +8,7 @@ let fetchPromise = null
 async function fetchProductionIds() {
   if (cachedProductionIds) return cachedProductionIds
   if (!fetchPromise) {
-    fetchPromise = fetch('/api/engines/production', { credentials: 'include' })
+    fetchPromise = apiFetch('/api/engines/production')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         const ids = Array.isArray(data?.production) ? data.production : null

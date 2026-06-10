@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 fingerprint_engine = { path = "../../fingerprint_engine" }
+weissman-core = { path = "../weissman-core" }
 weissman-db = { path = "../../crates/weissman-db" }
 axum = { version = "0.7", features = ["json", "ws"] }
 tokio = { version = "1", features = ["full"] }
@@ -22,3 +23,4 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres"] }
+url = "2"

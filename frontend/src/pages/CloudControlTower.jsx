@@ -21,6 +21,17 @@ const ENGINE_DESCRIPTIONS = {
   serverless_attack: 'Serverless event injection, function chaining exploitation, cold-start timing',
 }
 
+function firstClientTarget(client) {
+  if (!client) return ''
+  let domains = client.domains
+  if (typeof domains === 'string') {
+    try { domains = JSON.parse(domains) } catch { domains = [] }
+  }
+  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
+  if (!first) return ''
+  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
+}
+
 function CloudTab({ tab, active, onClick }) {
   return (
     <button
@@ -39,7 +50,7 @@ function CloudTab({ tab, active, onClick }) {
   )
 }
 
-function CloudEnginePanel({ tab, clientId, showToast }) {
+function CloudEnginePanel({ tab, clientId, target, showToast }) {
   const [status, setStatus] = useState('idle')
   const [lastRun, setLastRun] = useState(null)
   const [findings, setFindings] = useState([])
@@ -51,7 +62,7 @@ function CloudEnginePanel({ tab, clientId, showToast }) {
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: tab.engine, client_id: Number(clientId) }),
+        body: JSON.stringify({ engine: tab.engine, client_id: Number(clientId), ...(target ? { target } : {}) }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
@@ -155,6 +166,8 @@ export default function CloudControlTower() {
   }, [])
 
   const activeTabDef = CLOUD_TABS.find((t) => t.id === activeTab) ?? CLOUD_TABS[0]
+  const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
+  const clientTarget = firstClientTarget(selectedClient)
 
   return (
     <PageShell title="Cloud Control Tower" badge="CLOUD / INFRA" badgeColor="#3b82f6" subtitle={`${CLOUD_TABS.length} providers`}>
@@ -186,7 +199,7 @@ export default function CloudControlTower() {
 
       {!selectedClientId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
-          Select a client to enable scan controls. Cloud engines run without a target URL (use client credential config).
+          Select a client to enable scan controls. The scan uses the first approved client domain as target.
         </div>
       )}
 
@@ -194,6 +207,7 @@ export default function CloudControlTower() {
         key={activeTab}
         tab={activeTabDef}
         clientId={selectedClientId}
+        target={clientTarget}
         showToast={showToast}
       />
     </PageShell>

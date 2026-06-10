@@ -5,6 +5,9 @@ import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import { apiFetch } from '../../lib/apiBase'
+import SeverityBadge from '../ui/SeverityBadge'
+import { SkeletonTable } from '../ui/Skeleton'
+import EmptyState from '../ui/EmptyState'
 
 function severityToCvss(severity) {
   if (!severity) return '—'
@@ -88,6 +91,8 @@ function ExpandedRow({ finding, onClose }) {
   const crimeScene = desc.footprint || finding.description || 'No crime scene report.'
   const remediation = desc.remediation_snippet?.trim() || '—'
   const generatedPatch = desc.generated_patch?.trim() || ''
+  const pocCommit = finding.poc_commitment_sha256?.trim() || ''
+  const findingId = finding.finding_id?.trim() || ''
 
   return (
     <tr className="bg-[#0a0a0a]">
@@ -120,6 +125,8 @@ function ExpandedRow({ finding, onClose }) {
               Recommended Remediation (AI Generated)
             </h4>
             <CopyableBlock label="Remediation / patch" value={remediation} />
+            {findingId ? <CopyableBlock label="finding_id" value={findingId} /> : null}
+            {pocCommit ? <CopyableBlock label="poc_commitment_sha256" value={pocCommit} /> : null}
             {generatedPatch ? (
               <>
                 <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#34d399' }}>
@@ -267,15 +274,21 @@ export default function FindingsTab() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-[#6b7280]">
-                    Loading…
+                  <td colSpan={4} className="py-4 px-4">
+                    <SkeletonTable rows={6} cols={4} />
                   </td>
                 </tr>
               )}
               {!loading && !findingsError && findings.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-[#6b7280]">
-                    No findings for this client.
+                  <td colSpan={4} className="p-0 border-0">
+                    <EmptyState
+                      icon="search-x"
+                      title="No findings for this client"
+                      body="Run a scan or select a different client to view results."
+                      compact
+                      className="border-0 bg-transparent rounded-none"
+                    />
                   </td>
                 </tr>
               )}
@@ -286,19 +299,7 @@ export default function FindingsTab() {
                     className="border-b border-white/10 cursor-pointer transition-colors duration-200 hover:bg-white/5"
                   >
                     <td className="py-2.5 px-4">
-                      <span
-                        className={`font-medium ${
-                          (f.severity || '').toLowerCase().includes('critical')
-                            ? 'text-[#f87171]'
-                            : (f.severity || '').toLowerCase().includes('high')
-                              ? 'text-[#fb923c]'
-                              : (f.severity || '').toLowerCase().includes('medium')
-                                ? 'text-[#fbbf24]'
-                                : 'text-[#9ca3af]'
-                        }`}
-                      >
-                        {f.severity || '—'}
-                      </span>
+                      <SeverityBadge severity={f.severity} size="sm" />
                     </td>
                     <td className="py-2.5 px-4 text-[#9ca3af] font-mono text-xs">
                       {severityToCvss(f.severity)}

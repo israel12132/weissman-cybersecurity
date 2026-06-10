@@ -16,7 +16,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -213,7 +212,7 @@ def generate_report_pdf(
     client_targets: optional map client_id -> base URL for dynamic CURL generation (no placeholders).
     """
     try:
-        from weasyprint import HTML, CSS
+        from weasyprint import HTML
         from weasyprint.text.fonts import FontConfiguration
         _weasyprint_available = True
     except ImportError:
@@ -422,8 +421,9 @@ def generate_report_pdf(
         <p><strong>Total findings:</strong> {total}. {"No Findings." if not has_findings else "Findings are categorized by severity (Critical, High, Medium, Low, Info) and correlated against your authorized scope (domains, technology stack). All data is from the live database; no mock or simulated findings are included."}</p>
         <p><strong>Weissman Security Rating:</strong> {score}/100. A score of 90 or above indicates a strong posture; 70–89 suggests targeted remediation; below 70 warrants prioritized action.</p>
         <p><strong>Weissman Priority Score (CVSS × EPSS × Asset Criticality):</strong> {weissman_priority}/100. Higher values indicate findings that should be remediated first (exploit likelihood and impact).</p>
-        <p>Technical details, one-click remediation snippets, and exact patches are provided in the following sections. All findings are derived from trusted threat intelligence feeds (NVD, GitHub, OSV, OTX, HIBP). <strong>Zero False Positive:</strong> every finding in this report has been verified via a non-destructive Proof-of-Concept (PoC) against your environment; only confirmed (VERIFIED) results are included.</p>
-        <p><strong>Data integrity statement:</strong> This report is generated exclusively from live database and threat intelligence feeds. No synthetic, mock, or example data is used. Findings have been verified as described in the platform methodology.</p>
+        <p>Technical details, reproduction guidance (where available), and remediation are provided in the following sections. Findings are derived from trusted threat intelligence feeds (NVD, GitHub, OSV, OTX, HIBP) and correlated to your authorized scope (domains/tech stack).</p>
+        <p><strong>Validation note:</strong> Where applicable, the platform runs a non-destructive <em>safe-probe</em> (reachability/timing/header baseline) and includes signature-based fuzzer evidence. Some feed-derived items may require manual confirmation in your environment; they are not automatically “exploit-confirmed” by default.</p>
+        <p><strong>Data integrity statement:</strong> This report is generated from the live database and threat intelligence feeds configured for this deployment. No synthetic, mock, or example data is injected by the report generator.</p>
         <p><strong>Likely Threat Actors (APT Attribution):</strong> Based on Critical/High findings and public threat intelligence, the following advanced persistent threat (APT) groups are known to exploit similar vulnerabilities: {escape_basic(", ".join(threat_actors) if threat_actors else "— (none identified for this scope)")}.</p>
         <div class="page-footer">{COPYRIGHT_FOOTER}</div>
         <div class="certificate-line">{CERTIFICATE_TEXT}</div>

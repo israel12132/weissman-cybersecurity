@@ -8,6 +8,8 @@ use crate::fuzz_oob::{inject_oob_token, oast_correlation_enabled, verify_oob_tok
 use crate::generative_fuzz_llm::{
     self, BlockFeedback, GenerativeLlmConfig, GenerativeMutation,
 };
+use crate::pentest_memory;
+use sqlx::PgPool;
 use fuzz_core::{
     append_query_param, build_param_injection_probe_urls, is_anomaly,
     load_guided_payloads_from_file, looks_like_sqli_response, reflected_xss_indicated,
@@ -566,10 +568,26 @@ async fn concurrent_get_mutation_wave(
     collected
 }
 
+fn target_host_for_memory(target_url: &str) -> String {
+    target_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or(target_url)
+        .split(':')
+        .next()
+        .unwrap_or(target_url)
+        .trim()
+        .to_ascii_lowercase()
+}
+
 async fn execute_legacy_feedback_fuzz(
     target_url: &str,
     base_payload: &str,
     job_oast_token: Option<String>,
+    app_pool: Option<&PgPool>,
+    tenant_id: Option<i64>,
 ) -> Vec<ValidatedAnomaly> {
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
@@ -584,9 +602,22 @@ async fn execute_legacy_feedback_fuzz(
 
     let signature_rules = Arc::new(crate::signatures::load_signature_rules());
     let mutator = Mutator::new(base_payload);
-    let guided = std::env::var("FUZZ_PAYLOADS_FILE")
+    let mut guided = std::env::var("FUZZ_PAYLOADS_FILE")
         .map(|p| load_guided_payloads_from_file(&p))
         .unwrap_or_default();
+    if let (Some(pool), Some(tid)) = (app_pool, tenant_id) {
+        let host = target_host_for_memory(target_url);
+        if !host.is_empty() {
+            let fp = pentest_memory::build_target_fingerprint(&host, None, None, &[]);
+            let winners =
+                pentest_memory::prior_winners(pool, tid, "http_feedback_fuzz", &fp, 12).await;
+            for w in winners.into_iter().rev() {
+                if !guided.iter().any(|g| g == &w.payload) {
+                    guided.insert(0, w.payload);
+                }
+            }
+        }
+    }
     let mutations = resolve_mutations(&mutator, &guided);
     let post_jobs: Vec<(String, Option<String>)> =
         mutations.iter().cloned().map(|m| (m, None)).collect();
@@ -685,6 +716,7 @@ async fn execute_generative_feedback_fuzz(
     llm_tenant_id: Option<i64>,
     job_oast_token: Option<String>,
     cognitive_osint: Option<&str>,
+    app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
@@ -716,11 +748,34 @@ async fn execute_generative_feedback_fuzz(
     let (tx, mut rx) = mpsc::channel::<GenerativeMutation>(chan_cap);
     let stop = Arc::new(AtomicBool::new(false));
     let stop_prod = stop.clone();
-    let cognitive = cognitive_osint
+    let mut cognitive_buf = cognitive_osint
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("")
         .to_string();
+    if let (Some(pool), Some(tid)) = (app_pool, llm_tenant_id) {
+        let host = target_host_for_memory(target_url);
+        if !host.is_empty() {
+            let fp = pentest_memory::build_target_fingerprint(&host, None, None, &[]);
+            let winners =
+                pentest_memory::prior_winners(pool, tid, "http_feedback_fuzz", &fp, 8).await;
+            if !winners.is_empty() {
+                let hints: Vec<String> = winners
+                    .iter()
+                    .map(|w| format!("{} ({})", w.payload, w.vuln_signature))
+                    .collect();
+                if cognitive_buf.is_empty() {
+                    cognitive_buf = format!("Prior winning payloads on similar stacks: {}", hints.join("; "));
+                } else {
+                    cognitive_buf.push_str(&format!(
+                        "\nPrior winning payloads on similar stacks: {}",
+                        hints.join("; ")
+                    ));
+                }
+            }
+        }
+    }
+    let cognitive = cognitive_buf;
     let gen_task = tokio::spawn(generative_fuzz_llm::run_generative_producer_loop(
         tx,
         fb_rx,
@@ -972,9 +1027,17 @@ async fn execute_feedback_fuzz(
     llm_tenant_id: Option<i64>,
     job_oast_token: Option<String>,
     cognitive_osint: Option<&str>,
+    app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
     if generative_legacy_mode() {
-        execute_legacy_feedback_fuzz(target_url, base_payload, job_oast_token).await
+        execute_legacy_feedback_fuzz(
+            target_url,
+            base_payload,
+            job_oast_token,
+            app_pool,
+            llm_tenant_id,
+        )
+        .await
     } else {
         execute_generative_feedback_fuzz(
             target_url,
@@ -982,6 +1045,7 @@ async fn execute_feedback_fuzz(
             llm_tenant_id,
             job_oast_token,
             cognitive_osint,
+            app_pool,
         )
         .await
     }
@@ -989,12 +1053,12 @@ async fn execute_feedback_fuzz(
 
 /// Runs the fuzzer: baseline first, then concurrent mutation waves with rate limiting.
 pub async fn run_fuzzer(target_url: &str, base_payload: &str) {
-    let _ = execute_feedback_fuzz(target_url, base_payload, None, None, None).await;
+    let _ = execute_feedback_fuzz(target_url, base_payload, None, None, None, None).await;
 }
 
 /// Runs the fuzzer and returns all validated anomalies (for API/DB). Still generates markdown reports.
 pub async fn run_fuzzer_collect(target_url: &str, base_payload: &str) -> Vec<ValidatedAnomaly> {
-    execute_feedback_fuzz(target_url, base_payload, None, None, None).await
+    execute_feedback_fuzz(target_url, base_payload, None, None, None, None).await
 }
 
 /// Same as [`run_fuzzer_collect`] but passes tenant id into vLLM metering (`tenant_llm_usage`).
@@ -1004,6 +1068,7 @@ pub async fn run_fuzzer_collect_tenant(
     llm_tenant_id: Option<i64>,
     job_oast_token: Option<String>,
     cognitive_osint: Option<&str>,
+    app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
     execute_feedback_fuzz(
         target_url,
@@ -1011,6 +1076,7 @@ pub async fn run_fuzzer_collect_tenant(
         llm_tenant_id,
         job_oast_token,
         cognitive_osint,
+        app_pool,
     )
     .await
 }

@@ -306,7 +306,36 @@ async fn api_findings_update_status(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
     };
-    // Explicitly scope update to current tenant to defend against any RLS gap
+
+    // Capture engine + signature_hash BEFORE the update so the FP/TP feedback loop
+    // can record the right (tenant, engine, signature) tuple. We also need them to
+    // cascade the status change down into the finding cluster (if any).
+    let pre = sqlx::query(
+        "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target
+           FROM vulnerabilities
+          WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    let (engine, sig_hash, cluster_id, target_url) = match pre {
+        Some(r) => (
+            r.try_get::<String, _>("source").unwrap_or_default(),
+            r.try_get::<Option<String>, _>("signature_hash").ok().flatten().unwrap_or_default(),
+            r.try_get::<Option<i64>, _>("cluster_id").ok().flatten(),
+            r.try_get::<Option<String>, _>("target").ok().flatten().unwrap_or_default(),
+        ),
+        None => {
+            let _ = tx.rollback().await;
+            return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "Finding not found"}))).into_response();
+        }
+    };
+
+    // Explicitly scope update to current tenant to defend against any RLS gap.
     let affected = sqlx::query(
         "UPDATE vulnerabilities SET status = $1, updated_at = now(), status_changed_at = now() \
          WHERE id = $2 AND tenant_id = $3",
@@ -316,10 +345,69 @@ async fn api_findings_update_status(
     .bind(auth.tenant_id)
     .execute(&mut *tx)
     .await;
+
+    // ── False-positive / true-positive feedback ────────────────────────────
+    // FALSE_POSITIVE = engine got it wrong → record FP, possibly auto-suppress.
+    // FIXED / ACKNOWLEDGED / IN_PROGRESS = analyst validated → record TP.
+    let mut suppression_added = false;
+    if matches!(affected, Ok(ref r) if r.rows_affected() > 0) {
+        match new_status.as_str() {
+            "FALSE_POSITIVE" => {
+                match crate::fp_feedback::record_fp(
+                    &mut tx,
+                    auth.tenant_id,
+                    &engine,
+                    &sig_hash,
+                    if target_url.is_empty() { None } else { Some(target_url.as_str()) },
+                    Some(auth.user_id),
+                ).await {
+                    Ok(added) => suppression_added = added,
+                    Err(e) => tracing::warn!(target: "fp_feedback", error = %e, "record_fp failed"),
+                }
+            }
+            "FIXED" | "ACKNOWLEDGED" | "IN_PROGRESS" => {
+                if let Err(e) = crate::fp_feedback::record_tp(
+                    &mut tx, auth.tenant_id, &engine, &sig_hash,
+                ).await {
+                    tracing::warn!(target: "fp_feedback", error = %e, "record_tp failed");
+                }
+            }
+            _ => {}
+        }
+
+        // Propagate status to all siblings in the cluster — single click, one
+        // status across every engine's view of the same vulnerability.
+        if let Some(cid) = cluster_id {
+            if let Err(e) = crate::findings_correlator::cascade_cluster_status(
+                &mut tx, auth.tenant_id, cid, &new_status,
+            ).await {
+                tracing::warn!(target: "findings_correlator", error = %e, "cluster cascade failed");
+            }
+            let _ = sqlx::query(
+                "UPDATE weissman_finding_clusters
+                    SET status = $1, updated_at = now()
+                  WHERE id = $2 AND tenant_id = $3",
+            )
+            .bind(&new_status)
+            .bind(cid)
+            .bind(auth.tenant_id)
+            .execute(&mut *tx)
+            .await;
+        }
+    }
+
     let _ = tx.commit().await;
+
     match affected {
         Ok(r) if r.rows_affected() > 0 => {
-            (StatusCode::OK, Json(json!({"ok": true, "id": id, "status": new_status}))).into_response()
+            (StatusCode::OK, Json(json!({
+                "ok": true,
+                "id": id,
+                "status": new_status,
+                "suppression_added": suppression_added,
+                "engine": engine,
+                "cluster_id": cluster_id,
+            }))).into_response()
         }
         Ok(_) => {
             (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "Finding not found"}))).into_response()
@@ -600,12 +688,261 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/health": {
                 "get": {
-                    "summary": "Health check",
+                    "summary": "Health check (uptime, scan state, active engines, RSS)",
                     "tags": ["System"],
                     "security": [],
+                    "responses": { "200": { "description": "Server is healthy" } }
+                }
+            },
+
+            "/api/dashboard/exec-kpis": {
+                "get": {
+                    "summary": "Executive KPI roll-up for the cockpit hero strip",
+                    "description": "One-shot aggregate: severity counts (+24h deltas), open vs resolved, asset / agent / job totals, scan velocity, MTTR, 24-hour trend buckets, top engines / clients / CVEs / MITRE techniques, plus a weighted security score 0–100. The cockpit refreshes every 15 s.",
+                    "tags": ["Dashboard"],
+                    "responses": { "200": { "description": "Aggregated KPIs" } }
+                }
+            },
+
+            "/api/findings/clusters": {
+                "get": {
+                    "summary": "Collapsed findings — one row per (target, signature, cwe) cluster",
+                    "description": "Sorted by KEV→EPSS→severity. Supports `severity`, `status=OPEN`, `kev=true` filters; default `limit=100`, max 1000. Each cluster aggregates `engines[]`, `sources[]`, `cves[]`, `max_severity`, `max_cvss`, `max_epss`, `kev_listed`.",
+                    "tags": ["Findings"],
+                    "parameters": [
+                        { "name": "limit",    "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 1000 } },
+                        { "name": "offset",   "in": "query", "schema": { "type": "integer", "default": 0 } },
+                        { "name": "severity", "in": "query", "schema": { "type": "string", "enum": ["critical","high","medium","low","info"] } },
+                        { "name": "status",   "in": "query", "schema": { "type": "string", "enum": ["OPEN"] } },
+                        { "name": "kev",      "in": "query", "schema": { "type": "boolean" } }
+                    ],
+                    "responses": { "200": { "description": "Cluster list" } }
+                }
+            },
+
+            "/api/intel/status": {
+                "get": {
+                    "summary": "Threat-intel mirror status (KEV + EPSS row counts + last refresh)",
+                    "tags": ["Intel"],
+                    "responses": { "200": { "description": "Mirror health" } }
+                }
+            },
+            "/api/intel/suppressions": {
+                "get": {
+                    "summary": "List active auto-suppression rules (3-FP threshold)",
+                    "tags": ["Intel"],
+                    "responses": { "200": { "description": "Suppressions" } }
+                }
+            },
+            "/api/intel/suppressions/{id}": {
+                "delete": {
+                    "summary": "Remove a suppression rule (analyst override)",
+                    "tags": ["Intel"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
                     "responses": {
-                        "200": { "description": "Server is healthy" }
+                        "200": { "description": "Deleted" },
+                        "404": { "description": "Not found" }
                     }
+                }
+            },
+
+            "/api/attack-paths/{client_id}": {
+                "get": {
+                    "summary": "BFS-derived attack paths internet_exposed → crown_jewel",
+                    "description": "Dijkstra over risk_graph_nodes/edges weighted by associated finding's CVSS+EPSS+KEV. Returns top-K paths + choke-point analysis. `?recompute=1` rebuilds the snapshot live; otherwise returns the latest cached snapshot from `attack_path_snapshots`.",
+                    "tags": ["AttackPath"],
+                    "parameters": [
+                        { "name": "client_id", "in": "path",  "required": true, "schema": { "type": "integer" } },
+                        { "name": "recompute", "in": "query", "schema": { "type": "boolean" } },
+                        { "name": "top_k",     "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200 } }
+                    ],
+                    "responses": { "200": { "description": "Snapshot or null" } }
+                }
+            },
+            "/api/risk-graph/nodes/{node_id}/flags": {
+                "patch": {
+                    "summary": "Toggle internet_exposed / crown_jewel / asset_value on a node",
+                    "tags": ["AttackPath"],
+                    "parameters": [{ "name": "node_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "properties": {
+                                "internet_exposed": { "type": "boolean" },
+                                "crown_jewel":      { "type": "boolean" },
+                                "asset_value":      { "type": "number" }
+                            }
+                        } } }
+                    },
+                    "responses": { "200": { "description": "Updated" }, "404": { "description": "Node not found" } }
+                }
+            },
+
+            "/api/playbooks": {
+                "get": {
+                    "summary": "List SOAR playbooks for the tenant",
+                    "tags": ["SOAR"],
+                    "responses": { "200": { "description": "Playbook list" } }
+                },
+                "post": {
+                    "summary": "Create a SOAR playbook",
+                    "description": "Body: `{ name, description, enabled, trigger: {...}, actions: [...] }`. Trigger DSL keys: `severity[]`, `kev`, `epss_min`, `exposed`, `engines[]`, `cve_prefixes[]`, `cooldown_seconds`. Action kinds: `set_status | slack_notify | webhook | http_post | open_pr | isolate_host | page_oncall`.",
+                    "tags": ["SOAR"],
+                    "responses": { "201": { "description": "Created" }, "409": { "description": "Name already exists" } }
+                }
+            },
+            "/api/playbooks/{id}": {
+                "patch":  { "summary": "Update playbook", "tags": ["SOAR"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "responses": { "200": { "description": "Updated" }, "404": { "description": "Not found" } }
+                },
+                "delete": { "summary": "Delete playbook", "tags": ["SOAR"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "responses": { "200": { "description": "Deleted" }, "404": { "description": "Not found" } }
+                }
+            },
+            "/api/playbooks/fire": {
+                "post": {
+                    "summary": "Fire a synthetic PlaybookEvent against all enabled playbooks (supports dry_run)",
+                    "tags": ["SOAR"],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["event"],
+                            "properties": {
+                                "event":   { "type": "object" },
+                                "dry_run": { "type": "boolean", "default": false }
+                            }
+                        } } }
+                    },
+                    "responses": { "200": { "description": "Per-playbook dispatch results" } }
+                }
+            },
+            "/api/playbooks/{id}/runs": {
+                "get": {
+                    "summary": "Audit history of dispatches for a playbook",
+                    "tags": ["SOAR"],
+                    "parameters": [
+                        { "name": "id",    "in": "path",  "required": true, "schema": { "type": "integer" } },
+                        { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } }
+                    ],
+                    "responses": { "200": { "description": "Run history" } }
+                }
+            },
+
+            "/api/financial-risk/{client_id}": {
+                "get": {
+                    "summary": "FAIR-aligned $-at-risk snapshot for a client",
+                    "description": "Returns SLE_worst (single biggest loss possible today), ALE_annualised (expected $/yr loss), crown-jewel value, total asset value, and top contributors. `?recompute=1` runs fresh.",
+                    "tags": ["FinancialRisk"],
+                    "parameters": [
+                        { "name": "client_id", "in": "path",  "required": true, "schema": { "type": "integer" } },
+                        { "name": "recompute", "in": "query", "schema": { "type": "boolean" } }
+                    ],
+                    "responses": { "200": { "description": "Snapshot or null" } }
+                }
+            },
+            "/api/financial-risk/{client_id}/apply-tags": {
+                "post": {
+                    "summary": "Re-apply client_asset_value_rules to all of a client's risk_graph_nodes",
+                    "tags": ["FinancialRisk"],
+                    "parameters": [{ "name": "client_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "responses": { "200": { "description": "Number of nodes updated" } }
+                }
+            },
+
+            "/api/ueba/anomalies": {
+                "get": {
+                    "summary": "Recent UEBA anomalies detected on endpoint agents",
+                    "tags": ["UEBA"],
+                    "parameters": [
+                        { "name": "limit",    "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+                        { "name": "agent_id", "in": "query", "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Anomaly list" } }
+                }
+            },
+            "/api/ueba/ingest": {
+                "post": {
+                    "summary": "Ingest a UEBA baseline sample from a weissman-agent",
+                    "description": "Server side: writes the sample, recomputes mean/stddev from the last 7 days for `(agent, metric, hour_of_week)`, fires medium-severity anomaly when `|z| > 3` (high when > 6). Also detects new-port / new-process categorical anomalies.",
+                    "tags": ["UEBA"],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["agent_id","client_id","hour_of_week","metrics"],
+                            "properties": {
+                                "agent_id":     { "type": "string" },
+                                "client_id":    { "type": "integer" },
+                                "hour_of_week": { "type": "integer", "minimum": 0, "maximum": 167 },
+                                "metrics":      { "type": "object" }
+                            }
+                        } } }
+                    },
+                    "responses": { "200": { "description": "Ingest summary + any anomalies fired" } }
+                }
+            },
+
+            "/api/ask": {
+                "post": {
+                    "summary": "Ask Weissman — natural-language query compiled to safe parameterised SQL",
+                    "description": "LLM emits a strict JSON QueryPlan (never raw SQL). Server validates against an allow-list of 6 tables × N columns × 10 operators, compiles to parameterised SQL with `tenant_id=$1` enforced, and executes against the dedicated read-only role `weissman_ro` (SELECT-only, 15 s statement timeout). Returns the compiled SQL alongside the rows for full transparency. Audited to `nl_query_audit`. Returns **503** if no read-only pool is configured (set `WEISSMAN_READ_ONLY_DATABASE_URL`).",
+                    "tags": ["Ask"],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["question"],
+                            "properties": {
+                                "question": { "type": "string", "maxLength": 2000 }
+                            }
+                        } } }
+                    },
+                    "responses": {
+                        "200": { "description": "QueryPlan + compiled SQL + result rows" },
+                        "503": { "description": "Read-only pool not configured" }
+                    }
+                }
+            },
+
+            "/api/auth/signup": {
+                "post": {
+                    "summary": "Self-serve signup (rate-limited; sends verification email)",
+                    "tags": ["Auth"],
+                    "security": [],
+                    "responses": {
+                        "202": { "description": "Verification email sent (or shown in dev mode)" },
+                        "503": { "description": "Self-serve signup disabled (set WEISSMAN_SELF_SERVE_SIGNUP=true)" }
+                    }
+                }
+            },
+            "/api/auth/verify": {
+                "get": {
+                    "summary": "Verify email + create the tenant/admin user",
+                    "tags": ["Auth"],
+                    "security": [],
+                    "parameters": [{ "name": "token", "in": "query", "required": true, "schema": { "type": "string" } }],
+                    "responses": {
+                        "303": { "description": "Redirect to /command-center/login?verified=1" },
+                        "410": { "description": "Token invalid / consumed / expired" }
+                    }
+                }
+            },
+
+            "/api/audit-logs": {
+                "get": {
+                    "summary": "Tenant audit log (paginated + filterable)",
+                    "tags": ["Audit"],
+                    "parameters": [
+                        { "name": "limit",  "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 1000 } },
+                        { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+                        { "name": "action", "in": "query", "schema": { "type": "string" } },
+                        { "name": "actor",  "in": "query", "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Audit entries" } }
                 }
             }
         }

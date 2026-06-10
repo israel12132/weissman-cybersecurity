@@ -1,6 +1,10 @@
 //! Large HTTP + engine crate: scoped clippy allows so `cargo clippy -- -D warnings` stays green
 //! without mass refactors before release (correctness lints like `unwrap` remain enabled).
 //!
+//! The default `serde_json::json!` macro recursion limit (128) is exceeded by the
+//! inline OpenAPI spec in `server_handlers_rest2.inc`; raise it crate-wide.
+#![recursion_limit = "512"]
+//!
 //! # Safety policy
 //! Unsafe code is denied crate-wide. The sole exception is `hpc_runtime::linux_affinity`, which
 //! calls `libc::sched_setaffinity` for NUMA-aware thread pinning on Linux. That module carries an
@@ -35,6 +39,8 @@ pub mod auth_jwt;
 pub mod auth_refresh;
 pub mod billing;
 pub mod observability;
+pub mod api_docs;
+pub mod signup;
 pub mod request_trace;
 pub mod panic_shield;
 pub mod scan_concurrency;
@@ -45,6 +51,7 @@ pub mod council;
 pub mod council_hitl;
 pub mod council_synthesis;
 pub mod sso_management;
+pub mod saas_idp_discovery;
 pub mod ceo;
 pub mod crypto_engine;
 pub mod eternal_fuzz;
@@ -55,8 +62,21 @@ pub mod data_retention;
 pub mod db_backup;
 pub mod discovery_engine;
 pub mod engine_dispatch;
+pub mod engine_probes;
 pub mod engine_result;
 pub mod executive_pdf;
+pub mod findings_persist;
+pub mod findings_correlator;
+pub mod fp_feedback;
+pub mod intel_epss;
+pub mod intel_kev;
+pub mod embeddings;
+pub mod attack_path;
+pub mod soar_playbook;
+pub mod financial_risk;
+pub mod pentest_memory;
+pub mod ueba_detector;
+pub mod nl_query;
 pub mod exploit_synthesis_engine;
 pub mod fingerprint;
 pub mod fuzz_http_pool;
@@ -64,6 +84,7 @@ pub mod fuzz_oob;
 pub mod generative_fuzz_llm;
 pub mod fuzzer;
 pub mod leak_hunter_engine;
+pub mod liminal_boundary_engine;
 pub mod notifications;
 pub mod nvd_cve;
 pub mod outbound_http;
@@ -90,6 +111,7 @@ pub mod stealth_engine;
 pub mod strategic_analyzer;
 pub mod threat_intel_engine;
 pub mod timing_engine;
+pub mod template_engine;
 pub mod validator;
 
 pub mod auto_domain_discovery_engine;
@@ -131,6 +153,7 @@ pub mod predictive_analyzer;
 pub mod redteam_background_worker;
 pub mod risk_graph;
 pub mod security_hardening;
+pub mod security_startup;
 pub mod supply_chain_engine;
 pub mod swarm_orchestrator;
 pub mod strategy_engine;
@@ -199,6 +222,8 @@ pub mod advanced_mobile_engines;
 pub mod advanced_data_engines;
 pub mod admin_users;
 pub mod auth_mfa;
+pub mod endpoint_agents;
+pub mod rbac;
 
 pub use fingerprint::{
     get_top_ports, scan_ip_range, scan_ip_ranges_concurrent,

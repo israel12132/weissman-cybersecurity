@@ -271,12 +271,13 @@ pub async fn saml_acs(
             Json(json!({"ok": false, "detail": format!("decode: {}", e)})),
         )
     })?;
-    let insecure = matches!(
-        std::env::var("WEISSMAN_SAML_INSECURE_SKIP_VERIFY")
-            .ok()
-            .as_deref(),
-        Some("1") | Some("true") | Some("yes")
-    );
+    let insecure = !weissman_core::tls_policy::is_production_environment()
+        && matches!(
+            std::env::var("WEISSMAN_SAML_INSECURE_SKIP_VERIFY")
+                .ok()
+                .as_deref(),
+            Some("1") | Some("true") | Some("yes")
+        );
     let xmlsec_bin = std::env::var("WEISSMAN_XMLSEC1_BINARY").unwrap_or_default();
     if !insecure {
         if xmlsec_bin.trim().is_empty() {

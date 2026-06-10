@@ -33,6 +33,13 @@ pub fn resolve_static_dir() -> Option<PathBuf> {
 }
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // BLOCKER #5: refuse to start with insecure TLS policy in production.
+    if let Err(msg) = weissman_core::tls_policy::enforce_production_tls_policy() {
+        return Err(format!("[startup] TLS policy refusal: {msg}").into());
+    }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_production_security_policy() {
+        return Err(format!("[startup] security policy refusal: {msg}").into());
+    }
     fingerprint_engine::auth_jwt::init_jwt_secret_from_env().map_err(|msg| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, msg)
     })?;

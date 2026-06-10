@@ -37,10 +37,15 @@ mod discovery_ui_snapshot;
 
 pub(crate) use weissman_core::{finding_description, finding_title_and_severity, infer_poc_exploit};
 
-static SCANNING_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// Operator-controlled "continuous scanning enabled" toggle. The scheduled cycle only
+/// kicks off real work when this is `true`. **Does NOT** indicate whether a cycle is
+/// currently executing — use [`active_tenant_scan_count`] for that.
+static SCANNING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Number of [`run_cycle_for_tenant`] executions currently in flight. Source of truth for
+/// "is a scan happening right now?".
 static ACTIVE_TENANT_CYCLES: AtomicUsize = AtomicUsize::new(0);
 
-/// Number of `run_cycle_for_tenant` executions currently in flight (nested-safe via RAII guard).
 pub fn active_tenant_scan_count() -> usize {
     ACTIVE_TENANT_CYCLES.load(Ordering::Relaxed)
 }
@@ -60,12 +65,21 @@ impl Drop for TenantScanCounterGuard {
     }
 }
 
+/// Toggle whether the orchestrator loop should pick up new cycles.
 pub fn set_scanning_active(v: bool) {
-    SCANNING_ACTIVE.store(v, Ordering::SeqCst);
+    SCANNING_ENABLED.store(v, Ordering::SeqCst);
 }
 
+/// Backwards-compatible name. Returns whether scanning is *enabled*, **not** whether a
+/// cycle is in flight. Health and UI code that wants "is there work happening right now"
+/// should call [`active_tenant_scan_count`] / [`scan_in_progress`] instead.
 pub fn is_scanning_active() -> bool {
-    SCANNING_ACTIVE.load(Ordering::SeqCst)
+    SCANNING_ENABLED.load(Ordering::SeqCst)
+}
+
+/// True when at least one tenant cycle is currently executing.
+pub fn scan_in_progress() -> bool {
+    ACTIVE_TENANT_CYCLES.load(Ordering::Relaxed) > 0
 }
 
 /// Read a string config for this tenant. Returns None if missing or empty.
@@ -1788,6 +1802,9 @@ async fn run_cycle_for_tenant(
                         llm_model: semantic_config.llm_model.clone(),
                         recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
                         asm_ports: asm_ports.clone(),
+                        app_pool: Some(app_pool.clone()),
+                        agents: None, // orchestrator path: no live registry; tasks queue.
+                        client_id: Some(db_client_id),
                     };
                     let r =
                         crate::engine_dispatch::run_engine(other, &target, &ctx).await;

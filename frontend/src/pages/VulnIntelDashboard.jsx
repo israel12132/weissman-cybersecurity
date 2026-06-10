@@ -1,568 +1,365 @@
-/**
- * CVE / Vulnerability Intelligence Dashboard
- *
- * World-class vulnerability management: CVSS prioritization, exploitability
- * scoring, patch status tracking, risk matrix, and CVE timeline.
- * Route: /vuln-intel
- */
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import PageShell from './PageShell'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { apiFetch } from '../lib/apiBase'
+import FindingDrawer from '../components/ui/FindingDrawer'
+import EmptyState from '../components/ui/EmptyState'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import FilterPills from '../components/ui/FilterPills'
+import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import DataTable from '../components/ui/DataTable'
+import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/SeverityBadge'
+import PageShell from './PageShell'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const CVSS_COLOR = (score) => {
-  if (score >= 9.0) return '#ef4444'
-  if (score >= 7.0) return '#f97316'
-  if (score >= 4.0) return '#f59e0b'
-  return '#22d3ee'
+const STATUS_COLORS = {
+  OPEN: '#ef4444',
+  ACKNOWLEDGED: '#f59e0b',
+  IN_PROGRESS: '#3b82f6',
+  FIXED: '#22c55e',
+  FALSE_POSITIVE: '#6b7280',
 }
 
-// Fallback vulnerability database when API is unavailable
-const FALLBACK_VULN_DB = [
-  {
-    id: 'CVE-2024-3400',
-    title: 'PAN-OS Command Injection (GlobalProtect)',
-    cvss: 10.0,
-    exploited: true,
-    exploitMaturity: 'weaponized',
-    vendor: 'Palo Alto Networks',
-    product: 'PAN-OS / GlobalProtect',
-    patchStatus: 'available',
-    affectedVersions: '< 10.2.9-h1, < 11.0.4-h1, < 11.1.2-h3',
-    mitre: 'T1190',
-    cwe: 'CWE-78',
-    published: '2024-04-12',
-    description: 'OS command injection in GlobalProtect allows unauthenticated RCE. Actively exploited by UTA0218 (suspected state nexus).',
-    references: ['https://security.paloaltonetworks.com/CVE-2024-3400'],
-    epss: 0.975,
-    kev: true,
-  },
-  {
-    id: 'CVE-2024-1709',
-    title: 'ConnectWise ScreenConnect Auth Bypass',
-    cvss: 10.0,
-    exploited: true,
-    exploitMaturity: 'weaponized',
-    vendor: 'ConnectWise',
-    product: 'ScreenConnect',
-    patchStatus: 'available',
-    affectedVersions: '< 23.9.8',
-    mitre: 'T1190',
-    cwe: 'CWE-288',
-    published: '2024-02-19',
-    description: 'Authentication bypass using an alternate path allows full admin takeover. Mass exploitation observed within 48 h of disclosure.',
-    references: [],
-    epss: 0.971,
-    kev: true,
-  },
-  {
-    id: 'CVE-2024-6387',
-    title: 'OpenSSH Race Condition RCE (regreSSHion)',
-    cvss: 8.1,
-    exploited: false,
-    exploitMaturity: 'poc',
-    vendor: 'OpenSSH',
-    product: 'OpenSSH',
-    patchStatus: 'available',
-    affectedVersions: '8.5p1 – 9.7p1 (Linux glibc)',
-    mitre: 'T1210',
-    cwe: 'CWE-364',
-    published: '2024-07-01',
-    description: 'Signal handler race condition in sshd may allow unauthenticated RCE as root. Exploitation requires millions of attempts; PoC published.',
-    references: [],
-    epss: 0.21,
-    kev: false,
-  },
-  {
-    id: 'CVE-2024-21762',
-    title: 'FortiOS Out-of-Bound Write (SSL-VPN)',
-    cvss: 9.6,
-    exploited: true,
-    exploitMaturity: 'weaponized',
-    vendor: 'Fortinet',
-    product: 'FortiOS SSL-VPN',
-    patchStatus: 'available',
-    affectedVersions: '6.0–7.4 (see advisory)',
-    mitre: 'T1190',
-    cwe: 'CWE-787',
-    published: '2024-02-08',
-    description: 'Out-of-bounds write in FortiOS SSL-VPN enables unauthenticated RCE. Threat actors exploited it before the patch window.',
-    references: [],
-    epss: 0.943,
-    kev: true,
-  },
-  {
-    id: 'CVE-2024-27198',
-    title: 'TeamCity Authentication Bypass',
-    cvss: 9.8,
-    exploited: true,
-    exploitMaturity: 'weaponized',
-    vendor: 'JetBrains',
-    product: 'TeamCity',
-    patchStatus: 'available',
-    affectedVersions: '< 2023.11.4',
-    mitre: 'T1190',
-    cwe: 'CWE-288',
-    published: '2024-03-04',
-    description: 'Unauthenticated admin account creation on TeamCity instances. Used by multiple threat actors including BianLian ransomware.',
-    references: [],
-    epss: 0.965,
-    kev: true,
-  },
-  {
-    id: 'CVE-2023-46604',
-    title: 'Apache ActiveMQ ClassPathXmlApplicationContext RCE',
-    cvss: 9.8,
-    exploited: true,
-    exploitMaturity: 'weaponized',
-    vendor: 'Apache',
-    product: 'ActiveMQ',
-    patchStatus: 'available',
-    affectedVersions: '< 5.15.16, < 5.16.7, < 5.17.6, < 5.18.3',
-    mitre: 'T1190',
-    cwe: 'CWE-502',
-    published: '2023-10-25',
-    description: 'Deserialization RCE via OpenWire protocol. Used to deploy HelloKitty and TellYouThePass ransomware.',
-    references: [],
-    epss: 0.984,
-    kev: true,
-  },
-  {
-    id: 'CVE-2024-49113',
-    title: 'Windows LDAP RCE (DoS/RCE)',
-    cvss: 7.5,
-    exploited: false,
-    exploitMaturity: 'poc',
-    vendor: 'Microsoft',
-    product: 'Windows LDAP',
-    patchStatus: 'available',
-    affectedVersions: 'Windows Server 2008–2025',
-    mitre: 'T1210',
-    cwe: 'CWE-122',
-    published: '2024-12-10',
-    description: 'LDAPNightmare heap overflow in Windows LDAP service. PoC causes LSASS crash; RCE research ongoing.',
-    references: [],
-    epss: 0.18,
-    kev: false,
-  },
-  {
-    id: 'CVE-2024-38063',
-    title: 'Windows TCP/IP IPv6 Remote Code Execution',
-    cvss: 9.8,
-    exploited: false,
-    exploitMaturity: 'poc',
-    vendor: 'Microsoft',
-    product: 'Windows TCP/IP',
-    patchStatus: 'available',
-    affectedVersions: 'Windows 10/11 + Server 2008–2022',
-    mitre: 'T1210',
-    cwe: 'CWE-191',
-    published: '2024-08-13',
-    description: 'Integer underflow in IPv6 packet processing allows pre-auth RCE by sending crafted IPv6 packets. Disable IPv6 as immediate mitigation.',
-    references: [],
-    epss: 0.32,
-    kev: false,
-  },
-]
-
-const PATCH_STATUS_META = {
-  available:   { label: 'PATCH AVAILABLE',  color: '#4ade80' },
-  in_progress: { label: 'PATCHING',         color: '#f59e0b' },
-  not_started: { label: 'UNPATCHED',        color: '#ef4444' },
-  mitigated:   { label: 'MITIGATED',        color: '#22d3ee' },
+function isKevListed(f) {
+  return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
 }
 
-const EXPLOIT_META = {
-  weaponized: { label: 'WEAPONIZED', color: '#ef4444' },
-  poc:        { label: 'PoC',        color: '#f59e0b' },
-  theoretical:{ label: 'THEORETICAL',color: '#6b7280' },
+function formatDate(val) {
+  if (!val) return '—'
+  try {
+    return new Date(val).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const columnHelper = createColumnHelper()
 
-function CvssGauge({ score }) {
-  const color = CVSS_COLOR(score)
-  const pct = (score / 10) * 100
-  return (
-    <div className="flex items-center gap-3">
-      <div className="relative w-12 h-12">
-        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-          <circle cx="18" cy="18" r="15.9155" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="3" />
-          <circle
-            cx="18" cy="18" r="15.9155" fill="none"
-            stroke={color} strokeWidth="3"
-            strokeDasharray={`${pct} ${100 - pct}`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold font-mono" style={{ color }}>
-          {score.toFixed(1)}
+function buildColumns(t) {
+  return [
+    columnHelper.accessor('severity', {
+      id: 'severity',
+      header: t('common.severity'),
+      size: 110,
+      cell: ({ getValue }) => <SeverityBadge severity={getValue()} showDot />,
+    }),
+    columnHelper.accessor((row) => row.cve || row.cve_id || '—', {
+      id: 'cve',
+      header: t('findings.cve'),
+      size: 140,
+      cell: ({ getValue }) => (
+        <span className="text-cyan-300/90 font-mono text-[11px]">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.title || row.summary || '—', {
+      id: 'title',
+      header: t('common.name'),
+      size: 320,
+      cell: ({ getValue }) => (
+        <span className="text-white/85 text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.source || row.engine || '—', {
+      id: 'source',
+      header: t('findings.source'),
+      size: 140,
+      cell: ({ getValue }) => (
+        <span className="text-white/55 font-mono text-[11px] truncate">{getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => (row.status || 'OPEN').toUpperCase(), {
+      id: 'status',
+      header: t('common.status'),
+      size: 120,
+      cell: ({ getValue }) => {
+        const v = getValue()
+        const color = STATUS_COLORS[v] || '#6b7280'
+        return (
+          <span
+            className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono border"
+            style={{ color, backgroundColor: `${color}18`, borderColor: `${color}40` }}
+          >
+            {v}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor('discovered_at', {
+      id: 'discovered',
+      header: t('findings.discovered'),
+      size: 160,
+      cell: ({ getValue }) => (
+        <span className="text-white/45 font-mono text-[11px] whitespace-nowrap">
+          {formatDate(getValue())}
         </span>
-      </div>
-    </div>
-  )
+      ),
+    }),
+  ]
 }
-
-function EpssBar({ epss }) {
-  const pct = epss * 100
-  const color = epss > 0.8 ? '#ef4444' : epss > 0.5 ? '#f97316' : epss > 0.2 ? '#f59e0b' : '#22d3ee'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6 }}
-          className="h-full rounded-full"
-          style={{ background: color }}
-        />
-      </div>
-      <span className="text-[10px] font-mono shrink-0" style={{ color }}>{pct.toFixed(1)}%</span>
-    </div>
-  )
-}
-
-function VulnCard({ vuln, selected, onSelect }) {
-  const sc = CVSS_COLOR(vuln.cvss)
-  const em = EXPLOIT_META[vuln.exploitMaturity] ?? EXPLOIT_META.theoretical
-  return (
-    <motion.button
-      type="button"
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      onClick={() => onSelect(vuln.id)}
-      className="w-full text-left rounded-xl border p-4 transition-all hover:scale-[1.003]"
-      style={{
-        borderColor: selected ? `${sc}50` : 'rgba(255,255,255,0.07)',
-        background: selected ? `${sc}08` : 'rgba(0,0,0,0.3)',
-      }}
-    >
-      <div className="flex items-start gap-3">
-        <CvssGauge score={vuln.cvss} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[10px] font-mono text-white/35">{vuln.id}</span>
-            {vuln.kev && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest text-red-400 border-red-500/30 bg-red-950/30">
-                CISA KEV
-              </span>
-            )}
-            <span
-              className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
-              style={{ color: em.color, borderColor: `${em.color}40`, background: `${em.color}10` }}
-            >
-              {em.label}
-            </span>
-          </div>
-          <p className="text-xs font-semibold text-white/85 leading-snug mb-1">{vuln.title}</p>
-          <div className="flex items-center gap-2 text-[10px] font-mono text-white/30">
-            <span>{vuln.vendor}</span>
-            <span>·</span>
-            <span>{vuln.product}</span>
-            <span>·</span>
-            <span>{vuln.published}</span>
-          </div>
-        </div>
-      </div>
-    </motion.button>
-  )
-}
-
-function MetricCard({ label, value, sub, color, icon }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/8 p-4 flex flex-col gap-1"
-    >
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-lg">{icon}</span>}
-        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: `${color}99` }}>{label}</span>
-      </div>
-      <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-white/30 font-mono">{sub}</div>}
-    </motion.div>
-  )
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function VulnIntelDashboard() {
-  const [vulnDb, setVulnDb] = useState([])
+  const { t } = useTranslation()
+  const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [selectedId, setSelectedId] = useState(null)
-  const [search, setSearch] = useState('')
-  const [filterExploited, setFilterExploited] = useState(false)
-  const [filterKev, setFilterKev] = useState(false)
+  const [filter, setFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [kevFilter, setKevFilter] = useState(false)
+  const [filtersExpanded, setFiltersExpanded] = useState(true)
+  const [total, setTotal] = useState(0)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [selected, setSelected] = useState(null)
 
-  // Load vulnerability data from API
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const res = await apiFetch('/api/vuln-intel')
-        if (res.ok) {
-          const data = await res.json()
-          const vulnerabilities = Array.isArray(data) ? data : data.vulnerabilities || []
-          setVulnDb(vulnerabilities.length > 0 ? vulnerabilities : FALLBACK_VULN_DB)
-          if (!selectedId && vulnerabilities.length > 0) {
-            setSelectedId(vulnerabilities[0].id)
-          } else if (!selectedId && FALLBACK_VULN_DB.length > 0) {
-            setSelectedId(FALLBACK_VULN_DB[0].id)
-          }
-        } else if (res.status === 404) {
-          // API not implemented, use fallback
-          setVulnDb(FALLBACK_VULN_DB)
-          if (!selectedId) {
-            setSelectedId(FALLBACK_VULN_DB[0].id)
-          }
-        } else {
-          throw new Error(`Failed to load vulnerabilities (HTTP ${res.status})`)
-        }
-      } catch (err) {
-        setError(err?.message || 'Failed to load vulnerability intelligence')
-        // Use fallback data on error
-        setVulnDb(FALLBACK_VULN_DB)
-        if (!selectedId) {
-          setSelectedId(FALLBACK_VULN_DB[0].id)
-        }
-      } finally {
-        setLoading(false)
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const qs = new URLSearchParams({ limit: '1000' })
+    if (severityFilter !== 'all') qs.set('severity', severityFilter)
+    try {
+      const r = await apiFetch(`/api/findings?${qs.toString()}`)
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}))
+        throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       }
+      const data = await r.json()
+      const arr = Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : []
+      setFindings(arr)
+      setTotal(Number(data?.total ?? arr.length))
+      setLastUpdated(new Date())
+    } catch (e) {
+      setError(e.message || 'Failed to load findings')
+    } finally {
+      setLoading(false)
     }
+  }, [severityFilter])
 
-    loadData()
-  }, [])
+  useEffect(() => {
+    load().catch(() => {})
+  }, [load])
+
+  const summary = useMemo(() => {
+    const by = { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const f of findings) {
+      const s = (f.severity || 'info').toLowerCase()
+      if (by[s] !== undefined) by[s] += 1
+    }
+    const cves = new Set(findings.map((f) => f.cve || f.cve_id).filter(Boolean))
+    return { by, cves: cves.size }
+  }, [findings])
 
   const filtered = useMemo(() => {
-    let list = [...vulnDb].sort((a, b) => b.cvss - a.cvss)
-    if (filterExploited) list = list.filter((v) => v.exploited)
-    if (filterKev) list = list.filter((v) => v.kev)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (v) =>
-          v.id.toLowerCase().includes(q) ||
-          v.title.toLowerCase().includes(q) ||
-          v.vendor.toLowerCase().includes(q) ||
-          v.product.toLowerCase().includes(q),
-      )
+    const q = filter.trim().toLowerCase()
+    return findings.filter((f) => {
+      const sev = (f.severity || '').toLowerCase()
+      if (severityFilter !== 'all' && sev !== severityFilter) return false
+      if (statusFilter && (f.status || 'OPEN').toUpperCase() !== statusFilter) return false
+      if (kevFilter && !isKevListed(f)) return false
+      if (!q) return true
+      const hay = `${f.title || ''} ${f.description || ''} ${f.cve || ''} ${f.source || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [findings, filter, severityFilter, statusFilter, kevFilter])
+
+  const tableData = useMemo(() => filtered.slice(0, 200), [filtered])
+
+  const columns = useMemo(() => buildColumns(t), [t])
+
+  const statusCounts = useMemo(() => {
+    const c = {}
+    for (const f of findings) {
+      const s = (f.status || 'OPEN').toUpperCase()
+      c[s] = (c[s] || 0) + 1
     }
-    return list
-  }, [vulnDb, search, filterExploited, filterKev])
+    return c
+  }, [findings])
 
-  const selected = useMemo(() => vulnDb.find((v) => v.id === selectedId), [vulnDb, selectedId])
+  const kevCount = useMemo(() => findings.filter(isKevListed).length, [findings])
 
-  const metrics = useMemo(() => {
-    const critical = vulnDb.filter((v) => v.cvss >= 9.0).length
-    const exploited = vulnDb.filter((v) => v.exploited).length
-    const kev = vulnDb.filter((v) => v.kev).length
-    const avgCvss = vulnDb.length > 0 ? (vulnDb.reduce((s, v) => s + v.cvss, 0) / vulnDb.length).toFixed(1) : '0.0'
-    return { critical, exploited, kev, avgCvss }
-  }, [vulnDb])
-
-  const pm = selected ? (PATCH_STATUS_META[selected.patchStatus] ?? { label: selected.patchStatus.toUpperCase(), color: '#6b7280' }) : null
-  const em = selected ? (EXPLOIT_META[selected.exploitMaturity] ?? EXPLOIT_META.theoretical) : null
+  const selectedRowId = selected?.raw_id ?? selected?.id
 
   return (
     <PageShell
-      title="Vulnerability Intelligence"
-      subtitle={`${vulnDb.length} CVEs tracked · CVSS prioritized`}
+      title={t('vuln_intel.title')}
       badge="CVE"
       badgeColor="#f97316"
+      subtitle={t('vuln_intel.subtitle')}
     >
-      {/* Error Banner */}
-      {error && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-6">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-400 text-sm">⚠️</span>
-            <span className="text-xs font-mono text-amber-300/80">{error}</span>
-            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
-          </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-red-500/40 border-t-red-500 rounded-full animate-spin mx-auto" />
-            <p className="text-sm font-mono text-white/40">Loading vulnerability intelligence...</p>
-          </div>
-        </div>
-      )}
-
-      {!loading && (
-        <>
-      {/* ── Metrics ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Critical CVEs"     value={metrics.critical}  sub="CVSS ≥ 9.0"           color="#ef4444" icon="🔴" />
-        <MetricCard label="Actively Exploited" value={metrics.exploited} sub="In-the-wild attacks"  color="#f97316" icon="⚡" />
-        <MetricCard label="CISA KEV"           value={metrics.kev}      sub="Known exploited vulns" color="#f59e0b" icon="🏛️" />
-        <MetricCard label="Avg CVSS"           value={metrics.avgCvss}  sub="Portfolio risk score"  color="#8b5cf6" icon="📊" />
-      </div>
-
-      {/* ── Filters ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex-1 relative min-w-[200px]">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search CVE ID, product, vendor…"
-            className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder-white/20 font-mono focus:outline-none focus:border-orange-500/40"
-          />
-          {search && (
-            <button type="button" onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-            >✕</button>
-          )}
-        </div>
-        {[
-          { label: 'Exploited only', active: filterExploited, toggle: () => setFilterExploited((p) => !p), color: '#ef4444' },
-          { label: 'CISA KEV only',  active: filterKev,       toggle: () => setFilterKev((p) => !p),       color: '#f59e0b' },
-        ].map(({ label, active, toggle, color }) => (
+      <div className="space-y-5">
+        <PremiumPageHeader
+          title={t('vuln_intel.title')}
+          subtitle={t('vuln_intel.subtitle')}
+          badge={t('vuln_intel.live_badge')}
+          badgeColor="#f97316"
+          count={filtered.length}
+          countLabel={t('findings.title')}
+          lastUpdated={lastUpdated}
+          loading={loading}
+          onRefresh={() => load()}
+          refreshLabel={t('common.refresh')}
+        >
           <button
-            key={label} type="button" onClick={toggle}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all"
-            style={{
-              color: active ? color : 'rgba(255,255,255,0.35)',
-              borderColor: active ? `${color}40` : 'rgba(255,255,255,0.1)',
-              background: active ? `${color}10` : 'transparent',
-            }}
+            type="button"
+            onClick={() => setFiltersExpanded((v) => !v)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
           >
-            {label}
+            {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
           </button>
-        ))}
-        <span className="text-[10px] font-mono text-white/25">{filtered.length} CVEs</span>
-      </div>
+        </PremiumPageHeader>
 
-      <div className="grid lg:grid-cols-[380px_1fr] gap-6">
-        {/* ── Left: CVE list ───────────────────────────────────────────── */}
-        <div className="space-y-2 max-h-[78vh] overflow-y-auto pr-1">
-          {filtered.map((vuln) => (
-            <VulnCard key={vuln.id} vuln={vuln} selected={selectedId === vuln.id} onSelect={setSelectedId} />
-          ))}
-          {filtered.length === 0 && (
-            <div className="py-12 text-center text-white/25 text-xs font-mono">No CVEs match your filter.</div>
-          )}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <ExecutiveWidget
+            label={t('vuln_intel.critical')}
+            value={loading ? '—' : summary.by.critical.toLocaleString()}
+            accent="#ef4444"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.high')}
+            value={loading ? '—' : summary.by.high.toLocaleString()}
+            accent="#f97316"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.medium')}
+            value={loading ? '—' : summary.by.medium.toLocaleString()}
+            accent="#f59e0b"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.low')}
+            value={loading ? '—' : summary.by.low.toLocaleString()}
+            accent="#22d3ee"
+          />
+          <ExecutiveWidget
+            label={t('vuln_intel.distinct_cves')}
+            value={loading ? '—' : summary.cves.toLocaleString()}
+            hint={t('vuln_intel.distinct_cves_hint')}
+            accent="#a78bfa"
+            className="col-span-2 lg:col-span-1"
+          />
         </div>
 
-        {/* ── Right: CVE Detail ────────────────────────────────────────── */}
-        <AnimatePresence mode="wait">
-          {selected && (
-            <motion.div
-              key={selected.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 p-6 space-y-6 self-start"
-            >
-              {/* Header */}
-              <div>
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[10px] font-mono text-white/35">{selected.id}</span>
-                  {selected.kev && (
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-red-400 border-red-500/30 bg-red-950/30 uppercase tracking-widest">
-                      CISA KEV
-                    </span>
-                  )}
-                  <span
-                    className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
-                    style={{ color: em?.color, borderColor: `${em?.color}40`, background: `${em?.color}10` }}
-                  >
-                    {em?.label}
-                  </span>
-                  <span
-                    className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
-                    style={{ color: pm?.color, borderColor: `${pm?.color}40`, background: `${pm?.color}10` }}
-                  >
-                    {pm?.label}
-                  </span>
-                </div>
-                <h2 className="text-sm font-bold text-white mb-2">{selected.title}</h2>
-                <p className="text-xs text-white/50 leading-relaxed">{selected.description}</p>
-              </div>
+        {filtersExpanded && (
+          <div className="glass-panel rounded-2xl p-4 sm:p-5 space-y-4">
+            <FilterPills
+              label={t('findings.filter_severity')}
+              pills={[
+                {
+                  id: 'vuln-sev-all',
+                  label: t('vuln_intel.all_severities'),
+                  count: findings.length,
+                  active: severityFilter === 'all',
+                  color: '#94a3b8',
+                  onClick: () => setSeverityFilter('all'),
+                },
+                ...Object.entries(SEVERITY_META).map(([key, meta]) => ({
+                  id: `vuln-sev-${key}`,
+                  label: meta.label,
+                  count: summary.by[key] || 0,
+                  active: severityFilter === key,
+                  color: meta.color,
+                  onClick: () => setSeverityFilter(key),
+                })),
+              ]}
+            />
 
-              {/* Scores */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-black/30 border border-white/8 p-4">
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-2">CVSS v3.1 Base Score</div>
-                  <div className="flex items-center gap-3">
-                    <CvssGauge score={selected.cvss} />
-                    <div>
-                      <div className="text-xl font-bold font-mono" style={{ color: CVSS_COLOR(selected.cvss) }}>
-                        {selected.cvss.toFixed(1)}
-                      </div>
-                      <div className="text-[10px] font-mono text-white/30">
-                        {selected.cvss >= 9 ? 'Critical' : selected.cvss >= 7 ? 'High' : selected.cvss >= 4 ? 'Medium' : 'Low'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-black/30 border border-white/8 p-4">
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-2">EPSS Score (exploitation probability)</div>
-                  <EpssBar epss={selected.epss} />
-                  <div className="text-[10px] font-mono text-white/25 mt-2">
-                    {(selected.epss * 100).toFixed(1)}% chance of exploitation in 30 days
-                  </div>
-                </div>
-              </div>
+            <FilterPills
+              label={t('findings.filter_status')}
+              pills={[
+                {
+                  id: 'vuln-status-all',
+                  label: t('vuln_intel.all_statuses'),
+                  count: findings.length,
+                  active: !statusFilter,
+                  color: '#94a3b8',
+                  onClick: () => setStatusFilter(''),
+                },
+                ...Object.entries(STATUS_COLORS).map(([value, color]) => ({
+                  id: `vuln-status-${value}`,
+                  label: value.replace('_', ' '),
+                  count: statusCounts[value] || 0,
+                  active: statusFilter === value,
+                  color,
+                  onClick: () => setStatusFilter(statusFilter === value ? '' : value),
+                })),
+                {
+                  id: 'vuln-kev',
+                  label: t('vuln_intel.kev_only'),
+                  count: kevCount,
+                  active: kevFilter,
+                  color: '#f59e0b',
+                  onClick: () => setKevFilter((v) => !v),
+                },
+              ]}
+            />
 
-              {/* Meta grid */}
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Vendor',          value: selected.vendor },
-                  { label: 'Product',         value: selected.product },
-                  { label: 'Published',       value: selected.published },
-                  { label: 'CWE',             value: selected.cwe },
-                  { label: 'MITRE ATT&CK',    value: selected.mitre },
-                  { label: 'Patch Status',    value: pm?.label ?? selected.patchStatus },
-                ].map(({ label, value }) => (
-                  <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-0.5">{label}</div>
-                    <div className="text-xs font-semibold text-white/70">{value}</div>
-                  </div>
-                ))}
-              </div>
+            <div className="relative max-w-xl">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+                ⌕
+              </span>
+              <input
+                type="search"
+                placeholder={t('findings.search_placeholder')}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          </div>
+        )}
 
-              {/* Affected versions */}
-              <div className="rounded-xl bg-black/30 border border-white/8 p-4">
-                <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-2">Affected Versions</div>
-                <p className="text-xs font-mono text-amber-400/80">{selected.affectedVersions}</p>
-              </div>
+        {error ? (
+          <EmptyState
+            icon="alert"
+            title={t('vuln_intel.failed_title')}
+            body={error}
+            cta={{ label: t('common.retry'), onClick: load }}
+          />
+        ) : !loading && findings.length === 0 ? (
+          <EmptyState
+            icon="shield"
+            title={t('findings.no_findings_yet')}
+            body={t('findings.no_findings_body')}
+            cta={{ label: t('vuln_intel.empty_cta'), to: '/clients' }}
+          />
+        ) : !loading && filtered.length === 0 ? (
+          <EmptyState
+            icon="search-x"
+            title={t('vuln_intel.no_match_title')}
+            body={t('vuln_intel.no_match_body')}
+            cta={{ label: t('vuln_intel.empty_cta'), to: '/clients' }}
+          />
+        ) : (
+          <>
+            <DataTable
+              id="vuln-intel-table"
+              columns={columns}
+              data={tableData}
+              loading={loading}
+              onRowClick={(row) => setSelected(row.original)}
+              selectedRowId={selectedRowId}
+              getRowAccentColor={(row) => getSeverityMeta(row.severity).border}
+              emptyFilteredMessage={t('vuln_intel.no_match_title')}
+              zebra
+              stickyHeader
+            />
+            {!loading && filtered.length > 200 && (
+              <p className="text-[11px] font-mono text-white/35 text-center">
+                {t('vuln_intel.showing_first', { count: filtered.length })}
+              </p>
+            )}
+          </>
+        )}
 
-              {/* Risk priority indicator */}
-              <div className="rounded-xl bg-black/30 border border-white/8 p-4">
-                <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-2">Risk Priority Score</div>
-                <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                  <motion.div
-                    animate={{ width: `${Math.min(100, (selected.cvss / 10) * 70 + selected.epss * 30)}%` }}
-                    transition={{ duration: 0.7 }}
-                    className="h-full rounded-full"
-                    style={{ background: CVSS_COLOR(selected.cvss) }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[9px] font-mono text-white/25">Low</span>
-                  <span className="text-[9px] font-mono" style={{ color: CVSS_COLOR(selected.cvss) }}>
-                    {((selected.cvss / 10) * 70 + selected.epss * 30).toFixed(0)} / 100
-                  </span>
-                  <span className="text-[9px] font-mono text-white/25">Critical</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <p className="text-[10px] font-mono text-white/30 text-center">
+          {t('findings.shown_of_total', { shown: filtered.length, total })}
+        </p>
       </div>
-      </>
-      )}
+
+      <FindingDrawer finding={selected} onClose={() => setSelected(null)} />
     </PageShell>
   )
 }

@@ -10,7 +10,9 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
             false
         }
     };
-    let scanning = crate::orchestrator::is_scanning_active();
+    let scanning_enabled = crate::orchestrator::is_scanning_active();
+    let scan_in_progress = crate::orchestrator::scan_in_progress();
+    let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
     let mut engines: Vec<String> = vec![];
     let mut safe_mode = false;
     if postgres_ok {
@@ -44,7 +46,12 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "ok": true,
         "uptime_secs": uptime_secs,
         "postgres_ok": postgres_ok,
-        "scanning_active": scanning,
+        // Kept for back-compat with older clients that only check `scanning_active`.
+        "scanning_active": scanning_enabled,
+        // Source of truth: operator toggle vs. actual concurrent work.
+        "scanning_enabled": scanning_enabled,
+        "scan_in_progress": scan_in_progress,
+        "active_tenant_cycles": active_tenant_cycles,
         "active_engines": engines,
         "global_safe_mode": safe_mode,
         "process_rss_kb": rss_kb,
@@ -55,11 +62,36 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
 
 #[cfg(target_os = "linux")]
 fn resident_set_kb() -> Option<u64> {
+    // Cache the last sampled value for 5 seconds. /proc/self/statm is tiny, but /api/health
+    // is hammered by Docker / k8s probes (every 5–15s) plus uptime monitors. A blocking
+    // sync read on every request adds avoidable jitter to the async runtime's poll loop
+    // and shows up as latency on the rest of the request handlers sharing that worker.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Instant, Duration};
+    use std::sync::OnceLock;
+
+    static CACHE_VAL: AtomicU64 = AtomicU64::new(0);
+    static CACHE_AT:  OnceLock<std::sync::Mutex<Option<Instant>>> = OnceLock::new();
+    let lock = CACHE_AT.get_or_init(|| std::sync::Mutex::new(None));
+
+    if let Ok(guard) = lock.lock() {
+        if let Some(when) = *guard {
+            if when.elapsed() < Duration::from_secs(5) {
+                let v = CACHE_VAL.load(Ordering::Relaxed);
+                if v > 0 { return Some(v); }
+            }
+        }
+    }
     let s = std::fs::read_to_string("/proc/self/statm").ok()?;
     let mut it = s.split_whitespace();
     let _vsize = it.next()?;
     let resident_pages: u64 = it.next()?.parse().ok()?;
-    Some(resident_pages.saturating_mul(4096) / 1024)
+    let kb = resident_pages.saturating_mul(4096) / 1024;
+    CACHE_VAL.store(kb, Ordering::Relaxed);
+    if let Ok(mut guard) = lock.lock() {
+        *guard = Some(Instant::now());
+    }
+    Some(kb)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -67,14 +99,102 @@ fn resident_set_kb() -> Option<u64> {
     None
 }
 
-async fn api_audit_logs(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+async fn api_audit_logs(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Server-side pagination + optional action / actor filter so the UI doesn't pull 500 rows.
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 1000);
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let action_filter: Option<String> = q
+        .get("action")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let actor_filter: Option<String> = q
+        .get("actor")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "entries": [], "total": 0})),
+        )
+            .into_response();
     };
-    let rows: Vec<serde_json::Value> =
-        audit_log::list_recent(&mut tx, 500).await.unwrap_or_default();
+
+    let rows = sqlx::query(
+        r#"SELECT id,
+                  actor_user_id,
+                  COALESCE(user_label, '')  AS user_label,
+                  COALESCE(action_type, '') AS action_type,
+                  COALESCE(details, '')     AS details,
+                  COALESCE(ip_address, '')  AS ip_address,
+                  created_at
+             FROM audit_logs
+            WHERE tenant_id = $5
+              AND ($3::text IS NULL OR action_type ILIKE '%' || $3::text || '%')
+              AND ($4::text IS NULL OR user_label  ILIKE '%' || $4::text || '%')
+            ORDER BY id DESC
+            LIMIT $1 OFFSET $2"#,
+    )
+    .bind(limit)
+    .bind(offset)
+    .bind(action_filter.as_deref())
+    .bind(actor_filter.as_deref())
+    .bind(auth.tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let total: i64 = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*)::bigint FROM audit_logs
+           WHERE tenant_id = $3
+             AND ($1::text IS NULL OR action_type ILIKE '%' || $1::text || '%')
+             AND ($2::text IS NULL OR user_label  ILIKE '%' || $2::text || '%')"#,
+    )
+    .bind(action_filter.as_deref())
+    .bind(actor_filter.as_deref())
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
     let _ = tx.commit().await;
-    (StatusCode::OK, Json(Value::Array(rows))).into_response()
+
+    let entries: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<i64, _>("id").unwrap_or(0),
+                "user_id": r.try_get::<Option<i64>, _>("actor_user_id").ok().flatten(),
+                "actor_email": r.try_get::<String, _>("user_label").unwrap_or_default(),
+                "action": r.try_get::<String, _>("action_type").unwrap_or_default(),
+                "details": r.try_get::<String, _>("details").unwrap_or_default(),
+                "client_ip": r.try_get::<String, _>("ip_address").unwrap_or_default(),
+                "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
+            })
+        })
+        .collect();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "entries": entries,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        })),
+    )
+        .into_response()
 }
 
 async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
@@ -165,7 +285,15 @@ async fn api_system_backup(
 
 async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(Value::Array(vec![]))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "ok": false,
+                "detail": "Database unavailable. Retry shortly.",
+                "code": "db_unavailable",
+            })),
+        )
+            .into_response();
     };
     let rows = sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
@@ -200,6 +328,218 @@ async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): E
     (StatusCode::OK, Json(Value::Array(out))).into_response()
 }
 
+/// POST /api/clients/:id/scan/run-all — queue the curated baseline engine bundle against the
+/// client's domains. Uses `command_center_engine` jobs so the new `findings_persist` path
+/// surfaces results in the Findings Command Center end-to-end. Returns the list of queued
+/// job ids so the UI can link the customer to the Jobs Dashboard.
+async fn api_clients_scan_run_all(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    trace_ext: Option<Extension<crate::request_trace::TraceId>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+
+    // Resolve the client's authorized domains.
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "code": "db_unavailable"})),
+        )
+            .into_response();
+    };
+    let row = sqlx::query(
+        "SELECT domains FROM clients WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let domains_raw: String = match row {
+        Some(r) => r.try_get::<String, _>("domains").unwrap_or_default(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "detail": "Client not found"})),
+            )
+                .into_response();
+        }
+    };
+    let domains: Vec<String> = serde_json::from_str::<Vec<String>>(&domains_raw)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if domains.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "code": "no_domains",
+                "detail": "Add at least one authorized domain to this client before running scans.",
+            })),
+        )
+            .into_response();
+    }
+
+    // Curated baseline bundle that produces customer-actionable findings without burning
+    // the AI-heavy quota. Engines are gated by `is_production_engine_id` in the worker.
+    let baseline_engines: &[&str] = &[
+        "osint",
+        "asm",
+        "leak_hunter",
+        "discovery_engine",
+        "supply_chain",
+        "bola_idor",
+        "pki_tls",
+        "waf_bypass",
+        "liminal_boundary",
+    ];
+
+    let ip = extract_client_ip(&headers, addr);
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &u,
+            "scan_run_all_initiated",
+            &format!("client_id={id} engines={baseline:?}", id = id, baseline = baseline_engines),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    let mut queued: Vec<Value> = Vec::new();
+    for domain in &domains {
+        let target = if domain.starts_with("http://") || domain.starts_with("https://") {
+            domain.clone()
+        } else {
+            format!("http://{}", domain)
+        };
+        for engine in baseline_engines {
+            let payload = json!({
+                "engine": engine,
+                "target": target,
+                "client_id": id,
+            });
+            match crate::async_jobs::enqueue(
+                state.app_pool.as_ref(),
+                auth.tenant_id,
+                "command_center_engine",
+                payload,
+                trace_ext.as_ref().map(|Extension(t)| t.0.clone()),
+            )
+            .await
+            {
+                Ok(job_id) => {
+                    queued.push(json!({
+                        "engine": engine,
+                        "target": target,
+                        "job_id": job_id.to_string(),
+                        "status_url": format!("/api/jobs/{}", job_id),
+                    }));
+                }
+                Err(e) => {
+                    tracing::error!(
+                        target: "async_jobs",
+                        engine = %engine,
+                        target = %target,
+                        error = %e,
+                        "enqueue baseline scan job failed"
+                    );
+                }
+            }
+        }
+    }
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "ok": true,
+            "client_id": id,
+            "domains_count": domains.len(),
+            "jobs_queued": queued.len(),
+            "engines": baseline_engines,
+            "jobs": queued,
+            "message": format!(
+                "Queued {n} baseline scan jobs across {d} domain(s). Track progress at /api/jobs/<id> or in the Jobs Dashboard.",
+                n = queued.len(),
+                d = domains.len()
+            ),
+        })),
+    )
+        .into_response()
+}
+
+/// GET /api/clients/:id — single-client lookup. The frontend `ClientDetail` page calls this
+/// directly; before this handler existed the route only had POST/DELETE, returning 405 and
+/// rendering "Failed to load client:" for every customer.
+async fn api_clients_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly.", "code": "db_unavailable"})),
+        )
+            .into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT id, name, domains, tech_stack, ip_ranges,
+            COALESCE(contact_email,'') AS contact_email,
+            COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
+            COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
+            COALESCE(aws_external_id,'') AS aws_external_id,
+            COALESCE(gcp_project_id,'') AS gcp_project_id
+           FROM clients WHERE id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "Client not found", "code": "not_found"})),
+        )
+            .into_response();
+    };
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "id": r.try_get::<i64,_>("id").ok(),
+            "name": r.try_get::<String,_>("name").ok(),
+            "domains": r.try_get::<String,_>("domains").ok(),
+            "tech_stack": r.try_get::<String,_>("tech_stack").ok(),
+            "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
+            "contact_email": r.try_get::<String,_>("contact_email").ok(),
+            "auto_detect_tech_stack": r.try_get::<bool,_>("auto_detect_tech_stack").ok(),
+            "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
+            "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
+            "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+        })),
+    )
+        .into_response()
+}
+
 async fn api_clients_create(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -207,6 +547,9 @@ async fn api_clients_create(
     headers: HeaderMap,
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+        return r;
+    }
     let name = body.name.as_deref().unwrap_or("").trim();
     if name.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": "name required"}))).into_response();
@@ -257,9 +600,16 @@ async fn api_clients_create(
     {
         Ok(i) => i,
         Err(e) => {
-            eprintln!("[Weissman][API] Client create failed: {}", e);
+            tracing::error!(target: "api_clients", error = %e, name = %name, "client create failed");
             let _ = tx.rollback().await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "ok": false,
+                    "detail": format!("Database error while creating client: {e}"),
+                })),
+            )
+                .into_response();
         }
     };
     let ip = extract_client_ip(&headers, addr);
@@ -287,8 +637,15 @@ async fn api_clients_update(
     axum::extract::Path(id): axum::extract::Path<i64>,
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly."})),
+        )
+            .into_response();
     };
     let row = sqlx::query(
         r#"SELECT name,
@@ -405,8 +762,15 @@ async fn api_clients_delete(
     headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::ADMIN) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable. Retry shortly."})),
+        )
+            .into_response();
     };
     let row = sqlx::query("SELECT name FROM clients WHERE id = $1")
         .bind(id)
@@ -514,10 +878,116 @@ async fn api_client_config_patch(
             Value::Array(engines.iter().map(|s| Value::String(s.clone())).collect()),
         );
     }
-    if let Some(ref roe) = body.roe_mode {
-        let roe = roe.trim();
-        if roe == "safe_proofs" || roe == "weaponized_god_mode" {
-            config.insert("roe_mode".to_string(), Value::String(roe.to_string()));
+    if let Some(ref roe_raw) = body.roe_mode {
+        let roe = roe_raw.trim();
+        if roe == "safe_proofs" {
+            config.insert("roe_mode".to_string(), Value::String("safe_proofs".to_string()));
+        } else if roe == "weaponized_god_mode" {
+            // Governance: weaponized ROE requires explicit approval trail, unless the server
+            // is configured with a confirm secret and caller provides a matching header.
+            let confirm_secret =
+                std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
+            let header_bypass = !confirm_secret.trim().is_empty()
+                && crate::security_hardening::destructive_action_authorized(&headers);
+
+            if old_roe == "weaponized_god_mode" || header_bypass {
+                config.insert(
+                    "roe_mode".to_string(),
+                    Value::String("weaponized_god_mode".to_string()),
+                );
+            } else {
+                // Check for an existing approved request (2 distinct approvals) or create a pending one.
+                let row = sqlx::query(
+                    r#"SELECT id, status, expires_at, first_approved_by_user_id, second_approved_by_user_id
+                       FROM roe_override_requests
+                       WHERE client_id = $1
+                         AND status IN ('pending','approved')
+                         AND expires_at > now()
+                       ORDER BY requested_at DESC
+                       LIMIT 1
+                       FOR UPDATE"#,
+                )
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(r) = row {
+                    let req_id: i64 = r.try_get("id").unwrap_or(0);
+                    let status: String =
+                        r.try_get("status").unwrap_or_else(|_| "pending".to_string());
+                    let first: Option<i64> = r.try_get("first_approved_by_user_id").ok().flatten();
+                    let second: Option<i64> =
+                        r.try_get("second_approved_by_user_id").ok().flatten();
+                    if status == "approved" && first.is_some() && second.is_some() {
+                        let _ = sqlx::query(
+                            "UPDATE roe_override_requests SET status = 'applied', applied_by_user_id = $1, applied_at = now(), updated_at = now() WHERE id = $2",
+                        )
+                        .bind(auth.user_id)
+                        .bind(req_id)
+                        .execute(&mut *tx)
+                        .await;
+                        config.insert(
+                            "roe_mode".to_string(),
+                            Value::String("weaponized_god_mode".to_string()),
+                        );
+                    } else {
+                        let _ = tx.commit().await;
+                        return (
+                            StatusCode::CONFLICT,
+                            Json(json!({
+                                "ok": false,
+                                "error_code": "roe_approval_required",
+                                "request_id": req_id,
+                                "detail": "Weaponized ROE requires 2 distinct admin approvals. Request is pending.",
+                                "approvals_needed": 2,
+                                "approvals_have": (first.is_some() as i32) + (second.is_some() as i32),
+                                "admin_url": "/roe-approvals"
+                            })),
+                        )
+                            .into_response();
+                    }
+                } else {
+                    let created: Option<(i64,)> = sqlx::query_as(
+                        r#"INSERT INTO roe_override_requests (tenant_id, client_id, desired_roe_mode, status, requested_by_user_id)
+                           VALUES ($1, $2, 'weaponized_god_mode', 'pending', $3)
+                           RETURNING id"#,
+                    )
+                    .bind(auth.tenant_id)
+                    .bind(id)
+                    .bind(auth.user_id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .ok()
+                    .flatten();
+                    let req_id = created.map(|(x,)| x).unwrap_or(0);
+                    let _ = audit_log::insert_audit(
+                        &mut tx,
+                        auth.tenant_id,
+                        Some(auth.user_id),
+                        &actor,
+                        "roe_override_request_created",
+                        &format!("client_id={} request_id={}", id, req_id),
+                        &ip,
+                    )
+                    .await;
+                    let _ = tx.commit().await;
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(json!({
+                            "ok": false,
+                            "error_code": "roe_approval_required",
+                            "request_id": req_id,
+                            "detail": "Weaponized ROE requires 2 distinct admin approvals. A request was created.",
+                            "approvals_needed": 2,
+                            "approvals_have": 0,
+                            "admin_url": "/roe-approvals"
+                        })),
+                    )
+                        .into_response();
+                }
+            }
         }
     }
     if let Some(level) = body.stealth_level {
@@ -595,6 +1065,7 @@ async fn api_client_config_patch(
     (StatusCode::OK, Json(json!({"ok": true, "config": new_json}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_start(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -611,6 +1082,7 @@ async fn api_scan_start(
     (StatusCode::OK, Json(json!({"ok": true, "message": "Continuous scanning started"}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_stop(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -627,11 +1099,13 @@ async fn api_scan_stop(
     (StatusCode::OK, Json(json!({"ok": true, "message": "Scanning stopped"}))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_status() -> Response {
     let active = crate::orchestrator::is_scanning_active();
     (StatusCode::OK, Json(json!({ "scanning_active": active }))).into_response()
 }
 
+#[allow(dead_code)]
 async fn api_scan_run_all(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -701,6 +1175,9 @@ async fn api_scan(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<Value>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
     let engine = body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
     let target = body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
     let ip = extract_client_ip(&headers, addr);
@@ -715,11 +1192,23 @@ async fn api_scan(
         {
             Ok(x) => x,
             Err(e) => {
-                return (
-                    e.status_code(),
-                    Json(json!({"detail": e.detail(), "code": e.error_code()})),
-                )
-                    .into_response();
+                let mut body_json = json!({"detail": e.detail(), "code": e.error_code()});
+                let mut response_headers = axum::http::HeaderMap::new();
+                if let Some((reset_at, limit, used)) = e.quota_metadata() {
+                    let retry_after = (reset_at - chrono::Utc::now().timestamp()).max(1);
+                    if let Some(obj) = body_json.as_object_mut() {
+                        obj.insert("reset_at_unix".into(), json!(reset_at));
+                        obj.insert("limit".into(), json!(limit));
+                        obj.insert("used".into(), json!(used));
+                        obj.insert("retry_after_seconds".into(), json!(retry_after));
+                    }
+                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after.to_string()) {
+                        response_headers.insert("Retry-After", v);
+                    }
+                }
+                let mut resp = (e.status_code(), Json(body_json)).into_response();
+                resp.headers_mut().extend(response_headers);
+                return resp;
             }
         };
     if let Some(t) = body
@@ -768,6 +1257,7 @@ async fn api_scan(
     }
 }
 
+#[allow(dead_code)]
 async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
@@ -777,6 +1267,7 @@ async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> 
     })
 }
 
+#[allow(dead_code)]
 async fn ws_ai_redteam(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
@@ -795,10 +1286,29 @@ async fn ws_threat_intel(ws: WebSocketUpgrade, State(state): State<Arc<AppState>
     })
 }
 
-async fn api_telemetry_stream(State(state): State<Arc<AppState>>) -> Response {
+async fn api_telemetry_stream(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Optional `job_id` query param scopes the stream so each client only sees its own job.
+    // Without a filter the SSE was leaking every tenant's telemetry to every connection.
+    let want_job: Option<String> = q
+        .get("job_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     let mut rx = state.telemetry_broadcast_tx.subscribe();
     let event_stream = stream! {
         while let Ok(payload) = rx.recv().await {
+            if let Some(want) = want_job.as_deref() {
+                let matches = serde_json::from_str::<serde_json::Value>(&payload)
+                    .ok()
+                    .and_then(|v| v.get("job_id").and_then(|x| x.as_str()).map(|s| s.to_string()))
+                    .map(|jid| jid == want)
+                    .unwrap_or_else(|| payload.contains(want));
+                if !matches {
+                    continue;
+                }
+            }
             yield Ok::<Event, Infallible>(Event::default().data(payload));
         }
     };
@@ -909,12 +1419,14 @@ async fn api_dag_get() -> Response {
 // ── Auto Domain Discovery ─────────────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct DomainDiscoveryRequest {
     target: String,
     #[serde(default)]
     company_name: Option<String>,
 }
 
+#[allow(dead_code)]
 async fn api_discovery_domains(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -971,6 +1483,7 @@ async fn api_discovery_domains(
 // ── Scan All Engines for Client ───────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct ScanAllEnginesRequest {
     client_id: i64,
     #[serde(default)]
@@ -979,6 +1492,7 @@ struct ScanAllEnginesRequest {
     engines: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 async fn api_scan_all_engines(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1107,6 +1621,7 @@ async fn api_scan_all_engines(
 // ── Scan All Discovered Domains ───────────────────────────────────────────────
 
 #[derive(Debug, serde::Deserialize)]
+#[allow(dead_code)]
 struct ScanDomainsRequest {
     client_id: i64,
     domains: Vec<String>,
@@ -1114,6 +1629,7 @@ struct ScanDomainsRequest {
     engines: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 async fn api_scan_discovered_domains(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

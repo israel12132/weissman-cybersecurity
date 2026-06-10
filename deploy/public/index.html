@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Weissman Cybersecurity — Continuous offensive security for SOC teams</title>
+  <meta name="description" content="Weissman runs 253 production-grade offensive engines continuously against your attack surface — real probes, real findings, MITRE-mapped, auto-remediated via signed PRs." />
+
+  <!-- Open Graph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="Weissman Cybersecurity" />
+  <meta property="og:title"       content="Continuous offensive security, never simulated" />
+  <meta property="og:description" content="253 real probes, MITRE-mapped findings, auto-PR remediation, multi-tenant SaaS or self-hosted. Built for SOC teams that demand evidence." />
+  <meta property="og:image"       content="/og-cover.svg" />
+  <meta property="og:url"         content="/" />
+  <meta name="twitter:card"       content="summary_large_image" />
+  <meta name="twitter:title"      content="Weissman Cybersecurity" />
+  <meta name="twitter:description" content="Real probes. Real findings. Auto-remediation. For SOC teams." />
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="canonical" href="/" />
+  <meta name="robots" content="index,follow" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:#020617;color:#e2e8f0;font-family:'JetBrains Mono',ui-monospace,monospace;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh}
+    a{color:inherit;text-decoration:none}
+    .container{max-width:1200px;margin:0 auto;padding:0 1.25rem}
+    /* Nav */
+    nav{position:sticky;top:0;backdrop-filter:blur(12px);background:rgba(2,6,23,0.7);border-bottom:1px solid rgba(255,255,255,0.06);z-index:50}
+    .nav-inner{display:flex;align-items:center;justify-content:space-between;padding:.9rem 0}
+    .nav-links{display:flex;gap:1.5rem;align-items:center;font-size:.85rem;color:#94a3b8}
+    .nav-links a:hover{color:#22d3ee}
+    .cta{padding:.55rem 1.1rem;border-radius:.5rem;background:#22d3ee;color:#020617;font-weight:700;font-family:inherit;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;border:none;cursor:pointer;transition:transform .12s}
+    .cta:hover{transform:translateY(-1px)}
+    .cta-ghost{padding:.55rem 1.1rem;border-radius:.5rem;border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;font-weight:600;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em}
+    .cta-ghost:hover{border-color:#22d3ee;color:#22d3ee}
+    /* Hero */
+    .hero{padding:7rem 0 5rem;background:radial-gradient(ellipse 120% 80% at 50% 0%,#0f172a 0%,#020617 65%,#000 100%);text-align:center;position:relative;overflow:hidden}
+    .hero::before{content:"";position:absolute;inset:0;background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='1' cy='1' r='1' fill='%2322d3ee' opacity='0.06'/></svg>");opacity:.6;pointer-events:none}
+    .pill{display:inline-block;padding:.4rem .9rem;border:1px solid rgba(34,211,238,0.3);background:rgba(34,211,238,0.07);color:#22d3ee;font-size:.7rem;text-transform:uppercase;letter-spacing:.18em;border-radius:99px;margin-bottom:1.75rem}
+    h1{font-family:'Orbitron',sans-serif;font-weight:800;font-size:clamp(2rem,5vw,3.75rem);line-height:1.1;margin:0 0 1.25rem;color:#fff;letter-spacing:-0.01em}
+    h1 .accent{background:linear-gradient(135deg,#22d3ee,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{font-size:clamp(1rem,1.6vw,1.2rem);color:#94a3b8;max-width:760px;margin:0 auto 2.5rem;line-height:1.65}
+    .hero-cta{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-bottom:1rem}
+    .hero-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1.5rem;max-width:760px;margin:3.5rem auto 0;text-align:center}
+    .stat-num{font-family:'Orbitron',sans-serif;font-size:2rem;color:#22d3ee;font-weight:800}
+    .stat-label{font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.15em;margin-top:.25rem}
+    /* Sections */
+    section{padding:5rem 0;border-top:1px solid rgba(255,255,255,0.04)}
+    .section-eyebrow{font-size:.7rem;color:#22d3ee;text-transform:uppercase;letter-spacing:.2em;font-weight:600;margin-bottom:.6rem}
+    .section-h{font-family:'Orbitron',sans-serif;font-size:clamp(1.5rem,3vw,2.25rem);color:#fff;margin:0 0 1rem;font-weight:700}
+    .section-sub{color:#94a3b8;max-width:680px;margin:0 0 3rem;font-size:1rem}
+    /* Feature grid */
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem}
+    .card{background:linear-gradient(180deg,rgba(15,23,42,0.6),rgba(2,6,23,0.4));border:1px solid rgba(255,255,255,0.06);border-radius:1rem;padding:1.5rem;transition:border-color .2s,transform .12s}
+    .card:hover{border-color:rgba(34,211,238,0.3);transform:translateY(-2px)}
+    .card-icon{width:36px;height:36px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.3);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:1.1rem;margin-bottom:1rem;color:#22d3ee}
+    .card h3{font-size:1rem;color:#fff;margin:0 0 .5rem;font-weight:600}
+    .card p{font-size:.85rem;color:#94a3b8;margin:0;line-height:1.6}
+    /* Pricing */
+    .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;max-width:1080px;margin:0 auto}
+    .price-card{background:linear-gradient(180deg,rgba(15,23,42,0.7),rgba(2,6,23,0.4));border:1px solid rgba(255,255,255,0.08);border-radius:1rem;padding:2rem;display:flex;flex-direction:column}
+    .price-card.featured{border-color:rgba(34,211,238,0.4);box-shadow:0 0 0 1px rgba(34,211,238,0.2),0 8px 30px rgba(34,211,238,0.15)}
+    .price-tier{font-size:.7rem;color:#22d3ee;text-transform:uppercase;letter-spacing:.2em;font-weight:700;margin-bottom:.5rem}
+    .price-name{font-family:'Orbitron',sans-serif;font-size:1.6rem;color:#fff;margin:0 0 .5rem}
+    .price-amount{font-size:2.25rem;color:#fff;font-weight:700;margin:1rem 0 .25rem}
+    .price-amount .unit{font-size:.85rem;color:#64748b;font-weight:400}
+    .price-list{list-style:none;padding:0;margin:1.25rem 0;flex:1}
+    .price-list li{padding:.5rem 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.85rem;color:#94a3b8}
+    .price-list li::before{content:"✓ ";color:#22d3ee;margin-right:.35rem;font-weight:700}
+    /* Trust strip */
+    .trust{padding:3.5rem 0;text-align:center;border-top:1px solid rgba(255,255,255,0.04)}
+    .trust-row{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;color:#475569;font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:1.25rem}
+    .trust-row span{padding:.5rem 1rem;border:1px solid rgba(255,255,255,0.06);border-radius:.5rem}
+    /* Footer */
+    footer{padding:3rem 0 2rem;border-top:1px solid rgba(255,255,255,0.04);font-size:.8rem;color:#64748b}
+    .footer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:2rem;margin-bottom:2rem}
+    .footer-grid h4{font-size:.7rem;color:#e2e8f0;text-transform:uppercase;letter-spacing:.15em;margin:0 0 .75rem;font-weight:700}
+    .footer-grid a{display:block;padding:.25rem 0;color:#94a3b8;font-size:.85rem}
+    .footer-grid a:hover{color:#22d3ee}
+    .footer-bottom{padding-top:1.5rem;border-top:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
+    /* Cookie banner */
+    #cookie-banner{position:fixed;bottom:1rem;left:1rem;right:1rem;max-width:800px;margin:0 auto;background:#0b1120;border:1px solid rgba(34,211,238,0.3);border-radius:.75rem;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:.85rem;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.5);flex-wrap:wrap}
+    #cookie-banner.hidden{display:none}
+    #cookie-banner p{margin:0;color:#cbd5e1;flex:1;min-width:220px}
+    #cookie-banner a{color:#22d3ee;text-decoration:underline}
+    @media (max-width:640px){.hero{padding:5rem 0 3rem}.nav-links{gap:1rem;font-size:.75rem}}
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container nav-inner">
+      <a href="/" aria-label="Weissman home">
+        <svg width="190" height="36" viewBox="0 0 240 64" xmlns="http://www.w3.org/2000/svg" fill="none" role="img" aria-label="Weissman Cybersecurity">
+          <defs>
+            <linearGradient id="wg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#0ea5e9"/>
+            </linearGradient>
+            <linearGradient id="wt" x1="80" y1="0" x2="240" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#e2e8f0"/><stop offset="1" stop-color="#94a3b8"/>
+            </linearGradient>
+          </defs>
+          <path d="M32 6 L56 14 V32 C56 46 32 58 32 58 C32 58 8 46 8 32 V14 Z" fill="url(#wg)" stroke="#0e7490" stroke-width="1.5"/>
+          <path d="M18 28 L26 40 L34 22 L42 40 L50 24" stroke="#020617" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <text x="78" y="36" font-family="'Orbitron','Rajdhani',sans-serif" font-weight="700" font-size="22" letter-spacing="2.5" fill="url(#wt)">WEISSMAN</text>
+          <text x="78" y="52" font-family="'JetBrains Mono',monospace" font-size="10" letter-spacing="3" fill="#22d3ee" opacity="0.85">CYBERSECURITY</text>
+        </svg>
+      </a>
+      <div class="nav-links">
+        <a href="#engines">Engines</a>
+        <a href="#how">How it works</a>
+        <a href="/pricing.html">Pricing</a>
+        <a href="/api/docs/" target="_blank" rel="noopener">API</a>
+        <a href="/status">Status</a>
+        <a href="/command-center/login" class="cta-ghost">Sign in</a>
+        <a href="/command-center/login" class="cta">Start free trial</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <span class="pill">253 production engines · zero simulation</span>
+      <h1>Offensive security that <span class="accent">never bluffs</span>.</h1>
+      <p class="lead">Weissman continuously probes your real attack surface with 253 production-grade engines — every finding mapped to MITRE ATT&amp;CK, scored with CVSS + EPSS + CISA KEV, and remediated through signed pull requests that are verified in an ephemeral sandbox <strong>before</strong> a single line of code ships.</p>
+      <div class="hero-cta">
+        <a href="/command-center/login" class="cta">Start free trial →</a>
+        <a href="mailto:sales@weissman.io?subject=Weissman%20Demo%20Request" class="cta-ghost">Book a demo</a>
+      </div>
+      <div class="hero-stats">
+        <div><div class="stat-num">253</div><div class="stat-label">Real engines</div></div>
+        <div><div class="stat-num">14</div><div class="stat-label">Agent detections</div></div>
+        <div><div class="stat-num">192</div><div class="stat-label">API endpoints</div></div>
+        <div><div class="stat-num">RLS</div><div class="stat-label">Per-tenant</div></div>
+      </div>
+    </div>
+  </header>
+
+  <section id="engines">
+    <div class="container">
+      <div class="section-eyebrow">What it does</div>
+      <h2 class="section-h">One platform. Every layer of your attack surface.</h2>
+      <p class="section-sub">From subdomain takeover to OT/ICS protocol probing, from leaked secrets on GitHub to live LLM jailbreak attempts — all from the same console, every finding stitched into one risk graph.</p>
+      <div class="grid">
+        <div class="card"><div class="card-icon">⊕</div><h3>Web &amp; API</h3><p>XSS, SQLi, SSRF, IDOR/BOLA, prototype pollution, GraphQL introspection, RFI, padding-oracle, cache poisoning — real probes against your live services.</p></div>
+        <div class="card"><div class="card-icon">☁</div><h3>Cloud &amp; Kubernetes</h3><p>AWS / Azure / GCP misconfiguration, IAM shadow-admin paths, serverless cold-path attacks, K8s admission-control bypass, container-registry signing audits.</p></div>
+        <div class="card"><div class="card-icon">⛓</div><h3>Supply chain</h3><p>SBOM diffing, leaked secrets across GitHub/GitLab/PyPI/npm, typosquatting monitor, CI/CD pipeline poisoning, signed-PR verification before merge.</p></div>
+        <div class="card"><div class="card-icon">⚡</div><h3>OT / ICS</h3><p>Real protocol handshakes — Modbus, DNP3, EtherNet/IP, IEC 61850, S7 ISO-on-TCP. No port-scan-only fingerprints; we send the actual frames.</p></div>
+        <div class="card"><div class="card-icon">🧠</div><h3>AI / LLM redteam</h3><p>Jailbreak chains, prompt injection, model-inversion, RAG poisoning, plugin attack surfaces — for both your customer-facing LLMs and your internal agents.</p></div>
+        <div class="card"><div class="card-icon">📡</div><h3>Endpoint agent</h3><p>Lightweight binary for Windows / Linux / macOS. 14 local detections: process hollowing, ARP spoof, USB enum, EDR presence, log integrity, scheduled task tamper.</p></div>
+        <div class="card"><div class="card-icon">⚙</div><h3>Auto-remediation</h3><p>For confirmed vulnerabilities Weissman opens a signed PR with the fix, verifies it in a throwaway Docker, and only then merges. No silent edits.</p></div>
+        <div class="card"><div class="card-icon">🛡</div><h3>Multi-tenant SaaS or self-hosted</h3><p>PostgreSQL Row-Level Security everywhere. Same binary runs on your laptop, in your VPC, or in our cloud. No upgrade tax.</p></div>
+        <div class="card"><div class="card-icon">🌍</div><h3>i18n + RTL ready</h3><p>UI ships with English &amp; Hebrew today, full RTL layout, all strings extracted — adding French / German / Japanese is one JSON file each.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="container">
+      <div class="section-eyebrow">How it works</div>
+      <h2 class="section-h">Four steps. Zero ceremony.</h2>
+      <div class="grid">
+        <div class="card"><div class="card-icon">1</div><h3>Onboard a target</h3><p>Add a client + scope (domains, IP ranges, AWS role ARN). Scan-scope enforcement blocks any out-of-bounds probe automatically.</p></div>
+        <div class="card"><div class="card-icon">2</div><h3>Continuous scanning</h3><p>Orchestrator runs configured engines on a tenant-defined cadence. Findings are deduplicated by stable signature, re-firings bump <code>seen_count</code>.</p></div>
+        <div class="card"><div class="card-icon">3</div><h3>Triage &amp; verify</h3><p>Drawer with full evidence, MITRE link, CVE link, remediation steps, compliance impact (ISO27001 / SOC2 / PCI). Mark FP → engine learns.</p></div>
+        <div class="card"><div class="card-icon">4</div><h3>Auto-fix or alert</h3><p>Critical + verified findings open a PR (or fire a Slack/Teams webhook + SMTP). Patch is sandbox-verified before merge.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust">
+    <div class="container">
+      <div class="section-eyebrow">Trust the platform that hunts you</div>
+      <p class="section-sub" style="margin:0 auto">Weissman runs its own engines against itself, every cycle. The same auto-PR loop fixes <em>our</em> code too.</p>
+      <div class="trust-row">
+        <span>RLS Per-Tenant</span>
+        <span>JWT + TOTP MFA</span>
+        <span>ISO27001 Aligned</span>
+        <span>SOC2 Controls Ready</span>
+        <span>GDPR / DPA</span>
+        <span>Signed PRs</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <h4>Product</h4>
+          <a href="#engines">Engines</a>
+          <a href="#how">How it works</a>
+          <a href="/pricing.html">Pricing</a>
+          <a href="/command-center/login">Sign in</a>
+          <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <a href="mailto:sales@weissman.io">Contact sales</a>
+          <a href="mailto:security@weissman.io">Security contact</a>
+          <a href="/status">System status</a>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <a href="/terms.html">Terms of Service</a>
+          <a href="/privacy.html">Privacy Policy</a>
+          <a href="/dpa.html">Data Processing Addendum</a>
+          <a href="/security-policy.html">Responsible Disclosure</a>
+        </div>
+        <div>
+          <h4>Resources</h4>
+          <a href="/.well-known/security.txt">security.txt</a>
+          <a href="/sitemap.xml">Sitemap</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="year"></span> Weissman Cybersecurity. All rights reserved.</span>
+        <span>v1.0 · Built in Tel Aviv 🇮🇱</span>
+      </div>
+    </div>
+  </footer>
+
+  <div id="cookie-banner" class="hidden" role="alert" aria-live="polite">
+    <p>We use functional cookies only — never tracking pixels. By using Weissman you accept our <a href="/privacy.html">Privacy Policy</a>.</p>
+    <button type="button" id="cookie-ok" class="cta" style="font-size:.7rem;padding:.45rem 1rem">Accept</button>
+  </div>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear()
+    // Cookie banner — show once, store consent for 1 year.
+    (function () {
+      var key = 'weissman_cookie_consent_v1'
+      try {
+        if (!localStorage.getItem(key)) {
+          document.getElementById('cookie-banner').classList.remove('hidden')
+        }
+        document.getElementById('cookie-ok').addEventListener('click', function () {
+          localStorage.setItem(key, '' + Date.now())
+          document.getElementById('cookie-banner').classList.add('hidden')
+        })
+      } catch (_) {}
+    })()
+  </script>
+</body>
+</html>

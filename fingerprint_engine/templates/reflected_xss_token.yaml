@@ -1,0 +1,17 @@
+id: reflected_xss_token
+name: Reflected Token Check
+description: "Send a unique benign token and verify it is reflected in the response body (reflection indicator)."
+severity: medium
+vars:
+  token: "weissman_reflect_prb_9f3a"
+steps:
+  - id: q_reflection
+    request:
+      method: GET
+      path: "/?q={{vars.token}}"
+      headers:
+        User-Agent: "WeissmanTemplateEngine/1.0"
+    matchers:
+      - type: body_contains
+        contains: "{{vars.token}}"
+

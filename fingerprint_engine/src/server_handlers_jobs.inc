@@ -1,3 +1,99 @@
+/// GET /api/jobs?limit=&offset=&status= — tenant-scoped list for the Jobs dashboard.
+async fn api_async_jobs_list(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(50)
+        .clamp(1, 500);
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let status_filter: Option<String> = q
+        .get("status")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "jobs": []})),
+        )
+            .into_response();
+    };
+
+    let rows = sqlx::query(
+        r#"SELECT id, kind, status,
+                  COALESCE(payload, '{}'::jsonb) AS payload,
+                  COALESCE(result, '{}'::jsonb)  AS result,
+                  COALESCE(error, '')            AS error,
+                  COALESCE(attempts, 0)          AS attempts,
+                  created_at, started_at, completed_at,
+                  COALESCE(locked_by, '')        AS locked_by
+             FROM weissman_async_jobs
+            WHERE ($3::text IS NULL OR status = $3)
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2"#,
+    )
+    .bind(limit)
+    .bind(offset)
+    .bind(status_filter.as_deref())
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let total: i64 = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE ($1::text IS NULL OR status = $1)",
+    )
+    .bind(status_filter.as_deref())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let _ = tx.commit().await;
+
+    let out: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id_uuid: uuid::Uuid = r.try_get("id").unwrap_or_else(|_| uuid::Uuid::nil());
+            let payload: Value = r.try_get("payload").unwrap_or(Value::Null);
+            let target = payload.get("target").and_then(Value::as_str).map(|s| s.to_string());
+            let engine = payload.get("engine").and_then(Value::as_str).map(|s| s.to_string());
+            let client_id = payload.get("client_id").and_then(Value::as_i64);
+            json!({
+                "id": id_uuid.to_string(),
+                "kind": r.try_get::<String, _>("kind").unwrap_or_default(),
+                "status": r.try_get::<String, _>("status").unwrap_or_default(),
+                "engine": engine,
+                "target": target,
+                "client_id": client_id,
+                "attempts": r.try_get::<i32, _>("attempts").unwrap_or(0),
+                "error": r.try_get::<String, _>("error").unwrap_or_default(),
+                "locked_by": r.try_get::<String, _>("locked_by").unwrap_or_default(),
+                "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
+                "started_at": r.try_get::<chrono::DateTime<Utc>, _>("started_at").ok().map(|d| d.to_rfc3339()),
+                "completed_at": r.try_get::<chrono::DateTime<Utc>, _>("completed_at").ok().map(|d| d.to_rfc3339()),
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "jobs": out,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        })),
+    )
+        .into_response()
+}
+
 /// Unified async job + PoE job status (tenant-scoped).
 async fn api_async_job_status(
     State(state): State<Arc<AppState>>,

@@ -10,6 +10,23 @@ use serde_json::{json, Value};
 use sha2::Sha256;
 use sqlx::PgPool;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
+
+/// Constant-time comparison for bearer tokens. `==` on `String` short-circuits on the
+/// first mismatch, leaking the token byte-by-byte to a remote attacker via response
+/// timing. Padding to the longer length avoids leaking the token length too.
+fn constant_time_str_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    let max = a.len().max(b.len());
+    let mut buf_a = vec![0u8; max];
+    let mut buf_b = vec![0u8; max];
+    buf_a[..a.len()].copy_from_slice(a);
+    buf_b[..b.len()].copy_from_slice(b);
+    // length-difference contributes one extra bit so a==b length is required.
+    let len_eq = (a.len() == b.len()) as u8;
+    bool::from(buf_a.ct_eq(&buf_b)) && len_eq == 1
+}
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -35,7 +52,7 @@ fn verify_gitlab_token(headers: &HeaderMap, expected: &str) -> bool {
         .or_else(|| headers.get("X-Gitlab-Token"))
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    t == expected
+    constant_time_str_eq(t, expected)
 }
 
 fn verify_bitbucket_secret(headers: &HeaderMap, expected: &str) -> bool {
@@ -46,7 +63,8 @@ fn verify_bitbucket_secret(headers: &HeaderMap, expected: &str) -> bool {
         .get("authorization")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    t == format!("Bearer {}", expected)
+    let expected_header = format!("Bearer {}", expected);
+    constant_time_str_eq(t, &expected_header)
 }
 
 async fn log_cicd_event(
@@ -454,8 +472,8 @@ pub async fn generic_cicd_scan(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    let ok = format!("Bearer {}", expected.trim());
-    if expected.trim().is_empty() || auth != ok {
+    let expected_header = format!("Bearer {}", expected.trim());
+    if expected.trim().is_empty() || !constant_time_str_eq(auth, &expected_header) {
         return (
             StatusCode::UNAUTHORIZED,
             axum::Json(json!({"error": "unauthorized"})),

@@ -116,6 +116,15 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'liminal_boundary',
+    label: 'Liminal Boundary',
+    group: 'web',
+    mitre: 'T1190',
+    description:
+      'World-first protocol-stack fracture detection: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, trusted-header rewrite gaps, shadow-API entropy divergence',
+    requiresTarget: true,
+  },
+  {
     id: 'prototype_pollution',
     label: 'Prototype Pollution',
     group: 'web',

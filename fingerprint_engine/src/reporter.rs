@@ -1,7 +1,6 @@
 //! Local bug bounty report generation. LLM-assisted triage (vLLM) with static fallback;
 //! HackerOne/Bugcrowd-style Markdown to `reports/`, then optional NOTIFY_URL webhook (retries intact).
 
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
@@ -309,6 +308,207 @@ fn report_filename() -> String {
     format!("anomaly_{}.md", format_timestamp())
 }
 
+fn report_pdf_filename(markdown_name: &str) -> String {
+    if let Some(stem) = markdown_name.strip_suffix(".md") {
+        format!("{stem}.pdf")
+    } else {
+        format!("{markdown_name}.pdf")
+    }
+}
+
+fn pdf_escape(s: &str) -> String {
+    let mut escaped = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '(' => escaped.push_str("\\("),
+            ')' => escaped.push_str("\\)"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            c if c.is_control() => escaped.push(' '),
+            c => escaped.push(c),
+        }
+    }
+    escaped
+}
+
+fn cvss_score_from_severity(severity: &str) -> f32 {
+    match severity.trim().to_lowercase().as_str() {
+        "critical" => 9.8,
+        "high" => 8.2,
+        "medium" => 6.4,
+        "low" => 3.7,
+        other => {
+            tracing::warn!(target: "reporter", severity = other, "unknown severity for anomaly pdf; using fallback cvss");
+            5.0
+        }
+    }
+}
+
+fn wrap_for_pdf(text: &str, max_chars: usize) -> Vec<String> {
+    let mut wrapped: Vec<String> = Vec::new();
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            wrapped.push(String::new());
+            continue;
+        }
+        let mut current = String::new();
+        for token in line.split_whitespace() {
+            if token.len() > max_chars {
+                if !current.is_empty() {
+                    wrapped.push(std::mem::take(&mut current));
+                }
+                let mut start = 0usize;
+                let chars: Vec<char> = token.chars().collect();
+                while start < chars.len() {
+                    let end = (start + max_chars).min(chars.len());
+                    wrapped.push(chars[start..end].iter().collect());
+                    start = end;
+                }
+                continue;
+            }
+            let next_len = if current.is_empty() {
+                token.len()
+            } else {
+                current.len() + 1 + token.len()
+            };
+            if next_len > max_chars && !current.is_empty() {
+                wrapped.push(std::mem::take(&mut current));
+            }
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(token);
+        }
+        if !current.is_empty() {
+            wrapped.push(current);
+        }
+    }
+    wrapped
+}
+
+fn build_anomaly_pdf(
+    target_url: &str,
+    anomaly_type: &str,
+    baseline_vs_anomaly: &str,
+    severity: &str,
+    remediation: &str,
+) -> Vec<u8> {
+    let cvss = cvss_score_from_severity(severity);
+    let mut lines = vec![
+        "Weissman Fuzzer Anomaly Report".to_string(),
+        format!("Timestamp: {}", format_timestamp()),
+        String::new(),
+        format!("Target URL: {target_url}"),
+        format!("Anomaly Type: {anomaly_type}"),
+        format!("Severity: {}", severity.to_uppercase()),
+        format!("Estimated CVSS: {cvss:.1}"),
+        String::new(),
+        "Baseline vs Anomaly".to_string(),
+    ];
+    lines.extend(wrap_for_pdf(baseline_vs_anomaly, 90));
+    lines.push(String::new());
+    lines.push("Recommended Remediation".to_string());
+    lines.extend(wrap_for_pdf(remediation, 90));
+
+    // Single-page A4-ish layout using 16px line spacing from y=750. Keep hard cap
+    // so content never overflows the page box and corrupts rendering.
+    const MAX_LINES: usize = 44;
+    if lines.len() > MAX_LINES {
+        lines.truncate(MAX_LINES - 1);
+        lines.push("... (truncated)".to_string());
+    }
+
+    let mut stream = String::from("BT\n/F1 16 Tf\n72 750 Td\n");
+    for (idx, line) in lines.iter().enumerate() {
+        if idx == 1 {
+            stream.push_str("/F1 11 Tf\n");
+        }
+        if idx > 0 {
+            stream.push_str("0 -16 Td\n");
+        }
+        let escaped = pdf_escape(line);
+        stream.push_str(&format!("({escaped}) Tj\n"));
+    }
+    stream.push_str("ET");
+
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    offsets.push(out.len());
+    out.extend_from_slice(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+    );
+    offsets.push(out.len());
+    out.extend_from_slice(
+        format!(
+            "4 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
+            stream.len(),
+            stream
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    out.extend_from_slice(
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    );
+    let xref_offset = out.len();
+    out.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(5) {
+        out.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            xref_offset
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+fn write_anomaly_pdf_sidecar(
+    reports_dir_path: &std::path::Path,
+    markdown_name: &str,
+    target_url: &str,
+    anomaly_type: &str,
+    baseline_vs_anomaly: &str,
+    triage: Option<&BugReportTriage>,
+) {
+    let severity = triage
+        .map(|t| t.severity.clone())
+        .unwrap_or_else(|| "Medium".to_string());
+    let remediation = triage
+        .map(|t| t.remediation.clone())
+        .unwrap_or_else(|| {
+            "Validate and sanitize inputs, enforce strict schema checks, apply defensive timeouts, and retest after fix."
+                .to_string()
+        });
+    let pdf_bytes = build_anomaly_pdf(
+        target_url,
+        anomaly_type,
+        baseline_vs_anomaly,
+        &severity,
+        &remediation,
+    );
+    let pdf_name = report_pdf_filename(markdown_name);
+    let pdf_path = reports_dir_path.join(pdf_name);
+    if let Err(error) = std::fs::write(&pdf_path, pdf_bytes) {
+        tracing::warn!(
+            target: "reporter",
+            path = %pdf_path.display(),
+            error = %error,
+            "failed to write anomaly pdf sidecar"
+        );
+    }
+}
+
 async fn notify_webhook(name: &str) {
     if let Ok(notify_url) = std::env::var("NOTIFY_URL") {
         if let Ok(client) = reqwest::Client::builder()
@@ -372,6 +572,14 @@ async fn generate_bug_report_worker(
         tracing::warn!(target: "reporter", path = %path.display(), "failed to write bug report");
         return;
     }
+    write_anomaly_pdf_sidecar(
+        &reports_dir_path,
+        &name,
+        &target_url,
+        &anomaly_type,
+        &baseline_vs_anomaly,
+        triage.as_ref(),
+    );
 
     notify_webhook(&name).await;
 }
@@ -431,6 +639,14 @@ pub async fn generate_bug_report_blocking(
     if std::fs::write(&path, report_md).is_err() {
         return None;
     }
+    write_anomaly_pdf_sidecar(
+        &reports_dir_path,
+        &name,
+        target_url,
+        anomaly_type,
+        baseline_vs_anomaly,
+        triage.as_ref(),
+    );
 
     notify_webhook(&name).await;
     Some(path)

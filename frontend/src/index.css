@@ -1,19 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --app-bg: #09090b;
-  --card-bg: #18181b;
-  --border: #27272a;
-  --text: #d4d4d8;
-  --text-muted: #a1a1aa;
-  --accent: #94a3b8;
-  --accent-strong: #e2e8f0;
+/* ───────────────────────────────────────────────────────────────────────────────
+ * RTL support — activated automatically by i18n/index.js when language === 'he'.
+ * Most of our layout already uses Tailwind logical properties (ms-/me-/ps-/pe-).
+ * These rules cover the few places that still use directional values + flip a
+ * handful of icon-only buttons that need rotating.
+ * ─────────────────────────────────────────────────────────────────────────────── */
+html[dir='rtl'] body { text-align: right; }
+html[dir='rtl'] .ltr-only { direction: ltr; text-align: left; }
+html[dir='rtl'] .number-cell,
+html[dir='rtl'] code,
+html[dir='rtl'] pre,
+html[dir='rtl'] .font-mono {
+  /* Keep code/IDs/JWTs readable left-to-right even inside RTL containers. */
+  direction: ltr;
+  unicode-bidi: embed;
+  text-align: start;
+}
+html[dir='rtl'] .weissman-flip-x { transform: scaleX(-1); }
+
+/* RTL: tables, breadcrumbs, sidebar borders */
+html[dir='rtl'] .data-grid th,
+html[dir='rtl'] table th { text-align: start; }
+html[dir='rtl'] .text-left { text-align: start; }
+html[dir='rtl'] .cockpit-sidebar {
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.1);
+  border-inline-start: none;
+}
+
+/* Skip-to-content — visible only on keyboard focus (WCAG 2.4.1) */
+.skip-to-content {
+  position: fixed;
+  top: 0;
+  inset-inline-start: 0;
+  z-index: 10000;
+  padding: 0.75rem 1.25rem;
+  background: var(--accent-cyan);
+  color: var(--text-inverse);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-md) 0;
+  transform: translateY(-120%);
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+}
+.skip-to-content:focus {
+  transform: translateY(0);
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+html[dir='rtl'] .skip-to-content {
+  border-radius: 0 0 0 var(--radius-md);
 }
 
 * {
   box-sizing: border-box;
+}
+
+*::selection {
+  background: var(--selection-bg);
+  color: var(--selection-text);
 }
 
 html {
@@ -42,9 +93,203 @@ html, body, #root {
 }
 
 body {
-  background: var(--app-bg);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--text);
+  background: var(--bg-0);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* ── Premium scrollbar (global + utility class) ───────────────────────────── */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.14);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.28);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.14) transparent;
+}
+
+/* ── Accessible focus rings ───────────────────────────────────────────────── */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.focus-ring-danger:focus-visible {
+  box-shadow: var(--focus-ring-danger);
+}
+.focus-ring-violet:focus-visible {
+  box-shadow: var(--focus-ring-violet);
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  transition: box-shadow var(--duration-fast) var(--ease-out-expo);
+}
+
+/* ── Motion utilities (fade-in, slide-up, shimmer, pulse-subtle) ─────────── */
+@keyframes wm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes wm-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wm-slide-in-end {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes wm-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
+}
+@keyframes wm-pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(0.975); }
+}
+@keyframes wm-toast-progress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+.animate-fade-in {
+  animation: wm-fade-in var(--duration-standard) var(--ease-out-expo) both;
+}
+.animate-slide-up {
+  animation: wm-slide-up var(--duration-standard) var(--ease-out-expo) both;
+}
+.animate-slide-in-end {
+  animation: wm-slide-in-end var(--duration-standard) var(--ease-out-expo) both;
+}
+.animate-shimmer {
+  animation: wm-shimmer 1.75s var(--ease-in-out-smooth) infinite;
+}
+.animate-pulse-subtle {
+  animation: wm-pulse-subtle 2.5s ease-in-out infinite;
+}
+.animate-toast-progress {
+  animation-name: wm-toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-slide-in-end,
+  .animate-shimmer,
+  .animate-pulse-subtle,
+  .animate-toast-progress,
+  .skeleton-shimmer,
+  .animate-glitch,
+  .animate-pulse,
+  .animate-spin,
+  .soc-title-ultimate,
+  .skip-to-content {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    background-position: 0% center !important;
+    transition: none !important;
+  }
+}
+
+/* ── Glass morphism utilities ─────────────────────────────────────────────── */
+.glass-panel {
+  position: relative;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm), var(--shadow-inner);
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--accent-gradient-border);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.glass-elevated {
+  position: relative;
+  background: var(--bg-glass-elevated);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md), var(--shadow-glow-cyan);
+}
+
+.glass-elevated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--accent-gradient-border);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ── Brand gradient text utility ──────────────────────────────────────────── */
+.text-brand-gradient {
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Display heading typography ───────────────────────────────────────────── */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
 }
 
 /* Enterprise data grid */
@@ -59,18 +304,48 @@ body {
   z-index: 1;
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
-  padding: 12px 14px;
-  text-align: left;
+  padding: 10px 12px;
+  text-align: start;
   font-weight: 600;
   color: var(--accent-strong);
   white-space: nowrap;
 }
 .data-grid td {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 .data-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* DataTable sticky header */
+.weissman-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card-bg);
+}
+.weissman-data-table tbody tr.weissman-row-hover:hover {
   background: rgba(255, 255, 255, 0.04);
+}
+.weissman-data-table tbody tr.weissman-row-zebra:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
 }
 
 /* iOS-style toggle */
@@ -119,10 +394,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(0, 0, 0, 0.80);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(34, 211, 238, 0.15);
-  padding: 0.75rem 1.25rem;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.12);
+  padding: 0.5rem 1.25rem;
 }
 
 .nav-link {
@@ -242,14 +517,10 @@ body {
 /* Panel base */
 .soc-panel {
   border-radius: 0.75rem;
-  background: rgba(0, 0, 0, 0.40);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 0.65rem;
   overflow: hidden;
-  transition: border-color 0.2s ease;
-}
-.soc-panel:hover {
-  border-color: rgba(255, 255, 255, 0.12);
 }
 .soc-panel-killchain { flex: 1.5; min-height: 0; }
 .soc-panel-hex       { flex: 1;   min-height: 0; }
@@ -266,26 +537,26 @@ body {
   .soc-right {
     display: none;
   }
-  .soc-header {
-    padding: 0.5rem 0.75rem;
-  }
-  .soc-header nav {
-    gap: 0.5rem;
-  }
 }
 
-@media (max-width: 768px) {
-  .soc-header {
-    padding: 0.5rem;
-  }
-  .nav-link {
-    font-size: 0.65rem;
-  }
-  .soc-branding-frame {
-    margin: 0.25rem 0.5rem 0;
-    padding: 0.4rem 1rem;
-  }
-  .soc-title-ultimate {
-    font-size: 0.75rem;
-  }
+/* ─── Custom scrollbar (used by ExecKpiStrip / LiveActivityFeed / MITRE matrix /
+   TopMoversPanel). Keeps panels feeling like a SOC tool, not a default browser. */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.18);
+  border-radius: 3px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.32);
+}
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.18) transparent;
+}
+

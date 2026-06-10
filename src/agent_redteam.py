@@ -5,11 +5,9 @@ Provides contextual fuzzer payloads per technology stack for guided fuzzing.
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import tempfile
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)

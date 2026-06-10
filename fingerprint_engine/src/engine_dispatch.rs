@@ -20,6 +20,11 @@ pub struct EngineRunContext {
     pub llm_model: String,
     pub recon_subdomains: Vec<String>,
     pub asm_ports: Option<Vec<u16>>,
+    /// Pool + agent registry, populated by `api_scan` when known. When set, agent-required
+    /// engines try to dispatch live to an enrolled agent and queue an `endpoint_agent_tasks` row.
+    pub app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
+    pub agents: Option<std::sync::Arc<crate::endpoint_agents::AgentRegistry>>,
+    pub client_id: Option<i64>,
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {
@@ -29,10 +34,81 @@ pub fn production_ids_json() -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// Engines whose detection must run on an enrolled endpoint agent (not from a remote probe).
+pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
+    "process_hollowing",
+    "dll_hijacking_engine",
+    "process_inventory",
+    "persistence_mechanism",
+    "bootkit_uefi",
+    "arp_spoofing_engine",
+    "clipboard_hijack",
+    "screen_capture_exfil",
+    "insider_exfil",
+    "av_bypass_engine",
+    "log_tampering_engine",
+    "anti_debug_evasion",
+    "rootkit_simulation",
+    "memory_forensics_evasion",
+    "usb_enumeration",
+    "dns_tunneling_c2",
+    "icmp_covert",
+];
+
+#[must_use]
+pub fn is_agent_required_engine(id: &str) -> bool {
+    AGENT_REQUIRED_ENGINES.iter().any(|&k| k == id)
+}
+
 /// Run a production engine (or alias). Returns empty ok for unknown catalog-only IDs.
+///
+/// We prefer the **raw** engine_id when it has a dedicated implementation in
+/// `advanced_*_engines` (per real probe). Only when the raw ID is not in our
+/// `PRODUCTION_ENGINE_IDS` set do we fall back to `resolve_engine_id` for legacy
+/// aliases (so old `client_configs.enabled_engines` rows keep working).
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
-    let canonical = resolve_engine_id(engine_id);
-    if !is_production_engine_id(engine_id) {
+    // If this engine must run on an agent and we have routing info, dispatch it.
+    if is_agent_required_engine(engine_id) {
+        if let (Some(pool), Some(registry), Some(client_id), Some(tenant_id)) = (
+            ctx.app_pool.as_ref(),
+            ctx.agents.as_ref(),
+            ctx.client_id,
+            ctx.tenant_id,
+        ) {
+            return dispatch_to_agent(
+                pool.as_ref(),
+                registry,
+                tenant_id,
+                client_id,
+                engine_id,
+                target,
+            )
+            .await;
+        }
+        // No routing info → degrade to status-only finding.
+        let f = serde_json::json!({
+            "type": engine_id,
+            "category": "agent_required",
+            "title": format!("{} requires an enrolled endpoint agent", engine_id),
+            "severity": "info",
+            "mitre_attack": "",
+            "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
+            "target": target,
+            "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
+            "agent_required": true,
+        });
+        return EngineResult::ok(
+            vec![f],
+            format!("{}: requires endpoint agent", engine_id),
+        );
+    }
+    let raw = engine_id.trim();
+    let canonical = if is_production_engine_id(raw) {
+        raw
+    } else {
+        resolve_engine_id(raw)
+    };
+    if !is_production_engine_id(canonical) {
         return EngineResult::ok(
             vec![],
             format!(
@@ -115,6 +191,7 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(target).await,
         "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(target).await,
         "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(target).await,
+        "liminal_boundary" => crate::liminal_boundary_engine::run_liminal_boundary_result(target).await,
         "prototype_pollution" => {
             crate::prototype_pollution_engine::run_prototype_pollution_result(target).await
         }
@@ -241,13 +318,24 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         }
         "http_feedback_fuzz" => {
             let anomalies = if let Some(tid) = ctx.tenant_id {
-                crate::fuzzer::run_fuzzer_collect_tenant(target, "", Some(tid), None, None).await
+                crate::fuzzer::run_fuzzer_collect_tenant(
+                    target,
+                    "",
+                    Some(tid),
+                    None,
+                    None,
+                    ctx.app_pool.as_deref(),
+                )
+                .await
             } else {
                 crate::fuzzer::run_fuzzer_collect(target, "").await
             };
+            let verified_oob = anomalies.iter().filter(|a| a.oob_token.is_some()).count();
             let findings: Vec<serde_json::Value> = anomalies
                 .iter()
                 .map(|a| {
+                    let oob = a.oob_token.clone().filter(|s| !s.trim().is_empty());
+                    let verified = oob.is_some();
                     json!({
                         "type": "http_feedback_fuzz",
                         "title": a.anomaly_type.clone(),
@@ -255,17 +343,407 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                         "description": a.baseline_vs_anomaly.clone(),
                         "url": a.target_url.clone(),
                         "payload": a.payload.clone(),
+                        "verified": verified,
+                        "verification_method": if verified { "oob_oast_callback" } else { "behavioral_feedback_validation" },
+                        "oob_token": oob,
+                        "llm_user_prompt": a.llm_user_prompt,
                     })
                 })
                 .collect();
             EngineResult::ok(
                 findings,
-                format!("HTTP feedback fuzz: {} validated anomalies", anomalies.len()),
+                format!(
+                    "HTTP feedback fuzz: {} validated anomalies ({} OOB-verified)",
+                    anomalies.len(),
+                    verified_oob
+                ),
             )
         }
+        // ── Advanced AI / LLM engines ──────────────────────────────────────────
+        "llm_jailbreak" => crate::advanced_ai_engines::run_llm_jailbreak_result(target).await,
+        "prompt_injection_chain" => crate::advanced_ai_engines::run_prompt_injection_chain_result(target).await,
+        "model_inversion_attack" => crate::advanced_ai_engines::run_model_inversion_attack_result(target).await,
+        "ai_supply_chain_attack" => crate::advanced_ai_engines::run_ai_supply_chain_attack_result(target).await,
+        "llm_agent_hijack" => crate::advanced_ai_engines::run_llm_agent_hijack_result(target).await,
+        "rag_poisoning_engine" => crate::advanced_ai_engines::run_rag_poisoning_engine_result(target).await,
+        "adversarial_examples" => crate::advanced_ai_engines::run_adversarial_examples_result(target).await,
+        "data_poisoning_engine" => crate::advanced_ai_engines::run_data_poisoning_engine_result(target).await,
+        "deepfake_synthesis" => crate::advanced_ai_engines::run_deepfake_synthesis_result(target).await,
+        "llm_dos_attack" => crate::advanced_ai_engines::run_llm_dos_attack_result(target).await,
+        "multimodal_ai_attack" => crate::advanced_ai_engines::run_multimodal_ai_attack_result(target).await,
+        "ai_bias_exploit" => crate::advanced_ai_engines::run_ai_bias_exploit_result(target).await,
+        "gpt_plugin_attack" => crate::advanced_ai_engines::run_gpt_plugin_attack_result(target).await,
+        "autonomous_ai_escape" => crate::advanced_ai_engines::run_autonomous_ai_escape_result(target).await,
+        "llm_memory_extraction" => crate::advanced_ai_engines::run_llm_memory_extraction_result(target).await,
+        "neural_backdoor_detect" => crate::advanced_ai_engines::run_neural_backdoor_detect_result(target).await,
+        "ai_watermark_bypass" => crate::advanced_ai_engines::run_ai_watermark_bypass_result(target).await,
+        "federated_learning_attack" => crate::advanced_ai_engines::run_federated_learning_attack_result(target).await,
+        "llm_red_team_advanced" => crate::advanced_ai_engines::run_llm_red_team_advanced_result(target).await,
+        "model_stealing_engine" => crate::advanced_ai_engines::run_model_stealing_engine_result(target).await,
+
+        // ── Advanced APT / Top-Tier engines ────────────────────────────────────
+        "apt28_techniques" => crate::advanced_apt_engines::run_apt28_techniques_result(target).await,
+        "apt29_techniques" => crate::advanced_apt_engines::run_apt29_techniques_result(target).await,
+        "apt41_techniques" => crate::advanced_apt_engines::run_apt41_techniques_result(target).await,
+        "lazarus_group_ttps" => crate::advanced_apt_engines::run_lazarus_group_ttps_result(target).await,
+        "volt_typhoon_ttps" => crate::advanced_apt_engines::run_volt_typhoon_ttps_result(target).await,
+        "scattered_spider_ttps" => crate::advanced_apt_engines::run_scattered_spider_ttps_result(target).await,
+        "salt_typhoon_ttps" => crate::advanced_apt_engines::run_salt_typhoon_ttps_result(target).await,
+        "fin7_techniques" => crate::advanced_apt_engines::run_fin7_techniques_result(target).await,
+        "conti_ransomware_ttps" => crate::advanced_apt_engines::run_conti_ransomware_ttps_result(target).await,
+        "lockbit_techniques" => crate::advanced_apt_engines::run_lockbit_techniques_result(target).await,
+        "cl0p_techniques" => crate::advanced_apt_engines::run_cl0p_techniques_result(target).await,
+        "blackcat_alphv_ttps" => crate::advanced_apt_engines::run_blackcat_alphv_ttps_result(target).await,
+        "midnight_blizzard_ttps" => crate::advanced_apt_engines::run_midnight_blizzard_ttps_result(target).await,
+        "earth_longzhi_ttps" => crate::advanced_apt_engines::run_earth_longzhi_ttps_result(target).await,
+        "equation_group_ttps" => crate::advanced_apt_engines::run_equation_group_ttps_result(target).await,
+        "sandworm_techniques" => crate::advanced_apt_engines::run_sandworm_techniques_result(target).await,
+        "carbon_spider_ttps" => crate::advanced_apt_engines::run_carbon_spider_ttps_result(target).await,
+        "wizard_spider_ttps" => crate::advanced_apt_engines::run_wizard_spider_ttps_result(target).await,
+        "unc2452_ttps" => crate::advanced_apt_engines::run_unc2452_ttps_result(target).await,
+        "unc3944_ttps" => crate::advanced_apt_engines::run_unc3944_ttps_result(target).await,
+        "quantum_sovereign_nexus" => crate::advanced_apt_engines::run_quantum_sovereign_nexus_result(target).await,
+
+        // ── Advanced Cloud engines ─────────────────────────────────────────────
+        "lambda_escape" => crate::advanced_cloud_engines::run_lambda_escape_result(target).await,
+        "terraform_state_attack" => crate::advanced_cloud_engines::run_terraform_state_attack_result(target).await,
+        "cloudformation_injection" => crate::advanced_cloud_engines::run_cloudformation_injection_result(target).await,
+        "service_mesh_attack" => crate::advanced_cloud_engines::run_service_mesh_attack_result(target).await,
+        "cloud_audit_evasion" => crate::advanced_cloud_engines::run_cloud_audit_evasion_result(target).await,
+        "ecr_registry_attack" => crate::advanced_cloud_engines::run_ecr_registry_attack_result(target).await,
+        "multi_cloud_pivot" => crate::advanced_cloud_engines::run_multi_cloud_pivot_result(target).await,
+        "cloud_worm_propagation" => crate::advanced_cloud_engines::run_cloud_worm_propagation_result(target).await,
+        "serverless_injection" => crate::advanced_cloud_engines::run_serverless_injection_result(target).await,
+        "cloud_data_exfil" => crate::advanced_cloud_engines::run_cloud_data_exfil_result(target).await,
+        "cloud_network_attack" => crate::advanced_cloud_engines::run_cloud_network_attack_result(target).await,
+        "cloud_privilege_persistence" => crate::advanced_cloud_engines::run_cloud_privilege_persistence_result(target).await,
+
+        // ── Advanced Crypto / Identity engines ────────────────────────────────
+        "padding_oracle_attack" => crate::advanced_crypto_engines::run_padding_oracle_attack_result(target).await,
+        "hash_extension_attack" => crate::advanced_crypto_engines::run_hash_extension_attack_result(target).await,
+        "ecdsa_nonce_bias" => crate::advanced_crypto_engines::run_ecdsa_nonce_bias_result(target).await,
+        "rsa_timing_attack" => crate::advanced_crypto_engines::run_rsa_timing_attack_result(target).await,
+        "mfa_bypass_engine" => crate::advanced_crypto_engines::run_mfa_bypass_engine_result(target).await,
+        "credential_stuffing" => crate::advanced_crypto_engines::run_credential_stuffing_result(target).await,
+        "kerberos_attack_suite" => crate::advanced_crypto_engines::run_kerberos_attack_suite_result(target).await,
+        "zero_trust_bypass" => crate::advanced_crypto_engines::run_zero_trust_bypass_result(target).await,
+        "pki_hierarchy_attack" => crate::advanced_crypto_engines::run_pki_hierarchy_attack_result(target).await,
+        "session_fixation_adv" => crate::advanced_crypto_engines::run_session_fixation_adv_result(target).await,
+        "password_hash_crack" => crate::advanced_crypto_engines::run_password_hash_crack_result(target).await,
+        "quantum_key_attack" => crate::advanced_crypto_engines::run_quantum_key_attack_result(target).await,
+        "password_spray_advanced" => crate::advanced_crypto_engines::run_password_spray_advanced_result(target).await,
+
+        // ── Advanced Data Exfiltration engines ────────────────────────────────
+        "dns_exfil_engine" => crate::advanced_data_engines::run_dns_exfil_engine_result(target).await,
+        "http_covert_exfil" => crate::advanced_data_engines::run_http_covert_exfil_result(target).await,
+        "cloud_exfil_engine" => crate::advanced_data_engines::run_cloud_exfil_engine_result(target).await,
+        "encrypted_exfil" => crate::advanced_data_engines::run_encrypted_exfil_result(target).await,
+        "acoustic_exfil" => crate::advanced_data_engines::run_acoustic_exfil_result(target).await,
+        "em_exfil_engine" => crate::advanced_data_engines::run_em_exfil_engine_result(target).await,
+        "optical_exfil" => crate::advanced_data_engines::run_optical_exfil_result(target).await,
+        "cache_timing_exfil" => crate::advanced_data_engines::run_cache_timing_exfil_result(target).await,
+        "keyboard_acoustic" => crate::advanced_data_engines::run_keyboard_acoustic_result(target).await,
+        "screen_capture_exfil" => crate::advanced_data_engines::run_screen_capture_exfil_result(target).await,
+        "clipboard_hijack" => crate::advanced_data_engines::run_clipboard_hijack_result(target).await,
+        "database_exfil" => crate::advanced_data_engines::run_database_exfil_result(target).await,
+        "email_exfil" => crate::advanced_data_engines::run_email_exfil_result(target).await,
+        "insider_exfil" => crate::advanced_data_engines::run_insider_exfil_result(target).await,
+        "storage_covert_channel" => crate::advanced_data_engines::run_storage_covert_channel_result(target).await,
+
+        // ── Advanced Malware / Ransomware engines ─────────────────────────────
+        "bootkit_uefi" => crate::advanced_malware_engines::run_bootkit_uefi_result(target).await,
+        "fileless_malware_engine" => crate::advanced_malware_engines::run_fileless_malware_engine_result(target).await,
+        "polymorphic_engine" => crate::advanced_malware_engines::run_polymorphic_engine_result(target).await,
+        "botnet_c2_engine" => crate::advanced_malware_engines::run_botnet_c2_engine_result(target).await,
+        "keylogger_engine" => crate::advanced_malware_engines::run_keylogger_engine_result(target).await,
+        "spyware_stalkerware" => crate::advanced_malware_engines::run_spyware_stalkerware_result(target).await,
+        "worm_propagation" => crate::advanced_malware_engines::run_worm_propagation_result(target).await,
+        "rce_exploit_engine" => crate::advanced_malware_engines::run_rce_exploit_engine_result(target).await,
+        "persistence_mechanism" => crate::advanced_malware_engines::run_persistence_mechanism_result(target).await,
+        "lateral_movement_engine" => crate::advanced_malware_engines::run_lateral_movement_engine_result(target).await,
+        "data_staging_engine" => crate::advanced_malware_engines::run_data_staging_engine_result(target).await,
+        "exploit_kit_engine" => crate::advanced_malware_engines::run_exploit_kit_engine_result(target).await,
+        "trojan_dropper" => crate::advanced_malware_engines::run_trojan_dropper_result(target).await,
+        "macro_malware" => crate::advanced_malware_engines::run_macro_malware_result(target).await,
+
+        // ── Advanced Mobile engines ────────────────────────────────────────────
+        "android_malware_engine" => crate::advanced_mobile_engines::run_android_malware_engine_result(target).await,
+        "ios_exploit_engine" => crate::advanced_mobile_engines::run_ios_exploit_engine_result(target).await,
+        "mobile_mitm" => crate::advanced_mobile_engines::run_mobile_mitm_result(target).await,
+        "ssl_pinning_bypass" => crate::advanced_mobile_engines::run_ssl_pinning_bypass_result(target).await,
+        "android_intent_attack" => crate::advanced_mobile_engines::run_android_intent_attack_result(target).await,
+        "ios_url_scheme_attack" => crate::advanced_mobile_engines::run_ios_url_scheme_attack_result(target).await,
+        "mobile_overlay_attack" => crate::advanced_mobile_engines::run_mobile_overlay_attack_result(target).await,
+        "sim_swap_engine" => crate::advanced_mobile_engines::run_sim_swap_engine_result(target).await,
+        "mobile_banking_trojan" => crate::advanced_mobile_engines::run_mobile_banking_trojan_result(target).await,
+        "app_store_attack" => crate::advanced_mobile_engines::run_app_store_attack_result(target).await,
+        "mdm_bypass_engine" => crate::advanced_mobile_engines::run_mdm_bypass_engine_result(target).await,
+        "bluetooth_mobile_attack" => crate::advanced_mobile_engines::run_bluetooth_mobile_attack_result(target).await,
+        "nfc_relay_attack" => crate::advanced_mobile_engines::run_nfc_relay_attack_result(target).await,
+        "mobile_spyware_engine" => crate::advanced_mobile_engines::run_mobile_spyware_engine_result(target).await,
+        "react_native_attack" => crate::advanced_mobile_engines::run_react_native_attack_result(target).await,
+
+        // ── Advanced Network / Protocol engines ───────────────────────────────
+        "arp_spoofing_engine" => crate::advanced_network_engines::run_arp_spoofing_engine_result(target).await,
+        "vlan_hopping_attack" => crate::advanced_network_engines::run_vlan_hopping_attack_result(target).await,
+        "dhcp_attack_engine" => crate::advanced_network_engines::run_dhcp_attack_engine_result(target).await,
+        "dns_cache_poisoning" => crate::advanced_network_engines::run_dns_cache_poisoning_result(target).await,
+        "ntp_amplification" => crate::advanced_network_engines::run_ntp_amplification_result(target).await,
+        "snmp_exploitation" => crate::advanced_network_engines::run_snmp_exploitation_result(target).await,
+        "rdp_attack_engine" => crate::advanced_network_engines::run_rdp_attack_engine_result(target).await,
+        "ldap_injection_engine" => crate::advanced_network_engines::run_ldap_injection_engine_result(target).await,
+        "voip_sip_attack" => crate::advanced_network_engines::run_voip_sip_attack_result(target).await,
+        "ss7_attack_simulation" => crate::advanced_network_engines::run_ss7_attack_simulation_result(target).await,
+        "wifi_attack_engine" => crate::advanced_network_engines::run_wifi_attack_engine_result(target).await,
+        "bluetooth_attack_engine" => crate::advanced_network_engines::run_bluetooth_attack_engine_result(target).await,
+        "ospf_bgp_hijack" => crate::advanced_network_engines::run_ospf_bgp_hijack_result(target).await,
+        "mpls_vpn_attack" => crate::advanced_network_engines::run_mpls_vpn_attack_result(target).await,
+        "lte_5g_attack" => crate::advanced_network_engines::run_lte_5g_attack_result(target).await,
+        "network_covert_channel" => crate::advanced_network_engines::run_network_covert_channel_result(target).await,
+        "wpa3_attack_engine" => crate::advanced_network_engines::run_wpa3_attack_engine_result(target).await,
+        "tor_exit_attack" => crate::advanced_network_engines::run_tor_exit_attack_result(target).await,
+        "protocol_downgrade" => crate::advanced_network_engines::run_protocol_downgrade_result(target).await,
+        "network_baseline_anomaly" => crate::advanced_network_engines::run_network_baseline_anomaly_result(target).await,
+        "packet_injection_engine" => crate::advanced_network_engines::run_packet_injection_engine_result(target).await,
+        "network_tap_advanced" => crate::advanced_network_engines::run_network_tap_advanced_result(target).await,
+        "multicast_attack" => crate::advanced_network_engines::run_multicast_attack_result(target).await,
+        "nat_traversal_attack" => crate::advanced_network_engines::run_nat_traversal_attack_result(target).await,
+
+        // ── Advanced OT / ICS engines ──────────────────────────────────────────
+        "dnp3_attack" => crate::advanced_ot_engines::run_dnp3_attack_result(target).await,
+        "bacnet_attack" => crate::advanced_ot_engines::run_bacnet_attack_result(target).await,
+        "zigbee_attack" => crate::advanced_ot_engines::run_zigbee_attack_result(target).await,
+        "iec61850_attack" => crate::advanced_ot_engines::run_iec61850_attack_result(target).await,
+        "satellite_comm_attack" => crate::advanced_ot_engines::run_satellite_comm_attack_result(target).await,
+        "rfid_nfc_attack" => crate::advanced_ot_engines::run_rfid_nfc_attack_result(target).await,
+
+        // ── Advanced Recon engines ─────────────────────────────────────────────
+        "threat_intel_fusion" => crate::advanced_recon_engines::run_threat_intel_fusion_result(target).await,
+        "attack_surface_quantify" => crate::advanced_recon_engines::run_attack_surface_quantify_result(target).await,
+        "adversarial_simulation" => crate::advanced_recon_engines::run_adversarial_simulation_result(target).await,
+        "dark_web_monitor" => crate::advanced_recon_engines::run_dark_web_monitor_result(target).await,
+        "passive_dns_forensics" => crate::advanced_recon_engines::run_passive_dns_forensics_result(target).await,
+
+        // ── Advanced Social Engineering engines ───────────────────────────────
+        "spear_phishing_engine" => crate::advanced_social_engines::run_spear_phishing_engine_result(target).await,
+        "vishing_engine" => crate::advanced_social_engines::run_vishing_engine_result(target).await,
+        "smishing_engine" => crate::advanced_social_engines::run_smishing_engine_result(target).await,
+        "qr_phishing" => crate::advanced_social_engines::run_qr_phishing_result(target).await,
+        "deepfake_voice_engine" => crate::advanced_social_engines::run_deepfake_voice_engine_result(target).await,
+        "business_email_compromise" => crate::advanced_social_engines::run_business_email_compromise_result(target).await,
+        "watering_hole_attack" => crate::advanced_social_engines::run_watering_hole_attack_result(target).await,
+        "pretexting_engine" => crate::advanced_social_engines::run_pretexting_engine_result(target).await,
+        "insider_threat_engine" => crate::advanced_social_engines::run_insider_threat_engine_result(target).await,
+        "brand_impersonation" => crate::advanced_social_engines::run_brand_impersonation_result(target).await,
+        "fake_update_engine" => crate::advanced_social_engines::run_fake_update_engine_result(target).await,
+        "linkedin_phishing" => crate::advanced_social_engines::run_linkedin_phishing_result(target).await,
+        "callback_phishing" => crate::advanced_social_engines::run_callback_phishing_result(target).await,
+        "physical_social_eng" => crate::advanced_social_engines::run_physical_social_eng_result(target).await,
+        "typosquatting_phishing" => crate::advanced_social_engines::run_typosquatting_phishing_result(target).await,
+
+        // ── Advanced Stealth / Evasion engines ────────────────────────────────
+        "process_hollowing" => crate::advanced_stealth_engines::run_process_hollowing_result(target).await,
+        "living_off_land" => crate::advanced_stealth_engines::run_living_off_land_result(target).await,
+        "heap_exploitation" => crate::advanced_stealth_engines::run_heap_exploitation_result(target).await,
+
+        // ── Advanced Supply Chain engines ──────────────────────────────────────
+        "github_actions_attack" => crate::advanced_supply_chain_engines::run_github_actions_attack_result(target).await,
+        "compiler_backdoor" => crate::advanced_supply_chain_engines::run_compiler_backdoor_result(target).await,
+        "open_source_backdoor" => crate::advanced_supply_chain_engines::run_open_source_backdoor_result(target).await,
+        "cdn_poisoning_engine" => crate::advanced_supply_chain_engines::run_cdn_poisoning_engine_result(target).await,
+        "software_signing_attack" => crate::advanced_supply_chain_engines::run_software_signing_attack_result(target).await,
+        "build_system_compromise" => crate::advanced_supply_chain_engines::run_build_system_compromise_result(target).await,
+        "dependency_confusion" => crate::advanced_supply_chain_engines::run_dependency_confusion_result(target).await,
+        "update_hijacking" => crate::advanced_supply_chain_engines::run_update_hijacking_result(target).await,
+        "sbom_forgery_engine" => crate::advanced_supply_chain_engines::run_sbom_forgery_engine_result(target).await,
+        "third_party_api_attack" => crate::advanced_supply_chain_engines::run_third_party_api_attack_result(target).await,
+        "iac_supply_chain" => crate::advanced_supply_chain_engines::run_iac_supply_chain_result(target).await,
+
+        // ── Advanced Web engines ───────────────────────────────────────────────
+        "cors_misconfiguration" => crate::advanced_web_engines::run_cors_misconfiguration_result(target).await,
+        "swagger_abuse" => crate::advanced_web_engines::run_swagger_abuse_result(target).await,
+        "soap_injection" => crate::advanced_web_engines::run_soap_injection_result(target).await,
+        "odata_injection" => crate::advanced_web_engines::run_odata_injection_result(target).await,
+        "css_injection" => crate::advanced_web_engines::run_css_injection_result(target).await,
+        "template_injection_adv" => crate::advanced_web_engines::run_template_injection_adv_result(target).await,
+        "http_parameter_pollution" => crate::advanced_web_engines::run_http_parameter_pollution_result(target).await,
+        "api_mass_assignment" => crate::advanced_web_engines::run_api_mass_assignment_result(target).await,
+        "clickjacking_engine" => crate::advanced_web_engines::run_clickjacking_engine_result(target).await,
+        "subdomain_takeover" => crate::advanced_web_engines::run_subdomain_takeover_result(target).await,
+        "file_inclusion_rfi" => crate::advanced_web_engines::run_file_inclusion_rfi_result(target).await,
+        "deserialization_net" => crate::advanced_web_engines::run_deserialization_net_result(target).await,
+        "api_rate_limit_bypass" => crate::advanced_web_engines::run_api_rate_limit_bypass_result(target).await,
+        "graphql_subscription_attack" => crate::advanced_web_engines::run_graphql_subscription_attack_result(target).await,
+        "webrtc_attack" => crate::advanced_web_engines::run_webrtc_attack_result(target).await,
+        "browser_extension_attack" => crate::advanced_web_engines::run_browser_extension_attack_result(target).await,
+        "web3_dapp_attack" => crate::advanced_web_engines::run_web3_dapp_attack_result(target).await,
+        "api_gateway_bypass" => crate::advanced_web_engines::run_api_gateway_bypass_result(target).await,
+        "graphql_deep_attack" => crate::advanced_web_engines::run_graphql_deep_attack_result(target).await,
+        "grpc_reflection_attack" => crate::advanced_web_engines::run_grpc_reflection_attack_result(target).await,
+        "http2_attack" => crate::advanced_web_engines::run_http2_attack_result(target).await,
+        "idor_advanced" => crate::advanced_web_engines::run_idor_advanced_result(target).await,
+        "jwt_advanced_attack" => crate::advanced_web_engines::run_jwt_advanced_attack_result(target).await,
+        "nosql_deep_injection" => crate::advanced_web_engines::run_nosql_deep_injection_result(target).await,
+        "web_cache_poison_adv" => crate::advanced_web_engines::run_web_cache_poison_adv_result(target).await,
+
+        // ── Advanced Recon engines (new live probes) ───────────────────────────
+        "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
+        "darkweb_intel" => crate::advanced_recon_engines::run_darkweb_intel_result(target).await,
+        "financial_osint" => crate::advanced_recon_engines::run_financial_osint_result(target).await,
+        "blockchain_trace" => crate::advanced_recon_engines::run_blockchain_trace_result(target).await,
+        "metadata_harvest" => crate::advanced_recon_engines::run_metadata_harvest_result(target).await,
+        "patent_recon" => crate::advanced_recon_engines::run_patent_recon_result(target).await,
+        "telecom_osint" => crate::advanced_recon_engines::run_telecom_osint_result(target).await,
+        "iot_shodan_scan" => crate::advanced_recon_engines::run_iot_shodan_scan_result(target).await,
+        "job_posting_osint" => crate::advanced_recon_engines::run_job_posting_osint_result(target).await,
+        "github_secret_scan" => crate::advanced_recon_engines::run_github_secret_scan_result(target).await,
+
+        // ── Advanced Cloud engines (new live probes) ───────────────────────────
+        "cloud_metadata_ssrf" => crate::advanced_cloud_engines::run_cloud_metadata_ssrf_result(target).await,
+        "s3_bucket_attack" => crate::advanced_cloud_engines::run_s3_bucket_attack_result(target).await,
+        "cloud_iam_escalation" => crate::advanced_cloud_engines::run_cloud_iam_escalation_result(target).await,
+        "kubernetes_rbac_escape" => crate::advanced_cloud_engines::run_kubernetes_rbac_escape_result(target).await,
+        "azure_devops_attack" => crate::advanced_cloud_engines::run_azure_devops_attack_result(target).await,
+        "gcp_privilege_attack" => crate::advanced_cloud_engines::run_gcp_privilege_attack_result(target).await,
+        "secrets_manager_attack" => crate::advanced_cloud_engines::run_secrets_manager_attack_result(target).await,
+        "eks_attack" => crate::advanced_cloud_engines::run_eks_attack_result(target).await,
+
+        // ── Advanced OT engines (new live probes) ──────────────────────────────
+        "modbus_attack" => crate::advanced_ot_engines::run_modbus_attack_result(target).await,
+        "mqtt_attack" => crate::advanced_ot_engines::run_mqtt_attack_result(target).await,
+        "coap_attack" => crate::advanced_ot_engines::run_coap_attack_result(target).await,
+        "opcua_attack" => crate::advanced_ot_engines::run_opcua_attack_result(target).await,
+        "plc_logic_attack" => crate::advanced_ot_engines::run_plc_logic_attack_result(target).await,
+        "hmi_attack" => crate::advanced_ot_engines::run_hmi_attack_result(target).await,
+        "profinet_attack" => crate::advanced_ot_engines::run_profinet_attack_result(target).await,
+        "industrial_protocol_fuzz" => crate::advanced_ot_engines::run_industrial_protocol_fuzz_result(target).await,
+        "firmware_emulation_attack" => crate::advanced_ot_engines::run_firmware_emulation_attack_result(target).await,
+
+        // ── Advanced Stealth engines (new probes / agent_required) ─────────────
+        "dll_hijacking_engine" => crate::advanced_stealth_engines::run_dll_hijacking_engine_result(target).await,
+        "sandbox_evasion" => crate::advanced_stealth_engines::run_sandbox_evasion_result(target).await,
+        "rootkit_simulation" => crate::advanced_stealth_engines::run_rootkit_simulation_result(target).await,
+        "memory_forensics_evasion" => crate::advanced_stealth_engines::run_memory_forensics_evasion_result(target).await,
+        "av_bypass_engine" => crate::advanced_stealth_engines::run_av_bypass_engine_result(target).await,
+        "dns_tunneling_c2" => crate::advanced_stealth_engines::run_dns_tunneling_c2_result(target).await,
+        "steganography_c2" => crate::advanced_stealth_engines::run_steganography_c2_result(target).await,
+        "https_c2_masquerade" => crate::advanced_stealth_engines::run_https_c2_masquerade_result(target).await,
+        "icmp_covert" => crate::advanced_stealth_engines::run_icmp_covert_result(target).await,
+        "rop_chain_engine" => crate::advanced_stealth_engines::run_rop_chain_engine_result(target).await,
+        "timing_evasion_engine" => crate::advanced_stealth_engines::run_timing_evasion_engine_result(target).await,
+        "log_tampering_engine" => crate::advanced_stealth_engines::run_log_tampering_engine_result(target).await,
+        "jit_spray" => crate::advanced_stealth_engines::run_jit_spray_result(target).await,
+        "com_hijacking" => crate::advanced_stealth_engines::run_com_hijacking_result(target).await,
+        "network_traffic_masking" => crate::advanced_stealth_engines::run_network_traffic_masking_result(target).await,
+        "anti_debug_evasion" => crate::advanced_stealth_engines::run_anti_debug_evasion_result(target).await,
+        "parent_pid_spoof" => crate::advanced_stealth_engines::run_parent_pid_spoof_result(target).await,
+
+        // ── Advanced Crypto engines (new probes) ───────────────────────────────
+        "oauth_advanced_attack" => crate::advanced_crypto_engines::run_oauth_advanced_attack_result(target).await,
+        "saml_advanced_attack" => crate::advanced_crypto_engines::run_saml_advanced_attack_result(target).await,
+
+        // ── Advanced Network engines (new probes / agent_required) ────────────
+        "ipv6_advanced_attack" => crate::advanced_network_engines::run_ipv6_advanced_attack_result(target).await,
+
+        // ── Advanced Supply Chain engines (new probes) ─────────────────────────
+        "npm_package_attack" => crate::advanced_supply_chain_engines::run_npm_package_attack_result(target).await,
+        "pypi_supply_chain" => crate::advanced_supply_chain_engines::run_pypi_supply_chain_result(target).await,
+        "maven_supply_chain" => crate::advanced_supply_chain_engines::run_maven_supply_chain_result(target).await,
+        "docker_image_poison" => crate::advanced_supply_chain_engines::run_docker_image_poison_result(target).await,
+
+        // ── Advanced Malware engines (new probes / agent_required) ─────────────
+        "ransomware_emulation" => crate::advanced_malware_engines::run_ransomware_emulation_result(target).await,
+
         _ => EngineResult::ok(
             vec![],
             format!("Engine '{}' has no runner (internal)", canonical),
         ),
     }
+}
+
+async fn dispatch_to_agent(
+    pool: &sqlx::PgPool,
+    registry: &std::sync::Arc<crate::endpoint_agents::AgentRegistry>,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    target: &str,
+) -> EngineResult {
+    let params = serde_json::json!({});
+    let task = match crate::endpoint_agents::enqueue_task(
+        pool,
+        tenant_id,
+        client_id,
+        engine,
+        Some(target),
+        &params,
+    )
+    .await
+    {
+        Ok(u) => u,
+        Err(e) => {
+            return EngineResult::ok(
+                vec![],
+                format!("agent task enqueue failed for {}: {}", engine, e),
+            );
+        }
+    };
+    // Look up any online agent for this client.
+    let live_dispatched = if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
+        let online_uuid = sqlx::query_scalar::<_, String>(
+            r#"SELECT agent_uuid::text FROM endpoint_agents
+                WHERE tenant_id = $1 AND client_id = $2 AND status = 'online'
+                ORDER BY last_seen_at DESC LIMIT 1"#,
+        )
+        .bind(tenant_id)
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let _ = tx.commit().await;
+        if let Some(uuid) = online_uuid {
+            registry
+                .send(
+                    &uuid,
+                    crate::endpoint_agents::ServerToAgent::Task {
+                        task_id: task.to_string(),
+                        engine: engine.to_string(),
+                        target: Some(target.to_string()),
+                        params: params.clone(),
+                    },
+                )
+                .await
+                .is_ok()
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    let f = serde_json::json!({
+        "type": engine,
+        "category": "agent_dispatched",
+        "title": if live_dispatched {
+            format!("{}: task dispatched to online agent", engine)
+        } else {
+            format!("{}: task queued for next online agent", engine)
+        },
+        "severity": "info",
+        "mitre_attack": "",
+        "description": format!(
+            "Detection task {} routed to {} agent for client {}. Findings will stream to the dashboard as the agent reports them.",
+            task,
+            if live_dispatched { "live" } else { "next" },
+            client_id
+        ),
+        "target": target,
+        "task_id": task.to_string(),
+        "live_dispatched": live_dispatched,
+        "remediation": "View streaming findings under Dashboard → Findings, filtered by source = agent.",
+    });
+    EngineResult::ok(
+        vec![f],
+        format!("{}: task {} dispatched", engine, task),
+    )
 }

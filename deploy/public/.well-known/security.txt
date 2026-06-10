@@ -1,0 +1,8 @@
+Contact: mailto:security@weissman.io
+Contact: https://weissman.io/security-policy.html
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: en, he
+Canonical: https://weissman.io/.well-known/security.txt
+Policy: https://weissman.io/security-policy.html
+Acknowledgments: https://weissman.io/security-policy.html
+Hiring: https://weissman.io/#careers

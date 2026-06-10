@@ -5,9 +5,7 @@ Production-quality scanner classes for Web App, Cloud, API, Active Directory, an
 from __future__ import annotations
 
 import logging
-import random
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -597,7 +595,7 @@ class APISecurityScanner:
             cvss_score=7.5,
             title="API Key Exposed in URL Query Parameter",
             description="API keys passed in URL query strings are logged in web server access logs, browser history, and CDN logs.",
-            payload_example=f"GET /api/data?api_key=sk-live-XXXXXXXXXXXX HTTP/1.1",
+            payload_example="GET /api/data?api_key=sk-live-XXXXXXXXXXXX HTTP/1.1",
             remediation="Pass API keys in HTTP headers (Authorization: Bearer <key>) or POST body. Rotate all keys that appear in URL parameters.",
             cve_refs=[],
             confidence=0.98,
@@ -610,7 +608,7 @@ class APISecurityScanner:
             cvss_score=8.0,
             title="OAuth2 Open Redirect – Authorization Code Interception",
             description="The redirect_uri parameter is not validated against a registered allowlist. An attacker can redirect authorization codes to their own server.",
-            payload_example=f"GET /oauth/authorize?client_id=app&redirect_uri=https://evil.com/cb&response_type=code",
+            payload_example="GET /oauth/authorize?client_id=app&redirect_uri=https://evil.com/cb&response_type=code",
             remediation="Validate redirect_uri against a strict allowlist of pre-registered URIs. Use exact-match comparison, not prefix matching.",
             cve_refs=["CVE-2021-27582"],
             confidence=0.89,

@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /$
+Allow: /pricing.html
+Allow: /terms.html
+Allow: /privacy.html
+Allow: /dpa.html
+Allow: /security-policy.html
+Allow: /sitemap.xml
+Allow: /.well-known/security.txt
+Disallow: /command-center/
+Disallow: /api/
+Disallow: /ws/
+Disallow: /hooks/
+Disallow: /install/
+
+Sitemap: https://weissman.io/sitemap.xml

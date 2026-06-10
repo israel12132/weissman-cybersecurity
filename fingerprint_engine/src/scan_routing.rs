@@ -16,21 +16,23 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
-use weissman_core::models::engine::is_known_engine_id;
+use weissman_core::models::engine::{is_known_engine_id, is_production_engine_id};
 
-/// Extra engine ids accepted by the scan API beyond [`KNOWN_ENGINE_IDS`] (DAG / Engine Room).
+/// Extra engine ids accepted by the scan API beyond `PRODUCTION_ENGINE_IDS` (DAG / Engine Room).
+/// All entries here are legacy/alias IDs that aren't in the production set but are still wired.
 pub const EXTRA_SCAN_ENGINE_IDS: &[&str] = &[
     "ollama_fuzz",
     "zero_day_radar",
     "poe_synthesis",
     "pipeline",
-    "http_feedback_fuzz",
 ];
 
 #[must_use]
 pub fn is_allowed_scan_engine(engine: &str) -> bool {
     let e = engine.trim();
-    is_known_engine_id(e) || EXTRA_SCAN_ENGINE_IDS.iter().any(|&k| k == e)
+    is_production_engine_id(e)
+        || is_known_engine_id(e)
+        || EXTRA_SCAN_ENGINE_IDS.iter().any(|&k| k == e)
 }
 
 // --- Declarative requirements ------------------------------------------------
@@ -56,6 +58,13 @@ pub enum RouteError {
     BadRequest(String),
     PaymentRequired { detail: String },
     Forbidden { detail: String },
+    /// 429: AI-heavy daily quota exceeded. `reset_at_unix` is the next UTC midnight.
+    QuotaExceeded {
+        detail: String,
+        reset_at_unix: i64,
+        limit: u64,
+        used: u64,
+    },
     Internal { detail: String },
 }
 
@@ -66,6 +75,7 @@ impl RouteError {
             RouteError::BadRequest(_) => StatusCode::BAD_REQUEST,
             RouteError::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
             RouteError::Forbidden { .. } => StatusCode::FORBIDDEN,
+            RouteError::QuotaExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
             RouteError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -76,6 +86,7 @@ impl RouteError {
             RouteError::BadRequest(s) => s.as_str(),
             RouteError::PaymentRequired { detail } => detail.as_str(),
             RouteError::Forbidden { detail } => detail.as_str(),
+            RouteError::QuotaExceeded { detail, .. } => detail.as_str(),
             RouteError::Internal { detail } => detail.as_str(),
         }
     }
@@ -86,10 +97,28 @@ impl RouteError {
             RouteError::BadRequest(_) => "bad_request",
             RouteError::PaymentRequired { .. } => "payment_required",
             RouteError::Forbidden { .. } => "forbidden",
+            RouteError::QuotaExceeded { .. } => "quota_exceeded",
             RouteError::Internal { .. } => "internal_error",
         }
     }
+
+    /// Quota-related metadata for `Retry-After` header / JSON body.
+    #[must_use]
+    pub fn quota_metadata(&self) -> Option<(i64, u64, u64)> {
+        match self {
+            RouteError::QuotaExceeded {
+                reset_at_unix,
+                limit,
+                used,
+                ..
+            } => Some((*reset_at_unix, *limit, *used)),
+            _ => None,
+        }
+    }
 }
+
+/// Default daily quota for AI-heavy scans when the tenant has no explicit `ai_daily_scan_quota`.
+pub const DEFAULT_AI_DAILY_SCAN_QUOTA: u64 = 50;
 
 fn parse_boolish(s: &str) -> Option<bool> {
     match s.trim().to_ascii_lowercase().as_str() {
@@ -229,12 +258,13 @@ pub async fn check_tenant_entitlement(
                 return Err(RouteError::PaymentRequired { detail });
             }
 
-            let quota_limit: u64 = quota_raw
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
+            // Quota: explicit positive integer → use it.
+            // 0 in config → unlimited (legacy behaviour kept for paid plans).
+            // Missing in config → DEFAULT_AI_DAILY_SCAN_QUOTA (50).
+            let quota_limit: u64 = match quota_raw.as_deref().map(str::trim) {
+                Some("") | None => DEFAULT_AI_DAILY_SCAN_QUOTA,
+                Some(s) => s.parse::<u64>().unwrap_or(DEFAULT_AI_DAILY_SCAN_QUOTA),
+            };
 
             if quota_limit > 0 {
                 let used = count_ai_heavy_jobs_today_utc(pool, tenant_id)
@@ -252,10 +282,24 @@ pub async fn check_tenant_entitlement(
                     })?;
                 let used_u = used.max(0) as u64;
                 if used_u >= quota_limit {
+                    // Compute next UTC midnight as reset point.
+                    let now = Utc::now();
+                    let tomorrow = now.date_naive().succ_opt().unwrap_or_else(|| now.date_naive());
+                    let reset_at = tomorrow
+                        .and_hms_opt(0, 0, 0)
+                        .map(|dt| dt.and_utc().timestamp())
+                        .unwrap_or_else(|| now.timestamp() + 3600);
                     let detail = format!(
-                        "AI-heavy daily quota exhausted: {used_u}/{quota_limit} jobs (UTC day) for tenant {tenant_id}; engine '{engine}'"
+                        "AI-heavy daily quota exhausted: {used_u}/{quota_limit} jobs (UTC day) for tenant {tenant_id}; engine '{engine}'. Resets at {reset_at} (UTC midnight)."
                     );
-                    tracing::warn!(target: "scan_routing", tenant_id, used = used_u, limit = quota_limit, "ai_daily_scan_quota exceeded");
+                    tracing::warn!(
+                        target: "scan_routing",
+                        tenant_id,
+                        used = used_u,
+                        limit = quota_limit,
+                        reset_at,
+                        "ai_daily_scan_quota exceeded"
+                    );
                     try_audit_entitlement_denial(
                         pool,
                         tenant_id,
@@ -263,7 +307,12 @@ pub async fn check_tenant_entitlement(
                         &detail,
                     )
                     .await;
-                    return Err(RouteError::Forbidden { detail });
+                    return Err(RouteError::QuotaExceeded {
+                        detail,
+                        reset_at_unix: reset_at,
+                        limit: quota_limit,
+                        used: used_u,
+                    });
                 }
             }
 
@@ -451,6 +500,26 @@ fn enforce_scope_validation_for_engine(engine: &str) -> bool {
     !matches!(engine, "pipeline" | "zero_day_radar")
 }
 
+/// Read `system_configs.enforce_scope_strict` for the tenant. Default = `true`.
+/// Returns Err on database error so we *fail closed* if the policy can't be read.
+async fn enforce_scope_strict(pool: &PgPool, tenant_id: i64) -> Result<bool, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx for enforce_scope_strict: {e}"))?;
+    let raw: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'enforce_scope_strict'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("read enforce_scope_strict: {e}"))?;
+    let _ = tx.commit().await;
+    Ok(match raw.as_deref().map(str::trim) {
+        Some("false") | Some("0") | Some("no") => false,
+        _ => true,
+    })
+}
+
 fn build_payload(
     kind: PayloadKind,
     ctx: &ScanBodyFields,
@@ -583,7 +652,32 @@ pub async fn route_scan_job(
 
     let ctx = extract_fields(body);
     let client_id = parse_client_id(&ctx);
-    let scope_outcome = if !ctx.target.is_empty() && enforce_scope_validation_for_engine(engine) {
+
+    // ── BLOCKER #1: Strict scope validation ──────────────────────────────────
+    //
+    // Every scan with a target MUST be inside the client's approved scope
+    // unless the engine is explicitly exempt (`pipeline` operates on repo
+    // URLs, `zero_day_radar` is intel-only). In all other cases:
+    //   - target must be non-empty AND
+    //   - client_id must be supplied AND
+    //   - target must resolve to / match an approved domain or IP range
+    //
+    // `enforce_scope_strict` system_config can be set to `false` for a
+    // tenant to opt out (e.g. red-team-as-a-service mode). Default = strict.
+    let enforce_strict = enforce_scope_strict(pool, tenant_id)
+        .await
+        .map_err(|e| RouteError::Internal { detail: e })?;
+    let scope_outcome = if enforce_scope_validation_for_engine(engine) {
+        if ctx.target.is_empty() {
+            return Err(RouteError::BadRequest(format!(
+                "target required for engine '{engine}' (scope-enforced)"
+            )));
+        }
+        if enforce_strict && client_id.is_none() {
+            return Err(RouteError::BadRequest(format!(
+                "client_id required for engine '{engine}' (scope is enforced per-client)"
+            )));
+        }
         Some(
             crate::security_hardening::validate_scan_target_in_scope(
                 pool,

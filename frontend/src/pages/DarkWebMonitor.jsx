@@ -1,439 +1,165 @@
 /**
- * Dark Web Monitor
+ * Dark Web Monitor — real, customer-scoped intelligence only.
  *
- * World-class dark web threat intelligence: credential exposure alerts,
- * ransomware group intelligence, breach feed, dark web forum mentions.
- * Route: /dark-web
+ * Pulls credential / dark-web findings from `/api/findings` (sources: `leak_hunter`,
+ * `darkweb_intel`, `dark_web_monitor`, etc.). If no rows exist we render an honest
+ * empty state with the exact next steps (run a scan, set HIBP_API_KEY, etc.). No
+ * fabricated `acmecorp.com` data.
  */
-import React, { useState, useMemo, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 }
+const DARK_WEB_SOURCES = new Set([
+  'leak_hunter',
+  'darkweb_intel',
+  'dark_web_monitor',
+  'typosquatting_monitor',
+])
 
-// Fallback credential leaks when API is unavailable
-const FALLBACK_CREDENTIAL_LEAKS = [
-  {
-    id: 'leak-001',
-    source: 'BreachForums',
-    date: '2026-04-18',
-    severity: 'critical',
-    recordCount: 240_000,
-    dataTypes: ['email', 'bcrypt_hash', 'plaintext_password', 'phone'],
-    domain: 'acmecorp.com',
-    verified: true,
-    actor: 'ShinyHunters',
-    description: '240k employee and customer credentials from ACME Corp CRM database. 18% already cracked via rainbow tables.',
-  },
-  {
-    id: 'leak-002',
-    source: 'RaidForums Mirror',
-    date: '2026-04-15',
-    severity: 'high',
-    recordCount: 14_200,
-    dataTypes: ['email', 'md5_hash', 'username', 'api_key'],
-    domain: 'dev.acmecorp.com',
-    verified: true,
-    actor: 'Unknown',
-    description: '14k developer portal credentials including 38 API keys still valid at time of discovery.',
-  },
-  {
-    id: 'leak-003',
-    source: 'Telegram Channel',
-    date: '2026-04-10',
-    severity: 'medium',
-    recordCount: 3_100,
-    dataTypes: ['email', 'name', 'ip_address'],
-    domain: 'marketing.acmecorp.com',
-    verified: false,
-    actor: 'Unverified',
-    description: 'Unverified dump of marketing team data. Low-severity PII exposure; no passwords included.',
-  },
-]
-
-// Fallback ransomware groups when API is unavailable
-const FALLBACK_RANSOMWARE_GROUPS = [
-  {
-    id: 'lockbit',
-    name: 'LockBit 3.0',
-    status: 'active',
-    nation: 'Russia (suspected)',
-    recentVictims: 47,
-    sectors: ['Healthcare', 'Finance', 'Manufacturing'],
-    color: '#ef4444',
-    ttps: ['T1486', 'T1021.002', 'T1055', 'T1078'],
-    lastActivity: '2026-04-19',
-    description: 'Most prolific ransomware-as-a-service group. Uses triple extortion: encryption, data leak, DDoS.',
-    leakSiteActive: true,
-  },
-  {
-    id: 'clop',
-    name: 'Cl0p',
-    status: 'active',
-    nation: 'Russia (TA505)',
-    recentVictims: 31,
-    sectors: ['Legal', 'Education', 'Tech'],
-    color: '#f97316',
-    ttps: ['T1190', 'T1560', 'T1537'],
-    lastActivity: '2026-04-17',
-    description: 'Known for mass-exploitation of MOVEit, GoAnywhere, Accellion — zero-day supply chain attacks targeting file transfer appliances.',
-    leakSiteActive: true,
-  },
-  {
-    id: 'alphv',
-    name: 'ALPHV / BlackCat',
-    status: 'disrupted',
-    nation: 'Russia (suspected)',
-    recentVictims: 12,
-    sectors: ['Healthcare', 'Energy'],
-    color: '#f59e0b',
-    ttps: ['T1486', 'T1562', 'T1078.004'],
-    lastActivity: '2026-03-01',
-    description: 'First Rust-based ransomware. FBI operation disrupted in Dec 2023; resurfaced with limited activity.',
-    leakSiteActive: false,
-  },
-  {
-    id: 'play',
-    name: 'Play',
-    status: 'active',
-    nation: 'Unknown',
-    recentVictims: 19,
-    sectors: ['Government', 'Manufacturing'],
-    color: '#8b5cf6',
-    ttps: ['T1190', 'T1021.001', 'T1486'],
-    lastActivity: '2026-04-18',
-    description: 'Avoids ransom negotiation — deploys both encryption and data exfiltration simultaneously. No public decryptor.',
-    leakSiteActive: true,
-  },
-]
-
-// Fallback dark web mentions when API is unavailable
-const FALLBACK_DARK_WEB_MENTIONS = [
-  { id: 'm-1', ts: '2026-04-20 14:22', source: 'BreachForums',  severity: 'critical', text: '"acmecorp.com" admin panel credentials for sale — $500 BTC. Full DB access.', verified: true },
-  { id: 'm-2', ts: '2026-04-20 09:15', source: 'Dread Forum',   severity: 'high',     text: 'Thread: "ACME Corp VPN bypass — works on GlobalProtect 5.2.x, no auth needed"', verified: true },
-  { id: 'm-3', ts: '2026-04-19 22:44', source: 'Telegram',      severity: 'high',     text: 'New botnet targeting acmecorp[.]com DNS infra. 2.3k bots active.', verified: false },
-  { id: 'm-4', ts: '2026-04-19 11:30', source: 'XSS.is',        severity: 'medium',   text: 'Source code dump: acmecorp internal billing service v2.4 (nodejs/postgres)', verified: false },
-  { id: 'm-5', ts: '2026-04-18 08:00', source: 'Exploit.in',    severity: 'medium',   text: 'RDP credentials: acmecorp.com:3389 admin/welcome1 (batch of 14)', verified: true },
-  { id: 'm-6', ts: '2026-04-17 17:05', source: 'LockBit Blog',  severity: 'critical', text: 'ACME CORPORATION added to LockBit leak site. 48h countdown to release.', verified: true },
-]
-
-const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22d3ee', info: '#6b7280' }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub, color, icon }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/8 p-4 flex flex-col gap-1"
-    >
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-lg">{icon}</span>}
-        <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: `${color}99` }}>{label}</span>
-      </div>
-      <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-white/30 font-mono">{sub}</div>}
-    </motion.div>
-  )
+function severityBadge(sev) {
+  const s = (sev || 'info').toLowerCase()
+  const map = {
+    critical: 'text-rose-300 bg-rose-500/10 border-rose-500/40',
+    high: 'text-orange-300 bg-orange-500/10 border-orange-500/40',
+    medium: 'text-yellow-300 bg-yellow-500/10 border-yellow-500/40',
+    low: 'text-blue-300 bg-blue-500/10 border-blue-500/40',
+    info: 'text-slate-300 bg-slate-700/10 border-slate-500/40',
+  }
+  return `inline-block px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider ${map[s] || map.info}`
 }
-
-function CredentialLeakCard({ leak }) {
-  const sc = SEV_COLOR[leak.severity] ?? '#6b7280'
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/10 p-5 space-y-3"
-      style={{ borderColor: `${sc}25` }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span
-              className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
-              style={{ color: sc, borderColor: `${sc}40`, background: `${sc}10` }}
-            >
-              {leak.severity}
-            </span>
-            {leak.verified && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-green-400 border-green-500/30 bg-green-950/20 uppercase tracking-widest">
-                VERIFIED
-              </span>
-            )}
-            <span className="text-[10px] font-mono text-white/30">{leak.source}</span>
-            <span className="text-[10px] font-mono text-white/20">{leak.date}</span>
-          </div>
-          <p className="text-xs font-semibold text-white/80 font-mono">{leak.domain}</p>
-          <p className="text-xs text-white/45 mt-1 leading-relaxed">{leak.description}</p>
-        </div>
-        <div className="text-right shrink-0">
-          <div className="text-lg font-bold font-mono" style={{ color: sc }}>
-            {leak.recordCount.toLocaleString()}
-          </div>
-          <div className="text-[9px] font-mono text-white/25">records</div>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {leak.dataTypes.map((dt) => (
-          <span key={dt} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/45 capitalize">
-            {dt.replace(/_/g, ' ')}
-          </span>
-        ))}
-      </div>
-      {leak.actor !== 'Unknown' && leak.actor !== 'Unverified' && (
-        <div className="text-[10px] font-mono text-white/30">
-          Attributed to: <span className="text-red-400/70">{leak.actor}</span>
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
-function RansomwareGroupCard({ group, selected, onSelect }) {
-  const isActive = group.status === 'active'
-  return (
-    <motion.button
-      type="button"
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      onClick={() => onSelect(group.id === selected ? null : group.id)}
-      className="w-full text-left rounded-xl border p-4 transition-all hover:scale-[1.003]"
-      style={{
-        borderColor: selected === group.id ? `${group.color}50` : 'rgba(255,255,255,0.07)',
-        background: selected === group.id ? `${group.color}08` : 'rgba(0,0,0,0.3)',
-      }}
-    >
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-sm font-bold" style={{ color: group.color }}>{group.name}</span>
-            <span
-              className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
-              style={{
-                color: isActive ? '#ef4444' : '#22d3ee',
-                borderColor: isActive ? 'rgba(239,68,68,0.3)' : 'rgba(34,211,238,0.3)',
-                background: isActive ? 'rgba(239,68,68,0.08)' : 'rgba(34,211,238,0.08)',
-              }}
-            >
-              {group.status}
-            </span>
-            {group.leakSiteActive && (
-              <span className="text-[9px] font-mono text-red-400/60">● LEAK SITE LIVE</span>
-            )}
-          </div>
-          <div className="text-[10px] font-mono text-white/30">{group.nation} · last seen {group.lastActivity}</div>
-        </div>
-        <div className="text-right">
-          <div className="text-xl font-bold font-mono" style={{ color: group.color }}>{group.recentVictims}</div>
-          <div className="text-[9px] font-mono text-white/25">victims (90d)</div>
-        </div>
-      </div>
-      <p className="text-[11px] text-white/45 leading-relaxed mb-2">{group.description}</p>
-      <div className="flex flex-wrap gap-1 mb-1">
-        {group.sectors.map((s) => (
-          <span key={s} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/40">{s}</span>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {group.ttps.map((t) => (
-          <span key={t} className="text-[9px] font-mono px-1 py-0.5 bg-white/5 border border-white/10 rounded text-white/25">{t}</span>
-        ))}
-      </div>
-    </motion.button>
-  )
-}
-
-function MentionRow({ mention, index }) {
-  const sc = SEV_COLOR[mention.severity] ?? '#6b7280'
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04 }}
-      className="flex items-start gap-3 py-3 border-b border-white/5"
-    >
-      <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: sc, boxShadow: `0 0 6px ${sc}80` }} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span className="text-[9px] font-mono text-white/25">{mention.ts}</span>
-          <span
-            className="text-[9px] font-mono px-1 py-0.5 rounded border uppercase tracking-widest"
-            style={{ color: sc, borderColor: `${sc}30`, background: `${sc}08` }}
-          >
-            {mention.severity}
-          </span>
-          <span className="text-[9px] font-mono text-white/30">{mention.source}</span>
-          {mention.verified && (
-            <span className="text-[9px] font-mono text-green-400/50">✓ verified</span>
-          )}
-        </div>
-        <p className="text-xs text-white/60 leading-relaxed">{mention.text}</p>
-      </div>
-    </motion.div>
-  )
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DarkWebMonitor() {
-  const [credentialLeaks, setCredentialLeaks] = useState([])
-  const [ransomwareGroups, setRansomwareGroups] = useState([])
-  const [darkWebMentions, setDarkWebMentions] = useState([])
+  const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [activeSection, setActiveSection] = useState('leaks') // 'leaks' | 'ransomware' | 'mentions'
-  const [selectedRg, setSelectedRg] = useState(null)
 
-  // Load dark web data from API
   useEffect(() => {
-    const loadData = async () => {
+    let cancelled = false
+    ;(async () => {
       setLoading(true)
       setError(null)
-
       try {
-        const res = await apiFetch('/api/dark-web')
-        if (res.ok) {
-          const data = await res.json()
-          setCredentialLeaks(data.credentialLeaks || data.leaks || FALLBACK_CREDENTIAL_LEAKS)
-          setRansomwareGroups(data.ransomwareGroups || data.groups || FALLBACK_RANSOMWARE_GROUPS)
-          setDarkWebMentions(data.darkWebMentions || data.mentions || FALLBACK_DARK_WEB_MENTIONS)
-        } else if (res.status === 404) {
-          // API not implemented, use fallback
-          setCredentialLeaks(FALLBACK_CREDENTIAL_LEAKS)
-          setRansomwareGroups(FALLBACK_RANSOMWARE_GROUPS)
-          setDarkWebMentions(FALLBACK_DARK_WEB_MENTIONS)
-        } else {
-          throw new Error(`Failed to load dark web data (HTTP ${res.status})`)
-        }
-      } catch (err) {
-        setError(err?.message || 'Failed to load dark web intelligence')
-        // Use fallback data on error
-        setCredentialLeaks(FALLBACK_CREDENTIAL_LEAKS)
-        setRansomwareGroups(FALLBACK_RANSOMWARE_GROUPS)
-        setDarkWebMentions(FALLBACK_DARK_WEB_MENTIONS)
+        const r = await apiFetch('/api/findings?limit=2000')
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const d = await r.json()
+        if (cancelled) return
+        const arr = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
+        const filtered = arr.filter((f) => DARK_WEB_SOURCES.has((f.source || f.engine || '').toLowerCase()))
+        filtered.sort(
+          (a, b) =>
+            (SEVERITY_ORDER[(b.severity || '').toLowerCase()] || 0) -
+            (SEVERITY_ORDER[(a.severity || '').toLowerCase()] || 0),
+        )
+        setFindings(filtered)
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Failed to load findings')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
-    }
-
-    loadData()
+    })()
+    return () => { cancelled = true }
   }, [])
 
-  const metrics = useMemo(() => {
-    const totalRecords = credentialLeaks.reduce((s, l) => s + l.recordCount, 0)
-    const critLeaks = credentialLeaks.filter((l) => l.severity === 'critical').length
-    const activeRg = ransomwareGroups.filter((r) => r.status === 'active').length
-    const critMentions = darkWebMentions.filter((m) => m.severity === 'critical').length
-    return { totalRecords, critLeaks, activeRg, critMentions }
-  }, [credentialLeaks, ransomwareGroups, darkWebMentions])
-
-  const sections = [
-    { id: 'leaks',      label: '🔑 Credential Leaks',   count: credentialLeaks.length,    color: '#ef4444' },
-    { id: 'ransomware', label: '💀 Ransomware Groups',  count: ransomwareGroups.length,   color: '#f97316' },
-    { id: 'mentions',   label: '🕵️ Dark Web Mentions', count: darkWebMentions.length,   color: '#8b5cf6' },
-  ]
+  const stats = useMemo(() => {
+    const by = { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const f of findings) {
+      const s = (f.severity || 'info').toLowerCase()
+      if (by[s] !== undefined) by[s] += 1
+    }
+    return { ...by, total: findings.length }
+  }, [findings])
 
   return (
-    <PageShell
-      title="Dark Web Monitor"
-      subtitle="Credential leaks · Ransomware intel · Forum mentions"
-      badge="LIVE"
-      badgeColor="#ef4444"
-    >
-      {/* Error Banner */}
-      {error && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 mb-6">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-400 text-sm">⚠️</span>
-            <span className="text-xs font-mono text-amber-300/80">{error}</span>
-            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
-          </div>
+    <PageShell title="Dark Web Monitor" subtitle="Credential leaks, typosquats, and dark-web mentions">
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <StatCard label="Total Hits" value={stats.total} />
+          <StatCard label="Critical" value={stats.critical} accent="text-rose-300" />
+          <StatCard label="High" value={stats.high} accent="text-orange-300" />
+          <StatCard label="Medium" value={stats.medium} accent="text-yellow-300" />
+          <StatCard label="Low / Info" value={stats.low + stats.info} accent="text-slate-300" />
         </div>
-      )}
 
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin mx-auto" />
-            <p className="text-sm font-mono text-white/40">Loading dark web intelligence...</p>
+        {error && (
+          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
+            Couldn't load findings: {error}.
           </div>
-        </div>
-      )}
-
-      {!loading && (
-        <>
-      {/* ── Metrics ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Exposed Records"     value={metrics.totalRecords.toLocaleString()} sub="Across all monitored leaks"   color="#ef4444" icon="🔑" />
-        <MetricCard label="Critical Leaks"      value={metrics.critLeaks}                     sub="Verified high-risk breaches"  color="#f97316" icon="💥" />
-        <MetricCard label="Active Ransomware RG" value={metrics.activeRg}                     sub="Currently operating groups"  color="#f59e0b" icon="💀" />
-        <MetricCard label="Critical Mentions"   value={metrics.critMentions}                  sub="High-priority dark web hits"  color="#8b5cf6" icon="🕵️" />
-      </div>
-
-      {/* ── Section Tabs ─────────────────────────────────────────────────── */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {sections.map((s) => (
-          <button
-            key={s.id} type="button" onClick={() => setActiveSection(s.id)}
-            className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
-            style={{
-              color: activeSection === s.id ? s.color : 'rgba(255,255,255,0.35)',
-              borderColor: activeSection === s.id ? `${s.color}40` : 'rgba(255,255,255,0.1)',
-              background: activeSection === s.id ? `${s.color}10` : 'transparent',
-            }}
-          >
-            {s.label}
-            <span className="ml-2 text-[9px] font-mono opacity-60">({s.count})</span>
-          </button>
-        ))}
-      </div>
-
-      {/* ── Content ──────────────────────────────────────────────────────── */}
-      <AnimatePresence mode="wait">
-        {activeSection === 'leaks' && (
-          <motion.div key="leaks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            {credentialLeaks.length === 0 ? (
-              <div className="py-12 text-center text-white/40">No credential leaks found</div>
-            ) : (
-              credentialLeaks.map((leak) => (
-                <CredentialLeakCard key={leak.id} leak={leak} />
-              ))
-            )}
-          </motion.div>
         )}
 
-        {activeSection === 'ransomware' && (
-          <motion.div key="ransomware" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            {ransomwareGroups.length === 0 ? (
-              <div className="py-12 text-center text-white/40">No ransomware groups tracked</div>
-            ) : (
-              ransomwareGroups.map((group) => (
-                <RansomwareGroupCard key={group.id} group={group} selected={selectedRg} onSelect={setSelectedRg} />
-              ))
-            )}
-          </motion.div>
-        )}
-
-        {activeSection === 'mentions' && (
-          <motion.div key="mentions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 px-5">
-              {darkWebMentions.length === 0 ? (
-                <div className="py-12 text-center text-white/40">No dark web mentions found</div>
-              ) : (
-                darkWebMentions.map((m, i) => (
-                  <MentionRow key={m.id} mention={m} index={i} />
-                ))
-              )}
+        <section className="bg-black/40 border border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-white">Dark-web findings</h3>
+            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">Open Findings C2 →</Link>
+          </div>
+          {loading ? (
+            <div className="text-sm text-white/40">Loading…</div>
+          ) : findings.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px] font-mono">
+                <thead>
+                  <tr className="text-left text-white/45 border-b border-white/10">
+                    <th className="py-2 pr-3">Severity</th>
+                    <th className="py-2 pr-3">Title</th>
+                    <th className="py-2 pr-3">Source</th>
+                    <th className="py-2 pr-3">Target</th>
+                    <th className="py-2 pr-3">Discovered</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {findings.slice(0, 200).map((f) => (
+                    <tr key={f.id || f.finding_id} className="hover:bg-white/[0.02]">
+                      <td className="py-2 pr-3"><span className={severityBadge(f.severity)}>{(f.severity || 'info').toUpperCase()}</span></td>
+                      <td className="py-2 pr-3 text-white/85 max-w-md truncate" title={f.title}>{f.title || '—'}</td>
+                      <td className="py-2 pr-3 text-white/55">{f.source || f.engine || '—'}</td>
+                      <td className="py-2 pr-3 text-white/55 max-w-xs truncate" title={f.target}>{f.target || '—'}</td>
+                      <td className="py-2 pr-3 text-white/40">{f.discovered_at ? new Date(f.discovered_at).toLocaleString() : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      </>
-      )}
+          )}
+        </section>
+      </div>
     </PageShell>
+  )
+}
+
+function StatCard({ label, value, accent }) {
+  return (
+    <div className="rounded-2xl bg-black/40 border border-white/10 p-4">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{label}</div>
+      <div className={`text-3xl font-bold mt-1 ${accent || 'text-white'}`}>{value}</div>
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="text-sm text-white/55 space-y-3">
+      <div>No dark-web intelligence yet for this tenant.</div>
+      <ul className="list-disc pl-5 space-y-1 text-xs text-white/45">
+        <li>
+          Add a client and{' '}
+          <Link to="/clients" className="underline text-cyan-300">run the baseline scan</Link>{' '}
+          (Leak Hunter is included in the bundle).
+        </li>
+        <li>
+          For richer breach feeds, set <code className="text-cyan-300">HIBP_API_KEY</code>{' '}
+          / <code className="text-cyan-300">OTX_API_KEY</code> in System Configuration; the
+          engine is wired but degrades gracefully without keys.
+        </li>
+        <li>
+          Run the <code className="text-cyan-300">darkweb_intel</code> engine from the{' '}
+          <Link to="/engines" className="underline text-cyan-300">Engine Matrix</Link>{' '}
+          (requires an authorized domain).
+        </li>
+      </ul>
+    </div>
   )
 }

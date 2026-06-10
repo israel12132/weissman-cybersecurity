@@ -1,12 +1,139 @@
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
+import {
+  LayoutDashboard,
+  ShieldAlert,
+  Bug,
+  Clock,
+  MessageSquare,
+  Radar,
+  GitBranch,
+  Zap,
+  CalendarClock,
+  Bell,
+  Building2,
+  Server,
+  Cpu,
+  ScrollText,
+  Settings,
+  Shield,
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeft,
+  Trash2,
+} from 'lucide-react'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
 import { apiFetch } from '../../lib/apiBase'
+import { useProductionEngines } from '../../lib/useProductionEngines'
+import Logo from '../Logo'
+import ProfileMenu from '../ui/ProfileMenu'
+import LanguageSwitcher from '../LanguageSwitcher'
+import { useToast } from '../ui/Toaster'
+
+const STORAGE_KEY = 'weissman.nav.sections'
+
+function readSectionState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeSectionState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch { /* ignore */ }
+}
+
+function isRouteActive(pathname, to, matchPaths) {
+  if (matchPaths?.length) {
+    return matchPaths.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
+  }
+  if (to === '/') return pathname === '/' || pathname === '/operations'
+  return pathname === to || pathname.startsWith(`${to}/`)
+}
+
+function NavLink({ to, label, icon: Icon, id, matchPaths, badge }) {
+  const { pathname } = useLocation()
+  const active = isRouteActive(pathname, to, matchPaths)
+
+  return (
+    <Link
+      id={id}
+      to={to}
+      className={`group relative flex items-center gap-2.5 pl-3 pr-2.5 py-[7px] rounded-lg text-[11px] font-medium tracking-wide transition-all duration-200 ${
+        active
+          ? 'text-cyan-100 bg-cyan-500/[0.08] shadow-[inset_0_0_20px_rgba(34,211,238,0.06)]'
+          : 'text-white/55 hover:text-white/85 hover:bg-white/[0.04]'
+      }`}
+    >
+      <span
+        className={`absolute start-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-200 ${
+          active ? 'h-[70%] bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]' : 'h-0 bg-transparent'
+        }`}
+        aria-hidden
+      />
+      <Icon
+        className={`w-[15px] h-[15px] shrink-0 transition-colors ${
+          active ? 'text-cyan-400' : 'text-white/35 group-hover:text-white/55'
+        }`}
+        strokeWidth={active ? 2.25 : 1.75}
+      />
+      <span className="flex-1 truncate">{label}</span>
+      {badge != null && (
+        <span className="shrink-0 text-[9px] font-mono tabular-nums px-1.5 py-0.5 rounded border border-cyan-500/25 bg-cyan-500/10 text-cyan-300/80">
+          {badge}
+        </span>
+      )}
+    </Link>
+  )
+}
+
+function NavSection({ id, title, children, defaultOpen = true, open, onToggle }) {
+  return (
+    <div className="mb-0.5">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-md text-[9px] font-mono uppercase tracking-[0.22em] text-white/35 hover:text-white/55 hover:bg-white/[0.03] transition-colors"
+        aria-expanded={open}
+      >
+        <span className="truncate">{title}</span>
+        <motion.span
+          animate={{ rotate: open ? 0 : -90 }}
+          transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+          className="shrink-0"
+        >
+          <ChevronDown className="w-3 h-3" strokeWidth={2} />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-0.5 pb-1.5 pt-0.5">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 export default function GlobalNexus({ ceoIntegrated = false }) {
+  const { t } = useTranslation()
   const { isCeo } = useAuth()
+  const { toast } = useToast()
   const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients } = useClient()
   const [stats, setStats] = useState({ total_vulnerabilities: 0, security_score: 0, active_scans: 0 })
   const [addName, setAddName] = useState('')
@@ -21,6 +148,82 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addMessage, setAddMessage] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [sectionOpen, setSectionOpen] = useState(() => {
+    const saved = readSectionState()
+    return {
+      command: saved.command ?? true,
+      intelligence: saved.intelligence ?? true,
+      automation: saved.automation ?? false,
+      clients_agents: saved.clients_agents ?? true,
+      platform: saved.platform ?? false,
+    }
+  })
+  const { productionCount, catalogCount } = useProductionEngines()
+  const engineCountLabel = productionCount > 0 ? productionCount : catalogCount
+
+  const toggleSection = (id) => {
+    setSectionOpen((prev) => {
+      const next = { ...prev, [id]: !prev[id] }
+      writeSectionState(next)
+      return next
+    })
+  }
+
+  const navSections = useMemo(() => {
+    const sections = [
+      {
+        id: 'command',
+        title: t('nav.groups.command'),
+        defaultOpen: true,
+        items: [
+          { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, id: 'nav-dashboard', matchPaths: ['/', '/operations'] },
+          { to: '/findings', label: t('nav.findings'), icon: ShieldAlert, id: 'nav-findings-c2' },
+          { to: '/vuln-intel', label: t('nav.vuln_intel'), icon: Bug, id: 'nav-vuln-intel' },
+          { to: '/jobs', label: t('nav.jobs'), icon: Clock, id: 'nav-jobs' },
+        ],
+      },
+      {
+        id: 'intelligence',
+        title: t('nav.groups.intelligence'),
+        defaultOpen: true,
+        items: [
+          { to: '/ask', label: t('nav.ask_weissman'), icon: MessageSquare, id: 'nav-ask-weissman' },
+          { to: '/threat-intel', label: t('nav.threat_intel'), icon: Radar, id: 'nav-threat-intel' },
+          { to: '/risk-graph', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
+        ],
+      },
+      {
+        id: 'automation',
+        title: t('nav.groups.automation'),
+        items: [
+          { to: '/playbooks', label: t('nav.playbooks'), icon: Zap, id: 'nav-playbooks' },
+          { to: '/scan-scheduler', label: t('nav.scan_scheduler'), icon: CalendarClock, id: 'nav-scan-scheduler' },
+          { to: '/alert-rules', label: t('nav.alert_rules'), icon: Bell, id: 'nav-alert-rules' },
+        ],
+      },
+      {
+        id: 'clients_agents',
+        title: t('nav.groups.clients_agents'),
+        defaultOpen: true,
+        items: [
+          { to: '/clients', label: t('nav.clients'), icon: Building2, id: 'nav-clients' },
+          { to: '/agents', label: t('nav.agent_management'), icon: Server, id: 'nav-agents' },
+        ],
+      },
+      {
+        id: 'platform',
+        title: t('nav.groups.platform'),
+        items: [
+          { to: '/engines', label: t('nav.engines'), icon: Cpu, id: 'nav-engine-matrix', badge: engineCountLabel },
+          { to: '/audit-log', label: t('nav.audit_log'), icon: ScrollText, id: 'nav-audit-log' },
+          { to: '/system-config', label: t('nav.system_config'), icon: Settings, id: 'nav-system-config' },
+          ...(isCeo ? [{ to: '/admin', label: t('nav.admin'), icon: Shield, id: 'nav-admin-management' }] : []),
+        ],
+      },
+    ]
+    return sections
+  }, [t, isCeo, engineCountLabel])
 
   const handleAddClient = async (e) => {
     if (e) e.preventDefault()
@@ -33,10 +236,10 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     setAddSubmitting(true)
     try {
       const toJsonArray = (raw) => {
-        const t = (raw || '').trim()
-        if (!t) return '[]'
-        if (t.startsWith('[')) return t
-        return JSON.stringify(t.split(/[\s,]+/).filter(Boolean))
+        const trimmed = (raw || '').trim()
+        if (!trimmed) return '[]'
+        if (trimmed.startsWith('[')) return trimmed
+        return JSON.stringify(trimmed.split(/[\s,]+/).filter(Boolean))
       }
       const domains = toJsonArray(addDomains)
       const ip_ranges = toJsonArray(addIpRanges)
@@ -71,13 +274,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         setAddAwsExt('')
         setAddGcp('')
         await refreshClients()
+        toast.success(`Client "${name}" added`)
         setTimeout(() => setAddMessage(null), 2000)
       } else {
         const errMsg = r.status === 401 ? 'Please log in again' : formatApiErrorFromBody(d, r.status)
         setAddMessage({ error: errMsg })
+        toast.error(errMsg)
       }
     } catch (_) {
       setAddMessage({ error: 'Network error' })
+      toast.error('Network error — could not reach API.')
     }
     setAddSubmitting(false)
   }
@@ -98,193 +304,164 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       } catch (_) {}
     }
     load()
-    const t = setInterval(load, 15000)
+    const interval = setInterval(load, 15000)
     return () => {
       cancelled = true
-      clearInterval(t)
+      clearInterval(interval)
     }
   }, [])
 
-  return (
-    <aside className="flex flex-col w-full max-w-full lg:w-64 lg:shrink-0 lg:max-w-[16rem] h-auto max-h-[min(42vh,320px)] lg:max-h-none lg:h-full bg-black/40 backdrop-blur-md border-b lg:border-b-0 lg:border-r border-white/10 overflow-y-auto overflow-x-hidden shrink-0">
-      {/* Top: Global metrics */}
-      <div className="p-4 border-b border-white/10">
+  const healthColor = stats.security_score >= 70 ? '#4ade80' : stats.security_score >= 40 ? '#fbbf24' : '#f87171'
+
+  const sidebarContent = (
+    <>
+      {/* Brand */}
+      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-white/[0.06]">
         {isCeo && (
           <Link
             to="/"
-            className="mb-3 block text-center text-[10px] font-mono uppercase tracking-widest py-2 rounded border border-amber-500/40 text-amber-200/95 hover:bg-amber-950/40"
+            className="mb-3 block text-center text-[9px] font-mono uppercase tracking-[0.2em] py-1.5 rounded-md border border-amber-500/30 text-amber-200/90 hover:bg-amber-950/30 transition-colors"
           >
             {ceoIntegrated ? 'Cockpit · mission control' : 'CEO cockpit home'}
           </Link>
         )}
-        <div className="text-[10px] uppercase tracking-[0.2em] text-white/50 mb-3 font-medium">
-          Global Nexus
-        </div>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-[#9ca3af]">Active Threats</span>
-            <span className="font-mono text-sm font-semibold text-[#22d3ee] tabular-nums">
-              {stats.total_vulnerabilities}
-            </span>
+        <Link to="/" aria-label={t('a11y.home')} className="block group">
+          <Logo size={26} className="opacity-95 group-hover:opacity-100 transition-opacity" />
+          <p className="mt-2 text-[9px] font-mono uppercase tracking-[0.28em] text-cyan-400/70">
+            {t('nav.command_center')}
+          </p>
+        </Link>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/35 mb-1">
+              {t('nav.active_threats')}
+            </div>
+            <div className="text-sm font-semibold font-mono tabular-nums text-cyan-300">
+              {stats.total_vulnerabilities.toLocaleString()}
+            </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-[#9ca3af]">System Health</span>
-            <span
-              className="font-mono text-sm font-semibold tabular-nums"
-              style={{
-                color: stats.security_score >= 70 ? '#4ade80' : stats.security_score >= 40 ? '#fbbf24' : '#f87171',
-              }}
-            >
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/35 mb-1">
+              {t('nav.system_health')}
+            </div>
+            <div className="text-sm font-semibold font-mono tabular-nums" style={{ color: healthColor }}>
               {stats.security_score}%
-            </span>
-          </div>
-          {stats.active_scans > 0 && (
-            <div className="flex items-center gap-1.5 text-[10px] text-[#4ade80]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-              Scan active
             </div>
-          )}
+          </div>
         </div>
-      </div>
-
-      {/* Quick navigation to new pages */}
-      <div className="px-3 py-3 border-b border-white/10 space-y-1">
-        <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-1 mb-2 font-mono">Quick Nav</div>
-        <Link
-          id="nav-engine-matrix"
-          to="/engines"
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
-        >
-          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 79)
-        </Link>
-        <Link id="nav-threat-emulation" to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
-          <span>◈</span> APT Emulation
-        </Link>
-        <Link id="nav-cloud-tower" to="/cloud" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-blue-400/70 hover:bg-blue-950/20 hover:text-blue-300 transition-colors">
-          <span>☁</span> Cloud Tower
-        </Link>
-        <Link id="nav-supply-chain" to="/supply-chain" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-lime-400/70 hover:bg-lime-950/20 hover:text-lime-300 transition-colors">
-          <span>⛓</span> Supply Chain
-        </Link>
-        <Link id="nav-network-intel" to="/network" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-orange-400/70 hover:bg-orange-950/20 hover:text-orange-300 transition-colors">
-          <span>⛢</span> Network Intel
-        </Link>
-        <Link id="nav-pqc-radar" to="/pqc-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/70 hover:bg-emerald-950/20 hover:text-emerald-300 transition-colors">
-          <span>🔐</span> PQC Radar
-        </Link>
-        <Link id="nav-oast" to="/oast" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-[#22d3ee]/70 hover:bg-cyan-950/20 hover:text-cyan-300 transition-colors">
-          <span>⊂</span> OAST / OOB
-        </Link>
-        <Link id="nav-digital-twin" to="/digital-twin" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-violet-400/70 hover:bg-violet-950/20 hover:text-violet-300 transition-colors">
-          <span>⟐</span> Digital Twin
-        </Link>
-        <Link id="nav-zero-day-radar" to="/zero-day-radar" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-rose-400/70 hover:bg-rose-950/20 hover:text-rose-300 transition-colors">
-          <span>☢</span> Zero-Day Radar
-        </Link>
-        <Link to="/findings" id="nav-findings-c2" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-400/80 hover:bg-amber-950/30 hover:text-amber-300 transition-colors font-semibold">
-          <span>◉</span> Findings C2
-        </Link>
-        <Link to="/intel-map" id="nav-intel-map" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-sky-400/70 hover:bg-sky-950/20 hover:text-sky-300 transition-colors">
-          <span>🌐</span> Global Intel Map
-        </Link>
-        <Link to="/system-core" id="nav-system-core" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/70 hover:bg-slate-800/40 hover:text-slate-300 transition-colors">
-          <span>⚙</span> System Core
-        </Link>
-        {isCeo && (
-          <Link to="/admin" id="nav-admin-management" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-amber-300/90 hover:bg-amber-950/40 hover:text-amber-200 transition-colors font-semibold border border-amber-500/20 mt-2">
-            <span>👤</span> Admin Management
-          </Link>
+        {stats.active_scans > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-wider text-emerald-400/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {t('nav.scan_active')}
+          </div>
         )}
       </div>
 
-      {/* Body: Client list */}
-      <div className="flex-1 overflow-y-auto py-2 min-h-0">
-        <div className="text-[10px] uppercase tracking-widest text-[#6b7280] px-4 mb-2 font-mono">
-          Clients
-        </div>
-        {clientsError && (
-          <div
-            className="mx-4 mb-2 rounded-lg border border-rose-500/40 bg-rose-950/40 px-2 py-2 text-[11px] text-rose-200"
-            role="alert"
+      {/* Grouped navigation */}
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 scrollbar-thin" aria-label={t('a11y.nav_label')}>
+        {navSections.map((section) => (
+          <NavSection
+            key={section.id}
+            id={section.id}
+            title={section.title}
+            open={sectionOpen[section.id] ?? section.defaultOpen ?? false}
+            onToggle={toggleSection}
           >
-            <div className="flex justify-between gap-2 items-start">
-              <span className="min-w-0 break-words">{clientsError}</span>
-              <button
-                type="button"
-                className="text-rose-400 underline shrink-0 text-[10px]"
-                onClick={dismissClientsError}
-              >
-                Dismiss
-              </button>
+            {section.items.map((item) => (
+              <NavLink key={item.id} {...item} />
+            ))}
+          </NavSection>
+        ))}
+      </nav>
+
+      {/* Client roster */}
+      <div className="shrink-0 border-t border-white/[0.06] max-h-[28vh] lg:max-h-[22vh] flex flex-col min-h-0">
+        <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-[0.22em] text-white/35">
+          {t('nav.client_roster')}
+        </div>
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {clientsError && (
+            <div
+              className="mx-3 mb-2 rounded-lg border border-rose-500/30 bg-rose-950/30 px-2 py-2 text-[10px] text-rose-200"
+              role="alert"
+            >
+              <div className="flex justify-between gap-2 items-start">
+                <span className="min-w-0 break-words">{clientsError}</span>
+                <button
+                  type="button"
+                  className="text-rose-400 underline shrink-0 text-[9px]"
+                  onClick={dismissClientsError}
+                >
+                  {t('common.dismiss')}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-        <ul className="space-y-0.5">
-          {clients.length === 0 && !clientsError && (
-            <li className="px-4 py-2 text-xs text-white/40">No clients</li>
           )}
-          {clients.length === 0 && clientsError && (
-            <li className="px-4 py-2 text-xs text-rose-300/90">Client list unavailable.</li>
-          )}
-          {clients.map((c) => {
-            const id = String(c.id)
-            const selected = id === String(selectedClientId)
-            const isDeleting = deletingId === id
-            return (
-              <li key={id} className="flex items-center group">
-                <button
-                  type="button"
-                  onClick={() => setSelectedClientId(id)}
-                  className={`flex-1 min-w-0 text-left px-4 py-2.5 text-sm font-medium transition-all border-l-2 border-transparent rounded-r ${
-                    selected
-                      ? 'bg-white/10 border-[#22d3ee] text-white'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white/90'
-                  }`}
-                >
-                  <span className="block truncate">{c.name || `Client ${id}`}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    if (isDeleting) return
-                    if (!window.confirm(`Delete "${c.name || id}"?`)) return
-                    setDeletingId(id)
-                    try {
-                      const r = await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })
-                      if (r.ok || r.status === 204) {
-                        if (String(selectedClientId) === id) setSelectedClientId(null)
-                        await refreshClients()
-                      } else {
-                        setAddMessage({ error: await formatApiErrorResponse(r) })
+          <ul className="space-y-px pb-1">
+            {clients.length === 0 && !clientsError && (
+              <li className="px-4 py-2 text-[11px] text-white/35">{t('common.no_data')}</li>
+            )}
+            {clients.length === 0 && clientsError && (
+              <li className="px-4 py-2 text-[11px] text-rose-300/80">Client list unavailable.</li>
+            )}
+            {clients.map((c) => {
+              const id = String(c.id)
+              const selected = id === String(selectedClientId)
+              const isDeleting = deletingId === id
+              return (
+                <li key={id} className="flex items-center group">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedClientId(id)}
+                    className={`relative flex-1 min-w-0 text-start ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
+                      selected
+                        ? 'bg-cyan-500/[0.07] border-cyan-400 text-white shadow-[inset_0_0_16px_rgba(34,211,238,0.05)]'
+                        : 'border-transparent text-white/55 hover:bg-white/[0.03] hover:text-white/80'
+                    }`}
+                  >
+                    <span className="block truncate">{c.name || `Client ${id}`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (isDeleting) return
+                      if (!window.confirm(`Delete "${c.name || id}"?`)) return
+                      setDeletingId(id)
+                      try {
+                        const r = await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })
+                        if (r.ok || r.status === 204) {
+                          if (String(selectedClientId) === id) setSelectedClientId(null)
+                          await refreshClients()
+                        } else {
+                          setAddMessage({ error: await formatApiErrorResponse(r) })
+                        }
+                      } catch (err) {
+                        setAddMessage({ error: err?.message || 'Network error' })
                       }
-                    } catch (err) {
-                      setAddMessage({ error: err?.message || 'Network error' })
-                    }
-                    setDeletingId(null)
-                  }}
-                  disabled={isDeleting}
-                  className="shrink-0 p-2 text-[#6b7280] hover:text-[#f87171] opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                  aria-label="Delete client"
-                >
-                  {isDeleting ? (
-                    <span className="text-[10px]">…</span>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  )}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+                      setDeletingId(null)
+                    }}
+                    disabled={isDeleting}
+                    className="shrink-0 p-2 text-white/25 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    aria-label={t('a11y.delete_client')}
+                  >
+                    {isDeleting ? (
+                      <span className="text-[10px]">…</span>
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       </div>
 
-      {/* Add Client - button with direct onClick (no form submit) */}
-      <div className="border-t border-white/10 p-4 shrink-0 relative z-[100] bg-[#0a0a0a]">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-white/50 mb-3 font-medium">
-          Add Client
+      {/* Add client */}
+      <div className="border-t border-white/[0.06] p-3 shrink-0 relative z-[100] bg-[#060a12]/90">
+        <div className="text-[9px] uppercase tracking-[0.2em] text-white/40 mb-2 font-mono">
+          {t('nav.add_client')}
         </div>
         <div className="space-y-2">
           <input
@@ -292,94 +469,126 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             value={addName}
             onChange={(e) => setAddName(e.target.value)}
             placeholder="Client name *"
-            className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
           <input
             type="text"
             value={addDomains}
             onChange={(e) => setAddDomains(e.target.value)}
-            placeholder="Primary domains (required for most engines): a.com, b.com"
-            className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
+            placeholder="Domains: a.com, b.com"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
-          <p className="text-[10px] text-white/40 leading-snug">
-            OSINT/ASM/leak/BOLA/LLM scans need at least one domain. Tech stack can stay empty — engines infer
-            from fingerprints when <span className="text-white/60">auto-detect</span> is on.
-          </p>
-          <input
-            type="email"
-            value={addContactEmail}
-            onChange={(e) => setAddContactEmail(e.target.value)}
-            placeholder="Security contact email (optional)"
-            className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
-          />
-          <input
-            type="text"
-            value={addIpRanges}
-            onChange={(e) => setAddIpRanges(e.target.value)}
-            placeholder="IP ranges (optional): 10.0.0.0/8, 192.168.1.0/24"
-            className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
-          />
-          <input
-            type="text"
-            value={addTechStack}
-            onChange={(e) => setAddTechStack(e.target.value)}
-            placeholder="Known stack hints (optional): react, k8s, nginx or JSON array"
-            className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
-          />
-          <label className="flex items-center gap-2 text-[11px] text-white/70 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={addAutoDetectTech}
-              onChange={(e) => setAddAutoDetectTech(e.target.checked)}
-              className="rounded border-white/20"
-            />
-            Auto-detect tech stack from scan results
-          </label>
-          <details className="text-[11px] text-white/50">
-            <summary className="cursor-pointer text-[#22d3ee]/80 hover:text-[#22d3ee] py-1">
-              Cloud integration (optional)
+          <details className="text-[10px] text-white/45">
+            <summary className="cursor-pointer text-cyan-400/70 hover:text-cyan-300 py-0.5">
+              Advanced scope
             </summary>
-            <div className="space-y-2 pt-2 pl-1 border-l border-white/10 ml-1">
+            <div className="space-y-2 pt-2">
+              <input
+                type="email"
+                value={addContactEmail}
+                onChange={(e) => setAddContactEmail(e.target.value)}
+                placeholder="Contact email"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+              <input
+                type="text"
+                value={addIpRanges}
+                onChange={(e) => setAddIpRanges(e.target.value)}
+                placeholder="IP ranges"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+              <input
+                type="text"
+                value={addTechStack}
+                onChange={(e) => setAddTechStack(e.target.value)}
+                placeholder="Tech stack hints"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+              <label className="flex items-center gap-2 text-[10px] text-white/55 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addAutoDetectTech}
+                  onChange={(e) => setAddAutoDetectTech(e.target.checked)}
+                  className="rounded border-white/20"
+                />
+                Auto-detect tech stack
+              </label>
               <input
                 type="text"
                 value={addAwsArn}
                 onChange={(e) => setAddAwsArn(e.target.value)}
-                placeholder="AWS cross-account role ARN"
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
+                placeholder="AWS role ARN"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addAwsExt}
                 onChange={(e) => setAddAwsExt(e.target.value)}
                 placeholder="AWS external ID"
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addGcp}
                 onChange={(e) => setAddGcp(e.target.value)}
                 placeholder="GCP project ID"
-                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-sm placeholder-white/40 focus:outline-none focus:border-[#22d3ee]/50"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </details>
           {addMessage?.error && (
-            <p id="add-client-error-msg" className="text-xs text-red-400">{addMessage.error}</p>
+            <p id="add-client-error-msg" className="text-[10px] text-red-400">{addMessage.error}</p>
           )}
           {addMessage?.success && (
-            <p id="add-client-success-msg" className="text-xs text-[#4ade80]">Client added.</p>
+            <p id="add-client-success-msg" className="text-[10px] text-emerald-400">Client added.</p>
           )}
           <button
             id="add-client-submit-btn"
             type="button"
             disabled={addSubmitting}
             onClick={() => handleAddClient()}
-            className="w-full py-3 rounded-xl text-sm font-medium bg-[#22d3ee]/25 text-[#22d3ee] border-2 border-[#22d3ee]/60 hover:bg-[#22d3ee]/35 hover:border-[#22d3ee] disabled:opacity-50 transition-all cursor-pointer select-none touch-manipulation"
+            className="w-full py-2 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 hover:border-cyan-400/50 disabled:opacity-50 transition-all"
           >
             {addSubmitting ? 'Adding…' : 'Add Client'}
           </button>
         </div>
       </div>
-    </aside>
+
+      {/* Footer: profile + language */}
+      <div className="shrink-0 border-t border-white/[0.06] px-3 py-3 bg-[#050810]/95 space-y-2.5">
+        <ProfileMenu variant="sidebar" />
+        <LanguageSwitcher className="w-full justify-center" />
+      </div>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile toggle */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen((v) => !v)}
+        className="lg:hidden fixed bottom-4 start-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-[#0a0f1a]/95 backdrop-blur-md text-white/80 shadow-xl"
+        aria-expanded={mobileOpen}
+        aria-label={mobileOpen ? t('a11y.collapse_nav') : t('a11y.expand_nav')}
+      >
+        {mobileOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
+        <span className="text-[10px] font-mono uppercase tracking-widest">{t('nav.mobile_label')}</span>
+      </button>
+
+      <aside
+        className={`cockpit-sidebar flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-e border-white/[0.06] overflow-hidden shrink-0 transition-all duration-300 ${
+          mobileOpen
+            ? 'max-h-[min(85dvh,640px)] lg:max-h-none opacity-100 pointer-events-auto'
+            : 'max-h-0 lg:max-h-none opacity-0 lg:opacity-100 pointer-events-none lg:pointer-events-auto'
+        }`}
+        style={{
+          background: 'linear-gradient(180deg, rgba(10,15,26,0.97) 0%, rgba(5,8,16,0.99) 55%, rgba(3,6,12,1) 100%)',
+          boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03)',
+        }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   )
 }

@@ -80,7 +80,7 @@ export default function ClientNew() {
             'supply_chain',
             'leak_hunter',
             'bola_idor',
-            'ollama_fuzz',
+            'llm_path_fuzz',
             'semantic_ai_fuzz',
             'microsecond_timing',
             'ai_adversarial_redteam',
@@ -99,8 +99,25 @@ export default function ClientNew() {
       })
 
       if (!response.ok) {
-        const text = await response.text().catch(() => 'Failed to create client')
-        setError(`Failed to create client: ${text}`)
+        let detail = `HTTP ${response.status}`
+        try {
+          const data = await response.clone().json()
+          detail = data.detail || data.error || detail
+        } catch (_) {
+          try {
+            const text = await response.text()
+            if (text) detail = text.slice(0, 500)
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        if (response.status === 403) {
+          setError(`You don't have permission to create clients. ${detail}`)
+        } else if (response.status === 402) {
+          setError(`Plan limit reached: ${detail}`)
+        } else {
+          setError(`Failed to create client: ${detail}`)
+        }
         setSubmitting(false)
         return
       }
