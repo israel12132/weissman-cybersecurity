@@ -67,6 +67,7 @@ const MemoryForensicsLab = React.lazy(() => import('./components/MemoryForensics
 const AttackChainView = React.lazy(() => import('./components/cockpit/AttackChainView'))
 const EngineMatrix = React.lazy(() => import('./pages/EngineMatrix'))
 const EngineDetail = React.lazy(() => import('./pages/EngineDetail'))
+const OsintEngineProfile = React.lazy(() => import('./pages/OsintEngineProfile'))
 const TopTierEngineHub = React.lazy(() => import('./pages/TopTierEngineHub'))
 const TopTierEngineProfile = React.lazy(() => import('./pages/TopTierEngineProfile'))
 const StrategicEngineProgram = React.lazy(() => import('./pages/StrategicEngineProgram'))
@@ -184,6 +185,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="attack-chain/:clientId" element={<AttackChainView />} />
             {/* ── Enterprise C2 pages ─────────────────────────────────────────── */}
             <Route path="engines" element={<EngineMatrix />} />
+            <Route path="engines/osint" element={<OsintEngineProfile />} />
             <Route path="engines/top-tier" element={<TopTierEngineHub />} />
             <Route path="engines/top-tier/:engineId" element={<TopTierEngineProfile />} />
             <Route path="engines/strategic" element={<StrategicEngineProgram />} />

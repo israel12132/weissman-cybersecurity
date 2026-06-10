@@ -5,13 +5,14 @@
  * threat correlation, and composite risk scoring dashboard.
  * Route: /ai-analysis
  */
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
-// ─── Attack Patterns ──────────────────────────────────────────────────────────
+// ─── Fallback Data ────────────────────────────────────────────────────────────
 
-const ATTACK_PATTERNS = [
+const FALLBACK_ATTACK_PATTERNS = [
   {
     id: 'AP-001',
     name: 'Cloud-to-AD Lateral Movement',
@@ -101,9 +102,9 @@ const SEVERITY_META = {
   low:      { color: '#22d3ee', label: 'LOW' },
 }
 
-// ─── Correlation Feed ─────────────────────────────────────────────────────────
+// ─── Fallback Correlations ───────────────────────────────────────────────────
 
-const CORRELATIONS = [
+const FALLBACK_CORRELATIONS = [
   {
     id: 'corr-001',
     patternIds: ['AP-001', 'AP-004'],
@@ -133,272 +134,360 @@ const CORRELATIONS = [
   },
 ]
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AIAnalysisEngine() {
+  const [attackPatterns, setAttackPatterns] = useState([])
+  const [correlations, setCorrelations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [selectedPattern, setSelectedPattern] = useState(null)
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterSeverity, setFilterSeverity] = useState('all')
   const [activeTab, setActiveTab] = useState('patterns')
 
+  // Load AI analysis data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Fetch attack patterns
+        const patternsRes = await apiFetch('/api/ai-analysis/patterns')
+        if (patternsRes.ok) {
+          const patternsData = await patternsRes.json()
+          setAttackPatterns(Array.isArray(patternsData) ? patternsData : patternsData.patterns || [])
+        } else if (patternsRes.status === 404) {
+          // API not implemented, use fallback
+          setAttackPatterns(FALLBACK_ATTACK_PATTERNS)
+        } else {
+          throw new Error(`Failed to load patterns (HTTP ${patternsRes.status})`)
+        }
+
+        // Fetch correlations
+        const corrRes = await apiFetch('/api/ai-analysis/correlations')
+        if (corrRes.ok) {
+          const corrData = await corrRes.json()
+          setCorrelations(Array.isArray(corrData) ? corrData : corrData.correlations || [])
+        } else if (corrRes.status === 404) {
+          // API not implemented, use fallback
+          setCorrelations(FALLBACK_CORRELATIONS)
+        } else {
+          throw new Error(`Failed to load correlations (HTTP ${corrRes.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load AI analysis data')
+        // Use fallback data on error
+        setAttackPatterns(FALLBACK_ATTACK_PATTERNS)
+        setCorrelations(FALLBACK_CORRELATIONS)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
   const filtered = useMemo(() => {
-    return ATTACK_PATTERNS.filter((p) => {
+    return attackPatterns.filter((p) => {
       if (filterCategory !== 'all' && p.category !== filterCategory) return false
       if (filterSeverity !== 'all' && p.severity !== filterSeverity) return false
       return true
     })
-  }, [filterCategory, filterSeverity])
+  }, [attackPatterns, filterCategory, filterSeverity])
 
-  const avgConfidence = useMemo(
-    () => Math.round((ATTACK_PATTERNS.reduce((a, p) => a + p.confidence, 0) / ATTACK_PATTERNS.length) * 100),
-    [],
+  const avgConfidence = useMemo(() => {
+    if (attackPatterns.length === 0) return 0
+    return Math.round((attackPatterns.reduce((a, p) => a + p.confidence, 0) / attackPatterns.length) * 100)
+  }, [attackPatterns])
+
+  const criticalCount = useMemo(() =>
+    attackPatterns.filter(p => p.severity === 'critical').length,
+    [attackPatterns]
   )
 
   return (
     <PageShell
       title="AI Analysis Engine"
-      subtitle="Attack Pattern Recognition · Threat Correlation · Risk Scoring"
+      subtitle={loading ? 'Loading AI analysis...' : 'Attack Pattern Recognition · Threat Correlation · Risk Scoring'}
       badge="AI"
       badgeColor="#a78bfa"
     >
-      {/* ── KPI Bar ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Patterns Detected', value: ATTACK_PATTERNS.length, color: '#a78bfa' },
-          { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#10b981' },
-          { label: 'Correlations', value: CORRELATIONS.length, color: '#f97316' },
-          { label: 'Critical Patterns', value: ATTACK_PATTERNS.filter(p => p.severity === 'critical').length, color: '#ef4444' },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-            <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Tabs ── */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { id: 'patterns', label: 'Attack Patterns' },
-          { id: 'correlations', label: 'Correlations' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === tab.id
-                ? 'bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/40'
-                : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'patterns' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ── Pattern List ── */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-3">
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
-              >
-                <option value="all">All Categories</option>
-                {Object.entries(CATEGORY_META).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-              <select
-                value={filterSeverity}
-                onChange={(e) => setFilterSeverity(e.target.value)}
-                className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
-              >
-                <option value="all">All Severity</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-              </select>
-            </div>
-
-            {filtered.map((pattern) => {
-              const sm = SEVERITY_META[pattern.severity] ?? SEVERITY_META.medium
-              const cm = CATEGORY_META[pattern.category] ?? { color: '#22d3ee', icon: '🔍', label: pattern.category }
-              return (
-                <motion.button
-                  key={pattern.id}
-                  layout
-                  whileHover={{ scale: 1.01 }}
-                  onClick={() => setSelectedPattern(pattern)}
-                  className={`w-full text-left rounded-2xl border p-4 transition-all ${
-                    selectedPattern?.id === pattern.id
-                      ? 'border-[#a78bfa]/50 bg-[#a78bfa]/10'
-                      : 'border-white/10 bg-white/5 hover:bg-white/10'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span>{cm.icon}</span>
-                      <span className="text-sm font-semibold text-white truncate">{pattern.name}</span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0 ml-2"
-                      style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}>
-                      {sm.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-[11px] text-white/40">{cm.label}</span>
-                    <div className="flex items-center gap-1">
-                      <div className="w-16 bg-white/10 rounded-full h-1">
-                        <div className="h-1 rounded-full" style={{ width: `${pattern.confidence * 100}%`, backgroundColor: '#10b981' }} />
-                      </div>
-                      <span className="text-[10px] font-mono text-[#10b981]">{Math.round(pattern.confidence * 100)}%</span>
-                    </div>
-                  </div>
-                </motion.button>
-              )
-            })}
-          </div>
-
-          {/* ── Pattern Detail ── */}
-          <div className="lg:col-span-2">
-            <AnimatePresence mode="wait">
-              {selectedPattern ? (
-                <motion.div
-                  key={selectedPattern.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="rounded-2xl border border-white/15 bg-white/5 p-6 space-y-5"
-                >
-                  {(() => {
-                    const sm = SEVERITY_META[selectedPattern.severity] ?? SEVERITY_META.medium
-                    const cm = CATEGORY_META[selectedPattern.category] ?? { color: '#22d3ee', icon: '🔍', label: selectedPattern.category }
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xl">{cm.icon}</span>
-                              <h2 className="text-lg font-bold text-white">{selectedPattern.name}</h2>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded border"
-                                style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}>
-                                {sm.label}
-                              </span>
-                              <span className="text-[10px] px-2 py-0.5 rounded border"
-                                style={{ color: cm.color, borderColor: `${cm.color}40`, backgroundColor: `${cm.color}10` }}>
-                                {cm.label}
-                              </span>
-                              <span className="text-[10px] font-mono text-white/40">{selectedPattern.id}</span>
-                            </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="text-2xl font-bold text-[#10b981]">{Math.round(selectedPattern.confidence * 100)}%</div>
-                            <div className="text-[10px] text-white/40">Confidence</div>
-                          </div>
-                        </div>
-
-                        <p className="text-sm text-white/70 leading-relaxed">{selectedPattern.description}</p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">Affected Systems</div>
-                            <div className="flex flex-wrap gap-1">
-                              {selectedPattern.affectedSystems.map((s) => (
-                                <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">{s}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">MITRE Techniques</div>
-                            <div className="flex flex-wrap gap-1">
-                              {selectedPattern.mitreTechniques.map((t) => (
-                                <span key={t} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">{t}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">Indicators of Compromise</div>
-                          <ul className="space-y-1">
-                            {selectedPattern.indicators.map((ioc, i) => (
-                              <li key={i} className="text-xs text-white/70 flex items-start gap-2">
-                                <span className="text-[#f59e0b] mt-0.5 flex-shrink-0">◆</span>
-                                {ioc}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <div className="rounded-xl bg-[#10b981]/10 border border-[#10b981]/20 p-4">
-                          <div className="text-[10px] uppercase tracking-widest text-[#10b981]/70 mb-2">AI Remediation Guidance</div>
-                          <p className="text-xs text-white/70 leading-relaxed">{selectedPattern.remediation}</p>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="rounded-2xl border border-dashed border-white/10 bg-white/3 p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
-                >
-                  <div className="text-4xl mb-4">🤖</div>
-                  <div className="text-sm text-white/40">Select an attack pattern to view AI analysis details</div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+      {/* ── Error Banner ─────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
           </div>
         </div>
       )}
 
-      {activeTab === 'correlations' && (
-        <div className="space-y-4">
-          <div className="text-sm text-white/50 mb-4">
-            AI-detected correlations between attack patterns — multi-vector attack chains with compounding risk.
+      {/* ── Loading State ────────────────────────────────────────────────── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-violet-500/40 border-t-violet-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading AI analysis...</p>
           </div>
-          {CORRELATIONS.map((corr) => (
-            <motion.div
-              key={corr.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-white/10 bg-white/5 p-5"
-            >
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">{corr.title}</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {corr.patternIds.map((pid) => {
-                      const p = ATTACK_PATTERNS.find((x) => x.id === pid)
-                      return p ? (
-                        <span key={pid} className="text-[10px] px-2 py-0.5 rounded bg-[#a78bfa]/20 text-[#c4b5fd] border border-[#a78bfa]/30">
-                          {p.name}
-                        </span>
-                      ) : null
-                    })}
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-lg font-bold text-[#10b981]">{Math.round(corr.confidence * 100)}%</div>
-                  <div className="text-[10px] text-white/40">Confidence</div>
-                </div>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed mb-3">{corr.description}</p>
-              <div className="flex items-center justify-between text-[11px] text-white/40">
-                <span>Risk multiplier: <span className="text-[#f97316] font-mono">×{corr.riskMultiplier}</span></span>
-                <span>Detected: {corr.detectedAt.slice(0, 10)}</span>
-              </div>
-            </motion.div>
-          ))}
         </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* ── KPI Bar ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'Patterns Detected', value: attackPatterns.length, color: '#a78bfa' },
+              { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#10b981' },
+              { label: 'Correlations', value: correlations.length, color: '#f97316' },
+              { label: 'Critical Patterns', value: criticalCount, color: '#ef4444' },
+            ].map((kpi) => (
+              <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+                <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="flex gap-2 mb-6">
+            {[
+              { id: 'patterns', label: 'Attack Patterns' },
+              { id: 'correlations', label: 'Correlations' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/40'
+                    : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'patterns' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* ── Pattern List ── */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
+                  >
+                    <option value="all">All Categories</option>
+                    {Object.entries(CATEGORY_META).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterSeverity}
+                    onChange={(e) => setFilterSeverity(e.target.value)}
+                    className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
+                  >
+                    <option value="all">All Severity</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                  </select>
+                </div>
+
+                {filtered.length === 0 && (
+                  <div className="text-center py-8 text-white/40 text-sm">
+                    No patterns match your filters
+                  </div>
+                )}
+
+                {filtered.map((pattern) => {
+                  const sm = SEVERITY_META[pattern.severity] ?? SEVERITY_META.medium
+                  const cm = CATEGORY_META[pattern.category] ?? { color: '#22d3ee', icon: '🔍', label: pattern.category }
+                  return (
+                    <motion.button
+                      key={pattern.id}
+                      layout
+                      whileHover={{ scale: 1.01 }}
+                      onClick={() => setSelectedPattern(pattern)}
+                      className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                        selectedPattern?.id === pattern.id
+                          ? 'border-[#a78bfa]/50 bg-[#a78bfa]/10'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span>{cm.icon}</span>
+                          <span className="text-sm font-semibold text-white truncate">{pattern.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0 ml-2"
+                          style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}>
+                          {sm.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[11px] text-white/40">{cm.label}</span>
+                        <div className="flex items-center gap-1">
+                          <div className="w-16 bg-white/10 rounded-full h-1">
+                            <div className="h-1 rounded-full" style={{ width: `${pattern.confidence * 100}%`, backgroundColor: '#10b981' }} />
+                          </div>
+                          <span className="text-[10px] font-mono text-[#10b981]">{Math.round(pattern.confidence * 100)}%</span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  )
+                })}
+              </div>
+
+              {/* ── Pattern Detail ── */}
+              <div className="lg:col-span-2">
+                <AnimatePresence mode="wait">
+                  {selectedPattern ? (
+                    <motion.div
+                      key={selectedPattern.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="rounded-2xl border border-white/15 bg-white/5 p-6 space-y-5"
+                    >
+                      {(() => {
+                        const sm = SEVERITY_META[selectedPattern.severity] ?? SEVERITY_META.medium
+                        const cm = CATEGORY_META[selectedPattern.category] ?? { color: '#22d3ee', icon: '🔍', label: selectedPattern.category }
+                        return (
+                          <>
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xl">{cm.icon}</span>
+                                  <h2 className="text-lg font-bold text-white">{selectedPattern.name}</h2>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border"
+                                    style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}>
+                                    {sm.label}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded border"
+                                    style={{ color: cm.color, borderColor: `${cm.color}40`, backgroundColor: `${cm.color}10` }}>
+                                    {cm.label}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-white/40">{selectedPattern.id}</span>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="text-2xl font-bold text-[#10b981]">{Math.round(selectedPattern.confidence * 100)}%</div>
+                                <div className="text-[10px] text-white/40">Confidence</div>
+                              </div>
+                            </div>
+
+                            <p className="text-sm text-white/70 leading-relaxed">{selectedPattern.description}</p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">Affected Systems</div>
+                                <div className="flex flex-wrap gap-1">
+                                  {selectedPattern.affectedSystems.map((s) => (
+                                    <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">{s}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">MITRE Techniques</div>
+                                <div className="flex flex-wrap gap-1">
+                                  {selectedPattern.mitreTechniques.map((t) => (
+                                    <span key={t} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">{t}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">Indicators of Compromise</div>
+                              <ul className="space-y-1">
+                                {selectedPattern.indicators.map((ioc, i) => (
+                                  <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                    <span className="text-[#f59e0b] mt-0.5 flex-shrink-0">◆</span>
+                                    {ioc}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            <div className="rounded-xl bg-[#10b981]/10 border border-[#10b981]/20 p-4">
+                              <div className="text-[10px] uppercase tracking-widest text-[#10b981]/70 mb-2">AI Remediation Guidance</div>
+                              <p className="text-xs text-white/70 leading-relaxed">{selectedPattern.remediation}</p>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="rounded-2xl border border-dashed border-white/10 bg-white/3 p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
+                    >
+                      <div className="text-4xl mb-4">🤖</div>
+                      <div className="text-sm text-white/40">Select an attack pattern to view AI analysis details</div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'correlations' && (
+            <div className="space-y-4">
+              <div className="text-sm text-white/50 mb-4">
+                AI-detected correlations between attack patterns — multi-vector attack chains with compounding risk.
+              </div>
+              {correlations.length === 0 && (
+                <div className="text-center py-12 text-white/40 text-sm">
+                  No correlations detected
+                </div>
+              )}
+              {correlations.map((corr) => (
+                <motion.div
+                  key={corr.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                >
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white mb-1">{corr.title}</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {corr.patternIds.map((pid) => {
+                          const p = attackPatterns.find((x) => x.id === pid)
+                          return p ? (
+                            <span key={pid} className="text-[10px] px-2 py-0.5 rounded bg-[#a78bfa]/20 text-[#c4b5fd] border border-[#a78bfa]/30">
+                              {p.name}
+                            </span>
+                          ) : null
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-lg font-bold text-[#10b981]">{Math.round(corr.confidence * 100)}%</div>
+                      <div className="text-[10px] text-white/40">Confidence</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-white/60 leading-relaxed mb-3">{corr.description}</p>
+                  <div className="flex items-center justify-between text-[11px] text-white/40">
+                    <span>Risk multiplier: <span className="text-[#f97316] font-mono">×{corr.riskMultiplier}</span></span>
+                    <span>Detected: {corr.detectedAt.slice(0, 10)}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </PageShell>
   )

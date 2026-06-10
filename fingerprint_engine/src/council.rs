@@ -4,8 +4,8 @@
 //! - **Beta (Generalist / Defender)**: critiques stealth and detection risk.
 //! - **Gamma (Synthesizer / Coder)**: produces one refined, test-ready payload string.
 //!
-//! **Weissman Supreme Council** ([`run_supreme_council_debate`]): *Offensive Proposer* (e.g. DeepSeek-Coder),
-//! *Defensive Critic* (e.g. Mistral-Large), *Sovereign General* (e.g. Llama-4) with final authority.
+//! **Weissman Supreme Council** ([`run_supreme_council_debate`]): *Offensive Proposer* (e.g. deepseek-ai/deepseek-coder-33b-instruct),
+//! *Defensive Critic* (e.g. mistralai/Mistral-Large-Instruct-2407), *Sovereign General* (e.g. meta-llama/Meta-Llama-3.1-70B-Instruct) with final authority.
 //! Phase 1 runs Proposer + Critic in parallel (optional CPU affinity for Ryzen CCX batching); Phase 2 runs
 //! the General alone. Proven OAST/canary hits persist into Postgres table `supreme_council_memory` with embeddings for recall.
 //!
@@ -274,7 +274,7 @@ impl CouncilConfig {
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.trim().to_string())
-            .or_else(|| supreme.then(|| "DeepSeek-Coder-V3".to_string()))
+            .or_else(|| supreme.then(|| "deepseek-ai/deepseek-coder-33b-instruct".to_string()))
             .unwrap_or_else(|| openai_chat::resolve_llm_model(default_model.as_str()));
         let generalist = std::env::var("WEISSMAN_COUNCIL_MODEL_GENERALIST")
             .ok()
@@ -286,13 +286,13 @@ impl CouncilConfig {
                     .filter(|s| !s.trim().is_empty())
                     .map(|s| s.trim().to_string())
             })
-            .or_else(|| supreme.then(|| "Mistral-Large-3".to_string()))
+            .or_else(|| supreme.then(|| "mistralai/Mistral-Large-Instruct-2407".to_string()))
             .unwrap_or_else(|| coder.clone());
         let synthesizer = std::env::var("WEISSMAN_COUNCIL_MODEL_SYNTHESIZER")
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.trim().to_string())
-            .or_else(|| supreme.then(|| "Llama-4-70B-Q4_K_M".to_string()))
+            .or_else(|| supreme.then(|| "meta-llama/Meta-Llama-3.1-70B-Instruct".to_string()))
             .unwrap_or_else(|| coder.clone());
 
         let http_timeout_secs: u64 = std::env::var("WEISSMAN_COUNCIL_TIMEOUT_SECS")
@@ -332,7 +332,7 @@ impl CouncilConfig {
         let supreme_embedding_model = std::env::var("WEISSMAN_COUNCIL_EMBEDDING_MODEL")
             .ok()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "text-embedding-3-small".to_string());
+            .unwrap_or_else(|| "BAAI/bge-small-en-v1.5".to_string());
 
         Ok(Self {
             base_url: base,
