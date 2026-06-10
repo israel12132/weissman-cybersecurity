@@ -14,7 +14,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: weissman
     volumes:
       - weissman_pg:/var/lib/postgresql/data
@@ -43,15 +43,15 @@ services:
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:local
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      WEISSMAN_AUTH_DATABASE_URL: ${WEISSMAN_AUTH_DATABASE_URL}
-      WEISSMAN_MIGRATE_URL: ${WEISSMAN_MIGRATE_URL}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      WEISSMAN_AUTH_DATABASE_URL: ${WEISSMAN_AUTH_DATABASE_URL:?WEISSMAN_AUTH_DATABASE_URL is required}
+      WEISSMAN_MIGRATE_URL: ${WEISSMAN_MIGRATE_URL:?WEISSMAN_MIGRATE_URL is required}
       WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-http://localhost}
-      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET}
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?WEISSMAN_JWT_SECRET is required}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
-      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL}
-      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD}
+      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:?WEISSMAN_ADMIN_EMAIL is required}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:?WEISSMAN_ADMIN_PASSWORD is required}
       # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
