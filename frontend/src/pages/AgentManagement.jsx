@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 
 function timeAgo(iso) {
@@ -19,7 +21,9 @@ function StatusBadge({ online, last_seen_at }) {
 }
 
 export default function AgentManagement() {
+  const { t } = useTranslation()
   const [agents, setAgents] = useState([])
+  const [fleetBusy, setFleetBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState([])
   const [tokenClient, setTokenClient] = useState('')
@@ -79,6 +83,27 @@ export default function AgentManagement() {
     } catch (e) { setErr(e.message) }
   }, [tokenClient, tokenValidity])
 
+  const fleetDispatch = useCallback(async () => {
+    const cid = Number(tokenClient)
+    if (!cid) { setErr(t('agents.select_client_first', 'Select a client first')); return }
+    setFleetBusy(true)
+    setErr(null)
+    try {
+      const r = await apiFetch('/api/agents/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: cid, engine: 'process_inventory', fleet_broadcast: true }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      await refresh()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setFleetBusy(false)
+    }
+  }, [tokenClient, refresh, t])
+
   const installLinux = useMemo(() => {
     if (!generatedToken) return ''
     const base = apiUrl('/install/agent.sh')
@@ -95,28 +120,33 @@ export default function AgentManagement() {
     <div className="min-h-[100dvh] p-6 text-slate-100" style={{background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)'}}>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Endpoint Agents</h1>
-          <p className="text-sm text-white/55 mt-1">
-            Generate a single-use enrollment token, copy the install command, and run it on the target endpoint.
-            Once online, the agent unlocks every engine marked "Requires Agent".
-          </p>
+          <h1 className="text-2xl font-bold">{t('agents.title')}</h1>
+          <p className="text-sm text-white/55 mt-1">{t('agents.subtitle')}</p>
         </div>
-        <div className="text-[11px] font-mono text-white/40">
-          {agents.length} registered · {agents.filter((a) => a.online).length} online · refresh #{polled}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/nexus-swarm" className="text-[11px] font-mono px-2 py-1 rounded border border-violet-500/40 text-violet-300 hover:bg-violet-500/10">
+            {t('nav.nexus_swarm', 'Nexus Swarm')}
+          </Link>
+          <button type="button" disabled={fleetBusy || !tokenClient} onClick={fleetDispatch} className="text-[11px] font-mono px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40">
+            {fleetBusy ? t('agents.fleet_dispatching', 'Dispatching fleet…') : t('agents.fleet_dispatch', 'Dispatch fleet (30 engines)')}
+          </button>
+          <div className="text-[11px] font-mono text-white/40">
+            {t('agents.registered_count', { total: agents.length })} · {t('agents.online_count', { count: agents.filter((a) => a.online).length })} · #{polled}
+          </div>
         </div>
       </header>
 
       <section className="rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-5 mb-6 space-y-4">
-        <h2 className="text-xs font-mono uppercase tracking-widest text-white/55">Issue Enrollment Token</h2>
+        <h2 className="text-xs font-mono uppercase tracking-widest text-white/55">{t('agents.issue_token')}</h2>
         {err && <div className="text-[12px] font-mono text-rose-400">{err}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_140px] gap-3">
           <select value={tokenClient} onChange={(e) => setTokenClient(e.target.value)} className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono">
-            <option value="">— Select client —</option>
+            <option value="">{t('agents.select_client')}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name} (#{c.id})</option>)}
           </select>
           <input type="number" min={5} max={1440} value={tokenValidity} onChange={(e) => setTokenValidity(e.target.value)} className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Validity (minutes)" />
           <button type="button" onClick={createToken} className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-mono text-sm hover:bg-cyan-500/30">
-            Generate Token
+            {t('agents.generate_token')}
           </button>
         </div>
         {generatedToken && (

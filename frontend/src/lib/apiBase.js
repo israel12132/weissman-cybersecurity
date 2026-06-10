@@ -31,6 +31,26 @@ export function apiUrl(path) {
 
 const ACCESS_TOKEN_KEY = 'weissman_access_token'
 
+let rateLimitToastCallback = null
+
+/** Register a callback for 429 responses (used by RateLimitToast in AppShell). */
+export function setRateLimitToastCallback(callback) {
+  rateLimitToastCallback = callback
+}
+
+function parseRetryAfter(retryAfterHeader) {
+  if (!retryAfterHeader) return 60
+  const seconds = parseInt(retryAfterHeader, 10)
+  if (!Number.isNaN(seconds)) return seconds
+  try {
+    const date = new Date(retryAfterHeader)
+    const diff = Math.floor((date - new Date()) / 1000)
+    return diff > 0 ? diff : 60
+  } catch {
+    return 60
+  }
+}
+
 export function getStoredAccessToken() {
   if (typeof sessionStorage === 'undefined') return null
   const t = sessionStorage.getItem(ACCESS_TOKEN_KEY)
@@ -100,7 +120,19 @@ export async function apiFetch(pathOrUrl, init = {}) {
   }
   
   const response = await doFetch()
-  
+
+  if (response.status === 429 && rateLimitToastCallback) {
+    const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
+    let message = 'Rate limit exceeded. Please wait before trying again.'
+    try {
+      const errorData = await response.clone().json()
+      message = errorData.detail || errorData.message || message
+    } catch {
+      // ignore JSON parse errors
+    }
+    rateLimitToastCallback({ retryAfter, message })
+  }
+
   // If 401 Unauthorized, attempt token refresh and retry
   if (response.status === 401 && !pathStr.includes('/api/auth/refresh') && !pathStr.includes('/api/login')) {
     const refreshed = await tryRefreshToken()

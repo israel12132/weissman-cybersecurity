@@ -150,6 +150,9 @@ async fn api_system_configs_post(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<Value>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let mut pairs: Vec<(String, String)> = Vec::new();
     if let Some(arr) = body.as_array() {
         for v in arr {

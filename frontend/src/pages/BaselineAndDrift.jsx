@@ -30,12 +30,13 @@ export default function BaselineAndDrift() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [baselineRes, driftRes, anomaliesRes] = await Promise.all([
-        api.get('/api/baseline/current'),
+      const [summaryRes, driftRes, anomaliesRes] = await Promise.all([
+        api.get('/api/baseline/summary'),
         api.get(`/api/baseline/drift?range=${timeRange}`),
         api.get(`/api/baseline/anomalies?range=${timeRange}`),
       ]);
-      setBaseline(baselineRes);
+      const hasBaseline = (summaryRes.total_assets || 0) > 0;
+      setBaseline(hasBaseline ? summaryRes : null);
       setDriftData(driftRes.data || []);
       setAnomalies(anomaliesRes.anomalies || []);
     } catch (error) {
@@ -45,14 +46,8 @@ export default function BaselineAndDrift() {
     }
   };
 
-  const createBaseline = async () => {
-    try {
-      await api.post('/api/baseline/create');
-      alert('Baseline created successfully!');
-      fetchData();
-    } catch (error) {
-      console.error('Failed to create baseline:', error);
-    }
+  const refreshData = () => {
+    fetchData();
   };
 
   const getDriftColor = (drift) => {
@@ -131,10 +126,10 @@ export default function BaselineAndDrift() {
           </div>
 
           <button
-            onClick={createBaseline}
+            onClick={refreshData}
             className="px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
-            Create New Baseline
+            Refresh
           </button>
         </div>
 
@@ -216,7 +211,7 @@ export default function BaselineAndDrift() {
               <h3 className="text-sm font-semibold text-white">No Baseline Established</h3>
             </div>
             <p className="text-sm text-gray-300">
-              Create a baseline to start tracking drift and detecting anomalies in your security posture.
+              Endpoint agents auto-learn baselines over 7 days. Deploy agents and wait for UEBA samples to populate this view.
             </p>
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
@@ -55,6 +56,7 @@ function summarizeFamilies(findings) {
 }
 
 function StatusBadge({ status }) {
+  const { t } = useTranslation()
   const colors = {
     completed: 'text-green-400 bg-green-500/10 border-green-500/30',
     running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
@@ -64,12 +66,13 @@ function StatusBadge({ status }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}>
       <Icon className={`w-3.5 h-3.5 ${status === 'running' ? 'animate-spin' : ''}`} />
-      {status}
+      {t(`pages.remediationHub.status_${status}`, { defaultValue: status })}
     </span>
   )
 }
 
 export default function RemediationHub() {
+  const { t } = useTranslation()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -109,47 +112,43 @@ export default function RemediationHub() {
   }, [findings])
 
   return (
-    <PageShell title="Remediation Hub" icon={<Wrench />}>
+    <PageShell title={t('pages.remediationHub.title')} icon={<Wrench />}>
       <div className="space-y-6">
         <p className="text-xs text-white/45 font-mono">
-          Workflow board derived from <code>/api/findings</code> in real time. Each row groups
-          live findings by remediation family so you can drive fixes from where the vulnerabilities
-          actually live.
+          {t('pages.remediationHub.intro')}
         </p>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            Couldn't load findings: {error}.
+            {t('pages.remediationHub.load_error', { error })}
           </div>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard label="Total findings" value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} />
-          <StatCard label="Pending fix" value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} />
-          <StatCard label="In progress" value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} />
-          <StatCard label="Resolved" value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} />
+          <StatCard label={t('pages.remediationHub.total_findings')} value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} />
+          <StatCard label={t('pages.remediationHub.pending_fix')} value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} />
+          <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} />
+          <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} />
         </div>
 
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-cyan-400" />
-              Remediation families ({workflows.length})
+              {t('pages.remediationHub.families_heading', { count: workflows.length })}
             </h3>
-            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">Open Findings C2 →</Link>
+            <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">{t('pages.remediationHub.open_findings')}</Link>
           </div>
 
           <div className="divide-y divide-white/5">
             {loading ? (
-              <div className="p-6 text-sm text-white/45">Loading findings…</div>
+              <div className="p-6 text-sm text-white/45">{t('pages.remediationHub.loading')}</div>
             ) : workflows.length === 0 ? (
               <div className="p-6 text-sm text-white/45 space-y-2">
-                <div>No findings yet. Workflows will appear here automatically as engines complete.</div>
+                <div>{t('pages.remediationHub.empty_title')}</div>
                 <div className="text-xs text-white/35">
-                  Start by{' '}
-                  <Link to="/clients" className="underline">scanning a client</Link>{' '}
-                  or running the Engine Matrix.
+                  {t('pages.remediationHub.empty_hint')}
                 </div>
               </div>
             ) : (
@@ -162,14 +161,21 @@ export default function RemediationHub() {
                         <StatusBadge status={w.status} />
                       </div>
                       <div className="text-xs text-gray-400">
-                        {w.total} finding{w.total === 1 ? '' : 's'} · pending {w.statuses.pending || 0} · running {w.statuses.running || 0} · resolved {w.statuses.completed || 0}
+                        {w.total === 1
+                          ? t('pages.remediationHub.findings_count', { count: w.total })
+                          : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
+                        · {t('pages.remediationHub.status_breakdown', {
+                          pending: w.statuses.pending || 0,
+                          running: w.statuses.running || 0,
+                          resolved: w.statuses.completed || 0,
+                        })}
                       </div>
                     </div>
                     <Link
                       to={`/findings?q=${encodeURIComponent(w.label)}`}
                       className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
                     >
-                      View findings
+                      {t('pages.remediationHub.view_findings')}
                     </Link>
                   </div>
                 </div>

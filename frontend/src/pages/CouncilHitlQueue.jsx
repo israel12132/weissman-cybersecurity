@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch, apiUrl } from '../lib/apiBase'
 
 const STATUS_COLORS = {
   PENDING_APPROVAL: 'text-amber-400 border-amber-400/30 bg-amber-900/10',
@@ -115,7 +115,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {/* Fired job link */}
             {item.fired_job_id && (
               <p className="text-[11px] font-mono text-cyan-400/70">
-                Fired job: <a href={`/api/jobs/${item.fired_job_id}`} className="underline" target="_blank" rel="noreferrer">{item.fired_job_id}</a>
+                Fired job: <a href={apiUrl(`/api/jobs/${item.fired_job_id}`)} className="underline" target="_blank" rel="noreferrer">{item.fired_job_id}</a>
               </p>
             )}
             {item.review_note && (
@@ -173,7 +173,9 @@ export default function CouncilHitlQueue() {
   const fetchQueue = useCallback(async () => {
     const qs = activeTab === 'ALL' ? '' : `?status=${activeTab}`
     try {
-      const data = await apiFetch(`/api/council/hitl/queue${qs}`)
+      const r = await apiFetch(`/api/council/hitl/queue${qs}`)
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       setItems(data.items ?? [])
     } catch (e) {
       showToast('Failed to load queue: ' + e.message, false)
@@ -185,10 +187,12 @@ export default function CouncilHitlQueue() {
   const handleApprove = useCallback(async (id, note) => {
     setLoading(true)
     try {
-      const data = await apiFetch(`/api/council/hitl/${id}/approve`, {
+      const r = await apiFetch(`/api/council/hitl/${id}/approve`, {
         method: 'POST',
         body: JSON.stringify({ review_note: note || null }),
       })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       showToast(`Approved & fired — job ${data.job_id?.slice(0, 8)}…`)
       await fetchQueue()
     } catch (e) {
@@ -201,10 +205,14 @@ export default function CouncilHitlQueue() {
   const handleReject = useCallback(async (id, note) => {
     setLoading(true)
     try {
-      await apiFetch(`/api/council/hitl/${id}/reject`, {
+      const r = await apiFetch(`/api/council/hitl/${id}/reject`, {
         method: 'POST',
         body: JSON.stringify({ review_note: note || null }),
       })
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}))
+        throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      }
       showToast('Proposal rejected.')
       await fetchQueue()
     } catch (e) {

@@ -1,11 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import './i18n' // bootstrap i18next before any component renders
 import { ToastProvider } from './components/ui/Toaster'
+import RateLimitProvider from './components/RateLimitProvider'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
 import SkipToContent from './components/ui/SkipToContent'
 import NotFound from './components/ui/NotFound'
@@ -106,6 +107,7 @@ const EngineManagementConsole = React.lazy(() => import('./pages/EngineManagemen
 const SystemConfiguration = React.lazy(() => import('./pages/SystemConfiguration'))
 const MetricsDashboard = React.lazy(() => import('./pages/MetricsDashboard'))
 const CeoVault = React.lazy(() => import('./pages/CeoVault'))
+const CeoCommandCenter = React.lazy(() => import('./pages/CeoCommandCenter'))
 const RiskGraphVisualization = React.lazy(() => import('./pages/RiskGraphVisualization'))
 const ComplianceFrameworks = React.lazy(() => import('./pages/ComplianceFrameworks'))
 const SBOMBrowser = React.lazy(() => import('./pages/SBOMBrowser'))
@@ -129,6 +131,7 @@ const StatusPage = React.lazy(() => import('./pages/StatusPage'))
 const AuditLog = React.lazy(() => import('./pages/AuditLog'))
 const PlaybookBuilder = React.lazy(() => import('./pages/PlaybookBuilder'))
 const AskWeissman = React.lazy(() => import('./pages/AskWeissman'))
+const Billing = React.lazy(() => import('./pages/Billing'))
 const App = React.lazy(() => import('./App'))
 import './index.css'
 
@@ -149,6 +152,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter basename="/command-center">
       <AuthProvider>
         <ToastProvider>
+        <RateLimitProvider>
         <SkipToContent />
         <KeyboardShortcuts />
         <Routes>
@@ -249,15 +253,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="exploit-lab" element={<ExploitResearchLab />} />
             <Route path="agents" element={<AgentManagement />} />
             <Route path="audit-log" element={<AuditLog />} />
+            <Route path="billing" element={<Billing />} />
             <Route path="playbooks" element={<PlaybookBuilder />} />
             <Route path="ask" element={<AskWeissman />} />
-            <Route path="ceo" element={<Navigate to="/" replace />} />
+            <Route
+              path="ceo"
+              element={
+                <CeoProtectedRoute>
+                  <CeoCommandCenter />
+                </CeoProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
           </Route>
           {/* Fallback for any path outside the protected outlet */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </RateLimitProvider>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

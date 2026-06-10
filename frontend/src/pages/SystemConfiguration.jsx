@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { apiUrl, authHeaders } from '../lib/apiBase';
 
 /**
  * SystemConfiguration - Complete system settings management
@@ -16,6 +18,7 @@ import { api } from '../utils/apiFetch';
  * - Compliance settings
  */
 export default function SystemConfiguration() {
+  const { t } = useTranslation();
   const [config, setConfig] = useState({
     general: {},
     security: {},
@@ -31,13 +34,13 @@ export default function SystemConfiguration() {
   const [unsavedChanges, setUnsavedChanges] = useState(false);
 
   const tabs = [
-    { id: 'general', label: 'General', icon: <Settings /> },
-    { id: 'security', label: 'Security', icon: <Shield /> },
-    { id: 'scanning', label: 'Scanning', icon: <Zap /> },
-    { id: 'integrations', label: 'Integrations', icon: <Globe /> },
-    { id: 'retention', label: 'Data Retention', icon: <Database /> },
-    { id: 'performance', label: 'Performance', icon: <RefreshCw /> },
-    { id: 'compliance', label: 'Compliance', icon: <Lock /> },
+    { id: 'general', label: t('pages.systemConfiguration.tab_general'), icon: <Settings /> },
+    { id: 'security', label: t('pages.systemConfiguration.tab_security'), icon: <Shield /> },
+    { id: 'scanning', label: t('pages.systemConfiguration.tab_scanning'), icon: <Zap /> },
+    { id: 'integrations', label: t('pages.systemConfiguration.tab_integrations'), icon: <Globe /> },
+    { id: 'retention', label: t('pages.systemConfiguration.tab_retention'), icon: <Database /> },
+    { id: 'performance', label: t('pages.systemConfiguration.tab_performance'), icon: <RefreshCw /> },
+    { id: 'compliance', label: t('pages.systemConfiguration.tab_compliance'), icon: <Lock /> },
   ];
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export default function SystemConfiguration() {
   };
 
   return (
-    <PageShell title="System Configuration" icon={<Settings />}>
+    <PageShell title={t('pages.systemConfiguration.title')} subtitle={t('pages.systemConfiguration.subtitle')} icon={<Settings />}>
       <div className="space-y-6">
         {/* Unsaved Changes Warning */}
         {unsavedChanges && (
@@ -88,7 +91,7 @@ export default function SystemConfiguration() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
               <div>
-                <h3 className="text-sm font-semibold text-yellow-400">Unsaved Changes</h3>
+                <h3 className="text-sm font-semibold text-yellow-400">{t('pages.systemConfiguration.unsaved_warning')}</h3>
                 <p className="text-xs text-gray-400">You have unsaved configuration changes</p>
               </div>
             </div>
@@ -127,7 +130,7 @@ export default function SystemConfiguration() {
             {loading ? (
               <div className="text-center py-12 text-gray-500">
                 <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-                Loading configuration...
+                {t('pages.systemConfiguration.loading')}
               </div>
             ) : (
               <>
@@ -344,7 +347,7 @@ function MfaSelfServicePanel() {
   const [err, setErr] = React.useState('')
   const refresh = React.useCallback(async () => {
     try {
-      const r = await fetch('/api/auth/mfa/status', { credentials: 'include' })
+      const r = await fetch(apiUrl('/api/auth/mfa/status'), { credentials: 'include', headers: authHeaders() })
       const d = await r.json().catch(() => ({}))
       setStatus(d)
     } catch (e) {
@@ -356,7 +359,7 @@ function MfaSelfServicePanel() {
   const startSetup = async () => {
     setBusy(true); setErr('')
     try {
-      const r = await fetch('/api/auth/mfa/setup', { method: 'POST', credentials: 'include' })
+      const r = await fetch(apiUrl('/api/auth/mfa/setup'), { method: 'POST', credentials: 'include', headers: authHeaders() })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.detail || 'setup failed')
       setSetup(d)
@@ -365,9 +368,9 @@ function MfaSelfServicePanel() {
   const enable = async () => {
     setBusy(true); setErr('')
     try {
-      const r = await fetch('/api/auth/mfa/enable', {
+      const r = await fetch(apiUrl('/api/auth/mfa/enable'), {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ code: code.trim() }),
       })
       const d = await r.json().catch(() => ({}))
@@ -379,9 +382,9 @@ function MfaSelfServicePanel() {
   const disable = async () => {
     setBusy(true); setErr('')
     try {
-      const r = await fetch('/api/auth/mfa/disable', {
+      const r = await fetch(apiUrl('/api/auth/mfa/disable'), {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ code: code.trim() }),
       })
       const d = await r.json().catch(() => ({}))

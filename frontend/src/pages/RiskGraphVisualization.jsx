@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { GitBranch, Target, AlertTriangle, Shield, Zap, Filter, Download, Maximize2 } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
+import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 /**
  * RiskGraphVisualization - Interactive attack path and risk visualization
@@ -16,6 +17,7 @@ import { api } from '../utils/apiFetch';
  * - Real-time threat propagation
  */
 export default function RiskGraphVisualization() {
+  const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -24,8 +26,14 @@ export default function RiskGraphVisualization() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    fetchGraphData();
-  }, []);
+    if (clientLoading) return;
+    if (clientId == null) {
+      setGraphData({ nodes: [], edges: [] });
+      setLoading(false);
+      return;
+    }
+    fetchGraphData(clientId);
+  }, [clientId, clientLoading]);
 
   useEffect(() => {
     if (graphData.nodes.length > 0) {
@@ -33,10 +41,10 @@ export default function RiskGraphVisualization() {
     }
   }, [graphData, filter, layout]);
 
-  const fetchGraphData = async () => {
+  const fetchGraphData = async (cid) => {
     try {
       setLoading(true);
-      const data = await api.get('/api/risk/graph');
+      const data = await api.get(withClientId('/api/risk/graph', cid));
       setGraphData(data);
     } catch (error) {
       console.error('Failed to fetch graph data:', error);

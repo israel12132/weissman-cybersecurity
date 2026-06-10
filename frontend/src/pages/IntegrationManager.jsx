@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plug, Check, AlertTriangle, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -21,6 +22,7 @@ import { api } from '../utils/apiFetch';
  * - Event filtering
  */
 export default function IntegrationManager() {
+  const { t } = useTranslation();
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [testingConnection, setTestingConnection] = useState(null);
@@ -120,7 +122,7 @@ export default function IntegrationManager() {
   };
 
   return (
-    <PageShell title="Integration Manager" icon={<Plug />}>
+    <PageShell title={t('pages.integrationManager.title')} subtitle={t('pages.integrationManager.subtitle')} icon={<Plug />}>
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -164,7 +166,7 @@ export default function IntegrationManager() {
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add Integration
+            {t('pages.integrationManager.add_integration')}
           </button>
         </div>
 
@@ -184,7 +186,7 @@ export default function IntegrationManager() {
             </div>
           ) : integrations.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No integrations configured. Click "Add Integration" to get started.
+              {t('pages.integrationManager.no_integrations_hint')}
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -315,6 +317,7 @@ export default function IntegrationManager() {
  * Add Integration Modal
  */
 function AddIntegrationModal({ integration, onClose, onSave }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     type: integration?.id || '',
     name: integration?.name || '',
@@ -340,7 +343,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">Add Integration</h3>
+          <h3 className="text-lg font-bold text-white">{t('pages.integrationManager.add_integration_modal')}</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -429,7 +432,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
             disabled={saving || !formData.name || !formData.endpoint}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? 'Adding...' : 'Add Integration'}
+            {saving ? t('pages.integrationManager.adding') : t('pages.integrationManager.add_integration')}
           </button>
         </div>
       </div>

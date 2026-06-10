@@ -319,6 +319,146 @@ async fn api_containment_rules_post(
     }
 }
 
+#[derive(Deserialize, Default)]
+struct ContainmentRulePatchBody {
+    name: Option<String>,
+    enabled: Option<bool>,
+    pre_approved: Option<bool>,
+    aws_region: Option<String>,
+    forensic_source_cidr: Option<String>,
+    forensic_ports_csv: Option<String>,
+    k8s_api_server: Option<String>,
+    k8s_token_env_var: Option<String>,
+    k8s_namespace: Option<String>,
+    k8s_pod_label_key: Option<String>,
+    k8s_pod_label_value: Option<String>,
+    allow_dns_egress: Option<bool>,
+}
+
+async fn api_containment_rules_patch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(rule_id): Path<i64>,
+    Json(body): Json<ContainmentRulePatchBody>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let existing = sqlx::query(
+        r#"SELECT name, enabled, pre_approved, aws_region, forensic_source_cidr, forensic_ports_csv,
+                  k8s_api_server, k8s_token_env_var, k8s_namespace, k8s_pod_label_key, k8s_pod_label_value, allow_dns_egress
+           FROM containment_rules WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(rule_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    let Ok(Some(row)) = existing else {
+        let _ = tx.rollback().await;
+        return (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response();
+    };
+    let name = body
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| row.try_get::<String, _>("name").unwrap_or_default());
+    let enabled = body.enabled.unwrap_or_else(|| row.try_get::<bool, _>("enabled").unwrap_or(false));
+    let pre_approved = body
+        .pre_approved
+        .unwrap_or_else(|| row.try_get::<bool, _>("pre_approved").unwrap_or(false));
+    let aws_region = body
+        .aws_region
+        .unwrap_or_else(|| row.try_get::<String, _>("aws_region").unwrap_or_default());
+    let forensic_source_cidr = body
+        .forensic_source_cidr
+        .unwrap_or_else(|| row.try_get::<String, _>("forensic_source_cidr").unwrap_or_default());
+    let forensic_ports_csv = body
+        .forensic_ports_csv
+        .unwrap_or_else(|| row.try_get::<String, _>("forensic_ports_csv").unwrap_or_default());
+    let k8s_api_server = body
+        .k8s_api_server
+        .unwrap_or_else(|| row.try_get::<String, _>("k8s_api_server").unwrap_or_default());
+    let k8s_token_env_var = body
+        .k8s_token_env_var
+        .unwrap_or_else(|| row.try_get::<String, _>("k8s_token_env_var").unwrap_or_default());
+    let k8s_namespace = body
+        .k8s_namespace
+        .unwrap_or_else(|| row.try_get::<String, _>("k8s_namespace").unwrap_or_default());
+    let k8s_pod_label_key = body
+        .k8s_pod_label_key
+        .unwrap_or_else(|| row.try_get::<String, _>("k8s_pod_label_key").unwrap_or_default());
+    let k8s_pod_label_value = body
+        .k8s_pod_label_value
+        .unwrap_or_else(|| row.try_get::<String, _>("k8s_pod_label_value").unwrap_or_default());
+    let allow_dns_egress = body
+        .allow_dns_egress
+        .unwrap_or_else(|| row.try_get::<bool, _>("allow_dns_egress").unwrap_or(true));
+    let res = sqlx::query(
+        r#"UPDATE containment_rules
+              SET name = $1, enabled = $2, pre_approved = $3, aws_region = $4, forensic_source_cidr = $5,
+                  forensic_ports_csv = $6, k8s_api_server = $7, k8s_token_env_var = $8, k8s_namespace = $9,
+                  k8s_pod_label_key = $10, k8s_pod_label_value = $11, allow_dns_egress = $12
+            WHERE id = $13 AND tenant_id = $14"#,
+    )
+    .bind(&name)
+    .bind(enabled)
+    .bind(pre_approved)
+    .bind(&aws_region)
+    .bind(&forensic_source_cidr)
+    .bind(&forensic_ports_csv)
+    .bind(&k8s_api_server)
+    .bind(&k8s_token_env_var)
+    .bind(&k8s_namespace)
+    .bind(&k8s_pod_label_key)
+    .bind(&k8s_pod_label_value)
+    .bind(allow_dns_egress)
+    .bind(rule_id)
+    .bind(auth.tenant_id)
+    .execute(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_containment_rules_delete(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(rule_id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let res = sqlx::query("DELETE FROM containment_rules WHERE id = $1 AND tenant_id = $2")
+        .bind(rule_id)
+        .bind(auth.tenant_id)
+        .execute(&mut *tx)
+        .await;
+    let _ = tx.commit().await;
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            (StatusCode::OK, Json(json!({"ok": true, "id": rule_id}))).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
 #[derive(Deserialize)]
 struct ContainmentExecuteBody {
     rule_id: i64,

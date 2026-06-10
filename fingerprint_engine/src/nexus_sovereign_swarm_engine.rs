@@ -14,8 +14,15 @@ use tokio::sync::{Mutex, Semaphore};
 
 const ARCHETYPES: &[&str] = &["scout", "exploiter", "correlator", "stealth", "oracle"];
 const DEFAULT_AGENT_COUNT: u32 = 2048;
-const MAX_CONCURRENT_PROBES: usize = 48;
-const MAX_SURFACE_POINTS: usize = 512;
+const MAX_SURFACE_POINTS: usize = 2048;
+
+fn max_concurrent_probes() -> usize {
+    std::env::var("WEISSMAN_NSS_MAX_CONCURRENT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(128)
+        .clamp(16, 512)
+}
 
 #[derive(Debug, Clone)]
 struct SwarmConfig {
@@ -173,7 +180,7 @@ fn assign_agents(config: &SwarmConfig, surface: &[(String, String)]) -> Vec<Agen
     tasks
 }
 
-async fn build_client(stealth: bool) -> reqwest::Client {
+async fn build_client(stealth: bool, edge_meta: Option<&Value>) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::limited(3))
@@ -182,8 +189,30 @@ async fn build_client(stealth: bool) -> reqwest::Client {
         builder = builder.user_agent(
             "Mozilla/5.0 (compatible; WeissmanNSSI/1.0; +https://weissman.security/bot)",
         );
+    } else if let Some(meta) = edge_meta {
+        if let Some(pop) = meta.get("pop_label").and_then(Value::as_str) {
+            builder = builder.user_agent(format!(
+                "WeissmanNSSI/1.0 (edge-pop:{pop}; node={})",
+                meta.get("edge_swarm_node_id")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0)
+            ));
+        }
     }
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
+}
+
+async fn resolve_edge_meta(ctx: &EngineRunContext, target: &str) -> Option<Value> {
+    let (pool, tenant_id) = (ctx.app_pool.clone()?, ctx.tenant_id?);
+    crate::edge_swarm_intel::resolve_edge_swarm_for_target(
+        pool.as_ref().clone(),
+        tenant_id,
+        target,
+        ctx.llm_base_url.as_str(),
+        ctx.llm_model.as_str(),
+        ctx.tenant_id,
+    )
+    .await
 }
 
 async fn run_agent_probe(
@@ -498,15 +527,37 @@ pub async fn run_nexus_sovereign_swarm_result(
 
     let tasks = assign_agents(&config, &surface);
     let agent_count = tasks.len() as u32;
-    let endpoint_agents = if config.endpoint_bridge {
+    let edge_meta = if config.edge_distribution {
+        resolve_edge_meta(ctx, target).await
+    } else {
+        None
+    };
+    let mut endpoint_agents = if config.endpoint_bridge {
         count_endpoint_agents(ctx).await
     } else {
         0
     };
+    if config.endpoint_bridge {
+        if let (Some(pool), Some(registry), Some(client_id), Some(tenant_id)) = (
+            ctx.app_pool.as_ref(),
+            ctx.agents.as_ref(),
+            ctx.client_id,
+            ctx.tenant_id,
+        ) {
+            let surface_urls: Vec<String> = surface
+                .iter()
+                .map(|(b, p)| format!("{b}{p}"))
+                .collect();
+            let bridged =
+                crate::endpoint_agents::bridge_nssi_fleet(pool, registry, tenant_id, client_id, &surface_urls)
+                    .await;
+            endpoint_agents = endpoint_agents.max(bridged);
+        }
+    }
 
-    let stealth_client = build_client(false).await;
-    let stealth_mode_client = build_client(true).await;
-    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_PROBES));
+    let stealth_client = build_client(false, edge_meta.as_ref()).await;
+    let stealth_mode_client = build_client(true, edge_meta.as_ref()).await;
+    let sem = Arc::new(Semaphore::new(max_concurrent_probes()));
     let signals: Arc<Mutex<Vec<ProbeSignal>>> = Arc::new(Mutex::new(Vec::new()));
     let hive_mode = config.hive_mode.clone();
 
@@ -568,7 +619,19 @@ pub async fn run_nexus_sovereign_swarm_result(
             raw_signals.len(),
             emergent.len(),
             endpoint_agents,
-            if config.edge_distribution { " | edge POP distribution enabled" } else { "" },
+            if config.edge_distribution {
+                if let Some(ref e) = edge_meta {
+                    format!(
+                        " | edge POP {} ({})",
+                        e.get("pop_label").and_then(Value::as_str).unwrap_or("assigned"),
+                        e.get("region_code").and_then(Value::as_str).unwrap_or("global")
+                    )
+                } else {
+                    " | edge distribution requested (no POP nodes)".into()
+                }
+            } else {
+                String::new()
+            },
             swarm_iq
         ),
         "swarm_metrics": {
@@ -582,6 +645,8 @@ pub async fn run_nexus_sovereign_swarm_result(
             "llm_strategy": config.llm_strategy,
             "convergence_threshold": config.convergence_threshold,
             "archetypes": config.archetypes,
+            "edge_assignment": edge_meta,
+            "fleet_max": crate::endpoint_agents::FLEET_MAX_AGENTS,
         },
         "oracle_synthesis": oracle,
     }));

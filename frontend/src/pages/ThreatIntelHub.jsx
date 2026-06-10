@@ -6,6 +6,7 @@
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
@@ -174,7 +175,7 @@ function useFindingsStats() {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await apiFetch('/api/findings?page=1&per_page=1')
+        const r = await apiFetch('/api/findings?limit=1&offset=0')
         if (r.ok) {
           const d = await r.json()
           const total = d.total ?? 0
@@ -195,6 +196,7 @@ function useFindingsStats() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ThreatIntelHub() {
+  const { t } = useTranslation()
   const [activeGroup, setActiveGroup] = useState(null)
   const [search, setSearch] = useState('')
   const { stats, loading: statsLoading } = useFindingsStats()
@@ -228,38 +230,38 @@ export default function ThreatIntelHub() {
 
   return (
     <PageShell
-      title="Threat Intelligence Hub"
-      subtitle={`${ENGINES_REGISTRY.length} engines · ${uniqueMitre} MITRE techniques`}
-      badge="LIVE"
+      title={t('pages.threatIntelHub.title')}
+      subtitle={t('pages.threatIntelHub.subtitle', { engines: ENGINES_REGISTRY.length, mitre: uniqueMitre })}
+      badge={t('pages.threatIntelHub.badge')}
       badgeColor="#22d3ee"
     >
       {/* ── Top Stats ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <StatCard
-          label="Attack Engines"
+          label={t('pages.threatIntelHub.attack_engines')}
           value={ENGINES_REGISTRY.length}
-          sub={`${globalEngines} global · ${targetEngines} target-based`}
+          sub={t('pages.threatIntelHub.engines_sub', { global: globalEngines, target: targetEngines })}
           color="#22d3ee"
           icon="⚡"
         />
         <StatCard
-          label="MITRE Techniques"
+          label={t('pages.threatIntelHub.mitre_techniques')}
           value={uniqueMitre}
-          sub="ATT&CK technique coverage"
+          sub={t('pages.threatIntelHub.mitre_sub')}
           color="#8b5cf6"
           icon="🗺️"
         />
         <StatCard
-          label="Engine Groups"
+          label={t('pages.threatIntelHub.engine_groups')}
           value={ENGINE_GROUP_DEFS.length}
-          sub="Tactical domains covered"
+          sub={t('pages.threatIntelHub.groups_sub')}
           color="#f97316"
           icon="🏹"
         />
         <StatCard
-          label="Live Findings"
+          label={t('pages.threatIntelHub.live_findings')}
           value={statsLoading ? '—' : (stats?.total ?? '—')}
-          sub="Verified & potential"
+          sub={t('pages.threatIntelHub.findings_sub')}
           color="#ef4444"
           icon="🚨"
         />
@@ -268,7 +270,7 @@ export default function ThreatIntelHub() {
       <div className="grid lg:grid-cols-[320px_1fr] gap-6">
         {/* ── Left: Group Breakdown ─────────────────────────────────────── */}
         <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Engine Groups</h2>
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatIntelHub.groups_heading')}</h2>
           {ENGINE_GROUP_DEFS.map((group) => (
             <GroupBar
               key={group.id}
@@ -285,7 +287,7 @@ export default function ThreatIntelHub() {
               onClick={() => setActiveGroup(null)}
               className="w-full text-center text-[10px] font-mono text-white/30 hover:text-white/60 mt-2 transition-colors"
             >
-              ✕ clear filter
+              ✕ {t('pages.threatIntelHub.clear_filter')}
             </button>
           )}
 
@@ -306,7 +308,7 @@ export default function ThreatIntelHub() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search engines, MITRE IDs, descriptions…"
+                placeholder={t('pages.threatIntelHub.search_placeholder')}
                 className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder-white/20 font-mono focus:outline-none focus:border-cyan-500/40"
               />
               {search && (
@@ -320,7 +322,7 @@ export default function ThreatIntelHub() {
               )}
             </div>
             <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">
-              {filteredEngines.length} engines
+              {t('pages.threatIntelHub.engines_count', { count: filteredEngines.length })}
             </span>
           </div>
 
@@ -333,7 +335,7 @@ export default function ThreatIntelHub() {
                   animate={{ opacity: 1 }}
                   className="py-12 text-center text-white/25 text-xs font-mono"
                 >
-                  No engines match your search.
+                  {t('pages.threatIntelHub.no_match')}
                 </motion.div>
               ) : (
                 <motion.div key={`${activeGroup}-${search}`}>

@@ -1,3 +1,119 @@
+/// `GET /api/metrics/dashboard` — tenant-scoped operational metrics for the metrics UI.
+async fn api_metrics_dashboard(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let postgres_ok = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(state.app_pool.as_ref())
+        .await
+        .is_ok();
+
+    let empty_sev = json!({
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0,
+    });
+
+    if !postgres_ok {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "postgres_ok": false,
+                "active_scans": 0,
+                "findings_by_severity": empty_sev,
+                "jobs": { "completed_24h": 0, "failed_24h": 0 },
+            })),
+        )
+            .into_response();
+    }
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "postgres_ok": false,
+                "active_scans": 0,
+                "findings_by_severity": empty_sev,
+                "jobs": { "completed_24h": 0, "failed_24h": 0 },
+            })),
+        )
+            .into_response();
+    };
+
+    let sev_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
+           FROM vulnerabilities
+          WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+          GROUP BY s",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+
+    let sev_get = |rows: &[(String, i64)], k: &str| -> i64 {
+        rows.iter()
+            .find(|(s, _)| s == k)
+            .map(|(_, n)| *n)
+            .unwrap_or(0)
+    };
+
+    let active_scans: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+          WHERE tenant_id = $1 AND status = 'running'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    let jobs_completed_24h: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+          WHERE tenant_id = $1 AND status = 'completed'
+            AND updated_at > now() - interval '24 hours'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    let jobs_failed_24h: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs
+          WHERE tenant_id = $1 AND status IN ('failed','dead')
+            AND updated_at > now() - interval '24 hours'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    let _ = tx.commit().await;
+
+    let orchestrator_cycles = crate::orchestrator::active_tenant_scan_count() as i64;
+    let active_scans = active_scans.max(orchestrator_cycles);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "postgres_ok": true,
+            "active_scans": active_scans,
+            "findings_by_severity": {
+                "critical": sev_get(&sev_rows, "critical"),
+                "high":     sev_get(&sev_rows, "high"),
+                "medium":   sev_get(&sev_rows, "medium"),
+                "low":      sev_get(&sev_rows, "low"),
+                "info":     sev_get(&sev_rows, "info"),
+            },
+            "jobs": {
+                "completed_24h": jobs_completed_24h,
+                "failed_24h":    jobs_failed_24h,
+            },
+        })),
+    )
+        .into_response()
+}
+
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
@@ -644,10 +760,25 @@ async fn api_findings(
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0)
         .max(0);
-    let severity_filter: Option<String> = q
+    let severity_list: Vec<String> = q
         .get("severity")
-        .map(|s| s.trim().to_ascii_lowercase())
-        .filter(|s| matches!(s.as_str(), "critical" | "high" | "medium" | "low" | "info"));
+        .map(|s| {
+            s.split(',')
+                .map(|x| x.trim().to_ascii_lowercase())
+                .filter(|x| {
+                    matches!(
+                        x.as_str(),
+                        "critical" | "high" | "medium" | "low" | "info"
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let severity_filter: Option<Vec<String>> = if severity_list.is_empty() {
+        None
+    } else {
+        Some(severity_list)
+    };
     let client_filter: Option<i64> = q
         .get("client_id")
         .and_then(|s| s.parse::<i64>().ok());
@@ -672,7 +803,7 @@ async fn api_findings(
          epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, \
          intel_enriched_at, signature_hash, cluster_id, seen_count \
          FROM vulnerabilities \
-         WHERE ($3::text IS NULL OR lower(severity) = $3) \
+         WHERE ($3::text[] IS NULL OR lower(severity) = ANY($3)) \
            AND ($4::bigint IS NULL OR client_id = $4) \
          ORDER BY \
             CASE WHEN kev_listed THEN 0 ELSE 1 END, \
@@ -682,7 +813,7 @@ async fn api_findings(
     )
     .bind(limit)
     .bind(offset)
-    .bind(severity_filter.as_deref())
+    .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
     .fetch_all(&mut *tx)
     .await
@@ -690,10 +821,10 @@ async fn api_findings(
 
     let total: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
-         WHERE ($1::text IS NULL OR lower(severity) = $1) \
+         WHERE ($1::text[] IS NULL OR lower(severity) = ANY($1)) \
            AND ($2::bigint IS NULL OR client_id = $2)",
     )
-    .bind(severity_filter.as_deref())
+    .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
     .fetch_one(&mut *tx)
     .await
@@ -837,11 +968,13 @@ async fn api_config_public(Extension(auth): Extension<AuthContext>) -> Response 
 
 async fn api_engines_production() -> Response {
     let ids = weissman_core::models::engine::production_engine_ids();
-    let catalog_total = weissman_core::models::engine::FULL_ENGINE_REGISTRY_ORDER.len();
+    let live_count = ids.len();
     (StatusCode::OK, Json(json!({
         "production": ids,
-        "production_count": ids.len(),
-        "catalog_count": catalog_total,
+        "production_count": live_count,
+        "catalog_count": 0,
+        "all_runnable": true,
+        "frontend_total": live_count,
     }))).into_response()
 }
 
@@ -876,7 +1009,11 @@ fn top_tier_execution_path(engine_id: &str) -> &'static str {
     if engine_id == "poe_synthesis" {
         "poe_synthesis_run"
     } else if weissman_core::models::engine::is_production_engine_id(engine_id) {
-        "command_center_engine"
+        if weissman_core::models::engine::is_engine_alias(engine_id) {
+            "alias_engine_runner"
+        } else {
+            "command_center_engine"
+        }
     } else {
         "catalog_only"
     }
@@ -1575,13 +1712,17 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     .fetch_optional(state.auth_pool.as_ref())
     .await
     {
-        Ok(v) => v,
+        Ok(v) => (v, false),
         Err(e) => {
-            tracing::warn!(target: "auth", error = %e, "auth_pool user lookup failed; falling back to app_pool");
+            tracing::warn!(target: "auth", error = %e, "auth_pool user lookup failed; falling back to app_pool (MFA fail-closed)");
             let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_key).await else {
                 return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({"ok": false, "detail": "Invalid email or password"})),
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({
+                        "ok": false,
+                        "detail": "Authentication service temporarily unavailable",
+                        "code": "auth_degraded"
+                    })),
                 )
                     .into_response();
             };
@@ -1589,7 +1730,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                           COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
                           COALESCE(u.is_superadmin, false) AS is_superadmin,
-                         false AS mfa_enabled
+                          COALESCE(u.mfa_enabled, false) AS mfa_enabled
                    FROM users u
                    WHERE u.tenant_id = $1 AND lower(trim(u.email)) = lower(trim($2)) AND u.is_active = true"#,
             )
@@ -1600,9 +1741,11 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             .ok()
             .flatten();
             let _ = tx.commit().await;
-            fallback
+            (fallback, true)
         }
     };
+    let auth_pool_degraded = row.1;
+    let row = row.0;
     let (user_id, hash, tenant_id, role, is_superadmin, mfa_enabled) = match row {
         Some(r) => (
             r.try_get::<i64, _>("id").unwrap_or(0),
@@ -1629,6 +1772,23 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     }
 
     if password_ok {
+            if auth_pool_degraded && !mfa_enabled {
+                tracing::warn!(
+                    target: "auth",
+                    user_id,
+                    tenant_id,
+                    "auth_pool degraded; refusing password-only login without verified MFA status"
+                );
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({
+                        "ok": false,
+                        "detail": "Authentication service temporarily unavailable; cannot verify MFA status",
+                        "code": "auth_degraded"
+                    })),
+                )
+                    .into_response();
+            }
             // ── BLOCKER #3: Tenant-wide MFA enforcement ─────────────────────
             // If tenant policy `mfa_required` is true, deny login when MFA
             // is not yet enrolled. If the user has MFA, always go through

@@ -336,7 +336,9 @@ export default function SsoDashboard() {
   const fetchIdps = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await apiFetch('/api/sso/idps')
+      const r = await apiFetch('/api/sso/idps')
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       setIdps(data.idps ?? [])
     } catch (e) {
       showToast('Failed to load IdPs: ' + e.message, false)
@@ -351,10 +353,14 @@ export default function SsoDashboard() {
     setSaving(true)
     try {
       if (editingIdp) {
-        await apiFetch(`/api/sso/idps/${editingIdp.id}`, { method: 'PATCH', body: JSON.stringify(formData) })
+        const r = await apiFetch(`/api/sso/idps/${editingIdp.id}`, { method: 'PATCH', body: JSON.stringify(formData) })
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
         showToast('Connection updated.')
       } else {
-        await apiFetch('/api/sso/idps', { method: 'POST', body: JSON.stringify(formData) })
+        const r = await apiFetch('/api/sso/idps', { method: 'POST', body: JSON.stringify(formData) })
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
         showToast('Connection created.')
       }
       setSelectedProv(null)
@@ -370,7 +376,9 @@ export default function SsoDashboard() {
   const handleDelete = useCallback(async (id) => {
     if (!window.confirm('Remove this IdP connection?')) return
     try {
-      await apiFetch(`/api/sso/idps/${id}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/sso/idps/${id}`, { method: 'DELETE' })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       showToast('Connection removed.')
       await fetchIdps()
     } catch (e) {
@@ -380,7 +388,9 @@ export default function SsoDashboard() {
 
   const handleToggle = useCallback(async (id) => {
     try {
-      const data = await apiFetch(`/api/sso/idps/${id}/toggle`, { method: 'POST' })
+      const r = await apiFetch(`/api/sso/idps/${id}/toggle`, { method: 'POST' })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       setIdps(prev => prev.map(i => i.id === id ? { ...i, active: data.active } : i))
     } catch (e) {
       showToast('Toggle failed: ' + e.message, false)
@@ -390,7 +400,9 @@ export default function SsoDashboard() {
   const handleTest = useCallback(async (id) => {
     setTestingId(id)
     try {
-      const data = await apiFetch(`/api/sso/idps/${id}/test`, { method: 'POST' })
+      const r = await apiFetch(`/api/sso/idps/${id}/test`, { method: 'POST' })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
       if (data.ok) {
         showToast('✓ Connection test passed — IdP is reachable.')
       } else {

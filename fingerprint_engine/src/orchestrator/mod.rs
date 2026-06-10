@@ -1803,7 +1803,7 @@ async fn run_cycle_for_tenant(
                         recon_subdomains: recon_subdomains.clone().unwrap_or_default(),
                         asm_ports: asm_ports.clone(),
                         app_pool: Some(app_pool.clone()),
-                        agents: None, // orchestrator path: no live registry; tasks queue.
+                        agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                         client_id: Some(db_client_id),
                         job_params: serde_json::json!({}),
                     };

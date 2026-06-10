@@ -2,6 +2,8 @@
 
 pub mod ceo_rbac;
 pub mod client_ip;
+pub mod login_rate_limit;
+pub mod rate_limit_metrics;
 pub mod tenant_scan_limit;
 mod serve;
 

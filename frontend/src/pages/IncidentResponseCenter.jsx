@@ -5,11 +5,14 @@
  * real-time timelines, containment / eradication actions, MTTR metrics.
  * Route: /incident-response
  */
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiFetch } from '../lib/apiBase'
+import EmptyState from '../components/ui/EmptyState'
 import PageShell from './PageShell'
 
-// ─── Static demo data ─────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEVERITY_COLOR = {
   critical: '#ef4444',
@@ -18,91 +21,6 @@ const SEVERITY_COLOR = {
   low: '#22d3ee',
   info: '#6b7280',
 }
-
-const INITIAL_INCIDENTS = [
-  {
-    id: 'INC-0041',
-    title: 'Ransomware Lateral Movement Detected',
-    severity: 'critical',
-    status: 'active',
-    assignee: 'SOC Tier-3',
-    created: '2026-04-20T07:14:00Z',
-    updated: '2026-04-20T14:55:00Z',
-    source: 'EDR / CrowdStrike',
-    affectedAssets: ['DC01', 'FS02', 'WORKSTATION-44'],
-    mitre: 'T1486',
-    description: 'LockBit 3.0 variant detected moving laterally from compromised endpoint. Encryption activity observed on file server FS02.',
-    playbook: 'ransomware',
-    timeline: [
-      { t: '07:14', actor: 'EDR', msg: 'Suspicious process tree on WORKSTATION-44 — mimikatz.exe child of explorer.exe' },
-      { t: '07:19', actor: 'SIEM', msg: 'PsExec lateral movement to DC01 detected (Event 4648)' },
-      { t: '07:31', actor: 'EDR', msg: 'File encryption loop started on FS02 — .lockbit extension appended' },
-      { t: '07:45', actor: 'SOC', msg: 'Alert escalated to Tier-3 analyst' },
-      { t: '08:02', actor: 'SOC', msg: 'Network segment isolated; C2 domain blocked at perimeter' },
-    ],
-  },
-  {
-    id: 'INC-0040',
-    title: 'Credential Stuffing Campaign — Customer Portal',
-    severity: 'high',
-    status: 'containment',
-    assignee: 'SOC Tier-2',
-    created: '2026-04-20T03:00:00Z',
-    updated: '2026-04-20T11:30:00Z',
-    source: 'WAF / Cloudflare',
-    affectedAssets: ['login.acme.com'],
-    mitre: 'T1110.004',
-    description: '180 k login attempts from 4 200+ unique IPs over 8 hours. 94 accounts compromised. MFA bypass via SIM-swapping suspected.',
-    playbook: 'credential_stuffing',
-    timeline: [
-      { t: '03:00', actor: 'WAF', msg: 'Rate-limit threshold breached — 22 500 req/min on /api/auth/login' },
-      { t: '03:07', actor: 'SIEM', msg: 'Geo-anomaly: logins from 43 countries in 7 minutes' },
-      { t: '04:15', actor: 'SOC', msg: 'CAPTCHA enforcement activated; suspicious IPs added to block-list' },
-      { t: '09:00', actor: 'SOC', msg: 'Forced MFA reset for 94 affected accounts' },
-    ],
-  },
-  {
-    id: 'INC-0039',
-    title: 'Supply Chain Compromise — NPM Package',
-    severity: 'high',
-    status: 'eradication',
-    assignee: 'AppSec Lead',
-    created: '2026-04-19T16:00:00Z',
-    updated: '2026-04-20T10:00:00Z',
-    source: 'SCA / Snyk',
-    affectedAssets: ['build-pipeline-prod', 'node-app-01'],
-    mitre: 'T1195.001',
-    description: 'Malicious code injected into dependency "event-stream@3.3.7-patch" — crypto-mining payload and data exfiltration hook.',
-    playbook: 'supply_chain',
-    timeline: [
-      { t: '16:00', actor: 'SCA', msg: 'Malicious package flagged in node_modules — event-stream@3.3.7-patch' },
-      { t: '16:18', actor: 'DevOps', msg: 'Build pipeline paused; artifact quarantine initiated' },
-      { t: '18:30', actor: 'AppSec', msg: 'Reverse engineering confirmed crypto-miner + exfil webhook' },
-      { t: '22:00', actor: 'AppSec', msg: 'Package removed; dependency pinned to vetted version' },
-    ],
-  },
-  {
-    id: 'INC-0038',
-    title: 'Zero-Day Exploitation — Apache HTTP Server',
-    severity: 'critical',
-    status: 'resolved',
-    assignee: 'Vuln-Mgmt',
-    created: '2026-04-18T09:00:00Z',
-    updated: '2026-04-19T12:00:00Z',
-    source: 'IDS / Zeek',
-    affectedAssets: ['web-prod-01', 'web-prod-02'],
-    mitre: 'T1190',
-    description: 'CVE-2026-xxxxx (CVSS 9.8) — path traversal + RCE via mod_proxy. Two production web servers compromised before patch.',
-    playbook: 'zero_day',
-    timeline: [
-      { t: '09:00', actor: 'IDS', msg: 'Anomalous path traversal pattern detected on web-prod-01' },
-      { t: '09:11', actor: 'SIEM', msg: 'Reverse shell spawned on web-prod-01 — nc callback to 195.x.x.x' },
-      { t: '10:00', actor: 'SOC', msg: 'Web servers removed from load balancer; forensic image taken' },
-      { t: '14:00', actor: 'Vuln-Mgmt', msg: 'Emergency patch applied; WAF virtual patch deployed' },
-      { t: '12:00+1d', actor: 'SOC', msg: 'Servers restored; IOCs shared with threat intel feeds' },
-    ],
-  },
-]
 
 const PLAYBOOKS = {
   ransomware: {
@@ -177,6 +95,24 @@ function durationHuman(created, updated) {
   const h = Math.floor(ms / 3_600_000)
   const m = Math.floor((ms % 3_600_000) / 60_000)
   return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function normalizeIncident(raw) {
+  return {
+    id: raw.id ?? '',
+    title: raw.title ?? 'Untitled incident',
+    severity: String(raw.severity ?? 'high').toLowerCase(),
+    status: String(raw.status ?? 'active').toLowerCase(),
+    assignee: raw.assignee ?? 'SOC Analyst',
+    created: raw.created ?? new Date().toISOString(),
+    updated: raw.updated ?? raw.created ?? new Date().toISOString(),
+    source: raw.source ?? '—',
+    affectedAssets: Array.isArray(raw.affectedAssets) ? raw.affectedAssets : [],
+    mitre: raw.mitre ?? null,
+    description: raw.description ?? '',
+    playbook: raw.playbook ?? 'credential_stuffing',
+    timeline: Array.isArray(raw.timeline) ? raw.timeline : [],
+  }
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -344,10 +280,37 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function IncidentResponseCenter() {
-  const [incidents] = useState(INITIAL_INCIDENTS)
-  const [selectedId, setSelectedId] = useState(INITIAL_INCIDENTS[0].id)
+  const { t } = useTranslation()
+  const [incidents, setIncidents] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
   const [localSteps, setLocalSteps] = useState({})
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    apiFetch('/api/soc/incidents')
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Failed to load incidents (${r.status})`)
+        return r.json()
+      })
+      .then((data) => {
+        if (cancelled) return
+        const list = (data?.incidents ?? []).map(normalizeIncident)
+        setIncidents(list)
+        setSelectedId(list[0]?.id ?? null)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message ?? 'Failed to load incidents')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
@@ -366,29 +329,47 @@ export default function IncidentResponseCenter() {
     const crit = incidents.filter((i) => i.severity === 'critical').length
     const resolved = incidents.filter((i) => i.status === 'resolved').length
     const totalMs = incidents.reduce((sum, i) => sum + (new Date(i.updated) - new Date(i.created)), 0)
-    const avgH = (totalMs / incidents.length / 3_600_000).toFixed(1)
+    const avgH = incidents.length
+      ? (totalMs / incidents.length / 3_600_000).toFixed(1)
+      : '0.0'
     return { active, crit, resolved, avgH }
   }, [incidents])
 
   return (
     <PageShell
-      title="Incident Response Center"
-      subtitle={`${incidents.length} incidents tracked`}
-      badge="IR"
+      title={t('pages.incidentResponseCenter.title')}
+      subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
+      badge={t('pages.incidentResponseCenter.badge')}
       badgeColor="#ef4444"
     >
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Active Incidents"  value={metrics.active}  sub="Requiring immediate action" color="#ef4444" icon="🔥" />
-        <MetricCard label="Critical Severity" value={metrics.crit}    sub="P0 — C-suite notification"  color="#f97316" icon="⚠️" />
-        <MetricCard label="Avg MTTR"          value={`${metrics.avgH}h`} sub="Mean time to resolve"   color="#22d3ee" icon="⏱️" />
-        <MetricCard label="Resolved (7d)"     value={metrics.resolved} sub="Closed incidents"          color="#4ade80" icon="✅" />
+        <MetricCard label={t('pages.incidentResponseCenter.active_incidents')} value={metrics.active} sub={t('pages.incidentResponseCenter.active_sub')} color="#ef4444" icon="🔥" />
+        <MetricCard label={t('pages.incidentResponseCenter.critical_severity')} value={metrics.crit} sub={t('pages.incidentResponseCenter.critical_sub')} color="#f97316" icon="⚠️" />
+        <MetricCard label={t('pages.incidentResponseCenter.avg_mttr')} value={`${metrics.avgH}h`} sub={t('pages.incidentResponseCenter.mttr_sub')} color="#22d3ee" icon="⏱️" />
+        <MetricCard label={t('pages.incidentResponseCenter.resolved_7d')} value={metrics.resolved} sub={t('pages.incidentResponseCenter.resolved_sub')} color="#4ade80" icon="✅" />
       </div>
 
+      {error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono mb-6">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && incidents.length === 0 && (
+        <EmptyState
+          icon="shield"
+          title={t('pages.incidentResponseCenter.empty_title')}
+          body={t('pages.incidentResponseCenter.empty_body')}
+          cta={{ label: t('pages.incidentResponseCenter.view_findings'), to: '/findings' }}
+        />
+      )}
+
+      {!loading && !error && incidents.length > 0 && (
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Incident Queue</h2>
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.incidentResponseCenter.incident_queue')}</h2>
           {incidents.map((inc) => (
             <IncidentRow
               key={inc.id}
@@ -489,6 +470,7 @@ export default function IncidentResponseCenter() {
           )}
         </AnimatePresence>
       </div>
+      )}
     </PageShell>
   )
 }

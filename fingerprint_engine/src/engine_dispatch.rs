@@ -5,7 +5,7 @@ use crate::engine_result::EngineResult;
 use crate::stealth_engine::StealthConfig;
 use serde_json::json;
 use weissman_core::models::engine::{
-    is_production_engine_id, production_engine_ids, resolve_engine_id,
+    dispatch_engine_id, is_production_engine_id, production_engine_ids,
 };
 
 /// Context passed from orchestrator / async jobs into engine runners.
@@ -38,15 +38,10 @@ pub fn production_ids_json() -> Vec<serde_json::Value> {
 
 /// Engines whose detection must run on an enrolled endpoint agent (not from a remote probe).
 pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
+    // Stealth / EDR (host-only observation)
     "process_hollowing",
     "dll_hijacking_engine",
     "process_inventory",
-    "persistence_mechanism",
-    "bootkit_uefi",
-    "arp_spoofing_engine",
-    "clipboard_hijack",
-    "screen_capture_exfil",
-    "insider_exfil",
     "av_bypass_engine",
     "log_tampering_engine",
     "anti_debug_evasion",
@@ -55,11 +50,85 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "usb_enumeration",
     "dns_tunneling_c2",
     "icmp_covert",
+    // Malware / persistence (advanced_malware_engines agent_required_ok)
+    "bootkit_uefi",
+    "persistence_mechanism",
+    "polymorphic_engine",
+    "ransomware_emulation",
+    // Data exfiltration (advanced_data_engines agent_required_ok)
+    "acoustic_exfil",
+    "em_exfil_engine",
+    "optical_exfil",
+    "keyboard_acoustic",
+    "screen_capture_exfil",
+    "clipboard_hijack",
+    "insider_exfil",
+    "storage_covert_channel",
+    // Network / wireless (advanced_network_engines agent_required_ok)
+    "arp_spoofing_engine",
+    "vlan_hopping_attack",
+    "dhcp_attack_engine",
+    "wifi_attack_engine",
+    "bluetooth_attack_engine",
+    "lte_5g_attack",
+    "wpa3_attack_engine",
+    "packet_injection_engine",
+    "network_tap_advanced",
+    "multicast_attack",
+    "nat_traversal_attack",
+    // Mobile (advanced_mobile_engines agent_required_ok)
+    "sim_swap_engine",
+    "bluetooth_mobile_attack",
+    "nfc_relay_attack",
+    // Social engineering (advanced_social_engines agent_required_ok)
+    "deepfake_voice_engine",
+    "pretexting_engine",
+    "insider_threat_engine",
+    "physical_social_eng",
 ];
 
 #[must_use]
 pub fn is_agent_required_engine(id: &str) -> bool {
     AGENT_REQUIRED_ENGINES.iter().any(|&k| k == id)
+}
+
+/// Dispatch an agent-required engine to the endpoint fleet (or return a status finding).
+pub async fn run_agent_required_engine(
+    engine_id: &str,
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
+    if let (Some(pool), Some(registry), Some(client_id), Some(tenant_id)) = (
+        ctx.app_pool.as_ref(),
+        ctx.agents.as_ref(),
+        ctx.client_id,
+        ctx.tenant_id,
+    ) {
+        return dispatch_to_agent(
+            pool.as_ref(),
+            registry,
+            tenant_id,
+            client_id,
+            engine_id,
+            target,
+        )
+        .await;
+    }
+    let f = serde_json::json!({
+        "type": engine_id,
+        "category": "agent_required",
+        "title": format!("{} requires an enrolled endpoint agent", engine_id),
+        "severity": "info",
+        "mitre_attack": "",
+        "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
+        "target": target,
+        "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
+        "agent_required": true,
+    });
+    EngineResult::ok(
+        vec![f],
+        format!("{}: requires endpoint agent", engine_id),
+    )
 }
 
 /// Run a production engine (or alias). Returns empty ok for unknown catalog-only IDs.
@@ -69,48 +138,11 @@ pub fn is_agent_required_engine(id: &str) -> bool {
 /// `PRODUCTION_ENGINE_IDS` set do we fall back to `resolve_engine_id` for legacy
 /// aliases (so old `client_configs.enabled_engines` rows keep working).
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
-    // If this engine must run on an agent and we have routing info, dispatch it.
     if is_agent_required_engine(engine_id) {
-        if let (Some(pool), Some(registry), Some(client_id), Some(tenant_id)) = (
-            ctx.app_pool.as_ref(),
-            ctx.agents.as_ref(),
-            ctx.client_id,
-            ctx.tenant_id,
-        ) {
-            return dispatch_to_agent(
-                pool.as_ref(),
-                registry,
-                tenant_id,
-                client_id,
-                engine_id,
-                target,
-            )
-            .await;
-        }
-        // No routing info → degrade to status-only finding.
-        let f = serde_json::json!({
-            "type": engine_id,
-            "category": "agent_required",
-            "title": format!("{} requires an enrolled endpoint agent", engine_id),
-            "severity": "info",
-            "mitre_attack": "",
-            "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
-            "target": target,
-            "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
-            "agent_required": true,
-        });
-        return EngineResult::ok(
-            vec![f],
-            format!("{}: requires endpoint agent", engine_id),
-        );
+        return run_agent_required_engine(engine_id, target, ctx).await;
     }
     let raw = engine_id.trim();
-    let canonical = if is_production_engine_id(raw) {
-        raw
-    } else {
-        resolve_engine_id(raw)
-    };
-    if !is_production_engine_id(canonical) {
+    if !is_production_engine_id(raw) {
         return EngineResult::ok(
             vec![],
             format!(
@@ -123,6 +155,48 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         return EngineResult::error("target required");
     }
 
+    if crate::alias_engine_runner::is_alias_engine(raw) {
+        return crate::alias_engine_runner::run_alias_engine(raw, target, ctx).await;
+    }
+
+    let canonical = dispatch_engine_id(raw);
+    let mut result = dispatch_engine_match(canonical, target, ctx).await;
+    if raw != canonical || !result.findings.is_empty() {
+        for f in &mut result.findings {
+            if let Some(obj) = f.as_object_mut() {
+                obj.entry("source_engine".to_string())
+                    .or_insert_with(|| serde_json::Value::String(raw.to_string()));
+                obj.entry("engine_id".to_string())
+                    .or_insert_with(|| serde_json::Value::String(raw.to_string()));
+                if raw != canonical {
+                    obj.insert(
+                        "canonical_engine".to_string(),
+                        serde_json::Value::String(canonical.to_string()),
+                    );
+                }
+            }
+        }
+    }
+    if raw != canonical && !result.message.contains(raw) {
+        result.message = format!("{} (via {})", result.message, raw);
+    }
+    result
+}
+
+/// Run a canonical production engine (used by alias runner after specialization).
+pub(crate) async fn dispatch_canonical_engine(
+    canonical: &str,
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
+    dispatch_engine_match(canonical, target, ctx).await
+}
+
+async fn dispatch_engine_match(
+    canonical: &str,
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     let stealth = ctx.stealth.as_ref();
     let tl = if ctx.target_list.is_empty() {
         vec![target.to_string()]
@@ -659,10 +733,44 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         // ── Advanced Malware engines (new probes / agent_required) ─────────────
         "ransomware_emulation" => crate::advanced_malware_engines::run_ransomware_emulation_result(target).await,
 
-        _ => EngineResult::ok(
-            vec![],
-            format!("Engine '{}' has no runner (internal)", canonical),
+        _ => EngineResult::error(
+            format!(
+                "Engine '{}' is registered in PRODUCTION_ENGINE_IDS but has no dispatch runner in engine_dispatch",
+                canonical
+            ),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn catalog_only_engine_returns_empty_ok() {
+        let ctx = EngineRunContext::default();
+        let r = run_engine("totally_unknown_catalog_engine", "https://example.com", &ctx).await;
+        assert!(r.success, "expected ok status: {}", r.message);
+        assert!(r.findings.is_empty());
+        assert!(
+            r.message.contains("catalog-only"),
+            "expected catalog-only message, got: {}",
+            r.message
+        );
+    }
+
+    #[tokio::test]
+    async fn production_without_dispatch_runner_returns_error() {
+        let ctx = EngineRunContext::default();
+        // poe_synthesis is production but routed via exploit_synthesis_engine, not dispatch match arms.
+        let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
+        assert!(!r.success, "expected error status: {}", r.message);
+        assert!(r.findings.is_empty());
+        assert!(
+            r.message.contains("no dispatch runner"),
+            "expected dispatch runner message, got: {}",
+            r.message
+        );
     }
 }
 
@@ -674,9 +782,10 @@ async fn dispatch_to_agent(
     engine: &str,
     target: &str,
 ) -> EngineResult {
-    let params = serde_json::json!({});
-    let task = match crate::endpoint_agents::enqueue_task(
+    let params = serde_json::json!({"priority": "high"});
+    let (task, live_dispatched) = match crate::endpoint_agents::enqueue_and_dispatch_fleet(
         pool,
+        registry,
         tenant_id,
         client_id,
         engine,
@@ -685,46 +794,13 @@ async fn dispatch_to_agent(
     )
     .await
     {
-        Ok(u) => u,
+        Ok(pair) => pair,
         Err(e) => {
             return EngineResult::ok(
                 vec![],
                 format!("agent task enqueue failed for {}: {}", engine, e),
             );
         }
-    };
-    // Look up any online agent for this client.
-    let live_dispatched = if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        let online_uuid = sqlx::query_scalar::<_, String>(
-            r#"SELECT agent_uuid::text FROM endpoint_agents
-                WHERE tenant_id = $1 AND client_id = $2 AND status = 'online'
-                ORDER BY last_seen_at DESC LIMIT 1"#,
-        )
-        .bind(tenant_id)
-        .bind(client_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        let _ = tx.commit().await;
-        if let Some(uuid) = online_uuid {
-            registry
-                .send(
-                    &uuid,
-                    crate::endpoint_agents::ServerToAgent::Task {
-                        task_id: task.to_string(),
-                        engine: engine.to_string(),
-                        target: Some(target.to_string()),
-                        params: params.clone(),
-                    },
-                )
-                .await
-                .is_ok()
-        } else {
-            false
-        }
-    } else {
-        false
     };
     let f = serde_json::json!({
         "type": engine,

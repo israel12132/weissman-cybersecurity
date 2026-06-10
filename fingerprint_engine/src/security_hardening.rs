@@ -23,10 +23,11 @@ const SCAN_SCOPE_BLOCKLIST: &[&str] = &[
 ];
 
 /// When `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` is non-empty, the header must match exactly (constant-time on equal lengths).
+/// In production, an empty secret denies all destructive actions (fail-closed).
 pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
     let secret = std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
     if secret.is_empty() {
-        return true;
+        return !weissman_core::tls_policy::is_production_environment();
     }
     let Some(hv) = headers
         .get("x-weissman-destructive-confirm")
@@ -40,6 +41,22 @@ pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
         return false;
     }
     a.ct_eq(b).into()
+}
+
+/// Constant-time compare of raw HMAC/digest bytes against a hex signature (optional `sha256=` prefix).
+pub fn constant_time_hmac_hex_eq(expected_bytes: &[u8], provided_hex: &str) -> bool {
+    let provided = provided_hex.trim();
+    let provided = provided
+        .strip_prefix("sha256=")
+        .or_else(|| provided.strip_prefix("SHA256="))
+        .unwrap_or(provided);
+    let Ok(provided_bytes) = hex::decode(provided) else {
+        return false;
+    };
+    if expected_bytes.len() != provided_bytes.len() {
+        return false;
+    }
+    bool::from(expected_bytes.ct_eq(&provided_bytes))
 }
 
 /// `owner/repo` only; GitHub slug rules (no traversal, no URL injection).

@@ -3,9 +3,10 @@ import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Menu, X } from 'lucide-react'
 import Logo from '../Logo'
-import { NAV_GROUPS, isNavActive } from '../../lib/appNav'
+import { NAV_GROUPS, PRIMARY_NAV, isNavActive, canAccessNavItem } from '../../lib/appNav'
+import { useAuth } from '../../context/AuthContext'
 
-function NavLink({ item, label, active, onNavigate }) {
+function NavLink({ item, label, active, onNavigate, betaLabel }) {
   return (
     <Link
       to={item.to}
@@ -22,25 +23,43 @@ function NavLink({ item, label, active, onNavigate }) {
           {item.icon}
         </span>
       )}
-      <span className="truncate">{label}</span>
+      <span className="truncate flex-1 min-w-0">{label}</span>
+      {item.beta && betaLabel && (
+        <span
+          className="shrink-0 text-[8px] font-mono px-1 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300/85 uppercase tracking-wider"
+          aria-label={betaLabel}
+        >
+          {betaLabel}
+        </span>
+      )}
     </Link>
   )
 }
 
 export default function AppSidebar() {
   const { t } = useTranslation()
+  const { session } = useAuth()
   const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState({})
 
+  const betaLabel = t('nav.beta')
+  const primaryItems = useMemo(
+    () => PRIMARY_NAV.filter((item) => canAccessNavItem(item, session)),
+    [session],
+  )
+
   const activeGroupId = useMemo(() => {
+    if (primaryItems.some((item) => isNavActive(pathname, item.to, item.exact))) {
+      return 'primary'
+    }
     for (const group of NAV_GROUPS) {
       if (group.items.some((item) => isNavActive(pathname, item.to, item.exact))) {
         return group.id
       }
     }
-    return NAV_GROUPS[0]?.id
-  }, [pathname])
+    return 'primary'
+  }, [pathname, primaryItems])
 
   useEffect(() => {
     setMobileOpen(false)
@@ -74,9 +93,31 @@ export default function AppSidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-1 min-h-0">
+        {primaryItems.length > 0 && (
+          <div className="mb-2 pb-2 border-b border-white/10">
+            <div className="px-2 py-1.5 text-[9px] font-mono uppercase tracking-widest text-white/35">
+              {t('nav.groups.primary')}
+            </div>
+            <div className="mt-0.5 space-y-0.5">
+              {primaryItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  item={item}
+                  label={t(item.labelKey)}
+                  active={isNavActive(pathname, item.to, item.exact)}
+                  onNavigate={() => setMobileOpen(false)}
+                  betaLabel={betaLabel}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter((item) => canAccessNavItem(item, session))
+          if (visibleItems.length === 0) return null
           const isCollapsed = collapsedGroups[group.id] && group.id !== activeGroupId
-          const groupHasActive = group.items.some((item) => isNavActive(pathname, item.to, item.exact))
+          const groupHasActive = visibleItems.some((item) => isNavActive(pathname, item.to, item.exact))
 
           return (
             <div key={group.id} className="mb-1">
@@ -96,13 +137,14 @@ export default function AppSidebar() {
               </button>
               {!isCollapsed && (
                 <div className="mt-0.5 space-y-0.5">
-                  {group.items.map((item) => (
+                  {visibleItems.map((item) => (
                     <NavLink
                       key={item.to}
                       item={item}
                       label={t(item.labelKey)}
                       active={isNavActive(pathname, item.to, item.exact)}
                       onNavigate={() => setMobileOpen(false)}
+                      betaLabel={betaLabel}
                     />
                   ))}
                 </div>
@@ -116,7 +158,6 @@ export default function AppSidebar() {
 
   return (
     <>
-      {/* Mobile toggle */}
       <button
         type="button"
         className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-lg border border-white/15 bg-black/60 backdrop-blur-md text-white/80 hover:text-white"
@@ -126,7 +167,6 @@ export default function AppSidebar() {
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Mobile drawer backdrop */}
       {mobileOpen && (
         <button
           type="button"
@@ -136,7 +176,6 @@ export default function AppSidebar() {
         />
       )}
 
-      {/* Sidebar panel */}
       <aside
         className={[
           'fixed lg:sticky top-0 z-50 lg:z-10 h-[100dvh] w-[15.5rem] shrink-0',

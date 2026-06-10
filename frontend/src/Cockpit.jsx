@@ -1,5 +1,5 @@
 import React from 'react'
-import { ClientProvider } from './context/ClientContext'
+import { ClientProvider, useClient } from './context/ClientContext'
 import { TelemetryProvider } from './context/TelemetryContext'
 import { WarRoomProvider } from './context/WarRoomContext'
 import GlobalNexus from './components/cockpit/GlobalNexus'
@@ -7,12 +7,20 @@ import ClientCockpit from './components/cockpit/ClientCockpit'
 import TargetScopePanel from './components/cockpit/TargetScopePanel'
 import ToastContainer from './components/cockpit/Toast'
 import ExecKpiStrip from './components/cockpit/ExecKpiStrip'
+import OnboardingWizard from './components/onboarding/OnboardingWizard'
+import GlobalSearch from './components/GlobalSearch'
 
-export default function Cockpit({ ceoIntegrated = false }) {
+function CockpitLayout({ ceoIntegrated }) {
+  const { clients, refreshClients, setSelectedClientId } = useClient()
+  const showOnboarding = clients.length === 0
+
+  const handleOnboardingComplete = async ({ clientId }) => {
+    if (clientId) setSelectedClientId(String(clientId))
+    await refreshClients()
+  }
+
   return (
-    <ClientProvider>
-      <TelemetryProvider>
-        <WarRoomProvider>
+    <>
           {/* Top-level layout: KPI strip is a sticky hero band over the original
               3-column cockpit. Strip uses real-time aggregated data and is visible
               regardless of which tab the user picks below.  */}
@@ -49,6 +57,18 @@ export default function Cockpit({ ceoIntegrated = false }) {
             </div>
           </div>
           <ToastContainer />
+          <GlobalSearch />
+          <OnboardingWizard open={showOnboarding} onComplete={handleOnboardingComplete} />
+    </>
+  )
+}
+
+export default function Cockpit({ ceoIntegrated = false }) {
+  return (
+    <ClientProvider>
+      <TelemetryProvider>
+        <WarRoomProvider>
+          <CockpitLayout ceoIntegrated={ceoIntegrated} />
         </WarRoomProvider>
       </TelemetryProvider>
     </ClientProvider>

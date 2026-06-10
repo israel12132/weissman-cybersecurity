@@ -1,4 +1,4 @@
--- Mirror weissman-db migration.
+-- Sovereign Evolution: recursive WAF-learning buffer (Critic → Hacker polymorphic synthesis).
 
 CREATE TABLE sovereign_learning_buffer (
     id                         BIGSERIAL PRIMARY KEY,

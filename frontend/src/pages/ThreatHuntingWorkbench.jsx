@@ -5,9 +5,11 @@
  * hypothesis-driven hunting with YARA-like queries, hunt results.
  * Route: /threat-hunting
  */
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -18,73 +20,21 @@ const HUNT_STATUS_META = {
   queued:    { label: 'QUEUED',    color: '#8b5cf6' },
 }
 
-const CAMPAIGNS = [
-  {
-    id: 'hunt-007',
-    title: 'Living-off-the-land Binaries (LOLBins) Abuse',
-    hypothesis: 'Attackers are using signed Windows binaries (certutil, mshta, wscript) to download and execute payloads, evading AV.',
-    status: 'active',
-    analyst: 'T. Reyes',
-    started: '2026-04-19',
-    mitre: ['T1218', 'T1059.005', 'T1140'],
-    hitsFound: 14,
-    dataSources: ['EDR', 'Windows Event Logs', 'Sysmon'],
-    priority: 'high',
-    color: '#22d3ee',
-  },
-  {
-    id: 'hunt-006',
-    title: 'Kerberoasting & AS-REP Roasting Detection',
-    hypothesis: 'Privilege escalation via service account SPN enumeration and offline hash cracking (Kerberoasting) is active in AD environment.',
-    status: 'completed',
-    analyst: 'M. Kaplan',
-    started: '2026-04-15',
-    mitre: ['T1558.003', 'T1558.004'],
-    hitsFound: 3,
-    dataSources: ['AD Security Logs', 'SIEM', 'Zeek'],
-    priority: 'critical',
-    color: '#4ade80',
-  },
-  {
-    id: 'hunt-005',
-    title: 'DNS Tunneling for C2 Communication',
-    hypothesis: 'Threat actors are using DNS TXT/A record queries to exfiltrate data and receive C2 commands, bypassing network controls.',
-    status: 'active',
-    analyst: 'S. Park',
-    started: '2026-04-18',
-    mitre: ['T1071.004', 'T1041'],
-    hitsFound: 7,
-    dataSources: ['DNS Logs', 'NetFlow', 'Zeek'],
-    priority: 'high',
-    color: '#22d3ee',
-  },
-  {
-    id: 'hunt-004',
-    title: 'Scheduled Task Persistence via SYSTEM Context',
-    hypothesis: 'Malware is creating scheduled tasks running as SYSTEM to maintain persistence after reboot.',
-    status: 'paused',
-    analyst: 'A. Cohen',
-    started: '2026-04-10',
-    mitre: ['T1053.005', 'T1547'],
-    hitsFound: 0,
-    dataSources: ['Windows Event Logs', 'EDR'],
-    priority: 'medium',
-    color: '#f59e0b',
-  },
-  {
-    id: 'hunt-003',
-    title: 'Cloud Metadata Service Abuse (SSRF → IMDS)',
-    hypothesis: 'SSRF vulnerabilities in cloud workloads are being used to access AWS/GCP IMDS, leaking IAM credentials.',
-    status: 'queued',
-    analyst: 'Unassigned',
-    started: '—',
-    mitre: ['T1552.005', 'T1190'],
-    hitsFound: 0,
-    dataSources: ['CloudTrail', 'VPC Flow Logs', 'WAF'],
-    priority: 'high',
-    color: '#8b5cf6',
-  },
-]
+function normalizeCampaign(raw) {
+  return {
+    id: raw.id ?? '',
+    title: raw.title ?? 'Untitled hunt',
+    hypothesis: raw.hypothesis ?? '',
+    status: raw.status ?? 'queued',
+    analyst: raw.analyst ?? 'Unassigned',
+    started: raw.started ?? '—',
+    mitre: Array.isArray(raw.mitre) ? raw.mitre : [],
+    hitsFound: Number(raw.hitsFound) || 0,
+    dataSources: Array.isArray(raw.dataSources) ? raw.dataSources : [],
+    priority: raw.priority ?? 'medium',
+    color: raw.color ?? '#22d3ee',
+  }
+}
 
 const IOC_LIST = [
   { id: 'ioc-1',  type: 'ip',     value: '185.220.101.45',                  source: 'Threat Intel Feed', severity: 'critical', tags: ['tor-exit', 'c2'], added: '2026-04-20' },
@@ -360,29 +310,64 @@ function IocTable({ iocs }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ThreatHuntingWorkbench() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('campaigns') // 'campaigns' | 'queries' | 'iocs'
-  const [selectedCampaign, setSelectedCampaign] = useState(CAMPAIGNS[0].id)
+  const [campaigns, setCampaigns] = useState([])
+  const [campaignsLoading, setCampaignsLoading] = useState(true)
+  const [campaignsError, setCampaignsError] = useState(null)
+  const [selectedCampaign, setSelectedCampaign] = useState(null)
 
-  const selectedCampaignObj = useMemo(() => CAMPAIGNS.find((c) => c.id === selectedCampaign), [selectedCampaign])
+  const loadCampaigns = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/soc/hunts')
+      if (!r.ok) {
+        setCampaigns([])
+        setCampaignsError(`Couldn't load hunts (HTTP ${r.status})`)
+        return
+      }
+      const data = await r.json().catch(() => ({}))
+      const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map(normalizeCampaign)
+      setCampaigns(list)
+      setCampaignsError(null)
+      setSelectedCampaign((prev) => {
+        if (prev && list.some((c) => c.id === prev)) return prev
+        return list[0]?.id ?? null
+      })
+    } catch (e) {
+      setCampaigns([])
+      setCampaignsError(e.message || String(e))
+    } finally {
+      setCampaignsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadCampaigns()
+  }, [loadCampaigns])
+
+  const selectedCampaignObj = useMemo(
+    () => campaigns.find((c) => c.id === selectedCampaign),
+    [campaigns, selectedCampaign],
+  )
 
   const metrics = useMemo(() => {
-    const active = CAMPAIGNS.filter((c) => c.status === 'active').length
-    const totalHits = CAMPAIGNS.reduce((s, c) => s + c.hitsFound, 0)
+    const active = campaigns.filter((c) => c.status === 'active').length
+    const totalHits = campaigns.reduce((s, c) => s + c.hitsFound, 0)
     const totalIOCs = IOC_LIST.length
     const critIOCs = IOC_LIST.filter((i) => i.severity === 'critical').length
     return { active, totalHits, totalIOCs, critIOCs }
-  }, [])
+  }, [campaigns])
 
   const tabs = [
-    { id: 'campaigns', label: '🎯 Hunt Campaigns', count: CAMPAIGNS.length },
+    { id: 'campaigns', label: '🎯 Hunt Campaigns', count: campaigns.length },
     { id: 'queries',   label: '🔎 Hunt Queries',   count: HUNT_QUERIES.length },
     { id: 'iocs',      label: '🧲 IOC Library',    count: IOC_LIST.length },
   ]
 
   return (
     <PageShell
-      title="Threat Hunting Workbench"
-      subtitle="Hypothesis-driven hunting · IOC management · Query library"
+      title={t('pages.threatHuntingWorkbench.title')}
+      subtitle={t('pages.threatHuntingWorkbench.subtitle')}
       badge="HUNT"
       badgeColor="#8b5cf6"
     >
@@ -416,17 +401,32 @@ export default function ThreatHuntingWorkbench() {
       <AnimatePresence mode="wait">
         {activeTab === 'campaigns' && (
           <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-              <div className="space-y-2">
-                <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Hunt Campaigns</h2>
-                {CAMPAIGNS.map((c) => (
-                  <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} />
-                ))}
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Hunt Campaigns</h2>
+            {campaignsLoading ? (
+              <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.loading_campaigns')}</p>
+            ) : campaigns.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center">
+                <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.no_campaigns')}</p>
+                {campaignsError ? (
+                  <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
+                ) : (
+                  <p className="text-[11px] text-white/25 font-mono mt-2">
+                    Campaigns appear when correlated finding clusters are detected from scan data.
+                  </p>
+                )}
               </div>
-              <AnimatePresence mode="wait">
-                {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} />}
-              </AnimatePresence>
-            </div>
+            ) : (
+              <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+                <div className="space-y-2">
+                  {campaigns.map((c) => (
+                    <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} />
+                  ))}
+                </div>
+                <AnimatePresence mode="wait">
+                  {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} />}
+                </AnimatePresence>
+              </div>
+            )}
           </motion.div>
         )}
 

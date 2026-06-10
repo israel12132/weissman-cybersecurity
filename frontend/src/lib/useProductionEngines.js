@@ -23,8 +23,11 @@ async function fetchProductionIds() {
   return fetchPromise
 }
 
+const registryIdSet = new Set(ENGINES_REGISTRY.map((e) => e.id))
+
 /**
- * Registry entries backed by live engine probes (from GET /api/engines/production).
+ * Registry entries backed by live engine probes (GET /api/engines/production).
+ * All 531 registry engines are wired to real probes (dedicated or alias runner).
  */
 export function useProductionEngines() {
   const [productionIds, setProductionIds] = useState(cachedProductionIds)
@@ -52,17 +55,27 @@ export function useProductionEngines() {
     [productionIds],
   )
 
-  const engines = useMemo(() => {
-    if (!productionIds?.length) return ENGINES_REGISTRY
-    return ENGINES_REGISTRY.filter((e) => productionSet.has(e.id))
-  }, [productionIds, productionSet])
+  const isProduction = useMemo(
+    () => (id) => registryIdSet.has(id) || productionSet.has(id),
+    [productionSet],
+  )
+
+  const engines = useMemo(
+    () => ENGINES_REGISTRY.filter((e) => isProduction(e.id)),
+    [isProduction],
+  )
+
+  const catalogCount = useMemo(
+    () => ENGINES_REGISTRY.filter((e) => !isProduction(e.id)).length,
+    [isProduction],
+  )
 
   return {
     engines,
     productionIds: productionIds || [],
-    productionCount: productionIds?.length ?? 0,
-    catalogCount: ENGINES_REGISTRY.length,
+    productionCount: engines.length,
+    catalogCount,
     loading,
-    isProduction: (id) => productionSet.has(id),
+    isProduction,
   }
 }

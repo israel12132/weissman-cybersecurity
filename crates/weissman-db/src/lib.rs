@@ -39,6 +39,23 @@ pub fn resolve_auth_database_url() -> Result<String, std::env::VarError> {
     }
 }
 
+/// Compile-time crate migrations path (valid in dev / CI where the crate tree exists).
+const COMPILE_TIME_MIGRATIONS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+
+/// Resolve the on-disk migrations directory for the no-tx pre-runner.
+///
+/// Production containers bake `CARGO_MANIFEST_DIR` at build time (`/build/crates/...`) but do
+/// not ship that tree at runtime. Set `WEISSMAN_MIGRATIONS_DIR` (Docker: `/srv/migrations`) to
+/// point at the copied SQL files; when unset, fall back to the compile-time crate path.
+pub fn migrations_dir() -> std::path::PathBuf {
+    std::env::var("WEISSMAN_MIGRATIONS_DIR")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(COMPILE_TIME_MIGRATIONS_DIR))
+}
+
 /// Superuser or owner URL to run embedded migrations (optional at runtime).
 ///
 /// Two-phase application:
@@ -63,11 +80,10 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
         .map_err(sqlx::migrate::MigrateError::from)?;
 
     // Phase 1 — no-transaction migrations (CONCURRENTLY index builds, etc.).
-    // The macro `concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")` evaluates
-    // to the crate-local migrations directory at compile time, matching the
-    // path that `sqlx::migrate!("./migrations")` reads below.
-    let migrations_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
-    match no_tx_migrations::apply_no_tx_migrations(&pool, migrations_dir).await {
+    // Reads from disk via [`migrations_dir`] (runtime `WEISSMAN_MIGRATIONS_DIR` or compile-time
+    // crate path). Phase 2 embeds SQL at compile time via `sqlx::migrate!`.
+    let migrations_dir = migrations_dir();
+    match no_tx_migrations::apply_no_tx_migrations(&pool, &migrations_dir).await {
         Ok(n) if n > 0 => tracing::info!(
             target: "weissman_db",
             applied = n,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch, apiUrl } from '../lib/apiBase'
 
 function isoNowLocal() {
   const d = new Date()
@@ -245,14 +245,15 @@ export default function ClientEngagements() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        to={`/api/engagements/${e.id}`}
+                      <a
+                        href={apiUrl(`/api/engagements/${e.id}`)}
                         className="px-3 py-1 text-xs border border-slate-700 text-slate-300 rounded hover:bg-slate-800"
-                        onClick={(ev) => ev.preventDefault()}
-                        title="Engagement details are available via API; UI detail view will be added next."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open engagement JSON from API"
                       >
                         API
-                      </Link>
+                      </a>
                       {e.status !== 'closed' && (
                         <button
                           type="button"

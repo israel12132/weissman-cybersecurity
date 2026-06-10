@@ -459,6 +459,10 @@ export default function EngineDetail() {
   }, [])
 
   const handleRun = useCallback(async () => {
+    if (!isProduction(engineId)) {
+      showToast('error', t('engines.catalog_only_run_disabled'))
+      return
+    }
     if (!selectedClientId) { showToast('error', 'Select a client first'); return }
     if (engine?.requiresTarget && !target.trim()) { showToast('error', 'Enter a target URL'); return }
     setRunning(true)
@@ -524,7 +528,7 @@ export default function EngineDetail() {
       showToast('error', e?.message ?? 'Network error')
       setRunning(false)
     }
-  }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, showToast, resetFindings, addFinding])
+  }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, showToast, resetFindings, addFinding, isProduction, t])
 
   const handleStop = useCallback(() => {
     if (esRef.current) { esRef.current.close(); esRef.current = null }
@@ -556,7 +560,8 @@ export default function EngineDetail() {
     showToast('info', 'Export downloaded')
   }, [engineId, engine?.label, jobId, lastRunStatus, findings, runHistory, showToast])
 
-  const healthLabel = isProduction(engineId)
+  const engineRunnable = isProduction(engineId)
+  const healthLabel = engineRunnable
     ? t('engines.detail_health_live')
     : t('engines.detail_health_catalog')
   const healthAccent = isProduction(engineId) ? '#4ade80' : '#9ca3af'
@@ -674,7 +679,8 @@ export default function EngineDetail() {
               <button
                 type="button"
                 onClick={handleRun}
-                disabled={running}
+                disabled={running || !engineRunnable}
+                title={!engineRunnable ? t('engines.catalog_only_run_disabled') : undefined}
                 className="px-5 py-2.5 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {running ? t('engines.running') : `▶ ${t('engines.detail_run_engine')}`}
@@ -782,7 +788,8 @@ export default function EngineDetail() {
             <button
               type="button"
               onClick={handleRun}
-              disabled={running}
+              disabled={running || !engineRunnable}
+              title={!engineRunnable ? t('engines.catalog_only_run_disabled') : undefined}
               className="px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {running ? t('engines.running') : `▶ ${t('engines.run_engine')}`}

@@ -176,6 +176,18 @@ pub async fn api_admin_users_create(
         "viewer".to_string()
     };
 
+    if role == crate::rbac::roles::CEO && !crate::rbac::can_assign_ceo_role(&auth) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "ok": false,
+                "detail": "Only CEO or superadmin may assign the CEO role",
+                "error_code": "rbac_denied",
+            })),
+        )
+            .into_response();
+    }
+
     // Only superadmin can create superadmin users
     let is_superadmin = if auth.is_superadmin {
         body.is_superadmin
@@ -307,6 +319,20 @@ pub async fn api_admin_users_update(
             None
         }
     }).flatten();
+
+    if let Some(ref role) = valid_role {
+        if role == crate::rbac::roles::CEO && !crate::rbac::can_assign_ceo_role(&auth) {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Only CEO or superadmin may assign the CEO role",
+                    "error_code": "rbac_denied",
+                })),
+            )
+                .into_response();
+        }
+    }
 
     // Check if there are any changes to make
     let has_role_change = valid_role.is_some();

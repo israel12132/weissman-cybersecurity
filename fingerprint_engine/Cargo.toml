@@ -90,6 +90,7 @@ thiserror = "1"
 # Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # System libhwloc via pkg-config (install libhwloc-dev). Vendored build needs autoconf/automake.

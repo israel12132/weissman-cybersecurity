@@ -227,6 +227,9 @@ async fn api_enterprise_settings_patch(
     headers: HeaderMap,
     Json(body): Json<EnterpriseSettingsPatch>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -264,6 +267,9 @@ async fn api_system_backup(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let backups_dir = std::env::var("WEISSMAN_PG_BACKUP_DIR")
         .ok()
         .map(PathBuf::from)
@@ -1257,7 +1263,6 @@ async fn api_scan(
     }
 }
 
-#[allow(dead_code)]
 async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
@@ -1267,7 +1272,6 @@ async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> 
     })
 }
 
-#[allow(dead_code)]
 async fn ws_ai_redteam(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {

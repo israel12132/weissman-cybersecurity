@@ -185,7 +185,7 @@ function StatusDot({ status }) {
   )
 }
 
-function EngineRow({ engine, status, selected, onSelect }) {
+function EngineRow({ engine, status, selected, onSelect, isProductionEngine, t }) {
   const gDef = getGroupDef(engine.group)
   const groupColor = gDef?.color ?? '#6b7280'
   return (
@@ -228,6 +228,18 @@ function EngineRow({ engine, status, selected, onSelect }) {
           {!engine.requiresTarget && (
             <span className="text-[9px] font-mono text-emerald-400/70 border border-emerald-500/20 px-1.5 py-0.5 rounded">
               GLOBAL
+            </span>
+          )}
+          {!isProductionEngine && (
+            <span
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-[0.12em] font-semibold"
+              style={{
+                color: '#9ca3af',
+                borderColor: 'rgba(156,163,175,0.25)',
+                background: 'rgba(156,163,175,0.06)',
+              }}
+            >
+              {t('engines.tier_badge_catalog')}
             </span>
           )}
         </div>
@@ -273,7 +285,7 @@ function ProfileCard({ profile, count, active, onClick, enginesLabel }) {
 
 export default function EngineClientCatalog() {
   const { t } = useTranslation()
-  const { productionCount } = useProductionEngines()
+  const { productionCount, isProduction } = useProductionEngines()
   const [activeProfileId, setActiveProfileId] = useState('enterprise')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -376,8 +388,9 @@ export default function EngineClientCatalog() {
       showToast('error', 'Select a client first')
       return
     }
-    if (selectedEngines.size === 0) {
-      showToast('error', 'No engines selected')
+    const runnable = Array.from(selectedEngines).filter(isProduction)
+    if (runnable.length === 0) {
+      showToast('error', t('engines.catalog_only_run_disabled'))
       return
     }
     setRunAllLoading(true)
@@ -387,7 +400,7 @@ export default function EngineClientCatalog() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id: Number(selectedClientId),
-          engines: Array.from(selectedEngines),
+          engines: runnable,
         }),
       })
       const d = await r.json().catch(() => ({}))
@@ -395,10 +408,10 @@ export default function EngineClientCatalog() {
         showToast('error', d.detail || `Scan failed (${r.status})`)
         return
       }
-      showToast('info', `✅ Queued ${d.engines_queued ?? selectedEngines.size} engines (Job: ${d.job_id ?? '—'})`)
+      showToast('info', `✅ Queued ${d.engines_queued ?? runnable.length} engines (Job: ${d.job_id ?? '—'})`)
       setEngineStates((prev) => {
         const next = { ...prev }
-        for (const id of selectedEngines) next[id] = { ...next[id], status: 'running' }
+        for (const id of runnable) next[id] = { ...next[id], status: 'running' }
         return next
       })
     } catch (e) {
@@ -406,7 +419,7 @@ export default function EngineClientCatalog() {
     } finally {
       setRunAllLoading(false)
     }
-  }, [selectedClientId, selectedEngines, showToast])
+  }, [selectedClientId, selectedEngines, showToast, isProduction, t])
 
   // Group engines by their group for display
   const groupedEngines = useMemo(() => {
@@ -424,7 +437,15 @@ export default function EngineClientCatalog() {
   }, [filteredEngines, activeProfile.groups])
 
   const totalSelected = selectedEngines.size
+  const totalRunnable = useMemo(
+    () => Array.from(selectedEngines).filter(isProduction).length,
+    [selectedEngines, isProduction],
+  )
   const totalProfileEngines = profileEngineList.length
+  const runDisabled = runAllLoading || !selectedClientId || totalRunnable === 0
+  const runDisabledTooltip = totalRunnable === 0 && totalSelected > 0
+    ? t('engines.catalog_only_run_disabled')
+    : undefined
 
   const liveCount = productionCount || profileEngineList.length
 
@@ -459,10 +480,11 @@ export default function EngineClientCatalog() {
           id="run-all-engines-btn"
           type="button"
           onClick={handleRunAll}
-          disabled={runAllLoading || !selectedClientId || totalSelected === 0}
+          disabled={runDisabled}
+          title={runDisabledTooltip}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-mono font-semibold bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           style={
-            !runAllLoading && selectedClientId && totalSelected > 0
+            !runDisabled
               ? { boxShadow: '0 0 20px rgba(16,185,129,0.2)' }
               : {}
           }
@@ -473,7 +495,7 @@ export default function EngineClientCatalog() {
               {t('engines.catalog_running')}
             </>
           ) : (
-            <>🚀 {t('engines.catalog_run_selected', { count: totalSelected })}</>
+            <>🚀 {t('engines.catalog_run_selected', { count: totalRunnable })}</>
           )}
         </button>
       </div>
@@ -689,6 +711,8 @@ export default function EngineClientCatalog() {
                               status={engineStates[engine.id]?.status}
                               selected={selectedEngines.has(engine.id)}
                               onSelect={handleToggleEngine}
+                              isProductionEngine={isProduction(engine.id)}
+                              t={t}
                             />
                           ))}
                         </div>
@@ -706,10 +730,11 @@ export default function EngineClientCatalog() {
               id="run-all-engines-bottom-btn"
               type="button"
               onClick={handleRunAll}
-              disabled={runAllLoading || !selectedClientId || totalSelected === 0}
+              disabled={runDisabled}
+              title={runDisabledTooltip}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[13px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               style={
-                !runAllLoading && selectedClientId && totalSelected > 0
+                !runDisabled
                   ? { boxShadow: '0 0 20px rgba(34,197,94,0.2)' }
                   : {}
               }
@@ -721,7 +746,7 @@ export default function EngineClientCatalog() {
                 </>
               ) : (
                 <>
-                  🚀 {t('engines.catalog_run_all_bottom', { count: totalSelected })}
+                  🚀 {t('engines.catalog_run_all_bottom', { count: totalRunnable })}
                   {activeProfile && (
                     <span className="text-emerald-400/60 font-normal">
                       · {activeProfile.icon} {activeProfile.label}

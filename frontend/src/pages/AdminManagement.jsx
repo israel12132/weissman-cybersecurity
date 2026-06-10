@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/apiBase'
@@ -9,6 +10,7 @@ import PageShell from './PageShell'
  * Unique IDs: adminmgmt-*
  */
 export default function AdminManagement() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { session, isCeo } = useAuth()
   const [users, setUsers] = useState([])
@@ -40,7 +42,7 @@ export default function AdminManagement() {
       const data = await r.json()
       setUsers(Array.isArray(data) ? data : data.users || [])
     } catch (err) {
-      setError(err.message || 'Failed to load users')
+      setError(err.message || t('pages.adminManagement.load_failed'))
     } finally {
       setLoading(false)
     }
@@ -53,7 +55,7 @@ export default function AdminManagement() {
   const handleCreateUser = async (e) => {
     e.preventDefault()
     if (!newEmail.trim() || !newPassword.trim()) {
-      setError('Email and password are required')
+      setError(t('pages.adminManagement.email_password_required'))
       return
     }
     setSubmitting(true)
@@ -139,7 +141,7 @@ export default function AdminManagement() {
 
   if (!isCeo && !session?.is_superadmin) {
     return (
-      <PageShell title="Admin Management" subtitle="User & Role Management">
+      <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle_loading')}>
         <div className="p-8 text-center">
           <div className="text-red-400 text-lg font-semibold mb-2">Access Denied</div>
           <p className="text-slate-400 text-sm">
@@ -151,7 +153,7 @@ export default function AdminManagement() {
   }
 
   return (
-    <PageShell title="Admin Management" subtitle="Enterprise User & Role Management">
+    <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle')}>
       <div className="p-6 max-w-6xl mx-auto space-y-8">
         {/* Success/Error Messages */}
         {successMsg && (
@@ -264,7 +266,7 @@ export default function AdminManagement() {
                 disabled={submitting}
                 className="px-4 py-2 rounded-lg font-semibold text-sm bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors"
               >
-                {submitting ? 'Creating…' : 'Create User'}
+                {submitting ? t('pages.adminManagement.creating') : t('pages.adminManagement.create_user')}
               </button>
             </div>
           </form>
@@ -288,9 +290,9 @@ export default function AdminManagement() {
           </div>
 
           {loading && users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">Loading users…</div>
+            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.loading')}</div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">No users found</div>
+            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.no_users')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

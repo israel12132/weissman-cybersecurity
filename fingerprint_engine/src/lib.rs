@@ -61,6 +61,7 @@ pub mod db;
 pub mod data_retention;
 pub mod db_backup;
 pub mod discovery_engine;
+pub mod alias_engine_runner;
 pub mod engine_dispatch;
 pub mod engine_probes;
 pub mod engine_result;
@@ -223,6 +224,7 @@ pub mod advanced_mobile_engines;
 pub mod advanced_data_engines;
 pub mod admin_users;
 pub mod auth_mfa;
+pub mod agent_registry_sync;
 pub mod endpoint_agents;
 pub mod rbac;
 

@@ -14,24 +14,14 @@ use std::sync::{Arc, OnceLock};
 
 use crate::auth_jwt::AuthContext;
 
+use super::rate_limit_metrics;
+
 fn per_tenant_scan_per_minute() -> NonZeroU32 {
-    let n: u32 = std::env::var("WEISSMAN_TENANT_SCAN_POSTS_PER_MINUTE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(24)
-        .max(4)
-        .min(240);
-    NonZeroU32::new(n).unwrap_or(NonZeroU32::MIN)
+    NonZeroU32::new(rate_limit_metrics::scan_limit_per_minute()).unwrap_or(NonZeroU32::MIN)
 }
 
 fn tenant_scan_burst() -> NonZeroU32 {
-    let n: u32 = std::env::var("WEISSMAN_TENANT_SCAN_BURST")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(12)
-        .max(2)
-        .min(120);
-    NonZeroU32::new(n).unwrap_or(NonZeroU32::MIN)
+    NonZeroU32::new(rate_limit_metrics::scan_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
 fn scan_limiter() -> Arc<RateLimiter<i64, DefaultKeyedStateStore<i64>, DefaultClock>> {
@@ -82,6 +72,7 @@ pub async fn tenant_scan_rate_limit_middleware(
         return next.run(request).await;
     };
     if let Err(neg) = scan_limiter().check_key(&ctx.tenant_id) {
+        rate_limit_metrics::record_scan_denied(ctx.tenant_id, &path);
         let clock = DefaultClock::default();
         let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
         let limit = per_tenant_scan_per_minute().get();
@@ -115,5 +106,6 @@ pub async fn tenant_scan_rate_limit_middleware(
         }
         return resp;
     }
+    rate_limit_metrics::record_scan_allowed(ctx.tenant_id, &path);
     next.run(request).await
 }

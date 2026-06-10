@@ -174,6 +174,155 @@ async fn api_system_config_put_alias(
     api_system_configs_post(State(state), Extension(auth), Json(Value::Array(flat))).await
 }
 
+/// Static control catalog for frameworks not yet fully mapped in compliance_mappings.
+fn static_framework_controls(framework_id: &str) -> Vec<(&'static str, &'static str)> {
+    match framework_id {
+        "iso27001" => vec![
+            ("A.5", "Organizational controls"),
+            ("A.8", "Asset management"),
+            ("A.9", "Access control"),
+            ("A.10", "Cryptography"),
+            ("A.12", "Operations security"),
+            ("A.13", "Communications security"),
+        ],
+        "soc2" => vec![
+            ("CC6.1", "Logical and physical access controls"),
+            ("CC6.6", "Cloud network security"),
+            ("CC6.7", "Cryptographic controls"),
+            ("CC7.1", "Detection and monitoring"),
+        ],
+        "nis2" => vec![
+            ("Art.21(2)(d)", "Supply-chain security"),
+            ("Art.21(2)(h)", "Use of cryptography"),
+            ("Art.21(2)(i)", "Access control"),
+        ],
+        "gdpr" => vec![("Art.32", "Security of processing")],
+        "iec62443" => vec![
+            ("FR-1", "Identification and authentication"),
+            ("FR-3", "System integrity"),
+        ],
+        "pci" | "pci-dss" => vec![("4.1", "Strong cryptography on public networks")],
+        "csa-ccm" => vec![("DCS-04", "Data classification")],
+        "cis" => vec![
+            ("CIS 1", "Inventory and control of enterprise assets"),
+            ("CIS 3", "Data protection"),
+            ("CIS 6", "Access control management"),
+        ],
+        "nist" | "nist-csf" => vec![
+            ("ID.AM", "Asset management"),
+            ("PR.AC", "Identity management and access control"),
+            ("DE.CM", "Security continuous monitoring"),
+        ],
+        "hipaa" => vec![
+            ("164.312(a)", "Access control"),
+            ("164.312(e)", "Transmission security"),
+        ],
+        "fedramp" => vec![
+            ("AC-2", "Account management"),
+            ("SC-13", "Cryptographic protection"),
+        ],
+        _ => vec![],
+    }
+}
+
+fn framework_slug_known(framework_id: &str) -> bool {
+    crate::compliance_engine::normalize_framework_slug(framework_id).is_some()
+        || !static_framework_controls(framework_id).is_empty()
+}
+
+async fn load_compliance_evidence(
+    state: &Arc<AppState>,
+    tenant_id: i64,
+) -> Result<
+    (
+        String,
+        Vec<crate::compliance_engine::ComplianceMappingRow>,
+        Vec<String>,
+        Vec<(String, String, String)>,
+    ),
+    (),
+> {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, tenant_id).await else {
+        return Err(());
+    };
+    let tenant_name: String = sqlx::query_scalar("SELECT name FROM tenants WHERE id = $1")
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "Tenant".to_string());
+    let mappings = crate::compliance_engine::load_mappings(&mut *tx)
+        .await
+        .map_err(|_| ())?;
+    let cloud_rules: Vec<String> = sqlx::query_scalar::<_, String>(
+        "SELECT rule_id FROM cloud_scan_findings",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let vuln_rows = sqlx::query(
+        "SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    let vulns: Vec<(String, String, String)> = vuln_rows
+        .into_iter()
+        .filter_map(|r| {
+            Some((
+                r.try_get::<String, _>("source").ok()?,
+                r.try_get::<String, _>("title").ok()?,
+                r.try_get::<String, _>("severity").ok()?,
+            ))
+        })
+        .collect();
+    Ok((tenant_name, mappings, cloud_rules, vulns))
+}
+
+fn merge_control_statuses(
+    framework_id: &str,
+    mappings: &[crate::compliance_engine::ComplianceMappingRow],
+    cloud_rules: &[String],
+    vulns: &[(String, String, String)],
+) -> Vec<crate::compliance_engine::ControlStatusRow> {
+    let fw_db = crate::compliance_engine::normalize_framework_slug(framework_id)
+        .unwrap_or_else(|| framework_id.to_uppercase());
+    let live =
+        crate::compliance_engine::compute_control_statuses(mappings, &fw_db, cloud_rules, vulns);
+    let live_map: std::collections::HashMap<String, crate::compliance_engine::ControlStatusRow> =
+        live
+            .into_iter()
+            .map(|r| (r.control_id.clone(), r))
+            .collect();
+
+    let static_rows = static_framework_controls(framework_id);
+    if static_rows.is_empty() && live_map.is_empty() {
+        return vec![];
+    }
+    if static_rows.is_empty() {
+        let mut only_live: Vec<_> = live_map.into_values().collect();
+        only_live.sort_by(|a, b| a.control_id.cmp(&b.control_id));
+        return only_live;
+    }
+
+    static_rows
+        .into_iter()
+        .map(|(id, title)| {
+            if let Some(row) = live_map.get(id) {
+                row.clone()
+            } else {
+                crate::compliance_engine::ControlStatusRow {
+                    control_id: id.to_string(),
+                    control_title: title.to_string(),
+                    status: "compliant".into(),
+                }
+            }
+        })
+        .collect()
+}
+
 /// GET /api/compliance/frameworks — UI expects a list of supported frameworks. Map from posture.
 async fn api_compliance_frameworks_list(
     State(state): State<Arc<AppState>>,
@@ -206,50 +355,129 @@ async fn api_compliance_frameworks_list(
     (StatusCode::OK, Json(json!({ "ok": true, "frameworks": out }))).into_response()
 }
 
-/// GET /api/compliance/frameworks/:framework_id/controls — Minimal placeholder mapping framework
-/// → top engine groups so the UI can render a per-framework rollup until the full controls table
-/// ships.
+/// GET /api/compliance/frameworks/:framework_id/controls — live status from mapped findings.
 async fn api_compliance_frameworks_controls(
+    State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(framework_id): Path<String>,
 ) -> Response {
-    let _ = auth;
-    let controls = match framework_id.as_str() {
-        "iso27001" => vec![
-            ("A.5",   "Organizational controls"),
-            ("A.8",   "Asset management"),
-            ("A.9",   "Access control",),
-            ("A.10",  "Cryptography"),
-            ("A.12",  "Operations security"),
-            ("A.13",  "Communications security"),
-        ],
-        "soc2" => vec![
-            ("CC6.1", "Logical and physical access controls"),
-            ("CC6.6", "Cloud network security"),
-            ("CC6.7", "Cryptographic controls"),
-            ("CC7.1", "Detection and monitoring"),
-        ],
-        "nis2" => vec![
-            ("Art.21(2)(d)", "Supply-chain security"),
-            ("Art.21(2)(h)", "Use of cryptography"),
-            ("Art.21(2)(i)", "Access control"),
-        ],
-        "gdpr"     => vec![("Art.32", "Security of processing")],
-        "iec62443" => vec![("FR-1", "Identification and authentication"), ("FR-3", "System integrity")],
-        "pci"      => vec![("4.1", "Strong cryptography on public networks")],
-        "csa-ccm"  => vec![("DCS-04", "Data classification")],
-        _ => vec![],
-    };
-    if controls.is_empty() {
+    if !framework_slug_known(&framework_id) {
         return (
             StatusCode::NOT_FOUND,
             Json(json!({ "ok": false, "detail": format!("Unknown framework '{framework_id}'") })),
         )
             .into_response();
     }
-    let out: Vec<Value> = controls
+    let Ok((_tenant, mappings, cloud_rules, vulns)) =
+        load_compliance_evidence(&state, auth.tenant_id).await
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+        )
+            .into_response();
+    };
+    let rows = merge_control_statuses(&framework_id, &mappings, &cloud_rules, &vulns);
+    if rows.is_empty() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": format!("Unknown framework '{framework_id}'") })),
+        )
+            .into_response();
+    }
+    let out: Vec<Value> = rows
         .into_iter()
-        .map(|(id, title)| json!({ "id": id, "title": title }))
+        .map(|r| {
+            json!({
+                "id": r.control_id,
+                "title": r.control_title,
+                "status": r.status,
+            })
+        })
         .collect();
     (StatusCode::OK, Json(json!({ "ok": true, "controls": out }))).into_response()
+}
+
+/// GET /api/compliance/frameworks/:framework_id/report — PDF audit report (application/pdf).
+async fn api_compliance_frameworks_report(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(framework_id): Path<String>,
+) -> Response {
+    if !framework_slug_known(&framework_id) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": format!("Unknown framework '{framework_id}'") })),
+        )
+            .into_response();
+    }
+    let Ok((tenant_name, mappings, cloud_rules, vulns)) =
+        load_compliance_evidence(&state, auth.tenant_id).await
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "ok": false, "detail": "Database unavailable" })),
+        )
+            .into_response();
+    };
+    let rows = merge_control_statuses(&framework_id, &mappings, &cloud_rules, &vulns);
+    if rows.is_empty() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": format!("Unknown framework '{framework_id}'") })),
+        )
+            .into_response();
+    }
+    let compliant = rows.iter().filter(|r| r.status == "compliant").count();
+    let compliance_pct = if rows.is_empty() {
+        100u8
+    } else {
+        ((compliant as f64 / rows.len() as f64) * 100.0).round().clamp(0.0, 100.0) as u8
+    };
+    let pdf_controls: Vec<(String, String, bool)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.control_id.clone(),
+                r.control_title.clone(),
+                r.status == "compliant",
+            )
+        })
+        .collect();
+    let framework_label = crate::compliance_engine::framework_display_name(&framework_id);
+    let pdf = match crate::pdf_report::build_compliance_framework_pdf(
+        &tenant_name,
+        framework_label,
+        compliance_pct,
+        &pdf_controls,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "detail": format!("PDF failed: {e}") })),
+            )
+                .into_response();
+        }
+    };
+    let safe_id: String = framework_id
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
+    let filename = format!("{safe_id}-compliance-report.pdf");
+    let mut res = Response::new(Body::from(pdf));
+    res.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/pdf"),
+    );
+    res.headers_mut().insert(
+        CONTENT_DISPOSITION,
+        HeaderValue::try_from(format!("attachment; filename=\"{filename}\""))
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
+    );
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    res
 }

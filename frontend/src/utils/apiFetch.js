@@ -1,47 +1,41 @@
 /**
- * Enhanced API fetch wrapper with rate limiting support
- *
- * Features:
- * - Automatic JWT token handling
- * - Rate limit detection (429)
- * - Retry logic with exponential backoff
- * - Error standardization
- * - Request/response logging
+ * JSON-oriented API client built on lib/apiBase (apiUrl, auth, token refresh).
  */
 
-let rateLimitToastCallback = null;
+import { apiFetch as baseApiFetch } from '../lib/apiBase'
 
-/**
- * Register a callback to show rate limit toasts
- * Call this from App.jsx or main entry point
- */
+let rateLimitToastCallback = null
+
 export function setRateLimitToastCallback(callback) {
-  rateLimitToastCallback = callback;
+  rateLimitToastCallback = callback
 }
 
-/**
- * Parse Retry-After header (seconds or HTTP date)
- */
 function parseRetryAfter(retryAfterHeader) {
-  if (!retryAfterHeader) return 60; // Default 60 seconds
-
-  // Try parsing as seconds first
-  const seconds = parseInt(retryAfterHeader, 10);
-  if (!isNaN(seconds)) return seconds;
-
-  // Try parsing as HTTP date
+  if (!retryAfterHeader) return 60
+  const seconds = parseInt(retryAfterHeader, 10)
+  if (!Number.isNaN(seconds)) return seconds
   try {
-    const date = new Date(retryAfterHeader);
-    const now = new Date();
-    const diff = Math.floor((date - now) / 1000);
-    return diff > 0 ? diff : 60;
+    const date = new Date(retryAfterHeader)
+    const diff = Math.floor((date - new Date()) / 1000)
+    return diff > 0 ? diff : 60
   } catch {
-    return 60;
+    return 60
   }
 }
 
+async function readErrorMessage(response) {
+  let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+  try {
+    const errorData = await response.clone().json()
+    errorMessage = errorData.detail || errorData.message || errorData.error || errorMessage
+  } catch {
+    // ignore JSON parse errors
+  }
+  return errorMessage
+}
+
 /**
- * Enhanced fetch with rate limiting and retry logic
+ * Fetch JSON from API paths (relative or absolute). Throws on non-OK responses.
  */
 export async function apiFetch(url, options = {}) {
   const {
@@ -52,106 +46,73 @@ export async function apiFetch(url, options = {}) {
     retries = 0,
     retryDelay = 1000,
     ...restOptions
-  } = options;
+  } = options
 
-  const finalHeaders = {
-    'Content-Type': 'application/json',
-    ...headers,
-  };
-
-  const finalOptions = {
+  const finalHeaders = { ...headers }
+  const init = {
     method,
     headers: finalHeaders,
     credentials,
     ...restOptions,
-  };
+  }
 
-  if (body && typeof body === 'object') {
-    finalOptions.body = JSON.stringify(body);
-  } else if (body) {
-    finalOptions.body = body;
+  if (body != null && typeof body === 'object' && !(body instanceof FormData)) {
+    if (!finalHeaders['Content-Type'] && !finalHeaders['content-type']) {
+      init.headers = { ...finalHeaders, 'Content-Type': 'application/json' }
+    }
+    init.body = JSON.stringify(body)
+  } else if (body != null) {
+    init.body = body
   }
 
   try {
-    const response = await fetch(url, finalOptions);
+    const response = await baseApiFetch(url, init)
 
-    // Handle rate limiting (429)
     if (response.status === 429) {
-      const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
-
-      // Try to get error message from response
-      let errorMessage = 'Rate limit exceeded. Please wait before trying again.';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorMessage;
-      } catch {
-        // Ignore JSON parse errors
-      }
-
-      // Show toast if callback is registered
+      const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
+      const errorMessage = await readErrorMessage(response)
       if (rateLimitToastCallback) {
-        rateLimitToastCallback({
-          retryAfter,
-          message: errorMessage,
-        });
+        rateLimitToastCallback({ retryAfter, message: errorMessage })
       }
-
-      // Throw error with retry information
-      const error = new Error(errorMessage);
-      error.status = 429;
-      error.retryAfter = retryAfter;
-      throw error;
+      const error = new Error(errorMessage)
+      error.status = 429
+      error.retryAfter = retryAfter
+      throw error
     }
 
-    // Handle other HTTP errors
     if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorMessage;
-      } catch {
-        // Ignore JSON parse errors
-      }
-
-      const error = new Error(errorMessage);
-      error.status = response.status;
-      error.response = response;
-      throw error;
+      const errorMessage = await readErrorMessage(response)
+      const error = new Error(errorMessage)
+      error.status = response.status
+      error.response = response
+      throw error
     }
 
-    // Parse JSON response
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      return await response.json()
     }
 
-    // Return raw response for non-JSON
-    return response;
+    return response
   } catch (error) {
-    // Retry logic for network errors (not rate limits)
     if (error.status !== 429 && retries > 0) {
-      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      await new Promise((resolve) => setTimeout(resolve, retryDelay))
       return apiFetch(url, {
         ...options,
         retries: retries - 1,
-        retryDelay: retryDelay * 2, // Exponential backoff
-      });
+        retryDelay: retryDelay * 2,
+      })
     }
-
-    // Re-throw the error
-    throw error;
+    throw error
   }
 }
 
-/**
- * Convenience methods
- */
 export const api = {
   get: (url, options = {}) => apiFetch(url, { ...options, method: 'GET' }),
   post: (url, body, options = {}) => apiFetch(url, { ...options, method: 'POST', body }),
   put: (url, body, options = {}) => apiFetch(url, { ...options, method: 'PUT', body }),
   patch: (url, body, options = {}) => apiFetch(url, { ...options, method: 'PATCH', body }),
   delete: (url, options = {}) => apiFetch(url, { ...options, method: 'DELETE' }),
-};
+}
 
-export default apiFetch;
+export default apiFetch

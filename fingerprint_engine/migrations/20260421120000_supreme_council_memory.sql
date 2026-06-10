@@ -1,4 +1,5 @@
--- Mirror weissman-db migration (fingerprint_engine sqlx offline / local runs).
+-- Weissman Supreme Council: long-term semantic memory for OAST/canary-validated strategies.
+-- Embeddings stored as JSONB numeric arrays; similarity search runs in the application (cosine).
 
 CREATE TABLE supreme_council_memory (
     id                       BIGSERIAL PRIMARY KEY,

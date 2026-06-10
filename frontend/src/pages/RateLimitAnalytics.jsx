@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import PageShell from './PageShell'
@@ -15,6 +16,7 @@ import { apiFetch } from '../lib/apiBase'
  * - Tenant comparison
  */
 export default function RateLimitAnalytics() {
+  const { t } = useTranslation();
   const [data, setData] = useState({
     current: {
       scans: { current: 0, max: 24 },
@@ -57,13 +59,13 @@ export default function RateLimitAnalytics() {
   };
 
   return (
-    <PageShell title="Rate Limit Analytics" icon={<BarChart3 />}>
+    <PageShell title={t('pages.rateLimitAnalytics.title')} icon={<BarChart3 />}>
       <div className="space-y-6">
         {/* Header Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Activity className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-lg font-semibold text-white">Usage Analytics</h2>
+            <h2 className="text-lg font-semibold text-white">{t('pages.rateLimitAnalytics.usage_analytics')}</h2>
           </div>
           <div className="flex items-center gap-3">
             {/* Time range selector */}
@@ -78,7 +80,7 @@ export default function RateLimitAnalytics() {
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {range}
+                  {t(`pages.rateLimitAnalytics.range_${range}`)}
                 </button>
               ))}
             </div>
@@ -88,7 +90,7 @@ export default function RateLimitAnalytics() {
               className="flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
             >
               <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('common.refresh')}
             </button>
           </div>
         </div>
@@ -97,7 +99,7 @@ export default function RateLimitAnalytics() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {Object.entries(data.current).map(([key, { current, max }]) => {
             const percentage = (current / max) * 100;
-            const label = key.charAt(0).toUpperCase() + key.slice(1);
+            const label = t(`pages.rateLimitAnalytics.${key}_label`, { defaultValue: key.charAt(0).toUpperCase() + key.slice(1) });
 
             return (
               <div key={key} className={`p-4 rounded-xl border backdrop-blur-md ${getStatusColor(current, max)}`}>

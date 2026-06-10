@@ -10,14 +10,42 @@
 //!     client.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+/// Remote presence entries older than this are treated as offline (replica crash / network loss).
+pub const REMOTE_PRESENCE_STALE_AFTER: Duration = Duration::from_secs(120);
+
+/// Maximum endpoint agents dispatched per fleet operation (NSSI bridge, round-robin).
+pub const FLEET_MAX_AGENTS: i32 = 30;
+/// Pending tasks replayed when an agent reconnects.
+pub const PENDING_TASK_REPLAY_LIMIT: i32 = 500;
+/// Agent status listing cap (dashboard).
+pub const AGENT_STATUS_LIMIT: i32 = 10_000;
+
+static GLOBAL_REGISTRY: OnceLock<Arc<AgentRegistry>> = OnceLock::new();
+
+/// Engines dispatched to real endpoint agents during NSSI `endpoint_bridge`.
+pub const NSSI_BRIDGE_ENGINES: &[&str] = &[
+    "process_inventory",
+    "arp_spoofing_engine",
+    "usb_enumeration",
+    "log_tampering_engine",
+    "persistence_mechanism",
+    "av_bypass_engine",
+    "ueba_baseline",
+    "process_hollowing",
+    "clipboard_hijack",
+    "dns_tunneling_c2",
+];
 
 fn parse_ueba_ingest(
     finding: &Value,
@@ -81,26 +109,203 @@ pub struct EnrollResponse {
     pub server_message: Option<String>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug)]
+struct RemotePresence {
+    replica_id: String,
+    #[allow(dead_code)]
+    tenant_id: i64,
+    status: String,
+    updated_at: Instant,
+}
+
 pub struct AgentRegistry {
     inner: RwLock<HashMap<String, Sender<ServerToAgent>>>,
+    remote: RwLock<HashMap<String, RemotePresence>>,
+    dispatch_cursor: AtomicUsize,
+    sync: OnceLock<Arc<crate::agent_registry_sync::AgentRegistrySync>>,
+}
+
+impl Default for AgentRegistry {
+    fn default() -> Self {
+        Self {
+            inner: RwLock::new(HashMap::new()),
+            remote: RwLock::new(HashMap::new()),
+            dispatch_cursor: AtomicUsize::new(0),
+            sync: OnceLock::new(),
+        }
+    }
 }
 
 impl AgentRegistry {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            inner: RwLock::new(HashMap::new()),
-        })
+        Arc::new(Self::default())
     }
 
-    pub async fn attach(&self, agent_uuid: &str, tx: Sender<ServerToAgent>) {
-        let mut g = self.inner.write().await;
-        g.insert(agent_uuid.to_string(), tx);
+    /// Process-wide registry shared by HTTP handlers and async job executor.
+    pub fn global() -> Arc<Self> {
+        GLOBAL_REGISTRY
+            .get_or_init(|| Self::new())
+            .clone()
+    }
+
+    /// Wire Redis pub-sub (call once at HTTP startup when `REDIS_URL` is set).
+    pub fn set_sync(&self, sync: Arc<crate::agent_registry_sync::AgentRegistrySync>) {
+        let _ = self.sync.set(sync);
+    }
+
+    fn sync(&self) -> Option<&Arc<crate::agent_registry_sync::AgentRegistrySync>> {
+        self.sync.get()
+    }
+
+    fn remote_is_live(presence: &RemotePresence) -> bool {
+        presence.status != "offline"
+            && presence.updated_at.elapsed() < REMOTE_PRESENCE_STALE_AFTER
+    }
+
+    pub async fn apply_remote_event(
+        &self,
+        sync: &crate::agent_registry_sync::AgentRegistrySync,
+        raw: &str,
+    ) {
+        let Ok(event) = serde_json::from_str::<crate::agent_registry_sync::AgentSyncEvent>(raw)
+        else {
+            return;
+        };
+        match event {
+            crate::agent_registry_sync::AgentSyncEvent::Attach {
+                replica_id,
+                agent_uuid,
+                tenant_id,
+                ..
+            } => {
+                if replica_id == sync.replica_id {
+                    return;
+                }
+                if self.inner.read().await.contains_key(&agent_uuid) {
+                    return;
+                }
+                let mut remote = self.remote.write().await;
+                remote.insert(
+                    agent_uuid,
+                    RemotePresence {
+                        replica_id,
+                        tenant_id,
+                        status: "online".into(),
+                        updated_at: Instant::now(),
+                    },
+                );
+            }
+            crate::agent_registry_sync::AgentSyncEvent::Detach {
+                replica_id,
+                agent_uuid,
+                ..
+            } => {
+                if replica_id == sync.replica_id {
+                    return;
+                }
+                let mut remote = self.remote.write().await;
+                if remote
+                    .get(&agent_uuid)
+                    .is_some_and(|p| p.replica_id == replica_id)
+                {
+                    remote.remove(&agent_uuid);
+                }
+            }
+            crate::agent_registry_sync::AgentSyncEvent::Status {
+                replica_id,
+                agent_uuid,
+                tenant_id,
+                status,
+                ..
+            } => {
+                if replica_id == sync.replica_id {
+                    return;
+                }
+                if self.inner.read().await.contains_key(&agent_uuid) {
+                    return;
+                }
+                let mut remote = self.remote.write().await;
+                if status == "offline" {
+                    if remote
+                        .get(&agent_uuid)
+                        .is_some_and(|p| p.replica_id == replica_id)
+                    {
+                        remote.remove(&agent_uuid);
+                    }
+                } else {
+                    remote.insert(
+                        agent_uuid,
+                        RemotePresence {
+                            replica_id,
+                            tenant_id,
+                            status,
+                            updated_at: Instant::now(),
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn spawn_remote_presence_pruner(self: &Arc<Self>) {
+        let registry = Arc::clone(self);
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(30));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let mut remote = registry.remote.write().await;
+                remote.retain(|_, p| Self::remote_is_live(p));
+            }
+        });
+    }
+
+    pub async fn attach(&self, agent_uuid: &str, tenant_id: i64, tx: Sender<ServerToAgent>) {
+        {
+            let mut g = self.inner.write().await;
+            g.insert(agent_uuid.to_string(), tx);
+        }
+        {
+            let mut remote = self.remote.write().await;
+            remote.remove(agent_uuid);
+        }
+        if let Some(sync) = self.sync() {
+            let event = crate::agent_registry_sync::AgentSyncEvent::attach(
+                &sync.replica_id,
+                agent_uuid,
+                tenant_id,
+            );
+            sync.publish(&event).await;
+        }
     }
 
     pub async fn detach(&self, agent_uuid: &str) {
-        let mut g = self.inner.write().await;
-        g.remove(agent_uuid);
+        let removed = {
+            let mut g = self.inner.write().await;
+            g.remove(agent_uuid).is_some()
+        };
+        if removed {
+            if let Some(sync) = self.sync() {
+                let event = crate::agent_registry_sync::AgentSyncEvent::detach(
+                    &sync.replica_id,
+                    agent_uuid,
+                );
+                sync.publish(&event).await;
+            }
+        }
+    }
+
+    /// Propagate agent status to peer replicas (heartbeats, explicit offline).
+    pub async fn notify_status(&self, agent_uuid: &str, tenant_id: i64, status: &str) {
+        if let Some(sync) = self.sync() {
+            let event = crate::agent_registry_sync::AgentSyncEvent::status(
+                &sync.replica_id,
+                agent_uuid,
+                tenant_id,
+                status,
+            );
+            sync.publish(&event).await;
+        }
     }
 
     pub async fn send(
@@ -116,14 +321,161 @@ impl AgentRegistry {
     }
 
     pub async fn is_online(&self, agent_uuid: &str) -> bool {
-        let g = self.inner.read().await;
-        g.contains_key(agent_uuid)
+        if self.inner.read().await.contains_key(agent_uuid) {
+            return true;
+        }
+        self.remote
+            .read()
+            .await
+            .get(agent_uuid)
+            .is_some_and(Self::remote_is_live)
     }
 
     pub async fn online_agents(&self) -> Vec<String> {
-        let g = self.inner.read().await;
-        g.keys().cloned().collect()
+        let local = self.inner.read().await;
+        let remote = self.remote.read().await;
+        let mut out: std::collections::HashSet<String> = local.keys().cloned().collect();
+        for (uuid, presence) in remote.iter() {
+            if Self::remote_is_live(presence) {
+                out.insert(uuid.clone());
+            }
+        }
+        out.into_iter().collect()
     }
+
+    pub async fn is_agent_online(&self, agent_uuid: &str) -> bool {
+        self.is_online(agent_uuid).await
+    }
+}
+
+/// Live + recently-enrolled agents for a client, ordered for fleet dispatch.
+pub async fn agent_uuids_for_client(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i32,
+) -> Result<Vec<String>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query_scalar::<_, String>(
+        r#"SELECT agent_uuid::text FROM endpoint_agents
+            WHERE tenant_id = $1 AND client_id = $2
+              AND status IN ('online', 'enrolled')
+            ORDER BY
+              CASE WHEN status = 'online' THEN 0 ELSE 1 END,
+              last_seen_at DESC NULLS LAST
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(rows)
+}
+
+/// Round-robin live dispatch across the fleet; returns count of agents that received the message.
+pub async fn dispatch_to_fleet(
+    pool: &PgPool,
+    registry: &Arc<AgentRegistry>,
+    tenant_id: i64,
+    client_id: i64,
+    msg: ServerToAgent,
+    max_agents: i32,
+) -> u32 {
+    let Ok(agents) = agent_uuids_for_client(pool, tenant_id, client_id, max_agents).await else {
+        return 0;
+    };
+    if agents.is_empty() {
+        return 0;
+    }
+    let start = registry.dispatch_cursor.fetch_add(1, Ordering::Relaxed) % agents.len();
+    let mut dispatched = 0u32;
+    for i in 0..agents.len() {
+        let uuid = &agents[(start + i) % agents.len()];
+        if registry.is_agent_online(uuid).await {
+            if registry.send(uuid, msg.clone()).await.is_ok() {
+                dispatched += 1;
+            }
+        }
+    }
+    dispatched
+}
+
+/// Enqueue + live-push a task to the next agent in the fleet (round-robin).
+pub async fn enqueue_and_dispatch_fleet(
+    pool: &PgPool,
+    registry: &Arc<AgentRegistry>,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    target: Option<&str>,
+    params: &Value,
+) -> Result<(Uuid, bool), sqlx::Error> {
+    let task_uuid = enqueue_task(pool, tenant_id, client_id, engine, target, params).await?;
+    let agents = agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?;
+    let start = registry.dispatch_cursor.fetch_add(1, Ordering::Relaxed);
+    let mut live = false;
+    for (offset, _uuid) in agents.iter().enumerate() {
+        let idx = (start + offset) % agents.len();
+        let pick = &agents[idx];
+        if registry.is_agent_online(pick).await {
+            live = registry
+                .send(
+                    pick,
+                    ServerToAgent::Task {
+                        task_id: task_uuid.to_string(),
+                        engine: engine.to_string(),
+                        target: target.map(str::to_string),
+                        params: params.clone(),
+                    },
+                )
+                .await
+                .is_ok();
+            if live {
+                break;
+            }
+        }
+    }
+    Ok((task_uuid, live))
+}
+
+/// Bridge NSSI virtual swarm to real endpoint agents — one detection per agent (up to 30).
+pub async fn bridge_nssi_fleet(
+    pool: &PgPool,
+    registry: &Arc<AgentRegistry>,
+    tenant_id: i64,
+    client_id: i64,
+    targets: &[String],
+) -> u32 {
+    let Ok(agents) = agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await
+    else {
+        return 0;
+    };
+    if agents.is_empty() {
+        return 0;
+    }
+    let mut bridged = 0u32;
+    let mod_targets = targets.len().max(1);
+    for (i, _) in agents.iter().enumerate() {
+        let engine = NSSI_BRIDGE_ENGINES[i % NSSI_BRIDGE_ENGINES.len()];
+        let target = targets
+            .get(i % mod_targets)
+            .map(|s| s.as_str());
+        let params = json!({
+            "nssi_bridge": true,
+            "priority": "high",
+            "fleet_slot": i + 1,
+            "fleet_size": agents.len(),
+        });
+        if enqueue_and_dispatch_fleet(pool, registry, tenant_id, client_id, engine, target, &params)
+            .await
+            .is_ok()
+        {
+            bridged += 1;
+        }
+    }
+    bridged
 }
 
 /// Compute storage hash for an enrollment token. The plaintext is sent once over HTTPS.
@@ -188,13 +540,8 @@ pub async fn consume_enrollment_token(
 ) -> Result<ConsumedToken, String> {
     let hash = hash_token(plaintext);
     let row = sqlx::query_as::<_, (i64, i64)>(
-        r#"UPDATE endpoint_agent_enrollment_tokens
-              SET consumed_at = now()
-            WHERE token_hash = $1
-              AND consumed_at IS NULL
-              AND revoked_at IS NULL
-              AND expires_at > now()
-        RETURNING tenant_id, client_id"#,
+        r#"SELECT out_tenant_id, out_client_id
+             FROM consume_endpoint_agent_enrollment_token($1)"#,
     )
     .bind(&hash)
     .fetch_optional(pool)
@@ -208,6 +555,108 @@ pub async fn consume_enrollment_token(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Resolve the DB-registered client_id for an agent (authoritative over hello JSON).
+pub async fn registered_client_id(
+    pool: &PgPool,
+    tenant_id: i64,
+    agent_uuid: &Uuid,
+) -> Result<Option<i64>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let cid = sqlx::query_scalar::<_, i64>(
+        "SELECT client_id FROM endpoint_agents WHERE agent_uuid = $1 AND tenant_id = $2",
+    )
+    .bind(agent_uuid)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(cid)
+}
+
+pub async fn client_exists(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let ok = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1 AND tenant_id = $2)",
+    )
+    .bind(client_id)
+    .bind(tenant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(ok)
+}
+
+/// All enrolled/online agents for a tenant.
+pub async fn all_agent_uuids_for_tenant(
+    pool: &PgPool,
+    tenant_id: i64,
+    limit: i32,
+) -> Result<Vec<(String, i64)>, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query_as::<_, (String, i64)>(
+        r#"SELECT agent_uuid::text, client_id FROM endpoint_agents
+            WHERE tenant_id = $1
+            ORDER BY last_seen_at DESC NULLS LAST
+            LIMIT $2"#,
+    )
+    .bind(tenant_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(rows)
+}
+
+/// Push pending tasks to all online agents (API process — worker only queues).
+pub async fn push_pending_tasks_to_online(
+    pool: &PgPool,
+    registry: &Arc<AgentRegistry>,
+    tenant_id: i64,
+) -> u32 {
+    let Ok(agents) = all_agent_uuids_for_tenant(pool, tenant_id, AGENT_STATUS_LIMIT).await else {
+        return 0;
+    };
+    let mut pushed = 0u32;
+    for (uuid, client_id) in agents {
+        if !registry.is_agent_online(&uuid).await {
+            continue;
+        }
+        if let Ok(pending) = pending_tasks_for_client(pool, tenant_id, client_id).await {
+            for task in pending {
+                if registry.send(&uuid, task).await.is_ok() {
+                    pushed += 1;
+                }
+            }
+        }
+    }
+    pushed
+}
+
+pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            let Ok(rows) = sqlx::query_scalar::<_, i64>(
+                "SELECT DISTINCT tenant_id FROM endpoint_agent_tasks WHERE status = 'pending' AND expires_at > now() LIMIT 200",
+            )
+            .fetch_all(pool.as_ref())
+            .await
+            else {
+                continue;
+            };
+            for tid in rows {
+                let _ = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await;
+            }
+        }
+    });
+}
+
 pub async fn register_agent(
     pool: &PgPool,
     tenant_id: i64,
@@ -252,23 +701,18 @@ pub async fn register_agent(
 /// then re-set to the row's actual tenant_id).
 pub async fn mark_seen(
     pool: &PgPool,
+    tenant_id: i64,
     agent_uuid: &Uuid,
     status: &str,
 ) -> Result<(), sqlx::Error> {
-    // First find the agent's tenant_id through a session GUC swap that allows the read.
-    // We bracket the lookup with `SET LOCAL row_security = off` which Postgres ignores for
-    // non-superusers; instead we use a small two-step: query through a per-tenant scan via the
-    // postgres administrative role isn't an option here, so we accept that mark_seen may noop
-    // when called outside an authenticated session (which is fine — it's heartbeat-only).
     let mut conn = pool.acquire().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
-        .execute(&mut *conn)
-        .await?;
+    crate::db::set_tenant_conn(&mut *conn, tenant_id).await?;
     sqlx::query(
-        "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1",
+        "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1 AND tenant_id = $3",
     )
     .bind(agent_uuid)
     .bind(status)
+    .bind(tenant_id)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -287,40 +731,30 @@ pub async fn store_finding(
         }
         return Ok(());
     }
-    let title = finding
-        .get("title")
+    let target = finding
+        .get("target")
         .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let severity = finding
-        .get("severity")
-        .and_then(Value::as_str)
-        .unwrap_or("info")
-        .to_string();
-    let description = finding
-        .get("description")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let finding_id = format!("agent-{}-{}", engine, Uuid::new_v4().simple());
-    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    sqlx::query(
-        r#"INSERT INTO vulnerabilities
-            (tenant_id, client_id, finding_id, title, severity, source, description, status, discovered_at, raw_data)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', now(), $8)
-           ON CONFLICT DO NOTHING"#,
+        .unwrap_or("endpoint");
+    let source = format!("agent.{engine}");
+    if let Err(e) = crate::findings_persist::persist_engine_findings(
+        pool,
+        tenant_id,
+        Some(client_id),
+        &source,
+        target,
+        std::slice::from_ref(finding),
     )
-    .bind(tenant_id)
-    .bind(client_id)
-    .bind(&finding_id)
-    .bind(&title)
-    .bind(&severity)
-    .bind(format!("agent.{}", engine))
-    .bind(&description)
-    .bind(finding)
-    .execute(&mut *tx)
-    .await?;
-    tx.commit().await?;
+    .await
+    {
+        tracing::error!(
+            target: "endpoint_agents",
+            tenant_id,
+            client_id,
+            engine = %engine,
+            error = %e,
+            "findings_persist failed for agent finding"
+        );
+    }
     Ok(())
 }
 
@@ -339,10 +773,11 @@ pub async fn pending_tasks_for_client(
               AND status = 'pending'
               AND expires_at > now()
             ORDER BY created_at
-            LIMIT 50"#,
+            LIMIT $3"#,
     )
     .bind(tenant_id)
     .bind(client_id)
+    .bind(PENDING_TASK_REPLAY_LIMIT)
     .fetch_all(&mut *tx)
     .await?;
     let _ = tx.commit().await;
@@ -391,27 +826,27 @@ pub async fn enqueue_task(
 /// agent's tenant GUC was set on hello.
 pub async fn mark_task_status(
     pool: &PgPool,
+    tenant_id: i64,
     task_uuid: &Uuid,
     status: &str,
     findings_count: i32,
     error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', '0', true)")
-        .execute(&mut *conn)
-        .await?;
+    crate::db::set_tenant_conn(&mut *conn, tenant_id).await?;
     sqlx::query(
         r#"UPDATE endpoint_agent_tasks
               SET status = $2,
                   findings_count = $3,
                   error = $4,
                   completed_at = CASE WHEN $2 IN ('done','failed','expired') THEN now() ELSE completed_at END
-            WHERE task_uuid = $1"#,
+            WHERE task_uuid = $1 AND tenant_id = $5"#,
     )
     .bind(task_uuid)
     .bind(status)
     .bind(findings_count)
     .bind(error)
+    .bind(tenant_id)
     .execute(&mut *conn)
     .await?;
     Ok(())

@@ -123,6 +123,7 @@ function TierBadge({ tier, t }) {
 function EngineMatrixCard({
   engine,
   enabled,
+  runnable,
   status,
   lastRun,
   findingsDelta,
@@ -195,8 +196,14 @@ function EngineMatrixCard({
           <button
             id={`engine-${engine.id}-run-btn`}
             type="button"
-            disabled={loading || runBusy || !enabled}
-            title={!enabled ? t('engines.enable_engine_first') : t('engines.queue_scan')}
+            disabled={loading || runBusy || !runnable}
+            title={
+              !runnable
+                ? t('engines.catalog_only_run_disabled')
+                : !enabled
+                  ? t('engines.enable_engine_first')
+                  : t('engines.queue_scan')
+            }
             onClick={handleRun}
             className="px-2 py-0.5 rounded-md text-[9px] font-mono uppercase tracking-wider border border-cyan-500/30 text-cyan-300/80 hover:bg-cyan-950/50 hover:text-cyan-200 hover:border-cyan-400/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
@@ -246,6 +253,7 @@ function GroupSection({
   t,
 }) {
   const enabledCount = engines.filter((e) => enabledSet.has(e.id)).length
+  const runnableCount = engines.filter((e) => enabledSet.has(e.id) && isProduction(e.id)).length
   const runningCount = engines.filter((e) => engineStates[e.id]?.status === 'running').length
 
   return (
@@ -272,7 +280,8 @@ function GroupSection({
             id={`engine-group-${groupDef.id}-run-btn`}
             type="button"
             onClick={() => onRunGroup(engines.map((e) => e.id))}
-            disabled={loading || enabledCount === 0}
+            disabled={loading || runnableCount === 0}
+            title={runnableCount === 0 ? t('engines.catalog_only_run_disabled') : undefined}
             className="px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/80 hover:bg-cyan-950/40 hover:border-cyan-400/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('engines.run_group')}
@@ -306,6 +315,7 @@ function GroupSection({
                 key={engine.id}
                 engine={engine}
                 enabled={enabledSet.has(engine.id)}
+                runnable={enabledSet.has(engine.id) && isProduction(engine.id)}
                 status={state.status ?? 'idle'}
                 lastRun={state.lastRun ?? null}
                 findingsDelta={state.findingsDelta ?? 0}
@@ -461,6 +471,10 @@ export default function EngineMatrix() {
       showToast('error', t('engines.select_client_warning'))
       return
     }
+    if (!isProduction(engineId)) {
+      showToast('error', t('engines.catalog_only_run_disabled'))
+      return
+    }
     const engine = ENGINES_BY_ID[engineId]
     const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
     const clientTarget = firstClientTarget(selectedClient)
@@ -489,7 +503,7 @@ export default function EngineMatrix() {
       showToast('error', e?.message ?? 'Network error')
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
     }
-  }, [selectedClientId, clients, showToast, t])
+  }, [selectedClientId, clients, showToast, t, isProduction])
 
   const handleRunGroup = useCallback(async (engineIds) => {
     if (selectedClientId == null) {
@@ -497,17 +511,22 @@ export default function EngineMatrix() {
       return
     }
     await Promise.allSettled(
-      engineIds.filter((id) => enabledSet.has(id)).map((id) => handleRun(id)),
+      engineIds.filter((id) => enabledSet.has(id) && isProduction(id)).map((id) => handleRun(id)),
     )
-  }, [selectedClientId, enabledSet, handleRun, showToast, t])
+  }, [selectedClientId, enabledSet, handleRun, showToast, t, isProduction])
+
+  const runnableEnabledSet = useMemo(
+    () => new Set([...enabledSet].filter(isProduction)),
+    [enabledSet, isProduction],
+  )
 
   const handleRunAllEngines = useCallback(async () => {
     if (selectedClientId == null) {
       showToast('error', t('engines.select_client_warning'))
       return
     }
-    if (enabledSet.size === 0) {
-      showToast('error', 'No engines enabled for this client')
+    if (runnableEnabledSet.size === 0) {
+      showToast('error', t('engines.catalog_only_run_disabled'))
       return
     }
     setRunAllLoading(true)
@@ -517,7 +536,7 @@ export default function EngineMatrix() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id: Number(selectedClientId),
-          engines: Array.from(enabledSet),
+          engines: Array.from(runnableEnabledSet),
         }),
       })
       const d = await r.json().catch(() => ({}))
@@ -609,10 +628,11 @@ export default function EngineMatrix() {
               <button
                 type="button"
                 onClick={handleRunAllEngines}
-                disabled={runAllLoading || configLoading || !selectedClientId || totalEnabled === 0}
+                disabled={runAllLoading || configLoading || !selectedClientId || totalRunnable === 0}
+                title={totalRunnable === 0 && totalEnabled > 0 ? t('engines.catalog_only_run_disabled') : undefined}
                 className="px-4 py-2 rounded-xl text-[11px] font-mono font-semibold bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: totalEnabled })}
+                {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: totalRunnable })}
               </button>
             </div>
           </div>

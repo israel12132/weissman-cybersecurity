@@ -160,6 +160,9 @@ pub async fn api_sso_idps_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
         Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
@@ -195,6 +198,9 @@ pub async fn api_sso_idps_create(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<CreateIdpBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let name = body.name.trim().to_string();
     if name.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "name required"}))).into_response();
@@ -297,6 +303,9 @@ pub async fn api_sso_idp_patch(
     Path(idp_id): Path<i64>,
     Json(body): Json<PatchIdpBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
         Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
@@ -380,6 +389,9 @@ pub async fn api_sso_idp_delete(
     Extension(auth): Extension<AuthContext>,
     Path(idp_id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,
         Err(e) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": e.to_string()}))).into_response(),
@@ -442,6 +454,9 @@ pub async fn api_sso_idp_test(
     Extension(auth): Extension<AuthContext>,
     Path(idp_id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     // Fetch IdP config
     let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         Ok(t) => t,

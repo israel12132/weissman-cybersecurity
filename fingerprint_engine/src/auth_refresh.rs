@@ -11,10 +11,15 @@ pub enum SessionCookieError {
     Jwt(#[from] jsonwebtoken::errors::Error),
     #[error("refresh token persistence: {0}")]
     RefreshDb(#[from] sqlx::Error),
+    #[error("user inactive or not found")]
+    InactiveUser,
 }
 
-/// Role + superadmin for JWT (from `auth.v_user_lookup`).
-pub async fn user_rbac_snapshot(pool: &PgPool, user_id: i64) -> Result<(String, bool), sqlx::Error> {
+/// Role + superadmin for JWT (from `auth.v_user_lookup`). `None` when user is missing or deactivated.
+pub async fn user_rbac_snapshot(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<Option<(String, bool)>, sqlx::Error> {
     let row = sqlx::query(
         r#"SELECT COALESCE(NULLIF(trim(role), ''), 'viewer') AS role,
                   COALESCE(is_superadmin, false) AS is_superadmin
@@ -24,14 +29,13 @@ pub async fn user_rbac_snapshot(pool: &PgPool, user_id: i64) -> Result<(String, 
     .bind(user_id)
     .fetch_optional(pool)
     .await?;
-    match row {
-        Some(r) => Ok((
+    Ok(row.map(|r| {
+        (
             r.try_get::<String, _>("role")
                 .unwrap_or_else(|_| "viewer".into()),
             r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
-        )),
-        None => Ok(("viewer".into(), false)),
-    }
+        )
+    }))
 }
 
 /// Access JWT (for JSON + `Authorization`) + two `Set-Cookie` lines: access + opaque refresh (`Path=/api/auth`).
@@ -40,7 +44,9 @@ pub async fn build_session_cookie_headers(
     user_id: i64,
     tenant_id: i64,
 ) -> Result<(String, String, String), SessionCookieError> {
-    let (role, is_superadmin) = user_rbac_snapshot(pool, user_id).await?;
+    let (role, is_superadmin) = user_rbac_snapshot(pool, user_id)
+        .await?
+        .ok_or(SessionCookieError::InactiveUser)?;
     let access =
         crate::auth_jwt::create_access_token(user_id, tenant_id, role.as_str(), is_superadmin)?;
     let access_line = crate::auth_jwt::session_cookie_value(&access);

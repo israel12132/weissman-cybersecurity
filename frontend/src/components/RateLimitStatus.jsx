@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { apiFetch } from '../lib/apiBase';
 
 /**
  * RateLimitStatus - Real-time rate limit monitoring component
@@ -31,12 +32,15 @@ export default function RateLimitStatus({ compact = false }) {
 
   const fetchLimits = async () => {
     try {
-      const response = await fetch('/api/rate-limits/status', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/rate-limits/status');
       if (response.ok) {
         const data = await response.json();
-        setLimits(data.limits || limits);
+        const next = data.limits || {};
+        setLimits({
+          scans: next.scans || limits.scans,
+          logins: next.logins || limits.logins,
+          api: next.api || limits.api,
+        });
       }
     } catch (error) {
       console.warn('Failed to fetch rate limits:', error);

@@ -571,7 +571,13 @@ fn build_payload(
             Ok(p)
         }
         PayloadKind::ThreatIntelRun => Ok(json!({})),
-        PayloadKind::PoeSynthesis => Ok(json!({ "target": &ctx.target })),
+        PayloadKind::PoeSynthesis => {
+            let mut p = json!({ "target": &ctx.target });
+            if let Some(ref cid) = ctx.client_id {
+                obj_mut(&mut p)?.insert("client_id".into(), cid.clone());
+            }
+            Ok(p)
+        }
         PayloadKind::PipelineScan => {
             let repo = ctx
                 .repo_url
