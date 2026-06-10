@@ -58,7 +58,46 @@
     "system_config": "System Configuration",
     "status": "Status",
     "reports": "Reports",
-    "audit_log": "Audit Log"
+    "audit_log": "Audit Log",
+    "ask_weissman": "Ask Weissman",
+    "playbooks": "SOAR Playbooks"
+  },
+  "ask_weissman": {
+    "title": "Ask Weissman",
+    "subtitle": "Natural-language queries compiled to safe, parameterised SQL. Read-only role, tenant-scoped.",
+    "placeholder": "Ask anything about your data — e.g. top 5 KEV findings on prod assets",
+    "ask_button": "Ask →",
+    "asking": "Asking…",
+    "sample_prompts": "Sample prompts",
+    "compiled_sql": "Compiled SQL",
+    "no_rows": "(no rows)",
+    "network_error": "Network error — could not reach the API."
+  },
+  "playbooks": {
+    "title": "SOAR Playbooks",
+    "subtitle": "Build when {conditions} do [actions] rules that fire on every new finding.",
+    "new_playbook": "+ New playbook",
+    "insert_example": "Insert example",
+    "no_playbooks": "No playbooks yet.",
+    "dry_run": "Dry-run with sample",
+    "save_changes": "Save changes",
+    "create_playbook": "Create playbook",
+    "run_history": "Run history"
+  },
+  "clients_page": {
+    "title": "Client Management",
+    "subtitle": "Manage customer organizations and authorized scanning scope",
+    "worst_case_loss": "Worst-case loss",
+    "annualised_loss": "Annualised loss (ALE)",
+    "crown_jewels": "Crown jewels at risk",
+    "total_asset_value": "Total asset value",
+    "at_risk": "$-at-risk",
+    "compute_risk": "compute →",
+    "no_snapshot": "no snapshot",
+    "scan_now": "▶ Scan now",
+    "queuing": "Queuing…",
+    "scan_confirm": "Queue the baseline scan bundle for \"{{name}}\"?",
+    "track_jobs": "Track progress on the Jobs Dashboard"
   },
   "auth": {
     "tenant_slug": "Tenant slug",

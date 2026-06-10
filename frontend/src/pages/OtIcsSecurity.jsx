@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Factory, Cpu, AlertTriangle, Activity, Zap } from 'lucide-react';
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 /**
  * OtIcsSecurity - OT/ICS/IoT Security Dashboard
@@ -26,9 +27,7 @@ export default function OtIcsSecurity() {
 
   const fetchOtDevices = async () => {
     try {
-      const response = await fetch('/api/ot-ics/devices', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/ot-ics/devices');
       if (response.ok) {
         const data = await response.json();
         setDevices(data.devices || []);

@@ -90,9 +90,12 @@ export default function ProfileMenu() {
           </div>
 
           <div className="border-t border-white/10 pt-3 space-y-1">
+            <MenuLink to="/ask" label={t('nav.ask_weissman')} icon="💬" onClick={() => setOpen(false)} />
+            <MenuLink to="/playbooks" label={t('nav.playbooks')} icon="⚡" onClick={() => setOpen(false)} />
+            <MenuLink to="/clients" label={t('nav.clients')} icon="🏢" onClick={() => setOpen(false)} />
             <MenuLink to="/system-config" label={t('nav.system_config')} icon="⚙" onClick={() => setOpen(false)} />
             <MenuLink to="/admin" label={t('nav.admin')} icon="👥" onClick={() => setOpen(false)} />
-            <MenuLink to="/audit-log" label={t('nav.audit_log', { defaultValue: 'Audit log' })} icon="📋" onClick={() => setOpen(false)} />
+            <MenuLink to="/audit-log" label={t('nav.audit_log')} icon="📋" onClick={() => setOpen(false)} />
             <MenuLink to="/status" label={t('nav.status')} icon="✔" external onClick={() => setOpen(false)} />
           </div>
 

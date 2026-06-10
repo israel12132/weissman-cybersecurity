@@ -58,7 +58,46 @@
     "system_config": "הגדרות מערכת",
     "status": "סטטוס",
     "reports": "דוחות",
-    "audit_log": "יומן ביקורת"
+    "audit_log": "יומן ביקורת",
+    "ask_weissman": "שאל את Weissman",
+    "playbooks": "מדריכי SOAR"
+  },
+  "ask_weissman": {
+    "title": "שאל את Weissman",
+    "subtitle": "שאילתות בשפה טבעית המתורגמות ל-SQL בטוח ומוגבל. תפקיד קריאה בלבד, מוגבל ל-tenant.",
+    "placeholder": "שאל כל דבר על הנתונים שלך — למשל 5 ממצאי KEV מובילים בנכסי prod",
+    "ask_button": "שאל →",
+    "asking": "שואל…",
+    "sample_prompts": "שאלות לדוגמה",
+    "compiled_sql": "SQL מורכב",
+    "no_rows": "(אין שורות)",
+    "network_error": "שגיאת רשת — לא ניתן להתחבר ל-API."
+  },
+  "playbooks": {
+    "title": "מדריכי SOAR",
+    "subtitle": "בנה כללים של when {conditions} do [actions] שמופעלים על כל ממצא חדש.",
+    "new_playbook": "+ מדריך חדש",
+    "insert_example": "הוסף דוגמה",
+    "no_playbooks": "אין מדריכים עדיין.",
+    "dry_run": "הרצת יבש עם דוגמה",
+    "save_changes": "שמור שינויים",
+    "create_playbook": "צור מדריך",
+    "run_history": "היסטוריית הרצות"
+  },
+  "clients_page": {
+    "title": "ניהול לקוחות",
+    "subtitle": "ניהול ארגוני לקוחות וסקופ סריקה מורשה",
+    "worst_case_loss": "הפסד מקרה גרוע",
+    "annualised_loss": "הפסד שנתי (ALE)",
+    "crown_jewels": "נכסי crown jewel בסיכון",
+    "total_asset_value": "שווי נכסים כולל",
+    "at_risk": "$-בסיכון",
+    "compute_risk": "חשב →",
+    "no_snapshot": "אין snapshot",
+    "scan_now": "▶ סרוק עכשיו",
+    "queuing": "בתור…",
+    "scan_confirm": "להוסיף חבילת סריקה בסיסית ל-\"{{name}}\"?",
+    "track_jobs": "עקוב אחר ההתקדמות בלוח המשימות"
   },
   "auth": {
     "tenant_slug": "מזהה ארגון",

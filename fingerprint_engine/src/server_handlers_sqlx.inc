@@ -460,6 +460,173 @@ fn mitre_tactic_for(technique: &str) -> &'static str {
     }
 }
 
+/// `GET /api/findings/clusters` — collapsed view: one row per finding-cluster,
+/// sorted by KEV/EPSS/severity. This is what the inbox should show by default;
+/// the per-vulnerability list is for drill-down only.
+async fn api_findings_clusters(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(100).clamp(1, 1000);
+    let offset: i64 = q.get("offset").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0).max(0);
+    let severity = q.get("severity").map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+    let only_open = q.get("status").map(|s| s.trim().to_uppercase() == "OPEN").unwrap_or(false);
+    let only_kev = q.get("kev").map(|s| s == "1" || s == "true").unwrap_or(false);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
+    };
+
+    let rows = sqlx::query(
+        r#"SELECT id, client_id, target, cwe, vuln_signature, title,
+                  member_count, engines, sources, cves,
+                  max_severity, max_cvss, max_epss, kev_listed,
+                  status, first_seen_at, last_seen_at
+             FROM weissman_finding_clusters
+            WHERE ($3::text  IS NULL OR lower(max_severity) = $3)
+              AND ($4::bool  IS NULL OR ($4 AND status = 'OPEN') OR NOT $4)
+              AND ($5::bool  IS NULL OR ($5 AND kev_listed) OR NOT $5)
+            ORDER BY
+                CASE WHEN kev_listed THEN 0 ELSE 1 END,
+                COALESCE(max_epss, 0)::float DESC,
+                CASE max_severity
+                    WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                    WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END DESC,
+                last_seen_at DESC
+            LIMIT $1 OFFSET $2"#,
+    )
+    .bind(limit)
+    .bind(offset)
+    .bind(severity.as_deref())
+    .bind(only_open)
+    .bind(only_kev)
+    .fetch_all(&mut *tx).await.unwrap_or_default();
+
+    let total: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*)::bigint FROM weissman_finding_clusters
+            WHERE ($1::text IS NULL OR lower(max_severity) = $1)
+              AND ($2::bool IS NULL OR ($2 AND status = 'OPEN') OR NOT $2)
+              AND ($3::bool IS NULL OR ($3 AND kev_listed) OR NOT $3)"#,
+    )
+    .bind(severity.as_deref())
+    .bind(only_open)
+    .bind(only_kev)
+    .fetch_one(&mut *tx).await.unwrap_or(0);
+    let _ = tx.commit().await;
+
+    let clusters: Vec<Value> = rows.into_iter().map(|r| {
+        let max_severity: String = r.try_get("max_severity").unwrap_or_else(|_| "info".to_string());
+        let max_cvss: Option<f32> = r.try_get("max_cvss").ok();
+        let max_epss: Option<f32> = r.try_get("max_epss").ok();
+        let engines: Vec<String> = r.try_get("engines").unwrap_or_default();
+        let sources: Vec<String> = r.try_get("sources").unwrap_or_default();
+        let cves: Vec<String> = r.try_get("cves").unwrap_or_default();
+        json!({
+            "id":             r.try_get::<i64, _>("id").unwrap_or(0),
+            "client_id":      r.try_get::<i64, _>("client_id").unwrap_or(0),
+            "target":         r.try_get::<String, _>("target").unwrap_or_default(),
+            "cwe":            r.try_get::<String, _>("cwe").unwrap_or_default(),
+            "vuln_signature": r.try_get::<String, _>("vuln_signature").unwrap_or_default(),
+            "title":          r.try_get::<String, _>("title").unwrap_or_default(),
+            "member_count":   r.try_get::<i32, _>("member_count").unwrap_or(0),
+            "engines":        engines,
+            "sources":        sources,
+            "cves":           cves,
+            "max_severity":   max_severity,
+            "max_cvss":       max_cvss,
+            "max_epss":       max_epss,
+            "kev_listed":     r.try_get::<bool, _>("kev_listed").unwrap_or(false),
+            "status":         r.try_get::<String, _>("status").unwrap_or_default(),
+            "first_seen_at":  r.try_get::<chrono::DateTime<Utc>, _>("first_seen_at").ok().map(|d| d.to_rfc3339()),
+            "last_seen_at":   r.try_get::<chrono::DateTime<Utc>, _>("last_seen_at").ok().map(|d| d.to_rfc3339()),
+        })
+    }).collect();
+
+    (StatusCode::OK, Json(json!({
+        "ok": true,
+        "clusters": clusters,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }))).into_response()
+}
+
+/// `GET /api/intel/suppressions` — list the tenant's active auto-suppressions.
+async fn api_intel_suppressions(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT id, engine, signature_hash, target_glob, reason,
+                  fp_count_at_create, created_by_user_id, created_at,
+                  expires_at, hit_count, last_hit_at
+             FROM finding_suppressions
+            ORDER BY created_at DESC LIMIT 200"#,
+    )
+    .fetch_all(&mut *tx).await.unwrap_or_default();
+    let _ = tx.commit().await;
+    let list: Vec<Value> = rows.into_iter().map(|r| json!({
+        "id":             r.try_get::<i64, _>("id").unwrap_or(0),
+        "engine":         r.try_get::<String, _>("engine").unwrap_or_default(),
+        "signature_hash": r.try_get::<String, _>("signature_hash").unwrap_or_default(),
+        "target_glob":    r.try_get::<Option<String>, _>("target_glob").ok().flatten(),
+        "reason":         r.try_get::<String, _>("reason").unwrap_or_default(),
+        "fp_count_at_create": r.try_get::<i32, _>("fp_count_at_create").unwrap_or(0),
+        "created_by_user_id": r.try_get::<Option<i64>, _>("created_by_user_id").ok().flatten(),
+        "created_at":     r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
+        "expires_at":     r.try_get::<Option<chrono::DateTime<Utc>>, _>("expires_at").ok().flatten().map(|d| d.to_rfc3339()),
+        "hit_count":      r.try_get::<i32, _>("hit_count").unwrap_or(0),
+        "last_hit_at":    r.try_get::<Option<chrono::DateTime<Utc>>, _>("last_hit_at").ok().flatten().map(|d| d.to_rfc3339()),
+    })).collect();
+    (StatusCode::OK, Json(json!({"ok": true, "suppressions": list}))).into_response()
+}
+
+/// `DELETE /api/intel/suppressions/:id` — undo a suppression (analyst override).
+async fn api_intel_suppression_delete(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let res = sqlx::query("DELETE FROM finding_suppressions WHERE id = $1 AND tenant_id = $2")
+        .bind(id).bind(auth.tenant_id)
+        .execute(&mut *tx).await;
+    let _ = tx.commit().await;
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            (StatusCode::OK, Json(json!({"ok": true, "deleted": id}))).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false}))).into_response(),
+    }
+}
+
+/// `GET /api/intel/status` — health view of the intel mirrors. Always public to the
+/// authed UI so the cockpit can show "Last KEV refresh: 4 minutes ago".
+async fn api_intel_status(State(state): State<Arc<AppState>>) -> Response {
+    let kev_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM kev_intel")
+        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    let kev_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT MAX(refreshed_at) FROM kev_intel",
+    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    let epss_total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM epss_intel")
+        .fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    let epss_last: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT MAX(refreshed_at) FROM epss_intel",
+    ).fetch_optional(state.app_pool.as_ref()).await.ok().flatten();
+    (StatusCode::OK, Json(json!({
+        "ok": true,
+        "kev":  { "rows": kev_total.unwrap_or(0),  "last_refresh": kev_last.map(|d| d.to_rfc3339())  },
+        "epss": { "rows": epss_total.unwrap_or(0), "last_refresh": epss_last.map(|d| d.to_rfc3339()) },
+    }))).into_response()
+}
+
 async fn api_findings(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -501,11 +668,17 @@ async fn api_findings(
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed, \
          COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256, \
-         COALESCE(raw_data, '{}'::jsonb) AS raw_data \
+         COALESCE(raw_data, '{}'::jsonb) AS raw_data, \
+         epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, \
+         intel_enriched_at, signature_hash, cluster_id, seen_count \
          FROM vulnerabilities \
          WHERE ($3::text IS NULL OR lower(severity) = $3) \
            AND ($4::bigint IS NULL OR client_id = $4) \
-         ORDER BY discovered_at DESC LIMIT $1 OFFSET $2",
+         ORDER BY \
+            CASE WHEN kev_listed THEN 0 ELSE 1 END, \
+            COALESCE(epss_score, 0) DESC, \
+            discovered_at DESC \
+         LIMIT $1 OFFSET $2",
     )
     .bind(limit)
     .bind(offset)
@@ -555,6 +728,45 @@ async fn api_findings(
             .get("compliance")
             .cloned()
             .unwrap_or(Value::Array(vec![]));
+        let epss_score = r.try_get::<Option<f32>, _>("epss_score").ok().flatten();
+        let epss_percentile = r.try_get::<Option<f32>, _>("epss_percentile").ok().flatten();
+        let kev = r.try_get::<bool, _>("kev_listed").unwrap_or(false);
+        let kev_ransom = r.try_get::<bool, _>("kev_known_ransomware").unwrap_or(false);
+        let kev_due = r
+            .try_get::<Option<chrono::NaiveDate>, _>("kev_due_date")
+            .ok()
+            .flatten()
+            .map(|d| d.to_string());
+        let cluster_id = r.try_get::<Option<i64>, _>("cluster_id").ok().flatten();
+        let signature_hash = r.try_get::<Option<String>, _>("signature_hash").ok().flatten();
+        let seen_count = r.try_get::<i32, _>("seen_count").unwrap_or(1);
+
+        // Apply the FP/TP confidence multiplier to risk_score so a chronically-FP
+        // engine gets pushed down in the prioritised list, while a high-EPSS or KEV
+        // finding gets boosted. This makes the inbox automatically self-tuning.
+        let base_risk = if cvss > 0.0 { cvss } else { severity_to_score(&r.try_get::<String, _>("severity").unwrap_or_default()) };
+        let mut risk = base_risk;
+        if let Some(s) = epss_score {
+            risk *= 1.0 + (s as f64) * 0.5; // up to +50% for max EPSS
+        }
+        if kev {
+            risk *= 1.4;
+        }
+        if kev_ransom {
+            risk *= 1.15;
+        }
+        // confidence multiplier (FP/TP) — capped at base*1.0.
+        let conf_mult = if let (Some(eng), Some(sig)) =
+            (Some(r.try_get::<String, _>("source").unwrap_or_default()),
+             signature_hash.clone())
+        {
+            if !sig.is_empty() {
+                crate::fp_feedback::confidence_multiplier(&state.app_pool, auth.tenant_id, &eng, &sig).await
+            } else { 1.0 }
+        } else { 1.0 };
+        risk *= conf_mult;
+        let risk = (risk.min(10.0) * 10.0).round() / 10.0;
+
         out.push(json!({
             "id": format!("VLN-{}", raw_id),
             "raw_id": raw_id,
@@ -571,11 +783,21 @@ async fn api_findings(
             "verified": poc_sealed,
             "poc_commitment_sha256": r.try_get::<String, _>("poc_commitment_sha256").unwrap_or_default(),
             "cvss_score": cvss,
-            "risk_score": if cvss > 0.0 { cvss } else { severity_to_score(&r.try_get::<String, _>("severity").unwrap_or_default()) },
+            "risk_score": risk,
+            "confidence_multiplier": conf_mult,
             "mitre_attack": mitre,
             "remediation": remediation,
             "target": target,
             "compliance": compliance,
+            "epss_score": epss_score,
+            "epss_percentile": epss_percentile,
+            "kev_listed": kev,
+            "kev_known_ransomware": kev_ransom,
+            "kev_due_date": kev_due,
+            "intel_enriched_at": r.try_get::<Option<chrono::DateTime<Utc>>, _>("intel_enriched_at").ok().flatten().map(|d| d.to_rfc3339()),
+            "cluster_id": cluster_id,
+            "signature_hash": signature_hash,
+            "seen_count": seen_count,
             "raw": raw_data,
         }));
     }
@@ -1395,6 +1617,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     if hash.is_empty() { return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response(); }
     let mut password_ok = matches!(bcrypt::verify(password, &hash), Ok(true));
     if !password_ok
+        && !weissman_core::tls_policy::is_production_environment()
         && matches!(
             std::env::var("WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD").as_deref(),
             Ok("1") | Ok("true") | Ok("yes")

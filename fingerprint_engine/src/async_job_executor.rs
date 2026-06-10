@@ -1572,6 +1572,7 @@ pub async fn execute_job(
                 Some(tid),
                 job_oast_token,
                 cognitive.as_deref(),
+                Some(app_pool.as_ref()),
             )
             .await;
 

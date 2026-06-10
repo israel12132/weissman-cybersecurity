@@ -3,16 +3,52 @@ import { Link } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
+function fmtUsd(n) {
+  if (n == null) return '$—'
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`
+  if (abs >= 1_000_000)     return `$${(n / 1_000_000).toFixed(2)}M`
+  if (abs >= 1_000)         return `$${(n / 1_000).toFixed(1)}k`
+  return `$${Math.round(n).toLocaleString()}`
+}
+
 export default function Clients() {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [scanningId, setScanningId] = useState(null)
   const [scanToast, setScanToast] = useState(null)
+  // client_id → ClientFinancialRisk snapshot
+  const [risk, setRisk] = useState({})
 
   useEffect(() => {
     loadClients()
   }, [])
+
+  // Once clients land, pull (or compute) the latest $-at-risk snapshot per client.
+  // No fallback math — if the server doesn't have a snapshot yet, the UI shows "—".
+  useEffect(() => {
+    let cancelled = false
+    if (clients.length === 0) return undefined
+    Promise.all(
+      clients.map(async (c) => {
+        try {
+          const r = await apiFetch(`/api/financial-risk/${c.id}`)
+          if (!r.ok) return [c.id, null]
+          const d = await r.json()
+          return [c.id, d?.snapshot || null]
+        } catch (_) {
+          return [c.id, null]
+        }
+      })
+    ).then((pairs) => {
+      if (cancelled) return
+      const map = {}
+      pairs.forEach(([id, snap]) => { map[id] = snap })
+      setRisk(map)
+    })
+    return () => { cancelled = true }
+  }, [clients])
 
   async function loadClients() {
     setLoading(true)
@@ -35,6 +71,31 @@ export default function Clients() {
       setLoading(false)
     }
   }
+
+  async function recomputeRisk(clientId) {
+    try {
+      const r = await apiFetch(`/api/financial-risk/${clientId}?recompute=1`)
+      const d = await r.json()
+      if (r.ok && d?.snapshot) {
+        setRisk((m) => ({ ...m, [clientId]: d.snapshot }))
+      }
+    } catch (_) { /* surfaced via the empty $— card */ }
+  }
+
+  // Tenant-wide roll-ups for the hero band.
+  const totals = clients.reduce(
+    (acc, c) => {
+      const s = risk[c.id]
+      if (!s) return acc
+      acc.assets += s.total_asset_value_usd || 0
+      acc.crown  += s.crown_jewel_value_usd || 0
+      acc.sle    += s.sle_worst_usd || 0
+      acc.ale    += s.ale_annualised_usd || 0
+      acc.have   += 1
+      return acc
+    },
+    { assets: 0, crown: 0, sle: 0, ale: 0, have: 0 }
+  )
 
   async function runScan(clientId, clientName) {
     if (!confirm(`Queue the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) for "${clientName}"?`)) {
@@ -100,6 +161,58 @@ export default function Clients() {
             + Add New Client
           </Link>
         </div>
+
+        {/* ── $-at-risk hero band (Wiz / Tenable One inspired) ───────────────
+            Replaces "5 critical findings" with the executive number: dollars.
+            Pulls from /api/financial-risk/:client_id snapshots. */}
+        {clients.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/[0.06] p-4">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-rose-300/80">
+                Worst-case loss
+              </div>
+              <div className="text-2xl font-bold text-rose-300 tabular-nums mt-1">
+                {fmtUsd(totals.sle)}
+              </div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                if today's worst finding fires
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-amber-300/80">
+                Annualised loss (ALE)
+              </div>
+              <div className="text-2xl font-bold text-amber-300 tabular-nums mt-1">
+                {fmtUsd(totals.ale)}
+              </div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                expected $-loss/yr, FAIR-aligned
+              </div>
+            </div>
+            <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-4">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-violet-300/80">
+                Crown jewels at risk
+              </div>
+              <div className="text-2xl font-bold text-violet-300 tabular-nums mt-1">
+                {fmtUsd(totals.crown)}
+              </div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                business value of jewel assets
+              </div>
+            </div>
+            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.06] p-4">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/80">
+                Total asset value
+              </div>
+              <div className="text-2xl font-bold text-cyan-300 tabular-nums mt-1">
+                {fmtUsd(totals.assets)}
+              </div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">
+                {totals.have}/{clients.length} clients scored
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error State */}
         {error && (
@@ -196,6 +309,36 @@ export default function Clients() {
                     >
                       View
                     </Link>
+                  </div>
+
+                  {/* Big-money headline number — Wiz/Tenable-style executive cue */}
+                  <div className="mb-3 p-3 rounded-lg border border-rose-500/20 bg-rose-500/[0.04]">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-rose-300/80">
+                        $-at-risk
+                      </span>
+                      {!risk[client.id] && (
+                        <button
+                          type="button"
+                          onClick={() => recomputeRisk(client.id)}
+                          className="text-[9px] font-mono text-cyan-300/70 hover:text-cyan-200"
+                          title="Compute the FAIR-aligned blast-radius now"
+                        >
+                          compute →
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xl font-bold text-rose-300 tabular-nums mt-1">
+                      {risk[client.id]
+                        ? fmtUsd(risk[client.id].sle_worst_usd)
+                        : <span className="text-slate-500 text-sm font-normal">no snapshot</span>}
+                    </div>
+                    {risk[client.id] && (
+                      <div className="text-[10px] font-mono text-white/45 mt-0.5">
+                        ALE/yr: {fmtUsd(risk[client.id].ale_annualised_usd)} ·
+                        crown: {fmtUsd(risk[client.id].crown_jewel_value_usd)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 text-sm">

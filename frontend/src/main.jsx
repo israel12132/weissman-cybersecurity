@@ -124,6 +124,8 @@ const ClientSaasIdpDiscovery = React.lazy(() => import('./pages/ClientSaasIdpDis
 const JobsDashboard = React.lazy(() => import('./pages/JobsDashboard'))
 const StatusPage = React.lazy(() => import('./pages/StatusPage'))
 const AuditLog = React.lazy(() => import('./pages/AuditLog'))
+const PlaybookBuilder = React.lazy(() => import('./pages/PlaybookBuilder'))
+const AskWeissman = React.lazy(() => import('./pages/AskWeissman'))
 const App = React.lazy(() => import('./App'))
 import './index.css'
 
@@ -253,9 +255,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="exploit-lab" element={<ExploitResearchLab />} />
             <Route path="agents" element={<AgentManagement />} />
             <Route path="audit-log" element={<AuditLog />} />
+            <Route path="playbooks" element={<PlaybookBuilder />} />
+            <Route path="ask" element={<AskWeissman />} />
+            <Route path="ceo" element={<Navigate to="/" replace />} />
             <Route path="*" element={<NotFound />} />
             {/* ─────────────────────────────────────────────────────────────────── */}
-            <Route path="ceo" element={<Navigate to="/" replace />} />
           </Route>
           {/* Fallback for any path outside the protected outlet */}
           <Route path="*" element={<NotFound />} />

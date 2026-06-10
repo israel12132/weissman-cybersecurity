@@ -342,6 +342,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "browser_extension_attack",
     "web3_dapp_attack",
     "api_gateway_bypass",
+    "liminal_boundary",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -362,6 +363,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "jwt_attack",
     "oauth_oidc",
     "http_smuggling",
+    "liminal_boundary",
     "prototype_pollution",
     "ssrf_advanced",
     "xxe",
@@ -648,6 +650,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "webrtc_attack",
     "web3_dapp_attack",
     "api_gateway_bypass",
+    "liminal_boundary",
 ];
 
 /// Map catalog-only registry IDs to a production engine implementation.
@@ -871,6 +874,7 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "job_posting_osint" => "osint",
         "github_secret_scan" => "leak_hunter",
         "http2_attack" => "http_smuggling",
+        "protocol_schism_oracle" | "cache_vary_oracle" => "liminal_boundary",
         "ollama_fuzz" => "llm_path_fuzz",
         other => other,
     }

@@ -11,6 +11,8 @@ const SHORTCUTS = [
   { keys: 'g a', desc: 'Go to Agents' },
   { keys: 'g c', desc: 'Go to Clients' },
   { keys: 'g j', desc: 'Go to Jobs' },
+  { keys: 'g q', desc: 'Go to Ask Weissman' },
+  { keys: 'g p', desc: 'Go to SOAR Playbooks' },
   { keys: 'g s', desc: 'Go to System Configuration' },
   { keys: 'Esc', desc: 'Close dialogs / drawers', global: true },
 ]
@@ -62,6 +64,8 @@ export default function KeyboardShortcuts() {
           a: '/agents',
           c: '/clients',
           j: '/jobs',
+          q: '/ask',
+          p: '/playbooks',
           s: '/system-config',
         }[e.key]
         if (dest) {

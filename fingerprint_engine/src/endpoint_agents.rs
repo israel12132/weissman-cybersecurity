@@ -19,6 +19,37 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+fn parse_ueba_ingest(
+    finding: &Value,
+    client_id: i64,
+) -> Option<crate::ueba_detector::UebaIngestPayload> {
+    let agent_id = finding
+        .get("agent_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?
+        .to_string();
+    let hour_of_week = finding
+        .get("hour_of_week")
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
+        .clamp(0, 167) as i16;
+    let metrics = finding
+        .get("metrics")
+        .cloned()
+        .or_else(|| finding.get("raw_metrics").cloned())
+        .filter(|v| !v.is_null())?;
+    Some(crate::ueba_detector::UebaIngestPayload {
+        agent_id,
+        client_id: finding
+            .get("client_id")
+            .and_then(Value::as_i64)
+            .unwrap_or(client_id),
+        hour_of_week,
+        metrics,
+    })
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerToAgent {
@@ -250,6 +281,12 @@ pub async fn store_finding(
     engine: &str,
     finding: &Value,
 ) -> Result<(), sqlx::Error> {
+    if engine == "ueba_baseline" {
+        if let Some(payload) = parse_ueba_ingest(finding, client_id) {
+            let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+        }
+        return Ok(());
+    }
     let title = finding
         .get("title")
         .and_then(Value::as_str)

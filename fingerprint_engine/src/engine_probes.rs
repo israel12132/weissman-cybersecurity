@@ -52,6 +52,28 @@ pub async fn http_client() -> Client {
         .unwrap_or_else(|_| Client::new())
 }
 
+/// HTTP/1.1-only client — used to compare against HTTP/2 ALPN on the same URL.
+pub async fn http1_client() -> Client {
+    Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
+        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+        .user_agent("Weissman-LiminalProbe/1.0 h1")
+        .http1_only()
+        .build()
+        .unwrap_or_else(|_| Client::new())
+}
+
+/// HTTP/2-capable client (ALPN negotiates h2 on TLS). Pair with [`http1_client`].
+pub async fn http2_client() -> Client {
+    Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
+        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+        .user_agent("Weissman-LiminalProbe/1.0 h2")
+        .http2_adaptive_window(true)
+        .build()
+        .unwrap_or_else(|_| Client::new())
+}
+
 /// Attempt a TCP connect+banner read. Returns banner string if the port is open.
 pub async fn tcp_banner(host: &str, port: u16) -> Option<String> {
     let addr = format!("{}:{}", host, port);
@@ -117,6 +139,7 @@ pub fn resolve_ips(host: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+#[derive(Clone, Debug)]
 pub struct HttpProbe {
     pub status: u16,
     pub headers: Vec<(String, String)>,
@@ -124,9 +147,17 @@ pub struct HttpProbe {
     pub final_url: String,
 }
 
-/// Fetch URL and return status, headers, body (truncated to 64 KiB).
-pub async fn http_get(client: &Client, url: &str) -> Option<HttpProbe> {
-    let resp = client.get(url).send().await.ok()?;
+/// GET with optional extra headers (for cache-oracle / rewrite probes).
+pub async fn http_get_with_headers(
+    client: &Client,
+    url: &str,
+    extra: &[(&str, &str)],
+) -> Option<HttpProbe> {
+    let mut req = client.get(url);
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let resp = req.send().await.ok()?;
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
     let headers: Vec<(String, String)> = resp
@@ -146,6 +177,11 @@ pub async fn http_get(client: &Client, url: &str) -> Option<HttpProbe> {
         body,
         final_url,
     })
+}
+
+/// Fetch URL and return status, headers, body (truncated to 64 KiB).
+pub async fn http_get(client: &Client, url: &str) -> Option<HttpProbe> {
+    http_get_with_headers(client, url, &[]).await
 }
 
 /// POST JSON and return status + body (truncated).
@@ -331,6 +367,9 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     }
     if engine_id.contains("cors") {
         return "Replace `Access-Control-Allow-Origin: *` with an allow-list of trusted origins. Never combine `*` or `null` with `Access-Control-Allow-Credentials: true`.";
+    }
+    if engine_id.contains("liminal_boundary") {
+        return "Unify WAF/auth rules across HTTP/1.1 and HTTP/2 (ALPN) paths; add correct Vary headers for every cache-key dimension (Cookie, Accept-Language); strip or validate X-Original-URL / X-Rewrite-URL at the edge; disable trusted-header routing unless explicitly required.";
     }
     if engine_id.contains("xss") || engine_id.contains("css_injection") || engine_id.contains("template_injection") {
         return "Adopt a strict Content-Security-Policy: `default-src 'self'; script-src 'self' 'nonce-...'; object-src 'none';`. HTML-escape all dynamic content.";

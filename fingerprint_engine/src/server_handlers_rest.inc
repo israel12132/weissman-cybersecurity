@@ -402,6 +402,7 @@ async fn api_clients_scan_run_all(
         "bola_idor",
         "pki_tls",
         "waf_bypass",
+        "liminal_boundary",
     ];
 
     let ip = extract_client_ip(&headers, addr);

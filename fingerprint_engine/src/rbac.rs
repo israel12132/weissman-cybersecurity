@@ -103,6 +103,7 @@ mod tests {
             tenant_id: 1,
             role: role.to_string(),
             is_superadmin: superadmin,
+            agent_id: None,
         }
     }
 

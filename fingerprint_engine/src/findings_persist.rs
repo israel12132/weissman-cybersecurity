@@ -19,6 +19,11 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
 use crate::db;
+use crate::findings_correlator::{self, ClusterAttrs};
+use crate::fp_feedback;
+use crate::intel_epss;
+use crate::intel_kev;
+use crate::pentest_memory;
 
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
 fn normalize_severity(raw: Option<&str>) -> String {
@@ -116,6 +121,57 @@ fn extract_string(f: &Value, keys: &[&str]) -> String {
         }
     }
     String::new()
+}
+
+fn finding_internet_exposed(f: &Value) -> Option<bool> {
+    for k in ["internet_exposed", "exposed", "is_internet_exposed"] {
+        if let Some(b) = f.get(k).and_then(Value::as_bool) {
+            return Some(b);
+        }
+    }
+    None
+}
+
+/// Best-effort: finding JSON → risk_graph_nodes lookup for SOAR `exposed:` triggers.
+async fn resolve_internet_exposed(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    target_url: &str,
+    f: &Value,
+) -> bool {
+    if let Some(b) = finding_internet_exposed(f) {
+        return b;
+    }
+    let host = target_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or(target_url)
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if host.is_empty() {
+        return false;
+    }
+    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
+        return false;
+    };
+    let exposed = sqlx::query_scalar::<_, bool>(
+        r#"SELECT COALESCE(bool_or(internet_exposed), false)
+             FROM risk_graph_nodes
+            WHERE client_id = $1
+              AND (label ILIKE $2 OR graph_key ILIKE $2)"#,
+    )
+    .bind(client_id)
+    .bind(format!("%{host}%"))
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(false);
+    let _ = tx.commit().await;
+    exposed
 }
 
 fn extract_array(f: &Value, keys: &[&str]) -> Value {
@@ -228,6 +284,7 @@ pub async fn persist_engine_findings(
             &["mitre_attack", "mitre", "attack_id", "mitre_attack_id"],
         );
         let cwe = extract_string(f, &["cwe", "cwe_id"]);
+        let cve = extract_string(f, &["cve", "cve_id", "cveId"]);
         let remediation = extract_string(
             f,
             &[
@@ -257,12 +314,22 @@ pub async fn persist_engine_findings(
         };
         let confidence = extract_string(f, &["confidence", "certainty"]);
 
-        let raw_data = json!({
+        // ── Threat-intel enrichment (EPSS + CISA KEV) ───────────────────────
+        // When the engine emits a CVE we look it up against our local mirror.
+        // Lookups are best-effort: a network blip or missing intel must not
+        // block the scan from persisting. Both helpers also write back to the
+        // dedicated `epss_score` / `kev_listed` columns.
+        let mut epss_score: Option<f32> = None;
+        let mut kev_listed: bool = false;
+        let mut kev_known_ransomware: bool = false;
+        let mut kev_due_date: Option<chrono::NaiveDate> = None;
+        let mut raw_data_enriched = json!({
             "engine": engine,
             "target": target_url,
             "cvss_score": cvss,
             "mitre_attack": mitre,
             "cwe": cwe,
+            "cve": cve,
             "remediation": remediation,
             "references": references,
             "compliance": compliance,
@@ -270,28 +337,83 @@ pub async fn persist_engine_findings(
             "evidence": f.get("evidence").cloned().unwrap_or(Value::Null),
             "raw": f.clone(),
         });
+        if !cve.is_empty() {
+            if let Some(s) = intel_epss::enrich_with_epss(pool, &mut raw_data_enriched, Some(&cve)).await {
+                epss_score = Some(s.score);
+            }
+            if let Some(k) = intel_kev::is_kev_listed(pool, &cve).await {
+                kev_listed = true;
+                kev_known_ransomware = k.known_ransomware_use;
+                kev_due_date = k.due_date;
+                if let Value::Object(obj) = &mut raw_data_enriched {
+                    obj.insert(
+                        "kev".to_string(),
+                        json!({
+                            "listed": true,
+                            "known_ransomware_use": kev_known_ransomware,
+                            "vendor": k.vendor_project,
+                            "product": k.product,
+                            "due_date": kev_due_date.map(|d| d.to_string()),
+                            "required_action": k.required_action,
+                            "vulnerability_name": k.vulnerability_name,
+                        }),
+                    );
+                }
+            }
+        }
 
         let finding_id = build_finding_id(engine, &target_url, f);
+
+        // ── False-positive feedback / auto-suppression check ────────────────
+        // The signature_hash is the same triple used by the correlator so
+        // suppression rules transfer naturally across engines hitting the
+        // exact same vulnerability. We also need it for record_fp()/record_tp().
+        let vuln_signature = derive_vuln_signature_for_persist(f, &title);
+        let signature_hash =
+            findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
+
+        // If a suppression rule exists for this combo, demote to FALSE_POSITIVE
+        // before insert. We still persist (audit trail) but the inbox stays clean.
+        // We have to commit the existing tx to call is_suppressed (which opens its
+        // own short-lived tx); cheap because we restart immediately below.
+        let suppressed =
+            fp_feedback::is_suppressed(pool, tenant_id, engine, &signature_hash).await;
+        let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
+
+        // Re-open the tx if it was committed during the suppression check. We
+        // keep one tx per finding for clean rollback semantics.
+        // (Implementation note: is_suppressed uses its own tx, so ours is still alive.)
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
         // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
         // FALSE_POSITIVE) must survive the next scan. last_seen_at tracks recurrence.
-        let res = sqlx::query(
+        let upserted_id: i64 = sqlx::query_scalar(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
-                  description, status, proof, poc_commitment_sha256, raw_data, discovered_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', $9, $10, $11, now())
+                  description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
+                  signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
+                  intel_enriched_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $14, $9, $10, $11, now(),
+                       $12, $13, $15, $16, $17,
+                       CASE WHEN $13 IS NOT NULL OR $15 THEN now() ELSE NULL END)
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
-                   run_id           = EXCLUDED.run_id,
-                   title            = EXCLUDED.title,
-                   severity         = EXCLUDED.severity,
-                   description      = EXCLUDED.description,
-                   proof            = COALESCE(NULLIF(EXCLUDED.proof, ''), vulnerabilities.proof),
-                   raw_data         = EXCLUDED.raw_data,
-                   updated_at       = now(),
-                   last_seen_at     = now(),
-                   seen_count       = vulnerabilities.seen_count + 1"#,
+                   run_id               = EXCLUDED.run_id,
+                   title                = EXCLUDED.title,
+                   severity             = EXCLUDED.severity,
+                   description          = EXCLUDED.description,
+                   proof                = COALESCE(NULLIF(EXCLUDED.proof, ''), vulnerabilities.proof),
+                   raw_data             = EXCLUDED.raw_data,
+                   signature_hash       = COALESCE(EXCLUDED.signature_hash, vulnerabilities.signature_hash),
+                   epss_score           = COALESCE(EXCLUDED.epss_score, vulnerabilities.epss_score),
+                   kev_listed           = vulnerabilities.kev_listed OR EXCLUDED.kev_listed,
+                   kev_known_ransomware = vulnerabilities.kev_known_ransomware OR EXCLUDED.kev_known_ransomware,
+                   kev_due_date         = COALESCE(EXCLUDED.kev_due_date, vulnerabilities.kev_due_date),
+                   intel_enriched_at    = COALESCE(EXCLUDED.intel_enriched_at, vulnerabilities.intel_enriched_at),
+                   updated_at           = now(),
+                   last_seen_at         = now(),
+                   seen_count           = vulnerabilities.seen_count + 1
+               RETURNING id"#,
         )
         .bind(run_id)
         .bind(tenant_id)
@@ -303,14 +425,182 @@ pub async fn persist_engine_findings(
         .bind(&description)
         .bind(&poc)
         .bind(&poc_commitment)
-        .bind(&raw_data)
-        .execute(&mut *tx)
+        .bind(&raw_data_enriched)
+        .bind(&signature_hash)
+        .bind(epss_score)
+        .bind(effective_status)
+        .bind(kev_listed)
+        .bind(kev_known_ransomware)
+        .bind(kev_due_date)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
 
-        inserted += res.rows_affected();
+        // ── Correlate into a finding_cluster ─────────────────────────────────
+        let source_label = engine;
+        let cluster = findings_correlator::upsert_cluster_for_finding(
+            &mut tx,
+            tenant_id,
+            client_id,
+            f,
+            ClusterAttrs {
+                target: &target_url,
+                engine,
+                source: source_label,
+                title: &title,
+                severity: &severity,
+                cwe: &cwe,
+                cve: if cve.is_empty() { None } else { Some(&cve) },
+                cvss: Some(cvss),
+                epss_score,
+                kev_listed,
+            },
+        )
+        .await
+        .ok();
+
+        // Stamp the new cluster_id onto the vulnerability row.
+        if let Some((cid, ref _key)) = cluster {
+            let _ = sqlx::query("UPDATE vulnerabilities SET cluster_id = $1 WHERE id = $2")
+                .bind(cid)
+                .bind(upserted_id)
+                .execute(&mut *tx)
+                .await;
+        }
+
+        inserted += 1;
+        let _ = upserted_id; // silence unused warning when not building tests
+
+        // ── Pentest reinforcement memory (fire-and-forget) ───────────────────
+        let payload = extract_string(
+            f,
+            &["payload", "probe_payload", "injected_payload", "fuzz_payload"],
+        );
+        if !payload.is_empty() && effective_status != "FALSE_POSITIVE" {
+            let host = target_url
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .unwrap_or(&target_url)
+                .split(':')
+                .next()
+                .unwrap_or(&target_url)
+                .to_string();
+            let server_hdr = extract_string(f, &["server", "server_header"]);
+            let powered_by = extract_string(f, &["x_powered_by", "powered_by"]);
+            let server_opt = if server_hdr.is_empty() {
+                None
+            } else {
+                Some(server_hdr.as_str())
+            };
+            let powered_opt = if powered_by.is_empty() {
+                None
+            } else {
+                Some(powered_by.as_str())
+            };
+            let fingerprint =
+                pentest_memory::build_target_fingerprint(&host, server_opt, powered_opt, &[]);
+            let response_status = f
+                .get("response_status")
+                .and_then(Value::as_u64)
+                .unwrap_or(200) as i32;
+            let response_body = f
+                .get("response_body")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .or_else(|| if poc.is_empty() { None } else { Some(poc.clone()) });
+            let evidence = title.chars().take(240).collect::<String>();
+            let pool_mem = (*pool).clone();
+            let eng = engine.to_string();
+            let cwe_mem = cwe.clone();
+            let sig_mem = vuln_signature.clone();
+            tokio::spawn(async move {
+                let _ = pentest_memory::record_win(
+                    &pool_mem,
+                    tenant_id,
+                    &eng,
+                    &cwe_mem,
+                    &sig_mem,
+                    &payload,
+                    &evidence,
+                    response_status,
+                    response_body.as_deref(),
+                    &fingerprint,
+                )
+                .await;
+            });
+        }
+
+        let internet_exposed =
+            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, f).await;
+
+        // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
+        // Built outside the tx so a slow webhook doesn't extend the DB lock.
+        // We snapshot the event here while we still have all the data and
+        // tokio::spawn the dispatch after commit.
+        let event = crate::soar_playbook::PlaybookEvent {
+            kind: "finding_persisted".to_string(),
+            tenant_id,
+            client_id: Some(client_id),
+            finding_id: Some(upserted_id),
+            cluster_id: cluster.map(|(cid, _)| cid),
+            title: title.clone(),
+            severity: severity.clone(),
+            source: engine.to_string(),
+            target: target_url.clone(),
+            status: effective_status.to_string(),
+            cvss: Some(cvss as f32),
+            epss: epss_score,
+            kev: kev_listed,
+            kev_known_ransomware,
+            cve: if cve.is_empty() { None } else { Some(cve.clone()) },
+            signature_hash: Some(signature_hash.clone()),
+            internet_exposed,
+        };
+        // `PgPool` is internally an Arc, so `(*pool).clone()` is a cheap refcount bump.
+        let pool_for_dispatch: PgPool = (*pool).clone();
+        tokio::spawn(async move {
+            // Best-effort: any failure inside dispatch is logged but doesn't
+            // affect the persist transaction.
+            let _ = crate::soar_playbook::dispatch_event(&pool_for_dispatch, event, false).await;
+        });
     }
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(inserted)
+}
+
+/// Same priority order as `findings_correlator::derive_vuln_signature`, kept here so
+/// the persist path doesn't need to expose the helper publicly. Centralising the
+/// extraction keeps `signature_hash` identical on both sides.
+fn derive_vuln_signature_for_persist(finding: &Value, fallback_title: &str) -> String {
+    for k in ["signature", "rule_id", "vuln_signature", "rule"] {
+        if let Some(s) = finding.get(k).and_then(Value::as_str) {
+            let t = s.trim();
+            if !t.is_empty() {
+                return t.to_ascii_lowercase();
+            }
+        }
+    }
+    if let Some(t) = finding.get("type").and_then(Value::as_str) {
+        let s = t.trim();
+        if !s.is_empty() {
+            return s.to_ascii_lowercase();
+        }
+    }
+    for k in ["cve", "cve_id"] {
+        if let Some(c) = finding.get(k).and_then(Value::as_str) {
+            let s = c.trim();
+            if !s.is_empty() {
+                return s.to_ascii_uppercase();
+            }
+        }
+    }
+    fallback_title
+        .chars()
+        .take(80)
+        .collect::<String>()
+        .to_ascii_lowercase()
 }

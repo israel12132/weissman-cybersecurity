@@ -5,6 +5,7 @@ import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
 import { apiFetch } from '../../lib/apiBase'
+import { useProductionEngines } from '../../lib/useProductionEngines'
 import Logo from '../Logo'
 import ProfileMenu from '../ui/ProfileMenu'
 import { useToast } from '../ui/Toaster'
@@ -27,6 +28,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addMessage, setAddMessage] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const { productionCount, catalogCount } = useProductionEngines()
+  const engineCountLabel = productionCount > 0 ? productionCount : catalogCount
 
   const handleAddClient = async (e) => {
     if (e) e.preventDefault()
@@ -167,7 +170,35 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           to="/engines"
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-400/80 hover:bg-cyan-950/30 hover:text-cyan-300 transition-colors"
         >
-          <span className="text-cyan-500/60">⬡</span> Engine Matrix (All 79)
+          <span className="text-cyan-500/60">⬡</span> Engine Matrix ({engineCountLabel} live)
+        </Link>
+        <Link
+          id="nav-clients"
+          to="/clients"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-purple-400/80 hover:bg-purple-950/30 hover:text-purple-300 transition-colors"
+        >
+          <span>🏢</span> {t('nav.clients')}
+        </Link>
+        <Link
+          id="nav-jobs"
+          to="/jobs"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-slate-400/80 hover:bg-slate-800/40 hover:text-slate-200 transition-colors"
+        >
+          <span>⏱</span> {t('nav.jobs')}
+        </Link>
+        <Link
+          id="nav-ask-weissman"
+          to="/ask"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-cyan-300/90 hover:bg-cyan-950/30 hover:text-cyan-200 transition-colors font-semibold"
+        >
+          <span>💬</span> {t('nav.ask_weissman')}
+        </Link>
+        <Link
+          id="nav-playbooks"
+          to="/playbooks"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-300 transition-colors"
+        >
+          <span>⚡</span> {t('nav.playbooks')}
         </Link>
         <Link id="nav-threat-emulation" to="/threat-emulation" className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-mono text-red-400/70 hover:bg-red-950/20 hover:text-red-300 transition-colors">
           <span>◈</span> APT Emulation
