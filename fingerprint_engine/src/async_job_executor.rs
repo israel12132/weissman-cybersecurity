@@ -9,6 +9,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 
 const TOP_TIER_ENGINES: &[&str] = &[
+    "nexus_sovereign_swarm",
     "kill_chain",
     "oast_oob",
     "deception_honeypot",
@@ -118,12 +119,16 @@ pub async fn execute_job(
             let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
             let _ = tx.commit().await;
+            let job_params = p.clone();
             let ctx = crate::engine_dispatch::EngineRunContext {
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
                 github_token,
                 llm_base_url: llm_base.unwrap_or_default(),
                 llm_model: llm_model.unwrap_or_default(),
+                app_pool: Some(app_pool.clone()),
+                client_id: client_id_opt,
+                job_params,
                 ..Default::default()
             };
             if !weissman_core::models::engine::is_production_engine_id(engine) {

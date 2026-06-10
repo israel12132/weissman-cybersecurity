@@ -25,6 +25,8 @@ pub struct EngineRunContext {
     pub app_pool: Option<std::sync::Arc<sqlx::PgPool>>,
     pub agents: Option<std::sync::Arc<crate::endpoint_agents::AgentRegistry>>,
     pub client_id: Option<i64>,
+    /// Extra scan parameters forwarded from POST /api/command-center/scan body.
+    pub job_params: serde_json::Value,
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {
@@ -247,6 +249,9 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         "adversarial_ml" => crate::adversarial_ml_engine::run_adversarial_ml_result(target).await,
         "autonomous_pentest" => {
             crate::autonomous_pentest_engine::run_autonomous_pentest_result(target).await
+        }
+        "nexus_sovereign_swarm" => {
+            crate::nexus_sovereign_swarm_engine::run_nexus_sovereign_swarm_result(target, ctx).await
         }
         "aws_attack" => crate::aws_attack_engine::run_aws_attack_result(target).await,
         "azure_attack" => crate::azure_attack_engine::run_azure_attack_result(target).await,

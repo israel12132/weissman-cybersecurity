@@ -28,7 +28,7 @@ const ENGINE_TYPE_MAP = {
     'cicd_pipeline','container_registry','sbom_analyzer','typosquatting_monitor',
     'kill_chain','oast_oob','deception_honeypot','digital_twin','zero_day_prediction',
     'threat_emulation','microsecond_timing','semantic_ai_fuzz','ai_adversarial_redteam',
-    'llm_redteam','adversarial_ml','autonomous_pentest','llm_path_fuzz','supply_chain',
+    'llm_redteam','adversarial_ml','autonomous_pentest','nexus_sovereign_swarm','llm_path_fuzz','supply_chain',
     'cors_misconfiguration','swagger_abuse','soap_injection','odata_injection',
     'css_injection','template_injection_adv','http_parameter_pollution','api_mass_assignment',
     'clickjacking_engine','subdomain_takeover','file_inclusion_rfi','deserialization_net',
@@ -83,7 +83,8 @@ const ENGINE_TYPE_MAP = {
     'llm_agent_hijack','rag_poisoning_engine','adversarial_examples','data_poisoning_engine',
     'deepfake_synthesis','llm_dos_attack','multimodal_ai_attack','ai_bias_exploit',
     'gpt_plugin_attack','autonomous_ai_escape','llm_memory_extraction','neural_backdoor_detect',
-    'ai_watermark_bypass','federated_learning_attack','llm_red_team_advanced','model_stealing_engine',
+    'ai_watermark_bypass',    'federated_learning_attack','llm_red_team_advanced','model_stealing_engine',
+    'nexus_sovereign_swarm',
   ]),
   data_exfil: new Set([
     'dns_exfil_engine','http_covert_exfil','cloud_exfil_engine','encrypted_exfil',
@@ -134,6 +135,16 @@ const PARAM_DEFS = {
   semantic_ai_fuzz:[{ key:'llm_base_url', label:'LLM Base URL',                   type:'text',     placeholder:'http://127.0.0.1:8000/v1', defaultVal:'' },
                    { key:'llm_model',   label:'LLM Model',                         type:'text',     placeholder:'gpt-4o', defaultVal:'' },
                    { key:'temperature', label:'Temperature',                        type:'number',   placeholder:'0.7', defaultVal:'0.7', min:0, max:2 }],
+  nexus_sovereign_swarm:[
+                   { key:'agent_count', label:'Agent Deployment Count',          type:'number',   placeholder:'2048', defaultVal:'2048', min:64, max:10000 },
+                   { key:'hive_mode',   label:'Hive Coordination Mode',            type:'select',   options:['emergent','parallel','stealth','blitz'], defaultVal:'emergent' },
+                   { key:'llm_strategy',label:'Oracle LLM Strategy',               type:'select',   options:['adaptive','aggressive','stealth','oracle'], defaultVal:'adaptive' },
+                   { key:'archetypes',  label:'Agent Archetypes (comma-sep)',      type:'text',     placeholder:'scout,exploiter,correlator,stealth,oracle', defaultVal:'scout,exploiter,correlator,stealth,oracle' },
+                   { key:'endpoint_bridge', label:'Bridge Endpoint Agents',        type:'select',   options:['true','false'], defaultVal:'true' },
+                   { key:'edge_distribution', label:'Edge POP Distribution',       type:'select',   options:['true','false'], defaultVal:'true' },
+                   { key:'convergence_threshold', label:'Hive Consensus Threshold', type:'number', placeholder:'0.85', defaultVal:'0.85', min:0.5, max:0.99, step:0.01 },
+                   { key:'llm_base_url', label:'Oracle LLM Base URL',             type:'text',     placeholder:'http://127.0.0.1:11434/v1', defaultVal:'' },
+                   { key:'llm_model',   label:'Oracle LLM Model',                  type:'text',     placeholder:'gpt-4o', defaultVal:'' }],
   aws_attack:      [{ key:'aws_region',   label:'AWS Region',                      type:'text',     placeholder:'us-east-1', defaultVal:'us-east-1' },
                    { key:'resource_types',label:'Resource Types',                  type:'text',     placeholder:'s3,iam,ec2', defaultVal:'s3,iam,ec2' }],
   azure_attack:    [{ key:'azure_region', label:'Azure Region',                    type:'text',     placeholder:'eastus', defaultVal:'eastus' }],
@@ -587,6 +598,9 @@ export default function EngineDetail() {
           </span>
           {isTopTierEngine(engineId) && (
             <Link to={`/engines/top-tier/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10">Top-Tier</Link>
+          )}
+          {engineId === 'nexus_sovereign_swarm' && (
+            <Link to="/nexus-swarm" className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-violet-500/40 text-violet-300 hover:bg-violet-500/10">Swarm Command Center</Link>
           )}
           {DEDICATED_ENGINE_IDS.has(engineId) && (
             <Link to={`/engines/business/${engineId}`} className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">Business Profile</Link>

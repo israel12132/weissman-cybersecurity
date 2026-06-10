@@ -139,7 +139,7 @@ const AI_QUOTA_COUNT_SQL: &str = r#"
             kind = 'command_center_engine'
             AND COALESCE(payload->>'engine', '') IN (
                 'semantic_ai_fuzz', 'ai_adversarial_redteam', 'llm_path_fuzz', 'ollama_fuzz',
-                'http_feedback_fuzz', 'poe_synthesis'
+                'http_feedback_fuzz', 'poe_synthesis', 'nexus_sovereign_swarm'
             )
         )
     )
@@ -330,6 +330,7 @@ struct ScanBodyFields {
     ai_endpoint: Option<Value>,
     repo_url: Option<String>,
     base_payload: String,
+    extras: std::collections::HashMap<String, Value>,
 }
 
 fn extract_fields(body: &Value) -> ScanBodyFields {
@@ -351,12 +352,25 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    let reserved = [
+        "target", "client_id", "ai_endpoint", "repo_url", "base_payload", "engine", "timeout",
+        "stealth", "stealth_mode",
+    ];
+    let mut extras = std::collections::HashMap::new();
+    if let Some(obj) = body.as_object() {
+        for (k, v) in obj {
+            if !reserved.contains(&k.as_str()) {
+                extras.insert(k.clone(), v.clone());
+            }
+        }
+    }
     ScanBodyFields {
         target,
         client_id,
         ai_endpoint,
         repo_url,
         base_payload,
+        extras,
     }
 }
 
@@ -489,6 +503,7 @@ fn entitlement_for_fallback_engine(engine: &str) -> EntitlementTier {
             | "ollama_fuzz"
             | "http_feedback_fuzz"
             | "poe_synthesis"
+            | "nexus_sovereign_swarm"
     ) {
         EntitlementTier::AiHeavy
     } else {
@@ -593,7 +608,29 @@ fn build_payload(
             } else {
                 engine_for_default
             };
-            Ok(json!({ "engine": engine_norm, "target": &ctx.target }))
+            let mut p = json!({ "engine": engine_norm, "target": &ctx.target });
+            if let Some(ref cid) = ctx.client_id {
+                obj_mut(&mut p)?.insert("client_id".into(), cid.clone());
+            }
+            if engine_norm == "nexus_sovereign_swarm" {
+                let obj = obj_mut(&mut p)?;
+                for key in [
+                    "agent_count",
+                    "hive_mode",
+                    "llm_strategy",
+                    "endpoint_bridge",
+                    "edge_distribution",
+                    "convergence_threshold",
+                    "archetypes",
+                    "llm_base_url",
+                    "llm_model",
+                ] {
+                    if let Some(v) = ctx.extras.get(key) {
+                        obj.insert(key.into(), v.clone());
+                    }
+                }
+            }
+            Ok(p)
         }
     }
 }

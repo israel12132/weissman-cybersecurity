@@ -230,6 +230,14 @@ export const ENGINES_REGISTRY = [
     description: 'Fully autonomous multi-step penetration test orchestrated by AI planner',
     requiresTarget: true,
   },
+  {
+    id: 'nexus_sovereign_swarm',
+    label: 'Nexus Sovereign Swarm Intelligence',
+    group: 'ai',
+    mitre: 'T1595',
+    description: 'Hyper-scale hive-mind deployment of thousands of AI micro-agents with emergent consensus intelligence — the crown jewel of autonomous security orchestration',
+    requiresTarget: true,
+  },
 
   // ── GROUP 4: Cloud / Infra ───────────────────────────────────────────────────
   {

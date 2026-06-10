@@ -99,6 +99,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "llm_redteam",
     "adversarial_ml",
     "autonomous_pentest",
+    "nexus_sovereign_swarm",
     "http_feedback_fuzz",
     "aws_attack",
     "azure_attack",
@@ -378,6 +379,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "llm_redteam",
     "adversarial_ml",
     "autonomous_pentest",
+    "nexus_sovereign_swarm",
     // Cloud / Infra
     "aws_attack",
     "azure_attack",

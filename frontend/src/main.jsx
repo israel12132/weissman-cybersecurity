@@ -84,6 +84,7 @@ const FeedbackLoopVerification = React.lazy(() => import('./pages/FeedbackLoopVe
 const CouncilHitlQueue = React.lazy(() => import('./pages/CouncilHitlQueue'))
 const RoeApprovals = React.lazy(() => import('./pages/RoeApprovals'))
 const SsoDashboard = React.lazy(() => import('./pages/SsoDashboard'))
+const NexusSovereignSwarm = React.lazy(() => import('./pages/NexusSovereignSwarm'))
 const DigitalTwinSimulator = React.lazy(() => import('./pages/DigitalTwinSimulator'))
 const FindingsCommandCenter = React.lazy(() => import('./pages/FindingsCommandCenter'))
 const AdminManagement = React.lazy(() => import('./pages/AdminManagement'))
@@ -205,6 +206,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="sso-config" element={<SsoDashboard />} />
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
+            <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
             <Route path="threat-intel" element={<ThreatIntelHub />} />
             <Route path="intel-map" element={<App />} />

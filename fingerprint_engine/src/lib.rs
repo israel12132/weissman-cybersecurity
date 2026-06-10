@@ -174,6 +174,7 @@ pub mod cache_poisoning_engine;
 pub mod adversarial_ml_engine;
 pub mod antiforensics_engine;
 pub mod autonomous_pentest_engine;
+pub mod nexus_sovereign_swarm_engine;
 pub mod aws_attack_engine;
 pub mod azure_attack_engine;
 pub mod bgp_dns_hijacking_engine;

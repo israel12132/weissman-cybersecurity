@@ -654,5 +654,15 @@
     "rate_limited": "Too many requests. Retry in {{seconds}}s.",
     "not_found": "Resource not found.",
     "unknown_route": "Page not found."
+  },
+  "nexusSwarm": {
+    "title": "Nexus Sovereign Swarm Intelligence",
+    "subtitle": "Hyper-scale autonomous hive-mind — thousands of AI agents, emergent consensus, breakthrough SIQ scoring",
+    "hive_viz": "Live Hive Visualization",
+    "siq": "Swarm Intelligence Quotient",
+    "params": "Deployment Parameters",
+    "deploy": "Deploy Sovereign Swarm",
+    "deploying": "Deploying Swarm…",
+    "awaiting": "Awaiting deployment…"
   }
 }

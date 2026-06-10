@@ -241,7 +241,6 @@
     "ip_ranges_label": "טווחי IP:",
     "scan_confirm_full": "להוסיף חבילת סריקה בסיסית (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) ל-\"{{name}}\"?",
     "track_suffix": "לאחר השלמת הסריקות.",
-    "scored_clients": "{{scored}}/{{total}} לקוחות עם ציון",
     "add_new": "+ לקוח חדש",
     "add_first": "הוסף לקוח ראשון",
     "worst_case_loss": "הפסד מקרה גרוע",
@@ -263,7 +262,6 @@
     "scan_title": "הוסף חבילת סריקה בסיסית לתור",
     "track_jobs": "עקוב אחר ההתקדמות בלוח המשימות",
     "track_findings": "מרכז הממצאים",
-    "track_suffix": "לאחר השלמת הסריקות.",
     "loading": "טוען לקוחות…",
     "no_clients": "אין לקוחות עדיין",
     "no_clients_hint": "התחל בהוספת ארגון הלקוח הראשון שלך.",
@@ -487,5 +485,15 @@
     "superadmin": "מנהל-על",
     "ceo": "מנכ\"ל",
     "tenant": "ארגון {{id}}"
+  },
+  "nexusSwarm": {
+    "title": "Nexus Sovereign Swarm Intelligence",
+    "subtitle": "Hive-mind אוטונומי בקנה מידה ענק — אלפי סוכני AI, הסכמה מתפתחת, ציון SIQ פריצת-דרך",
+    "hive_viz": "הדמיית Hive חיה",
+    "siq": "מדד אינטליגנציה של ה-Swarm",
+    "params": "פרמטרי פריסה",
+    "deploy": "פרוס Swarm ריבוני",
+    "deploying": "מפריס Swarm…",
+    "awaiting": "ממתין לפריסה…"
   }
 }
