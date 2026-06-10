@@ -1817,7 +1817,7 @@ dependencies = [
  "aws-sdk-sts",
  "aws-types",
  "axum",
- "base64 0.21.7",
+ "base64 0.22.1",
  "bcrypt",
  "bollard",
  "bytes",
