@@ -31,18 +31,19 @@ const SEV_COLORS = {
 }
 
 const ACTION_KINDS = [
-  { kind: 'set_status',   label: 'Set Status',     params: { status: 'IN_PROGRESS' } },
-  { kind: 'slack_notify', label: 'Slack / Webhook', params: { url: '', template: '{{severity}}: {{title}} on {{target}}' } },
-  { kind: 'webhook',      label: 'HTTP Webhook',    params: { url: '', template: '{{title}}' } },
-  { kind: 'open_pr',      label: 'Auto-PR',         params: { title: 'Auto-fix: {{title}}' } },
-  { kind: 'isolate_host', label: 'Isolate Host',    params: { target: '{{target}}', duration_seconds: 900 } },
-  { kind: 'page_oncall',  label: 'Page On-call',    params: { team: 'sec-oncall', severity: '{{severity}}' } },
-  { kind: 'http_post',    label: 'HTTP POST',       params: { url: '', body: { } } },
+  { kind: 'set_status',   labelKey: 'playbooks.action.set_status',   params: { status: 'IN_PROGRESS' } },
+  { kind: 'slack_notify', labelKey: 'playbooks.action.slack_notify', params: { url: '', template: '{{severity}}: {{title}} on {{target}}' } },
+  { kind: 'webhook',      labelKey: 'playbooks.action.webhook',      params: { url: '', template: '{{title}}' } },
+  { kind: 'open_pr',      labelKey: 'playbooks.action.open_pr',      params: { title: 'Auto-fix: {{title}}' } },
+  { kind: 'isolate_host', labelKey: 'playbooks.action.isolate_host', params: { target: '{{target}}', duration_seconds: 900 } },
+  { kind: 'page_oncall',  labelKey: 'playbooks.action.page_oncall',  params: { team: 'sec-oncall', severity: '{{severity}}' } },
+  { kind: 'http_post',    labelKey: 'playbooks.action.http_post',    params: { url: '', body: { } } },
 ]
 
-const EXAMPLE_PLAYBOOK = {
-  name: 'Critical KEV \u2192 isolate + page',
-  description: 'Any critical finding with a CISA-KEV listed CVE on an internet-exposed asset isolates the host and pages on-call.',
+function buildExamplePlaybook(t) {
+  return {
+  name: t('playbooks.example_name'),
+  description: t('playbooks.example_description'),
   enabled: true,
   trigger: {
     severity: ['critical'],
@@ -56,6 +57,7 @@ const EXAMPLE_PLAYBOOK = {
     { kind: 'page_oncall',  params: { team: 'sec-oncall', severity: 'critical' } },
     { kind: 'slack_notify', params: { template: 'KEV CRITICAL on {{target}}: {{title}} (cvss={{cvss}} epss={{epss}})' } },
   ],
+  }
 }
 
 const STATUS_META = {
@@ -133,7 +135,7 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
   )
 }
 
-function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemove, onParamsChange, invalidLabel }) {
+function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemove, onParamsChange, invalidLabel, moveUpLabel, moveDownLabel, removeLabel }) {
   const [paramsText, setParamsText] = useState(JSON.stringify(action.params || {}, null, 2))
   const [jsonError, setJsonError] = useState(false)
 
@@ -173,13 +175,13 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
               <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-white/35">{action.kind}</span>
             </div>
             <div className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label="Move up">
+              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label={moveUpLabel}>
                 <ChevronUp className="h-4 w-4" />
               </button>
-              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label="Move down">
+              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label={moveDownLabel}>
                 <ChevronDown className="h-4 w-4" />
               </button>
-              <button type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Remove">
+              <button type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -290,7 +292,7 @@ export default function PlaybookBuilder() {
 
   const insertExample = () => {
     setSelected(null)
-    setDraft(JSON.parse(JSON.stringify(EXAMPLE_PLAYBOOK)))
+    setDraft(JSON.parse(JSON.stringify(buildExamplePlaybook(t))))
     setStatusMsg({ kind: 'info', text: t('playbooks.loaded_example') })
     setFireResult(null)
   }
@@ -446,10 +448,13 @@ export default function PlaybookBuilder() {
     return t('playbooks.summary', { count: list.length, enabled, failures: fails })
   }, [list, t])
 
-  const actionLabel = (kind) => ACTION_KINDS.find((a) => a.kind === kind)?.label || kind
+  const actionLabel = (kind) => {
+    const entry = ACTION_KINDS.find((a) => a.kind === kind)
+    return entry?.labelKey ? t(entry.labelKey) : kind
+  }
 
   return (
-    <div className="playbook-builder-root min-h-[100dvh] text-slate-100">
+    <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] text-slate-100 outline-none">
       {/* Header */}
       <header className="border-b border-white/[0.06] bg-[#09090b]/80 px-5 py-5 backdrop-blur-xl lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -497,7 +502,7 @@ export default function PlaybookBuilder() {
           <div className="sticky top-0 p-4">
             <h2 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
               <FileJson className="h-3.5 w-3.5" />
-              Library
+              {t('playbooks.library')}
             </h2>
             {loadError && (
               <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300 ring-1 ring-rose-500/25">{loadError}</p>
@@ -531,7 +536,7 @@ export default function PlaybookBuilder() {
                               ? 'bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-500/30'
                               : 'bg-white/[0.04] text-white/35 ring-1 ring-white/[0.08]'
                           }`}>
-                            {pb.enabled ? t('playbooks.on') : t('playbooks.off')}
+                            {pb.enabled ? t('common.on') : t('common.off')}
                           </span>
                         </div>
                         <div className="mt-1.5 flex items-center gap-2 text-[10px] text-white/35">
@@ -609,7 +614,7 @@ export default function PlaybookBuilder() {
                                 : 'bg-white/[0.03] ring-white/[0.08] text-white/40 hover:text-white/65'
                             }`}
                           >
-                            {s}
+                            {t(`playbooks.severity.${s}`)}
                           </button>
                         )
                       })}
@@ -673,7 +678,7 @@ export default function PlaybookBuilder() {
                       onClick={() => addAction(a.kind)}
                       className="rounded-lg bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/55 ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
                     >
-                      + {a.label}
+                      + {t(a.labelKey)}
                     </button>
                   ))}
                 </div>
@@ -693,6 +698,9 @@ export default function PlaybookBuilder() {
                         onRemove={() => removeAction(i)}
                         onParamsChange={(json) => updateActionParams(i, json)}
                         invalidLabel={t('playbooks.json_invalid')}
+                        moveUpLabel={t('a11y.move_up')}
+                        moveDownLabel={t('a11y.move_down')}
+                        removeLabel={t('a11y.remove_action')}
                       />
                     ))}
                   </ul>

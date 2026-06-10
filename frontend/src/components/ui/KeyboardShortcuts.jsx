@@ -1,45 +1,34 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Command, Keyboard, Navigation, Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
-const SHORTCUTS = [
-  { keys: '?', desc: 'Show this help', global: true, section: 'general' },
-  { keys: '/', desc: 'Focus search', global: true, section: 'general' },
-  { keys: 'g h', desc: 'Go to Cockpit (home)', section: 'nav' },
-  { keys: 'g e', desc: 'Go to Engines', section: 'nav' },
-  { keys: 'g f', desc: 'Go to Findings', section: 'nav' },
-  { keys: 'g v', desc: 'Go to Vulnerability Intel', section: 'nav' },
-  { keys: 'g a', desc: 'Go to Agents', section: 'nav' },
-  { keys: 'g c', desc: 'Go to Clients', section: 'nav' },
-  { keys: 'g j', desc: 'Go to Jobs', section: 'nav' },
-  { keys: 'g q', desc: 'Go to Ask Weissman', section: 'nav' },
-  { keys: 'g p', desc: 'Go to SOAR Playbooks', section: 'nav' },
-  { keys: 'g s', desc: 'Go to System Configuration', section: 'nav' },
-  { keys: 'Esc', desc: 'Close dialogs / drawers', global: true, section: 'general' },
+const SHORTCUT_DEFS = [
+  { keys: '?', descKey: 'shortcuts.show_help', global: true },
+  { keys: '/', descKey: 'shortcuts.focus_search', global: true },
+  { keys: 'g h', descKey: 'shortcuts.go_cockpit' },
+  { keys: 'g e', descKey: 'shortcuts.go_engines' },
+  { keys: 'g f', descKey: 'shortcuts.go_findings' },
+  { keys: 'g v', descKey: 'shortcuts.go_vuln_intel' },
+  { keys: 'g a', descKey: 'shortcuts.go_agents' },
+  { keys: 'g c', descKey: 'shortcuts.go_clients' },
+  { keys: 'g j', descKey: 'shortcuts.go_jobs' },
+  { keys: 'g q', descKey: 'shortcuts.go_ask' },
+  { keys: 'g p', descKey: 'shortcuts.go_playbooks' },
+  { keys: 'g s', descKey: 'shortcuts.go_system_config' },
+  { keys: 'Esc', descKey: 'shortcuts.close_dialogs', global: true },
 ]
-
-const SECTIONS = [
-  { id: 'general', label: 'General', Icon: Command },
-  { id: 'nav', label: 'Navigation', Icon: Navigation },
-]
-
-function Kbd({ children }) {
-  return (
-    <kbd className="inline-flex items-center justify-center min-w-[1.65rem] px-2 py-1 rounded-md border border-white/12 bg-gradient-to-b from-white/[0.08] to-white/[0.03] text-cyan-200/90 text-[11px] font-mono shadow-[0_1px_0_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
-      {children}
-    </kbd>
-  )
-}
 
 /**
  * Global keyboard-shortcut handler. Listens for "g + <letter>" sequences for navigation and
  * single-key shortcuts (?, /). Shows a help overlay on '?'.
- *
- * Mount once near the router root.
  */
 export default function KeyboardShortcuts() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [helpOpen, setHelpOpen] = useState(false)
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, helpOpen)
 
   useEffect(() => {
     let lastG = 0
@@ -93,83 +82,52 @@ export default function KeyboardShortcuts() {
   }, [navigate])
 
   if (!helpOpen) return null
-
   return (
-    <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4">
       <button
         type="button"
         onClick={() => setHelpOpen(false)}
-        className="absolute inset-0 bg-black/75 backdrop-blur-md"
-        aria-label="Close shortcuts"
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        aria-label={t('a11y.close_shortcuts')}
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="kbd-help-title"
-        className="relative w-full max-w-xl rounded-2xl border border-white/12 bg-[#0a0f1a]/97 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.55)] overflow-hidden animate-slide-up"
+        className="relative w-full max-w-lg rounded-2xl border border-white/15 bg-[#0b1120]/98 backdrop-blur-md p-6 shadow-2xl"
       >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" aria-hidden="true" />
-
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/6">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center justify-center w-9 h-9 rounded-lg border border-cyan-500/20 bg-cyan-500/10">
-              <Keyboard className="w-4 h-4 text-cyan-400" strokeWidth={2} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 id="kbd-help-title" className="text-base font-semibold text-white/92">
-                Keyboard shortcuts
-              </h2>
-              <p className="text-[11px] text-white/40 mt-0.5">Press <Kbd>?</Kbd> anytime to toggle</p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="kbd-help-title" className="text-base font-semibold text-white/90">
+            {t('a11y.keyboard_shortcuts')}
+          </h2>
           <button
             type="button"
             onClick={() => setHelpOpen(false)}
-            className="p-2 rounded-lg text-white/40 hover:text-white/90 hover:bg-white/6 transition-colors"
-            style={{ transitionDuration: 'var(--duration-fast)' }}
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" strokeWidth={2.5} />
-          </button>
+            className="text-white/40 hover:text-white text-2xl leading-none"
+            aria-label={t('a11y.close')}
+          >×</button>
         </div>
-
-        <div className="px-6 py-4 max-h-[min(60vh,28rem)] overflow-y-auto custom-scroll space-y-5">
-          {SECTIONS.map(({ id, label, Icon }) => {
-            const rows = SHORTCUTS.filter((s) => s.section === id)
-            if (rows.length === 0) return null
-            return (
-              <section key={id}>
-                <div className="flex items-center gap-2 mb-2.5">
-                  <Icon className="w-3.5 h-3.5 text-cyan-400/70" strokeWidth={2} aria-hidden="true" />
-                  <h3 className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/35">{label}</h3>
-                </div>
-                <div className="rounded-xl border border-white/6 divide-y divide-white/5 overflow-hidden">
-                  {rows.map(({ keys, desc }) => (
-                    <div key={keys} className="flex items-center gap-4 px-4 py-2.5 hover:bg-white/[0.02] transition-colors" style={{ transitionDuration: 'var(--duration-fast)' }}>
-                      <div className="flex items-center gap-1.5 shrink-0 min-w-[7.5rem]">
-                        {keys.split(' ').map((k, i) => (
-                          <React.Fragment key={i}>
-                            {i > 0 && <span className="text-[10px] text-white/25 font-mono">then</span>}
-                            <Kbd>{k}</Kbd>
-                          </React.Fragment>
-                        ))}
-                      </div>
-                      <span className="text-[13px] text-white/72">{desc}</span>
-                    </div>
+        <table className="w-full text-[13px] font-mono data-grid">
+          <tbody className="divide-y divide-white/5">
+            {SHORTCUT_DEFS.map(({ keys, descKey }) => (
+              <tr key={keys}>
+                <td className="py-2 pe-4 w-32">
+                  {keys.split(' ').map((k, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span className="text-white/30 mx-1">{t('a11y.then')}</span>}
+                      <kbd className="inline-block px-2 py-0.5 rounded border border-white/15 bg-white/5 text-cyan-200 text-[11px]">{k}</kbd>
+                    </React.Fragment>
                   ))}
-                </div>
-              </section>
-            )
-          })}
-        </div>
-
-        <div className="px-6 py-3.5 border-t border-white/6 bg-white/[0.02] flex items-center justify-between gap-3 text-[10px] text-white/35 font-mono">
-          <span className="flex items-center gap-1.5">
-            <Search className="w-3 h-3 opacity-60" aria-hidden="true" />
-            <span><Kbd>/</Kbd> focuses global search</span>
-          </span>
-          <span><Kbd>Esc</Kbd> to close</span>
-        </div>
+                </td>
+                <td className="py-2 text-white/70">{t(descKey)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-[10px] text-white/35 mt-4">
+          {t('a11y.press_esc_to_close')}
+        </p>
       </div>
     </div>
   )

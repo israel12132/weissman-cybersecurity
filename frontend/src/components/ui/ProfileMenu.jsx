@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
 const QUICK_LINKS = [
   { to: '/ask', labelKey: 'nav.ask_weissman', icon: MessageSquare },
@@ -34,7 +35,9 @@ export default function ProfileMenu({ variant = 'header' }) {
   const { session, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const menuRef = useRef(null)
   const isSidebar = variant === 'sidebar'
+  useFocusTrap(menuRef, open)
 
   useEffect(() => {
     if (!open) return undefined
@@ -66,6 +69,7 @@ export default function ProfileMenu({ variant = 'header' }) {
         className={triggerClass}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={t('a11y.open_account_menu')}
       >
         <span className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-[11px] font-bold text-black flex items-center justify-center shrink-0">
           {initial}
@@ -74,12 +78,12 @@ export default function ProfileMenu({ variant = 'header' }) {
           <span className="flex-1 min-w-0 text-start">
             <span className="block text-[11px] text-white/85 font-mono truncate">{email}</span>
             <span className="block text-[9px] uppercase tracking-widest text-white/35 mt-0.5">
-              {isSuper ? 'CEO' : role}
+              {isSuper ? t('profile.ceo') : role}
             </span>
           </span>
         ) : (
           <span className="hidden sm:inline text-[11px] font-mono uppercase tracking-widest">
-            {isSuper ? 'CEO' : role}
+            {isSuper ? t('profile.ceo') : role}
           </span>
         )}
         <ChevronDown
@@ -90,8 +94,9 @@ export default function ProfileMenu({ variant = 'header' }) {
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
-          aria-label="Account menu"
+          aria-label={t('a11y.account_menu')}
           className={`${
             isSidebar ? 'absolute bottom-full mb-2 start-0 end-0' : 'absolute end-0 mt-2'
           } w-64 rounded-xl border border-white/10 bg-[#0b1120]/98 backdrop-blur-md shadow-2xl z-50 p-3 space-y-3`}
@@ -99,7 +104,7 @@ export default function ProfileMenu({ variant = 'header' }) {
           <div className="px-1">
             <div className="text-[13px] text-white/85 font-mono truncate">{email}</div>
             <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
-              {isSuper ? 'Superadmin' : role}{session?.tenant_id ? ` · tenant ${session.tenant_id}` : ''}
+              {isSuper ? t('profile.superadmin') : role}{session?.tenant_id ? ` · ${t('profile.tenant', { id: session.tenant_id })}` : ''}
             </div>
           </div>
 

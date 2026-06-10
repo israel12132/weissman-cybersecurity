@@ -499,33 +499,33 @@ export default function EngineClientCatalog() {
 
       <div className="grid xl:grid-cols-[300px_1fr] gap-6">
         {/* ── Left: Client Profile Cards ─────────────────────────────── */}
-        <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">
-            Client Profiles
+        <div className="space-y-2.5">
+          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/35 mb-3 px-1">
+            {t('engines.catalog_profiles')}
           </h2>
           {CLIENT_PROFILES.map((profile) => (
             <ProfileCard
               key={profile.id}
               profile={profile}
               count={profileEngines(profile).length}
+              enginesLabel={t('engines.catalog_engines_count', { count: profileEngines(profile).length })}
               active={profile.id === activeProfileId}
               onClick={() => setActiveProfileId(profile.id)}
             />
           ))}
 
-          {/* Quick links */}
-          <div className="pt-4 space-y-1.5">
+          <div className="pt-4 space-y-2 px-1">
             <Link
               to="/engines"
-              className="flex items-center gap-2 text-[11px] font-mono text-white/35 hover:text-cyan-300 transition-colors"
+              className="flex items-center gap-2 text-[11px] font-mono text-white/40 hover:text-cyan-300 transition-colors"
             >
-              ⚡ Engine Matrix (full view)
+              ⚡ {t('engines.catalog_matrix_link')}
             </Link>
             <Link
               to="/threat-intel"
-              className="flex items-center gap-2 text-[11px] font-mono text-white/35 hover:text-cyan-300 transition-colors"
+              className="flex items-center gap-2 text-[11px] font-mono text-white/40 hover:text-cyan-300 transition-colors"
             >
-              🗺️ Threat Intel Hub (MITRE map)
+              🗺️ {t('engines.catalog_threat_intel_link')}
             </Link>
           </div>
         </div>
@@ -534,12 +534,17 @@ export default function EngineClientCatalog() {
         <div className="min-w-0 space-y-4">
           {/* Profile header */}
           <div
-            className="rounded-xl border p-5"
+            className="rounded-2xl border p-5 md:p-6 relative overflow-hidden"
             style={{
-              borderColor: `${activeProfile.color}30`,
-              background: `${activeProfile.color}08`,
+              borderColor: `${activeProfile.color}35`,
+              background: `linear-gradient(135deg, ${activeProfile.color}10, rgba(0,0,0,0.4))`,
+              boxShadow: `inset 0 1px 0 ${activeProfile.color}20`,
             }}
           >
+            <div
+              className="absolute inset-x-0 top-0 h-px"
+              style={{ background: `linear-gradient(90deg, transparent, ${activeProfile.color}60, transparent)` }}
+            />
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl">{activeProfile.icon}</span>
               <div>
@@ -574,8 +579,8 @@ export default function EngineClientCatalog() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search engines, MITRE IDs, descriptions…"
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder-white/20 font-mono focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('engines.catalog_search_placeholder')}
+                className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
               />
               {search && (
                 <button
@@ -587,22 +592,22 @@ export default function EngineClientCatalog() {
                 </button>
               )}
             </div>
-            <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">
-              {filteredEngines.length}/{totalProfileEngines} · {totalSelected} selected
+            <span className="text-[10px] font-mono text-white/35 whitespace-nowrap px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
+              {t('engines.catalog_shown', { shown: filteredEngines.length, total: totalProfileEngines, selected: totalSelected })}
             </span>
             <button
               type="button"
               onClick={handleSelectAll}
-              className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
+              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/45 hover:text-white/75 hover:border-white/20 transition-colors"
             >
-              Select All
+              {t('engines.catalog_select_all')}
             </button>
             <button
               type="button"
               onClick={handleDeselectAll}
-              className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
+              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/45 hover:text-white/75 hover:border-white/20 transition-colors"
             >
-              Clear
+              {t('engines.catalog_clear_selection')}
             </button>
           </div>
 
@@ -616,7 +621,7 @@ export default function EngineClientCatalog() {
                   animate={{ opacity: 1 }}
                   className="py-12 text-center text-white/25 text-xs font-mono"
                 >
-                  No engines match your search.
+                  {t('engines.catalog_no_match')}
                 </motion.div>
               ) : (
                 <motion.div key={`${activeProfileId}-${search}`} className="space-y-6">
@@ -641,8 +646,8 @@ export default function EngineClientCatalog() {
                             >
                               {GROUP_ICONS[gId] ?? '◆'} {gDef?.label ?? gId}
                             </span>
-                            <span className="text-[10px] font-mono text-white/30">
-                              {selectedCount}/{engines.length} selected
+                            <span className="text-[10px] font-mono text-white/35">
+                              {t('engines.catalog_group_selected', { selected: selectedCount, total: engines.length })}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -711,14 +716,14 @@ export default function EngineClientCatalog() {
             >
               {runAllLoading ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-green-400/40 border-t-green-400 rounded-full animate-spin" />
-                  Running all engines…
+                  <span className="w-4 h-4 border-2 border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
+                  {t('engines.catalog_running_all')}
                 </>
               ) : (
                 <>
-                  🚀 Run All {totalSelected} Selected Engines
+                  🚀 {t('engines.catalog_run_all_bottom', { count: totalSelected })}
                   {activeProfile && (
-                    <span className="text-green-400/60 font-normal">
+                    <span className="text-emerald-400/60 font-normal">
                       · {activeProfile.icon} {activeProfile.label}
                     </span>
                   )}
@@ -726,8 +731,8 @@ export default function EngineClientCatalog() {
               )}
             </button>
             {!selectedClientId && (
-              <p className="text-center text-[10px] font-mono text-amber-400/50 mt-1.5">
-                Select a client above to enable scanning
+              <p className="text-center text-[10px] font-mono text-amber-400/55 mt-1.5">
+                {t('engines.catalog_select_client_bottom')}
               </p>
             )}
           </div>

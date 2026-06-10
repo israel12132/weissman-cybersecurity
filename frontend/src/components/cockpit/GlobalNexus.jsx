@@ -325,7 +325,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             {ceoIntegrated ? 'Cockpit · mission control' : 'CEO cockpit home'}
           </Link>
         )}
-        <Link to="/" aria-label="Weissman Cybersecurity home" className="block group">
+        <Link to="/" aria-label={t('a11y.home')} className="block group">
           <Logo size={26} className="opacity-95 group-hover:opacity-100 transition-opacity" />
           <p className="mt-2 text-[9px] font-mono uppercase tracking-[0.28em] text-cyan-400/70">
             {t('nav.command_center')}
@@ -358,7 +358,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       </div>
 
       {/* Grouped navigation */}
-      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 scrollbar-thin" aria-label="Command center navigation">
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 scrollbar-thin" aria-label={t('a11y.nav_label')}>
         {navSections.map((section) => (
           <NavSection
             key={section.id}
@@ -392,7 +392,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                   className="text-rose-400 underline shrink-0 text-[9px]"
                   onClick={dismissClientsError}
                 >
-                  Dismiss
+                  {t('common.dismiss')}
                 </button>
               </div>
             </div>
@@ -413,7 +413,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                   <button
                     type="button"
                     onClick={() => setSelectedClientId(id)}
-                    className={`relative flex-1 min-w-0 text-left ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
+                    className={`relative flex-1 min-w-0 text-start ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
                       selected
                         ? 'bg-cyan-500/[0.07] border-cyan-400 text-white shadow-[inset_0_0_16px_rgba(34,211,238,0.05)]'
                         : 'border-transparent text-white/55 hover:bg-white/[0.03] hover:text-white/80'
@@ -570,14 +570,14 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         onClick={() => setMobileOpen((v) => !v)}
         className="lg:hidden fixed bottom-4 start-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-[#0a0f1a]/95 backdrop-blur-md text-white/80 shadow-xl"
         aria-expanded={mobileOpen}
-        aria-label={mobileOpen ? 'Collapse navigation' : 'Expand navigation'}
+        aria-label={mobileOpen ? t('a11y.collapse_nav') : t('a11y.expand_nav')}
       >
         {mobileOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
-        <span className="text-[10px] font-mono uppercase tracking-widest">Nav</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest">{t('nav.mobile_label')}</span>
       </button>
 
       <aside
-        className={`flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-r border-white/[0.06] overflow-hidden shrink-0 transition-all duration-300 ${
+        className={`cockpit-sidebar flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-e border-white/[0.06] overflow-hidden shrink-0 transition-all duration-300 ${
           mobileOpen
             ? 'max-h-[min(85dvh,640px)] lg:max-h-none opacity-100 pointer-events-auto'
             : 'max-h-0 lg:max-h-none opacity-0 lg:opacity-100 pointer-events-none lg:pointer-events-auto'

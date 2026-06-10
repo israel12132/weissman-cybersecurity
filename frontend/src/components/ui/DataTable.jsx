@@ -56,6 +56,8 @@ export default function DataTable({
   stickyHeader = true,
   onRowClick,
   getRowAccentColor,
+  selectedRowId,
+  getRowId = (row) => row?.raw_id ?? row?.id,
   animateRows = true,
   sorting,
   onSortingChange,
@@ -174,10 +176,14 @@ export default function DataTable({
 
             {rows.map((row, i) => {
               const accent = getRowAccentColor?.(row.original)
+              const rowId = getRowId(row.original)
+              const isSelected =
+                selectedRowId != null && rowId != null && String(selectedRowId) === String(rowId)
               const rowClasses = [
                 'border-b border-white/5 transition-colors duration-100',
                 onRowClick ? 'cursor-pointer weissman-row-hover' : 'weissman-row-hover',
                 zebra ? 'weissman-row-zebra' : '',
+                isSelected ? 'bg-cyan-500/[0.08] ring-1 ring-inset ring-cyan-500/25' : '',
               ]
                 .filter(Boolean)
                 .join(' ')

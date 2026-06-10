@@ -332,28 +332,6 @@ function useFindings() {
   return { findings, addFinding, reset }
 }
 
-// ─── MITRE card ─────────────────────────────────────────────────────────────────
-
-function MitreCard({ technique }) {
-  if (!technique) return null
-  return (
-    <div className="rounded-xl bg-black/40 border border-white/10 p-4">
-      <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">MITRE ATT&amp;CK</div>
-      <div className="flex items-center gap-3">
-        <span className="text-2xl font-bold font-mono text-[#22d3ee]">{technique}</span>
-        <a
-          href={`https://attack.mitre.org/techniques/${technique.replace('.', '/')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[11px] text-white/40 hover:text-cyan-400 transition-colors"
-        >
-          View on MITRE →
-        </a>
-      </div>
-    </div>
-  )
-}
-
 // ─── Run history ───────────────────────────────────────────────────────────────
 
 const HISTORY_KEY = (id) => `engine_run_history_${id}`

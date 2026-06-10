@@ -123,7 +123,7 @@ export default function AppShell({
           </div>
         </header>
 
-        <main className={`flex-1 ${maxWidth} mx-auto w-full px-4 py-6 sm:py-8 ${contentClassName}`}>
+        <main id="main-content" tabIndex={-1} className={`flex-1 outline-none ${maxWidth} mx-auto w-full px-4 py-6 sm:py-8 ${contentClassName}`}>
           {children}
         </main>
       </div>

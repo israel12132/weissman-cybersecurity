@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   FileSearch,
@@ -84,17 +85,32 @@ export default function EmptyState({
 
       {(cta || secondary) && (
         <div className="flex gap-3 mt-6 flex-wrap justify-center">
-          {cta && (
-            <button
-              type="button"
-              onClick={cta.onClick}
-              className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
-            >
-              {cta.label}
-            </button>
-          )}
+          {cta &&
+            (cta.to ? (
+              <Link
+                to={cta.to}
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
+              >
+                {cta.label}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={cta.onClick}
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
+              >
+                {cta.label}
+              </button>
+            ))}
           {secondary &&
-            (secondary.href ? (
+            (secondary.to ? (
+              <Link
+                to={secondary.to}
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+              >
+                {secondary.label}
+              </Link>
+            ) : secondary.href ? (
               <a
                 href={secondary.href}
                 className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"

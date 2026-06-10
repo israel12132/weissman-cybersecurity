@@ -62,4 +62,30 @@ export function SkeletonRow({ cols = 5, className = '' }) {
   )
 }
 
+/** Grid of executive widget placeholders. */
+export function SkeletonWidgetGrid({ count = 4, className = '' }) {
+  return (
+    <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${className}`} aria-busy="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="rounded-2xl border border-white/8 p-5 bg-black/30">
+          <SkeletonBar className="h-3 w-24 mb-4" />
+          <SkeletonBar className="h-8 w-32 mb-2" />
+          <SkeletonBar className="h-3 w-full" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Client card grid skeleton. */
+export function SkeletonCardGrid({ count = 3, className = '' }) {
+  return (
+    <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 ${className}`} aria-busy="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} lines={3} />
+      ))}
+    </div>
+  )
+}
+
 export default SkeletonBar
