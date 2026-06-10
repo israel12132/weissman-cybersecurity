@@ -5,12 +5,17 @@
  * real-time timelines, containment / eradication actions, MTTR metrics.
  * Route: /incident-response
  */
+<<<<<<< HEAD
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+=======
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
+>>>>>>> origin/main
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../lib/apiBase'
 import EmptyState from '../components/ui/EmptyState'
 import PageShell from './PageShell'
+import { apiFetch } from '../lib/apiBase'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -22,6 +27,30 @@ const SEVERITY_COLOR = {
   info: '#6b7280',
 }
 
+<<<<<<< HEAD
+=======
+// Fallback incidents when API is unavailable or returns empty
+const FALLBACK_INCIDENTS = [
+  {
+    id: 'INC-DEMO-001',
+    title: 'No Active Incidents — System Ready',
+    severity: 'info',
+    status: 'resolved',
+    assignee: 'SOC Team',
+    created: new Date().toISOString(),
+    updated: new Date().toISOString(),
+    source: 'System',
+    affectedAssets: [],
+    mitre: null,
+    description: 'All systems nominal. No active security incidents detected. The Incident Response Center is monitoring for threats.',
+    playbook: null,
+    timeline: [
+      { t: new Date().toTimeString().slice(0, 5), actor: 'System', msg: 'Incident Response Center initialized and ready' },
+    ],
+  },
+]
+
+>>>>>>> origin/main
 const PLAYBOOKS = {
   ransomware: {
     label: 'Ransomware Playbook',
@@ -280,8 +309,14 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function IncidentResponseCenter() {
+<<<<<<< HEAD
   const { t } = useTranslation()
   const [incidents, setIncidents] = useState([])
+=======
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+>>>>>>> origin/main
   const [selectedId, setSelectedId] = useState(null)
   const [localSteps, setLocalSteps] = useState({})
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
@@ -312,6 +347,43 @@ export default function IncidentResponseCenter() {
     return () => { cancelled = true }
   }, [])
 
+  // Load incidents from API
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    apiFetch('/api/incidents')
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 404) {
+            // API endpoint not yet implemented, use fallback
+            setIncidents(FALLBACK_INCIDENTS)
+            setSelectedId(FALLBACK_INCIDENTS[0].id)
+            return
+          }
+          throw new Error(`Failed to load incidents (HTTP ${r.status})`)
+        }
+        return r.json()
+      })
+      .then((data) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          setIncidents(data)
+          setSelectedId(data[0].id)
+        } else {
+          // Empty response, use fallback
+          setIncidents(FALLBACK_INCIDENTS)
+          setSelectedId(FALLBACK_INCIDENTS[0].id)
+        }
+      })
+      .catch((err) => {
+        setError(err?.message || 'Failed to load incidents')
+        setIncidents(FALLBACK_INCIDENTS)
+        setSelectedId(FALLBACK_INCIDENTS[0].id)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [])
+
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
   const handleToggleStep = useCallback((incidentId, stepId) => {
@@ -337,19 +409,49 @@ export default function IncidentResponseCenter() {
 
   return (
     <PageShell
+<<<<<<< HEAD
       title={t('pages.incidentResponseCenter.title')}
       subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
       badge={t('pages.incidentResponseCenter.badge')}
+=======
+      title="Incident Response Center"
+      subtitle={loading ? 'Loading...' : `${incidents.length} incidents tracked`}
+      badge="IR"
+>>>>>>> origin/main
       badgeColor="#ef4444"
     >
+      {/* ── Error Banner ─────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading State ────────────────────────────────────────────────── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-cyan-500/40 border-t-cyan-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading incidents...</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
+      {!loading && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <MetricCard label={t('pages.incidentResponseCenter.active_incidents')} value={metrics.active} sub={t('pages.incidentResponseCenter.active_sub')} color="#ef4444" icon="🔥" />
         <MetricCard label={t('pages.incidentResponseCenter.critical_severity')} value={metrics.crit} sub={t('pages.incidentResponseCenter.critical_sub')} color="#f97316" icon="⚠️" />
         <MetricCard label={t('pages.incidentResponseCenter.avg_mttr')} value={`${metrics.avgH}h`} sub={t('pages.incidentResponseCenter.mttr_sub')} color="#22d3ee" icon="⏱️" />
         <MetricCard label={t('pages.incidentResponseCenter.resolved_7d')} value={metrics.resolved} sub={t('pages.incidentResponseCenter.resolved_sub')} color="#4ade80" icon="✅" />
       </div>
+      )}
 
+<<<<<<< HEAD
       {error && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono mb-6">
           {error}
@@ -366,6 +468,9 @@ export default function IncidentResponseCenter() {
       )}
 
       {!loading && !error && incidents.length > 0 && (
+=======
+      {!loading && (
+>>>>>>> origin/main
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">

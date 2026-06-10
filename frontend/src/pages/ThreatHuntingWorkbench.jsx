@@ -6,12 +6,15 @@
  * Route: /threat-hunting
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
+<<<<<<< HEAD
 import { useTranslation } from 'react-i18next'
+=======
+>>>>>>> origin/main
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const HUNT_STATUS_META = {
   active:    { label: 'ACTIVE',    color: '#22d3ee' },
@@ -20,6 +23,7 @@ const HUNT_STATUS_META = {
   queued:    { label: 'QUEUED',    color: '#8b5cf6' },
 }
 
+<<<<<<< HEAD
 function normalizeCampaign(raw) {
   return {
     id: raw.id ?? '',
@@ -35,6 +39,76 @@ function normalizeCampaign(raw) {
     color: raw.color ?? '#22d3ee',
   }
 }
+=======
+// Fallback campaigns when API is unavailable
+const FALLBACK_CAMPAIGNS = [
+  {
+    id: 'hunt-007',
+    title: 'Living-off-the-land Binaries (LOLBins) Abuse',
+    hypothesis: 'Attackers are using signed Windows binaries (certutil, mshta, wscript) to download and execute payloads, evading AV.',
+    status: 'active',
+    analyst: 'T. Reyes',
+    started: '2026-04-19',
+    mitre: ['T1218', 'T1059.005', 'T1140'],
+    hitsFound: 14,
+    dataSources: ['EDR', 'Windows Event Logs', 'Sysmon'],
+    priority: 'high',
+    color: '#22d3ee',
+  },
+  {
+    id: 'hunt-006',
+    title: 'Kerberoasting & AS-REP Roasting Detection',
+    hypothesis: 'Privilege escalation via service account SPN enumeration and offline hash cracking (Kerberoasting) is active in AD environment.',
+    status: 'completed',
+    analyst: 'M. Kaplan',
+    started: '2026-04-15',
+    mitre: ['T1558.003', 'T1558.004'],
+    hitsFound: 3,
+    dataSources: ['AD Security Logs', 'SIEM', 'Zeek'],
+    priority: 'critical',
+    color: '#4ade80',
+  },
+  {
+    id: 'hunt-005',
+    title: 'DNS Tunneling for C2 Communication',
+    hypothesis: 'Threat actors are using DNS TXT/A record queries to exfiltrate data and receive C2 commands, bypassing network controls.',
+    status: 'active',
+    analyst: 'S. Park',
+    started: '2026-04-18',
+    mitre: ['T1071.004', 'T1041'],
+    hitsFound: 7,
+    dataSources: ['DNS Logs', 'NetFlow', 'Zeek'],
+    priority: 'high',
+    color: '#22d3ee',
+  },
+  {
+    id: 'hunt-004',
+    title: 'Scheduled Task Persistence via SYSTEM Context',
+    hypothesis: 'Malware is creating scheduled tasks running as SYSTEM to maintain persistence after reboot.',
+    status: 'paused',
+    analyst: 'A. Cohen',
+    started: '2026-04-10',
+    mitre: ['T1053.005', 'T1547'],
+    hitsFound: 0,
+    dataSources: ['Windows Event Logs', 'EDR'],
+    priority: 'medium',
+    color: '#f59e0b',
+  },
+  {
+    id: 'hunt-003',
+    title: 'Cloud Metadata Service Abuse (SSRF → IMDS)',
+    hypothesis: 'SSRF vulnerabilities in cloud workloads are being used to access AWS/GCP IMDS, leaking IAM credentials.',
+    status: 'queued',
+    analyst: 'Unassigned',
+    started: '—',
+    mitre: ['T1552.005', 'T1190'],
+    hitsFound: 0,
+    dataSources: ['CloudTrail', 'VPC Flow Logs', 'WAF'],
+    priority: 'high',
+    color: '#8b5cf6',
+  },
+]
+>>>>>>> origin/main
 
 const IOC_LIST = [
   { id: 'ioc-1',  type: 'ip',     value: '185.220.101.45',                  source: 'Threat Intel Feed', severity: 'critical', tags: ['tor-exit', 'c2'], added: '2026-04-20' },
@@ -310,6 +384,7 @@ function IocTable({ iocs }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ThreatHuntingWorkbench() {
+<<<<<<< HEAD
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('campaigns') // 'campaigns' | 'queries' | 'iocs'
   const [campaigns, setCampaigns] = useState([])
@@ -357,11 +432,95 @@ export default function ThreatHuntingWorkbench() {
     const critIOCs = IOC_LIST.filter((i) => i.severity === 'critical').length
     return { active, totalHits, totalIOCs, critIOCs }
   }, [campaigns])
+=======
+  const [campaigns, setCampaigns] = useState([])
+  const [iocs, setIocs] = useState([])
+  const [queries, setQueries] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [activeTab, setActiveTab] = useState('campaigns') // 'campaigns' | 'queries' | 'iocs'
+  const [selectedCampaign, setSelectedCampaign] = useState(null)
+
+  // Load data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Fetch hunt campaigns
+        const campaignsRes = await apiFetch('/api/threat-hunting/campaigns')
+        if (campaignsRes.ok) {
+          const campaignsData = await campaignsRes.json()
+          const campaignsArray = Array.isArray(campaignsData) ? campaignsData : campaignsData.campaigns || []
+          setCampaigns(campaignsArray)
+          if (campaignsArray.length > 0) {
+            setSelectedCampaign(campaignsArray[0].id)
+          }
+        } else if (campaignsRes.status === 404) {
+          // API not implemented, use fallback
+          setCampaigns(FALLBACK_CAMPAIGNS)
+          setSelectedCampaign(FALLBACK_CAMPAIGNS[0].id)
+        } else {
+          throw new Error(`Failed to load campaigns (HTTP ${campaignsRes.status})`)
+        }
+
+        // Fetch IOCs
+        const iocsRes = await apiFetch('/api/threat-hunting/iocs')
+        if (iocsRes.ok) {
+          const iocsData = await iocsRes.json()
+          setIocs(Array.isArray(iocsData) ? iocsData : iocsData.iocs || [])
+        } else if (iocsRes.status === 404) {
+          setIocs(IOC_LIST)
+        } else {
+          throw new Error(`Failed to load IOCs (HTTP ${iocsRes.status})`)
+        }
+
+        // Fetch hunt queries
+        const queriesRes = await apiFetch('/api/threat-hunting/queries')
+        if (queriesRes.ok) {
+          const queriesData = await queriesRes.json()
+          setQueries(Array.isArray(queriesData) ? queriesData : queriesData.queries || [])
+        } else if (queriesRes.status === 404) {
+          setQueries(HUNT_QUERIES)
+        } else {
+          throw new Error(`Failed to load queries (HTTP ${queriesRes.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load threat hunting data')
+        // Use fallback data on error
+        setCampaigns(FALLBACK_CAMPAIGNS)
+        setSelectedCampaign(FALLBACK_CAMPAIGNS[0].id)
+        setIocs(IOC_LIST)
+        setQueries(HUNT_QUERIES)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+>>>>>>> origin/main
+
+  const selectedCampaignObj = useMemo(() => campaigns.find((c) => c.id === selectedCampaign), [selectedCampaign, campaigns])
+
+  const metrics = useMemo(() => {
+    const active = campaigns.filter((c) => c.status === 'active').length
+    const totalHits = campaigns.reduce((s, c) => s + c.hitsFound, 0)
+    const totalIOCs = iocs.length
+    const critIOCs = iocs.filter((i) => i.severity === 'critical').length
+    return { active, totalHits, totalIOCs, critIOCs }
+  }, [campaigns, iocs])
 
   const tabs = [
     { id: 'campaigns', label: '🎯 Hunt Campaigns', count: campaigns.length },
+<<<<<<< HEAD
     { id: 'queries',   label: '🔎 Hunt Queries',   count: HUNT_QUERIES.length },
     { id: 'iocs',      label: '🧲 IOC Library',    count: IOC_LIST.length },
+=======
+    { id: 'queries',   label: '🔎 Hunt Queries',   count: queries.length },
+    { id: 'iocs',      label: '🧲 IOC Library',    count: iocs.length },
+>>>>>>> origin/main
   ]
 
   return (
@@ -371,33 +530,59 @@ export default function ThreatHuntingWorkbench() {
       badge="HUNT"
       badgeColor="#8b5cf6"
     >
+      {/* ── Error Banner ── */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading State ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading threat hunting data...</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Active Hunts"    value={metrics.active}    sub="Currently executing"      color="#22d3ee" icon="🎯" />
-        <MetricCard label="Total Hits"      value={metrics.totalHits} sub="Across all campaigns"     color="#ef4444" icon="🔴" />
-        <MetricCard label="IOCs Tracked"    value={metrics.totalIOCs} sub="Active indicators"        color="#8b5cf6" icon="🧲" />
-        <MetricCard label="Critical IOCs"   value={metrics.critIOCs}  sub="Immediate action needed"  color="#f97316" icon="⚡" />
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <MetricCard label="Active Hunts"    value={metrics.active}    sub="Currently executing"      color="#22d3ee" icon="🎯" />
+          <MetricCard label="Total Hits"      value={metrics.totalHits} sub="Across all campaigns"     color="#ef4444" icon="🔴" />
+          <MetricCard label="IOCs Tracked"    value={metrics.totalIOCs} sub="Active indicators"        color="#8b5cf6" icon="🧲" />
+          <MetricCard label="Critical IOCs"   value={metrics.critIOCs}  sub="Immediate action needed"  color="#f97316" icon="⚡" />
+        </div>
+      )}
 
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {tabs.map((t) => (
-          <button
-            key={t.id} type="button" onClick={() => setActiveTab(t.id)}
-            className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
-            style={{
-              color: activeTab === t.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
-              borderColor: activeTab === t.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
-              background: activeTab === t.id ? 'rgba(139,92,246,0.1)' : 'transparent',
-            }}
-          >
-            {t.label}
-            <span className="ml-2 text-[9px] opacity-60">({t.count})</span>
-          </button>
-        ))}
-      </div>
+      {!loading && (
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {tabs.map((t) => (
+            <button
+              key={t.id} type="button" onClick={() => setActiveTab(t.id)}
+              className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
+              style={{
+                color: activeTab === t.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
+                borderColor: activeTab === t.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
+                background: activeTab === t.id ? 'rgba(139,92,246,0.1)' : 'transparent',
+              }}
+            >
+              {t.label}
+              <span className="ml-2 text-[9px] opacity-60">({t.count})</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
+<<<<<<< HEAD
       <AnimatePresence mode="wait">
         {activeTab === 'campaigns' && (
           <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -429,23 +614,61 @@ export default function ThreatHuntingWorkbench() {
             )}
           </motion.div>
         )}
+=======
+      {!loading && (
+        <AnimatePresence mode="wait">
+          {activeTab === 'campaigns' && (
+            <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {campaigns.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-12 text-center">
+                  <p className="text-sm text-white/40">No hunt campaigns found</p>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+                  <div className="space-y-2">
+                    <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Hunt Campaigns</h2>
+                    {campaigns.map((c) => (
+                      <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} />
+                    ))}
+                  </div>
+                  <AnimatePresence mode="wait">
+                    {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} />}
+                  </AnimatePresence>
+                </div>
+              )}
+            </motion.div>
+          )}
+>>>>>>> origin/main
 
-        {activeTab === 'queries' && (
-          <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Detection Queries</h2>
-            {HUNT_QUERIES.map((q) => (
-              <QueryCard key={q.id} query={q} />
-            ))}
-          </motion.div>
-        )}
+          {activeTab === 'queries' && (
+            <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Detection Queries</h2>
+              {queries.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-12 text-center">
+                  <p className="text-sm text-white/40">No detection queries found</p>
+                </div>
+              ) : (
+                queries.map((q) => (
+                  <QueryCard key={q.id} query={q} />
+                ))
+              )}
+            </motion.div>
+          )}
 
-        {activeTab === 'iocs' && (
-          <motion.div key="iocs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Indicators of Compromise</h2>
-            <IocTable iocs={IOC_LIST} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {activeTab === 'iocs' && (
+            <motion.div key="iocs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Indicators of Compromise</h2>
+              {iocs.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-12 text-center">
+                  <p className="text-sm text-white/40">No IOCs found</p>
+                </div>
+              ) : (
+                <IocTable iocs={iocs} />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </PageShell>
   )
 }

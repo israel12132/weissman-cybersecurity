@@ -9,18 +9,26 @@
  * (mapped engines), `/api/dashboard/exec-kpis` (KPI strip). No fabricated chains.
  */
 import React, { useState, useMemo, useEffect } from 'react'
+<<<<<<< HEAD
 import { Link } from 'react-router-dom'
+=======
+>>>>>>> origin/main
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+<<<<<<< HEAD
 import EmptyState from '../components/ui/EmptyState'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
+=======
+import { apiFetch } from '../lib/apiBase'
+>>>>>>> origin/main
 
 // ─── Kill Chain Phases (MITRE scaffolding — engines/findings are live) ────────
 
-const PHASES = [
+// Fallback phases when API is unavailable
+const FALLBACK_PHASES = [
   {
     id: 'reconnaissance',
     label: 'Reconnaissance',
@@ -95,6 +103,7 @@ const PHASES = [
 
 const PHASE_SEQUENCE = PHASES.map((p) => p.id)
 
+<<<<<<< HEAD
 /** Engine IDs per phase — mirrors backend `kill_chain_orchestrator.py`. */
 const PHASE_ENGINE_MAP = {
   reconnaissance: [
@@ -168,6 +177,74 @@ const VULN_TYPE_PHASE_AFFINITY = {
   ransomware: 'exfiltration',
   keylogger: 'installation',
 }
+=======
+// Fallback chains when API is unavailable
+const FALLBACK_CHAINS = [
+  {
+    id: 'chain-001',
+    name: 'Cloud-to-AD Lateral Movement',
+    severity: 'critical',
+    completedPhases: 5,
+    totalPhases: 7,
+    riskScore: 94,
+    target: 'enterprise-corp.com',
+    discoveredAt: '2026-05-16T14:22:00Z',
+    techniques: ['T1078', 'T1021', 'T1484', 'T1087', 'T1003'],
+    summary: 'Attacker compromises cloud credentials via phishing, pivots through VPN to on-prem AD, escalates to Domain Admin.',
+    phaseFindings: {
+      reconnaissance: ['Leaked AWS creds on Pastebin', 'Employee email enumeration via LinkedIn'],
+      weaponization: ['Custom phishing kit targeting O365 login'],
+      delivery: ['Spear-phish to 3 finance employees'],
+      exploitation: ['Successful OAuth2 token hijack', 'SSRF → IMDS credential theft'],
+      installation: ['Persistence via scheduled task', 'Golden ticket forged'],
+      c2: [],
+      exfiltration: [],
+    },
+  },
+  {
+    id: 'chain-002',
+    name: 'Supply Chain → RCE Chain',
+    severity: 'critical',
+    completedPhases: 4,
+    totalPhases: 7,
+    riskScore: 88,
+    target: 'ci-pipeline.internal',
+    discoveredAt: '2026-05-14T09:15:00Z',
+    techniques: ['T1195', 'T1059', 'T1543', 'T1036', 'T1041'],
+    summary: 'Malicious npm package injected into CI/CD pipeline executes arbitrary code on build servers.',
+    phaseFindings: {
+      reconnaissance: ['Repo enumeration via GitHub API', 'Dependency manifest harvested'],
+      weaponization: ['Typosquatted npm package "lodash-util" uploaded'],
+      delivery: ['Package installed via automated dependency update bot'],
+      exploitation: ['Postinstall script executed arbitrary shell commands'],
+      installation: [],
+      c2: [],
+      exfiltration: [],
+    },
+  },
+  {
+    id: 'chain-003',
+    name: 'SSRF → IMDS → IAM Escalation',
+    severity: 'high',
+    completedPhases: 3,
+    totalPhases: 7,
+    riskScore: 74,
+    target: 'webapp.acmecorp.com',
+    discoveredAt: '2026-05-12T16:45:00Z',
+    techniques: ['T1190', 'T1552', 'T1078', 'T1537'],
+    summary: 'SSRF in web application reaches AWS IMDS to steal IAM role credentials, enabling privilege escalation.',
+    phaseFindings: {
+      reconnaissance: ['Cloud provider identified via response headers', 'EC2 instance metadata service accessible'],
+      weaponization: [],
+      delivery: [],
+      exploitation: ['SSRF to 169.254.169.254 returns IAM role creds', 'API key with S3:* permissions found'],
+      installation: [],
+      c2: [],
+      exfiltration: [],
+    },
+  },
+]
+>>>>>>> origin/main
 
 const SEVERITY_META = {
   critical: { color: '#ef4444', label: 'CRITICAL' },
@@ -377,17 +454,23 @@ function normalizeApiChains(apiChains) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function KillChainOrchestrator() {
+<<<<<<< HEAD
   const { t } = useTranslation()
   const { engines: productionEngines, productionCount, loading: enginesLoading } = useProductionEngines()
   const [findings, setFindings] = useState([])
   const [chainsFromApi, setChainsFromApi] = useState(null)
   const [execKpis, setExecKpis] = useState(null)
+=======
+  const [phases, setPhases] = useState([])
+  const [chains, setChains] = useState([])
+>>>>>>> origin/main
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeChain, setActiveChain] = useState(null)
   const [activePhase, setActivePhase] = useState(null)
   const [filterSeverity, setFilterSeverity] = useState('all')
 
+<<<<<<< HEAD
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -428,6 +511,72 @@ export default function KillChainOrchestrator() {
       engines: enginesForPhase(phase.id, productionEngines).map((e) => e.label),
     })),
     [productionEngines],
+=======
+  // Load kill chain data from API
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // Fetch kill chain phases
+        const phasesRes = await apiFetch('/api/kill-chain/phases')
+        if (phasesRes.ok) {
+          const phasesData = await phasesRes.json()
+          setPhases(Array.isArray(phasesData) ? phasesData : phasesData.phases || [])
+        } else if (phasesRes.status === 404) {
+          // API not implemented, use fallback
+          setPhases(FALLBACK_PHASES)
+        } else {
+          throw new Error(`Failed to load phases (HTTP ${phasesRes.status})`)
+        }
+
+        // Fetch attack chains
+        const chainsRes = await apiFetch('/api/kill-chain/chains')
+        if (chainsRes.ok) {
+          const chainsData = await chainsRes.json()
+          const chainsArray = Array.isArray(chainsData) ? chainsData : chainsData.chains || []
+          setChains(chainsArray)
+          if (chainsArray.length > 0) {
+            setActiveChain(chainsArray[0])
+          }
+        } else if (chainsRes.status === 404) {
+          // API not implemented, use fallback
+          setChains(FALLBACK_CHAINS)
+          setActiveChain(FALLBACK_CHAINS[0])
+        } else {
+          throw new Error(`Failed to load attack chains (HTTP ${chainsRes.status})`)
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load kill chain data')
+        // Use fallback data on error
+        setPhases(FALLBACK_PHASES)
+        setChains(FALLBACK_CHAINS)
+        setActiveChain(FALLBACK_CHAINS[0])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  const filteredChains = useMemo(
+    () => filterSeverity === 'all'
+      ? chains
+      : chains.filter((c) => c.severity === filterSeverity),
+    [chains, filterSeverity],
+  )
+
+  const overallRisk = useMemo(
+    () => chains.length > 0 ? Math.round(chains.reduce((a, c) => a + c.riskScore, 0) / chains.length) : 0,
+    [chains],
+  )
+
+  const totalTechniques = useMemo(
+    () => chains.reduce((a, c) => a + c.techniques.length, 0),
+    [chains],
+>>>>>>> origin/main
   )
 
   const filteredChains = useMemo(
@@ -473,6 +622,7 @@ export default function KillChainOrchestrator() {
       badge="ATT&CK"
       badgeColor="#ef4444"
     >
+<<<<<<< HEAD
       <p className="text-xs text-white/45 font-mono mb-6">
         Chains from <code>/api/soc/kill-chains</code>
         {chainsFromApi ? ' (live)' : ' — falling back to findings grouped by target'}.
@@ -484,10 +634,31 @@ export default function KillChainOrchestrator() {
       {error && (
         <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
           Couldn't load kill-chain data: {error}.
+=======
+      {/* ── Error Banner ── */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚠️</span>
+            <span className="text-xs font-mono text-amber-300/80">{error}</span>
+            <span className="text-[10px] text-amber-300/50 ml-auto">Using demo data</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading State ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-red-500/40 border-t-red-500 rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-mono text-white/40">Loading kill chain data...</p>
+          </div>
+>>>>>>> origin/main
         </div>
       )}
 
       {/* ── KPI Bar ── */}
+<<<<<<< HEAD
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Active Chains', value: isLoading ? '…' : chains.length, color: '#22d3ee' },
@@ -515,6 +686,25 @@ export default function KillChainOrchestrator() {
           secondary={{ label: 'Browse engines', to: '/engines' }}
         />
       ) : (
+=======
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Active Chains', value: chains.length, color: '#22d3ee' },
+            { label: 'Avg Risk Score', value: `${overallRisk}/100`, color: '#ef4444' },
+            { label: 'Techniques Mapped', value: totalTechniques, color: '#f97316' },
+            { label: 'Phases Covered', value: phases.length, color: '#10b981' },
+          ].map((kpi) => (
+            <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+              <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
+              <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && (
+>>>>>>> origin/main
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ── Left: Chain List ── */}
           <div className="space-y-3">
@@ -531,6 +721,7 @@ export default function KillChainOrchestrator() {
                 <option value="medium">Medium</option>
               </select>
             </div>
+<<<<<<< HEAD
 
             {filteredChains.length === 0 ? (
               <EmptyState
@@ -613,6 +804,110 @@ export default function KillChainOrchestrator() {
                           key={t}
                           to={`/findings?mitre=${encodeURIComponent(t)}`}
                           className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 border border-[#6366f1]/30 text-[#a5b4fc] hover:bg-[#6366f1]/30"
+=======
+
+            {filteredChains.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-12 text-center">
+                <p className="text-sm text-white/40">No attack chains found</p>
+              </div>
+            ) : (
+              filteredChains.map((chain) => {
+            const sm = SEVERITY_META[chain.severity] ?? SEVERITY_META.medium
+            const progress = Math.round((chain.completedPhases / chain.totalPhases) * 100)
+            return (
+              <motion.button
+                key={chain.id}
+                layout
+                whileHover={{ scale: 1.01 }}
+                onClick={() => { setActiveChain(chain); setActivePhase(null) }}
+                className={`w-full text-left rounded-2xl border p-4 transition-all ${
+                  activeChain?.id === chain.id
+                    ? 'border-[#ef4444]/50 bg-[#ef4444]/10'
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-white truncate pr-2">{chain.name}</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border flex-shrink-0"
+                    style={{ color: sm.color, borderColor: `${sm.color}40`, backgroundColor: `${sm.color}10` }}>
+                    {sm.label}
+                  </span>
+                </div>
+                <div className="text-[11px] text-white/40 mb-3 truncate">{chain.target}</div>
+                <div className="w-full bg-white/10 rounded-full h-1.5 mb-1">
+                  <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: sm.color }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-white/40">
+                  <span>{chain.completedPhases}/{chain.totalPhases} phases</span>
+                  <span>Risk: <span className="font-mono" style={{ color: sm.color }}>{chain.riskScore}</span></span>
+                </div>
+                </motion.button>
+              )
+              })
+            )}
+          </div>
+
+          {/* ── Center: Phase Timeline ── */}
+          <div className="lg:col-span-2 space-y-4">
+            {activeChain && (
+            <>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 mb-2">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
+                    <div className="text-[11px] text-white/40 mt-1">
+                      Target: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
+                      {' · '}
+                      Detected: <span className="text-white/60">{activeChain.discoveredAt.slice(0, 10)}</span>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-2xl font-bold text-[#ef4444]">{activeChain.riskScore}</div>
+                    <div className="text-[10px] text-white/40">Risk Score</div>
+                  </div>
+                </div>
+                <p className="text-xs text-white/60 leading-relaxed">{activeChain.summary}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {activeChain.techniques.map((t) => (
+                    <span key={t} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 border border-[#6366f1]/30 text-[#a5b4fc]">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Phase pipeline */}
+              <div className="space-y-2">
+                {phases.map((phase, idx) => {
+                  const findings = activeChain.phaseFindings[phase.id] ?? []
+                  const isCompleted = idx < activeChain.completedPhases
+                  const isActive = idx === activeChain.completedPhases
+                  const isExpanded = activePhase === phase.id
+
+                  return (
+                    <motion.div
+                      key={phase.id}
+                      layout
+                      className={`rounded-2xl border transition-all ${
+                        isExpanded ? 'border-white/20 bg-white/8' :
+                        isCompleted ? 'border-white/10 bg-white/5' :
+                        isActive ? `bg-white/5` :
+                        'border-white/5 bg-black/20 opacity-50'
+                      }`}
+                      style={isExpanded ? { borderColor: `${phase.color}40` } : {}}
+                    >
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-3 p-4 text-left"
+                        onClick={() => setActivePhase(isExpanded ? null : phase.id)}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 border-2"
+                          style={{
+                            borderColor: isCompleted || isActive ? phase.color : 'rgba(255,255,255,0.1)',
+                            backgroundColor: isCompleted ? `${phase.color}20` : 'transparent',
+                          }}
+>>>>>>> origin/main
                         >
                           {t}
                         </Link>
@@ -670,6 +965,7 @@ export default function KillChainOrchestrator() {
                                 </span>
                               )}
                             </div>
+<<<<<<< HEAD
                             <div className="text-[11px] text-white/40 truncate">{phase.description}</div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
@@ -750,6 +1046,16 @@ export default function KillChainOrchestrator() {
                 title={t('pages.killChainOrchestrator.select_chain_title')}
                 body="Choose a target chain from the list to inspect phase progression and mapped findings."
               />
+=======
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )
+                })}
+                </div>
+              </>
+>>>>>>> origin/main
             )}
           </div>
         </div>

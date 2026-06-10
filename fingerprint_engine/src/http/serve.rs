@@ -1521,9 +1521,15 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             get(api_client_semantic_reasoning),
         )
         .route("/api/verify-audit/:hash", get(api_verify_audit))
+<<<<<<< HEAD
         // .route("/api/scan/status", get(api_scan_status))
         // .route("/api/scan/start", post(api_scan_start))
         // .route("/api/scan/stop", post(api_scan_stop))
+=======
+        .route("/api/scan/status", get(api_scan_status))
+        .route("/api/scan/start", post(api_scan_start))
+        .route("/api/scan/stop", post(api_scan_stop))
+>>>>>>> origin/main
         .route("/api/scan/run-all", post(api_scan_run_all))
         .route("/api/scan/all-engines", post(api_scan_all_engines))
         .route("/api/discovery/domains", post(api_discovery_domains))

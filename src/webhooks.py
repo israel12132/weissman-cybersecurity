@@ -9,7 +9,6 @@ import logging
 import os
 from typing import Any
 
-import requests
 
 from src.database import get_session_factory, WebhookModel
 
@@ -98,13 +97,11 @@ def push_findings_to_webhooks(payload: dict[str, Any]) -> None:
             "Content-Type": "application/json",
             "X-Weissman-Signature": signature,
         }
-        last_error = None
         for attempt in range(WEBHOOK_MAX_RETRIES + 1):
             try:
                 from src.http_client import safe_post, ENTERPRISE_HTTP_TIMEOUT
                 r = safe_post(url, data=body_bytes, headers=headers, timeout=ENTERPRISE_HTTP_TIMEOUT)
                 if r.status_code >= 400:
-                    last_error = f"HTTP {r.status_code}"
                     if attempt < WEBHOOK_MAX_RETRIES:
                         time.sleep(WEBHOOK_BACKOFF_BASE ** attempt)
                         continue
@@ -112,7 +109,6 @@ def push_findings_to_webhooks(payload: dict[str, Any]) -> None:
                 else:
                     break
             except Exception as e:
-                last_error = str(e)
                 if attempt < WEBHOOK_MAX_RETRIES:
                     delay = WEBHOOK_BACKOFF_BASE ** attempt
                     logger.debug("Webhook POST attempt %s failed for %s, retry in %ss: %s", attempt + 1, url[:80], delay, e)
