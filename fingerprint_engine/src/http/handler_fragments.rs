@@ -12,7 +12,7 @@ include!(concat!(
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/src/server_handlers_onboarding_stub.inc"
+    "/src/server_handlers_platform.inc"
 ));
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),

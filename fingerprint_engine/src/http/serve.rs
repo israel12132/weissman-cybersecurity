@@ -620,20 +620,91 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
     Html(html).into_response()
 }
 
-/// WebSocket: on connect send init with globe + score so frontend shows "online" and has data.
-async fn ws_command_center(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+/// Normalize internal telemetry JSON to Command Center `{ kind, payload, ts }` shape.
+fn normalize_cc_event(raw: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(raw).ok()?;
+    if v.get("kind").is_some() {
+        return Some(raw.to_string());
+    }
+    let ts = chrono::Utc::now().timestamp_millis();
+    if let Some(event) = v.get("event").and_then(Value::as_str) {
+        let kind = match event {
+            "finding_created" => {
+                let sev = v
+                    .get("severity")
+                    .and_then(Value::as_str)
+                    .unwrap_or("info")
+                    .to_ascii_lowercase();
+                if sev == "critical" || sev == "high" {
+                    "critical_cve"
+                } else {
+                    "scan_pulse"
+                }
+            }
+            "new_target" => "new_source_discovered",
+            "progress" => "scan_pulse",
+            "engine_error" | "error" => "emergency_alert",
+            _ => "audit",
+        };
+        let payload = if event == "finding_created" {
+            json!({
+                "message": format!(
+                    "Finding: {}",
+                    v.get("title").and_then(Value::as_str).unwrap_or("—")
+                ),
+                "severity": v.get("severity").cloned().unwrap_or(json!("info")),
+                "client_id": v.get("client_id").cloned().unwrap_or(Value::Null),
+                "target": v.get("client_id").cloned().unwrap_or(Value::Null),
+                "finding_id": v.get("finding_id").cloned().unwrap_or(Value::Null),
+            })
+        } else {
+            v.clone()
+        };
+        return Some(json!({ "kind": kind, "payload": payload, "ts": ts }).to_string());
+    }
+    if v.get("message").is_some() || v.get("job_id").is_some() {
+        let msg = v
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("job update");
+        return Some(
+            json!({
+                "kind": "audit",
+                "payload": {
+                    "action": msg,
+                    "message": msg,
+                    "severity": v.get("status").and_then(Value::as_str).unwrap_or("info"),
+                    "job_id": v.get("job_id").cloned().unwrap_or(Value::Null),
+                },
+                "ts": ts,
+            })
+            .to_string(),
+        );
+    }
+    None
+}
+
+/// WebSocket: init handshake + live telemetry stream for Command Center.
+async fn ws_command_center(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
     let pool = state.app_pool.clone();
-    let auth = state.auth_pool.clone();
+    let telemetry = state.telemetry_broadcast_tx.clone();
+    let tenant_id = auth.tenant_id;
     ws.on_upgrade(move |socket| async move {
-        handle_ws(socket, pool, auth).await;
+        handle_ws_command_center(socket, pool, tenant_id, telemetry).await;
     })
 }
 
-async fn handle_ws(mut socket: WebSocket, pool: Arc<PgPool>, auth: Arc<PgPool>) {
-    let Some(tid) = default_tenant_id(auth.as_ref()).await else {
-        return;
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tid).await else {
+async fn handle_ws_command_center(
+    mut socket: WebSocket,
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    telemetry: Arc<tokio::sync::broadcast::Sender<String>>,
+) {
+    let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else {
         return;
     };
     let vuln_count: i64 =
@@ -674,13 +745,73 @@ async fn handle_ws(mut socket: WebSocket, pool: Arc<PgPool>, auth: Arc<PgPool>) 
         "total_vulnerabilities": vuln_count,
         "assets_monitored": client_count,
     });
+    let score_payload_ticker = score_payload.clone();
     let init = json!({ "type": "init", "globe": globe, "score": score_payload });
     if let Ok(s) = serde_json::to_string(&init) {
         let _ = socket.send(Message::Text(s)).await;
     }
+
+    let mut rx = telemetry.subscribe();
+    let mut ticker = tokio::time::interval(Duration::from_secs(15));
+
     loop {
-        if socket.recv().await.is_none() {
-            break;
+        tokio::select! {
+            inbound = socket.recv() => {
+                match inbound {
+                    None => break,
+                    Some(Ok(Message::Text(text))) => {
+                        if text.contains("\"type\":\"ping\"") || text.contains("\"ping\"") {
+                            let _ = socket.send(Message::Text(json!({"type":"pong"}).to_string())).await;
+                        }
+                    }
+                    Some(Ok(Message::Ping(p))) => {
+                        let _ = socket.send(Message::Pong(p)).await;
+                    }
+                    Some(Ok(Message::Close(_))) => break,
+                    Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+            telemetry_msg = rx.recv() => {
+                if let Ok(raw) = telemetry_msg {
+                    if let Some(normalized) = normalize_cc_event(&raw) {
+                        if socket.send(Message::Text(normalized)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ = ticker.tick() => {
+                let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else { continue; };
+                let row = sqlx::query(
+                    "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                if let Some(r) = row {
+                    let title: String = r.try_get("title").unwrap_or_default();
+                    let severity: String = r.try_get("severity").unwrap_or_else(|_| "info".into());
+                    let client_id: String = r.try_get("client_id").unwrap_or_else(|_| "—".into());
+                    let kind = if severity == "critical" || severity == "high" { "critical_cve" } else { "scan_pulse" };
+                    let pulse = json!({
+                        "type": "refresh",
+                        "kind": kind,
+                        "payload": {
+                            "message": title,
+                            "severity": severity,
+                            "target": client_id,
+                            "client_id": client_id,
+                        },
+                        "score": score_payload_ticker,
+                    });
+                    if let Ok(s) = serde_json::to_string(&pulse) {
+                        let _ = socket.send(Message::Text(s)).await;
+                    }
+                }
+            }
         }
     }
 }
@@ -1200,13 +1331,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))
         .route("/ws/agent", get(ws_agent))
-        // Onboarding + billing (Paddle + self-serve register; target/launch-scan still stubbed).
+        // Onboarding + billing (Paddle + self-serve register).
         .route("/api/onboarding/register", post(api_onboarding_register))
-        .route("/api/onboarding/target", post(api_onboarding_target_stub))
-        .route(
-            "/api/onboarding/launch-scan",
-            post(api_onboarding_launch_scan_stub),
-        )
+        .route("/api/onboarding/target", post(api_onboarding_target))
+        .route("/api/onboarding/launch-scan", post(api_onboarding_launch_scan))
         .route("/api/billing/usage", get(api_billing_usage))
         .route(
             "/api/billing/checkout-session",
@@ -1426,6 +1554,22 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/compliance/frameworks/:framework_id/controls",
             get(api_compliance_frameworks_controls),
         )
+        .route("/api/search", get(api_global_search))
+        .route(
+            "/api/integrations",
+            get(api_integrations_list).post(api_integrations_post),
+        )
+        .route("/api/integrations/:id/test", post(api_integrations_test))
+        .route("/api/integrations/:id", delete(api_integrations_delete))
+        .route("/api/ot-ics/devices", get(api_ot_ics_devices))
+        .route("/api/mobile-security/apps", get(api_mobile_security_apps))
+        .route("/api/soc/incidents", get(api_soc_incidents))
+        .route("/api/soc/hunts", get(api_soc_hunts))
+        .route("/api/soc/kill-chains", get(api_soc_kill_chains))
+        .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
+        .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
+        .route("/api/soc/social-engineering", get(api_soc_social_engineering))
+        .route("/api/soc/network-protocols", get(api_soc_network_protocols))
         .route("/api/reports/executive", get(api_reports_executive))
         .route(
             "/api/sovereign/phantom-trap",
