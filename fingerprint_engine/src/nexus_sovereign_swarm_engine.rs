@@ -598,5 +598,5 @@ pub async fn run_nexus_sovereign_swarm_result(
 pub async fn run_nexus_sovereign_swarm(target: &str) {
     let ctx = EngineRunContext::default();
     let result = run_nexus_sovereign_swarm_result(target, &ctx).await;
-    crate::engine_result::print_result(&result);
+    crate::engine_result::print_result(result);
 }

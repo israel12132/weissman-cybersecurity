@@ -1805,6 +1805,7 @@ async fn run_cycle_for_tenant(
                         app_pool: Some(app_pool.clone()),
                         agents: None, // orchestrator path: no live registry; tasks queue.
                         client_id: Some(db_client_id),
+                        job_params: serde_json::json!({}),
                     };
                     let r =
                         crate::engine_dispatch::run_engine(other, &target, &ctx).await;
