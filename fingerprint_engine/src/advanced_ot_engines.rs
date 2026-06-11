@@ -1,9 +1,10 @@
-//! Advanced OT/ICS Engines — real TCP/UDP port + protocol fingerprint probes.
-//! Industrial protocols are detected by attempting a TCP connect on well-known ports and (where
-//! safe) reading a banner or sending a minimal protocol-specific probe frame.
+//! Advanced OT/ICS Engines — real TCP/UDP protocol fingerprint probes.
+//! Passive surface checks delegate to `ot_ics_engine`; bus-level / physical attacks
+//! require an enrolled endpoint agent (no HTTP stand-ins).
 
-use crate::engine_probes::{empty_ok, extract_host, finding, tcp_open, tcp_probe_response};
+use crate::engine_probes::{agent_required_ok, empty_ok, extract_host, finding, tcp_open, tcp_probe_response};
 use crate::engine_result::{print_result, EngineResult};
+use crate::ot_ics_engine::{probe_bacnet_read_property, probe_modbus_function_code, probe_opcua_discovery, OtFingerprint};
 use serde_json::Value;
 
 macro_rules! cli_wrapper {
@@ -13,6 +14,188 @@ macro_rules! cli_wrapper {
         }
     };
 }
+
+fn ot_fingerprint_finding(fp: &OtFingerprint, engine_id: &str, target: &str) -> Value {
+    let severity = if fp.confidence > 0.85 {
+        "critical"
+    } else if fp.confidence > 0.6 {
+        "high"
+    } else {
+        "medium"
+    };
+    finding(
+        engine_id,
+        &format!("{} on {}:{} ({})", fp.protocol, fp.host, fp.port, fp.vendor_hint),
+        severity,
+        "T0843",
+        &format!(
+            "Protocol: {}, confidence {:.2}, excerpt: {}",
+            fp.protocol, fp.confidence, fp.raw_excerpt_hex
+        ),
+        target,
+    )
+}
+
+async fn agent_required_bus_attack(
+    engine_id: &str,
+    target: &str,
+    title: &str,
+    rationale: &str,
+) -> EngineResult {
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    agent_required_ok(engine_id, target, title, rationale)
+}
+
+// Modbus TCP — function-code 03 read probe (shared with ot_ics_engine).
+pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(target);
+    if let Some(fp) = probe_modbus_function_code(&host).await {
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "modbus_attack", target)],
+            "modbus_attack: Modbus/TCP function 03 response observed".to_string(),
+        );
+    }
+    if tcp_open(&host, 502).await {
+        return EngineResult::ok(
+            vec![finding(
+                "modbus_attack",
+                "Port 502/tcp open (Modbus candidate)",
+                "medium",
+                "T0843",
+                &format!("TCP {}:502 accepts connections but no FC03/readProperty confirmation.", host),
+                target,
+            )],
+            "modbus_attack: port open, protocol unconfirmed".to_string(),
+        );
+    }
+    empty_ok("modbus_attack", target)
+}
+cli_wrapper!(run_modbus_attack, run_modbus_attack_result);
+
+pub async fn run_bacnet_attack_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    if let Some(fp) = probe_bacnet_read_property(&host).await {
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "bacnet_attack", t)],
+            "bacnet_attack: BACnet/IP readProperty response observed".to_string(),
+        );
+    }
+    empty_ok("bacnet_attack", t)
+}
+cli_wrapper!(run_bacnet_attack, run_bacnet_attack_result);
+
+pub async fn run_opcua_attack_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    if let Some(fp) = probe_opcua_discovery(&host).await {
+        return EngineResult::ok(
+            vec![ot_fingerprint_finding(&fp, "opcua_attack", t)],
+            "opcua_attack: OPC-UA discovery handshake observed".to_string(),
+        );
+    }
+    if tcp_open(&host, 4840).await {
+        return EngineResult::ok(
+            vec![finding(
+                "opcua_attack",
+                "Port 4840/tcp open (OPC-UA candidate)",
+                "medium",
+                "T0843",
+                &format!("TCP {}:4840 accepts connections but HEL/ACK discovery was not confirmed.", host),
+                t,
+            )],
+            "opcua_attack: port open, discovery unconfirmed".to_string(),
+        );
+    }
+    empty_ok("opcua_attack", t)
+}
+cli_wrapper!(run_opcua_attack, run_opcua_attack_result);
+
+pub async fn run_modbus_exploit_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "modbus_exploit",
+        target,
+        "Modbus write/coerce exploits require on-segment agent",
+        "Function-code abuse and register writes need L2/L3 access to the fieldbus from an OT-segment agent.",
+    )
+    .await
+}
+cli_wrapper!(run_modbus_exploit, run_modbus_exploit_result);
+
+pub async fn run_plc_logic_bomb_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "plc_logic_bomb",
+        target,
+        "PLC logic manipulation requires engineering-workstation agent",
+        "Logic downloads and runtime tampering are validated from an enrolled agent on the OT engineering network.",
+    )
+    .await
+}
+cli_wrapper!(run_plc_logic_bomb, run_plc_logic_bomb_result);
+
+pub async fn run_lorawan_attack_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "lorawan_attack",
+        target,
+        "LoRaWAN RF attacks require a radio-capable endpoint agent",
+        "LoRaWAN join-abuse and downlink spoofing need local RF hardware — not reachable via HTTP management APIs.",
+    )
+    .await
+}
+cli_wrapper!(run_lorawan_attack, run_lorawan_attack_result);
+
+pub async fn run_voltage_glitch_attack_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "voltage_glitch_attack",
+        target,
+        "Voltage/clock glitching requires physical hardware access",
+        "Fault injection against secure boot or crypto accelerators must run on a bench agent with a glitch rig.",
+    )
+    .await
+}
+cli_wrapper!(run_voltage_glitch_attack, run_voltage_glitch_attack_result);
+
+pub async fn run_tpm_firmware_attack_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "tpm_firmware_attack",
+        target,
+        "TPM/firmware bus attacks require a local hardware agent",
+        "SPI/LPC TPM probing and firmware glitching cannot be inferred from remote HTTP or audit-only crypto scans.",
+    )
+    .await
+}
+cli_wrapper!(run_tpm_firmware_attack, run_tpm_firmware_attack_result);
+
+pub async fn run_cold_boot_attack_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "cold_boot_attack",
+        target,
+        "Cold-boot memory capture requires physical host access",
+        "RAM remanence extraction runs on an enrolled agent with physical access to the target machine.",
+    )
+    .await
+}
+cli_wrapper!(run_cold_boot_attack, run_cold_boot_attack_result);
+
+pub async fn run_hospital_hl7_attack_result(target: &str) -> EngineResult {
+    agent_required_bus_attack(
+        "hospital_hl7_attack",
+        target,
+        "HL7/clinical interface attacks require on-segment agent",
+        "MLLP/HL7 manipulation and medical-device bus testing need an agent on the clinical network segment.",
+    )
+    .await
+}
+cli_wrapper!(run_hospital_hl7_attack, run_hospital_hl7_attack_result);
 
 async fn port_probe_finding(
     target: &str,
@@ -48,49 +231,13 @@ async fn port_probe_finding(
     }
 }
 
-// Modbus TCP — port 502; verify with a "Read Holding Registers" probe.
-pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let host = extract_host(target);
-    let mut findings: Vec<Value> = Vec::new();
-    if tcp_open(&host, 502).await {
-        // MBAP header + function 03 read holding registers (1 register at addr 0)
-        let probe: [u8; 12] = [0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01];
-        let resp = tcp_probe_response(&host, 502, &probe).await;
-        let modbus_like = resp.as_deref().map(|b| b.len() >= 8 && b[7] == 0x03 || b.get(7) == Some(&0x83)).unwrap_or(false);
-        findings.push(finding(
-            "modbus_attack",
-            if modbus_like {
-                "Modbus/TCP confirmed (function 03 response)"
-            } else {
-                "Port 502/tcp open (Modbus likely)"
-            },
-            "high",
-            "T0843",
-            &format!("TCP {}:{} reachable. {}", host, 502, if modbus_like { "Function 03 echoed." } else { "No protocol confirmation." }),
-            target,
-        ));
-    }
-    if findings.is_empty() {
-        empty_ok("modbus_attack", target)
-    } else {
-        EngineResult::ok(findings.clone(), format!("modbus_attack: {}", findings.len()))
-    }
-}
-cli_wrapper!(run_modbus_attack, run_modbus_attack_result);
-
 pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
-    // Strengthened: probe with a DNP3 LINK_STATUS request (function code 0x09) — if the device
-    // replies with a valid DNP3 header (start bytes 0x05 0x64), it's a confirmed DNP3 endpoint.
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let host = extract_host(t);
     let mut findings: Vec<Value> = Vec::new();
     if tcp_open(&host, 20000).await {
-        // DNP3 LINK_STATUS request frame, src=1 dst=2
         let probe: [u8; 12] = [
             0x05, 0x64, 0x05, 0xC9, 0x02, 0x00, 0x01, 0x00, 0xCB, 0x16, 0x00, 0x00,
         ];
@@ -112,7 +259,11 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
                 "TCP {}:{} reachable. {}",
                 host,
                 20000,
-                if confirmed { "LINK_STATUS reply confirms DNP3." } else { "No protocol confirmation." }
+                if confirmed {
+                    "LINK_STATUS reply confirms DNP3."
+                } else {
+                    "No protocol confirmation."
+                }
             ),
             t,
         ));
@@ -124,12 +275,6 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
     }
 }
 cli_wrapper!(run_dnp3_attack, run_dnp3_attack_result);
-
-pub async fn run_bacnet_attack_result(t: &str) -> EngineResult {
-    // BACnet/IP uses UDP 47808; we test if the host has the port open via TCP just to confirm reachability.
-    port_probe_finding(t, "bacnet_attack", "BACnet building-automation port", "medium", "T0843", &[47808], "BACnet/IP listens on UDP 47808.").await
-}
-cli_wrapper!(run_bacnet_attack, run_bacnet_attack_result);
 
 pub async fn run_mqtt_attack_result(t: &str) -> EngineResult {
     port_probe_finding(t, "mqtt_attack", "MQTT broker port", "medium", "T0809", &[1883, 8883], "MQTT plaintext/TLS broker.").await
@@ -147,16 +292,12 @@ pub async fn run_zigbee_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_zigbee_attack, run_zigbee_attack_result);
 
 pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
-    // Strengthened: send an ISO-TSAP CR (Connection Request) TPKT — port 102 OT devices reply
-    // with a CC (Connection Confirm) packet starting 03 00 …, the TPKT header. Banner-only port
-    // scans miss this, but a real OT host announces itself.
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let host = extract_host(t);
     let mut findings: Vec<Value> = Vec::new();
     if tcp_open(&host, 102).await {
-        // Minimal TPKT-wrapped COTP CR PDU (22 bytes): 03 00 00 16  11 E0 00 00 00 01 00 …
         let probe: [u8; 22] = [
             0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0,
             0x01, 0x0A, 0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
@@ -179,7 +320,11 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
                 "TCP {}:{} reachable. {}",
                 host,
                 102,
-                if confirmed { "ISO-TSAP CR/CC handshake confirms IEC 61850 / MMS." } else { "No TPKT reply observed." }
+                if confirmed {
+                    "ISO-TSAP CR/CC handshake confirms IEC 61850 / MMS."
+                } else {
+                    "No TPKT reply observed."
+                }
             ),
             t,
         ));
@@ -191,11 +336,6 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
     }
 }
 cli_wrapper!(run_iec61850_attack, run_iec61850_attack_result);
-
-pub async fn run_opcua_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "opcua_attack", "OPC-UA industrial port", "high", "T0843", &[4840], "OPC-UA discovery endpoint.").await
-}
-cli_wrapper!(run_opcua_attack, run_opcua_attack_result);
 
 pub async fn run_plc_logic_attack_result(t: &str) -> EngineResult {
     port_probe_finding(t, "plc_logic_attack", "PLC engineering port", "high", "T0843", &[44818, 102, 502, 9600], "Common PLC engineering/runtime ports.").await

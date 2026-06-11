@@ -5,9 +5,22 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, has_header, header_value, http_get, http_client,
-    normalize_url, HttpProbe,
+    empty_ok, finding, finding_with_probe_depth, has_header, header_value,
+    http_get, http_client, http_post_json, normalize_url, HttpProbe,
 };
+
+const WEB_PROBE_DEPTH: &str = "web_app_surface";
+
+fn web_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, WEB_PROBE_DEPTH)
+}
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
 
@@ -27,12 +40,14 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
     let base = normalize_url(target);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
+    let intro = serde_json::json!({"query":"{__schema{types{name fields{name}}}}"});
+    let mutation_intro = serde_json::json!({"query":"{__schema{mutationType{name}}}"});
+    let batch = serde_json::json!([{"query":"{__typename}"},{"query":"{__typename}"}]);
     for path in ["/graphql", "/api/graphql", "/v1/graphql", "/query", "/api/v1/graphql"] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let intro = serde_json::json!({"query":"{__schema{types{name fields{name}}}}"});
-        if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &intro).await {
+        if let Some(p) = http_post_json(&client, &url, &intro).await {
             if p.status < 500 && p.body.contains("__schema") && p.body.contains("types") {
-                findings.push(finding(
+                findings.push(web_finding(
                     "graphql_deep_attack",
                     "GraphQL introspection enabled",
                     "high",
@@ -40,6 +55,36 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
                     &format!(
                         "GraphQL endpoint {} accepts __schema introspection (HTTP {}), exposing the full type graph to unauthenticated users.",
                         p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
+        }
+        if let Some(p) = http_post_json(&client, &url, &mutation_intro).await {
+            if p.status < 500 && p.body.contains("mutationType") {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "GraphQL mutation schema enumerable",
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "Mutation root exposed via introspection at {} (HTTP {}).",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
+        }
+        if let Some(p) = http_post_json(&client, &url, &batch).await {
+            if p.status >= 200 && p.status < 300 && p.body.trim_start().starts_with('[') {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "GraphQL batching accepted",
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "Endpoint {} returned batched JSON array for multi-query POST — brute-force/DoS amplification risk.",
+                        p.final_url
                     ),
                     target,
                 ));
@@ -60,29 +105,45 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let host = extract_host(target);
+    let base = normalize_url(target);
+    let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    for port in [50051u16, 9090, 8443, 443, 80] {
-        if crate::engine_probes::tcp_open(&host, port).await {
-            // gRPC reflection lives over h2; observable hint is open port + later TLS-alpn h2.
-            findings.push(finding(
-                "grpc_reflection_attack",
-                &format!("gRPC-style port open on {}:{}", host, port),
-                "medium",
-                "T1190",
-                &format!(
-                    "TCP {}:{} accepts connections. If the service implements grpc.reflection.v1alpha.ServerReflection, the schema is enumerable.",
-                    host, port
-                ),
-                target,
-            ));
+    let grpc_paths = [
+        "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+        "/grpc.health.v1.Health/Check",
+    ];
+    for path in grpc_paths {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = crate::engine_probes::http_post_json_with_headers(
+            &client,
+            &url,
+            &serde_json::json!({}),
+            &[("Content-Type", "application/grpc"), ("TE", "trailers")],
+        )
+        .await
+        {
+            let grpc_status = header_value(&p.headers, "grpc-status");
+            let grpc_message = header_value(&p.headers, "grpc-message");
+            if grpc_status.is_some() || grpc_message.is_some() {
+                findings.push(web_finding(
+                    "grpc_reflection_attack",
+                    "gRPC endpoint responded with grpc-status headers",
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "POST {} returned gRPC framing (grpc-status={:?}, grpc-message={:?}) — reflection/schema enumeration may be reachable over HTTP/2.",
+                        p.final_url, grpc_status, grpc_message
+                    ),
+                    target,
+                ));
+            }
         }
     }
     if findings.is_empty() {
         empty_ok("grpc_reflection_attack", target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("grpc_reflection_attack: {} port(s)", n))
+        EngineResult::ok(findings, format!("grpc_reflection_attack: {} signal(s)", n))
     }
 }
 cli_wrapper!(run_grpc_reflection_attack, run_grpc_reflection_attack_result);
@@ -333,20 +394,32 @@ pub async fn run_template_injection_adv_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    let probe = format!("{}/?q={}", base.trim_end_matches('/'), "%7B%7B7*7%7D%7D");
-    if let Some(p) = http_get(&client, &probe).await {
-        if p.body.contains("49") && !p.body.contains("{{7*7}}") {
-            findings.push(finding(
-                "template_injection_adv",
-                "Possible server-side template evaluation (7*7=49)",
-                "high",
-                "T1059",
-                &format!(
-                    "Response to {{7*7}} payload on {} contains '49' — engine likely evaluated the expression server-side.",
-                    p.final_url
-                ),
-                target,
-            ));
+    let payloads = [("{{7*7}}", "49"), ("${7*7}", "49"), ("#{7*7}", "49")];
+    let params = ["q", "search", "name", "template", "page"];
+    'outer: for param in params {
+        for (payload, expected) in payloads {
+            let probe = format!(
+                "{}/?{}={}",
+                base.trim_end_matches('/'),
+                param,
+                urlencoding::encode(payload)
+            );
+            if let Some(p) = http_get(&client, &probe).await {
+                if p.body.contains(expected) && !p.body.contains(payload) {
+                    findings.push(web_finding(
+                        "template_injection_adv",
+                        "Server-side template evaluation confirmed",
+                        "high",
+                        "T1059",
+                        &format!(
+                            "Parameter '{}' on {} evaluated '{}' → '{}' without echoing the payload.",
+                            param, p.final_url, payload, expected
+                        ),
+                        target,
+                    ));
+                    break 'outer;
+                }
+            }
         }
     }
     if findings.is_empty() {
@@ -718,18 +791,44 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let host = extract_host(target);
+    let base = normalize_url(target);
+    let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    for port in [8080u16, 4000, 8000, 3000] {
-        if crate::engine_probes::tcp_open(&host, port).await {
-            findings.push(finding(
-                "graphql_subscription_attack",
-                &format!("Potential WS/GraphQL port open {}:{}", host, port),
-                "info",
-                "T1190",
-                &format!("TCP open on {}:{}. Validate /subscriptions endpoint with WS upgrade.", host, port),
-                target,
-            ));
+    let sub_query = serde_json::json!({"query":"subscription { __typename }"});
+    for path in ["/graphql", "/api/graphql", "/subscriptions", "/api/subscriptions"] {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_post_json(&client, &url, &sub_query).await {
+            let body_low = p.body.to_ascii_lowercase();
+            if body_low.contains("subscription")
+                && (body_low.contains("not supported")
+                    || body_low.contains("cannot")
+                    || body_low.contains("websocket")
+                    || body_low.contains("ws"))
+            {
+                findings.push(web_finding(
+                    "graphql_subscription_attack",
+                    "GraphQL subscription transport referenced",
+                    "info",
+                    "T1190",
+                    &format!(
+                        "POST {} returned subscription-related errors (HTTP {}) — WebSocket subscription transport may be enabled; verify auth on upgrade.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            } else if p.status >= 200 && p.status < 300 && p.body.contains("__typename") {
+                findings.push(web_finding(
+                    "graphql_subscription_attack",
+                    "GraphQL subscription query accepted over HTTP",
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "Subscription query accepted at {} (HTTP {}) without WebSocket upgrade — check authorization on live subscription streams.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
         }
     }
     if findings.is_empty() {

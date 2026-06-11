@@ -42,7 +42,12 @@ async fn missing_header_finding(target: &str, engine_id: &str, title: &str, mitr
 }
 
 pub async fn run_process_hollowing_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "process_hollowing",
+        t,
+        "Process hollowing / injection requires host memory inspection",
+        "T1055.012 hollowing swaps code inside a live process — invisible to HTTP/DNS probes. The Weissman agent monitors cross-process memory writes, suspicious section mappings, and hollowed-image signatures.",
+    )
 }
 cli_wrapper!(run_process_hollowing, run_process_hollowing_result);
 
@@ -52,7 +57,115 @@ pub async fn run_dll_hijacking_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_dll_hijacking_engine, run_dll_hijacking_engine_result);
 
 pub async fn run_living_off_land_result(t: &str) -> EngineResult {
-    missing_header_finding(t, "living_off_land", "Hardening header check", "T1218", &["x-content-type-options", "x-frame-options"]).await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let mut findings: Vec<Value> = Vec::new();
+
+    let script_paths = [
+        "/scripts/", "/js/", "/static/js/", "/assets/js/", "/api/exec", "/api/run",
+        "/download/", "/powershell", "/shell", "/bin/", "/tools/",
+    ];
+    let script_content_types = [
+        "application/javascript",
+        "text/javascript",
+        "application/x-powershell",
+        "text/plain",
+        "application/octet-stream",
+    ];
+
+    for path in script_paths {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status >= 200 && p.status < 400 {
+                if let Some(ct) = header_value(&p.headers, "content-type") {
+                    let ct_low = ct.to_ascii_lowercase();
+                    if script_content_types.iter().any(|s| ct_low.contains(s)) {
+                        findings.push(finding(
+                            "living_off_land",
+                            &format!("Script-friendly content-type on {}", path),
+                            "medium",
+                            "T1218",
+                            &format!(
+                                "{} serves Content-Type '{}' — review for LOLBin/script delivery (mshta, regsvr32, powershell download cradle).",
+                                p.final_url, ct
+                            ),
+                            t,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    let dangerous_ext = [".ps1", ".bat", ".cmd", ".vbs", ".js", ".hta", ".dll", ".scr", ".msi"];
+    let upload_bases = [
+        "/upload/", "/uploads/", "/files/", "/static/", "/media/", "/assets/", "/download/",
+    ];
+    for upload_base in upload_bases {
+        for ext in dangerous_ext {
+            let url = format!("{}{}probe{}", base.trim_end_matches('/'), upload_base, ext);
+            if let Some(p) = http_get(&client, &url).await {
+                if p.status == 200 && !p.body.trim().is_empty() {
+                    findings.push(finding(
+                        "living_off_land",
+                        &format!("Dangerous extension reachable under {}{}", upload_base, ext),
+                        "high",
+                        "T1218",
+                        &format!(
+                            "{} returned HTTP 200 for a {} file — attackers may host LOLBins for download-and-execute chains.",
+                            p.final_url, ext
+                        ),
+                        t,
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Some(p) = http_get(&client, &base).await {
+        let body_low = p.body.to_ascii_lowercase();
+        for ext in dangerous_ext {
+            if body_low.contains(ext) {
+                findings.push(finding(
+                    "living_off_land",
+                    &format!("Page references {} artifacts", ext),
+                    "medium",
+                    "T1218",
+                    &format!(
+                        "Response from {} links to or mentions '{}' — verify these are not user-uploaded script payloads.",
+                        p.final_url, ext
+                    ),
+                    t,
+                ));
+                break;
+            }
+        }
+        if !has_header(&p.headers, "x-content-type-options") {
+            findings.push(finding(
+                "living_off_land",
+                "Missing X-Content-Type-Options (MIME sniffing aids LOLBin delivery)",
+                "low",
+                "T1218",
+                &format!(
+                    "{} lacks X-Content-Type-Options: nosniff — browsers may misinterpret uploaded script content.",
+                    p.final_url
+                ),
+                t,
+            ));
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("living_off_land", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("living_off_land: {} remote LOLBin surface signal(s)", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_living_off_land, run_living_off_land_result);
 

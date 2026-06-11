@@ -94,23 +94,75 @@ pub async fn run_encrypted_exfil_result(t: &str) -> EngineResult {
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    const LARGE_BODY_BYTES: usize = 1_048_576;
+    const CLOUD_REF_MIN_BYTES: usize = 10_240;
     let client = http_client().await;
     let url = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if header_value(&p.headers, "content-encoding").unwrap_or("").contains("br") {
+        if p.body.len() >= LARGE_BODY_BYTES {
             findings.push(finding(
                 "encrypted_exfil",
-                "Brotli/compressed response — content opaque to legacy DLP",
-                "info",
+                &format!("Large outbound response ({} B)", p.body.len()),
+                "medium",
                 "T1048.002",
-                &format!("Response from {} uses Brotli content-encoding.", p.final_url),
+                &format!(
+                    "Response from {} is {} bytes — large payloads may carry encrypted or compressed exfil staging; verify DLP/egress inspection.",
+                    p.final_url, p.body.len()
+                ),
                 t,
             ));
         }
+        if let Some(cl) = header_value(&p.headers, "content-length") {
+            if let Ok(len) = cl.parse::<usize>() {
+                if len >= LARGE_BODY_BYTES && p.body.len() < LARGE_BODY_BYTES {
+                    findings.push(finding(
+                        "encrypted_exfil",
+                        &format!("Content-Length indicates large payload ({} B)", len),
+                        "medium",
+                        "T1048.002",
+                        &format!(
+                            "Content-Length header on {} declares {} bytes — inspect egress for bulk encrypted transfers.",
+                            p.final_url, len
+                        ),
+                        t,
+                    ));
+                }
+            }
+        }
+        let cloud_hosts = [
+            ("amazonaws.com", "AWS S3/object storage"),
+            ("storage.googleapis.com", "Google Cloud Storage"),
+            (".blob.core.windows.net", "Azure Blob Storage"),
+            ("dropbox.com", "Dropbox"),
+            ("backblazeb2.com", "Backblaze B2"),
+            ("wasabisys.com", "Wasabi"),
+        ];
+        for (host, label) in cloud_hosts {
+            if p.body.contains(host) && p.body.len() >= CLOUD_REF_MIN_BYTES {
+                findings.push(finding(
+                    "encrypted_exfil",
+                    &format!("Cloud storage URL in large response ({})", label),
+                    "info",
+                    "T1567.002",
+                    &format!(
+                        "Response from {} ({} B) references {} — verify outbound uploads to third-party storage are authorized.",
+                        p.final_url, p.body.len(), label
+                    ),
+                    t,
+                ));
+                break;
+            }
+        }
     }
-    if findings.is_empty() { empty_ok("encrypted_exfil", t) }
-    else { EngineResult::ok(findings.clone(), format!("encrypted_exfil: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("encrypted_exfil", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("encrypted_exfil: {} exfil surface signal(s)", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_encrypted_exfil, run_encrypted_exfil_result);
 

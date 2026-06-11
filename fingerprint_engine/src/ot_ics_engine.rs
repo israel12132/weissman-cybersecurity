@@ -1,4 +1,4 @@
-//! Phase 7: OT/ICS passive fingerprinting — Modbus TCP, EtherNet/IP (CIP), S7/ISO-on-TCP.
+//! Phase 7: OT/ICS passive fingerprinting — Modbus TCP, BACnet/IP, OPC-UA, EtherNet/IP (CIP), S7/ISO-on-TCP.
 //! Read-only / exception-probing only; short timeouts to reduce load on fragile controllers.
 //!
 //! Concurrency: many **distinct IPs** in parallel (cap 50–100), but **one TCP probe at a time**
@@ -14,6 +14,8 @@ use tokio::net::TcpStream;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(1200);
 const IO_TIMEOUT: Duration = Duration::from_millis(900);
 pub const MODBUS_PORT: u16 = 502;
+pub const BACNET_PORT: u16 = 47808;
+pub const OPCUA_PORT: u16 = 4840;
 pub const ENIP_PORT: u16 = 44818;
 pub const S7_PORT: u16 = 102;
 
@@ -62,7 +64,7 @@ fn modbus_exception_meaning(code: u8) -> &'static str {
 }
 
 /// Modbus TCP: MBAP + illegal function 0xFF — valid stack returns exception 0x81+ or echoes pattern.
-async fn probe_modbus(host: &str) -> Option<OtFingerprint> {
+pub async fn probe_modbus(host: &str) -> Option<OtFingerprint> {
     let addr = format!("{}:{}", host, MODBUS_PORT);
     let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
         Ok(Ok(s)) => s,
@@ -120,6 +122,165 @@ async fn probe_modbus(host: &str) -> Option<OtFingerprint> {
         confidence: conf,
         raw_excerpt_hex: to_hex_prefix(slice, 48),
         metadata: Value::Object(meta),
+    })
+}
+
+/// Modbus TCP: MBAP + function 0x03 read holding registers (addr 0, qty 1) — passive FC probe.
+pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
+    let addr = format!("{}:{}", host, MODBUS_PORT);
+    let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        _ => return None,
+    };
+    let _ = stream.set_nodelay(true);
+    let pdu: [u8; 12] = [0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01];
+    match tokio::time::timeout(IO_TIMEOUT, stream.write_all(&pdu)).await {
+        Ok(Ok(())) => {}
+        _ => return None,
+    }
+    let mut resp = [0u8; 256];
+    let n = match tokio::time::timeout(IO_TIMEOUT, stream.read(&mut resp)).await {
+        Ok(Ok(n)) => n,
+        _ => return None,
+    };
+    if n < 8 {
+        return None;
+    }
+    let slice = resp.get(..n)?;
+    let fc = *slice.get(7)?;
+    let looks_read = fc == 0x03;
+    let looks_exception = fc == 0x83;
+    if !looks_read && !looks_exception {
+        return None;
+    }
+    let conf = if looks_read { 0.9 } else { 0.82 };
+    Some(OtFingerprint {
+        host: host.to_string(),
+        port: MODBUS_PORT,
+        protocol: "modbus_tcp".into(),
+        vendor_hint: if looks_read {
+            "Modbus/TCP (function 03 read response)".into()
+        } else {
+            "Modbus/TCP (function 03 exception response)".into()
+        },
+        confidence: conf,
+        raw_excerpt_hex: to_hex_prefix(slice, 48),
+        metadata: json!({
+            "unit_id": slice.get(6).copied().unwrap_or(0),
+            "function_code": fc,
+            "probe": "read_holding_registers_fc03",
+        }),
+    })
+}
+
+/// BACnet/IP: BVLC readProperty for device object-name (UDP 47808).
+pub async fn probe_bacnet_read_property(host: &str) -> Option<OtFingerprint> {
+    use tokio::net::UdpSocket;
+    let payload: [u8; 17] = [
+        0x81, 0x0a, 0x00, 0x16, 0x01, 0x04, 0x00, 0x05, 0x01, 0x01, 0x0c, 0x0c, 0x02, 0x3f,
+        0xff, 0x19, 0x4c,
+    ];
+    let local = match tokio::time::timeout(CONNECT_TIMEOUT, UdpSocket::bind("0.0.0.0:0")).await {
+        Ok(Ok(s)) => s,
+        _ => return None,
+    };
+    let remote = format!("{}:{}", host, BACNET_PORT);
+    if local.connect(&remote).await.is_err() {
+        return None;
+    }
+    if local.send(&payload).await.is_err() {
+        return None;
+    }
+    let mut resp = [0u8; 512];
+    let n = match tokio::time::timeout(IO_TIMEOUT, local.recv(&mut resp)).await {
+        Ok(Ok(n)) if n >= 6 => n,
+        _ => return None,
+    };
+    let slice = resp.get(..n)?;
+    if slice.first().copied() != Some(0x81) || slice.get(1).copied() != Some(0x0a) {
+        return None;
+    }
+    let npdu_version = slice.get(4).copied().unwrap_or(0);
+    let conf = if npdu_version == 0x01 { 0.9 } else { 0.75 };
+    Some(OtFingerprint {
+        host: host.to_string(),
+        port: BACNET_PORT,
+        protocol: "bacnet_ip".into(),
+        vendor_hint: "BACnet/IP (readProperty response)".into(),
+        confidence: conf,
+        raw_excerpt_hex: to_hex_prefix(slice, 48),
+        metadata: json!({
+            "npdu_version": npdu_version,
+            "probe": "read_property_object_name",
+        }),
+    })
+}
+
+fn build_opcua_hello(host: &str) -> Vec<u8> {
+    let endpoint = format!("opc.tcp://{host}:{OPCUA_PORT}");
+    let url = endpoint.as_bytes();
+    let mut out = Vec::with_capacity(32 + url.len());
+    out.extend_from_slice(b"HELF");
+    let body_len = 4 + 4 + 4 + 4 + 4 + 4 + url.len();
+    let msg_size = (8 + body_len) as u32;
+    out.extend_from_slice(&msg_size.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&65_535u32.to_le_bytes());
+    out.extend_from_slice(&65_535u32.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&(url.len() as u32).to_le_bytes());
+    out.extend_from_slice(url);
+    out
+}
+
+/// OPC-UA: TCP binary HEL — discovery banner via ACK/ERR reply.
+pub async fn probe_opcua_discovery(host: &str) -> Option<OtFingerprint> {
+    let addr = format!("{}:{}", host, OPCUA_PORT);
+    let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        _ => return None,
+    };
+    let _ = stream.set_nodelay(true);
+    let hello = build_opcua_hello(host);
+    match tokio::time::timeout(IO_TIMEOUT, stream.write_all(&hello)).await {
+        Ok(Ok(())) => {}
+        _ => return None,
+    }
+    let mut resp = [0u8; 512];
+    let n = match tokio::time::timeout(IO_TIMEOUT, stream.read(&mut resp)).await {
+        Ok(Ok(n)) if n >= 8 => n,
+        _ => return None,
+    };
+    let slice = resp.get(..n)?;
+    let msg_type = std::str::from_utf8(slice.get(..3).unwrap_or(&[])).unwrap_or("");
+    let is_ack = msg_type == "ACK";
+    let is_err = msg_type == "ERR";
+    if !is_ack && !is_err {
+        return None;
+    }
+    let banner = String::from_utf8_lossy(slice.get(8..n.min(128)).unwrap_or(&[]))
+        .chars()
+        .filter(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+        .collect::<String>()
+        .trim()
+        .to_string();
+    Some(OtFingerprint {
+        host: host.to_string(),
+        port: OPCUA_PORT,
+        protocol: "opc_ua".into(),
+        vendor_hint: if is_ack {
+            "OPC-UA (HEL/ACK discovery handshake)".into()
+        } else {
+            "OPC-UA (HEL/ERR — server rejected hello)".into()
+        },
+        confidence: if is_ack { 0.92 } else { 0.78 },
+        raw_excerpt_hex: to_hex_prefix(slice, 64),
+        metadata: json!({
+            "message_type": msg_type,
+            "discovery_banner": banner,
+            "probe": "opcua_hello_discovery",
+        }),
     })
 }
 
@@ -426,10 +587,21 @@ async fn probe_s7(host: &str) -> Option<OtFingerprint> {
     })
 }
 
-/// Run all three probes **sequentially** on one host (single-IP safety).
+/// Run OT protocol probes **sequentially** on one host (single-IP safety).
 async fn probe_host_passive_sequential(host: String) -> Vec<OtFingerprint> {
     let mut out = Vec::new();
     if let Some(fp) = probe_modbus(&host).await {
+        out.push(fp);
+    }
+    if let Some(fp) = probe_modbus_function_code(&host).await {
+        if out.iter().all(|e| e.protocol != "modbus_tcp") {
+            out.push(fp);
+        }
+    }
+    if let Some(fp) = probe_bacnet_read_property(&host).await {
+        out.push(fp);
+    }
+    if let Some(fp) = probe_opcua_discovery(&host).await {
         out.push(fp);
     }
     if let Some(fp) = probe_enip(&host).await {

@@ -72,14 +72,17 @@ ALTER TABLE endpoint_agents               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE endpoint_agent_enrollment_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE endpoint_agent_tasks          ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS endpoint_agents_tenant_isolation ON endpoint_agents;
 CREATE POLICY endpoint_agents_tenant_isolation
     ON endpoint_agents
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
 
+DROP POLICY IF EXISTS endpoint_agent_tokens_tenant_isolation ON endpoint_agent_enrollment_tokens;
 CREATE POLICY endpoint_agent_tokens_tenant_isolation
     ON endpoint_agent_enrollment_tokens
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
 
+DROP POLICY IF EXISTS endpoint_agent_tasks_tenant_isolation ON endpoint_agent_tasks;
 CREATE POLICY endpoint_agent_tasks_tenant_isolation
     ON endpoint_agent_tasks
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);

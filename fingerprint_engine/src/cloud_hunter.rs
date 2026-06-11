@@ -7,6 +7,33 @@ use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
 
+const CLOUD_HUNTER_PROBE_DEPTH: &str = "cloud_dns_surface";
+
+fn cloud_hunter_finding(
+    subtype: &str,
+    asset: &str,
+    value: &str,
+    severity: &str,
+    title: &str,
+    cname_target: Option<&str>,
+) -> serde_json::Value {
+    let mut obj = serde_json::json!({
+        "type": "cloud_hunter",
+        "subtype": subtype,
+        "asset": asset,
+        "value": value,
+        "severity": severity,
+        "title": title,
+        "probe_depth": CLOUD_HUNTER_PROBE_DEPTH,
+    });
+    if let Some(cname) = cname_target {
+        if let Some(map) = obj.as_object_mut() {
+            map.insert("cname_target".to_string(), serde_json::json!(cname));
+        }
+    }
+    obj
+}
+
 /// Known CNAME suffixes that are common subdomain takeover targets when the target service is gone.
 const TAKEOVER_CNAME_SUFFIXES: &[&str] = &[
     // AWS S3
@@ -306,30 +333,28 @@ pub async fn run_cloud_hunter(
                     let exposed = is_list_bucket_response(&body, status_code);
                     (takeover, exposed)
                 }
-                Err(_) => (is_takeover_suffix && !target_resolves, false),
+                Err(_) => (false, false),
             };
 
             if takeover {
-                findings.push(serde_json::json!({
-                    "type": "cloud_hunter",
-                    "subtype": "subdomain_takeover",
-                    "asset": "subdomain",
-                    "value": sub,
-                    "cname_target": cname_lower,
-                    "severity": "critical",
-                    "title": "Dangling DNS / Subdomain Takeover"
-                }));
+                findings.push(cloud_hunter_finding(
+                    "subdomain_takeover",
+                    "subdomain",
+                    &sub,
+                    "critical",
+                    "Dangling DNS / Subdomain Takeover",
+                    Some(&cname_lower),
+                ));
             }
             if exposed {
-                findings.push(serde_json::json!({
-                    "type": "cloud_hunter",
-                    "subtype": "public_cloud_exposure",
-                    "asset": "storage",
-                    "value": sub,
-                    "cname_target": cname_lower,
-                    "severity": "critical",
-                    "title": "Public Cloud Storage / Directory Listing"
-                }));
+                findings.push(cloud_hunter_finding(
+                    "public_cloud_exposure",
+                    "storage",
+                    &sub,
+                    "critical",
+                    "Public Cloud Storage / Directory Listing",
+                    Some(&cname_lower),
+                ));
             }
 
             let status = if takeover {
@@ -359,14 +384,14 @@ pub async fn run_cloud_hunter(
                 Err(_) => false,
             };
             if exposed {
-                findings.push(serde_json::json!({
-                    "type": "cloud_hunter",
-                    "subtype": "public_cloud_exposure",
-                    "asset": "storage",
-                    "value": sub,
-                    "severity": "critical",
-                    "title": "Public Cloud Storage / Directory Listing"
-                }));
+                findings.push(cloud_hunter_finding(
+                    "public_cloud_exposure",
+                    "storage",
+                    &sub,
+                    "critical",
+                    "Public Cloud Storage / Directory Listing",
+                    None,
+                ));
             }
             let status = if exposed {
                 "exposed".to_string()

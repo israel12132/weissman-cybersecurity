@@ -78,7 +78,7 @@ export default function IdentityContextManager() {
                 <span className="text-sm font-mono text-amber-300/90">{error}</span>
               </div>
               <button
-                onClick={fetchIdentities}
+                onClick={() => clientId != null && fetchIdentities(clientId)}
                 className="text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors"
               >
                 Retry

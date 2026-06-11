@@ -20,80 +20,25 @@ import { useProductionEngines } from '../lib/useProductionEngines'
 
 // ─── Kill Chain Phases (MITRE scaffolding — engines/findings are live) ────────
 
-const PHASES = [
-  {
-    id: 'reconnaissance',
-    label: 'Reconnaissance',
-    icon: '🔭',
-    color: '#22d3ee',
-    mitre: 'TA0043',
-    techniques: ['T1595', 'T1592', 'T1589', 'T1590', 'T1597', 'T1598'],
-    description: 'Gather intelligence on target systems, networks, employees, and infrastructure before active exploitation.',
-    riskWeight: 0.10,
-  },
-  {
-    id: 'weaponization',
-    label: 'Weaponization',
-    icon: '⚗️',
-    color: '#a78bfa',
-    mitre: 'TA0001',
-    techniques: ['T1587', 'T1588', 'T1583', 'T1584'],
-    description: 'Develop or acquire tools, exploits, and payloads tailored to target vulnerabilities.',
-    riskWeight: 0.15,
-  },
-  {
-    id: 'delivery',
-    label: 'Delivery',
-    icon: '📦',
-    color: '#f97316',
-    mitre: 'TA0001',
-    techniques: ['T1566', 'T1190', 'T1195', 'T1091'],
-    description: 'Transmit weaponized payloads to the target environment via phishing, web exploits, or supply chain compromise.',
-    riskWeight: 0.20,
-  },
-  {
-    id: 'exploitation',
-    label: 'Exploitation',
-    icon: '💥',
-    color: '#ef4444',
-    mitre: 'TA0002',
-    techniques: ['T1203', 'T1211', 'T1068', 'T1210'],
-    description: 'Trigger code execution or abuse vulnerabilities to establish initial access within the target.',
-    riskWeight: 0.25,
-  },
-  {
-    id: 'installation',
-    label: 'Installation',
-    icon: '🔩',
-    color: '#f59e0b',
-    mitre: 'TA0003',
-    techniques: ['T1543', 'T1547', 'T1574', 'T1505'],
-    description: 'Install backdoors, web shells, or persistent agents to maintain access after initial compromise.',
-    riskWeight: 0.10,
-  },
-  {
-    id: 'c2',
-    label: 'Command & Control',
-    icon: '📡',
-    color: '#6366f1',
-    mitre: 'TA0011',
-    techniques: ['T1071', 'T1090', 'T1572', 'T1008'],
-    description: 'Establish covert communication channels between compromised hosts and attacker-controlled infrastructure.',
-    riskWeight: 0.10,
-  },
-  {
-    id: 'exfiltration',
-    label: 'Exfiltration',
-    icon: '📤',
-    color: '#10b981',
-    mitre: 'TA0010',
-    techniques: ['T1041', 'T1048', 'T1537', 'T1020'],
-    description: 'Extract sensitive data from the target environment using covert channels or cloud storage abuse.',
-    riskWeight: 0.10,
-  },
+const PHASE_DEFS = [
+  { id: 'reconnaissance', icon: '🔭', color: '#22d3ee', mitre: 'TA0043', techniques: ['T1595', 'T1592', 'T1589', 'T1590', 'T1597', 'T1598'], riskWeight: 0.10 },
+  { id: 'weaponization', icon: '⚗️', color: '#a78bfa', mitre: 'TA0001', techniques: ['T1587', 'T1588', 'T1583', 'T1584'], riskWeight: 0.15 },
+  { id: 'delivery', icon: '📦', color: '#f97316', mitre: 'TA0001', techniques: ['T1566', 'T1190', 'T1195', 'T1091'], riskWeight: 0.20 },
+  { id: 'exploitation', icon: '💥', color: '#ef4444', mitre: 'TA0002', techniques: ['T1203', 'T1211', 'T1068', 'T1210'], riskWeight: 0.25 },
+  { id: 'installation', icon: '🔩', color: '#f59e0b', mitre: 'TA0003', techniques: ['T1543', 'T1547', 'T1574', 'T1505'], riskWeight: 0.10 },
+  { id: 'c2', icon: '📡', color: '#6366f1', mitre: 'TA0011', techniques: ['T1071', 'T1090', 'T1572', 'T1008'], riskWeight: 0.10 },
+  { id: 'exfiltration', icon: '📤', color: '#10b981', mitre: 'TA0010', techniques: ['T1041', 'T1048', 'T1537', 'T1020'], riskWeight: 0.10 },
 ]
 
-const PHASE_SEQUENCE = PHASES.map((p) => p.id)
+function buildPhases(t) {
+  return PHASE_DEFS.map((phase) => ({
+    ...phase,
+    label: t(`pages.killChainOrchestrator.phases.${phase.id}.label`),
+    description: t(`pages.killChainOrchestrator.phases.${phase.id}.description`),
+  }))
+}
+
+const PHASE_SEQUENCE = PHASE_DEFS.map((p) => p.id)
 
 /** Engine IDs per phase — mirrors backend `kill_chain_orchestrator.py`. */
 const PHASE_ENGINE_MAP = {
@@ -169,12 +114,16 @@ const VULN_TYPE_PHASE_AFFINITY = {
   keylogger: 'installation',
 }
 
-const SEVERITY_META = {
-  critical: { color: '#ef4444', label: 'CRITICAL' },
-  high: { color: '#f97316', label: 'HIGH' },
-  medium: { color: '#f59e0b', label: 'MEDIUM' },
-  low: { color: '#22d3ee', label: 'LOW' },
-  info: { color: '#6b7280', label: 'INFO' },
+function severityMeta(sev, t) {
+  const color = {
+    critical: '#ef4444',
+    high: '#f97316',
+    medium: '#f59e0b',
+    low: '#22d3ee',
+    info: '#6b7280',
+  }[sev] ?? '#f59e0b'
+  const labelKey = `pages.killChainOrchestrator.severity_${sev}`
+  return { color, label: t(labelKey, { defaultValue: sev?.toUpperCase() }) }
 }
 
 const SEVERITY_RANK = { critical: 5, high: 4, medium: 3, low: 2, info: 1 }
@@ -302,7 +251,7 @@ function buildChainsFromFindings(findings) {
         name: target === 'Unscoped findings' ? 'Unscoped attack chain' : `${target} attack chain`,
         severity: maxSeverity(groupFindings) === 'info' ? severity : maxSeverity(groupFindings),
         completedPhases,
-        totalPhases: PHASES.length,
+        totalPhases: PHASE_DEFS.length,
         riskScore,
         target,
         discoveredAt,
@@ -318,6 +267,27 @@ function buildChainsFromFindings(findings) {
 function enginesForPhase(phaseId, productionEngines) {
   const allowed = new Set(PHASE_ENGINE_MAP[phaseId] || [])
   return productionEngines.filter((e) => allowed.has(e.id))
+}
+
+function buildEngineStatusFromFindings(findings) {
+  const map = {}
+  for (const f of findings) {
+    const id = normalizeSource(f)
+    if (!id) continue
+    const sev = (f.severity || 'info').toLowerCase()
+    const at = f.discovered_at || f.created_at || ''
+    if (!map[id]) {
+      map[id] = { findingCount: 0, maxSeverity: 'info', lastAt: at }
+    }
+    map[id].findingCount += 1
+    if ((SEVERITY_RANK[sev] || 0) > (SEVERITY_RANK[map[id].maxSeverity] || 0)) {
+      map[id].maxSeverity = sev
+    }
+    if (at && (!map[id].lastAt || at > map[id].lastAt)) {
+      map[id].lastAt = at
+    }
+  }
+  return map
 }
 
 function parseFindingsResponse(data) {
@@ -348,7 +318,7 @@ function normalizeApiChains(apiChains) {
       : 0
     const riskScore = chain.phase_progress != null
       ? Math.round(Number(chain.phase_progress))
-      : Math.round((completedPhases / PHASES.length) * 100)
+      : Math.round((completedPhases / PHASE_DEFS.length) * 100)
 
     const target = chain.client_id != null
       ? `Client ${chain.client_id}`
@@ -360,7 +330,7 @@ function normalizeApiChains(apiChains) {
       name: chain.name || `${target} attack chain`,
       severity: (chain.severity || 'medium').toLowerCase(),
       completedPhases,
-      totalPhases: PHASES.length,
+      totalPhases: PHASE_DEFS.length,
       riskScore,
       target,
       discoveredAt,
@@ -409,25 +379,32 @@ export default function KillChainOrchestrator() {
         setFindings(parseFindingsResponse(findingsData))
         setExecKpis(kpisData)
       } catch (e) {
-        if (!cancelled) setError(e.message || 'Failed to load kill-chain data')
+        if (!cancelled) setError(e.message || t('pages.killChainOrchestrator.load_error', { error: '' }))
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const chains = useMemo(
     () => chainsFromApi ?? buildChainsFromFindings(findings),
     [chainsFromApi, findings],
   )
 
+  const engineStatusById = useMemo(
+    () => buildEngineStatusFromFindings(findings),
+    [findings],
+  )
+
+  const phases = useMemo(() => buildPhases(t), [t])
+
   const phasesWithEngines = useMemo(
-    () => PHASES.map((phase) => ({
+    () => phases.map((phase) => ({
       ...phase,
-      engines: enginesForPhase(phase.id, productionEngines).map((e) => e.label),
+      engines: enginesForPhase(phase.id, productionEngines),
     })),
-    [productionEngines],
+    [phases, productionEngines],
   )
 
   const filteredChains = useMemo(
@@ -474,26 +451,24 @@ export default function KillChainOrchestrator() {
       badgeColor="#ef4444"
     >
       <p className="text-xs text-white/45 font-mono mb-6">
-        Chains from <code>/api/soc/kill-chains</code>
-        {chainsFromApi ? ' (live)' : ' — falling back to findings grouped by target'}.
-        Engine mappings from <code>/api/engines/production</code>
-        {productionCount > 0 ? ` (${productionCount} live)` : ''}. KPIs augmented by{' '}
-        <code>/api/dashboard/exec-kpis</code> when findings are sparse.
+        {t('pages.killChainOrchestrator.data_source_note', {
+          live: chainsFromApi ? t('pages.killChainOrchestrator.data_source_live') : t('pages.killChainOrchestrator.data_source_fallback'),
+          engines: productionCount > 0 ? t('pages.killChainOrchestrator.data_source_engines', { count: productionCount }) : '',
+        })}
       </p>
 
       {error && (
         <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-          Couldn't load kill-chain data: {error}.
+          {t('pages.killChainOrchestrator.load_error', { error })}
         </div>
       )}
 
-      {/* ── KPI Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Active Chains', value: isLoading ? '…' : chains.length, color: '#22d3ee' },
-          { label: 'Avg Risk Score', value: isLoading ? '…' : `${overallRisk}/100`, color: '#ef4444' },
-          { label: 'Techniques Mapped', value: isLoading ? '…' : techniquesMapped, color: '#f97316' },
-          { label: 'Phases Covered', value: isLoading ? '…' : `${phasesCovered}/${PHASES.length}`, color: '#10b981' },
+          { label: t('pages.killChainOrchestrator.kpi_active_chains'), value: isLoading ? '…' : chains.length, color: '#22d3ee' },
+          { label: t('pages.killChainOrchestrator.kpi_avg_risk'), value: isLoading ? '…' : `${overallRisk}/100`, color: '#ef4444' },
+          { label: t('pages.killChainOrchestrator.kpi_techniques'), value: isLoading ? '…' : techniquesMapped, color: '#f97316' },
+          { label: t('pages.killChainOrchestrator.kpi_phases_covered'), value: isLoading ? '…' : `${phasesCovered}/${PHASE_DEFS.length}`, color: '#10b981' },
         ].map((kpi) => (
           <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
             <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
@@ -504,31 +479,31 @@ export default function KillChainOrchestrator() {
 
       {isLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-white/45">
-          Loading findings and production engines…
+          {t('pages.killChainOrchestrator.loading')}
         </div>
       ) : chains.length === 0 ? (
         <EmptyState
           icon="radar"
           title={t('pages.killChainOrchestrator.no_findings_title')}
-          body="Kill-chain views are built from live scan findings. Run engines against a target to populate reconnaissance through exfiltration phases."
-          cta={{ label: 'Open Findings C2', to: '/findings' }}
-          secondary={{ label: 'Browse engines', to: '/engines' }}
+          body={t('pages.killChainOrchestrator.no_findings_body')}
+          cta={{ label: t('pages.killChainOrchestrator.cta_open_findings'), to: '/findings' }}
+          secondary={{ label: t('pages.killChainOrchestrator.cta_browse_engines'), to: '/engines' }}
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ── Left: Chain List ── */}
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-white/80">Attack Chains</h2>
+              <h2 className="text-sm font-semibold text-white/80">{t('pages.killChainOrchestrator.attack_chains')}</h2>
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
                 className="text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white/60 focus:outline-none"
               >
-                <option value="all">All Severity</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
+                <option value="all">{t('pages.killChainOrchestrator.filter_all')}</option>
+                <option value="critical">{t('pages.killChainOrchestrator.filter_critical')}</option>
+                <option value="high">{t('pages.killChainOrchestrator.filter_high')}</option>
+                <option value="medium">{t('pages.killChainOrchestrator.filter_medium')}</option>
               </select>
             </div>
 
@@ -537,12 +512,12 @@ export default function KillChainOrchestrator() {
                 compact
                 icon="search-x"
                 title={t('pages.killChainOrchestrator.no_match_title')}
-                body="Try a different severity filter or review findings in the command center."
-                cta={{ label: 'View findings', to: '/findings' }}
+                body={t('pages.killChainOrchestrator.no_match_body')}
+                cta={{ label: t('pages.killChainOrchestrator.cta_view_findings'), to: '/findings' }}
               />
             ) : (
               filteredChains.map((chain) => {
-                const sm = SEVERITY_META[chain.severity] ?? SEVERITY_META.medium
+                const sm = severityMeta(chain.severity, t)
                 const progress = Math.round((chain.completedPhases / chain.totalPhases) * 100)
                 return (
                   <motion.button
@@ -570,9 +545,9 @@ export default function KillChainOrchestrator() {
                       <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: sm.color }} />
                     </div>
                     <div className="flex justify-between text-[10px] text-white/40">
-                      <span>{chain.completedPhases}/{chain.totalPhases} phases</span>
+                      <span>{chain.completedPhases}/{chain.totalPhases} {t('pages.killChainOrchestrator.phases_label')}</span>
                       <span>
-                        Risk: <span className="font-mono" style={{ color: sm.color }}>{chain.riskScore}</span>
+                        {t('pages.killChainOrchestrator.risk_label')}: <span className="font-mono" style={{ color: sm.color }}>{chain.riskScore}</span>
                       </span>
                     </div>
                   </motion.button>
@@ -590,11 +565,11 @@ export default function KillChainOrchestrator() {
                     <div>
                       <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
                       <div className="text-[11px] text-white/40 mt-1">
-                        Target: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
+                        {t('pages.killChainOrchestrator.target_label')}: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
                         {activeChain.discoveredAt && (
                           <>
                             {' · '}
-                            Detected:{' '}
+                            {t('pages.killChainOrchestrator.detected_label')}:{' '}
                             <span className="text-white/60">{activeChain.discoveredAt.slice(0, 10)}</span>
                           </>
                         )}
@@ -602,26 +577,25 @@ export default function KillChainOrchestrator() {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-2xl font-bold text-[#ef4444]">{activeChain.riskScore}</div>
-                      <div className="text-[10px] text-white/40">Risk Score</div>
+                      <div className="text-[10px] text-white/40">{t('pages.killChainOrchestrator.risk_score')}</div>
                     </div>
                   </div>
                   <p className="text-xs text-white/60 leading-relaxed">{activeChain.summary}</p>
                   {activeChain.techniques.length > 0 ? (
                     <div className="flex flex-wrap gap-2 mt-3">
-                      {activeChain.techniques.map((t) => (
+                      {activeChain.techniques.map((technique) => (
                         <Link
-                          key={t}
-                          to={`/findings?mitre=${encodeURIComponent(t)}`}
+                          key={technique}
+                          to={`/findings?mitre=${encodeURIComponent(technique)}`}
                           className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 border border-[#6366f1]/30 text-[#a5b4fc] hover:bg-[#6366f1]/30"
                         >
-                          {t}
+                          {technique}
                         </Link>
                       ))}
                     </div>
                   ) : (
                     <p className="text-[10px] text-white/35 mt-3 font-mono">
-                      No MITRE technique IDs on these findings yet — engines will populate{' '}
-                      <code>mitre_attack</code> as scans complete.
+                      {t('pages.killChainOrchestrator.no_mitre_hint')}
                     </p>
                   )}
                 </div>
@@ -666,7 +640,7 @@ export default function KillChainOrchestrator() {
                               <span className="text-[10px] font-mono text-white/30">{phase.mitre}</span>
                               {isActive && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/30 animate-pulse">
-                                  ACTIVE
+                                  {t('pages.killChainOrchestrator.phase_active')}
                                 </span>
                               )}
                             </div>
@@ -675,7 +649,7 @@ export default function KillChainOrchestrator() {
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {phaseFindingLabels.length > 0 && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ef4444]/20 text-[#ef4444] border border-[#ef4444]/30">
-                                {phaseFindingLabels.length} findings
+                                {t('pages.killChainOrchestrator.findings_count', { count: phaseFindingLabels.length })}
                               </span>
                             )}
                             <span className="text-white/30 text-xs">{isExpanded ? '▲' : '▼'}</span>
@@ -694,26 +668,49 @@ export default function KillChainOrchestrator() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
                                     <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">
-                                      Production Engines
+                                      {t('pages.killChainOrchestrator.production_engines')}
                                     </div>
                                     {phase.engines.length > 0 ? (
                                       <div className="flex flex-wrap gap-1">
-                                        {phase.engines.map((e) => (
-                                          <span key={e} className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/60 border border-white/10">
-                                            {e}
-                                          </span>
-                                        ))}
+                                        {phase.engines.map((e) => {
+                                          const st = engineStatusById[e.id]
+                                          const sm = st ? severityMeta(st.maxSeverity, t) : null
+                                          return (
+                                            <Link
+                                              key={e.id}
+                                              to={`/engines/${e.id}`}
+                                              className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/60 border border-white/10 hover:border-white/20 hover:text-white/80 transition-colors"
+                                            >
+                                              <span>{e.label}</span>
+                                              {st?.findingCount > 0 ? (
+                                                <span
+                                                  className="font-mono px-1 py-px rounded border"
+                                                  style={{
+                                                    color: sm.color,
+                                                    borderColor: `${sm.color}40`,
+                                                    backgroundColor: `${sm.color}12`,
+                                                  }}
+                                                  title={st.lastAt ? t('pages.killChainOrchestrator.last_finding', { date: st.lastAt.slice(0, 10) }) : undefined}
+                                                >
+                                                  {st.findingCount} · {sm.label}
+                                                </span>
+                                              ) : (
+                                                <span className="text-white/25 font-mono">{t('pages.killChainOrchestrator.idle')}</span>
+                                              )}
+                                            </Link>
+                                          )
+                                        })}
                                       </div>
                                     ) : (
-                                      <p className="text-[10px] text-white/35">No production engines mapped to this phase.</p>
+                                      <p className="text-[10px] text-white/35">{t('pages.killChainOrchestrator.no_engines_phase')}</p>
                                     )}
                                   </div>
                                   <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">MITRE Techniques</div>
+                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.killChainOrchestrator.mitre_techniques')}</div>
                                     <div className="flex flex-wrap gap-1">
-                                      {phase.techniques.map((t) => (
-                                        <span key={t} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">
-                                          {t}
+                                      {phase.techniques.map((technique) => (
+                                        <span key={technique} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">
+                                          {technique}
                                         </span>
                                       ))}
                                     </div>
@@ -721,7 +718,7 @@ export default function KillChainOrchestrator() {
                                 </div>
                                 {phaseFindingLabels.length > 0 ? (
                                   <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">Findings</div>
+                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.killChainOrchestrator.findings_heading')}</div>
                                     <ul className="space-y-1">
                                       {phaseFindingLabels.map((f, i) => (
                                         <li key={i} className="text-xs text-white/70 flex items-start gap-2">
@@ -732,7 +729,7 @@ export default function KillChainOrchestrator() {
                                     </ul>
                                   </div>
                                 ) : (
-                                  <p className="text-[10px] text-white/35">No findings in this phase for this target.</p>
+                                  <p className="text-[10px] text-white/35">{t('pages.killChainOrchestrator.no_findings_phase')}</p>
                                 )}
                               </div>
                             </motion.div>
@@ -748,7 +745,7 @@ export default function KillChainOrchestrator() {
                 compact
                 icon="inbox"
                 title={t('pages.killChainOrchestrator.select_chain_title')}
-                body="Choose a target chain from the list to inspect phase progression and mapped findings."
+                body={t('pages.killChainOrchestrator.select_chain_body')}
               />
             )}
           </div>

@@ -25,7 +25,7 @@ async fn api_auth_mfa_verify(
         )
             .into_response();
     };
-    let row = sqlx::query(
+    let row = match sqlx::query(
         r#"SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled, false) AS mfa_enabled,
                   COALESCE(NULLIF(trim(email), ''), '') AS email
            FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true"#,
@@ -34,17 +34,34 @@ async fn api_auth_mfa_verify(
     .bind(ctx.tenant_id)
     .fetch_optional(state.app_pool.as_ref())
     .await
-    .ok()
-    .flatten();
-    let Some(r) = row else {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"ok": false, "detail": "User not found"})),
-        )
-            .into_response();
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "User not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "MFA verify user lookup failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Authentication service temporarily unavailable",
+                    "code": "auth_degraded"
+                })),
+            )
+                .into_response();
+        }
     };
-    let secret: String = r.try_get("mfa_secret").unwrap_or_default();
-    let enabled: bool = r.try_get("mfa_enabled").unwrap_or(false);
+    let secret: String = row.try_get("mfa_secret").unwrap_or_default();
+    let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
+    let email: String = row.try_get("email").unwrap_or_default();
+    if let Some(retry_after) = crate::http::check_lockout(ctx.tenant_id, &email) {
+        return crate::http::locked_response(retry_after);
+    }
     if !enabled || secret.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -53,19 +70,24 @@ async fn api_auth_mfa_verify(
             .into_response();
     }
     if !crate::auth_mfa::verify_code(&secret, code) {
+        crate::http::record_failure(ctx.tenant_id, &email);
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok": false, "detail": "Invalid verification code"})),
         )
             .into_response();
     }
-    let email: String = r.try_get("email").unwrap_or_default();
     let mut tx = match db::begin_tenant_tx(&state.app_pool, ctx.tenant_id).await {
         Ok(t) => t,
-        Err(_) => {
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "MFA verify audit tx failed");
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"ok": false})),
+                Json(json!({
+                    "ok": false,
+                    "detail": "Authentication service temporarily unavailable",
+                    "code": "auth_degraded"
+                })),
             )
                 .into_response();
         }
@@ -111,6 +133,7 @@ async fn api_auth_mfa_verify(
         })),
     )
         .into_response();
+    crate::http::clear_failures(ctx.tenant_id, &email);
     append_set_cookie(response.headers_mut(), &access_cookie);
     append_set_cookie(response.headers_mut(), &refresh_cookie);
     response

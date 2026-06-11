@@ -1,31 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Smartphone, Shield, AlertTriangle, CheckCircle, Search, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Smartphone, Shield, AlertTriangle, Search, Filter } from 'lucide-react';
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
+import { clientPrimaryTargetUrl } from '../lib/clientTarget'
+import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
+
+const MOBILE_ENGINE = 'mobile_attack'
 
 /**
  * MobileSecurity - Mobile & App Security Analysis Dashboard
- *
- * Covers:
- * - iOS/Android vulnerability scanning
- * - Mobile app binary analysis
- * - API security testing
- * - Certificate pinning bypass
- * - Root/Jailbreak detection bypass
- * - Deep link hijacking
  */
 export default function MobileSecurity() {
+  const { t } = useTranslation();
   const [apps, setApps] = useState([]);
   const [findings, setFindings] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, ios, android
+  const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [scanningAppId, setScanningAppId] = useState(null);
+  const [pendingJobId, setPendingJobId] = useState(null);
+  const [scanError, setScanError] = useState(null);
 
-  useEffect(() => {
-    fetchMobileApps();
-  }, []);
-
-  const fetchMobileApps = async () => {
+  const fetchMobileApps = useCallback(async () => {
     try {
       const response = await apiFetch('/api/mobile-security/apps');
       if (response.ok) {
@@ -38,7 +37,78 @@ export default function MobileSecurity() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchMobileApps();
+    apiFetch('/api/clients')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        if (!Array.isArray(d)) return
+        setClients(d)
+        if (d.length) setSelectedClientId(String(d[0].id))
+      })
+      .catch(() => {});
+  }, [fetchMobileApps]);
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: async (job) => {
+      const resolved = await resolveJobFindings(job, MOBILE_ENGINE, selectedClientId)
+      if (resolved.length) {
+        setFindings((prev) => {
+          const ids = new Set(prev.map((f) => f.id))
+          return [...resolved.filter((f) => !ids.has(f.id)), ...prev]
+        })
+      }
+      await fetchMobileApps()
+      setScanningAppId(null)
+      setPendingJobId(null)
+    },
+  })
+
+  const handleScan = useCallback(async (app) => {
+    if (!selectedClientId) {
+      setScanError(t('pages.mobileSecurity.select_client_first'))
+      return
+    }
+    const client = clients.find((c) => String(c.id) === String(selectedClientId))
+    const target = clientPrimaryTargetUrl(client)
+    if (!target) {
+      setScanError(t('pages.mobileSecurity.no_client_domain'))
+      return
+    }
+    setScanError(null)
+    setScanningAppId(app.id)
+    try {
+      const r = await apiFetch('/api/command-center/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: MOBILE_ENGINE,
+          client_id: Number(selectedClientId),
+          target,
+          package_id: app.package_id,
+          platform: app.platform,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setScanError(d.detail || d.error || t('pages.mobileSecurity.scan_failed'))
+        setScanningAppId(null)
+        return
+      }
+      const jobId = d.job_id ?? ''
+      if (jobId) setPendingJobId(jobId)
+      else {
+        setScanError(t('pages.mobileSecurity.scan_no_job'))
+        setScanningAppId(null)
+      }
+    } catch (e) {
+      setScanError(e?.message ?? t('pages.mobileSecurity.network_error'))
+      setScanningAppId(null)
+    }
+  }, [selectedClientId, clients, t])
 
   const filteredApps = apps
     .filter((app) => filter === 'all' || app.platform === filter)
@@ -65,13 +135,32 @@ export default function MobileSecurity() {
   };
 
   return (
-    <PageShell title="Mobile & App Security" icon={<Smartphone />}>
+    <PageShell title={t('pages.mobileSecurity.title')} icon={<Smartphone />}>
       <div className="space-y-6">
+        {clients.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-white/40">{t('pages.mobileSecurity.client_label')}</span>
+            <select
+              value={selectedClientId ?? ''}
+              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+            >
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {scanError && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+            {scanError}
+          </div>
+        )}
+
         {/* Header Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Apps</span>
+              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_total_apps')}</span>
               <Smartphone className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{apps.length}</div>
@@ -79,7 +168,7 @@ export default function MobileSecurity() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">iOS Apps</span>
+              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_ios_apps')}</span>
               <Shield className="w-4 h-4 text-gray-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -89,7 +178,7 @@ export default function MobileSecurity() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Android Apps</span>
+              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_android_apps')}</span>
               <Shield className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -99,7 +188,7 @@ export default function MobileSecurity() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Vulnerabilities</span>
+              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_vulnerabilities')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-white">{findings.length}</div>
@@ -114,7 +203,7 @@ export default function MobileSecurity() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search apps by name or package ID..."
+              placeholder={t('pages.mobileSecurity.search_placeholder')}
               className="w-full pl-10 pr-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
@@ -130,7 +219,7 @@ export default function MobileSecurity() {
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {f === 'all' ? 'All' : f === 'ios' ? 'iOS' : 'Android'}
+                {f === 'all' ? t('pages.mobileSecurity.filter_all') : f === 'ios' ? t('pages.mobileSecurity.filter_ios') : t('pages.mobileSecurity.filter_android')}
               </button>
             ))}
           </div>
@@ -141,18 +230,18 @@ export default function MobileSecurity() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4 text-cyan-400" />
-              Mobile Applications
+              {t('pages.mobileSecurity.apps_heading')}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading mobile apps...
+              {t('pages.mobileSecurity.loading')}
             </div>
           ) : filteredApps.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No mobile apps found. Upload an APK/IPA file to start analysis.
+              {t('pages.mobileSecurity.empty')}
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -172,21 +261,20 @@ export default function MobileSecurity() {
                           }`}
                         >
                           <Smartphone className="w-3 h-3" />
-                          {app.platform === 'ios' ? 'iOS' : 'Android'}
+                          {app.platform === 'ios' ? t('pages.mobileSecurity.platform_ios') : t('pages.mobileSecurity.platform_android')}
                         </div>
                         <h4 className="text-sm font-semibold text-white">{app.name}</h4>
                         <span className="text-xs text-gray-500">{app.version}</span>
                       </div>
 
                       <div className="flex items-center gap-4 text-xs text-gray-400 mb-2">
-                        <span>Package: {app.package_id}</span>
+                        <span>{t('pages.mobileSecurity.package_label')} {app.package_id}</span>
                         <span>•</span>
-                        <span>Size: {app.size_mb} MB</span>
+                        <span>{t('pages.mobileSecurity.size_label', { size: app.size_mb })}</span>
                         <span>•</span>
-                        <span>Last scanned: {app.last_scan || 'Never'}</span>
+                        <span>{t('pages.mobileSecurity.last_scanned_label')} {app.last_scan || t('pages.mobileSecurity.last_scanned_never')}</span>
                       </div>
 
-                      {/* Findings Summary */}
                       {app.findings && app.findings.length > 0 && (
                         <div className="flex items-center gap-2 mt-2">
                           {['critical', 'high', 'medium', 'low'].map((severity) => {
@@ -201,7 +289,7 @@ export default function MobileSecurity() {
                                   severity
                                 )}`}
                               >
-                                {count} {severity}
+                                {t(`pages.mobileSecurity.severity_count_${severity}`, { count })}
                               </div>
                             );
                           })}
@@ -210,11 +298,16 @@ export default function MobileSecurity() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors">
-                        Scan Now
+                      <button
+                        type="button"
+                        onClick={() => handleScan(app)}
+                        disabled={!selectedClientId || (scanningAppId === app.id && Boolean(pendingJobId))}
+                        className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {scanningAppId === app.id && pendingJobId ? t('pages.mobileSecurity.scanning') : t('pages.mobileSecurity.scan_now')}
                       </button>
                       <button className="px-3 py-1.5 bg-white/5 text-gray-300 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors">
-                        View Details
+                        {t('pages.mobileSecurity.view_details')}
                       </button>
                     </div>
                   </div>
@@ -228,13 +321,13 @@ export default function MobileSecurity() {
         <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1">Upload Mobile App</h3>
+              <h3 className="text-sm font-semibold text-white mb-1">{t('pages.mobileSecurity.upload_title')}</h3>
               <p className="text-xs text-gray-400">
-                Upload an APK (Android) or IPA (iOS) file for security analysis
+                {t('pages.mobileSecurity.upload_body')}
               </p>
             </div>
             <button className="px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors">
-              Choose File
+              {t('pages.mobileSecurity.choose_file')}
             </button>
           </div>
         </div>

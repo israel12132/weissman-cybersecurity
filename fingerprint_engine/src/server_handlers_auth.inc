@@ -13,7 +13,35 @@ fn append_set_cookie(headers: &mut HeaderMap, line: &str) {
     }
 }
 
-async fn api_logout() -> Response {
+async fn api_logout(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Response {
+    if let Some(access_raw) = extract_access_cookie(&headers) {
+        if let Some((jti, exp)) = crate::auth_jwt::access_token_revocation_info(&access_raw) {
+            let expires_at = chrono::DateTime::<chrono::Utc>::from_timestamp(exp, 0)
+                .unwrap_or_else(chrono::Utc::now);
+            if let Err(e) = crate::auth_refresh::revoke_access_jti(
+                state.auth_pool.as_ref(),
+                &jti,
+                expires_at,
+            )
+            .await
+            {
+                tracing::warn!(target: "auth", error = %e, "access jti revocation failed on logout");
+            }
+        }
+    }
+    if let Some(refresh_raw) = extract_refresh_cookie(&headers) {
+        if let Err(e) = crate::auth_refresh::revoke_refresh_token_by_raw(
+            state.auth_pool.as_ref(),
+            &refresh_raw,
+        )
+        .await
+        {
+            tracing::warn!(target: "auth", error = %e, "refresh token revocation failed on logout");
+        }
+    }
     let mut res = (
         StatusCode::OK,
         Json(json!({"ok": true, "detail": "session cleared"})),
@@ -58,7 +86,7 @@ async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap
                             .into_response();
                     }
                 };
-            let access = match crate::auth_jwt::create_access_token(
+            let minted = match crate::auth_jwt::create_access_token(
                 user_id,
                 tenant_id,
                 role.as_str(),
@@ -74,6 +102,15 @@ async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap
                         .into_response();
                 }
             };
+            if let Err(e) = crate::auth_refresh::store_refresh_access_jti(
+                state.auth_pool.as_ref(),
+                &new_refresh,
+                &minted.jti,
+            )
+            .await
+            {
+                tracing::warn!(target: "auth", error = %e, "failed to link refresh row to access jti");
+            }
             let mut res = (
                 StatusCode::OK,
                 Json(json!({
@@ -82,13 +119,13 @@ async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap
                     "tenant_id": tenant_id,
                     "role": role,
                     "is_superadmin": is_superadmin,
-                    "access_token": access,
+                    "access_token": minted.token,
                 })),
             )
                 .into_response();
             append_set_cookie(
                 res.headers_mut(),
-                &crate::auth_jwt::session_cookie_value(&access),
+                &crate::auth_jwt::session_cookie_value(&minted.token),
             );
             append_set_cookie(
                 res.headers_mut(),
@@ -130,6 +167,56 @@ async fn api_auth_me(Extension(auth): Extension<AuthContext>) -> Response {
         })),
     )
         .into_response()
+}
+
+async fn api_auth_sse_ticket(Extension(auth): Extension<AuthContext>) -> Response {
+    match crate::auth_jwt::create_sse_ticket(
+        auth.user_id,
+        auth.tenant_id,
+        auth.role.as_str(),
+        auth.is_superadmin,
+    ) {
+        Ok(ticket) => {
+            let ttl = std::env::var("WEISSMAN_SSE_TICKET_MINUTES")
+                .ok()
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(15)
+                .clamp(5, 60)
+                * 60;
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "ticket": ticket,
+                    "expires_in": ttl,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "sse ticket mint failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "ticket mint failed"})),
+            )
+                .into_response()
+        }
+    }
+}
+
+fn extract_access_cookie(headers: &HeaderMap) -> Option<String> {
+    let cookie_h = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    let prefix = format!("{}=", crate::auth_jwt::WEISSMAN_COOKIE_NAME);
+    for part in cookie_h.split(';') {
+        let part = part.trim();
+        if part.starts_with(&prefix) {
+            let v = part[prefix.len()..].trim();
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn extract_refresh_cookie(headers: &HeaderMap) -> Option<String> {

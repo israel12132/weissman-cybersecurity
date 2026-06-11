@@ -1,7 +1,7 @@
 //! CNAPP Layer 4: Deception engine. Generates honeytokens dynamically (no hardcoded values).
 //! Format and type derived from client tech/config. Trigger ingestion records attacker fingerprint.
 
-use rand::Rng;
+use rand::RngExt;
 
 /// Asset types for deception (format generated from type).
 pub const TYPE_AWS_KEY: &str = "aws_key";
@@ -11,18 +11,18 @@ pub const TYPE_SHADOW_ENDPOINT: &str = "shadow_endpoint";
 
 fn rand_hex(len: usize) -> String {
     let mut s = String::with_capacity(len);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     for _ in 0..len {
-        s.push_str(&format!("{:x}", rng.gen_range(0..16)));
+        s.push_str(&format!("{:x}", rng.random_range(0..16)));
     }
     s
 }
 
 fn rand_alpha(len: usize) -> String {
     let mut s = String::with_capacity(len);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     for _ in 0..len {
-        let c = rng.gen_range(0..26);
+        let c = rng.random_range(0..26);
         s.push((b'A' + c) as char);
     }
     s

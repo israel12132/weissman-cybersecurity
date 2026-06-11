@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
+import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 
-const SUPPLY_ENGINES = [
-  { id: 'supply_chain', label: 'Supply Chain Scanner', description: 'Vendor dependency compromise detection' },
-  { id: 'cicd_pipeline', label: 'CI/CD Pipeline', description: 'ArgoCD, Jenkins, GitLab CI, Azure DevOps exposure' },
-  { id: 'container_registry', label: 'Container Registry', description: 'DockerHub, ECR, /v2/_catalog exposure scan' },
-  { id: 'sbom_analyzer', label: 'SBOM Analyzer', description: 'CycloneDX/SPDX lockfile CVE exposure scan' },
-  { id: 'typosquatting_monitor', label: 'Typosquatting Monitor', description: 'NPM/PyPI impersonation package detection' },
+const SUPPLY_ENGINE_IDS = [
+  'supply_chain',
+  'cicd_pipeline',
+  'container_registry',
+  'sbom_analyzer',
+  'typosquatting_monitor',
 ]
 
 const SEVERITY_COLORS = {
@@ -23,7 +25,7 @@ function sevClass(s) {
   return SEVERITY_COLORS[(s || '').toLowerCase()] ?? SEVERITY_COLORS.info
 }
 
-function FindingCard({ finding }) {
+function FindingCard({ finding, t }) {
   const cls = sevClass(finding.severity)
   return (
     <div className={`rounded-xl border p-4 ${cls.bg} ${cls.border} space-y-1`}>
@@ -33,7 +35,7 @@ function FindingCard({ finding }) {
         </span>
         <span className="text-[10px] font-mono text-white/30">{finding.engine ?? ''}</span>
       </div>
-      <p className="text-sm font-medium text-white/90">{finding.title ?? finding.type ?? 'Finding'}</p>
+      <p className="text-sm font-medium text-white/90">{finding.title ?? finding.type ?? t('pages.supplyChainHub.finding_fallback')}</p>
       {finding.target && (
         <p className="text-[11px] font-mono text-white/40 truncate">{finding.target}</p>
       )}
@@ -41,37 +43,56 @@ function FindingCard({ finding }) {
   )
 }
 
-function EngineRunPanel({ engine, clientId, showToast }) {
+function EngineRunPanel({ engineId, clientId, showToast, t }) {
   const [running, setRunning] = useState(false)
   const [findings, setFindings] = useState([])
   const [lastRun, setLastRun] = useState(null)
+  const [pendingJobId, setPendingJobId] = useState(null)
+
+  const label = t(`pages.supplyChainHub.engines.${engineId}.label`)
+  const description = t(`pages.supplyChainHub.engines.${engineId}.description`)
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: async (job) => {
+      setRunning(false)
+      setLastRun(new Date().toLocaleTimeString())
+      setFindings(await resolveJobFindings(job, engineId, clientId))
+      setPendingJobId(null)
+      if (uiJobStatus(job.status) === 'error') {
+        showToast('error', `${label}: ${job.status}`)
+      }
+    },
+  })
 
   const handleRun = useCallback(async () => {
-    if (!clientId) { showToast('error', 'Select a client first'); return }
+    if (!clientId) { showToast('error', t('pages.supplyChainHub.select_client_first')); return }
     setRunning(true)
+    setFindings([])
     try {
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engine.id, client_id: Number(clientId) }),
+        body: JSON.stringify({ engine: engineId, client_id: Number(clientId) }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast('error', d.detail || 'Scan failed'); return }
-      showToast('info', `${engine.label}: queued job ${d.job_id ?? ''}`)
-      setLastRun(new Date().toLocaleTimeString())
+      if (!r.ok) { showToast('error', d.detail || t('pages.supplyChainHub.scan_failed')); setRunning(false); return }
+      const jobId = d.job_id ?? ''
+      showToast('info', t('pages.supplyChainHub.queued', { label, jobId }))
+      if (jobId) setPendingJobId(jobId)
+      else setRunning(false)
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
-    } finally {
+      showToast('error', e?.message ?? t('common.error'))
       setRunning(false)
     }
-  }, [clientId, engine, showToast])
+  }, [clientId, engineId, label, showToast, t])
 
   return (
     <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">{engine.label}</h3>
-          <p className="text-[11px] text-white/40 mt-0.5">{engine.description}</p>
+          <h3 className="text-sm font-semibold text-white">{label}</h3>
+          <p className="text-[11px] text-white/40 mt-0.5">{description}</p>
         </div>
         <button
           type="button"
@@ -79,15 +100,15 @@ function EngineRunPanel({ engine, clientId, showToast }) {
           disabled={running || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#84cc16]/30 text-[#84cc16]/70 hover:bg-[#84cc16]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          {running ? '⟳' : '▶ Run'}
+          {running ? t('pages.supplyChainHub.running') : t('pages.supplyChainHub.run')}
         </button>
       </div>
       {lastRun && (
-        <p className="text-[10px] font-mono text-white/30">Last run: {lastRun}</p>
+        <p className="text-[10px] font-mono text-white/30">{t('pages.supplyChainHub.last_run', { time: lastRun })}</p>
       )}
       {findings.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-white/5">
-          {findings.slice(0, 5).map((f, i) => <FindingCard key={i} finding={f} />)}
+          {findings.slice(0, 5).map((f, i) => <FindingCard key={i} finding={f} t={t} />)}
         </div>
       )}
     </div>
@@ -95,6 +116,7 @@ function EngineRunPanel({ engine, clientId, showToast }) {
 }
 
 export default function SupplyChainHub() {
+  const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -109,25 +131,23 @@ export default function SupplyChainHub() {
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
     setToast({ id, sev, msg })
-    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
+    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
   }, [])
 
   return (
-    <PageShell title="Supply Chain Hub" badge="SUPPLY CHAIN" badgeColor="#84cc16" subtitle={`${SUPPLY_ENGINES.length} engines`}>
-      {/* Client selector */}
+    <PageShell title={t('pages.supplyChainHub.title')} badge={t('pages.supplyChainHub.badge')} badgeColor="#84cc16" subtitle={t('pages.supplyChainHub.subtitle', { count: SUPPLY_ENGINE_IDS.length })}>
       <div className="flex items-center gap-2 mb-6">
-        <span className="text-[11px] font-mono text-white/40">Client:</span>
+        <span className="text-[11px] font-mono text-white/40">{t('pages.supplyChainHub.client_label')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
           className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#84cc16]/40"
         >
-          <option value="">— Select client —</option>
+          <option value="">{t('pages.supplyChainHub.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#84cc16]/30 text-[#84cc16]'}`}>
           {toast.msg}
@@ -136,18 +156,18 @@ export default function SupplyChainHub() {
 
       {!selectedClientId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
-          Select a client to enable engine runs.
+          {t('pages.supplyChainHub.select_client_warning')}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {SUPPLY_ENGINES.map((engine) => (
+        {SUPPLY_ENGINE_IDS.map((engineId) => (
           <motion.div
-            key={engine.id}
+            key={engineId}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <EngineRunPanel engine={engine} clientId={selectedClientId} showToast={showToast} />
+            <EngineRunPanel engineId={engineId} clientId={selectedClientId} showToast={showToast} t={t} />
           </motion.div>
         ))}
       </div>

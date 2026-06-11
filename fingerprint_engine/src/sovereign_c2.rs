@@ -6,7 +6,6 @@
 
 use hmac::{Hmac, Mac};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use rand::Rng;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -246,7 +245,7 @@ fn honeytoken_bundle() -> Option<SovereignSwarmCmd> {
     let jwt_preview = jwt.chars().take(48).collect::<String>();
     let api_key = format!(
         "wm_sk_{}",
-        hex::encode(rand::thread_rng().gen::<[u8; 24]>())
+        hex::encode(rand::random::<[u8; 24]>())
     );
     let api_key_preview = format!("{}…", &api_key[..api_key.len().min(12)]);
     let pub_ssh = generate_ed25519_pub().unwrap_or_default();
@@ -297,7 +296,7 @@ pub fn spawn_sovereign_stack(
                         let min_p = env_u64("WEISSMAN_SOVEREIGN_PORT_MIN", 40000).max(1024) as u16;
                         let max_p =
                             env_u64("WEISSMAN_SOVEREIGN_PORT_MAX", 41000).max(u64::from(min_p)) as u16;
-                        let port = rand::thread_rng().gen_range(min_p..=max_p);
+                        let port = rand::random_range(min_p..=max_p);
                         let issued = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .map(|d| d.as_secs())

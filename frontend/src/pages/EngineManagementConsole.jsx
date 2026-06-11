@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Cpu, Play, Pause, Filter, Search, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -17,6 +18,7 @@ import { ENGINES_BY_ID } from '../lib/enginesRegistry';
  * - Resource usage metrics
  */
 export default function EngineManagementConsole() {
+  const { t } = useTranslation();
   const [engines, setEngines] = useState([]);
   const [filteredEngines, setFilteredEngines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -191,14 +193,18 @@ export default function EngineManagementConsole() {
     }, {}),
   };
 
+  const isFiltered = searchTerm || categoryFilter !== 'all' || statusFilter !== 'all';
+
   return (
-    <PageShell title="Engine Management Console" icon={<Cpu />}>
+    <PageShell title={t('pages.engineManagementConsole.title')} icon={<Cpu />}>
       <div className="space-y-6">
         {/* Stats Header */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Engines</span>
+              <span className="text-sm text-gray-400">
+                {t('pages.engineManagementConsole.total_engines')}
+              </span>
               <Cpu className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -206,7 +212,9 @@ export default function EngineManagementConsole() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Enabled</span>
+              <span className="text-sm text-gray-400">
+                {t('pages.engineManagementConsole.enabled')}
+              </span>
               <CheckCircle className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-400">{stats.enabled}</div>
@@ -214,7 +222,9 @@ export default function EngineManagementConsole() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Disabled</span>
+              <span className="text-sm text-gray-400">
+                {t('pages.engineManagementConsole.disabled')}
+              </span>
               <XCircle className="w-4 h-4 text-gray-400" />
             </div>
             <div className="text-2xl font-bold text-gray-400">{stats.disabled}</div>
@@ -222,7 +232,9 @@ export default function EngineManagementConsole() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Categories</span>
+              <span className="text-sm text-gray-400">
+                {t('pages.engineManagementConsole.categories')}
+              </span>
               <Filter className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-white">{categories.length - 1}</div>
@@ -238,7 +250,7 @@ export default function EngineManagementConsole() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search engines by name, ID, or description..."
+              placeholder={t('pages.engineManagementConsole.search_placeholder')}
               className="w-full pl-10 pr-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
@@ -251,7 +263,9 @@ export default function EngineManagementConsole() {
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
-                {cat === 'all' ? 'All Categories' : cat.toUpperCase()}
+                {cat === 'all'
+                  ? t('pages.engineManagementConsole.all_categories')
+                  : cat.toUpperCase()}
               </option>
             ))}
           </select>
@@ -268,7 +282,11 @@ export default function EngineManagementConsole() {
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {status === 'all' ? 'All' : status === 'enabled' ? 'Enabled' : 'Disabled'}
+                {status === 'all'
+                  ? t('common.all')
+                  : status === 'enabled'
+                    ? t('pages.engineManagementConsole.enabled')
+                    : t('pages.engineManagementConsole.disabled')}
               </button>
             ))}
           </div>
@@ -280,10 +298,14 @@ export default function EngineManagementConsole() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-white mb-1">
-                  Bulk Actions for {categoryFilter.toUpperCase()}
+                  {t('pages.engineManagementConsole.bulk_actions', {
+                    category: categoryFilter.toUpperCase(),
+                  })}
                 </h3>
                 <p className="text-xs text-gray-400">
-                  {stats.byCategory[categoryFilter]} engines in this category
+                  {t('pages.engineManagementConsole.engines_in_category', {
+                    count: stats.byCategory[categoryFilter],
+                  })}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -292,14 +314,14 @@ export default function EngineManagementConsole() {
                   className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500/30 transition-colors"
                 >
                   <Play className="w-3 h-3" />
-                  Enable All
+                  {t('pages.engineManagementConsole.enable_all')}
                 </button>
                 <button
                   onClick={() => bulkToggleCategory(categoryFilter, false)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-colors"
                 >
                   <Pause className="w-3 h-3" />
-                  Disable All
+                  {t('pages.engineManagementConsole.disable_all')}
                 </button>
               </div>
             </div>
@@ -311,21 +333,21 @@ export default function EngineManagementConsole() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
-              {filteredEngines.length} Engines
-              {searchTerm || categoryFilter !== 'all' || statusFilter !== 'all'
-                ? ' (filtered)'
-                : ''}
+              {t('pages.engineManagementConsole.engines_heading', {
+                count: filteredEngines.length,
+              })}
+              {isFiltered ? t('pages.engineManagementConsole.filtered') : ''}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading engines...
+              {t('pages.engineManagementConsole.loading')}
             </div>
           ) : filteredEngines.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No engines found matching your filters.
+              {t('pages.engineManagementConsole.empty')}
             </div>
           ) : (
             <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
@@ -371,37 +393,51 @@ export default function EngineManagementConsole() {
                               : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
                           }`}
                         >
-                          {engine.enabled ? 'Enabled' : 'Disabled'}
+                          {engine.enabled
+                            ? t('pages.engineManagementConsole.enabled')
+                            : t('pages.engineManagementConsole.disabled')}
                         </span>
                       </div>
 
                       {/* Description */}
                       <p className="text-xs text-gray-400 mb-2">
-                        {engine.description || 'No description available'}
+                        {engine.description || t('pages.engineManagementConsole.no_description')}
                       </p>
 
                       {/* Engine Details */}
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>ID: {engine.id}</span>
+                        <span>
+                          {t('pages.engineManagementConsole.id_detail', { id: engine.id })}
+                        </span>
                         {engine.timeout && (
                           <>
                             <span>•</span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              Timeout: {engine.timeout}s
+                              {t('pages.engineManagementConsole.timeout_detail', {
+                                seconds: engine.timeout,
+                              })}
                             </span>
                           </>
                         )}
                         {engine.concurrency && (
                           <>
                             <span>•</span>
-                            <span>Concurrency: {engine.concurrency}</span>
+                            <span>
+                              {t('pages.engineManagementConsole.concurrency_detail', {
+                                count: engine.concurrency,
+                              })}
+                            </span>
                           </>
                         )}
                         {engine.last_run && (
                           <>
                             <span>•</span>
-                            <span>Last run: {engine.last_run}</span>
+                            <span>
+                              {t('pages.engineManagementConsole.last_run_detail', {
+                                time: engine.last_run,
+                              })}
+                            </span>
                           </>
                         )}
                       </div>
@@ -440,6 +476,7 @@ export default function EngineManagementConsole() {
  * Engine Configuration Modal
  */
 function EngineConfigModal({ engine, onClose, onSave }) {
+  const { t } = useTranslation();
   const [config, setConfig] = useState({
     timeout: engine.timeout || 30,
     concurrency: engine.concurrency || 1,
@@ -458,7 +495,9 @@ function EngineConfigModal({ engine, onClose, onSave }) {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-bold text-white">{engine.name}</h3>
-            <p className="text-xs text-gray-400">Engine Configuration</p>
+            <p className="text-xs text-gray-400">
+              {t('pages.engineManagementConsole.engine_config')}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -472,7 +511,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           {/* Timeout */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Timeout (seconds)
+              {t('pages.engineManagementConsole.timeout_label')}
             </label>
             <input
               type="number"
@@ -487,7 +526,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           {/* Concurrency */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Concurrency
+              {t('pages.engineManagementConsole.concurrency_label')}
             </label>
             <input
               type="number"
@@ -502,7 +541,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           {/* Max Retries */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Max Retries
+              {t('pages.engineManagementConsole.max_retries_label')}
             </label>
             <input
               type="number"
@@ -517,7 +556,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           {/* CPU Limit */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              CPU Limit (%)
+              {t('pages.engineManagementConsole.cpu_limit_label')}
             </label>
             <input
               type="number"
@@ -535,7 +574,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           {/* Memory Limit */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Memory Limit (MB)
+              {t('pages.engineManagementConsole.memory_limit_label')}
             </label>
             <input
               type="number"
@@ -557,13 +596,13 @@ function EngineConfigModal({ engine, onClose, onSave }) {
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors"
           >
-            Save Configuration
+            {t('pages.engineManagementConsole.save_configuration')}
           </button>
         </div>
       </div>

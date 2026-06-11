@@ -6,6 +6,19 @@ use crate::engine_result::EngineResult;
 use serde_json::json;
 use weissman_core::models::engine::resolve_engine_id;
 
+fn apply_alias_honest_metadata(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    alias_engine_id: &str,
+    canonical_engine_id: &str,
+    probe_fidelity: &str,
+    surface_summary: &str,
+) {
+    obj.insert("alias_engine_id".to_string(), json!(alias_engine_id));
+    obj.insert("canonical_engine_id".to_string(), json!(canonical_engine_id));
+    obj.insert("probe_fidelity".to_string(), json!(probe_fidelity));
+    obj.insert("surface_summary".to_string(), json!(surface_summary));
+}
+
 #[must_use]
 pub fn is_alias_engine(id: &str) -> bool {
     let s = id.trim();
@@ -21,7 +34,7 @@ pub async fn run_alias_engine(
     match engine_id.trim() {
         "rce_chain" => run_alias_probe("rce_chain", "kill_chain", "", "Specialized rce chain probe against live target", "kill-chain", "", target, ctx).await,
         "active_directory" => run_alias_probe("active_directory", "kerberos_attack_suite", "", "Active Directory attack surface: Kerberos, LDAP, BloodHound paths", "identity", "T1078", target, ctx).await,
-        "c2_emulation" => run_alias_probe("c2_emulation", "botnet_c2_engine", "", "C2 beacon patterns, DNS/HTTPS callback channels", "c2", "T1071", target, ctx).await,
+        "c2_emulation" => run_alias_probe("c2_emulation", "botnet_c2_engine", "", "DNS TXT C2 indicators + HTTP beacon path acceptance (remote surface)", "c2", "T1071", target, ctx).await,
         "lateral_movement" => run_alias_probe("lateral_movement", "lateral_movement_engine", "", "Specialized lateral movement probe against live target", "lateral-movement-engine", "", target, ctx).await,
         "data_exfiltration" => run_alias_probe("data_exfiltration", "http_covert_exfil", "", "Specialized data exfiltration probe against live target", "http-covert-exfil", "", target, ctx).await,
         "memory_corruption" => run_alias_probe("memory_corruption", "heap_exploitation", "", "Specialized memory corruption probe against live target", "heap-exploitation", "", target, ctx).await,
@@ -32,7 +45,7 @@ pub async fn run_alias_engine(
         "mobile_attack" => run_alias_probe("mobile_attack", "mobile_mitm", "", "Specialized mobile attack probe against live target", "mobile-mitm", "", target, ctx).await,
         "cloud_ransomware" => run_alias_probe("cloud_ransomware", "cloud_worm_propagation", "", "Specialized cloud ransomware probe against live target", "cloud-worm-propagation", "", target, ctx).await,
         "firmware_exploit" => run_alias_probe("firmware_exploit", "iot_firmware", "", "Firmware extraction, UART/JTAG, known CVE signatures", "iot", "T1195", target, ctx).await,
-        "dns_rebinding" => run_alias_probe("dns_rebinding", "dns_cache_poisoning", "rebind.attacker.example", "DNS rebinding to bypass same-origin", "network", "T1190", target, ctx).await,
+        "dns_rebinding" => run_alias_probe("dns_rebinding", "dns_rebinding", "rebind.attacker.example", "DNS rebinding to bypass same-origin", "network", "T1190", target, ctx).await,
         "physical_security" => run_alias_probe("physical_security", "physical_social_eng", "", "Specialized physical security probe against live target", "physical-social-eng", "", target, ctx).await,
         "vuln_chaining" => run_alias_probe("vuln_chaining", "kill_chain", "", "Specialized vuln chaining probe against live target", "kill-chain", "", target, ctx).await,
         "sqli_advanced" => run_alias_probe("sqli_advanced", "http_feedback_fuzz", "' OR '1'='1-- ", "SQL injection: error-based, boolean-blind, time-based, UNION", "injection", "T1190", target, ctx).await,
@@ -44,7 +57,7 @@ pub async fn run_alias_engine(
         "insider_threat" => run_alias_probe("insider_threat", "insider_threat_engine", "", "Specialized insider threat probe against live target", "insider-threat-engine", "", target, ctx).await,
         "post_exploitation" => run_alias_probe("post_exploitation", "threat_emulation", "", "Specialized post exploitation probe against live target", "threat-emulation", "", target, ctx).await,
         "cloud_lateral" => run_alias_probe("cloud_lateral", "multi_cloud_pivot", "", "Specialized cloud lateral probe against live target", "multi-cloud-pivot", "", target, ctx).await,
-        "process_injection" => run_alias_probe("process_injection", "process_hollowing", "", "Specialized process injection probe against live target", "process-hollowing", "", target, ctx).await,
+        "process_injection" => run_alias_probe("process_injection", "process_hollowing", "", "Process injection/hollowing — agent_required (host memory inspection)", "process-hollowing", "T1055", target, ctx).await,
         "api_fuzzing" => run_alias_probe("api_fuzzing", "http_feedback_fuzz", "{\"__proto__\":{\"polluted\":true}}", "REST/JSON API fuzzing: mass assignment, type confusion", "api", "T1190", target, ctx).await,
         "smb_relay" => run_alias_probe("smb_relay", "smb_netbios", "NTLM relay", "SMB/NTLM relay and signing bypass", "lateral", "T1557", target, ctx).await,
         "graphql_injection" => run_alias_probe("graphql_injection", "graphql_attack", "{__schema{types{name}}}", "GraphQL injection and introspection abuse", "graphql", "T1190", target, ctx).await,
@@ -77,7 +90,7 @@ pub async fn run_alias_engine(
         "satellite_attack" => run_alias_probe("satellite_attack", "satellite_comm_attack", "", "Specialized satellite attack probe against live target", "satellite-comm-attack", "", target, ctx).await,
         "ai_poisoning" => run_alias_probe("ai_poisoning", "data_poisoning_engine", "", "Specialized ai poisoning probe against live target", "data-poisoning-engine", "", target, ctx).await,
         "smart_contract_audit" => run_alias_probe("smart_contract_audit", "web3_dapp_attack", "reentrancy", "Solidity reentrancy, oracle manipulation, flash loans", "web3", "T1190", target, ctx).await,
-        "automotive_can_bus" => run_alias_probe("automotive_can_bus", "rfid_nfc_attack", "", "Specialized automotive can bus probe against live target", "rfid-nfc-attack", "", target, ctx).await,
+        "automotive_can_bus" => run_alias_probe("automotive_can_bus", "can_bus_surface", "", "Automotive CAN/DoIP diagnostic gateway surface", "can-bus-surface", "T0855", target, ctx).await,
         "zero_click_exploit" => run_alias_probe("zero_click_exploit", "zero_day_prediction", "", "Zero-click attack surface: iMessage, WhatsApp, email parsers", "apt", "T1190", target, ctx).await,
         "biometric_spoofing" => run_alias_probe("biometric_spoofing", "mfa_bypass_engine", "", "Specialized biometric spoofing probe against live target", "mfa-bypass-engine", "", target, ctx).await,
         "quantum_attack" => run_alias_probe("quantum_attack", "quantum_key_attack", "", "Post-quantum crypto migration gaps, harvest-now-decrypt-later", "crypto", "T1557", target, ctx).await,
@@ -97,7 +110,7 @@ pub async fn run_alias_engine(
         "exfil_ai_inference" => run_alias_probe("exfil_ai_inference", "model_inversion_attack", "", "Specialized exfil ai inference probe against live target", "model-inversion-attack", "", target, ctx).await,
         "cloud_waf_bypass" => run_alias_probe("cloud_waf_bypass", "waf_bypass", "", "Specialized cloud waf bypass probe against live target", "waf-bypass", "", target, ctx).await,
         "telco_ss7_attack" => run_alias_probe("telco_ss7_attack", "ss7_attack_simulation", "", "Specialized telco ss7 attack probe against live target", "ss7-attack-simulation", "", target, ctx).await,
-        "deepweb_intel" => run_alias_probe("deepweb_intel", "dark_web_monitor", "", "Specialized deepweb intel probe against live target", "dark-web-monitor", "", target, ctx).await,
+        "deepweb_intel" => run_alias_probe("deepweb_intel", "dark_web_monitor", "", "IntelX leak/dark-web lookup (INTELX_API_KEY required for live query)", "dark-web-monitor", "T1597", target, ctx).await,
         "network_tap_implant" => run_alias_probe("network_tap_implant", "network_tap_advanced", "", "Specialized network tap implant probe against live target", "network-tap-advanced", "", target, ctx).await,
         "gitops_attack" => run_alias_probe("gitops_attack", "iac_supply_chain", "", "Specialized gitops attack probe against live target", "iac-supply-chain", "", target, ctx).await,
         "compliance_gap_scan" => run_alias_probe("compliance_gap_scan", "attack_surface_quantify", "", "Specialized compliance gap scan probe against live target", "attack-surface-quantify", "", target, ctx).await,
@@ -145,12 +158,12 @@ pub async fn run_alias_engine(
         "cloud_logging_blind" => run_alias_probe("cloud_logging_blind", "cloud_audit_evasion", "", "Specialized cloud logging blind probe against live target", "cloud-audit-evasion", "", target, ctx).await,
         "ecr_image_poison" => run_alias_probe("ecr_image_poison", "ecr_registry_attack", "", "Specialized ecr image poison probe against live target", "ecr-registry-attack", "", target, ctx).await,
         "cloud_function_escape" => run_alias_probe("cloud_function_escape", "lambda_escape", "", "Specialized cloud function escape probe against live target", "lambda-escape", "", target, ctx).await,
-        "modbus_exploit" => run_alias_probe("modbus_exploit", "scada_ics", "        ", "Modbus TCP function code abuse", "ot", "T0855", target, ctx).await,
-        "plc_logic_bomb" => run_alias_probe("plc_logic_bomb", "scada_ics", "", "Specialized plc logic bomb probe against live target", "scada-ics", "", target, ctx).await,
-        "lorawan_attack" => run_alias_probe("lorawan_attack", "ble_rf", "", "Specialized lorawan attack probe against live target", "ble-rf", "", target, ctx).await,
-        "hmi_exploit" => run_alias_probe("hmi_exploit", "scada_ics", "", "Specialized hmi exploit probe against live target", "scada-ics", "", target, ctx).await,
-        "can_fd_attack" => run_alias_probe("can_fd_attack", "rfid_nfc_attack", "", "Specialized can fd attack probe against live target", "rfid-nfc-attack", "", target, ctx).await,
-        "ics_historian_attack" => run_alias_probe("ics_historian_attack", "scada_ics", "", "Specialized ics historian attack probe against live target", "scada-ics", "", target, ctx).await,
+        "modbus_exploit" => run_alias_probe("modbus_exploit", "modbus_exploit", "", "Modbus TCP function-code abuse (agent on OT segment)", "ot", "T0855", target, ctx).await,
+        "plc_logic_bomb" => run_alias_probe("plc_logic_bomb", "plc_logic_bomb", "", "PLC logic manipulation (engineering-workstation agent)", "ot", "T0836", target, ctx).await,
+        "lorawan_attack" | "lora_attack" => run_alias_probe("lorawan_attack", "lorawan_attack", "", "LoRaWAN RF abuse (radio-capable agent)", "ot", "T0855", target, ctx).await,
+        "hmi_exploit" => run_alias_probe("hmi_exploit", "scada_ics", "", "OT/ICS passive protocol surface (Modbus, BACnet, OPC-UA)", "scada-ics", "T0843", target, ctx).await,
+        "can_fd_attack" => run_alias_probe("can_fd_attack", "can_bus_surface", "", "CAN-FD diagnostic gateway surface (DoIP/OBD)", "can-bus-surface", "T0855", target, ctx).await,
+        "ics_historian_attack" => run_alias_probe("ics_historian_attack", "scada_ics", "", "ICS historian / OT protocol surface scan", "scada-ics", "T0843", target, ctx).await,
         "rootkit_implant" => run_alias_probe("rootkit_implant", "bootkit_uefi", "", "Specialized rootkit implant probe against live target", "bootkit-uefi", "", target, ctx).await,
         "timestomping" => run_alias_probe("timestomping", "antiforensics", "", "Specialized timestomping probe against live target", "antiforensics", "", target, ctx).await,
         "log_wiping" => run_alias_probe("log_wiping", "antiforensics", "", "Specialized log wiping probe against live target", "antiforensics", "", target, ctx).await,
@@ -193,17 +206,17 @@ pub async fn run_alias_engine(
         "destructive_wiper" => run_alias_probe("destructive_wiper", "conti_ransomware_ttps", "", "Specialized destructive wiper probe against live target", "conti-ransomware-ttps", "", target, ctx).await,
         "cloud_iam_escalation" => run_alias_probe("cloud_iam_escalation", "aws_attack", "", "Specialized cloud iam escalation probe against live target", "aws-attack", "", target, ctx).await,
         "secrets_manager_attack" => run_alias_probe("secrets_manager_attack", "aws_attack", "", "Specialized secrets manager attack probe against live target", "aws-attack", "", target, ctx).await,
-        "tpm_firmware_attack" => run_alias_probe("tpm_firmware_attack", "crypto_engine", "", "Specialized tpm firmware attack probe against live target", "crypto-engine", "", target, ctx).await,
-        "cold_boot_attack" => run_alias_probe("cold_boot_attack", "crypto_engine", "", "Specialized cold boot attack probe against live target", "crypto-engine", "", target, ctx).await,
+        "tpm_firmware_attack" => run_alias_probe("tpm_firmware_attack", "tpm_firmware_attack", "", "TPM/firmware bus attack (local hardware agent)", "physical", "T1195", target, ctx).await,
+        "cold_boot_attack" => run_alias_probe("cold_boot_attack", "cold_boot_attack", "", "Cold-boot memory capture (physical host agent)", "physical", "T1005", target, ctx).await,
         "evil_maid_engine" => run_alias_probe("evil_maid_engine", "physical_social_eng", "", "Specialized evil maid engine probe against live target", "physical-social-eng", "", target, ctx).await,
         "thunderbolt_dma_attack" => run_alias_probe("thunderbolt_dma_attack", "physical_social_eng", "", "Specialized thunderbolt dma attack probe against live target", "physical-social-eng", "", target, ctx).await,
-        "voltage_glitch_attack" => run_alias_probe("voltage_glitch_attack", "crypto_engine", "", "Specialized voltage glitch attack probe against live target", "crypto-engine", "", target, ctx).await,
+        "voltage_glitch_attack" => run_alias_probe("voltage_glitch_attack", "voltage_glitch_attack", "", "Voltage/clock glitch fault injection (bench agent)", "physical", "T1195", target, ctx).await,
         "badusb_hid_attack" => run_alias_probe("badusb_hid_attack", "physical_social_eng", "", "Specialized badusb hid attack probe against live target", "physical-social-eng", "", target, ctx).await,
         "hardware_wallet_attack" => run_alias_probe("hardware_wallet_attack", "pki_hierarchy_attack", "", "Specialized hardware wallet attack probe against live target", "pki-hierarchy-attack", "", target, ctx).await,
         "jtag_swd_exploitation" => run_alias_probe("jtag_swd_exploitation", "iot_firmware", "", "Specialized jtag swd exploitation probe against live target", "iot-firmware", "", target, ctx).await,
         "medical_device_exploit" => run_alias_probe("medical_device_exploit", "iot_firmware", "", "Specialized medical device exploit probe against live target", "iot-firmware", "", target, ctx).await,
         "implantable_device_hack" => run_alias_probe("implantable_device_hack", "iot_firmware", "", "Specialized implantable device hack probe against live target", "iot-firmware", "", target, ctx).await,
-        "hospital_hl7_attack" => run_alias_probe("hospital_hl7_attack", "scada_ics", "", "Specialized hospital hl7 attack probe against live target", "scada-ics", "", target, ctx).await,
+        "hospital_hl7_attack" => run_alias_probe("hospital_hl7_attack", "hospital_hl7_attack", "", "HL7/clinical interface bus attack (on-segment agent)", "medical", "T0886", target, ctx).await,
         "agentic_framework_attack" => run_alias_probe("agentic_framework_attack", "llm_agent_hijack", "", "Specialized agentic framework attack probe against live target", "llm-agent-hijack", "", target, ctx).await,
         "llm_function_call_hijack" => run_alias_probe("llm_function_call_hijack", "llm_agent_hijack", "", "Specialized llm function call hijack probe against live target", "llm-agent-hijack", "", target, ctx).await,
         "multi_agent_subversion" => run_alias_probe("multi_agent_subversion", "llm_agent_hijack", "", "Specialized multi agent subversion probe against live target", "llm-agent-hijack", "", target, ctx).await,
@@ -276,7 +289,28 @@ async fn run_alias_probe(
 
     // Agent-required engines must go through run_engine (fleet queue + live dispatch).
     if crate::engine_dispatch::is_agent_required_engine(canonical) {
-        return crate::engine_dispatch::run_agent_required_engine(canonical, target, ctx).await;
+        let mut result =
+            crate::engine_dispatch::run_agent_required_engine(canonical, target, ctx).await;
+        for f in &mut result.findings {
+            if let Some(obj) = f.as_object_mut() {
+                obj.insert("type".to_string(), json!(engine_id));
+                obj.insert("source_engine".to_string(), json!(engine_id));
+                obj.insert("engine_id".to_string(), json!(engine_id));
+                obj.insert("canonical_engine".to_string(), json!(canonical));
+                obj.insert("alias_category".to_string(), json!(category));
+                apply_alias_honest_metadata(
+                    obj,
+                    engine_id,
+                    canonical,
+                    "agent_required",
+                    cognitive_hint,
+                );
+            }
+        }
+        if !result.message.contains(engine_id) {
+            result.message = format!("{}: {}", engine_id, result.message);
+        }
+        return result;
     }
 
     // Delegate to the canonical production probe, then re-tag findings for this alias.
@@ -289,6 +323,13 @@ async fn run_alias_probe(
             obj.insert("engine_id".to_string(), json!(engine_id));
             obj.insert("canonical_engine".to_string(), json!(canonical));
             obj.insert("alias_category".to_string(), json!(category));
+            apply_alias_honest_metadata(
+                obj,
+                engine_id,
+                canonical,
+                "alias_retag",
+                cognitive_hint,
+            );
             if !mitre.is_empty() {
                 obj.entry("mitre_attack".to_string())
                     .or_insert_with(|| json!(mitre));
@@ -343,6 +384,10 @@ async fn run_http_fuzz_alias(
                 "source_engine": engine_id,
                 "engine_id": engine_id,
                 "canonical_engine": "http_feedback_fuzz",
+                "alias_engine_id": engine_id,
+                "canonical_engine_id": "http_feedback_fuzz",
+                "probe_fidelity": "http_fuzz_tuned",
+                "surface_summary": cognitive_hint,
                 "alias_category": category,
                 "category": category,
                 "title": a.anomaly_type.clone(),

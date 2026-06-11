@@ -12,7 +12,7 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`).
+/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`, `jti`).
 #[derive(Clone, Debug)]
 pub struct AuthContext {
     pub user_id: i64,
@@ -21,6 +21,8 @@ pub struct AuthContext {
     pub is_superadmin: bool,
     /// Set for endpoint-agent session JWTs (`typ: agent`).
     pub agent_id: Option<String>,
+    /// Access JWT id for logout revocation (`typ: access` only).
+    pub jti: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +41,9 @@ struct JwtClaims {
     /// Endpoint agent UUID when `typ` is `agent`.
     #[serde(default)]
     agent_id: Option<String>,
+    /// Unique token id for access JWT revocation.
+    #[serde(default)]
+    jti: Option<String>,
 }
 
 pub const WEISSMAN_COOKIE_NAME: &str = "weissman_token";
@@ -51,6 +56,24 @@ fn access_token_ttl_secs() -> i64 {
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(15)
         .clamp(5, 240)
+        * 60
+}
+
+fn agent_token_ttl_secs() -> i64 {
+    std::env::var("WEISSMAN_AGENT_JWT_TTL_MINS")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(240)
+        .clamp(30, 1440)
+        * 60
+}
+
+fn sse_ticket_ttl_secs() -> i64 {
+    std::env::var("WEISSMAN_SSE_TICKET_MINUTES")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(15)
+        .clamp(5, 60)
         * 60
 }
 
@@ -106,6 +129,7 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 role: "agent".to_string(),
                 is_superadmin: false,
                 agent_id: Some(aid),
+                jti: c.jti,
             })
         }
         Some("refresh") | Some("mfa_pending") => None,
@@ -126,6 +150,7 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 role,
                 is_superadmin: c.is_superadmin.unwrap_or(false),
                 agent_id: None,
+                jti: c.jti,
             })
         }
     }
@@ -145,7 +170,7 @@ pub fn create_agent_session_token(
         return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
     }
     let now = chrono::Utc::now();
-    let exp = (now + chrono::Duration::hours(24)).timestamp();
+    let exp = (now + chrono::Duration::seconds(agent_token_ttl_secs())).timestamp();
     let claims = JwtClaims {
         sub: 0,
         tid: tenant_id,
@@ -155,6 +180,7 @@ pub fn create_agent_session_token(
         role: Some("agent".to_string()),
         is_superadmin: Some(false),
         agent_id: Some(aid.to_string()),
+        jti: None,
     };
     encode(
         &Header::default(),
@@ -163,13 +189,20 @@ pub fn create_agent_session_token(
     )
 }
 
+/// Minted human access JWT plus its `jti` for session tracking / revocation.
+#[derive(Clone, Debug)]
+pub struct MintedAccessToken {
+    pub token: String,
+    pub jti: String,
+}
+
 /// Short-lived access JWT (`typ: access`) with RBAC claims for middleware and `/api/auth/me`.
 pub fn create_access_token(
     user_id: i64,
     tenant_id: i64,
     role: &str,
     is_superadmin: bool,
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<MintedAccessToken, jsonwebtoken::errors::Error> {
     let secret = jwt_secret();
     if secret.is_empty() {
         return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
@@ -182,6 +215,7 @@ pub fn create_access_token(
     } else {
         role_norm.to_string()
     };
+    let jti = uuid::Uuid::new_v4().to_string();
     let claims = JwtClaims {
         sub: user_id,
         tid: tenant_id,
@@ -191,12 +225,14 @@ pub fn create_access_token(
         role: Some(role_s),
         is_superadmin: Some(is_superadmin),
         agent_id: None,
+        jti: Some(jti.clone()),
     };
-    encode(
+    let token = encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret),
-    )
+    )?;
+    Ok(MintedAccessToken { token, jti })
 }
 
 /// Backward-compatible alias (viewer, not superadmin).
@@ -205,7 +241,7 @@ pub fn create_session_token(
     user_id: i64,
     tenant_id: i64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    create_access_token(user_id, tenant_id, "viewer", false)
+    create_access_token(user_id, tenant_id, "viewer", false).map(|m| m.token)
 }
 
 fn mfa_pending_ttl_secs() -> i64 {
@@ -239,12 +275,68 @@ pub fn create_mfa_pending_token(
         role: Some(role.trim().to_string()),
         is_superadmin: Some(is_superadmin),
         agent_id: None,
+        jti: None,
     };
     encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret),
     )
+}
+
+/// Short-lived scoped ticket for SSE when HttpOnly cookies are unavailable cross-origin.
+pub fn create_sse_ticket(
+    user_id: i64,
+    tenant_id: i64,
+    role: &str,
+    is_superadmin: bool,
+) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
+    }
+    let now = chrono::Utc::now();
+    let exp = (now + chrono::Duration::seconds(sse_ticket_ttl_secs())).timestamp();
+    let role_norm = role.trim();
+    let role_s = if role_norm.is_empty() {
+        "viewer".to_string()
+    } else {
+        role_norm.to_string()
+    };
+    let claims = JwtClaims {
+        sub: user_id,
+        tid: tenant_id,
+        exp,
+        iat: now.timestamp(),
+        typ: Some("sse_ticket".to_string()),
+        role: Some(role_s),
+        is_superadmin: Some(is_superadmin),
+        agent_id: None,
+        jti: Some(uuid::Uuid::new_v4().to_string()),
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
+}
+
+pub fn verify_sse_ticket(token: &str) -> Option<AuthContext> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return None;
+    }
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
+        .ok()
+        .and_then(|d| {
+            let c = d.claims;
+            if c.typ.as_deref() != Some("sse_ticket") {
+                return None;
+            }
+            auth_context_from_claims(c)
+        })
 }
 
 pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
@@ -281,7 +373,10 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
     match decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation) {
         Ok(d) => {
             let c = d.claims;
-            if matches!(c.typ.as_deref(), Some("refresh") | Some("mfa_pending")) {
+            if matches!(
+                c.typ.as_deref(),
+                Some("refresh") | Some("mfa_pending") | Some("sse_ticket")
+            ) {
                 tracing::debug!(
                     target: "auth_jwt",
                     "Rejected refresh token used as access token"
@@ -316,6 +411,27 @@ pub fn verify_access_token(token: &str) -> Option<AuthContext> {
     }
 }
 
+/// Verified access JWT `(jti, exp)` for logout revocation. Legacy tokens without `jti` return `None`.
+pub fn access_token_revocation_info(token: &str) -> Option<(String, i64)> {
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return None;
+    }
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+    let c = decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
+        .ok()?
+        .claims;
+    if matches!(
+        c.typ.as_deref(),
+        Some("refresh") | Some("mfa_pending") | Some("sse_ticket") | Some("agent")
+    ) {
+        return None;
+    }
+    let jti = c.jti.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+    Some((jti.to_string(), c.exp))
+}
+
 /// Alias for [`verify_access_token`].
 #[inline]
 pub fn verify_session_token(token: &str) -> Option<AuthContext> {
@@ -330,9 +446,23 @@ pub fn is_user_access_context(ctx: &AuthContext) -> bool {
 
 /// Verify endpoint-agent session JWT (`typ: agent`). Rejects human user access tokens.
 pub fn verify_agent_session_token(token: &str) -> Option<AuthContext> {
-    verify_access_token(token).filter(|ctx| {
-        ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent")
-    })
+    let secret = jwt_secret();
+    if secret.is_empty() {
+        return None;
+    }
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
+        .ok()
+        .and_then(|d| {
+            let c = d.claims;
+            if c.typ.as_deref() != Some("agent") {
+                return None;
+            }
+            auth_context_from_claims(c).filter(|ctx| {
+                ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent")
+            })
+        })
 }
 
 /// `Set-Cookie` for access token. Max-Age tracks JWT lifetime.
@@ -381,6 +511,31 @@ mod agent_token_tests {
     use super::*;
 
     #[test]
+    fn verify_agent_session_rejects_human_access_token() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let now = chrono::Utc::now();
+        let claims = JwtClaims {
+            sub: 1,
+            tid: 10,
+            exp: (now + chrono::Duration::hours(1)).timestamp(),
+            iat: now.timestamp(),
+            typ: Some("access".to_string()),
+            role: Some("admin".to_string()),
+            is_superadmin: Some(false),
+            agent_id: None,
+            jti: Some("test-jti".to_string()),
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret),
+        )
+        .expect("mint access");
+        assert!(verify_agent_session_token(&token).is_none());
+    }
+
+    #[test]
     fn agent_session_token_roundtrip() {
         let secret = b"unit-test-secret-at-least-32-chars-long";
         let now = chrono::Utc::now();
@@ -393,6 +548,7 @@ mod agent_token_tests {
             role: Some("agent".to_string()),
             is_superadmin: Some(false),
             agent_id: Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
+            jti: None,
         };
         let token = encode(
             &Header::default(),

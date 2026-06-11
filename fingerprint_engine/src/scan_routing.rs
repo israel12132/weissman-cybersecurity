@@ -354,7 +354,6 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         .to_string();
     let reserved = [
         "target", "client_id", "ai_endpoint", "repo_url", "base_payload", "engine", "timeout",
-        "stealth", "stealth_mode",
     ];
     let mut extras = std::collections::HashMap::new();
     if let Some(obj) = body.as_object() {
@@ -618,22 +617,10 @@ fn build_payload(
             if let Some(ref cid) = ctx.client_id {
                 obj_mut(&mut p)?.insert("client_id".into(), cid.clone());
             }
-            if engine_norm == "nexus_sovereign_swarm" {
+            {
                 let obj = obj_mut(&mut p)?;
-                for key in [
-                    "agent_count",
-                    "hive_mode",
-                    "llm_strategy",
-                    "endpoint_bridge",
-                    "edge_distribution",
-                    "convergence_threshold",
-                    "archetypes",
-                    "llm_base_url",
-                    "llm_model",
-                ] {
-                    if let Some(v) = ctx.extras.get(key) {
-                        obj.insert(key.into(), v.clone());
-                    }
+                for (k, v) in &ctx.extras {
+                    obj.insert(k.clone(), v.clone());
                 }
             }
             Ok(p)

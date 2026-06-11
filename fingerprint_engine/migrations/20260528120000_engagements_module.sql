@@ -26,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_engagements_status
 
 ALTER TABLE engagements ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS engagements_tenant_isolation ON engagements;
 CREATE POLICY engagements_tenant_isolation
     ON engagements
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);

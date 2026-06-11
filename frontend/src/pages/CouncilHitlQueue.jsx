@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiUrl } from '../lib/apiBase'
+import { api } from '../utils/apiFetch'
 
 const STATUS_COLORS = {
   PENDING_APPROVAL: 'text-amber-400 border-amber-400/30 bg-amber-900/10',
@@ -173,9 +174,7 @@ export default function CouncilHitlQueue() {
   const fetchQueue = useCallback(async () => {
     const qs = activeTab === 'ALL' ? '' : `?status=${activeTab}`
     try {
-      const r = await apiFetch(`/api/council/hitl/queue${qs}`)
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      const data = await api.get(`/api/council/hitl/queue${qs}`)
       setItems(data.items ?? [])
     } catch (e) {
       showToast('Failed to load queue: ' + e.message, false)
@@ -187,12 +186,7 @@ export default function CouncilHitlQueue() {
   const handleApprove = useCallback(async (id, note) => {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/council/hitl/${id}/approve`, {
-        method: 'POST',
-        body: JSON.stringify({ review_note: note || null }),
-      })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      const data = await api.post(`/api/council/hitl/${id}/approve`, { review_note: note || null })
       showToast(`Approved & fired — job ${data.job_id?.slice(0, 8)}…`)
       await fetchQueue()
     } catch (e) {
@@ -205,14 +199,7 @@ export default function CouncilHitlQueue() {
   const handleReject = useCallback(async (id, note) => {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/council/hitl/${id}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ review_note: note || null }),
-      })
-      if (!r.ok) {
-        const data = await r.json().catch(() => ({}))
-        throw new Error(data.detail || data.error || `HTTP ${r.status}`)
-      }
+      await api.post(`/api/council/hitl/${id}/reject`, { review_note: note || null })
       showToast('Proposal rejected.')
       await fetchQueue()
     } catch (e) {

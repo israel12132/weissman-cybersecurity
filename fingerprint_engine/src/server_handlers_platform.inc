@@ -473,6 +473,133 @@ async fn api_integrations_test(
         .into_response()
 }
 
+fn ot_ics_infer_device_type(protocol: &str, vendor: &str) -> &'static str {
+    let p = protocol.to_ascii_lowercase();
+    let v = vendor.to_ascii_lowercase();
+    if v.contains("plc") || p.contains("modbus") || p.contains("s7") || p.contains("profinet") {
+        "plc"
+    } else if v.contains("scada") || p.contains("scada") {
+        "scada"
+    } else if p.contains("dnp3") || p.contains("rtu") {
+        "rtu"
+    } else {
+        "hmi"
+    }
+}
+
+fn ot_ics_protocol_from_text(text: &str, source: &str) -> String {
+    let blob = format!("{} {}", text, source).to_ascii_lowercase();
+    if blob.contains("modbus") {
+        "Modbus".into()
+    } else if blob.contains("bacnet") {
+        "BACnet".into()
+    } else if blob.contains("opc-ua") || blob.contains("opcua") {
+        "OPC-UA".into()
+    } else if blob.contains("dnp3") {
+        "DNP3".into()
+    } else if blob.contains("s7") || blob.contains("siemens") {
+        "S7".into()
+    } else if blob.contains("ethernet/ip") || blob.contains("enip") {
+        "EtherNet/IP".into()
+    } else if blob.contains("iec 61850") || blob.contains("iec61850") || blob.contains("mms") {
+        "IEC 61850".into()
+    } else if blob.contains("mqtt") {
+        "MQTT".into()
+    } else if blob.contains("scada") || blob.contains("ics") || blob.contains("ot/") {
+        "SCADA/ICS".into()
+    } else {
+        "unknown".into()
+    }
+}
+
+fn ot_ics_parse_host_port(text: &str) -> (String, i32) {
+    let mut host = String::new();
+    let mut port: i32 = 0;
+    for token in text.split(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != ':') {
+        if token.contains(':') {
+            let parts: Vec<&str> = token.split(':').collect();
+            if parts.len() == 2 {
+                let h = parts[0].trim();
+                if h.contains('.') || h.chars().any(|c| c.is_ascii_alphabetic()) {
+                    host = h.to_string();
+                    port = parts[1].parse().unwrap_or(0);
+                }
+            }
+        } else if token.contains('.')
+            && token.split('.').count() == 4
+            && token.chars().all(|c| c.is_ascii_digit() || c == '.')
+        {
+            host = token.to_string();
+        }
+    }
+    (host, port)
+}
+
+fn ot_ics_device_key(host: &str, port: i32, protocol: &str) -> String {
+    format!("{}:{}:{}", host.to_ascii_lowercase(), port, protocol.to_ascii_lowercase())
+}
+
+fn ot_ics_severity_to_confidence(severity: &str) -> f64 {
+    match severity.to_ascii_lowercase().as_str() {
+        "critical" => 0.92,
+        "high" => 0.78,
+        "medium" => 0.55,
+        "low" => 0.35,
+        _ => 0.25,
+    }
+}
+
+fn ot_ics_push_device(
+    devices: &mut Vec<Value>,
+    seen: &mut HashMap<String, ()>,
+    protocol_counts: &mut HashMap<String, (i64, String)>,
+    id: i64,
+    client_id: i64,
+    host: &str,
+    port: i32,
+    protocol: &str,
+    vendor: &str,
+    confidence: f64,
+    source: &str,
+) {
+    let host = if host.is_empty() { "unknown".into() } else { host.to_string() };
+    let protocol = if protocol.is_empty() || protocol == "unknown" {
+        ot_ics_protocol_from_text("", source)
+    } else {
+        protocol.to_string()
+    };
+    let key = ot_ics_device_key(&host, port, &protocol);
+    if seen.contains_key(&key) {
+        return;
+    }
+    seen.insert(key, ());
+    let device_type = ot_ics_infer_device_type(&protocol, vendor);
+    let status = if confidence >= 0.7 { "verified" } else { "suspected" };
+    devices.push(json!({
+        "id": id,
+        "client_id": client_id,
+        "host": host,
+        "ip": host,
+        "name": if vendor.is_empty() { format!("{}:{}", host, port.max(0)) } else { format!("{} ({})", vendor, host) },
+        "port": port,
+        "protocol": protocol,
+        "vendor": vendor,
+        "type": device_type,
+        "confidence": confidence,
+        "status": status,
+        "source": source,
+    }));
+    let entry = protocol_counts
+        .entry(protocol.clone())
+        .or_insert((0, "info".into()));
+    entry.0 += 1;
+    if confidence >= 0.8 {
+        entry.1 = "critical".into();
+    } else if confidence >= 0.5 && entry.1 != "critical" {
+        entry.1 = "warning".into();
+    }
+}
+
 /// GET /api/ot-ics/devices — tenant-wide OT/ICS fingerprint rollup.
 async fn api_ot_ics_devices(
     State(state): State<Arc<AppState>>,
@@ -481,7 +608,7 @@ async fn api_ot_ics_devices(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"devices": [], "protocols": []})),
+            Json(json!({"devices": [], "protocols": [], "findings": []})),
         )
             .into_response();
     };
@@ -493,50 +620,147 @@ async fn api_ot_ics_devices(
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
+
+    let finding_rows = sqlx::query(
+        r#"SELECT id, client_id, title, severity, source, status, description, discovered_at
+           FROM vulnerabilities
+           WHERE lower(COALESCE(source,'')) LIKE '%scada%'
+              OR lower(COALESCE(source,'')) LIKE '%modbus%'
+              OR lower(COALESCE(source,'')) LIKE '%bacnet%'
+              OR lower(COALESCE(source,'')) LIKE '%opcua%'
+              OR lower(COALESCE(source,'')) LIKE '%opc-ua%'
+              OR lower(COALESCE(source,'')) LIKE '%ot_ics%'
+              OR lower(COALESCE(source,'')) LIKE '%dnp3%'
+              OR lower(COALESCE(source,'')) LIKE '%iec61850%'
+              OR lower(COALESCE(source,'')) LIKE '%profinet%'
+              OR lower(COALESCE(source,'')) LIKE '%mqtt%'
+              OR lower(COALESCE(title,'')) LIKE '%modbus%'
+              OR lower(COALESCE(title,'')) LIKE '%bacnet%'
+              OR lower(COALESCE(title,'')) LIKE '%opc-ua%'
+              OR lower(COALESCE(title,'')) LIKE '%opc ua%'
+              OR lower(COALESCE(title,'')) LIKE '%scada%'
+              OR lower(COALESCE(title,'')) LIKE '%dnp3%'
+              OR lower(COALESCE(title,'')) LIKE '%ot/ics%'
+              OR lower(COALESCE(description,'')) LIKE '%modbus%'
+              OR lower(COALESCE(description,'')) LIKE '%bacnet%'
+              OR lower(COALESCE(description,'')) LIKE '%opc-ua%'
+           ORDER BY discovered_at DESC LIMIT 300"#,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
     let _ = tx.commit().await;
 
     let mut protocol_counts: HashMap<String, (i64, String)> = HashMap::new();
     let mut devices: Vec<Value> = Vec::new();
+    let mut seen: HashMap<String, ()> = HashMap::new();
+    let mut findings: Vec<Value> = Vec::new();
+
     for r in rows {
         let protocol: String = r.try_get("protocol").unwrap_or_else(|_| "unknown".into());
         let host: String = r.try_get("host").unwrap_or_default();
         let port: i32 = r.try_get("port").unwrap_or(0);
         let vendor: String = r.try_get("vendor_hint").unwrap_or_default();
         let confidence: f64 = r.try_get("confidence").unwrap_or(0.0);
-        let device_type = if vendor.to_lowercase().contains("plc") {
-            "plc"
-        } else if vendor.to_lowercase().contains("scada") {
-            "scada"
-        } else if protocol.eq_ignore_ascii_case("modbus") {
-            "plc"
-        } else {
-            "hmi"
-        };
-        devices.push(json!({
-            "id": r.try_get::<i64,_>("id").unwrap_or(0),
-            "client_id": r.try_get::<i64,_>("client_id").unwrap_or(0),
-            "host": host,
-            "port": port,
-            "protocol": protocol,
-            "vendor": vendor,
-            "type": device_type,
-            "confidence": confidence,
-            "status": if confidence >= 0.7 { "verified" } else { "suspected" },
-        }));
-        let entry = protocol_counts.entry(protocol.clone()).or_insert((0, "info".into()));
-        entry.0 += 1;
-        if confidence >= 0.8 {
-            entry.1 = "critical".into();
-        } else if confidence >= 0.5 && entry.1 != "critical" {
-            entry.1 = "warning".into();
-        }
+        ot_ics_push_device(
+            &mut devices,
+            &mut seen,
+            &mut protocol_counts,
+            r.try_get::<i64, _>("id").unwrap_or(0),
+            r.try_get::<i64, _>("client_id").unwrap_or(0),
+            &host,
+            port,
+            &protocol,
+            &vendor,
+            confidence,
+            "ot_ics_fingerprints",
+        );
     }
+
+    for r in finding_rows {
+        let id: i64 = r.try_get("id").unwrap_or(0);
+        let client_id: i64 = r.try_get("client_id").unwrap_or(0);
+        let title: String = r.try_get("title").unwrap_or_default();
+        let source: String = r.try_get("source").unwrap_or_default();
+        let severity: String = r.try_get("severity").unwrap_or_else(|_| "info".into());
+        let description: String = r.try_get("description").unwrap_or_default();
+        let status: String = r.try_get("status").unwrap_or_else(|_| "open".into());
+        let discovered_at: Option<chrono::DateTime<chrono::Utc>> = r.try_get("discovered_at").ok();
+
+        findings.push(json!({
+            "id": id,
+            "client_id": client_id,
+            "title": title,
+            "severity": severity,
+            "source": source,
+            "status": status,
+            "description": description,
+            "discovered_at": discovered_at.map(|t| t.to_rfc3339()),
+        }));
+
+        let blob = format!("{} {}", title, description);
+        let protocol = ot_ics_protocol_from_text(&blob, &source);
+        let (mut host, mut port) = ot_ics_parse_host_port(&blob);
+        if host.is_empty() {
+            host = ot_ics_parse_host_port(&description).0;
+            if port == 0 {
+                port = ot_ics_parse_host_port(&description).1;
+            }
+        }
+        if port == 0 {
+            port = match protocol.as_str() {
+                "Modbus" => 502,
+                "BACnet" => 47808,
+                "OPC-UA" => 4840,
+                "DNP3" => 20000,
+                "S7" | "IEC 61850" => 102,
+                _ => 0,
+            };
+        }
+        let vendor = if description.contains("Vendor:") {
+            description
+                .split("Vendor:")
+                .nth(1)
+                .unwrap_or("")
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        } else {
+            String::new()
+        };
+        let confidence = ot_ics_severity_to_confidence(&severity);
+        ot_ics_push_device(
+            &mut devices,
+            &mut seen,
+            &mut protocol_counts,
+            id,
+            client_id,
+            &host,
+            port,
+            &protocol,
+            &vendor,
+            confidence,
+            &source,
+        );
+    }
+
     let protocols: Vec<Value> = protocol_counts
         .into_iter()
         .map(|(name, (count, status))| json!({ "name": name, "count": count, "status": status }))
         .collect();
 
-    (StatusCode::OK, Json(json!({ "ok": true, "devices": devices, "protocols": protocols }))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "devices": devices,
+            "protocols": protocols,
+            "findings": findings,
+        })),
+    )
+        .into_response()
 }
 
 /// GET /api/mobile-security/apps — mobile-related findings grouped as apps.
@@ -633,6 +857,49 @@ fn finding_status_to_incident_status(status: &str) -> &'static str {
     }
 }
 
+/// Parse `INC-0042` → underlying vulnerability id.
+fn parse_incident_finding_id(incident_id: &str) -> Option<i64> {
+    let s = incident_id.trim();
+    let num = s.strip_prefix("INC-").or_else(|| s.strip_prefix("inc-"))?;
+    num.parse::<i64>().ok().filter(|&id| id > 0)
+}
+
+#[derive(Debug, Deserialize)]
+struct IncidentPlaybookStepPatchBody {
+    step_id: i32,
+    #[serde(default)]
+    done: Option<bool>,
+}
+
+/// Load completed playbook step ids keyed by finding_id.
+async fn fetch_playbook_steps_map(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    finding_ids: &[i64],
+) -> std::collections::HashMap<i64, Vec<i32>> {
+    if finding_ids.is_empty() {
+        return std::collections::HashMap::new();
+    }
+    let rows = sqlx::query(
+        r#"SELECT finding_id, step_id
+           FROM soc_incident_playbook_steps
+           WHERE finding_id = ANY($1) AND done = TRUE
+           ORDER BY step_id"#,
+    )
+    .bind(finding_ids)
+    .fetch_all(&mut **tx)
+    .await
+    .unwrap_or_default();
+    let mut out: std::collections::HashMap<i64, Vec<i32>> = std::collections::HashMap::new();
+    for r in rows {
+        let fid: i64 = r.try_get("finding_id").unwrap_or(0);
+        let sid: i32 = r.try_get("step_id").unwrap_or(0);
+        if fid > 0 && sid > 0 {
+            out.entry(fid).or_default().push(sid);
+        }
+    }
+    out
+}
+
 /// GET /api/soc/incidents — derive IR cases from critical/high findings + audit trail.
 async fn api_soc_incidents(
     State(state): State<Arc<AppState>>,
@@ -661,7 +928,12 @@ async fn api_soc_incidents(
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
-    let _ = tx.commit().await;
+
+    let finding_ids: Vec<i64> = rows
+        .iter()
+        .filter_map(|r| r.try_get::<i64, _>("id").ok())
+        .collect();
+    let steps_map = fetch_playbook_steps_map(&mut tx, &finding_ids).await;
 
     let mut incidents: Vec<Value> = Vec::new();
     for r in rows {
@@ -698,6 +970,7 @@ async fn api_soc_incidents(
             }
         }
 
+        let done_steps = steps_map.get(&id).cloned().unwrap_or_default();
         incidents.push(json!({
             "id": format!("INC-{:04}", id),
             "finding_id": id,
@@ -712,10 +985,138 @@ async fn api_soc_incidents(
             "mitre": null,
             "description": description,
             "playbook": if severity == "critical" { "zero_day" } else { "credential_stuffing" },
+            "playbookStepsDone": done_steps,
             "timeline": timeline,
         }));
     }
+    let _ = tx.commit().await;
     (StatusCode::OK, Json(json!({ "ok": true, "incidents": incidents }))).into_response()
+}
+
+/// PATCH /api/soc/incidents/:id/playbook-steps — persist IR playbook step completion.
+async fn api_soc_incident_playbook_steps_patch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(incident_id): Path<String>,
+    Json(body): Json<IncidentPlaybookStepPatchBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let finding_id = match parse_incident_finding_id(&incident_id) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "invalid incident id; expected INC-####"})),
+            )
+                .into_response();
+        }
+    };
+    if body.step_id <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "step_id must be positive"})),
+        )
+            .into_response();
+    }
+    let done = body.done.unwrap_or(true);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+
+    let exists = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*)::bigint FROM vulnerabilities WHERE id = $1"#,
+    )
+    .bind(finding_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    if exists == 0 {
+        let _ = tx.rollback().await;
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "incident not found"})),
+        )
+            .into_response();
+    }
+
+    if done {
+        let _ = sqlx::query(
+            r#"INSERT INTO soc_incident_playbook_steps (tenant_id, finding_id, step_id, done, updated_at)
+               VALUES ($1, $2, $3, TRUE, now())
+               ON CONFLICT (tenant_id, finding_id, step_id)
+               DO UPDATE SET done = TRUE, updated_at = now()"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(finding_id)
+        .bind(body.step_id)
+        .execute(&mut *tx)
+        .await;
+    } else {
+        let _ = sqlx::query(
+            r#"DELETE FROM soc_incident_playbook_steps
+               WHERE tenant_id = $1 AND finding_id = $2 AND step_id = $3"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(finding_id)
+        .bind(body.step_id)
+        .execute(&mut *tx)
+        .await;
+    }
+
+    let steps_map = fetch_playbook_steps_map(&mut tx, &[finding_id]).await;
+    let _ = tx.commit().await;
+    let done_steps = steps_map.get(&finding_id).cloned().unwrap_or_default();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "incident_id": incident_id,
+            "finding_id": finding_id,
+            "step_id": body.step_id,
+            "done": done,
+            "playbookStepsDone": done_steps,
+        })),
+    )
+        .into_response()
+}
+
+/// Extract unique IP/domain indicators from finding text fields.
+fn extract_network_iocs(text: &str) -> Vec<(String, &'static str)> {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    let lower = text.to_ascii_lowercase();
+
+    for token in lower.split(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != ':') {
+        let t = token.trim_matches(|c| c == '.' || c == '[' || c == ']' || c == '(' || c == ')');
+        if t.is_empty() {
+            continue;
+        }
+        if t.chars().filter(|&c| c == '.').count() == 3
+            && t.chars().all(|c| c.is_ascii_digit() || c == '.')
+            && t.len() >= 7
+            && t.len() <= 15
+            && seen.insert(format!("ip:{t}"))
+        {
+            out.push((t.to_string(), "ip"));
+            continue;
+        }
+        if t.contains('.')
+            && !t.starts_with("http")
+            && t.len() >= 4
+            && t.len() <= 253
+            && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+            && t.contains('.')
+            && !t.ends_with(".local")
+            && seen.insert(format!("domain:{t}"))
+        {
+            out.push((t.to_string(), "domain"));
+        }
+    }
+    out
 }
 
 /// GET /api/soc/hunts — hypothesis-style hunts from finding clusters / high-signal sources.
@@ -741,10 +1142,11 @@ async fn api_soc_hunts(
     .unwrap_or_default();
 
     let ioc_rows = sqlx::query(
-        r#"SELECT title, severity, source, discovered_at
+        r#"SELECT id, title, severity, source, description, discovered_at,
+                  COALESCE(raw_data, '{}'::jsonb) AS raw_data
            FROM vulnerabilities
-           WHERE kev_listed = true OR lower(severity) = 'critical'
-           ORDER BY discovered_at DESC LIMIT 40"#,
+           WHERE kev_listed = true OR lower(severity) IN ('critical', 'high')
+           ORDER BY discovered_at DESC LIMIT 80"#,
     )
     .fetch_all(&mut *tx)
     .await
@@ -775,26 +1177,70 @@ async fn api_soc_hunts(
         })
         .collect();
 
-    let iocs: Vec<Value> = ioc_rows
-        .into_iter()
-        .map(|r| {
-            json!({
-                "indicator": r.try_get::<String,_>("title").unwrap_or_default(),
-                "type": "finding",
-                "severity": r.try_get::<String,_>("severity").unwrap_or_default(),
-                "source": r.try_get::<String,_>("source").unwrap_or_default(),
-                "last_seen": r.try_get::<DateTime<Utc>,_>("discovered_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-            })
-        })
-        .collect();
+    let mut iocs: Vec<Value> = Vec::new();
+    let mut ioc_seen = std::collections::HashSet::new();
+    for r in ioc_rows {
+        let raw_id: i64 = r.try_get("id").unwrap_or(0);
+        let title: String = r.try_get("title").unwrap_or_default();
+        let severity: String = r.try_get("severity").unwrap_or_else(|_| "medium".into());
+        let source: String = r.try_get("source").unwrap_or_default();
+        let description: String = r.try_get("description").unwrap_or_default();
+        let raw_data: Value = r.try_get("raw_data").unwrap_or(json!({}));
+        let discovered: DateTime<Utc> = r.try_get("discovered_at").unwrap_or_else(|_| Utc::now());
+        let added = discovered.format("%Y-%m-%d").to_string();
+        let target = raw_data
+            .get("target")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let url = raw_data
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let mut blob = format!("{title} {description} {target} {url}");
+        if let Some(mitre) = raw_data.get("mitre_attack").and_then(Value::as_str) {
+            blob.push(' ');
+            blob.push_str(mitre);
+        }
+        for (value, ioc_type) in extract_network_iocs(&blob) {
+            let key = format!("{ioc_type}:{value}");
+            if !ioc_seen.insert(key) {
+                continue;
+            }
+            iocs.push(json!({
+                "id": format!("ioc-{}-{}", ioc_type, iocs.len() + 1),
+                "type": ioc_type,
+                "value": value,
+                "source": if source.is_empty() { "Findings" } else { source.as_str() },
+                "severity": severity,
+                "tags": [source.clone()],
+                "added": added,
+                "finding_id": raw_id,
+            }));
+        }
+        if iocs.len() >= 60 {
+            break;
+        }
+    }
 
     let queries: Vec<Value> = campaigns
         .iter()
         .take(8)
-        .map(|c| {
+        .enumerate()
+        .map(|(i, c)| {
+            let ds = c
+                .get("dataSources")
+                .and_then(|d| d.get(0))
+                .and_then(Value::as_str)
+                .unwrap_or("findings");
             json!({
+                "id": format!("q-{}", i + 1),
                 "name": c.get("title").cloned().unwrap_or(Value::Null),
-                "query": format!("source:{}", c.get("dataSources").and_then(|d| d.get(0)).unwrap_or(&Value::Null)),
+                "datasource": ds,
+                "language": "KQL",
+                "query": format!("findings | where source == \"{ds}\" | summarize count() by severity, title"),
+                "mitre": c.get("mitre").and_then(|m| m.get(0)).cloned().unwrap_or(Value::Null),
                 "hits": c.get("hitsFound").cloned().unwrap_or(json!(0)),
             })
         })
@@ -805,6 +1251,28 @@ async fn api_soc_hunts(
         Json(json!({ "ok": true, "campaigns": campaigns, "iocs": iocs, "queries": queries })),
     )
         .into_response()
+}
+
+/// GET /api/soc/iocs — IOC library extracted from recent findings (IPs/domains).
+async fn api_soc_iocs(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let resp = api_soc_hunts(State(state), Extension(auth)).await;
+    let status = resp.status();
+    let bytes = match axum::body::to_bytes(resp.into_body(), 4_194_304).await {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "iocs": []})),
+            )
+                .into_response();
+        }
+    };
+    let v: Value = serde_json::from_slice(&bytes).unwrap_or(json!({"iocs": []}));
+    let iocs = v.get("iocs").cloned().unwrap_or(json!([]));
+    (status, Json(json!({"ok": true, "iocs": iocs}))).into_response()
 }
 
 /// GET /api/soc/kill-chains — MITRE-aligned chains from privilege escalation events.
@@ -963,7 +1431,8 @@ async fn api_soc_social_engineering(
     let rows = sqlx::query(
         r#"SELECT id, title, severity, source, status, description, discovered_at
            FROM vulnerabilities
-           WHERE lower(COALESCE(source,'')) LIKE '%phish%'
+           WHERE lower(COALESCE(source,'')) = 'social_engineering_phishing'
+              OR lower(COALESCE(source,'')) LIKE '%phish%'
               OR lower(COALESCE(source,'')) LIKE '%social%'
               OR lower(COALESCE(title,'')) LIKE '%phish%'
               OR lower(COALESCE(title,'')) LIKE '%social%'
@@ -978,12 +1447,22 @@ async fn api_soc_social_engineering(
         .into_iter()
         .map(|r| {
             let id: i64 = r.try_get("id").unwrap_or(0);
+            let source = r.try_get::<String, _>("source").unwrap_or_default();
+            let status = r
+                .try_get::<String, _>("status")
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let campaign_type = if source.eq_ignore_ascii_case("social_engineering_phishing") {
+                "email_phishing"
+            } else {
+                "phishing_assessment"
+            };
             json!({
                 "id": format!("camp-{}", id),
                 "name": r.try_get::<String,_>("title").unwrap_or_default(),
-                "type": "phishing_assessment",
+                "type": campaign_type,
                 "severity": r.try_get::<String,_>("severity").unwrap_or_default(),
-                "status": r.try_get::<String,_>("status").unwrap_or_default(),
+                "status": status,
                 "description": r.try_get::<String,_>("description").unwrap_or_default(),
                 "started_at": r.try_get::<DateTime<Utc>,_>("discovered_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
             })
@@ -997,6 +1476,158 @@ async fn api_soc_social_engineering(
     });
 
     (StatusCode::OK, Json(json!({ "ok": true, "campaigns": campaigns, "stats": stats }))).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct SocialCampaignCreate {
+    name: String,
+    template: Option<String>,
+    client_id: Option<i64>,
+    description: Option<String>,
+    campaign_type: Option<String>,
+}
+
+/// POST /api/soc/social-engineering/campaigns — register a phishing assessment campaign.
+async fn api_soc_social_engineering_campaigns_post(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<SocialCampaignCreate>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let name = body.name.trim();
+    if name.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "name required"})),
+        )
+            .into_response();
+    }
+    let client_id = match body.client_id {
+        Some(id) if id > 0 => id,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "client_id required"})),
+            )
+                .into_response();
+        }
+    };
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let client_ok: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1 AND tenant_id = $2)",
+    )
+    .bind(client_id)
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(false);
+    if !client_ok {
+        let _ = tx.rollback().await;
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "client not found"})),
+        )
+            .into_response();
+    }
+
+    let template = body.template.unwrap_or_else(|| "Password Reset".into());
+    let campaign_type = body
+        .campaign_type
+        .unwrap_or_else(|| "email_phishing".into());
+    let description = body.description.unwrap_or_default();
+    let full_description = if description.is_empty() {
+        format!("Phishing simulation campaign using the \"{}\" template.", template)
+    } else {
+        format!(
+            "{} (template: {})",
+            description.trim(),
+            template
+        )
+    };
+
+    let run_id: i64 = match sqlx::query_scalar(
+        "INSERT INTO report_runs (tenant_id, summary, findings_json) VALUES ($1, $2, '[]') RETURNING id",
+    )
+    .bind(auth.tenant_id)
+    .bind(json!({"kind": "social_engineering_campaign", "template": template}).to_string())
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": format!("report run insert failed: {}", e)})),
+            )
+                .into_response();
+        }
+    };
+
+    let finding_id = format!("soc-camp-{}", uuid::Uuid::new_v4());
+    let source = "social_engineering_phishing";
+    let row_id: i64 = match sqlx::query_scalar(
+        r#"INSERT INTO vulnerabilities
+             (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, discovered_at)
+           VALUES ($1, $2, $3, $4, $5, 'medium', $6, $7, 'OPEN', now())
+           RETURNING id"#,
+    )
+    .bind(run_id)
+    .bind(auth.tenant_id)
+    .bind(client_id)
+    .bind(&finding_id)
+    .bind(name)
+    .bind(source)
+    .bind(&full_description)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": format!("campaign insert failed: {}", e)})),
+            )
+                .into_response();
+        }
+    };
+
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": "commit failed"})),
+        )
+            .into_response();
+    }
+
+    let campaign = json!({
+        "id": format!("camp-{}", row_id),
+        "name": name,
+        "type": campaign_type,
+        "severity": "medium",
+        "status": "open",
+        "description": full_description,
+        "started_at": chrono::Utc::now().to_rfc3339(),
+        "client_id": client_id,
+        "template": template,
+    });
+
+    (
+        StatusCode::CREATED,
+        Json(json!({"ok": true, "campaign": campaign})),
+    )
+        .into_response()
 }
 
 /// GET /api/soc/network-protocols — protocol exposure rollup from findings + OT fingerprints.
@@ -1355,10 +1986,11 @@ async fn api_scan_schedules_create(
         }
     };
 
+    let next_run = crate::scan_schedule_worker::compute_next_run_at(&schedule_type, Utc::now());
     let created: Option<(i64,)> = sqlx::query_as(
         r#"INSERT INTO weissman_scan_schedules
-           (tenant_id, client_id, name, description, schedule_type, cron, engines, enabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (tenant_id, client_id, name, description, schedule_type, cron, engines, enabled, next_run_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id"#,
     )
     .bind(auth.tenant_id)
@@ -1369,6 +2001,7 @@ async fn api_scan_schedules_create(
     .bind(&cron)
     .bind(engines_json)
     .bind(enabled)
+    .bind(next_run)
     .fetch_optional(&mut *tx)
     .await
     .ok()
@@ -1445,11 +2078,12 @@ async fn api_scan_schedules_update(
         }
     };
 
+    let next_run = crate::scan_schedule_worker::compute_next_run_at(&schedule_type, Utc::now());
     let updated = sqlx::query(
         r#"UPDATE weissman_scan_schedules
            SET client_id = $1, name = $2, description = $3, schedule_type = $4, cron = $5,
-               engines = $6, enabled = $7, updated_at = now()
-           WHERE id = $8"#,
+               engines = $6, enabled = $7, next_run_at = $8, updated_at = now()
+           WHERE id = $9"#,
     )
     .bind(client_id)
     .bind(name)
@@ -1458,6 +2092,7 @@ async fn api_scan_schedules_update(
     .bind(&cron)
     .bind(engines_json)
     .bind(enabled)
+    .bind(next_run)
     .bind(schedule_id)
     .execute(&mut *tx)
     .await;
@@ -1726,12 +2361,17 @@ async fn api_scan_schedules_run(
     )
     .await;
 
+    let schedule_type_for_next: String = row
+        .try_get("schedule_type")
+        .unwrap_or_else(|_| "daily".into());
+    let next_run = crate::scan_schedule_worker::compute_next_run_at(&schedule_type_for_next, Utc::now());
     let _ = sqlx::query(
         r#"UPDATE weissman_scan_schedules
-           SET last_run_at = now(), run_count = run_count + 1, updated_at = now()
+           SET last_run_at = now(), next_run_at = $2, run_count = run_count + 1, updated_at = now()
            WHERE id = $1"#,
     )
     .bind(schedule_id)
+    .bind(next_run)
     .execute(&mut *tx)
     .await;
     let _ = tx.commit().await;
@@ -1878,6 +2518,12 @@ fn reshape_risk_graph_for_ui(v: Value) -> Value {
                 .or_else(|| n.get("graph_key").and_then(Value::as_str))
                 .unwrap_or("asset");
             let risk_score = n.get("risk_score").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let meta_raw = n.get("metadata").cloned().unwrap_or(Value::Null);
+            let meta_parsed: Value = match &meta_raw {
+                Value::String(s) => serde_json::from_str(s).unwrap_or(json!({})),
+                Value::Object(_) => meta_raw.clone(),
+                _ => json!({}),
+            };
             json!({
                 "id": id,
                 "name": label,
@@ -1886,7 +2532,15 @@ fn reshape_risk_graph_for_ui(v: Value) -> Value {
                 "risk_score": risk_score,
                 "severity": risk_score_to_severity(risk_score),
                 "is_choke_point": n.get("is_choke_point").cloned().unwrap_or(Value::Bool(false)),
-                "metadata": n.get("metadata").cloned().unwrap_or(json!({})),
+                "metadata": meta_parsed,
+                "description": meta_parsed.get("description").cloned()
+                    .or_else(|| meta_parsed.get("summary").cloned())
+                    .unwrap_or(Value::Null),
+                "finding_id": meta_parsed.get("finding_id").cloned()
+                    .or_else(|| meta_parsed.get("vulnerability_id").cloned())
+                    .unwrap_or(Value::Null),
+                "attack_paths": meta_parsed.get("attack_paths").cloned().unwrap_or(json!(0)),
+                "mitigations": meta_parsed.get("mitigations").cloned().unwrap_or(json!(0)),
             })
         })
         .collect();
@@ -1942,6 +2596,162 @@ async fn api_risk_graph_alias(
     (status, Json(reshape_risk_graph_for_ui(v))).into_response()
 }
 
+fn sbom_component_type(source: &str) -> &'static str {
+    let s = source.to_ascii_lowercase();
+    if s.contains("transitive") || s.contains("indirect") {
+        "transitive"
+    } else {
+        "direct"
+    }
+}
+
+/// Map DB SBOM row + matched vulns to SBOMBrowser field names.
+fn reshape_sbom_component_for_ui(
+    id: i64,
+    package_name: &str,
+    ecosystem: &str,
+    version_spec: &str,
+    source: &str,
+    created_at: &str,
+    vulns: &[Value],
+) -> Value {
+    let version = if version_spec.is_empty() || version_spec == "*" {
+        "unknown".to_string()
+    } else {
+        version_spec.to_string()
+    };
+    let vulnerabilities: Vec<Value> = vulns
+        .iter()
+        .map(|v| {
+            json!({
+                "id": v.get("id").cloned().unwrap_or(Value::Null),
+                "cve": v.get("cve").cloned()
+                    .or_else(|| v.get("title").cloned())
+                    .unwrap_or(Value::Null),
+                "severity": v.get("severity").cloned().unwrap_or(json!("medium")),
+                "title": v.get("title").cloned().unwrap_or(Value::Null),
+            })
+        })
+        .collect();
+    let max_sev = vulnerabilities
+        .iter()
+        .filter_map(|v| v.get("severity").and_then(Value::as_str))
+        .max_by_key(|s| severity_rank(s))
+        .unwrap_or("info");
+    json!({
+        "id": id,
+        "name": package_name,
+        "package_name": package_name,
+        "version": version,
+        "version_spec": version_spec,
+        "ecosystem": ecosystem,
+        "source": source,
+        "type": sbom_component_type(source),
+        "license": if ecosystem.is_empty() { Value::Null } else { json!(format!("{ecosystem}-registry")) },
+        "vulnerabilities": vulnerabilities,
+        "outdated": max_sev == "critical" || max_sev == "high",
+        "latest_version": Value::Null,
+        "created_at": created_at,
+    })
+}
+
+/// Load SBOM components enriched with tenant-scoped vulnerability matches.
+async fn sbom_components_for_ui(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Vec<Value>, Response> {
+    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "components": []})),
+        )
+            .into_response());
+    };
+    let rows = sqlx::query(
+        "SELECT id, package_name, ecosystem, version_spec, source, created_at FROM client_sbom_components WHERE client_id = $1 ORDER BY id DESC",
+    )
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": e.to_string(), "components": []})),
+        )
+            .into_response()
+    })?;
+    let vuln_rows = sqlx::query(
+        r#"SELECT id, title, severity, description, source
+           FROM vulnerabilities
+           WHERE client_id = $1
+             AND (
+               lower(COALESCE(source,'')) LIKE '%sbom%'
+               OR lower(COALESCE(source,'')) LIKE '%supply%'
+               OR lower(COALESCE(title,'')) LIKE '%cve-%'
+               OR lower(COALESCE(description,'')) LIKE '%cve-%'
+             )
+           ORDER BY id DESC LIMIT 500"#,
+    )
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let mut vulns_by_pkg: HashMap<String, Vec<Value>> = HashMap::new();
+    for r in vuln_rows {
+        let title: String = r.try_get("title").unwrap_or_default();
+        let description: String = r.try_get("description").unwrap_or_default();
+        let blob = format!("{} {}", title, description).to_ascii_lowercase();
+        for row in &rows {
+            let pkg: String = row.try_get("package_name").unwrap_or_default();
+            if pkg.is_empty() {
+                continue;
+            }
+            if blob.contains(&pkg.to_ascii_lowercase()) {
+                let cve = title
+                    .split_whitespace()
+                    .find(|t| t.to_ascii_uppercase().starts_with("CVE-"))
+                    .unwrap_or("")
+                    .to_string();
+                vulns_by_pkg.entry(pkg).or_default().push(json!({
+                    "id": r.try_get::<i64,_>("id").unwrap_or(0),
+                    "title": title,
+                    "severity": r.try_get::<String,_>("severity").unwrap_or_else(|_| "medium".into()),
+                    "cve": if cve.is_empty() { Value::Null } else { json!(cve) },
+                }));
+            }
+        }
+    }
+
+    let components: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let id: i64 = r.try_get("id").unwrap_or(0);
+            let package_name: String = r.try_get("package_name").unwrap_or_default();
+            let ecosystem: String = r.try_get("ecosystem").unwrap_or_default();
+            let version_spec: String = r.try_get("version_spec").unwrap_or_default();
+            let source: String = r.try_get("source").unwrap_or_default();
+            let created_at = r
+                .try_get::<DateTime<Utc>, _>("created_at")
+                .map(|d| d.to_rfc3339())
+                .unwrap_or_default();
+            let vulns = vulns_by_pkg.get(&package_name).map(|v| v.as_slice()).unwrap_or(&[]);
+            reshape_sbom_component_for_ui(
+                id,
+                &package_name,
+                &ecosystem,
+                &version_spec,
+                &source,
+                &created_at,
+                vulns,
+            )
+        })
+        .collect();
+    Ok(components)
+}
+
 /// GET /api/sbom/components — alias for `/api/clients/:id/sbom/components`.
 async fn api_sbom_components_alias(
     State(state): State<Arc<AppState>>,
@@ -1952,7 +2762,10 @@ async fn api_sbom_components_alias(
         Ok(id) => id,
         Err(resp) => return resp,
     };
-    api_client_sbom_list(State(state), Extension(auth), Path(client_id)).await
+    match sbom_components_for_ui(&state.app_pool, auth.tenant_id, client_id).await {
+        Ok(components) => (StatusCode::OK, Json(json!({ "ok": true, "components": components }))).into_response(),
+        Err(resp) => resp,
+    }
 }
 
 /// Build SPDX or CycloneDX export from live `client_sbom_components` rows.
@@ -2109,6 +2922,302 @@ async fn api_sbom_export_alias(
     }
 }
 
+fn infer_containment_action(
+    k8s_api_server: &str,
+    aws_region: &str,
+    forensic_ports_csv: &str,
+) -> &'static str {
+    if !k8s_api_server.trim().is_empty() {
+        "quarantine"
+    } else if !aws_region.trim().is_empty() {
+        "isolate"
+    } else if forensic_ports_csv.contains(',') && forensic_ports_csv != "22,443" {
+        "block"
+    } else {
+        "alert"
+    }
+}
+
+/// Reshape DB containment row for ContainmentRulesBuilder UI fields.
+fn reshape_containment_rule_for_ui(row: Value) -> Value {
+    let name = row.get("name").and_then(Value::as_str).unwrap_or("");
+    let enabled = row.get("enabled").and_then(Value::as_bool).unwrap_or(false);
+    let pre_approved = row.get("pre_approved").and_then(Value::as_bool).unwrap_or(false);
+    let aws_region = row.get("aws_region").and_then(Value::as_str).unwrap_or("");
+    let forensic_source_cidr = row
+        .get("forensic_source_cidr")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let forensic_ports_csv = row
+        .get("forensic_ports_csv")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let k8s_api_server = row.get("k8s_api_server").and_then(Value::as_str).unwrap_or("");
+    let k8s_namespace = row.get("k8s_namespace").and_then(Value::as_str).unwrap_or("");
+    let k8s_pod_label_key = row.get("k8s_pod_label_key").and_then(Value::as_str).unwrap_or("");
+    let k8s_pod_label_value = row
+        .get("k8s_pod_label_value")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let action = infer_containment_action(k8s_api_server, aws_region, forensic_ports_csv);
+    let mut description_parts = Vec::new();
+    if !aws_region.is_empty() {
+        description_parts.push(format!("AWS region {aws_region}"));
+    }
+    if !forensic_source_cidr.is_empty() && forensic_source_cidr != "0.0.0.0/0" {
+        description_parts.push(format!("CIDR {forensic_source_cidr}"));
+    }
+    if !forensic_ports_csv.is_empty() {
+        description_parts.push(format!("Ports {forensic_ports_csv}"));
+    }
+    if !k8s_api_server.is_empty() {
+        description_parts.push(format!("K8s namespace {k8s_namespace}"));
+    }
+    if !k8s_pod_label_key.is_empty() {
+        description_parts.push(format!("Label {k8s_pod_label_key}={k8s_pod_label_value}"));
+    }
+    let description = if description_parts.is_empty() {
+        format!("Containment rule \"{name}\"")
+    } else {
+        description_parts.join(" · ")
+    };
+    let target = if !k8s_pod_label_value.is_empty() {
+        format!("{k8s_namespace}/{k8s_pod_label_value}")
+    } else if !aws_region.is_empty() {
+        aws_region.to_string()
+    } else {
+        forensic_source_cidr.to_string()
+    };
+    json!({
+        "id": row.get("id").cloned().unwrap_or(Value::Null),
+        "name": name,
+        "enabled": enabled,
+        "pre_approved": pre_approved,
+        "action": action,
+        "auto_trigger": pre_approved,
+        "description": description,
+        "target": target,
+        "triggered_count": 0,
+        "trigger_on": json!({
+            "severity": if enabled && pre_approved { json!("critical") } else { Value::Null },
+        }),
+        "aws_region": aws_region,
+        "forensic_source_cidr": forensic_source_cidr,
+        "forensic_ports_csv": forensic_ports_csv,
+        "k8s_api_server": k8s_api_server,
+        "k8s_token_env_var": row.get("k8s_token_env_var").cloned().unwrap_or(Value::Null),
+        "k8s_namespace": k8s_namespace,
+        "k8s_pod_label_key": k8s_pod_label_key,
+        "k8s_pod_label_value": k8s_pod_label_value,
+        "allow_dns_egress": row.get("allow_dns_egress").cloned().unwrap_or(json!(true)),
+        "created_at": row.get("created_at").cloned().unwrap_or(Value::Null),
+    })
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct UiContainmentRuleBody {
+    name: String,
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    action: Option<String>,
+    #[serde(default)]
+    auto_trigger: Option<bool>,
+    #[serde(default)]
+    trigger_on: Option<Value>,
+    #[serde(default)]
+    pre_approved: Option<bool>,
+    #[serde(default)]
+    aws_region: Option<String>,
+    #[serde(default)]
+    forensic_source_cidr: Option<String>,
+    #[serde(default)]
+    forensic_ports_csv: Option<String>,
+    #[serde(default)]
+    k8s_api_server: Option<String>,
+    #[serde(default)]
+    k8s_token_env_var: Option<String>,
+    #[serde(default)]
+    k8s_namespace: Option<String>,
+    #[serde(default)]
+    k8s_pod_label_key: Option<String>,
+    #[serde(default)]
+    k8s_pod_label_value: Option<String>,
+    #[serde(default)]
+    allow_dns_egress: Option<bool>,
+}
+
+fn ui_containment_to_db(body: &UiContainmentRuleBody) -> ContainmentRuleBody {
+    let action = body
+        .action
+        .as_deref()
+        .unwrap_or("isolate")
+        .to_ascii_lowercase();
+    let auto = body
+        .auto_trigger
+        .or(body.pre_approved)
+        .unwrap_or(false);
+    let (aws_region, k8s_api_server, forensic_ports) = match action.as_str() {
+        "block" => (
+            body.aws_region.clone().unwrap_or_default(),
+            String::new(),
+            body.forensic_ports_csv
+                .clone()
+                .unwrap_or_else(|| "22,443,8080".into()),
+        ),
+        "quarantine" => (
+            body.aws_region.clone().unwrap_or_default(),
+            body.k8s_api_server
+                .clone()
+                .unwrap_or_else(|| "https://kubernetes.default.svc".into()),
+            body.forensic_ports_csv
+                .clone()
+                .unwrap_or_else(|| "22,443".into()),
+        ),
+        "isolate" => (
+            body.aws_region
+                .clone()
+                .unwrap_or_else(|| "us-east-1".into()),
+            String::new(),
+            body.forensic_ports_csv
+                .clone()
+                .unwrap_or_else(|| "22,443".into()),
+        ),
+        _ => (
+            String::new(),
+            String::new(),
+            body.forensic_ports_csv
+                .clone()
+                .unwrap_or_else(|| "22,443".into()),
+        ),
+    };
+    ContainmentRuleBody {
+        name: body.name.clone(),
+        enabled: body.enabled.or(Some(true)),
+        pre_approved: Some(auto),
+        aws_region: Some(aws_region),
+        forensic_source_cidr: body
+            .forensic_source_cidr
+            .clone()
+            .or(Some("0.0.0.0/0".into())),
+        forensic_ports_csv: Some(forensic_ports),
+        k8s_api_server: Some(k8s_api_server),
+        k8s_token_env_var: body.k8s_token_env_var.clone(),
+        k8s_namespace: body.k8s_namespace.clone().or(Some("default".into())),
+        k8s_pod_label_key: body.k8s_pod_label_key.clone(),
+        k8s_pod_label_value: body.k8s_pod_label_value.clone(),
+        allow_dns_egress: body.allow_dns_egress.or(Some(true)),
+    }
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct UiContainmentRulePatchBody {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    action: Option<String>,
+    #[serde(default)]
+    auto_trigger: Option<bool>,
+    #[serde(default)]
+    trigger_on: Option<Value>,
+    #[serde(default)]
+    pre_approved: Option<bool>,
+    #[serde(default)]
+    aws_region: Option<String>,
+    #[serde(default)]
+    forensic_source_cidr: Option<String>,
+    #[serde(default)]
+    forensic_ports_csv: Option<String>,
+    #[serde(default)]
+    k8s_api_server: Option<String>,
+    #[serde(default)]
+    k8s_token_env_var: Option<String>,
+    #[serde(default)]
+    k8s_namespace: Option<String>,
+    #[serde(default)]
+    k8s_pod_label_key: Option<String>,
+    #[serde(default)]
+    k8s_pod_label_value: Option<String>,
+    #[serde(default)]
+    allow_dns_egress: Option<bool>,
+}
+
+fn ui_containment_patch_to_db(body: &UiContainmentRulePatchBody) -> ContainmentRulePatchBody {
+    let mut patch = ContainmentRulePatchBody::default();
+    if let Some(name) = &body.name {
+        patch.name = Some(name.clone());
+    }
+    if let Some(enabled) = body.enabled {
+        patch.enabled = Some(enabled);
+    }
+    if let Some(auto) = body.auto_trigger.or(body.pre_approved) {
+        patch.pre_approved = Some(auto);
+    }
+    if let Some(v) = &body.aws_region {
+        patch.aws_region = Some(v.clone());
+    }
+    if let Some(v) = &body.forensic_source_cidr {
+        patch.forensic_source_cidr = Some(v.clone());
+    }
+    if let Some(v) = &body.forensic_ports_csv {
+        patch.forensic_ports_csv = Some(v.clone());
+    }
+    if let Some(v) = &body.k8s_api_server {
+        patch.k8s_api_server = Some(v.clone());
+    }
+    if let Some(v) = &body.k8s_token_env_var {
+        patch.k8s_token_env_var = Some(v.clone());
+    }
+    if let Some(v) = &body.k8s_namespace {
+        patch.k8s_namespace = Some(v.clone());
+    }
+    if let Some(v) = &body.k8s_pod_label_key {
+        patch.k8s_pod_label_key = Some(v.clone());
+    }
+    if let Some(v) = &body.k8s_pod_label_value {
+        patch.k8s_pod_label_value = Some(v.clone());
+    }
+    if let Some(v) = body.allow_dns_egress {
+        patch.allow_dns_egress = Some(v);
+    }
+    if let Some(action) = body.action.as_deref() {
+        let mapped = ui_containment_to_db(&UiContainmentRuleBody {
+            name: body.name.clone().unwrap_or_default(),
+            action: Some(action.to_string()),
+            auto_trigger: body.auto_trigger,
+            pre_approved: body.pre_approved,
+            aws_region: body.aws_region.clone(),
+            forensic_source_cidr: body.forensic_source_cidr.clone(),
+            forensic_ports_csv: body.forensic_ports_csv.clone(),
+            k8s_api_server: body.k8s_api_server.clone(),
+            k8s_token_env_var: body.k8s_token_env_var.clone(),
+            k8s_namespace: body.k8s_namespace.clone(),
+            k8s_pod_label_key: body.k8s_pod_label_key.clone(),
+            k8s_pod_label_value: body.k8s_pod_label_value.clone(),
+            allow_dns_egress: body.allow_dns_egress,
+            ..Default::default()
+        });
+        if patch.aws_region.is_none() {
+            patch.aws_region = mapped.aws_region;
+        }
+        if patch.forensic_ports_csv.is_none() {
+            patch.forensic_ports_csv = mapped.forensic_ports_csv;
+        }
+        if patch.k8s_api_server.is_none() {
+            patch.k8s_api_server = mapped.k8s_api_server;
+        }
+    }
+    let _ = body.description.as_ref();
+    let _ = body.trigger_on.as_ref();
+    patch
+}
+
 /// GET /api/containment/rules — alias for `/api/clients/:id/containment-rules`.
 async fn api_containment_rules_alias(
     State(state): State<Arc<AppState>>,
@@ -2119,7 +3228,28 @@ async fn api_containment_rules_alias(
         Ok(id) => id,
         Err(resp) => return resp,
     };
-    api_containment_rules_list(State(state), Extension(auth), Path(client_id)).await
+    let resp = api_containment_rules_list(State(state), Extension(auth), Path(client_id)).await;
+    let status = resp.status();
+    let bytes = match axum::body::to_bytes(resp.into_body(), 2_097_152).await {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"rules": []})),
+            )
+                .into_response();
+        }
+    };
+    let v: Value = serde_json::from_slice(&bytes).unwrap_or(json!({"rules": []}));
+    let rules: Vec<Value> = v
+        .get("rules")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(reshape_containment_rule_for_ui)
+        .collect();
+    (status, Json(json!({ "rules": rules }))).into_response()
 }
 
 /// GET /api/identity/contexts — alias for `/api/clients/:id/identity-contexts` with UI field names.
@@ -2299,13 +3429,14 @@ async fn api_containment_rules_post_alias(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ClientIdAliasQuery>,
-    Json(body): Json<ContainmentRuleBody>,
+    Json(body): Json<UiContainmentRuleBody>,
 ) -> Response {
     let client_id = match resolve_alias_client_id(&state.app_pool, auth.tenant_id, q.client_id).await {
         Ok(id) => id,
         Err(resp) => return resp,
     };
-    api_containment_rules_post(State(state), Extension(auth), Path(client_id), Json(body)).await
+    let db_body = ui_containment_to_db(&body);
+    api_containment_rules_post(State(state), Extension(auth), Path(client_id), Json(db_body)).await
 }
 
 /// PATCH/PUT /api/containment/rules/:id — update rule by id (tenant-scoped).
@@ -2313,9 +3444,10 @@ async fn api_containment_rules_patch_alias(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(rule_id): Path<i64>,
-    Json(body): Json<ContainmentRulePatchBody>,
+    Json(body): Json<UiContainmentRulePatchBody>,
 ) -> Response {
-    api_containment_rules_patch(State(state), Extension(auth), Path(rule_id), Json(body)).await
+    let db_body = ui_containment_patch_to_db(&body);
+    api_containment_rules_patch(State(state), Extension(auth), Path(rule_id), Json(db_body)).await
 }
 
 /// DELETE /api/containment/rules/:id — delete rule by id (tenant-scoped).

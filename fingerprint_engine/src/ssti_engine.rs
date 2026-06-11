@@ -1,80 +1,113 @@
-//! SSTI Engine — template injection probing via URL params and form fields, arithmetic detection.
+//! SSTI Engine — template injection probing with reflection-aware arithmetic detection.
 //! MITRE: T1059 (Command and Scripting Interpreter).
 
+use crate::engine_probes::{
+    empty_ok, finding_with_probe_depth, http_client, http_get, normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Duration;
 
-fn make_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
+const SSTI_PROBE_DEPTH: &str = "ssti_template_surface";
 
-fn base_url(target: &str) -> String {
-    let t = target.trim().trim_end_matches('/');
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
+fn ssti_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+    let mut f = finding_with_probe_depth(
+        "ssti",
+        title,
+        severity,
+        "T1059",
+        description,
+        target,
+        SSTI_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
     }
+    f
 }
 
-/// SSTI payloads and the expected output when evaluated (7*7 = 49).
-const SSTI_PAYLOADS: &[(&str, &str)] = &[
-    ("{{7*7}}", "49"),       // Jinja2, Twig, Pebble
-    ("${7*7}", "49"),        // Freemarker, Spring EL
-    ("<%= 7*7 %>", "49"),    // ERB (Ruby), EJS
-    ("#{7*7}", "49"),        // Thymeleaf, Groovy
-    ("{{7*'7'}}", "7777777"), // Jinja2 vs Twig differentiator
-    ("%7B%7B7*7%7D%7D", "49"), // URL-encoded Jinja2
+const SSTI_PAYLOADS: &[(&str, &str, &str)] = &[
+    ("{{7*7}}", "49", "Jinja2/Twig"),
+    ("${7*7}", "49", "Freemarker/Spring EL"),
+    ("<%= 7*7 %>", "49", "ERB/EJS"),
+    ("#{7*7}", "49", "Thymeleaf"),
+    ("{{7*'7'}}", "7777777", "Jinja2"),
 ];
 
-/// Common GET parameters that might be rendered in templates.
-const PROBE_PARAMS: &[&str] = &["q", "search", "query", "name", "input", "msg", "message", "text", "value", "template", "page", "id", "title", "content", "data"];
+const PROBE_PARAMS: &[&str] = &[
+    "q", "search", "query", "name", "input", "msg", "message", "text", "value", "template", "page",
+    "id", "title", "content", "data",
+];
 
-/// Common endpoints that may render user input.
-const PROBE_PATHS: &[&str] = &["/", "/search", "/index", "/home", "/api/render", "/template", "/render", "/preview", "/api/preview"];
+const PROBE_PATHS: &[&str] = &[
+    "/", "/search", "/index", "/home", "/api/render", "/template", "/render", "/preview",
+    "/api/preview",
+];
+
+fn ssti_confirmed(body: &str, payload: &str, expected: &str) -> bool {
+    body.contains(expected) && !body.contains(payload)
+}
+
+async fn http_post_form(client: &reqwest::Client, url: &str, form: &str) -> Option<crate::engine_probes::HttpProbe> {
+    let resp = client
+        .post(url)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(form.to_string())
+        .timeout(Duration::from_secs(8))
+        .send()
+        .await
+        .ok()?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let body = resp.text().await.unwrap_or_default();
+    let body = if body.len() > 65_536 {
+        body[..65_536].to_string()
+    } else {
+        body
+    };
+    Some(crate::engine_probes::HttpProbe {
+        status,
+        headers,
+        body,
+        final_url,
+    })
+}
 
 pub async fn run_ssti_result(target: &str) -> EngineResult {
-    let client = make_client();
-    let base = base_url(target);
-    let mut findings = Vec::new();
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings: Vec<Value> = Vec::new();
 
-    // Probe GET params across multiple paths
     'outer: for path in PROBE_PATHS {
-        let url_base = format!("{}{}", base, path);
+        let url_base = format!("{}{}", base.trim_end_matches('/'), path);
         for param in PROBE_PARAMS {
-            for (payload, expected) in SSTI_PAYLOADS {
-                let probe_url = format!("{}?{}={}", url_base, param, payload);
-                if let Ok(resp) = client.get(&probe_url).send().await {
-                    let status = resp.status().as_u16();
-                    let body = resp.text().await.unwrap_or_default();
-                    if (status == 200 || status == 201) && body.contains(expected) {
-                        let engine_type = if payload.starts_with("{{") {
-                            "Jinja2/Twig/Pebble"
-                        } else if payload.starts_with("${") {
-                            "Freemarker/Spring EL"
-                        } else if payload.starts_with("<%=") {
-                            "ERB/EJS"
-                        } else if payload.starts_with("#{") {
-                            "Thymeleaf/Groovy"
-                        } else {
-                            "Unknown"
-                        };
-                        findings.push(json!({
-                            "type": "ssti",
-                            "title": format!("SSTI Confirmed ({} Template Engine)", engine_type),
-                            "severity": "critical",
-                            "mitre_attack": "T1059",
-                            "description": format!(
-                                "Server-side template injection confirmed at {} via parameter '{}'. Payload '{}' evaluated to '{}'. Remote code execution may be possible.",
-                                probe_url, param, payload, expected
+            for (payload, expected, engine_type) in SSTI_PAYLOADS {
+                let encoded = urlencoding::encode(payload);
+                let probe_url = format!("{}?{}={}", url_base, param, encoded);
+                if let Some(p) = http_get(&client, &probe_url).await {
+                    if (p.status == 200 || p.status == 201) && ssti_confirmed(&p.body, payload, expected) {
+                        findings.push(ssti_finding(
+                            &format!("SSTI confirmed ({})", engine_type),
+                            "critical",
+                            &format!(
+                                "Parameter '{}' on {} evaluated '{}' → '{}' (HTTP {}).",
+                                param, p.final_url, payload, expected, p.status
                             ),
-                            "value": probe_url
-                        }));
+                            target,
+                            json!({ "parameter": param, "payload": payload, "engine": engine_type }),
+                        ));
                         break 'outer;
                     }
                 }
@@ -82,33 +115,24 @@ pub async fn run_ssti_result(target: &str) -> EngineResult {
         }
     }
 
-    // Probe POST form fields if no GET hit
     if findings.is_empty() {
         for path in PROBE_PATHS {
-            let url = format!("{}{}", base, path);
-            for (payload, expected) in SSTI_PAYLOADS {
+            let url = format!("{}{}", base.trim_end_matches('/'), path);
+            for (payload, expected, engine_type) in SSTI_PAYLOADS {
                 for field in PROBE_PARAMS.iter().take(6) {
-                    let form_data = format!("{}={}", field, payload);
-                    if let Ok(resp) = client
-                        .post(&url)
-                        .header("Content-Type", "application/x-www-form-urlencoded")
-                        .body(form_data)
-                        .send()
-                        .await
-                    {
-                        let body = resp.text().await.unwrap_or_default();
-                        if body.contains(expected) {
-                            findings.push(json!({
-                                "type": "ssti",
-                                "title": "SSTI Confirmed via POST Form Field",
-                                "severity": "critical",
-                                "mitre_attack": "T1059",
-                                "description": format!(
-                                    "Server-side template injection confirmed at {} via POST field '{}'. Payload '{}' evaluated to '{}'.",
-                                    url, field, payload, expected
+                    let form = format!("{}={}", field, urlencoding::encode(payload));
+                    if let Some(p) = http_post_form(&client, &url, &form).await {
+                        if ssti_confirmed(&p.body, payload, expected) {
+                            findings.push(ssti_finding(
+                                &format!("SSTI confirmed via POST ({})", engine_type),
+                                "critical",
+                                &format!(
+                                    "POST field '{}' on {} evaluated '{}' → '{}'.",
+                                    field, p.final_url, payload, expected
                                 ),
-                                "value": url
-                            }));
+                                target,
+                                json!({ "field": field, "payload": payload }),
+                            ));
                             break;
                         }
                     }
@@ -123,12 +147,12 @@ pub async fn run_ssti_result(target: &str) -> EngineResult {
         }
     }
 
-    let message = if findings.is_empty() {
-        "No SSTI vulnerabilities detected".to_string()
+    if findings.is_empty() {
+        empty_ok("ssti", target)
     } else {
-        format!("{} SSTI issue(s) found", findings.len())
-    };
-    EngineResult::ok(findings, message)
+        let n = findings.len();
+        EngineResult::ok(findings, format!("ssti: {} live finding(s)", n))
+    }
 }
 
 pub async fn run_ssti(target: &str) {

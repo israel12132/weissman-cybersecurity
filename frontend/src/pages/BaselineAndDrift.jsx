@@ -1,27 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Activity, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useTranslation } from 'react-i18next';
+import { Activity, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 
-/**
- * BaselineAndDrift - Security posture baseline and drift detection
- *
- * Features:
- * - Establish security baseline (normal state)
- * - Continuous drift detection
- * - Anomaly scoring
- * - Threshold-based alerting
- * - Historical trend analysis
- * - Baseline snapshots
- * - Configuration drift tracking
- */
 export default function BaselineAndDrift() {
+  const { t } = useTranslation();
   const [baseline, setBaseline] = useState(null);
   const [driftData, setDriftData] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('7d'); // 24h, 7d, 30d
+  const [timeRange, setTimeRange] = useState('7d');
 
   useEffect(() => {
     fetchData();
@@ -66,13 +56,12 @@ export default function BaselineAndDrift() {
     : { totalAssets: 0, driftScore: 0, anomalyCount: 0, lastUpdated: null };
 
   return (
-    <PageShell title="Baseline & Drift Detection" icon={<Activity />}>
+    <PageShell title={t('pages.baselineAndDrift.title')} icon={<Activity />}>
       <div className="space-y-6">
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Baseline Assets</span>
+              <span className="text-sm text-gray-400">{t('pages.baselineAndDrift.baseline_assets')}</span>
               <CheckCircle className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.totalAssets}</div>
@@ -80,7 +69,7 @@ export default function BaselineAndDrift() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Drift Score</span>
+              <span className="text-sm text-gray-400">{t('pages.baselineAndDrift.drift_score')}</span>
               <TrendingUp className="w-4 h-4 text-purple-400" />
             </div>
             <div className={`text-2xl font-bold ${getDriftColor(stats.driftScore)}`}>
@@ -90,7 +79,7 @@ export default function BaselineAndDrift() {
 
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-red-400">Anomalies</span>
+              <span className="text-sm text-red-400">{t('pages.baselineAndDrift.anomalies')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">{stats.anomalyCount}</div>
@@ -98,16 +87,15 @@ export default function BaselineAndDrift() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Last Update</span>
+              <span className="text-sm text-gray-400">{t('pages.baselineAndDrift.last_update')}</span>
               <Activity className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-sm font-bold text-white">
-              {stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleDateString() : 'Never'}
+              {stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleDateString() : t('pages.baselineAndDrift.never')}
             </div>
           </div>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
             {['24h', '7d', '30d'].map((range) => (
@@ -129,15 +117,14 @@ export default function BaselineAndDrift() {
             onClick={refreshData}
             className="px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
-            Refresh
+            {t('common.refresh')}
           </button>
         </div>
 
-        {/* Drift Chart */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-white">Drift Over Time</h3>
+            <h3 className="text-sm font-semibold text-white">{t('pages.baselineAndDrift.drift_over_time')}</h3>
           </div>
           {driftData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
@@ -157,27 +144,26 @@ export default function BaselineAndDrift() {
             </ResponsiveContainer>
           ) : (
             <div className="h-[250px] flex items-center justify-center text-gray-500">
-              No drift data available
+              {t('pages.baselineAndDrift.no_drift_data')}
             </div>
           )}
         </div>
 
-        {/* Anomalies */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
-              Detected Anomalies ({anomalies.length})
+              {t('pages.baselineAndDrift.anomalies_heading', { count: anomalies.length })}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading anomalies...
+              {t('pages.baselineAndDrift.loading_anomalies')}
             </div>
           ) : anomalies.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No anomalies detected</div>
+            <div className="p-8 text-center text-gray-500">{t('pages.baselineAndDrift.no_anomalies')}</div>
           ) : (
             <div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
               {anomalies.map((anomaly) => (
@@ -188,12 +174,12 @@ export default function BaselineAndDrift() {
                         <AlertTriangle className="w-4 h-4 text-red-400" />
                         <h4 className="text-sm font-semibold text-white">{anomaly.type}</h4>
                         <span className="px-2 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-xs font-medium">
-                          Score: {anomaly.score}
+                          {t('pages.baselineAndDrift.score_label', { score: anomaly.score })}
                         </span>
                       </div>
                       <p className="text-xs text-gray-400 mb-2">{anomaly.description}</p>
                       <div className="text-xs text-gray-500">
-                        Detected: {new Date(anomaly.detected_at).toLocaleString()}
+                        {t('pages.baselineAndDrift.detected_at', { time: new Date(anomaly.detected_at).toLocaleString() })}
                       </div>
                     </div>
                   </div>
@@ -203,15 +189,14 @@ export default function BaselineAndDrift() {
           )}
         </div>
 
-        {/* Info */}
         {!baseline && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
-              <h3 className="text-sm font-semibold text-white">No Baseline Established</h3>
+              <h3 className="text-sm font-semibold text-white">{t('pages.baselineAndDrift.no_baseline_title')}</h3>
             </div>
             <p className="text-sm text-gray-300">
-              Endpoint agents auto-learn baselines over 7 days. Deploy agents and wait for UEBA samples to populate this view.
+              {t('pages.baselineAndDrift.no_baseline_body')}
             </p>
           </div>
         )}

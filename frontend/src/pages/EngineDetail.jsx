@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { ENGINES_BY_ID, ENGINE_GROUPS } from '../lib/enginesRegistry'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch, resolveEventSourceUrl } from '../lib/apiBase'
 import { downloadBytes } from '../lib/pdfExport'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
@@ -377,11 +377,55 @@ function StatCard({ label, value, sub, accent = '#22d3ee', icon }) {
   )
 }
 
+function mapServerHistoryJob(job) {
+  return {
+    target: job.target || '',
+    status: job.status || 'unknown',
+    findingsCount: job.findings_count ?? job.findingsCount ?? 0,
+    jobId: job.job_id ?? job.jobId ?? '',
+    ts: job.created_at ?? job.ts ?? new Date().toISOString(),
+    source: job.source || 'server',
+  }
+}
+
 function RunHistoryPanel({ engineId, emptyLabel }) {
-  const [history] = useState(() => loadHistory(engineId))
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [fromServer, setFromServer] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+        const data = await r.json().catch(() => null)
+        if (!cancelled && r.ok && Array.isArray(data?.jobs) && data.jobs.length > 0) {
+          setHistory(data.jobs.map(mapServerHistoryJob))
+          setFromServer(true)
+          setLoading(false)
+          return
+        }
+      } catch {
+        /* fall through to localStorage */
+      }
+      if (!cancelled) {
+        setHistory(loadHistory(engineId))
+        setFromServer(false)
+        setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [engineId])
+
+  if (loading) return <p className="text-[11px] font-mono text-white/25">Loading run history…</p>
   if (!history.length) return <p className="text-[11px] font-mono text-white/25">{emptyLabel}</p>
   return (
     <div className="space-y-2">
+      {!fromServer && (
+        <p className="text-[10px] font-mono text-white/20 mb-2">Showing local browser history (server unavailable).</p>
+      )}
       {history.map((r, i) => (
         <div key={i} className="flex items-center gap-3 text-[11px] font-mono text-white/50 flex-wrap">
           <span className={r.status === 'completed' ? 'text-[#4ade80]' : 'text-red-400'}>{r.status}</span>
@@ -406,7 +450,7 @@ export default function EngineDetail() {
   const engineType    = getEngineType(engineId || '')
   const engineTypeMeta= ENGINE_TYPE_META[engineType] || ENGINE_TYPE_META.live_probe
   const extraParamDefs= useMemo(() => getEngineParams(engine), [engine])
-  const runHistory    = useMemo(() => loadHistory(engineId || ''), [engineId])
+  const [runHistory, setRunHistory] = useState([])
   const lastHistoryRun= runHistory[0] ?? null
 
   const [target, setTarget]               = useState('')
@@ -431,6 +475,26 @@ export default function EngineDetail() {
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!engineId) return
+    let cancelled = false
+    async function loadRunHistory() {
+      try {
+        const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+        const data = await r.json().catch(() => null)
+        if (!cancelled && r.ok && Array.isArray(data?.jobs) && data.jobs.length > 0) {
+          setRunHistory(data.jobs.map(mapServerHistoryJob))
+          return
+        }
+      } catch {
+        /* fallback below */
+      }
+      if (!cancelled) setRunHistory(loadHistory(engineId))
+    }
+    loadRunHistory()
+    return () => { cancelled = true }
+  }, [engineId, lastRunStatus])
 
   useEffect(() => {
     if (!selectedClientId) return
@@ -498,7 +562,7 @@ export default function EngineDetail() {
         const streamPath = engineId === 'poe_synthesis'
           ? `/api/poe-scan/stream/${encodeURIComponent(jid)}`
           : `/api/telemetry/stream?job_id=${encodeURIComponent(jid)}`
-        const url = apiEventSourceUrl(streamPath)
+        const url = await resolveEventSourceUrl(streamPath)
         if (esRef.current) esRef.current.close()
         const es = new EventSource(url, { withCredentials: true })
         esRef.current = es

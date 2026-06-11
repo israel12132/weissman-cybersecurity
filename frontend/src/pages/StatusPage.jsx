@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
@@ -86,9 +87,16 @@ function StatusIndicator({ level }) {
   )
 }
 
-function ServiceCard({ icon: Icon, name, description, level, detail, checkedAt, t, locale }) {
+function ServiceCard({ icon: Icon, name, description, level, detail, detailLink, checkedAt, t, locale }) {
   const meta = STATUS[level] || STATUS.unknown
   const StatusIcon = meta.icon
+  const detailContent = detailLink ? (
+    <Link to={detailLink} className="text-xs font-mono text-cyan-300/90 hover:text-cyan-200 truncate underline-offset-2 hover:underline">
+      {detail || '—'}
+    </Link>
+  ) : (
+    <span className="text-xs font-mono text-white/70 truncate">{detail || '—'}</span>
+  )
   return (
     <article className="rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-5 hover:border-white/15 transition-colors">
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -109,7 +117,7 @@ function ServiceCard({ icon: Icon, name, description, level, detail, checkedAt, 
       <div className="flex items-end justify-between gap-3 pt-3 border-t border-white/5">
         <div className="flex items-center gap-2 min-w-0">
           <StatusIcon className={`h-4 w-4 shrink-0 ${meta.iconClass}`} />
-          <span className="text-xs font-mono text-white/70 truncate">{detail || '—'}</span>
+          {detailContent}
         </div>
         {checkedAt && (
           <span className="text-[10px] font-mono text-white/30 whitespace-nowrap flex items-center gap-1">
@@ -203,6 +211,7 @@ function deriveServices(state) {
     detail: state.engines?.ok
       ? `${state.engines.production_count} production · ${state.engines.catalog_count} catalog`
       : state.engines?.error || (state.engines?.status ? `HTTP ${state.engines.status}` : null),
+    detailLink: state.engines?.ok ? '/engines?tier=live' : null,
     checkedAt: ts,
   })
 
@@ -232,6 +241,24 @@ function deriveServices(state) {
   return services
 }
 
+function extractFailedHealthProbes(audit) {
+  if (!audit || typeof audit !== 'object') return []
+  if (Array.isArray(audit.failed_health_probes)) return audit.failed_health_probes
+  if (Array.isArray(audit.last_failed_probes)) return audit.last_failed_probes
+
+  const engines = Array.isArray(audit.engines) ? audit.engines : []
+  return engines
+    .filter((e) => {
+      const probeStatus = e.probe_status || e.last_probe_status || e.health_probe?.status
+      return probeStatus === 'fail' || probeStatus === 'failed'
+    })
+    .map((e) => ({
+      engine_id: e.engine_id || e.id,
+      message: e.health_probe?.message || e.probe_message || e.message || null,
+      checked_at: e.health_probe?.checked_at || e.last_probe_at || e.checked_at,
+    }))
+}
+
 function overallLevel(services, state) {
   if (state.loading) return 'unknown'
   if (services.some((s) => s.level === 'outage')) return 'outage'
@@ -257,6 +284,7 @@ export default function StatusPage() {
     ts: null,
   })
   const [incidents, setIncidents] = useState([])
+  const [failedProbes, setFailedProbes] = useState([])
   const prevLevels = useRef({})
 
   const recordIncidents = useCallback((services, ts) => {
@@ -320,6 +348,16 @@ export default function StatusPage() {
       }
     } catch (e) {
       result.engines = { ok: false, error: e.message }
+    }
+
+    try {
+      const r = await fetch(apiUrl('/api/engines/top-tier/audit'), { credentials: 'omit' })
+      if (r.ok) {
+        const audit = await r.json()
+        setFailedProbes(extractFailedHealthProbes(audit))
+      }
+    } catch {
+      // audit probe failures are optional on the public status page
     }
 
     try {
@@ -453,6 +491,7 @@ export default function StatusPage() {
                   description={t(meta.descKey)}
                   level={svc.level}
                   detail={svc.detail}
+                  detailLink={svc.detailLink}
                   checkedAt={svc.checkedAt}
                   t={t}
                   locale={i18n.language}
@@ -461,6 +500,32 @@ export default function StatusPage() {
             })}
           </div>
         </section>
+
+        {failedProbes.length > 0 && (
+          <section className="rounded-2xl border border-rose-500/25 bg-rose-500/10 backdrop-blur-md p-6 mb-8">
+            <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-rose-200/80 mb-4">
+              {t('status.failed_probes_heading')}
+            </h3>
+            <ul className="space-y-3">
+              {failedProbes.map((probe) => (
+                <li
+                  key={`${probe.engine_id}-${probe.checked_at || probe.message}`}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-rose-500/15 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-white/90 font-medium font-mono">{probe.engine_id}</p>
+                    <p className="text-xs text-white/55 mt-0.5">{probe.message || t('status.health_probe_failed')}</p>
+                  </div>
+                  {probe.checked_at && (
+                    <span className="text-[10px] font-mono text-white/35 shrink-0">
+                      {fmtChecked(probe.checked_at, i18n.language)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {visibleIncidents.length > 0 && (
           <section className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8">

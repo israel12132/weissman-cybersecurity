@@ -2,7 +2,23 @@
 //! `password_spray`, `kerberoasting`, `saml_attack`, `oauth_oidc` modules where appropriate;
 //! otherwise probe HTTP/TLS surface for the relevant indicators.
 
-use crate::engine_probes::{empty_ok, finding, header_value, http_client, http_get, normalize_url};
+use crate::engine_probes::{
+    empty_ok, finding, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url,
+};
+
+const CRYPTO_PROBE_DEPTH: &str = "crypto_auth_surface";
+
+fn crypto_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> serde_json::Value {
+    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, CRYPTO_PROBE_DEPTH)
+}
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
 
@@ -43,7 +59,7 @@ pub async fn run_padding_oracle_attack_result(t: &str) -> EngineResult {
         let sizes: Vec<usize> = results.iter().map(|r| r.2).collect();
         // Oracle signature: empty + valid_b64 return one error class, bad_pad returns a different one.
         if statuses[0] != statuses[2] || (sizes[2] as i64 - sizes[0] as i64).abs() > 32 {
-            findings.push(finding(
+            findings.push(crypto_finding(
                 "padding_oracle_attack",
                 "Differential response to bad-padding token (possible oracle)",
                 "medium",

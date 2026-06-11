@@ -1,12 +1,80 @@
-//! Supply chain audit: NPM search + OSV vuln check. Output JSON for Python.
+//! Supply chain audit: exposed SBOM/manifest discovery + registry OSV checks.
 //! Module 2: routes through StealthClientFactory + jitter + identity morphing when config provided.
 
+use crate::engine_probes::{empty_ok, finding_with_probe_depth, normalize_url};
 use crate::engine_result::{print_result, EngineResult};
 use crate::stealth_engine;
 use futures::stream::{self, StreamExt};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
+
+const SUPPLY_PROBE_DEPTH: &str = "supply_chain_registry_and_manifest";
+
+fn supply_finding(title: &str, severity: &str, description: &str, target: &str, extra: serde_json::Value) -> serde_json::Value {
+    let mut f = finding_with_probe_depth(
+        "supply_chain",
+        title,
+        severity,
+        "T1195.001",
+        description,
+        target,
+        SUPPLY_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    f
+}
+
+const MANIFEST_PATHS: &[&str] = &[
+    "/sbom.json",
+    "/bom.json",
+    "/cyclonedx.json",
+    "/spdx.json",
+    "/.well-known/sbom",
+    "/api/sbom",
+    "/package.json",
+    "/package-lock.json",
+    "/yarn.lock",
+    "/requirements.txt",
+    "/Pipfile.lock",
+    "/go.sum",
+    "/Cargo.lock",
+    "/composer.lock",
+    "/Gemfile.lock",
+    "/pom.xml",
+];
+
+fn classify_manifest(path: &str, body: &str) -> (&'static str, &'static str) {
+    let body_low = body.to_ascii_lowercase();
+    if path.contains("cyclonedx") || body_low.contains("bomformat") && body_low.contains("cyclonedx") {
+        return ("CycloneDX SBOM", "high");
+    }
+    if path.contains("spdx") || body_low.contains("spdxversion") {
+        return ("SPDX SBOM", "high");
+    }
+    if path.ends_with("package-lock.json") || path.ends_with("yarn.lock") {
+        return ("NPM lockfile", "medium");
+    }
+    if path.ends_with("requirements.txt") || path.ends_with("Pipfile.lock") {
+        return ("Python dependency manifest", "medium");
+    }
+    if path.ends_with("Cargo.lock") {
+        return ("Rust Cargo.lock", "medium");
+    }
+    if path.ends_with("go.sum") {
+        return ("Go module checksums", "medium");
+    }
+    if path.ends_with("package.json") {
+        return ("NPM package.json", "low");
+    }
+    ("Dependency manifest", "low")
+}
 
 const TIMEOUT_SECS: u64 = 6;
 /// Parallel OSV queries after registry metadata (registry rate limits; keep bounded).
@@ -97,6 +165,54 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     dp[m][n]
 }
 
+async fn discover_exposed_manifests(
+    c: &reqwest::Client,
+    target: &str,
+    stealth: Option<&stealth_engine::StealthConfig>,
+) -> Vec<serde_json::Value> {
+    let base = normalize_url(target);
+    let mut out = Vec::new();
+    for path in MANIFEST_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(s) = stealth {
+            stealth_engine::apply_jitter(s);
+        }
+        let req = apply_stealth_headers(c.get(&url), stealth);
+        let Ok(resp) = req.send().await else { continue };
+        if resp.status().as_u16() != 200 {
+            continue;
+        }
+        let Ok(body) = resp.text().await else { continue };
+        if body.len() < 12 {
+            continue;
+        }
+        let (doc_type, severity) = classify_manifest(path, &body);
+        let has_deps = body.contains("dependencies")
+            || body.contains("packages")
+            || body.contains("components")
+            || body.contains("[[package]]");
+        if !has_deps && !body.contains("bomFormat") && !body.contains("SPDXVersion") {
+            continue;
+        }
+        out.push(supply_finding(
+            &format!("Exposed {} at {}", doc_type, path),
+            severity,
+            &format!(
+                "Live {} fetched from {} ({} bytes). Exposed manifests enable targeted CVE selection — cross-reference with OSV/NVD and remove public access.",
+                doc_type, url, body.len()
+            ),
+            target,
+            json!({
+                "url": url,
+                "document_type": doc_type,
+                "body_length": body.len(),
+                "discovery": "manifest_probe"
+            }),
+        ));
+    }
+    out
+}
+
 pub async fn run_supply_chain_result(
     target: &str,
     stealth: Option<&stealth_engine::StealthConfig>,
@@ -141,6 +257,8 @@ pub async fn run_supply_chain_result(
         req.send().await.ok()
     };
     let (npm_resp, pypi_resp) = tokio::join!(npm_fut, pypi_fut);
+
+    let mut findings = discover_exposed_manifests(c.as_ref(), target, st.as_ref()).await;
 
     let mut npm_packages: Vec<(String, String)> = Vec::new();
     if let Some(r) = npm_resp {
@@ -188,19 +306,34 @@ pub async fn run_supply_chain_result(
                 } else {
                     "info"
                 };
-                json!({
-                    "type": "supply_chain",
-                    "package": name,
-                    "ecosystem": "npm",
-                    "version": version,
-                    "vuln_count": osv.vuln_count,
-                    "osv_ids": osv.ids,
-                    "osv_summaries": osv.summaries,
-                    "typosquat_risk": typosquat_risk,
-                    "typosquat_similar_to": typosquat,
-                    "severity": severity,
-                    "poc_exploit": poc
-                })
+                supply_finding(
+                    &format!("npm package '{}' OSV audit", name),
+                    severity,
+                    &format!(
+                        "Registry search matched {}@{} with {} OSV record(s){}.",
+                        name,
+                        version,
+                        osv.vuln_count,
+                        if typosquat_risk {
+                            format!("; typosquat risk vs '{}'", typosquat.as_deref().unwrap_or("?"))
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    target,
+                    json!({
+                        "package": name,
+                        "ecosystem": "npm",
+                        "version": version,
+                        "vuln_count": osv.vuln_count,
+                        "osv_ids": osv.ids,
+                        "osv_summaries": osv.summaries,
+                        "typosquat_risk": typosquat_risk,
+                        "typosquat_similar_to": typosquat,
+                        "poc_exploit": poc,
+                        "discovery": "registry_osv"
+                    }),
+                )
             }
         },
     ))
@@ -208,7 +341,7 @@ pub async fn run_supply_chain_result(
     .collect()
     .await;
 
-    let mut findings = npm_findings;
+    findings.extend(npm_findings);
 
     if let Some(r) = pypi_resp {
         if r.status().is_success() {
@@ -237,25 +370,36 @@ pub async fn run_supply_chain_result(
                     let typosquat = detect_typosquat(&name);
                     let typosquat_risk = typosquat.is_some();
                     let severity = if osv.vuln_count > 0 || typosquat_risk { "high" } else { "info" };
-                    findings.push(json!({
-                        "type": "supply_chain",
-                        "package": name,
-                        "ecosystem": "pypi",
-                        "version": version,
-                        "vuln_count": osv.vuln_count,
-                        "osv_ids": osv.ids,
-                        "osv_summaries": osv.summaries,
-                        "typosquat_risk": typosquat_risk,
-                        "typosquat_similar_to": typosquat,
-                        "severity": severity,
-                        "poc_exploit": poc
-                    }));
+                    findings.push(supply_finding(
+                        &format!("PyPI package '{}' OSV audit", name),
+                        severity,
+                        &format!(
+                            "PyPI metadata for {}@{} returned {} OSV record(s).",
+                            name, version, osv.vuln_count
+                        ),
+                        target,
+                        json!({
+                            "package": name,
+                            "ecosystem": "pypi",
+                            "version": version,
+                            "vuln_count": osv.vuln_count,
+                            "osv_ids": osv.ids,
+                            "osv_summaries": osv.summaries,
+                            "typosquat_risk": typosquat_risk,
+                            "typosquat_similar_to": typosquat,
+                            "poc_exploit": poc,
+                            "discovery": "registry_osv"
+                        }),
+                    ));
                 }
             }
         }
     }
 
-    let msg = format!("Supply chain: {} packages audited", findings.len());
+    if findings.is_empty() {
+        return empty_ok("supply_chain", target);
+    }
+    let msg = format!("Supply chain: {} live finding(s)", findings.len());
     EngineResult::ok(findings, msg)
 }
 

@@ -1,4 +1,5 @@
--- Mirror weissman-db migration for sqlx migrate from fingerprint_engine.
+-- Re-enable RLS on endpoint_agent_enrollment_tokens (disabled in 20260602180000_relax_agent_token_rls.sql).
+-- Unauthenticated POST /api/agents/enroll consumes tokens via SECURITY DEFINER RPC (hash lookup only).
 
 CREATE INDEX IF NOT EXISTS idx_endpoint_agent_tokens_active_hash
     ON endpoint_agent_enrollment_tokens (token_hash)

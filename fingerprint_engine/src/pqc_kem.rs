@@ -4,7 +4,7 @@
 use core::convert::AsRef;
 use ml_kem::kem::{Decapsulate, Encapsulate};
 use ml_kem::{KemCore, MlKem768};
-use rand::rngs::OsRng;
+use rand_core::OsRng;
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone, serde::Serialize)]

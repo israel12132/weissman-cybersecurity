@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import { useJobPoll, normalizeJobStatus } from '../lib/useJobPoll'
 import PageShell from './PageShell'
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────
@@ -300,6 +301,8 @@ export default function EngineClientCatalog() {
   const [selectedEngines, setSelectedEngines] = useState(new Set())
   const [search, setSearch] = useState('')
   const [runAllLoading, setRunAllLoading] = useState(false)
+  const [pendingJobId, setPendingJobId] = useState(null)
+  const [pendingEngineIds, setPendingEngineIds] = useState([])
   const [toast, setToast] = useState(null)
 
   // Load clients from API
@@ -344,6 +347,50 @@ export default function EngineClientCatalog() {
     setToast({ id, severity, message })
     setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
   }, [])
+
+  const applyJobEngineResults = useCallback((job, engineIds, terminal = false) => {
+    const payload = job?.result ?? job?.result_json ?? {}
+    const rows = Array.isArray(payload?.results) ? payload.results : []
+    const jobStatus = normalizeJobStatus(job?.status)
+    const fallbackStatus = jobStatus === 'completed' ? 'completed' : jobStatus === 'failed' || jobStatus === 'dead' ? 'error' : 'running'
+    const lastRun = terminal ? new Date().toLocaleString() : 'just now'
+
+    setEngineStates((prev) => {
+      const next = { ...prev }
+      if (rows.length) {
+        for (const row of rows) {
+          const eid = row.engine
+          if (!eid) continue
+          next[eid] = {
+            ...next[eid],
+            status: row.success ? 'completed' : 'error',
+            lastRun,
+            findingsDelta: row.findings_count ?? 0,
+          }
+        }
+      } else {
+        for (const id of engineIds) {
+          next[id] = {
+            ...next[id],
+            status: fallbackStatus === 'running' ? 'running' : fallbackStatus,
+            lastRun: terminal ? lastRun : next[id]?.lastRun ?? 'just now',
+          }
+        }
+      }
+      return next
+    })
+  }, [])
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onUpdate: (job) => applyJobEngineResults(job, pendingEngineIds, false),
+    onComplete: (job) => {
+      applyJobEngineResults(job, pendingEngineIds, true)
+      setPendingJobId(null)
+      setPendingEngineIds([])
+      setRunAllLoading(false)
+    },
+  })
 
   const handleToggleEngine = useCallback((engineId) => {
     setSelectedEngines((prev) => {
@@ -413,17 +460,23 @@ export default function EngineClientCatalog() {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
         showToast('error', d.detail || `Scan failed (${r.status})`)
+        setRunAllLoading(false)
         return
       }
       showToast('info', `✅ Queued ${d.engines_queued ?? runnable.length} engines (Job: ${d.job_id ?? '—'})`)
       setEngineStates((prev) => {
         const next = { ...prev }
-        for (const id of runnable) next[id] = { ...next[id], status: 'running' }
+        for (const id of runnable) next[id] = { ...next[id], status: 'running', lastRun: 'just now' }
         return next
       })
+      if (d.job_id) {
+        setPendingJobId(String(d.job_id))
+        setPendingEngineIds(runnable)
+      } else {
+        setRunAllLoading(false)
+      }
     } catch (e) {
       showToast('error', e?.message ?? 'Network error')
-    } finally {
       setRunAllLoading(false)
     }
   }, [selectedClientId, selectedEngines, showToast, isProduction, t])

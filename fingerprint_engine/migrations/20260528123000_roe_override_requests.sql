@@ -32,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_roe_override_requests_client
 
 ALTER TABLE roe_override_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS roe_override_requests_tenant_isolation ON roe_override_requests;
 CREATE POLICY roe_override_requests_tenant_isolation
     ON roe_override_requests
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);

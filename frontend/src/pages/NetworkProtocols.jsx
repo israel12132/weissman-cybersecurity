@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Network, Globe, Shield, Activity, AlertTriangle } from 'lucide-react';
 import PageShell from './PageShell';
@@ -152,6 +153,7 @@ function getStatusColor(status) {
 }
 
 export default function NetworkProtocols() {
+  const { t } = useTranslation();
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [protocols, setProtocols] = useState([]);
@@ -196,36 +198,36 @@ export default function NetworkProtocols() {
   }), [protocols]);
 
   return (
-    <PageShell title="Network Protocol Analysis" icon={<Network />}>
+    <PageShell title={t('pages.networkProtocols.title')} icon={<Network />}>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[11px] font-mono text-white/40">Client scope:</span>
+          <span className="text-[11px] font-mono text-white/40">{t('pages.networkProtocols.client_scope')}</span>
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
             className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
           >
-            <option value="">All clients (tenant findings)</option>
+            <option value="">{t('pages.networkProtocols.all_clients')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           <span className="text-[10px] font-mono text-white/30">
-            Source: {dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource}
+            {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>
-          <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">Open Findings C2 →</Link>
+          <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">{t('pages.networkProtocols.open_findings')}</Link>
         </div>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
-            Could not load protocol data: {error}.
+            {t('pages.networkProtocols.load_error', { error })}
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Protocols Scanned</span>
+              <span className="text-sm text-gray-400">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.scanned}</div>
@@ -233,7 +235,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Critical Issues</span>
+              <span className="text-sm text-gray-400">{t('pages.networkProtocols.critical_issues')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.critical}</div>
@@ -241,7 +243,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Warnings</span>
+              <span className="text-sm text-gray-400">{t('pages.networkProtocols.warnings')}</span>
               <Activity className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.warning}</div>
@@ -249,7 +251,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Secure</span>
+              <span className="text-sm text-gray-400">{t('pages.networkProtocols.secure')}</span>
               <Shield className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.secure}</div>
@@ -260,19 +262,19 @@ export default function NetworkProtocols() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Globe className="w-4 h-4 text-cyan-400" />
-              Network Protocols
+              {t('pages.networkProtocols.heading')}
             </h3>
           </div>
 
           {loading ? (
-            <div className="p-6 text-sm text-white/40">Loading probe-derived protocol data…</div>
+            <div className="p-6 text-sm text-white/40">{t('pages.networkProtocols.loading')}</div>
           ) : protocols.length === 0 ? (
             <div className="p-6 space-y-3 text-sm text-white/50">
-              <p>No network protocol findings yet.</p>
+              <p>{t('pages.networkProtocols.empty_title')}</p>
               <p className="text-xs text-white/35">
-                Run ASM or network engines (BGP/DNS, IPv6, mTLS/gRPC, SMB/NetBIOS, PKI/TLS) from{' '}
-                <Link to="/network" className="text-cyan-300 hover:text-cyan-200">Network Intelligence</Link>
-                {' '}or the engine room. Select a client to merge risk-graph network nodes when available.
+                {t('pages.networkProtocols.empty_hint')}{' '}
+                <Link to="/network" className="text-cyan-300 hover:text-cyan-200">{t('pages.networkProtocols.network_intel_link')}</Link>
+                {' '}{t('pages.networkProtocols.empty_suffix')}
               </p>
             </div>
           ) : (
@@ -288,14 +290,16 @@ export default function NetworkProtocols() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-400">
-                        {protocol.findings} {protocol.findings === 1 ? 'finding' : 'findings'} from live probes
+                        {protocol.findings === 1
+                          ? t('pages.networkProtocols.findings_one', { count: protocol.findings })
+                          : t('pages.networkProtocols.findings_other', { count: protocol.findings })}
                       </div>
                     </div>
                     <Link
                       to="/findings"
                       className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
                     >
-                      View findings
+                      {t('pages.networkProtocols.view_findings')}
                     </Link>
                   </div>
                 </div>

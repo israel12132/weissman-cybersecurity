@@ -1,6 +1,6 @@
 //! Ghost network: polymorphic headers, jitter, proxy rotation (shared by all engines).
 
-use rand::Rng;
+use rand::RngExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::time::Duration;
 
@@ -15,29 +15,29 @@ pub struct StealthConfig {
 
 /// Behavioral jitter between sessions (human browsing cadence).
 pub fn apply_behavioral_jitter() {
-    let ms = rand::thread_rng().gen_range(200..=2000);
+    let ms = rand::random_range(200..=2000);
     std::thread::sleep(Duration::from_millis(ms));
 }
 
 fn random_spoof_ip() -> String {
-    let mut rng = rand::thread_rng();
-    match rng.gen_range(0..3) {
+    let mut rng = rand::rng();
+    match rng.random_range(0..3) {
         0 => format!(
             "10.{}.{}.{}",
-            rng.gen_range(0..255),
-            rng.gen_range(0..255),
-            rng.gen_range(1..254)
+            rng.random_range(0..255),
+            rng.random_range(0..255),
+            rng.random_range(1..254)
         ),
         1 => format!(
             "172.{}.{}.{}",
-            rng.gen_range(16..32),
-            rng.gen_range(0..255),
-            rng.gen_range(1..254)
+            rng.random_range(16..32),
+            rng.random_range(0..255),
+            rng.random_range(1..254)
         ),
         _ => format!(
             "192.168.{}.{}",
-            rng.gen_range(0..255),
-            rng.gen_range(1..254)
+            rng.random_range(0..255),
+            rng.random_range(1..254)
         ),
     }
 }
@@ -65,7 +65,7 @@ pub fn apply_jitter(config: &StealthConfig) {
     if max_ms == 0 {
         return;
     }
-    let ms = rand::thread_rng().gen_range(min_ms..=max_ms);
+    let ms = rand::random_range(min_ms..=max_ms);
     std::thread::sleep(Duration::from_millis(ms));
 }
 
@@ -74,7 +74,7 @@ pub fn build_client(config: &StealthConfig, timeout_secs: u64) -> reqwest::Clien
         .timeout(Duration::from_secs(timeout_secs))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs());
     if !config.proxy_list.is_empty() {
-        let idx = rand::thread_rng().gen_range(0..config.proxy_list.len());
+        let idx = rand::rng().random_range(0..config.proxy_list.len());
         if let Some(proxy_url) = config.proxy_list.get(idx) {
             if !proxy_url.is_empty() {
                 let normalized = if proxy_url.contains("://") {
@@ -116,10 +116,10 @@ pub fn random_morph_headers(config: &StealthConfig) -> HeaderMap {
     if !config.identity_morphing {
         return map;
     }
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     if let (Ok(name), Ok(val)) = (
         HeaderName::try_from("User-Agent"),
-        HeaderValue::try_from(USER_AGENTS[rng.gen_range(0..USER_AGENTS.len())]),
+        HeaderValue::try_from(USER_AGENTS[rng.random_range(0..USER_AGENTS.len())]),
     ) {
         map.insert(name, val);
     }
@@ -138,19 +138,19 @@ pub fn random_morph_headers(config: &StealthConfig) -> HeaderMap {
     }
     if let (Ok(name), Ok(val)) = (
         HeaderName::try_from("Accept-Language"),
-        HeaderValue::try_from(ACCEPT_LANGUAGES[rng.gen_range(0..ACCEPT_LANGUAGES.len())]),
+        HeaderValue::try_from(ACCEPT_LANGUAGES[rng.random_range(0..ACCEPT_LANGUAGES.len())]),
     ) {
         map.insert(name, val);
     }
     if let (Ok(name), Ok(val)) = (
         HeaderName::try_from("Sec-Ch-Ua"),
-        HeaderValue::try_from(SEC_CH_UA[rng.gen_range(0..SEC_CH_UA.len())]),
+        HeaderValue::try_from(SEC_CH_UA[rng.random_range(0..SEC_CH_UA.len())]),
     ) {
         map.insert(name, val);
     }
     if let (Ok(name), Ok(val)) = (
         HeaderName::try_from("Connection"),
-        HeaderValue::try_from(CONNECTION[rng.gen_range(0..CONNECTION.len())]),
+        HeaderValue::try_from(CONNECTION[rng.random_range(0..CONNECTION.len())]),
     ) {
         map.insert(name, val);
     }
@@ -178,7 +178,7 @@ pub fn is_waf_or_rate_limit(status: u16, body: &str) -> bool {
 }
 
 pub fn apply_rotation_delay(config: &StealthConfig) {
-    let extra = rand::thread_rng().gen_range(1000..=4000);
+    let extra = rand::random_range(1000..=4000);
     let ms = (config.jitter_max_ms + extra).min(15_000);
     std::thread::sleep(Duration::from_millis(ms));
 }

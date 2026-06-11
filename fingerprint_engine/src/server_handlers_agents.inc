@@ -161,7 +161,7 @@ async fn api_agents_create_token(
         )
             .into_response();
     }
-    let validity = body.valid_minutes.clamp(5, 1440);
+    let validity = body.valid_minutes.clamp(5, 10_080);
     let plaintext = match crate::endpoint_agents::create_enrollment_token(
         state.app_pool.as_ref(),
         auth.tenant_id,
@@ -214,11 +214,15 @@ struct AgentEnrollBody {
 
 async fn api_agents_enroll(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     axum::extract::Json(body): axum::extract::Json<AgentEnrollBody>,
 ) -> Response {
+    let client_ip = crate::http::extract_client_ip(&headers, addr);
     let consumed = match crate::endpoint_agents::consume_enrollment_token(
         state.app_pool.as_ref(),
         body.enrollment_token.trim(),
+        Some(&client_ip),
     )
     .await
     {
@@ -469,6 +473,7 @@ async fn ws_agent(
             tokio::sync::mpsc::channel::<crate::endpoint_agents::ServerToAgent>(256);
         let mut agent_uuid: Option<String> = None;
         let mut client_id: Option<i64> = None;
+        let mut local_session: u64 = 0;
 
         loop {
             tokio::select! {
@@ -527,7 +532,7 @@ async fn ws_agent(
                                     }
                                     agent_uuid = Some(aid.clone());
                                     client_id = Some(db_cid);
-                                    registry.attach(&aid, tenant_id, tx_to_agent.clone()).await;
+                                    local_session = registry.attach(&aid, tenant_id, tx_to_agent.clone()).await;
                                     if let Ok(u) = uuid::Uuid::parse_str(&aid) {
                                         let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "online").await;
                                         registry.notify_status(&aid, tenant_id, "online").await;
@@ -606,10 +611,11 @@ async fn ws_agent(
         }
 
         if let Some(aid) = agent_uuid.as_deref() {
-            registry.detach(aid).await;
-            if let Ok(u) = uuid::Uuid::parse_str(aid) {
-                let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "offline").await;
-                registry.notify_status(aid, tenant_id, "offline").await;
+            if registry.detach(aid, local_session).await {
+                if let Ok(u) = uuid::Uuid::parse_str(aid) {
+                    let _ = crate::endpoint_agents::mark_seen(app_pool.as_ref(), tenant_id, &u, "offline").await;
+                    registry.notify_status(aid, tenant_id, "offline").await;
+                }
             }
         }
     })

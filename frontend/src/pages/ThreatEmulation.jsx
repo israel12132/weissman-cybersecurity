@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
-import { useJobPoll } from '../lib/useJobPoll'
+import { clientPrimaryTargetUrl } from '../lib/clientTarget'
+import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 
 // ─── APT Group definitions ────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ function severityBar(value, max = 100) {
 }
 
 function AptCard({ group, result, onRun, running, clientId }) {
+  const { t } = useTranslation()
   const { pct: blockPct, color: blockColor } = severityBar(result?.blocked_pct ?? 0)
   const { pct: detectPct } = severityBar(result?.detected_pct ?? 0)
 
@@ -108,11 +110,11 @@ function AptCard({ group, result, onRun, running, clientId }) {
           disabled={running || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wide border border-red-500/30 text-red-300/80 hover:bg-red-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          {running ? '⟳' : '▶ Emulate'}
+          {running ? '⟳' : t('pages.threatEmulation.emulate')}
         </button>
       </div>
 
-      <p className="text-xs text-white/50 leading-relaxed">{group.description}</p>
+      <p className="text-xs text-white/50 leading-relaxed">{t(`pages.threatEmulation.apt_groups.${group.id}.description`, { defaultValue: group.description })}</p>
 
       {/* Techniques */}
       <div className="flex flex-wrap gap-1">
@@ -127,26 +129,29 @@ function AptCard({ group, result, onRun, running, clientId }) {
       {result ? (
         <div className="space-y-2 pt-2 border-t border-white/5">
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-white/50">Blocked</span>
+            <span className="text-white/50">{t('pages.threatEmulation.blocked')}</span>
             <span style={{ color: blockColor }}>{result.blocked_pct ?? 0}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${blockPct}%`, backgroundColor: blockColor }} />
           </div>
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-white/50">Detected (not blocked)</span>
+            <span className="text-white/50">{t('pages.threatEmulation.detected_not_blocked')}</span>
             <span className="text-amber-400">{result.detected_pct ?? 0}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full bg-amber-500/70 transition-all" style={{ width: `${detectPct}%` }} />
           </div>
           <p className="text-[10px] font-mono text-white/30">
-            {result.techniques_tested ?? 0} techniques tested · {result.gaps ?? 0} detection gaps
+            {t('pages.threatEmulation.results_summary', {
+              tested: result.techniques_tested ?? 0,
+              gaps: result.gaps ?? 0,
+            })}
           </p>
         </div>
       ) : (
         <div className="pt-2 border-t border-white/5">
-          <p className="text-[11px] font-mono text-white/25">No emulation data yet — run to generate report.</p>
+          <p className="text-[11px] font-mono text-white/25">{t('pages.threatEmulation.no_data')}</p>
         </div>
       )}
     </motion.div>
@@ -154,6 +159,7 @@ function AptCard({ group, result, onRun, running, clientId }) {
 }
 
 export default function ThreatEmulation() {
+  const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [results, setResults] = useState({})
@@ -175,12 +181,19 @@ export default function ThreatEmulation() {
   }, [])
 
   const runEmulation = useCallback(async (groupId) => {
-    if (!selectedClientId) { showToast('error', 'Select a client first'); return }
+    if (!selectedClientId) { showToast('error', t('pages.threatEmulation.select_client_first')); return }
+    const client = clients.find((c) => String(c.id) === String(selectedClientId))
+    const target = clientPrimaryTargetUrl(client)
+    if (!target) {
+      showToast('error', t('pages.threatEmulation.missing_target'))
+      return
+    }
     setRunningId(groupId)
     try {
       const body = {
         engine: 'threat_emulation',
         client_id: Number(selectedClientId),
+        target,
         apt_group: groupId,
       }
       const r = await apiFetch('/api/command-center/scan', {
@@ -190,11 +203,11 @@ export default function ThreatEmulation() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        showToast('error', d.detail || d.error || 'Emulation failed')
+        showToast('error', d.detail || d.error || t('pages.threatEmulation.emulation_failed'))
         return
       }
       const jobId = d.job_id ?? ''
-      showToast('info', `APT emulation queued: job ${jobId}`)
+      showToast('info', t('pages.threatEmulation.emulation_queued', { jobId }))
       if (jobId) {
         setPendingJobs((prev) => ({ ...prev, [groupId]: jobId }))
       }
@@ -203,11 +216,11 @@ export default function ThreatEmulation() {
         [groupId]: { blocked_pct: 0, detected_pct: 0, techniques_tested: 0, gaps: 0, pending: true, job_id: jobId },
       }))
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.threatEmulation.network_error'))
     } finally {
       setRunningId(null)
     }
-  }, [selectedClientId, showToast])
+  }, [selectedClientId, clients, showToast, t])
 
   const runAll = useCallback(async () => {
     for (const group of APT_GROUPS) {
@@ -220,11 +233,11 @@ export default function ThreatEmulation() {
 
   useJobPoll(activeJobId, {
     enabled: Boolean(activeJobId && activePoll),
-    onComplete: (job) => {
+    onComplete: async (job) => {
       const groupId = activePoll
       if (!groupId) return
-      const payload = job?.result ?? job?.findings_json ?? {}
-      const findings = Array.isArray(payload?.findings) ? payload.findings : (Array.isArray(job?.findings) ? job.findings : [])
+      const payload = job?.result ?? {}
+      const findings = await resolveJobFindings(job, 'threat_emulation', selectedClientId)
       const blocked = findings.filter((f) => (f?.severity || '').toLowerCase() === 'info').length
       const detected = findings.length - blocked
       const total = Math.max(findings.length, 1)
@@ -249,17 +262,16 @@ export default function ThreatEmulation() {
   })
 
   return (
-    <PageShell title="APT Threat Emulation" badge="APT / TOP-TIER" badgeColor="#ef4444" subtitle={`${APT_GROUPS.length} adversary groups`}>
-      {/* Client + actions bar */}
+    <PageShell title={t('pages.threatEmulation.title')} badge={t('pages.threatEmulation.badge')} badgeColor="#ef4444" subtitle={t('pages.threatEmulation.subtitle', { count: APT_GROUPS.length })}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-white/40">Target client:</span>
+          <span className="text-[11px] font-mono text-white/40">{t('pages.threatEmulation.target_client')}</span>
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
             className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
           >
-            <option value="">— Select —</option>
+            <option value="">{t('pages.threatEmulation.select_placeholder')}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
@@ -269,7 +281,7 @@ export default function ThreatEmulation() {
           disabled={!selectedClientId || !!runningId}
           className="px-4 py-2 rounded-xl font-mono text-sm border border-red-500/30 text-red-300/80 hover:bg-red-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          ▶ Run All APT Groups
+          {t('pages.threatEmulation.run_all')}
         </button>
       </div>
 
@@ -282,7 +294,7 @@ export default function ThreatEmulation() {
 
       {!selectedClientId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
-          Select a client to enable emulation runs.
+          {t('pages.threatEmulation.select_client_warning')}
         </div>
       )}
 

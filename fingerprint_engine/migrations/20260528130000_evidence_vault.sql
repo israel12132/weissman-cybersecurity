@@ -29,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_evidence_items_tenant_vuln_created
 
 ALTER TABLE evidence_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS evidence_items_tenant_isolation ON evidence_items;
 CREATE POLICY evidence_items_tenant_isolation
     ON evidence_items
     USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint);

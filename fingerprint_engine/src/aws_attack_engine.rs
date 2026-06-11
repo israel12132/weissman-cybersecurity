@@ -1,60 +1,40 @@
-//! AWS Attack Engine — probes for exposed AWS metadata, S3 buckets, credentials, and API keys.
-//! MITRE: T1552 (Unsecured Credentials).
+//! AWS Attack Engine — honest remote probes for S3 exposure and leaked credentials on the target.
+//! Does not probe the scanner host's link-local IMDS (169.254.169.254). MITRE: T1552.
 
+use crate::engine_probes::{
+    empty_ok, extract_host, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
-use std::time::Duration;
+use serde_json::Value;
 
-async fn build_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
+const AWS_PROBE_DEPTH: &str = "aws_remote_surface";
 
-fn normalize_target(target: &str) -> String {
-    let t = target.trim().trim_end_matches('/');
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
-    }
-}
-
-fn extract_domain(target: &str) -> String {
-    let t = target.trim();
-    let without_scheme = if let Some(s) = t.strip_prefix("https://") {
-        s
-    } else if let Some(s) = t.strip_prefix("http://") {
-        s
-    } else {
-        t
-    };
-    without_scheme
-        .split('/')
-        .next()
-        .unwrap_or(without_scheme)
-        .split(':')
-        .next()
-        .unwrap_or(without_scheme)
-        .to_string()
+fn aws_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(
+        "aws_attack",
+        title,
+        severity,
+        "T1552",
+        description,
+        target,
+        AWS_PROBE_DEPTH,
+    )
 }
 
 const AWS_WEB_PATHS: &[&str] = &[
     "/.aws/credentials",
     "/.aws/config",
     "/aws/credentials",
-    "/_aws/",
-    "/aws/",
-    "/s3/",
     "/static/aws-config.js",
     "/js/config.js",
     "/assets/config.js",
     "/static/config.js",
-    "/app.js",
-    "/bundle.js",
-    "/main.js",
 ];
 
 const AWS_KEY_INDICATORS: &[&str] = &[
@@ -63,112 +43,99 @@ const AWS_KEY_INDICATORS: &[&str] = &[
     "aws_secret_access_key",
     "AWSSecretKey",
     "AWSAccessKeyId",
-    "s3.amazonaws.com",
     "aws_session_token",
-    "[default]",
-    "region = ",
 ];
+
+fn body_has_aws_keys(body: &str) -> bool {
+    AWS_KEY_INDICATORS.iter().any(|ind| body.contains(ind))
+}
+
+fn s3_listing_exposed(body: &str) -> bool {
+    body.contains("<ListBucketResult") || body.contains("<Contents>")
+}
 
 pub async fn run_aws_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
 
-    let client = build_client().await;
-    let base = normalize_target(target);
-    let domain = extract_domain(&base);
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let host = extract_host(target);
+    let domain_base = host.split('.').next().unwrap_or(&host);
     let mut findings = Vec::new();
 
-    // Check for AWS IMDS metadata endpoint (only relevant if on an internal/EC2 network)
-    let imds_url = "http://169.254.169.254/latest/meta-data/";
-    if let Ok(resp) = client
-        .get(imds_url)
-        .timeout(Duration::from_secs(3))
-        .send()
-        .await
-    {
-        if resp.status().as_u16() == 200 {
-            let body = resp.text().await.unwrap_or_default();
-            findings.push(json!({
-                "type": "aws_attack",
-                "title": "AWS IMDS Metadata Endpoint Accessible",
-                "severity": "critical",
-                "mitre_attack": "T1552",
-                "description": format!(
-                    "AWS EC2 Instance Metadata Service (IMDS) at {} is accessible. This can expose IAM credentials and sensitive instance data. Response body preview: {}",
-                    imds_url,
-                    &body[..body.len().min(200)]
-                )
-            }));
-        }
-    }
-
-    // Check for public S3 bucket derived from domain
-    let domain_base = domain.split('.').next().unwrap_or(&domain);
-    let s3_urls = vec![
-        format!("https://s3.amazonaws.com/{}", domain_base),
-        format!("https://s3.amazonaws.com/{}", domain),
+    let s3_urls = [
         format!("https://{}.s3.amazonaws.com/", domain_base),
-        format!("https://{}.s3.amazonaws.com/", domain),
+        format!("https://{}.s3.amazonaws.com/", host),
+        format!("https://s3.amazonaws.com/{}/", domain_base),
+        format!("https://s3.amazonaws.com/{}/", host),
     ];
 
-    for s3_url in &s3_urls {
-        if let Ok(resp) = client.get(s3_url).send().await {
-            let status = resp.status().as_u16();
-            if status == 200 || status == 403 {
-                let severity = if status == 200 { "critical" } else { "high" };
-                let detail = if status == 200 {
-                    "The S3 bucket is publicly readable — data is exposed."
-                } else {
-                    "The S3 bucket exists but access is forbidden. Bucket enumeration confirmed."
-                };
-                findings.push(json!({
-                    "type": "aws_attack",
-                    "title": format!("AWS S3 Bucket Exposed: {}", s3_url),
-                    "severity": severity,
-                    "mitre_attack": "T1552",
-                    "description": format!("S3 URL {} returned HTTP {}. {}", s3_url, status, detail)
-                }));
+    for url in s3_urls.iter() {
+        if let Some(p) = http_get(&client, url).await {
+            if p.status == 200 && s3_listing_exposed(&p.body) {
+                findings.push(aws_finding(
+                    "Public S3 bucket listing",
+                    "critical",
+                    &format!("Bucket listing readable at {} (HTTP 200).", url),
+                    target,
+                ));
+            } else if p.status == 403 && p.body.contains("AccessDenied") {
+                findings.push(aws_finding(
+                    "S3 bucket exists (AccessDenied)",
+                    "info",
+                    &format!(
+                        "{} returned HTTP 403 AccessDenied — bucket name resolves; review ACL/policy.",
+                        url
+                    ),
+                    target,
+                ));
             }
         }
     }
 
-    // Check web root for exposed AWS credentials / API keys in files
     for path in AWS_WEB_PATHS {
-        let url = format!("{}{}", base, path);
-        if let Ok(resp) = client.get(&url).send().await {
-            let status = resp.status().as_u16();
-            if status == 200 {
-                let body = resp.text().await.unwrap_or_default();
-                let found_key = AWS_KEY_INDICATORS.iter().any(|ind| body.contains(ind));
-                if found_key {
-                    findings.push(json!({
-                        "type": "aws_attack",
-                        "title": format!("AWS Credentials Exposed at {}", path),
-                        "severity": "critical",
-                        "mitre_attack": "T1552",
-                        "description": format!(
-                            "File at {} (HTTP {}) contains AWS credential indicators (access keys, secret keys, or config). Immediate remediation required.",
-                            url, status
-                        )
-                    }));
-                } else if path.contains("credentials") || path.contains(".aws") {
-                    findings.push(json!({
-                        "type": "aws_attack",
-                        "title": format!("AWS Credentials File Accessible: {}", path),
-                        "severity": "high",
-                        "mitre_attack": "T1552",
-                        "description": format!(
-                            "AWS credentials file path {} is accessible (HTTP {}). Even if empty, this path should not be publicly reachable.",
-                            url, status
-                        )
-                    }));
-                }
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status == 200 && body_has_aws_keys(&p.body) {
+                findings.push(aws_finding(
+                    &format!("AWS credential material at {}", path),
+                    "critical",
+                    &format!(
+                        "{} (HTTP 200) contains AWS access-key indicators — rotate keys immediately.",
+                        p.final_url
+                    ),
+                    target,
+                ));
             }
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("AWS Attack: {} findings", findings.len()))
+    if let Some(p) = http_get(&client, &base).await {
+        if header_value(&p.headers, "x-amzn-requestid").is_some()
+            || header_value(&p.headers, "x-amz-apigw-id").is_some()
+        {
+            findings.push(aws_finding(
+                "AWS API Gateway / Lambda front-end detected",
+                "info",
+                &format!(
+                    "{} carries x-amzn-* headers — review IAM auth and stage logging.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("aws_attack", target)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("aws_attack: {} signal(s)", findings.len()),
+        )
+    }
 }
 
 pub async fn run_aws_attack(target: &str) {
