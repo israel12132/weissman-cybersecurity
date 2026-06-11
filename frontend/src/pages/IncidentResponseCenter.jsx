@@ -24,68 +24,68 @@ const SEVERITY_COLOR = {
 
 const PLAYBOOKS = {
   ransomware: {
-    label: 'Ransomware Playbook',
+    labelKey: 'pages.incidentResponseCenter.playbooks.ransomware.label',
     steps: [
-      { id: 1, phase: 'Detection',     action: 'Isolate affected endpoints from network', mitre: 'T1486', done: true },
-      { id: 2, phase: 'Detection',     action: 'Identify patient-zero via process tree analysis', mitre: 'T1055', done: true },
-      { id: 3, phase: 'Containment',   action: 'Block C2 domains/IPs at perimeter firewall', mitre: 'T1071', done: true },
-      { id: 4, phase: 'Containment',   action: 'Disable SMB shares and lateral movement paths', mitre: 'T1021.002', done: false },
-      { id: 5, phase: 'Eradication',   action: 'Remove malware from all endpoints; restore from backup', mitre: 'T1485', done: false },
-      { id: 6, phase: 'Recovery',      action: 'Validate backup integrity before restoration', mitre: null, done: false },
-      { id: 7, phase: 'Recovery',      action: 'Re-enable production systems under monitoring', mitre: null, done: false },
-      { id: 8, phase: 'Lessons Learned', action: 'Publish post-incident report & update runbooks', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_1', mitre: 'T1486', done: true },
+      { id: 2, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_2', mitre: 'T1055', done: true },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_3', mitre: 'T1071', done: true },
+      { id: 4, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_4', mitre: 'T1021.002', done: false },
+      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_5', mitre: 'T1485', done: false },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_6', mitre: null, done: false },
+      { id: 7, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_7', mitre: null, done: false },
+      { id: 8, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_8', mitre: null, done: false },
     ],
   },
   credential_stuffing: {
-    label: 'Credential Stuffing Playbook',
+    labelKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.label',
     steps: [
-      { id: 1, phase: 'Detection',   action: 'Enable enhanced logging on auth endpoints', mitre: 'T1110', done: true },
-      { id: 2, phase: 'Containment', action: 'Activate CAPTCHA and rate-limiting', mitre: 'T1110.004', done: true },
-      { id: 3, phase: 'Containment', action: 'Block malicious IPs / ASNs at WAF', mitre: null, done: true },
-      { id: 4, phase: 'Eradication', action: 'Force password reset for affected accounts', mitre: null, done: true },
-      { id: 5, phase: 'Eradication', action: 'Enforce MFA for all active sessions', mitre: null, done: false },
-      { id: 6, phase: 'Recovery',    action: 'Notify affected users per breach notification policy', mitre: null, done: false },
-      { id: 7, phase: 'Lessons Learned', action: 'Evaluate Passwordless / passkeys adoption', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_1', mitre: 'T1110', done: true },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_2', mitre: 'T1110.004', done: true },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_3', mitre: null, done: true },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_4', mitre: null, done: true },
+      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_5', mitre: null, done: false },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_6', mitre: null, done: false },
+      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_7', mitre: null, done: false },
     ],
   },
   supply_chain: {
-    label: 'Supply Chain Compromise Playbook',
+    labelKey: 'pages.incidentResponseCenter.playbooks.supply_chain.label',
     steps: [
-      { id: 1, phase: 'Detection',   action: 'Identify all systems consuming malicious package', mitre: 'T1195.001', done: true },
-      { id: 2, phase: 'Containment', action: 'Pause CI/CD pipelines; quarantine built artifacts', mitre: null, done: true },
-      { id: 3, phase: 'Eradication', action: 'Remove malicious package; pin dependencies', mitre: null, done: true },
-      { id: 4, phase: 'Eradication', action: 'Audit for secrets exfiltrated during compromise window', mitre: 'T1552', done: false },
-      { id: 5, phase: 'Recovery',    action: 'Rebuild and redeploy from clean source', mitre: null, done: false },
-      { id: 6, phase: 'Lessons Learned', action: 'Implement SLSA / Sigstore supply chain attestation', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_1', mitre: 'T1195.001', done: true },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_2', mitre: null, done: true },
+      { id: 3, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_3', mitre: null, done: true },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_4', mitre: 'T1552', done: false },
+      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_5', mitre: null, done: false },
+      { id: 6, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_6', mitre: null, done: false },
     ],
   },
   zero_day: {
-    label: 'Zero-Day Exploitation Playbook',
+    labelKey: 'pages.incidentResponseCenter.playbooks.zero_day.label',
     steps: [
-      { id: 1, phase: 'Detection',   action: 'Confirm exploitation via forensics / PCAP review', mitre: 'T1190', done: true },
-      { id: 2, phase: 'Containment', action: 'Remove affected systems from production', mitre: null, done: true },
-      { id: 3, phase: 'Containment', action: 'Deploy WAF virtual patch', mitre: null, done: true },
-      { id: 4, phase: 'Eradication', action: 'Apply vendor patch or mitigate via config change', mitre: null, done: true },
-      { id: 5, phase: 'Recovery',    action: 'Restore from pre-compromise backup', mitre: null, done: true },
-      { id: 6, phase: 'Recovery',    action: 'Harden system with minimal attack surface', mitre: null, done: true },
-      { id: 7, phase: 'Lessons Learned', action: 'Share IOCs with ISAC / threat intel community', mitre: null, done: true },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_1', mitre: 'T1190', done: true },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_2', mitre: null, done: true },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_3', mitre: null, done: true },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_4', mitre: null, done: true },
+      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_5', mitre: null, done: true },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_6', mitre: null, done: true },
+      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_7', mitre: null, done: true },
     ],
   },
 }
 
 const PHASE_COLOR = {
-  Detection:       '#ef4444',
-  Containment:     '#f97316',
-  Eradication:     '#f59e0b',
-  Recovery:        '#22d3ee',
-  'Lessons Learned': '#8b5cf6',
+  detection: '#ef4444',
+  containment: '#f97316',
+  eradication: '#f59e0b',
+  recovery: '#22d3ee',
+  lessons_learned: '#8b5cf6',
 }
 
 const STATUS_META = {
-  active:      { label: 'ACTIVE',      color: '#ef4444' },
-  containment: { label: 'CONTAINMENT', color: '#f97316' },
-  eradication: { label: 'ERADICATION', color: '#f59e0b' },
-  resolved:    { label: 'RESOLVED',    color: '#22d3ee' },
+  active:      { labelKey: 'pages.incidentResponseCenter.status_active',      color: '#ef4444' },
+  containment: { labelKey: 'pages.incidentResponseCenter.status_containment', color: '#f97316' },
+  eradication: { labelKey: 'pages.incidentResponseCenter.status_eradication', color: '#f59e0b' },
+  resolved:    { labelKey: 'pages.incidentResponseCenter.status_resolved',    color: '#22d3ee' },
 }
 
 // ─── Helper: human-readable duration ─────────────────────────────────────────
@@ -97,13 +97,13 @@ function durationHuman(created, updated) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
-function normalizeIncident(raw) {
+function normalizeIncident(raw, t) {
   return {
     id: raw.id ?? '',
-    title: raw.title ?? 'Untitled incident',
+    title: raw.title ?? t('pages.incidentResponseCenter.untitled_incident'),
     severity: String(raw.severity ?? 'high').toLowerCase(),
     status: String(raw.status ?? 'active').toLowerCase(),
-    assignee: raw.assignee ?? 'SOC Analyst',
+    assignee: raw.assignee ?? t('pages.incidentResponseCenter.default_assignee'),
     created: raw.created ?? new Date().toISOString(),
     updated: raw.updated ?? raw.created ?? new Date().toISOString(),
     source: raw.source ?? '—',
@@ -111,8 +111,16 @@ function normalizeIncident(raw) {
     mitre: raw.mitre ?? null,
     description: raw.description ?? '',
     playbook: raw.playbook ?? 'credential_stuffing',
+    playbookStepsDone: Array.isArray(raw.playbookStepsDone) ? raw.playbookStepsDone : [],
     timeline: Array.isArray(raw.timeline) ? raw.timeline : [],
   }
+}
+
+function mergePlaybookSteps(playbookId, doneIds) {
+  const pb = PLAYBOOKS[playbookId]
+  if (!pb) return []
+  const doneSet = new Set(doneIds)
+  return pb.steps.map((s) => ({ ...s, done: doneSet.has(s.id) }))
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -134,9 +142,10 @@ function MetricCard({ label, value, sub, color, icon }) {
   )
 }
 
-function IncidentRow({ incident, selected, onSelect }) {
-  const sm = STATUS_META[incident.status] ?? { label: incident.status.toUpperCase(), color: '#6b7280' }
+function IncidentRow({ incident, selected, onSelect, t }) {
+  const sm = STATUS_META[incident.status] ?? { labelKey: null, color: '#6b7280' }
   const sc = SEVERITY_COLOR[incident.severity] ?? '#6b7280'
+  const statusLabel = sm.labelKey ? t(sm.labelKey) : incident.status.toUpperCase()
   return (
     <motion.button
       type="button"
@@ -158,7 +167,7 @@ function IncidentRow({ incident, selected, onSelect }) {
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
             >
-              {sm.label}
+              {statusLabel}
             </span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
@@ -207,17 +216,16 @@ function Timeline({ events }) {
   )
 }
 
-function PlaybookSteps({ playbookId, onToggle, localSteps }) {
+function PlaybookSteps({ playbookId, onToggle, steps, t }) {
   const pb = PLAYBOOKS[playbookId]
   if (!pb) return null
-  const steps = localSteps ?? pb.steps
   const done = steps.filter((s) => s.done).length
   const pct = Math.round((done / steps.length) * 100)
   const barColor = pct === 100 ? '#22d3ee' : pct > 60 ? '#22d3ee' : pct > 30 ? '#f59e0b' : '#ef4444'
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">{pb.label}</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t(pb.labelKey)}</span>
         <span className="text-[10px] font-mono" style={{ color: barColor }}>{done}/{steps.length} ({pct}%)</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/5 mb-4 overflow-hidden">
@@ -230,7 +238,8 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
       </div>
       <div className="space-y-2">
         {steps.map((step) => {
-          const phaseColor = PHASE_COLOR[step.phase] ?? '#6b7280'
+          const phaseColor = PHASE_COLOR[step.phaseKey] ?? '#6b7280'
+          const phaseLabel = t(`pages.incidentResponseCenter.phases.${step.phaseKey}`)
           return (
             <motion.div
               key={step.id}
@@ -257,7 +266,7 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
                     className="text-[9px] font-mono px-1 py-0.5 rounded border uppercase tracking-wider"
                     style={{ color: phaseColor, borderColor: `${phaseColor}40`, background: `${phaseColor}10` }}
                   >
-                    {step.phase}
+                    {phaseLabel}
                   </span>
                   {step.mitre && (
                     <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
@@ -266,7 +275,7 @@ function PlaybookSteps({ playbookId, onToggle, localSteps }) {
                   )}
                 </div>
                 <p className="text-xs text-white/70 mt-0.5" style={{ textDecoration: step.done ? 'line-through' : 'none', opacity: step.done ? 0.4 : 0.85 }}>
-                  {step.action}
+                  {t(step.actionKey)}
                 </p>
               </div>
             </motion.div>
@@ -283,10 +292,10 @@ export default function IncidentResponseCenter() {
   const { t } = useTranslation()
   const [incidents, setIncidents] = useState([])
   const [selectedId, setSelectedId] = useState(null)
-  const [localSteps, setLocalSteps] = useState({})
   const [tab, setTab] = useState('timeline') // 'timeline' | 'playbook'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [stepSaving, setStepSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -299,30 +308,69 @@ export default function IncidentResponseCenter() {
       })
       .then((data) => {
         if (cancelled) return
-        const list = (data?.incidents ?? []).map(normalizeIncident)
+        const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
         setIncidents(list)
         setSelectedId(list[0]?.id ?? null)
       })
       .catch((e) => {
-        if (!cancelled) setError(e.message ?? 'Failed to load incidents')
+        if (!cancelled) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
-  const handleToggleStep = useCallback((incidentId, stepId) => {
-    setLocalSteps((prev) => {
-      const pb = PLAYBOOKS[incidents.find((i) => i.id === incidentId)?.playbook]
-      if (!pb) return prev
-      const base = prev[incidentId] ?? pb.steps
-      const next = base.map((s) => s.id === stepId ? { ...s, done: !s.done } : s)
-      return { ...prev, [incidentId]: next }
-    })
-  }, [incidents])
+  const selectedSteps = useMemo(() => {
+    if (!selected) return []
+    return mergePlaybookSteps(selected.playbook, selected.playbookStepsDone)
+  }, [selected])
+
+  const handleToggleStep = useCallback(async (incidentId, stepId) => {
+    const incident = incidents.find((i) => i.id === incidentId)
+    if (!incident) return
+    const current = mergePlaybookSteps(incident.playbook, incident.playbookStepsDone)
+    const step = current.find((s) => s.id === stepId)
+    const nextDone = !(step?.done ?? false)
+
+    setIncidents((prev) => prev.map((inc) => {
+      if (inc.id !== incidentId) return inc
+      const doneIds = new Set(inc.playbookStepsDone)
+      if (nextDone) doneIds.add(stepId)
+      else doneIds.delete(stepId)
+      return { ...inc, playbookStepsDone: [...doneIds] }
+    }))
+
+    setStepSaving(true)
+    try {
+      const r = await apiFetch(`/api/soc/incidents/${encodeURIComponent(incidentId)}/playbook-steps`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step_id: stepId, done: nextDone }),
+      })
+      if (!r.ok) throw new Error(`Failed to save step (${r.status})`)
+      const data = await r.json()
+      const doneIds = Array.isArray(data?.playbookStepsDone) ? data.playbookStepsDone : null
+      if (doneIds) {
+        setIncidents((prev) => prev.map((inc) => (
+          inc.id === incidentId ? { ...inc, playbookStepsDone: doneIds } : inc
+        )))
+      }
+    } catch (e) {
+      setIncidents((prev) => prev.map((inc) => {
+        if (inc.id !== incidentId) return inc
+        const doneIds = new Set(inc.playbookStepsDone)
+        if (nextDone) doneIds.delete(stepId)
+        else doneIds.add(stepId)
+        return { ...inc, playbookStepsDone: [...doneIds] }
+      }))
+      setError(e.message ?? t('pages.incidentResponseCenter.save_step_failed'))
+    } finally {
+      setStepSaving(false)
+    }
+  }, [incidents, t])
 
   const metrics = useMemo(() => {
     const active = incidents.filter((i) => i.status === 'active').length
@@ -376,6 +424,7 @@ export default function IncidentResponseCenter() {
               incident={inc}
               selected={selectedId === inc.id}
               onSelect={setSelectedId}
+              t={t}
             />
           ))}
         </div>
@@ -402,7 +451,9 @@ export default function IncidentResponseCenter() {
                       background: `${STATUS_META[selected.status]?.color ?? '#6b7280'}10`,
                     }}
                   >
-                    {STATUS_META[selected.status]?.label ?? selected.status}
+                    {STATUS_META[selected.status]
+                      ? t(STATUS_META[selected.status].labelKey)
+                      : selected.status}
                   </span>
                   <span
                     className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
@@ -427,9 +478,9 @@ export default function IncidentResponseCenter() {
               {/* Meta row */}
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Assignee', value: selected.assignee },
-                  { label: 'Source',   value: selected.source },
-                  { label: 'Duration', value: durationHuman(selected.created, selected.updated) },
+                  { label: t('pages.incidentResponseCenter.assignee'), value: selected.assignee },
+                  { label: t('pages.incidentResponseCenter.source'), value: selected.source },
+                  { label: t('pages.incidentResponseCenter.duration'), value: durationHuman(selected.created, selected.updated) },
                 ].map(({ label, value }) => (
                   <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">{label}</div>
@@ -440,19 +491,19 @@ export default function IncidentResponseCenter() {
 
               {/* Tabs */}
               <div className="flex gap-2 border-b border-white/10 pb-2">
-                {['timeline', 'playbook'].map((t) => (
+                {['timeline', 'playbook'].map((tabKey) => (
                   <button
-                    key={t}
+                    key={tabKey}
                     type="button"
-                    onClick={() => setTab(t)}
+                    onClick={() => setTab(tabKey)}
                     className="text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all"
                     style={{
-                      color: tab === t ? '#22d3ee' : 'rgba(255,255,255,0.3)',
-                      background: tab === t ? 'rgba(34,211,238,0.08)' : 'transparent',
-                      border: tab === t ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent',
+                      color: tab === tabKey ? '#22d3ee' : 'rgba(255,255,255,0.3)',
+                      background: tab === tabKey ? 'rgba(34,211,238,0.08)' : 'transparent',
+                      border: tab === tabKey ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent',
                     }}
                   >
-                    {t === 'timeline' ? '📋 Timeline' : '📖 Playbook'}
+                    {tabKey === 'timeline' ? t('pages.incidentResponseCenter.tab_timeline') : t('pages.incidentResponseCenter.tab_playbook')}
                   </button>
                 ))}
               </div>
@@ -462,8 +513,9 @@ export default function IncidentResponseCenter() {
               ) : (
                 <PlaybookSteps
                   playbookId={selected.playbook}
-                  localSteps={localSteps[selected.id]}
-                  onToggle={(stepId) => handleToggleStep(selected.id, stepId)}
+                  steps={selectedSteps}
+                  t={t}
+                  onToggle={stepSaving ? undefined : (stepId) => handleToggleStep(selected.id, stepId)}
                 />
               )}
             </motion.div>

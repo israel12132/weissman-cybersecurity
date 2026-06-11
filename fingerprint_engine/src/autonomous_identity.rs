@@ -281,12 +281,12 @@ fn synthetic_email(salt: u32) -> String {
 }
 
 fn synthetic_password() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
+    use rand::RngExt;
+    let mut rng = rand::rng();
     const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrst23456789!@#$%";
     (0..22)
         .map(|_| {
-            let i = rng.gen_range(0..CHARSET.len());
+            let i = rng.random_range(0..CHARSET.len());
             CHARSET[i] as char
         })
         .collect()

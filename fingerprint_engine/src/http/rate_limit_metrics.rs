@@ -1,8 +1,7 @@
 //! In-memory rate-limit usage counters and analytics (scans / login / API).
 //!
-//! Scan limits mirror `tenant_scan_limit.rs` env vars; login/API limits mirror
-//! `weissman-server` edge middleware env vars. Optional Redis is not wired in Rust
-//! today — counters live in-process only.
+//! Scan limits mirror `tenant_scan_limit.rs` env vars; login/API limits mirror edge middleware.
+//! When `REDIS_URL` is set, distributed counters back tenant scans, login POSTs, and API traffic.
 
 use axum::extract::{ConnectInfo, Extension, Query};
 use axum::http::{HeaderMap, StatusCode};
@@ -41,6 +40,7 @@ struct MinuteCounts {
 
 struct ViolationRow {
     at: DateTime<Utc>,
+    tenant_id: Option<i64>,
     kind: &'static str,
     endpoint: String,
     attempts: u32,
@@ -230,10 +230,11 @@ fn window_count(map: &DashMap<String, Mutex<VecDeque<Instant>>>, key: &str, wind
     (count, reset_in)
 }
 
-fn record_violation(kind: &'static str, endpoint: &str) {
+fn record_violation(tenant_id: Option<i64>, kind: &'static str, endpoint: &str) {
     let mut v = store().violations.lock().expect("violations lock");
     v.push_back(ViolationRow {
         at: Utc::now(),
+        tenant_id,
         kind,
         endpoint: endpoint.to_string(),
         attempts: 1,
@@ -241,27 +242,38 @@ fn record_violation(kind: &'static str, endpoint: &str) {
     while v.len() > VIOLATION_CAP {
         v.pop_front();
     }
+    if let Some(tid) = tenant_id {
+        let ep = endpoint.to_string();
+        let k = kind.to_string();
+        tokio::spawn(async move {
+            super::rate_limit_redis::push_violation(tid, &k, &ep).await;
+        });
+    }
 }
 
-fn record_endpoint(path: &str) {
+fn record_endpoint(tenant_id: i64, path: &str) {
+    let key = format!("{tenant_id}:{path}");
     store()
         .endpoint_hits
-        .entry(path.to_string())
+        .entry(key)
         .and_modify(|c| *c = c.saturating_add(1))
         .or_insert(1);
+    let p = path.to_string();
+    tokio::spawn(async move {
+        super::rate_limit_redis::incr_endpoint_hit(tenant_id, &p).await;
+    });
 }
 
 /// Successful tenant scan POST (after governor allowed).
 pub fn record_scan_allowed(tenant_id: i64, path: &str) {
     push_window_i64(&store().scan_windows, tenant_id, Duration::from_secs(60));
     bump_minute(BucketKind::Scans);
-    record_endpoint(path);
+    record_endpoint(tenant_id, path);
 }
 
 /// Tenant scan POST rejected by governor.
 pub fn record_scan_denied(tenant_id: i64, path: &str) {
-    let _ = tenant_id;
-    record_violation("scans", path);
+    record_violation(Some(tenant_id), "scans", path);
     let _ = window_count_i64(&store().scan_windows, tenant_id, Duration::from_secs(60));
 }
 
@@ -272,8 +284,8 @@ pub fn record_login_allowed(client_ip: &str) {
 }
 
 /// Edge login attempt rejected.
-pub fn record_login_denied(client_ip: &str) {
-    record_violation("logins", "/api/login");
+pub fn record_login_denied(client_ip: &str, endpoint: &str) {
+    record_violation(None, "logins", endpoint);
     let _ = window_count(&store().login_windows, client_ip, Duration::from_secs(60));
 }
 
@@ -285,7 +297,7 @@ pub fn record_api_allowed(client_ip: &str) {
 
 /// General API request rejected at edge.
 pub fn record_api_denied(client_ip: &str) {
-    record_violation("api", "edge");
+    record_violation(None, "api", "edge");
     let _ = window_count(&store().api_windows, client_ip, Duration::from_secs(1));
 }
 
@@ -354,7 +366,7 @@ fn aggregate_history(range_secs: i64, bucket_secs: i64, time_fmt: &str) -> Vec<V
     out
 }
 
-pub fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
+pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
     let (scan_cur, _) = window_count_i64(&store().scan_windows, tenant_id, Duration::from_secs(60));
     let (login_cur, _) = window_count(&store().login_windows, client_ip, Duration::from_secs(60));
     let (api_cur, _) = window_count(&store().api_windows, client_ip, Duration::from_secs(1));
@@ -362,34 +374,85 @@ pub fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
     let (range_secs, bucket_secs, time_fmt) = range_params(range);
     let history = aggregate_history(range_secs, bucket_secs, time_fmt);
 
-    let violations: Vec<Value> = store()
-        .violations
-        .lock()
-        .expect("violations lock")
-        .iter()
-        .rev()
-        .take(50)
-        .map(|v| {
-            json!({
-                "type": v.kind,
-                "endpoint": v.endpoint,
-                "time": v.at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                "attempts": v.attempts,
+    let prefix = format!("{tenant_id}:");
+    let violations: Vec<Value> = if super::rate_limit_redis::is_enabled() {
+        let mut rows = super::rate_limit_redis::list_violations(tenant_id, 50).await;
+        if rows.is_empty() {
+            rows = store()
+                .violations
+                .lock()
+                .expect("violations lock")
+                .iter()
+                .rev()
+                .filter(|v| v.tenant_id == Some(tenant_id) || v.tenant_id.is_none())
+                .take(50)
+                .map(|v| {
+                    json!({
+                        "type": v.kind,
+                        "endpoint": v.endpoint,
+                        "time": v.at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                        "attempts": v.attempts,
+                    })
+                })
+                .collect();
+        }
+        rows
+    } else {
+        store()
+            .violations
+            .lock()
+            .expect("violations lock")
+            .iter()
+            .rev()
+            .filter(|v| v.tenant_id == Some(tenant_id) || v.tenant_id.is_none())
+            .take(50)
+            .map(|v| {
+                json!({
+                    "type": v.kind,
+                    "endpoint": v.endpoint,
+                    "time": v.at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                    "attempts": v.attempts,
+                })
             })
-        })
-        .collect();
+            .collect()
+    };
 
-    let mut endpoints: Vec<(String, u32)> = store()
-        .endpoint_hits
-        .iter()
-        .map(|e| (e.key().clone(), *e.value()))
-        .collect();
-    endpoints.sort_by(|a, b| b.1.cmp(&a.1));
-    endpoints.truncate(ENDPOINT_CAP);
+    let mut endpoints: Vec<(String, u32)> = if super::rate_limit_redis::is_enabled() {
+        super::rate_limit_redis::top_endpoints(tenant_id, ENDPOINT_CAP).await
+    } else {
+        store()
+            .endpoint_hits
+            .iter()
+            .filter_map(|e| {
+                let k = e.key();
+                k.strip_prefix(&prefix)
+                    .map(|path| (path.to_string(), *e.value()))
+            })
+            .collect()
+    };
+    if endpoints.is_empty() {
+        endpoints = store()
+            .endpoint_hits
+            .iter()
+            .filter_map(|e| {
+                let k = e.key();
+                k.strip_prefix(&prefix)
+                    .map(|path| (path.to_string(), *e.value()))
+            })
+            .collect();
+        endpoints.sort_by(|a, b| b.1.cmp(&a.1));
+        endpoints.truncate(ENDPOINT_CAP);
+    }
     let endpoints_json: Vec<Value> = endpoints
         .into_iter()
         .map(|(endpoint, count)| json!({ "endpoint": endpoint, "count": count }))
         .collect();
+
+    let source = if super::rate_limit_redis::is_enabled() {
+        "redis"
+    } else {
+        "in_memory"
+    };
 
     json!({
         "current": {
@@ -401,7 +464,7 @@ pub fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
         "violations": violations,
         "endpoints": endpoints_json,
         "range": range,
-        "source": "in_memory",
+        "source": source,
     })
 }
 
@@ -423,6 +486,11 @@ pub async fn api_rate_limits_status(
 ) -> Response {
     let ip = extract_client_ip(&headers, peer);
     let limits = status_for(auth.tenant_id, &ip);
+    let source = if super::rate_limit_redis::is_enabled() {
+        "redis"
+    } else {
+        "in_memory"
+    };
     (
         StatusCode::OK,
         Json(json!({
@@ -430,20 +498,23 @@ pub async fn api_rate_limits_status(
             "limits": limits,
             "burst": scan_burst(),
             "limit_per_minute": scan_limit_per_minute(),
-            "source": "in_memory",
+            "source": source,
         })),
     )
         .into_response()
 }
 
-/// GET /api/rate-limits/analytics — historical buckets + violations (real counters only).
+/// GET /api/rate-limits/analytics — historical buckets + violations (tenant-scoped, admin only).
 pub async fn api_rate_limits_analytics(
     Extension(auth): Extension<AuthContext>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Query(q): Query<RateLimitAnalyticsQuery>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let ip = extract_client_ip(&headers, peer);
-    let body = analytics_for(auth.tenant_id, &ip, q.range.trim());
+    let body = analytics_for(auth.tenant_id, &ip, q.range.trim()).await;
     (StatusCode::OK, Json(body)).into_response()
 }

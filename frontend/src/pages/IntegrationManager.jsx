@@ -17,7 +17,7 @@ import { api } from '../utils/apiFetch';
  * Features:
  * - OAuth/API key authentication
  * - Webhook configuration
- * - Real-time sync status
+ * - Connection test (manual — no background sync)
  * - Connection testing
  * - Event filtering
  */
@@ -220,22 +220,24 @@ export default function IntegrationManager() {
                           {integration.description || 'No description'}
                         </p>
 
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
                           {integration.endpoint && (
                             <span className="flex items-center gap-1">
                               Endpoint: <span className="font-mono">{integration.endpoint}</span>
                             </span>
                           )}
-                          {integration.last_sync && (
-                            <>
-                              <span>•</span>
-                              <span>Last sync: {integration.last_sync}</span>
-                            </>
+                          {integration.config?.endpoint && !integration.endpoint && (
+                            <span className="flex items-center gap-1">
+                              Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
+                            </span>
                           )}
-                          {integration.events_sent !== undefined && (
+                          <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">
+                            Manual sync · test connection to verify
+                          </span>
+                          {integration.last_test && (
                             <>
                               <span>•</span>
-                              <span>{integration.events_sent} events sent</span>
+                              <span>Last test: {integration.last_test}</span>
                             </>
                           )}
                         </div>
@@ -303,8 +305,12 @@ export default function IntegrationManager() {
         <AddIntegrationModal
           integration={addModal === true ? null : addModal}
           onClose={() => setAddModal(false)}
-          onSave={() => {
-            fetchIntegrations();
+          onSave={(saved) => {
+            if (saved?.integrations) {
+              setIntegrations(saved.integrations);
+            } else {
+              fetchIntegrations();
+            }
             setAddModal(false);
           }}
         />
@@ -326,14 +332,27 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
     webhook_url: '',
   });
   const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState(null);
 
   const handleSave = async () => {
     try {
       setSaving(true);
-      await api.post('/api/integrations', formData);
-      onSave();
+      setSaveResult(null);
+      const payload = {
+        id: formData.type,
+        name: formData.name,
+        category: integration?.category || 'Custom',
+        config: {
+          endpoint: formData.endpoint,
+          api_key: formData.api_key,
+          webhook_url: formData.webhook_url,
+        },
+      };
+      const result = await api.post('/api/integrations', payload);
+      onSave(result);
     } catch (error) {
       console.error('Failed to add integration:', error);
+      setSaveResult({ status: 'error', message: error?.message || 'Failed to add integration.' });
     } finally {
       setSaving(false);
     }
@@ -420,6 +439,16 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
           </div>
         </div>
 
+        {saveResult && (
+          <div className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
+            saveResult.status === 'error'
+              ? 'border-red-500/30 bg-red-500/10 text-red-300'
+              : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+          }`}>
+            {saveResult.message}
+          </div>
+        )}
+
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
@@ -429,7 +458,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !formData.name || !formData.endpoint}
+            disabled={saving || !formData.name || !formData.endpoint || !formData.type}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? t('pages.integrationManager.adding') : t('pages.integrationManager.add_integration')}

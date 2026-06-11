@@ -13,6 +13,7 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, OnceLock};
 
 use super::client_ip::extract_client_ip;
+use super::login_lockout::is_account_lockout_post;
 use super::rate_limit_metrics;
 
 fn login_per_minute() -> NonZeroU32 {
@@ -67,7 +68,7 @@ fn unauth_post_kind(method: &axum::http::Method, path: &str) -> Option<UnauthPos
     if method != axum::http::Method::POST {
         return None;
     }
-    if matches!(path, "/api/login" | "/api/auth/mfa/verify") {
+    if is_account_lockout_post(method, path) {
         return Some(UnauthPostKind::Login);
     }
     if path == "/api/agents/enroll" {
@@ -92,8 +93,49 @@ pub async fn login_rate_limit_middleware(
         UnauthPostKind::Login => (login_limiter(), login_per_minute(), login_burst(), "Login"),
         UnauthPostKind::Enroll => (enroll_limiter(), enroll_per_minute(), enroll_burst(), "Agent enroll"),
     };
+
+    if kind == UnauthPostKind::Login && super::rate_limit_redis::is_enabled() {
+        if let Some(count) = super::rate_limit_redis::incr_login_ip(&ip).await {
+            let max = limit.get() as u64;
+            if count > max {
+                rate_limit_metrics::record_login_denied(&ip, &path);
+                let retry_after_secs = 60u64;
+                tracing::warn!(
+                    target: "rate_limit",
+                    client_ip = %ip,
+                    path = %path,
+                    count,
+                    limit = max,
+                    kind = label,
+                    "unauthenticated POST rate limit exceeded (redis)"
+                );
+                let mut resp = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    axum::Json(serde_json::json!({
+                        "ok": false,
+                        "code": "rate_limited",
+                        "detail": format!(
+                            "{label} rate limit hit ({burst} burst / {limit} per minute per IP). Retry in {retry_after_secs}s."
+                        ),
+                        "retry_after_seconds": retry_after_secs,
+                        "limit_per_minute": limit.get(),
+                        "burst": burst.get(),
+                        "source": "redis",
+                    })),
+                )
+                    .into_response();
+                if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+                    resp.headers_mut().insert("Retry-After", v);
+                }
+                return resp;
+            }
+            rate_limit_metrics::record_login_allowed(&ip);
+            return next.run(request).await;
+        }
+    }
+
     if let Err(neg) = limiter.check_key(&ip) {
-        rate_limit_metrics::record_login_denied(&ip);
+        rate_limit_metrics::record_login_denied(&ip, &path);
         let clock = DefaultClock::default();
         let retry_after_secs = neg.wait_time_from(clock.now()).as_secs().max(1);
         let limit = limit.get();

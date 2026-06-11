@@ -9,24 +9,25 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import EmptyState from '../components/ui/EmptyState'
 import { apiFetch } from '../lib/apiBase'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const HUNT_STATUS_META = {
-  active:    { label: 'ACTIVE',    color: '#22d3ee' },
-  completed: { label: 'COMPLETED', color: '#4ade80' },
-  paused:    { label: 'PAUSED',    color: '#f59e0b' },
-  queued:    { label: 'QUEUED',    color: '#8b5cf6' },
+  active:    { labelKey: 'pages.threatHuntingWorkbench.status_active',    color: '#22d3ee' },
+  completed: { labelKey: 'pages.threatHuntingWorkbench.status_completed', color: '#4ade80' },
+  paused:    { labelKey: 'pages.threatHuntingWorkbench.status_paused',    color: '#f59e0b' },
+  queued:    { labelKey: 'pages.threatHuntingWorkbench.status_queued',    color: '#8b5cf6' },
 }
 
-function normalizeCampaign(raw) {
+function normalizeCampaign(raw, t) {
   return {
     id: raw.id ?? '',
-    title: raw.title ?? 'Untitled hunt',
+    title: raw.title ?? t('pages.threatHuntingWorkbench.untitled_hunt'),
     hypothesis: raw.hypothesis ?? '',
     status: raw.status ?? 'queued',
-    analyst: raw.analyst ?? 'Unassigned',
+    analyst: raw.analyst ?? t('pages.threatHuntingWorkbench.unassigned'),
     started: raw.started ?? '—',
     mitre: Array.isArray(raw.mitre) ? raw.mitre : [],
     hitsFound: Number(raw.hitsFound) || 0,
@@ -36,58 +37,30 @@ function normalizeCampaign(raw) {
   }
 }
 
-const IOC_LIST = [
-  { id: 'ioc-1',  type: 'ip',     value: '185.220.101.45',                  source: 'Threat Intel Feed', severity: 'critical', tags: ['tor-exit', 'c2'], added: '2026-04-20' },
-  { id: 'ioc-2',  type: 'domain', value: 'update-service[.]xyz',            source: 'Hunt-007',          severity: 'high',     tags: ['c2', 'lolbin'],   added: '2026-04-19' },
-  { id: 'ioc-3',  type: 'hash',   value: '7a9c2f5b3d8e1f4c9b6a0d3e2c8f1a5b', source: 'EDR Alert',        severity: 'critical', tags: ['ransomware'],     added: '2026-04-19' },
-  { id: 'ioc-4',  type: 'email',  value: 'noreply@update-service[.]xyz',    source: 'Phishing Report',   severity: 'medium',   tags: ['phishing'],       added: '2026-04-18' },
-  { id: 'ioc-5',  type: 'url',    value: 'https://cdn-fast[.]cc/stage2.ps1', source: 'Hunt-005',         severity: 'high',     tags: ['c2', 'powershell'], added: '2026-04-18' },
-  { id: 'ioc-6',  type: 'ip',     value: '91.108.4.199',                    source: 'Threat Intel Feed', severity: 'high',     tags: ['scanning'],       added: '2026-04-17' },
-  { id: 'ioc-7',  type: 'hash',   value: 'e3b0c44298fc1c149afbf4c8996fb924', source: 'Hunt-006',         severity: 'medium',   tags: ['kerberoasting'],  added: '2026-04-16' },
-  { id: 'ioc-8',  type: 'domain', value: 'evil-cert-check[.]com',           source: 'Hunt-007',         severity: 'high',     tags: ['lolbin', 'certutil'], added: '2026-04-16' },
-]
+function normalizeIoc(raw, index) {
+  const tags = Array.isArray(raw.tags) ? raw.tags : (raw.source ? [raw.source] : [])
+  return {
+    id: raw.id ?? `ioc-${index}`,
+    type: raw.type ?? 'domain',
+    value: raw.value ?? raw.indicator ?? '',
+    source: raw.source ?? 'Findings',
+    severity: String(raw.severity ?? 'medium').toLowerCase(),
+    tags,
+    added: raw.added ?? (raw.last_seen ? String(raw.last_seen).slice(0, 10) : '—'),
+  }
+}
 
-const HUNT_QUERIES = [
-  {
-    id: 'q-1',
-    name: 'LOLBin Download via certutil',
-    datasource: 'Windows Event Logs (Sysmon)',
-    language: 'KQL',
-    query: `DeviceProcessEvents
-| where FileName =~ "certutil.exe"
-| where ProcessCommandLine has_any ("urlcache", "verifyctl", "-decode")
-| project Timestamp, DeviceName, ProcessCommandLine, AccountName`,
-    mitre: 'T1218.003',
-    hits: 9,
-  },
-  {
-    id: 'q-2',
-    name: 'DNS Query Entropy Spike',
-    datasource: 'Zeek / DNS Logs',
-    language: 'SPL',
-    query: `index=zeek sourcetype=dns
-| eval domain_len=len(query)
-| where domain_len > 60 AND query_type="TXT"
-| stats count by src_ip, query
-| where count > 50
-| sort -count`,
-    mitre: 'T1071.004',
-    hits: 4,
-  },
-  {
-    id: 'q-3',
-    name: 'Kerberoasting — TGS Request Spike',
-    datasource: 'Windows Security Logs',
-    language: 'KQL',
-    query: `SecurityEvent
-| where EventID == 4769
-| where TicketEncryptionType == "0x17"
-| summarize count() by AccountName, IpAddress, bin(TimeGenerated, 5m)
-| where count_ > 5`,
-    mitre: 'T1558.003',
-    hits: 3,
-  },
-]
+function normalizeQuery(raw, index, t) {
+  return {
+    id: raw.id ?? `q-${index}`,
+    name: raw.name ?? t('pages.threatHuntingWorkbench.untitled_query'),
+    datasource: raw.datasource ?? raw.dataSources?.[0] ?? 'Findings',
+    language: raw.language ?? 'KQL',
+    query: raw.query ?? '',
+    mitre: raw.mitre ?? '—',
+    hits: Number(raw.hits ?? raw.hitsFound) || 0,
+  }
+}
 
 const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22d3ee', info: '#6b7280' }
 const IOC_TYPE_ICON = { ip: '🌐', domain: '🔗', hash: '#️⃣', email: '✉️', url: '🔍' }
@@ -111,9 +84,10 @@ function MetricCard({ label, value, sub, color, icon }) {
   )
 }
 
-function CampaignCard({ campaign, selected, onSelect }) {
-  const sm = HUNT_STATUS_META[campaign.status] ?? { label: campaign.status.toUpperCase(), color: '#6b7280' }
+function CampaignCard({ campaign, selected, onSelect, t }) {
+  const sm = HUNT_STATUS_META[campaign.status] ?? { labelKey: null, color: '#6b7280' }
   const sc = SEV_COLOR[campaign.priority] ?? '#6b7280'
+  const statusLabel = sm.labelKey ? t(sm.labelKey) : campaign.status.toUpperCase()
   return (
     <motion.button
       type="button"
@@ -135,7 +109,7 @@ function CampaignCard({ campaign, selected, onSelect }) {
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
             >
-              {sm.label}
+              {statusLabel}
             </span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
@@ -150,21 +124,22 @@ function CampaignCard({ campaign, selected, onSelect }) {
           <div className="text-xl font-bold font-mono" style={{ color: campaign.hitsFound > 0 ? '#ef4444' : '#4ade80' }}>
             {campaign.hitsFound}
           </div>
-          <div className="text-[9px] font-mono text-white/25">hits</div>
+          <div className="text-[9px] font-mono text-white/25">{t('pages.threatHuntingWorkbench.hits')}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
-        {campaign.mitre.map((t) => (
-          <span key={t} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/30">{t}</span>
+        {campaign.mitre.map((m) => (
+          <span key={m} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/30">{m}</span>
         ))}
       </div>
     </motion.button>
   )
 }
 
-function CampaignDetail({ campaign }) {
+function CampaignDetail({ campaign, t }) {
   if (!campaign) return null
-  const sm = HUNT_STATUS_META[campaign.status] ?? { label: campaign.status.toUpperCase(), color: '#6b7280' }
+  const sm = HUNT_STATUS_META[campaign.status] ?? { labelKey: null, color: '#6b7280' }
+  const statusLabel = sm.labelKey ? t(sm.labelKey) : campaign.status.toUpperCase()
   return (
     <motion.div
       key={campaign.id}
@@ -179,7 +154,7 @@ function CampaignDetail({ campaign }) {
             className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
             style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
           >
-            {sm.label}
+            {statusLabel}
           </span>
         </div>
         <h3 className="text-sm font-bold text-white mb-2">{campaign.title}</h3>
@@ -187,10 +162,10 @@ function CampaignDetail({ campaign }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: 'Analyst',      value: campaign.analyst },
-          { label: 'Started',      value: campaign.started },
-          { label: 'Hits Found',   value: campaign.hitsFound > 0 ? `🔴 ${campaign.hitsFound}` : '✅ 0' },
-          { label: 'Data Sources', value: campaign.dataSources.join(', ') },
+          { label: t('pages.threatHuntingWorkbench.analyst'), value: campaign.analyst },
+          { label: t('pages.threatHuntingWorkbench.started'), value: campaign.started },
+          { label: t('pages.threatHuntingWorkbench.hits_found'), value: campaign.hitsFound > 0 ? `🔴 ${campaign.hitsFound}` : '✅ 0' },
+          { label: t('pages.threatHuntingWorkbench.data_sources'), value: campaign.dataSources.join(', ') },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
             <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-0.5">{label}</div>
@@ -199,15 +174,15 @@ function CampaignDetail({ campaign }) {
         ))}
       </div>
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/25 mb-2">MITRE ATT&amp;CK Techniques</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-white/25 mb-2">{t('pages.threatHuntingWorkbench.mitre_techniques')}</div>
         <div className="flex flex-wrap gap-1.5">
-          {campaign.mitre.map((t) => (
+          {campaign.mitre.map((m) => (
             <span
-              key={t}
+              key={m}
               className="px-2 py-1 rounded text-[10px] font-mono border"
               style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)', color: 'rgba(34,211,238,0.7)' }}
             >
-              {t}
+              {m}
             </span>
           ))}
         </div>
@@ -216,7 +191,7 @@ function CampaignDetail({ campaign }) {
   )
 }
 
-function QueryCard({ query }) {
+function QueryCard({ query, t }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <motion.div
@@ -240,7 +215,7 @@ function QueryCard({ query }) {
         </div>
         <div className="text-right shrink-0">
           <div className="text-lg font-bold font-mono" style={{ color: query.hits > 0 ? '#ef4444' : '#4ade80' }}>{query.hits}</div>
-          <div className="text-[9px] font-mono text-white/25">hits</div>
+          <div className="text-[9px] font-mono text-white/25">{t('pages.threatHuntingWorkbench.hits')}</div>
         </div>
       </button>
       <AnimatePresence>
@@ -263,15 +238,25 @@ function QueryCard({ query }) {
   )
 }
 
-function IocTable({ iocs }) {
+function IocTable({ iocs, t }) {
+  if (!iocs.length) {
+    return (
+      <EmptyState
+        icon="search"
+        title={t('pages.threatHuntingWorkbench.ioc_empty_title')}
+        body={t('pages.threatHuntingWorkbench.ioc_empty_body')}
+        cta={{ label: t('pages.threatHuntingWorkbench.ioc_view_findings'), to: '/findings' }}
+      />
+    )
+  }
   return (
     <div className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 overflow-hidden">
       <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-white/8 text-[9px] font-mono uppercase tracking-widest text-white/25">
-        <span>Type</span>
-        <span>Indicator</span>
-        <span>Source</span>
-        <span>Severity</span>
-        <span>Added</span>
+        <span>{t('pages.threatHuntingWorkbench.col_type')}</span>
+        <span>{t('pages.threatHuntingWorkbench.col_indicator')}</span>
+        <span>{t('pages.threatHuntingWorkbench.col_source')}</span>
+        <span>{t('pages.threatHuntingWorkbench.col_severity')}</span>
+        <span>{t('pages.threatHuntingWorkbench.col_added')}</span>
       </div>
       {iocs.map((ioc, i) => {
         const sc = SEV_COLOR[ioc.severity] ?? '#6b7280'
@@ -287,8 +272,8 @@ function IocTable({ iocs }) {
             <div className="min-w-0">
               <code className="text-[11px] font-mono text-white/75 block truncate">{ioc.value}</code>
               <div className="flex gap-1 mt-0.5 flex-wrap">
-                {ioc.tags.map((t) => (
-                  <span key={t} className="text-[8px] font-mono bg-white/5 border border-white/10 px-1 py-0.5 rounded text-white/30">{t}</span>
+                {ioc.tags.map((tag) => (
+                  <span key={tag} className="text-[8px] font-mono bg-white/5 border border-white/10 px-1 py-0.5 rounded text-white/30">{tag}</span>
                 ))}
               </div>
             </div>
@@ -311,23 +296,31 @@ function IocTable({ iocs }) {
 
 export default function ThreatHuntingWorkbench() {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState('campaigns') // 'campaigns' | 'queries' | 'iocs'
+  const [activeTab, setActiveTab] = useState('campaigns')
   const [campaigns, setCampaigns] = useState([])
+  const [iocs, setIocs] = useState([])
+  const [queries, setQueries] = useState([])
   const [campaignsLoading, setCampaignsLoading] = useState(true)
   const [campaignsError, setCampaignsError] = useState(null)
   const [selectedCampaign, setSelectedCampaign] = useState(null)
 
-  const loadCampaigns = useCallback(async () => {
+  const loadHuntData = useCallback(async () => {
     try {
       const r = await apiFetch('/api/soc/hunts')
       if (!r.ok) {
         setCampaigns([])
-        setCampaignsError(`Couldn't load hunts (HTTP ${r.status})`)
+        setIocs([])
+        setQueries([])
+        setCampaignsError(t('pages.threatHuntingWorkbench.load_error', { status: r.status }))
         return
       }
       const data = await r.json().catch(() => ({}))
-      const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map(normalizeCampaign)
+      const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map((raw) => normalizeCampaign(raw, t))
+      const iocList = (Array.isArray(data.iocs) ? data.iocs : []).map(normalizeIoc)
+      const queryList = (Array.isArray(data.queries) ? data.queries : []).map((raw, i) => normalizeQuery(raw, i, t))
       setCampaigns(list)
+      setIocs(iocList)
+      setQueries(queryList)
       setCampaignsError(null)
       setSelectedCampaign((prev) => {
         if (prev && list.some((c) => c.id === prev)) return prev
@@ -335,15 +328,17 @@ export default function ThreatHuntingWorkbench() {
       })
     } catch (e) {
       setCampaigns([])
+      setIocs([])
+      setQueries([])
       setCampaignsError(e.message || String(e))
     } finally {
       setCampaignsLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
-    loadCampaigns()
-  }, [loadCampaigns])
+    loadHuntData()
+  }, [loadHuntData])
 
   const selectedCampaignObj = useMemo(
     () => campaigns.find((c) => c.id === selectedCampaign),
@@ -353,55 +348,52 @@ export default function ThreatHuntingWorkbench() {
   const metrics = useMemo(() => {
     const active = campaigns.filter((c) => c.status === 'active').length
     const totalHits = campaigns.reduce((s, c) => s + c.hitsFound, 0)
-    const totalIOCs = IOC_LIST.length
-    const critIOCs = IOC_LIST.filter((i) => i.severity === 'critical').length
+    const totalIOCs = iocs.length
+    const critIOCs = iocs.filter((i) => i.severity === 'critical').length
     return { active, totalHits, totalIOCs, critIOCs }
-  }, [campaigns])
+  }, [campaigns, iocs])
 
   const tabs = [
-    { id: 'campaigns', label: '🎯 Hunt Campaigns', count: campaigns.length },
-    { id: 'queries',   label: '🔎 Hunt Queries',   count: HUNT_QUERIES.length },
-    { id: 'iocs',      label: '🧲 IOC Library',    count: IOC_LIST.length },
+    { id: 'campaigns', label: t('pages.threatHuntingWorkbench.tab_campaigns'), count: campaigns.length },
+    { id: 'queries',   label: t('pages.threatHuntingWorkbench.tab_queries'),   count: queries.length },
+    { id: 'iocs',      label: t('pages.threatHuntingWorkbench.tab_iocs'),    count: iocs.length },
   ]
 
   return (
     <PageShell
       title={t('pages.threatHuntingWorkbench.title')}
       subtitle={t('pages.threatHuntingWorkbench.subtitle')}
-      badge="HUNT"
+      badge={t('pages.threatHuntingWorkbench.badge')}
       badgeColor="#8b5cf6"
     >
-      {/* ── Metrics ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label="Active Hunts"    value={metrics.active}    sub="Currently executing"      color="#22d3ee" icon="🎯" />
-        <MetricCard label="Total Hits"      value={metrics.totalHits} sub="Across all campaigns"     color="#ef4444" icon="🔴" />
-        <MetricCard label="IOCs Tracked"    value={metrics.totalIOCs} sub="Active indicators"        color="#8b5cf6" icon="🧲" />
-        <MetricCard label="Critical IOCs"   value={metrics.critIOCs}  sub="Immediate action needed"  color="#f97316" icon="⚡" />
+        <MetricCard label={t('pages.threatHuntingWorkbench.metric_active_hunts')} value={metrics.active} sub={t('pages.threatHuntingWorkbench.metric_active_hunts_sub')} color="#22d3ee" icon="🎯" />
+        <MetricCard label={t('pages.threatHuntingWorkbench.metric_total_hits')} value={metrics.totalHits} sub={t('pages.threatHuntingWorkbench.metric_total_hits_sub')} color="#ef4444" icon="🔴" />
+        <MetricCard label={t('pages.threatHuntingWorkbench.metric_iocs_tracked')} value={metrics.totalIOCs} sub={t('pages.threatHuntingWorkbench.metric_iocs_tracked_sub')} color="#8b5cf6" icon="🧲" />
+        <MetricCard label={t('pages.threatHuntingWorkbench.metric_critical_iocs')} value={metrics.critIOCs} sub={t('pages.threatHuntingWorkbench.metric_critical_iocs_sub')} color="#f97316" icon="⚡" />
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           <button
-            key={t.id} type="button" onClick={() => setActiveTab(t.id)}
+            key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
             className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
             style={{
-              color: activeTab === t.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
-              borderColor: activeTab === t.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
-              background: activeTab === t.id ? 'rgba(139,92,246,0.1)' : 'transparent',
+              color: activeTab === tab.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
+              borderColor: activeTab === tab.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
+              background: activeTab === tab.id ? 'rgba(139,92,246,0.1)' : 'transparent',
             }}
           >
-            {t.label}
-            <span className="ml-2 text-[9px] opacity-60">({t.count})</span>
+            {tab.label}
+            <span className="ml-2 text-[9px] opacity-60">({tab.count})</span>
           </button>
         ))}
       </div>
 
-      {/* ── Content ──────────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
         {activeTab === 'campaigns' && (
           <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Hunt Campaigns</h2>
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.campaigns_heading')}</h2>
             {campaignsLoading ? (
               <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.loading_campaigns')}</p>
             ) : campaigns.length === 0 ? (
@@ -411,7 +403,7 @@ export default function ThreatHuntingWorkbench() {
                   <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
                 ) : (
                   <p className="text-[11px] text-white/25 font-mono mt-2">
-                    Campaigns appear when correlated finding clusters are detected from scan data.
+                    {t('pages.threatHuntingWorkbench.no_campaigns_hint')}
                   </p>
                 )}
               </div>
@@ -419,11 +411,11 @@ export default function ThreatHuntingWorkbench() {
               <div className="grid lg:grid-cols-[360px_1fr] gap-6">
                 <div className="space-y-2">
                   {campaigns.map((c) => (
-                    <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} />
+                    <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} t={t} />
                   ))}
                 </div>
                 <AnimatePresence mode="wait">
-                  {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} />}
+                  {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} t={t} />}
                 </AnimatePresence>
               </div>
             )}
@@ -432,17 +424,25 @@ export default function ThreatHuntingWorkbench() {
 
         {activeTab === 'queries' && (
           <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Detection Queries</h2>
-            {HUNT_QUERIES.map((q) => (
-              <QueryCard key={q.id} query={q} />
-            ))}
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.detection_queries_heading')}</h2>
+            {queries.length === 0 ? (
+              <EmptyState
+                icon="search"
+                title={t('pages.threatHuntingWorkbench.no_queries_title')}
+                body={t('pages.threatHuntingWorkbench.no_queries_body')}
+              />
+            ) : (
+              queries.map((q) => (
+                <QueryCard key={q.id} query={q} t={t} />
+              ))
+            )}
           </motion.div>
         )}
 
         {activeTab === 'iocs' && (
           <motion.div key="iocs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">Indicators of Compromise</h2>
-            <IocTable iocs={IOC_LIST} />
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.ioc_heading')}</h2>
+            <IocTable iocs={iocs} t={t} />
           </motion.div>
         )}
       </AnimatePresence>

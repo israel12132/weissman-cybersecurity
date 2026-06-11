@@ -145,14 +145,43 @@ export async function apiFetch(pathOrUrl, init = {}) {
   return response
 }
 
-/** EventSource cannot send Authorization; append access_token when stored (backend accepts query for SSE). */
+/** Prefer HttpOnly cookie auth for EventSource (`withCredentials: true`). */
 export function apiEventSourceUrl(pathWithQuery) {
   const p = pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`
-  const base = apiUrl(p)
-  const t = getStoredAccessToken()
-  if (!t) return base
+  return apiUrl(p)
+}
+
+/** Short-lived SSE ticket when cookies cannot be sent (cross-origin / legacy Bearer fallback). */
+export async function fetchSseTicket() {
+  try {
+    const r = await apiFetch('/api/auth/sse-ticket')
+    if (!r.ok) return null
+    const data = await r.json().catch(() => ({}))
+    const ticket = data.ticket
+    return ticket && String(ticket).trim() ? String(ticket).trim() : null
+  } catch {
+    return null
+  }
+}
+
+/** Append scoped SSE ticket query param (fallback only — prefer cookie-only URLs). */
+export function apiEventSourceUrlWithTicket(pathWithQuery, ticket) {
+  const base = apiEventSourceUrl(pathWithQuery)
+  if (!ticket) return base
   const sep = base.includes('?') ? '&' : '?'
-  return `${base}${sep}access_token=${encodeURIComponent(t)}`
+  return `${base}${sep}sse_ticket=${encodeURIComponent(ticket)}`
+}
+
+/**
+ * Resolve EventSource URL: cookie-only by default; fetch sse_ticket when Bearer fallback is needed.
+ */
+export async function resolveEventSourceUrl(pathWithQuery) {
+  const base = apiEventSourceUrl(pathWithQuery)
+  if (getStoredAccessToken()) {
+    const ticket = await fetchSseTicket()
+    if (ticket) return apiEventSourceUrlWithTicket(pathWithQuery, ticket)
+  }
+  return base
 }
 
 /**

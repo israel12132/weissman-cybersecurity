@@ -71,6 +71,48 @@ pub async fn tenant_scan_rate_limit_middleware(
     let Some(ctx) = request.extensions().get::<AuthContext>().cloned() else {
         return next.run(request).await;
     };
+
+    let limit = per_tenant_scan_per_minute().get() as u64;
+    if super::rate_limit_redis::is_enabled() {
+        if let Some(count) = super::rate_limit_redis::incr_tenant_scan(ctx.tenant_id).await {
+            if count > limit {
+                rate_limit_metrics::record_scan_denied(ctx.tenant_id, &path);
+                let retry_after_secs = 60u64;
+                let burst = tenant_scan_burst().get();
+                tracing::warn!(
+                    target: "rate_limit",
+                    tenant_id = ctx.tenant_id,
+                    path = %path,
+                    count,
+                    limit,
+                    "tenant scan POST rate limit exceeded (redis)"
+                );
+                let mut resp = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    axum::Json(serde_json::json!({
+                        "ok": false,
+                        "code": "rate_limited",
+                        "detail": format!(
+                            "Scan rate limit hit ({burst} burst / {limit} per minute per tenant). \
+                             Retry in {retry_after_secs}s."
+                        ),
+                        "retry_after_seconds": retry_after_secs,
+                        "limit_per_minute": limit,
+                        "burst": burst,
+                        "source": "redis",
+                    })),
+                )
+                    .into_response();
+                if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+                    resp.headers_mut().insert("Retry-After", v);
+                }
+                return resp;
+            }
+            rate_limit_metrics::record_scan_allowed(ctx.tenant_id, &path);
+            return next.run(request).await;
+        }
+    }
+
     if let Err(neg) = scan_limiter().check_key(&ctx.tenant_id) {
         rate_limit_metrics::record_scan_denied(ctx.tenant_id, &path);
         let clock = DefaultClock::default();

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
@@ -65,6 +65,23 @@ function getEngineTier(engineId, isProduction) {
   if (isTopTierEngine(engineId)) return 'top_tier'
   if (isProduction(engineId)) return 'live'
   return 'catalog'
+}
+
+function formatHistoryTimestamp(iso) {
+  if (!iso) return null
+  try {
+    return new Date(iso).toLocaleString()
+  } catch {
+    return null
+  }
+}
+
+function jobStatusToEngineStatus(status) {
+  const s = (status || '').toLowerCase()
+  if (s === 'completed') return 'completed'
+  if (s === 'failed' || s === 'dead') return 'error'
+  if (s === 'running' || s === 'pending') return 'running'
+  return 'idle'
 }
 
 // ─── UI Components ───────────────────────────────────────────────────────────
@@ -338,6 +355,7 @@ function GroupSection({
 
 export default function EngineMatrix() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const {
     engines: productionEngines,
     productionCount,
@@ -347,7 +365,10 @@ export default function EngineMatrix() {
   } = useProductionEngines()
 
   const [activeGroup, setActiveGroup] = useState('all')
-  const [tierFilter, setTierFilter] = useState('all')
+  const [tierFilter, setTierFilter] = useState(() => {
+    const tier = searchParams.get('tier')
+    return tier && TIER_FILTERS.includes(tier) ? tier : 'all'
+  })
   const [search, setSearch] = useState('')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -356,6 +377,11 @@ export default function EngineMatrix() {
   const [engineStates, setEngineStates] = useState({})
   const [toast, setToast] = useState(null)
   const [runAllLoading, setRunAllLoading] = useState(false)
+
+  useEffect(() => {
+    const tier = searchParams.get('tier')
+    if (tier && TIER_FILTERS.includes(tier)) setTierFilter(tier)
+  }, [searchParams])
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -519,6 +545,44 @@ export default function EngineMatrix() {
     () => new Set([...enabledSet].filter(isProduction)),
     [enabledSet, isProduction],
   )
+  const totalRunnable = runnableEnabledSet.size
+
+  useEffect(() => {
+    if (productionLoading || filteredEngines.length === 0) return undefined
+    let cancelled = false
+    const ids = filteredEngines.map((e) => e.id)
+
+    async function loadHistories() {
+      const results = await Promise.allSettled(
+        ids.map(async (id) => {
+          const r = await apiFetch(`/api/engines/history/${encodeURIComponent(id)}?limit=1`)
+          const data = await r.json().catch(() => null)
+          if (!r.ok || !Array.isArray(data?.jobs) || data.jobs.length === 0) return [id, null]
+          const job = data.jobs[0]
+          return [id, {
+            lastRun: formatHistoryTimestamp(job.created_at ?? job.updated_at),
+            status: jobStatusToEngineStatus(job.status),
+            findingsDelta: job.findings_count ?? 0,
+          }]
+        }),
+      )
+      if (cancelled) return
+      setEngineStates((prev) => {
+        const next = { ...prev }
+        for (const result of results) {
+          if (result.status !== 'fulfilled' || !result.value?.[1]) continue
+          const [id, hist] = result.value
+          const existing = prev[id]
+          if (existing?.status === 'running' || existing?.lastRun === 'just now') continue
+          next[id] = { ...existing, ...hist }
+        }
+        return next
+      })
+    }
+
+    loadHistories()
+    return () => { cancelled = true }
+  }, [filteredEngines, productionLoading])
 
   const handleRunAllEngines = useCallback(async () => {
     if (selectedClientId == null) {

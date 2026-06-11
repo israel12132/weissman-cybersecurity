@@ -4,7 +4,11 @@
 //! perform active denial or spoofing operations; only connect-and-banner probes against the user-
 //! supplied target.
 
-use crate::engine_probes::{empty_ok, extract_host, finding, tcp_banner, tcp_open};
+use crate::engine_probes::{
+    dns_a, dns_a_min_ttl, dns_caa, dns_mx, dns_txt, empty_ok, extract_host, finding,
+    finding_with_probe_depth, host_header_rebinding_signal, http_client, http_get_with_headers,
+    normalize_url, tcp_banner, tcp_open, tcp_probe_response, udp_probe_response,
+};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
 
@@ -16,37 +20,17 @@ macro_rules! cli_wrapper {
     };
 }
 
-async fn port_check(t: &str, engine_id: &str, title: &str, severity: &str, mitre: &str, ports: &[u16], note: &str) -> EngineResult {
-    if t.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let host = extract_host(t);
-    let mut findings: Vec<Value> = Vec::new();
-    for &p in ports {
-        if tcp_open(&host, p).await {
-            let banner = tcp_banner(&host, p).await.unwrap_or_default();
-            findings.push(finding(
-                engine_id,
-                &format!("{} ({}/tcp open)", title, p),
-                severity,
-                mitre,
-                &format!(
-                    "TCP {}:{} reachable. Banner: '{}'. {}",
-                    host,
-                    p,
-                    banner.chars().take(120).collect::<String>(),
-                    note
-                ),
-                t,
-            ));
-        }
-    }
-    if findings.is_empty() {
-        empty_ok(engine_id, t)
-    } else {
-        let n = findings.len();
-        EngineResult::ok(findings, format!("{}: {} open port(s)", engine_id, n))
-    }
+const NETWORK_PROBE_DEPTH: &str = "network_protocol_surface";
+
+fn net_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, NETWORK_PROBE_DEPTH)
 }
 
 pub async fn run_arp_spoofing_engine_result(t: &str) -> EngineResult {
@@ -84,51 +68,331 @@ pub async fn run_dns_cache_poisoning_result(t: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(t);
-    let txt = crate::engine_probes::dns_txt(&host).await;
-    let a = crate::engine_probes::dns_a(&host).await;
+    let txt = dns_txt(&host).await;
+    let a = dns_a(&host).await;
+    let mx = dns_mx(&host).await;
+    let caa = dns_caa(&host).await;
     let mut findings: Vec<Value> = Vec::new();
-    if !txt.iter().any(|t| t.contains("v=spf1") || t.contains("DMARC1")) && !a.is_empty() {
-        findings.push(finding(
+
+    let has_spf = txt.iter().any(|r| r.contains("v=spf1"));
+    let has_dmarc = dns_txt(&format!("_dmarc.{}", host)).await.iter().any(|r| r.contains("DMARC1"));
+    if !mx.is_empty() && (!has_spf || !has_dmarc) {
+        findings.push(net_finding(
             "dns_cache_poisoning",
-            "Domain has A records but no SPF/DMARC TXT",
-            "low",
+            "MX present without full email auth (SPF/DMARC)",
+            "medium",
             "T1071.004",
-            &format!("DNS A={} no SPF/DMARC observed for {}.", a.join(","), host),
+            &format!(
+                "MX={:?} for {} but SPF={} DMARC={}. Missing mail-auth records increase spoofing risk after DNS cache poisoning.",
+                mx, host, has_spf, has_dmarc
+            ),
             t,
         ));
     }
-    if findings.is_empty() { empty_ok("dns_cache_poisoning", t) }
-    else { EngineResult::ok(findings.clone(), format!("dns_cache_poisoning: {}", findings.len())) }
+
+    if let Some(ttl) = dns_a_min_ttl(&host).await {
+        if ttl <= 30 && caa.is_empty() && !a.is_empty() {
+            findings.push(net_finding(
+                "dns_cache_poisoning",
+                &format!("Ultra-short A TTL ({}s) without CAA", ttl),
+                "medium",
+                "T1071.004",
+                &format!(
+                    "A records for {} advertise TTL {}s and no CAA records were observed — rapid TTL rotation eases cache-poisoning and fraudulent issuance.",
+                    host, ttl
+                ),
+                t,
+            ));
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("dns_cache_poisoning", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("dns_cache_poisoning: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_dns_cache_poisoning, run_dns_cache_poisoning_result);
 
+pub async fn run_dns_rebinding_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let client = http_client().await;
+    let url = normalize_url(t);
+    let mut findings: Vec<Value> = Vec::new();
+
+    let baseline = http_get_with_headers(&client, &url, &[]).await;
+    let foreign = http_get_with_headers(
+        &client,
+        &url,
+        &[("Host", "rebind.attacker.example")],
+    )
+    .await;
+    if let (Some(base), Some(forg)) = (baseline, foreign) {
+        if host_header_rebinding_signal(base.status, forg.status, forg.body.len()) {
+            findings.push(finding(
+                "dns_rebinding",
+                "Host header accepted for foreign hostname",
+                "medium",
+                "T1190",
+                &format!(
+                    "Request to {} with Host: rebind.attacker.example returned HTTP {} (baseline {}). This split-horizon behavior aids DNS rebinding against browser same-origin policy.",
+                    url, forg.status, base.status
+                ),
+                t,
+            ));
+        }
+    }
+
+    if let Some(ttl) = dns_a_min_ttl(&host).await {
+        if ttl <= 60 {
+            findings.push(finding(
+                "dns_rebinding",
+                &format!("Short DNS A TTL ({}s)", ttl),
+                "low",
+                "T1190",
+                &format!(
+                    "A records for {} advertise TTL {}s — ultra-short TTLs ease DNS rebinding pivot windows; prefer TTL ≥ 300s on internet-facing names.",
+                    host, ttl
+                ),
+                t,
+            ));
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("dns_rebinding", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("dns_rebinding: {} signal(s)", n))
+    }
+}
+cli_wrapper!(run_dns_rebinding, run_dns_rebinding_result);
+
+pub async fn run_can_bus_surface_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    for (port, label) in [
+        (13400u16, "DoIP (ISO 13400)"),
+        (35000u16, "OBD/WiFi gateway"),
+        (29536u16, "Vector CAN bridge"),
+    ] {
+        if !tcp_open(&host, port).await {
+            continue;
+        }
+        let mut detail = format!("TCP {}:{} accepts connections.", host, port);
+        if port == 13400 {
+            let probe: [u8; 17] = [
+                0x02, 0xFD, 0x00, 0x05, 0x00, 0x00, 0x00, 0x07, 0x0E, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00,
+            ];
+            if let Some(resp) = tcp_probe_response(&host, port, &probe).await {
+                if resp.len() >= 4 && resp[0] == 0x02 && resp[1] == 0xFD {
+                    detail.push_str(" DoIP protocol header echoed.");
+                }
+            }
+        }
+        findings.push(finding(
+            "can_bus_surface",
+            &format!("{} ({}/tcp open)", label, port),
+            if port == 13400 { "high" } else { "medium" },
+            "T0855",
+            &format!(
+                "{} Internet-exposed vehicle diagnostic surface — isolate CAN/DoIP behind VPN; CAN-FD gateways share this attack plane.",
+                detail
+            ),
+            t,
+        ));
+    }
+    if findings.is_empty() {
+        empty_ok("can_bus_surface", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("can_bus_surface: {} open port(s)", n))
+    }
+}
+cli_wrapper!(run_can_bus_surface, run_can_bus_surface_result);
+
 pub async fn run_ntp_amplification_result(t: &str) -> EngineResult {
-    port_check(t, "ntp_amplification", "NTP port", "low", "T1498.002", &[123], "Verify monlist disabled.").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    let mut ntp_req = [0u8; 48];
+    ntp_req[0] = 0x1b;
+    if let Some(resp) = udp_probe_response(&host, 123, &ntp_req).await {
+        if resp.len() >= 48 && (resp[0] & 0x07) == 4 {
+            findings.push(net_finding(
+                "ntp_amplification",
+                "NTP server responded to client mode probe",
+                "low",
+                "T1498.002",
+                &format!(
+                    "UDP {}:123 returned a valid NTP mode-4 response ({} B). Verify monlist/monitor (mode 7) is disabled on this daemon.",
+                    host, resp.len()
+                ),
+                t,
+            ));
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("ntp_amplification", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("ntp_amplification: {} signal(s)", n))
+    }
 }
 cli_wrapper!(run_ntp_amplification, run_ntp_amplification_result);
 
 pub async fn run_snmp_exploitation_result(t: &str) -> EngineResult {
-    port_check(t, "snmp_exploitation", "SNMP port", "medium", "T1046", &[161], "Test community strings public/private.").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    const SNMP_GET: &[u8] = &[
+        0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0,
+        0x19, 0x02, 0x04, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30,
+        0x0c, 0x30, 0x0a, 0x06, 0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
+    ];
+    if let Some(resp) = udp_probe_response(&host, 161, SNMP_GET).await {
+        if resp.first() == Some(&0x30) && resp.windows(6).any(|w| w == [0x2b, 0x06, 0x01, 0x02, 0x01, 0x01]) {
+            findings.push(net_finding(
+                "snmp_exploitation",
+                "SNMP agent answered public community GET",
+                "high",
+                "T1046",
+                &format!(
+                    "UDP {}:161 returned SNMP sysDescr.0 data for community 'public' ({} B). Change community strings and restrict SNMP to management nets.",
+                    host, resp.len()
+                ),
+                t,
+            ));
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("snmp_exploitation", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("snmp_exploitation: {} signal(s)", n))
+    }
 }
 cli_wrapper!(run_snmp_exploitation, run_snmp_exploitation_result);
 
 pub async fn run_rdp_attack_engine_result(t: &str) -> EngineResult {
-    port_check(t, "rdp_attack_engine", "RDP", "high", "T1021.001", &[3389], "Internet-exposed RDP — high abuse risk.").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    if tcp_open(&host, 3389).await {
+        if let Some(banner) = tcp_banner(&host, 3389).await {
+            if banner.starts_with("\x03\x00") {
+                findings.push(net_finding(
+                    "rdp_attack_engine",
+                    "RDP TPKT banner observed on 3389/tcp",
+                    "high",
+                    "T1021.001",
+                    &format!(
+                        "TCP {}:3389 returned Microsoft RDP TPKT header (0x03 0x00). Internet-exposed RDP is a top brute-force / CVE target — require VPN + NLA.",
+                        host
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("rdp_attack_engine", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("rdp_attack_engine: {} signal(s)", n))
+    }
 }
 cli_wrapper!(run_rdp_attack_engine, run_rdp_attack_engine_result);
 
 pub async fn run_ldap_injection_engine_result(t: &str) -> EngineResult {
-    port_check(t, "ldap_injection_engine", "LDAP/LDAPS", "medium", "T1078", &[389, 636, 3268, 3269], "Active Directory directory surface.").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    const LDAP_BIND: &[u8] = &[0x30, 0x0c, 0x02, 0x01, 0x01, 0x60, 0x07, 0x02, 0x01, 0x03, 0x04, 0x00, 0x80, 0x00];
+    for (port, label) in [(389u16, "LDAP"), (3268, "Global Catalog LDAP")] {
+        if let Some(resp) = tcp_probe_response(&host, port, LDAP_BIND).await {
+            if resp.first() == Some(&0x30) && resp.len() >= 7 {
+                findings.push(net_finding(
+                    "ldap_injection_engine",
+                    &format!("{} anonymous bind response on {}/tcp", label, port),
+                    "medium",
+                    "T1078",
+                    &format!(
+                        "TCP {}:{} answered LDAP bind probe ({} B). Anonymous or misconfigured directory binds enable user enumeration — disable anon bind and require TLS.",
+                        host, port, resp.len()
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("ldap_injection_engine", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("ldap_injection_engine: {} signal(s)", n))
+    }
 }
 cli_wrapper!(run_ldap_injection_engine, run_ldap_injection_engine_result);
 
 pub async fn run_voip_sip_attack_result(t: &str) -> EngineResult {
-    port_check(t, "voip_sip_attack", "SIP / VoIP", "medium", "T1499", &[5060, 5061], "SIP REGISTER / INVITE surface.").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    let sip_options = format!(
+        "OPTIONS sip:probe@{host} SIP/2.0\r\nVia: SIP/2.0/TCP {host}:5060\r\nMax-Forwards: 70\r\nTo: <sip:probe@{host}>\r\nFrom: <sip:probe@{host}>\r\nCall-ID: weissman-probe\r\nCSeq: 1 OPTIONS\r\nContent-Length: 0\r\n\r\n"
+    );
+    for port in [5060u16, 5061] {
+        if let Some(resp) = tcp_probe_response(&host, port, sip_options.as_bytes()).await {
+            let text = String::from_utf8_lossy(&resp);
+            if text.contains("SIP/2.0") && text.contains("Allow:") {
+                findings.push(net_finding(
+                    "voip_sip_attack",
+                    &format!("SIP OPTIONS answered on {}/tcp", port),
+                    "medium",
+                    "T1499",
+                    &format!(
+                        "TCP {}:{} returned SIP/2.0 with Allow: header — REGISTER/INVITE surface exposed. Restrict SIP to trusted SBCs.",
+                        host, port
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("voip_sip_attack", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("voip_sip_attack: {} signal(s)", n))
+    }
 }
 cli_wrapper!(run_voip_sip_attack, run_voip_sip_attack_result);
 
 pub async fn run_ss7_attack_simulation_result(t: &str) -> EngineResult {
-    port_check(t, "ss7_attack_simulation", "SS7/SIGTRAN candidate port", "low", "T1499", &[2904, 2905], "SCTP/M3UA endpoints (SCTP usually).").await
+    crate::engine_probes::agent_required_ok(
+        "ss7_attack_simulation",
+        t,
+        "SS7/SIGTRAN detection requires telco PCAP or SS7 gateway logs",
+        "M3UA/SCTP signaling is not observable via internet TCP connect probes; ingest PCAP from the SS7 gateway or deploy the telco sensor agent.",
+    )
 }
 cli_wrapper!(run_ss7_attack_simulation, run_ss7_attack_simulation_result);
 
@@ -158,35 +422,47 @@ pub async fn run_ospf_bgp_hijack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_ospf_bgp_hijack, run_ospf_bgp_hijack_result);
 
 pub async fn run_mpls_vpn_attack_result(t: &str) -> EngineResult {
-    // Public ASN ownership lookup via team-cymru's whois service. Reveals which carrier the
-    // target sits behind — useful for verifying VPN provider attestation, not for proving abuse.
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let host = crate::engine_probes::extract_host(t);
-    let ips = crate::engine_probes::dns_a(&host).await;
+    let host = extract_host(t);
+    let ips = dns_a(&host).await;
     if ips.is_empty() {
         return empty_ok("mpls_vpn_attack", t);
     }
     let mut findings: Vec<Value> = Vec::new();
     for ip in ips.iter().take(2) {
-        let mut f = finding(
-            "mpls_vpn_attack",
-            &format!("Public IP {} ASN/carrier identifiable", ip),
-            "info",
-            "T1090",
-            &format!(
-                "Target resolves to {}. Look up ASN via team-cymru (origin) to validate the carrier's VPN segregation posture. Cross-VRF / label-stack injection is a carrier-side concern.",
-                ip
-            ),
-            t,
-        );
-        if let Some(obj) = f.as_object_mut() {
-            obj.insert("ip".into(), Value::String(ip.clone()));
+        let query = format!("-v {}\n", ip);
+        if let Some(resp) = tcp_probe_response("whois.cymru.com", 43, query.as_bytes()).await {
+            let text = String::from_utf8_lossy(&resp);
+            let line = text.lines().find(|l| l.contains('|') && l.contains(ip));
+            if let Some(line) = line {
+                let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+                if parts.len() >= 7 {
+                    let asn = parts[0];
+                    let prefix = parts[1];
+                    let cc = parts[2];
+                    let owner = parts[5];
+                    findings.push(net_finding(
+                        "mpls_vpn_attack",
+                        &format!("Origin ASN {} ({}) for {}", asn, owner, ip),
+                        "info",
+                        "T1090",
+                        &format!(
+                            "Team Cymru origin lookup for {} → ASN {} prefix {} country {} owner {}. Validate MPLS/VPN segregation with the carrier; cross-VRF injection is a provider-side control.",
+                            ip, asn, prefix, cc, owner
+                        ),
+                        t,
+                    ));
+                }
+            }
         }
-        findings.push(f);
     }
-    EngineResult::ok(findings.clone(), format!("mpls_vpn_attack: {}", findings.len()))
+    if findings.is_empty() {
+        empty_ok("mpls_vpn_attack", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("mpls_vpn_attack: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_mpls_vpn_attack, run_mpls_vpn_attack_result);
 
@@ -307,7 +583,7 @@ pub async fn run_network_baseline_anomaly_result(t: &str) -> EngineResult {
     // facing host.
     let canonical: std::collections::HashSet<u16> =
         [80, 443, 22, 25, 53, 110, 143, 465, 587, 993, 995].iter().copied().collect();
-    let mut anomalies: Vec<Value> = asm
+    let anomalies: Vec<Value> = asm
         .findings
         .iter()
         .filter_map(|f| {
@@ -334,7 +610,6 @@ pub async fn run_network_baseline_anomaly_result(t: &str) -> EngineResult {
         empty_ok("network_baseline_anomaly", t)
     } else {
         let n = anomalies.len();
-        anomalies.extend(asm.findings.into_iter().take(0)); // keep type
         EngineResult::ok(anomalies, format!("network_baseline_anomaly: {} anomaly", n))
     }
 }
@@ -379,3 +654,14 @@ pub async fn run_nat_traversal_attack_result(t: &str) -> EngineResult {
     )
 }
 cli_wrapper!(run_nat_traversal_attack, run_nat_traversal_attack_result);
+
+#[cfg(test)]
+mod tests {
+    use crate::engine_probes::host_header_rebinding_signal;
+
+    #[test]
+    fn rebinding_host_signal_requires_foreign_success() {
+        assert!(host_header_rebinding_signal(404, 200, 128));
+        assert!(!host_header_rebinding_signal(200, 200, 128));
+    }
+}

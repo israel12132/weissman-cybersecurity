@@ -18,7 +18,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use chrono::{Datelike, Utc};
-use rand::RngCore;
+use rand_core::{OsRng, RngCore};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -65,7 +65,7 @@ fn hash_token(plaintext: &str) -> String {
 
 fn generate_token() -> String {
     let mut buf = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut buf);
+    OsRng.fill_bytes(&mut buf);
     // URL-safe base64 (no padding) — fits cleanly in a query-string param.
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(buf)

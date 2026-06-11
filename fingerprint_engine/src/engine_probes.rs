@@ -184,9 +184,18 @@ pub async fn http_get(client: &Client, url: &str) -> Option<HttpProbe> {
     http_get_with_headers(client, url, &[]).await
 }
 
-/// POST JSON and return status + body (truncated).
-pub async fn http_post_json(client: &Client, url: &str, payload: &Value) -> Option<HttpProbe> {
-    let resp = client.post(url).json(payload).send().await.ok()?;
+/// POST JSON with optional extra headers (e.g. Authorization probes).
+pub async fn http_post_json_with_headers(
+    client: &Client,
+    url: &str,
+    payload: &Value,
+    extra: &[(&str, &str)],
+) -> Option<HttpProbe> {
+    let mut req = client.post(url).json(payload);
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let resp = req.send().await.ok()?;
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
     let headers: Vec<(String, String)> = resp
@@ -206,6 +215,11 @@ pub async fn http_post_json(client: &Client, url: &str, payload: &Value) -> Opti
         body,
         final_url,
     })
+}
+
+/// POST JSON and return status + body (truncated).
+pub async fn http_post_json(client: &Client, url: &str, payload: &Value) -> Option<HttpProbe> {
+    http_post_json_with_headers(client, url, payload, &[]).await
 }
 
 pub fn has_header(headers: &[(String, String)], name: &str) -> bool {
@@ -280,6 +294,184 @@ pub async fn dns_a(host: &str) -> Vec<String> {
     out
 }
 
+/// Minimum TTL (seconds) among A records for `host`, if any.
+pub async fn dns_a_min_ttl(host: &str) -> Option<u32> {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return None,
+    };
+    let lookup = resolver.ipv4_lookup(host).await.ok()?;
+    lookup.answers().iter().map(|r| r.ttl).min()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TlsCertSummary {
+    pub issuer: String,
+    pub subject: String,
+    pub self_signed: bool,
+    pub expired: bool,
+}
+
+/// Extended TLS certificate fields for crypto/PQC posture probes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TlsCertDetails {
+    pub issuer: String,
+    pub subject: String,
+    pub self_signed: bool,
+    pub expired: bool,
+    pub days_until_expiry: i64,
+    pub public_key_bits: u32,
+    pub signature_algorithm: String,
+    pub is_rsa: bool,
+    pub is_ec: bool,
+    pub san_dns_names: Vec<String>,
+}
+
+/// Fetch the peer TLS certificate issuer/subject for HTTPS on port 443.
+pub async fn tls_cert_summary(host: &str) -> Option<TlsCertSummary> {
+    tls_cert_details(host)
+        .await
+        .map(|d| TlsCertSummary {
+            issuer: d.issuer,
+            subject: d.subject,
+            self_signed: d.self_signed,
+            expired: d.expired,
+        })
+}
+
+/// Fetch extended TLS certificate metadata for HTTPS on port 443.
+pub async fn tls_cert_details(host: &str) -> Option<TlsCertDetails> {
+    let host = host.to_string();
+    tokio::task::spawn_blocking(move || tls_cert_details_blocking(&host))
+        .await
+        .ok()
+        .flatten()
+}
+
+fn tls_cert_details_blocking(host: &str) -> Option<TlsCertDetails> {
+    use openssl::ssl::{SslConnector, SslMethod};
+    use std::net::TcpStream;
+    let connector = SslConnector::builder(SslMethod::tls()).ok()?.build();
+    let stream = TcpStream::connect(format!("{host}:443")).ok()?;
+    let stream = connector.connect(host, stream).ok()?;
+    let cert = stream.ssl().peer_certificate()?;
+    Some(parse_cert_details(&cert))
+}
+
+fn parse_cert_details(cert: &openssl::x509::X509) -> TlsCertDetails {
+    let fmt_dn_entry = |e: &openssl::x509::X509NameEntryRef| -> String {
+        let key = e.object().nid().short_name().unwrap_or("?");
+        let val = match e.data().as_utf8() {
+            Ok(s) => s.to_string(),
+            Err(_) => "?".to_string(),
+        };
+        format!("{key}={val}")
+    };
+    let issuer = cert
+        .issuer_name()
+        .entries()
+        .map(fmt_dn_entry)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let subject = cert
+        .subject_name()
+        .entries()
+        .map(fmt_dn_entry)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let self_signed = issuer == subject;
+    let not_after = cert.not_after().to_owned();
+    let now = openssl::asn1::Asn1Time::days_from_now(0).ok();
+    let expired = now.as_ref().is_some_and(|n| not_after <= *n);
+    let days_until_expiry = now
+        .as_ref()
+        .and_then(|n| not_after.diff(n.as_ref()).ok())
+        .map(|diff| i64::from(diff.days))
+        .unwrap_or(0);
+    let pkey = cert.public_key().ok();
+    let public_key_bits = pkey.as_ref().map(|k| k.bits()).unwrap_or(0);
+    let signature_algorithm = cert
+        .signature_algorithm()
+        .object()
+        .nid()
+        .short_name()
+        .unwrap_or("unknown")
+        .to_string();
+    let is_rsa = pkey.as_ref().is_some_and(|k| k.rsa().is_ok());
+    let is_ec = pkey.as_ref().is_some_and(|k| k.ec_key().is_ok());
+    let mut san_dns_names = Vec::new();
+    if let Some(alt_names) = cert.subject_alt_names() {
+        for name in alt_names {
+            if let Some(dns) = name.dnsname() {
+                san_dns_names.push(dns.to_string());
+            }
+        }
+    }
+    TlsCertDetails {
+        issuer,
+        subject,
+        self_signed,
+        expired,
+        days_until_expiry,
+        public_key_bits,
+        signature_algorithm,
+        is_rsa,
+        is_ec,
+        san_dns_names,
+    }
+}
+
+/// UDP send/receive with bounded timeout (SNMP, NTP, etc.).
+pub async fn udp_probe_response(host: &str, port: u16, payload: &[u8]) -> Option<Vec<u8>> {
+    use tokio::net::UdpSocket;
+    let local = UdpSocket::bind("0.0.0.0:0").await.ok()?;
+    let remote = format!("{}:{}", host, port);
+    local.connect(&remote).await.ok()?;
+    local.send(payload).await.ok()?;
+    let mut buf = vec![0u8; 1024];
+    match timeout(Duration::from_millis(TCP_BANNER_READ_MS), local.recv(&mut buf)).await {
+        Ok(Ok(n)) if n > 0 => Some(buf[..n].to_vec()),
+        _ => None,
+    }
+}
+
+pub async fn dns_caa(host: &str) -> Vec<String> {
+    use hickory_resolver::proto::rr::RecordType;
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(caa) = resolver.lookup(host, RecordType::CAA).await {
+        for record in caa.answers() {
+            let hickory_resolver::proto::rr::RData::CAA(caa) = &record.data else {
+                continue;
+            };
+            out.push(format!(
+                "{}={}",
+                caa.tag,
+                String::from_utf8_lossy(&caa.value)
+            ));
+        }
+    }
+    out
+}
+
+/// True when a foreign Host header yields a successful response (rebinding surface).
+#[must_use]
+pub fn host_header_rebinding_signal(
+    baseline_status: u16,
+    foreign_status: u16,
+    foreign_body_len: usize,
+) -> bool {
+    foreign_status >= 200
+        && foreign_status < 400
+        && foreign_body_len > 32
+        && (baseline_status >= 400 || foreign_status != baseline_status)
+}
+
 /// Convenience: build a result with optional empty findings (no simulated content).
 pub fn empty_ok(engine_id: &str, target: &str) -> EngineResult {
     EngineResult::ok(
@@ -349,6 +541,23 @@ pub fn finding(
         "remediation": default_remediation(engine_id, severity),
         "compliance": default_compliance(engine_id),
     })
+}
+
+/// Structured finding with an extra `probe_depth` metadata field.
+pub fn finding_with_probe_depth(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+    probe_depth: &str,
+) -> Value {
+    let mut f = finding(engine_id, title, severity, mitre, description, target);
+    if let Some(obj) = f.as_object_mut() {
+        obj.insert("probe_depth".to_string(), json!(probe_depth));
+    }
+    f
 }
 
 /// Lookup-table for a default remediation hint. The orchestrator can override per-finding when
@@ -437,4 +646,15 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
         tags.push("ISO27001:A.12");
     }
     tags
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_header_rebinding_signal;
+
+    #[test]
+    fn host_header_rebinding_signal_detects_foreign_host_success() {
+        assert!(host_header_rebinding_signal(404, 200, 64));
+        assert!(!host_header_rebinding_signal(200, 200, 64));
+    }
 }

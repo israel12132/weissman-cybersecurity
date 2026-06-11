@@ -153,10 +153,11 @@ pub fn qr_code_for_audit(base_url: &str, audit_root_hash: &str) -> Result<String
     qr_code_base64_svg(&payload)
 }
 
-/// Run crypto/audit engine on a target (no-op for this module - audit only).
-pub async fn run_crypto_engine_result(_target: &str) -> crate::engine_result::EngineResult {
-    crate::engine_result::EngineResult::ok(
-        vec![],
-        "Crypto engine: audit-only module, no active scanning performed".to_string(),
-    )
+/// Run crypto engine scan: TLS/PKI surface probe (cipher suite, cert chain, weak protocols).
+pub async fn run_crypto_engine_result(target: &str) -> crate::engine_result::EngineResult {
+    let mut result = crate::pki_tls_engine::run_pki_tls_result(target).await;
+    if result.message.trim().is_empty() {
+        result.message = "Crypto/TLS surface scan complete".to_string();
+    }
+    result
 }

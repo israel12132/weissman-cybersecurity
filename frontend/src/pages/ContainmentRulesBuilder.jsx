@@ -1,22 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
-/**
- * ContainmentRulesBuilder - Network containment and isolation rules
- *
- * Features:
- * - Auto-isolation rules for critical findings
- * - Network segmentation policies
- * - Quarantine workflows
- * - Whitelist/blacklist management
- * - Emergency kill switches
- * - Containment history tracking
- * - Integration with firewall/SDN
- */
 export default function ContainmentRulesBuilder() {
+  const { t } = useTranslation();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +50,7 @@ export default function ContainmentRulesBuilder() {
   };
 
   const deleteRule = async (ruleId) => {
-    if (!confirm('Are you sure you want to delete this containment rule?')) return;
+    if (!confirm(t('pages.containmentRulesBuilder.delete_confirm'))) return;
     if (clientId == null) return;
 
     try {
@@ -92,13 +82,12 @@ export default function ContainmentRulesBuilder() {
   };
 
   return (
-    <PageShell title="Containment Rules Builder" icon={<Shield />}>
+    <PageShell title={t('pages.containmentRulesBuilder.title')} icon={<Shield />}>
       <div className="space-y-6">
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Rules</span>
+              <span className="text-sm text-gray-400">{t('pages.containmentRulesBuilder.total_rules')}</span>
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -106,7 +95,7 @@ export default function ContainmentRulesBuilder() {
 
           <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-green-400">Active</span>
+              <span className="text-sm text-green-400">{t('pages.containmentRulesBuilder.active')}</span>
               <Play className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-400">{stats.enabled}</div>
@@ -114,7 +103,7 @@ export default function ContainmentRulesBuilder() {
 
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-red-400">Auto-Isolate</span>
+              <span className="text-sm text-red-400">{t('pages.containmentRulesBuilder.auto_isolate')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">{stats.isolated}</div>
@@ -122,41 +111,39 @@ export default function ContainmentRulesBuilder() {
 
           <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-purple-400">Triggered</span>
+              <span className="text-sm text-purple-400">{t('pages.containmentRulesBuilder.triggered')}</span>
               <Check className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-400">{stats.triggered}</div>
           </div>
         </div>
 
-        {/* Create Button */}
         <div className="flex justify-end">
           <button
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Create Rule
+            {t('pages.containmentRulesBuilder.create_rule')}
           </button>
         </div>
 
-        {/* Rules List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
-              Containment Rules
+              {t('pages.containmentRulesBuilder.rules_heading')}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading rules...
+              {t('pages.containmentRulesBuilder.loading')}
             </div>
           ) : rules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No containment rules configured. Click "Create Rule" to get started.
+              {t('pages.containmentRulesBuilder.empty')}
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -190,40 +177,39 @@ export default function ContainmentRulesBuilder() {
                           </span>
                           {rule.auto_trigger && (
                             <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded text-xs font-medium">
-                              AUTO
+                              {t('pages.containmentRulesBuilder.auto_badge')}
                             </span>
                           )}
                         </div>
 
                         <p className="text-xs text-gray-400 mb-3">{rule.description}</p>
 
-                        {/* Conditions */}
                         <div className="flex flex-wrap gap-2 mb-2">
                           {rule.trigger_on?.severity && (
                             <span className="text-xs px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded">
-                              Severity: {rule.trigger_on.severity}
+                              {t('pages.containmentRulesBuilder.severity_trigger', { severity: rule.trigger_on.severity })}
                             </span>
                           )}
                           {rule.trigger_on?.cve && (
                             <span className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded">
-                              CVE Match
+                              {t('pages.containmentRulesBuilder.cve_match')}
                             </span>
                           )}
                           {rule.target && (
                             <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
-                              Target: {rule.target}
+                              {t('pages.containmentRulesBuilder.target_label', { target: rule.target })}
                             </span>
                           )}
                         </div>
 
                         <div className="flex items-center gap-3 text-xs text-gray-500">
                           {rule.triggered_count !== undefined && (
-                            <span>Triggered: {rule.triggered_count} times</span>
+                            <span>{t('pages.containmentRulesBuilder.triggered_times', { count: rule.triggered_count })}</span>
                           )}
                           {rule.last_triggered && (
                             <>
                               <span>•</span>
-                              <span>Last: {rule.last_triggered}</span>
+                              <span>{t('pages.containmentRulesBuilder.last_triggered', { time: rule.last_triggered })}</span>
                             </>
                           )}
                         </div>
@@ -251,26 +237,24 @@ export default function ContainmentRulesBuilder() {
           )}
         </div>
 
-        {/* Emergency Kill Switch */}
         <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-400" />
-                Emergency Network Isolation
+                {t('pages.containmentRulesBuilder.emergency_title')}
               </h3>
               <p className="text-xs text-gray-400">
-                Immediately isolate all compromised assets from the network
+                {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
             <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
-              Activate Kill Switch
+              {t('pages.containmentRulesBuilder.kill_switch')}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Create/Edit Modal */}
       {(createModal || editModal) && (
         <RuleModal
           rule={editModal}
@@ -279,7 +263,6 @@ export default function ContainmentRulesBuilder() {
             setCreateModal(false);
             setEditModal(null);
           }}
-          clientId={clientId}
           onSave={() => {
             if (clientId != null) fetchRules(clientId);
             setCreateModal(false);
@@ -291,10 +274,8 @@ export default function ContainmentRulesBuilder() {
   );
 }
 
-/**
- * Rule Modal
- */
 function RuleModal({ rule, clientId, onClose, onSave }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: rule?.name || '',
     description: rule?.description || '',
@@ -327,7 +308,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
       <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
-            {rule ? 'Edit Rule' : 'Create Containment Rule'}
+            {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             ✕
@@ -336,27 +317,27 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Rule Name</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Auto-isolate critical assets"
+              placeholder={t('pages.containmentRulesBuilder.rule_name_placeholder')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Action</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.action')}</label>
             <select
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
-              <option value="isolate">Isolate (full network cut)</option>
-              <option value="quarantine">Quarantine (limited access)</option>
-              <option value="block">Block (IP/port specific)</option>
-              <option value="alert">Alert Only</option>
+              <option value="isolate">{t('pages.containmentRulesBuilder.action_isolate')}</option>
+              <option value="quarantine">{t('pages.containmentRulesBuilder.action_quarantine')}</option>
+              <option value="block">{t('pages.containmentRulesBuilder.action_block')}</option>
+              <option value="alert">{t('pages.containmentRulesBuilder.action_alert')}</option>
             </select>
           </div>
 
@@ -368,7 +349,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
                 onChange={(e) => setFormData({ ...formData, auto_trigger: e.target.checked })}
                 className="rounded"
               />
-              Auto-trigger on condition match
+              {t('pages.containmentRulesBuilder.auto_trigger')}
             </label>
           </div>
         </div>
@@ -378,14 +359,14 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving...' : rule ? 'Save Changes' : 'Create Rule'}
+            {saving ? t('pages.containmentRulesBuilder.saving') : rule ? t('pages.containmentRulesBuilder.save_changes') : t('pages.containmentRulesBuilder.create_rule')}
           </button>
         </div>
       </div>

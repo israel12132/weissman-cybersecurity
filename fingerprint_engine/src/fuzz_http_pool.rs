@@ -1,6 +1,6 @@
 //! Rotating egress proxies (`PROXIES_LIST` / `PROXIES_FILE`) and per-request User-Agent jitter for fuzz probes.
 
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use reqwest::Proxy;
 use reqwest::RequestBuilder;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -22,7 +22,7 @@ static USER_AGENTS: &[&str] = &[
 #[must_use]
 pub fn random_fuzz_user_agent() -> &'static str {
     USER_AGENTS
-        .choose(&mut rand::thread_rng())
+        .choose(&mut rand::rng())
         .copied()
         .unwrap_or(USER_AGENTS[0])
 }

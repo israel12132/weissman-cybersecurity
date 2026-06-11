@@ -6,7 +6,8 @@
 //!   3. Emit findings only on observed behaviour; no canned "simulated …" text.
 
 use crate::engine_probes::{
-    empty_ok, finding, http_client, http_get, http_post_json, normalize_url,
+    empty_ok, finding, finding_with_probe_depth, has_header, http_client, http_get,
+    http_post_json, http_post_json_with_headers, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
@@ -19,16 +20,194 @@ macro_rules! cli_wrapper {
     };
 }
 
+const LLM_PROBE_DEPTH: &str = "llm_surface_hardening";
+
 /// Common LLM endpoints to probe (OpenAI-compatible / ollama / vLLM).
 const LLM_PATHS: &[&str] = &[
     "/v1/chat/completions",
     "/v1/completions",
+    "/v1/models",
     "/api/generate",
     "/api/chat",
     "/chat",
     "/completion",
     "/api/v1/chat/completions",
 ];
+
+const GENERATIVE_PATHS: &[&str] = &[
+    "/v1/images/generations",
+    "/v1/audio/speech",
+    "/api/tts",
+    "/v1/embeddings",
+];
+
+const RATE_LIMIT_HEADERS: &[&str] = &[
+    "x-ratelimit-limit",
+    "x-ratelimit-remaining",
+    "retry-after",
+    "ratelimit-limit",
+];
+
+const SAFE_INJECTION_PROBE: &str =
+    "Respond with exactly the token PROBE_OK and nothing else.";
+
+fn llm_hardening_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        LLM_PROBE_DEPTH,
+    )
+}
+
+fn models_listing_exposed(probe: &crate::engine_probes::HttpProbe) -> bool {
+    probe.status >= 200
+        && probe.status < 300
+        && (probe.body.contains("\"data\"")
+            || probe.body.contains("\"models\"")
+            || probe.body.contains("\"object\":\"model\""))
+}
+
+fn unauthenticated_completion(probe: &crate::engine_probes::HttpProbe) -> bool {
+    probe.status >= 200
+        && probe.status < 300
+        && !probe.body.to_ascii_lowercase().contains("unauthorized")
+        && !probe.body.to_ascii_lowercase().contains("invalid api key")
+        && (probe.body.contains("\"choices\"")
+            || probe.body.contains("\"content\"")
+            || probe.body.contains("PROBE_OK"))
+}
+
+fn rate_limit_headers_absent(headers: &[(String, String)]) -> bool {
+    !RATE_LIMIT_HEADERS.iter().any(|h| has_header(headers, h))
+}
+
+async fn probe_llm_hardening(
+    target: &str,
+    engine_id: &str,
+    mitre: &str,
+    extra_paths: &[&str],
+) -> Vec<Value> {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let chat_payload = json!({
+        "model": "probe",
+        "messages": [{"role":"user","content": SAFE_INJECTION_PROBE}],
+        "max_tokens": 8
+    });
+
+    for path in LLM_PATHS.iter().chain(extra_paths.iter()) {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if *path == "/v1/models" || path.ends_with("/models") {
+            if let Some(p) = http_get(&client, &url).await {
+                if models_listing_exposed(&p) {
+                    findings.push(llm_hardening_finding(
+                        engine_id,
+                        "Open model listing without API key",
+                        "high",
+                        mitre,
+                        &format!(
+                            "{} returned HTTP {} with model metadata and no Authorization header — enables model enumeration and abuse.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    ));
+                }
+            }
+            continue;
+        }
+
+        if let Some(p) = http_post_json(&client, &url, &chat_payload).await {
+            if p.status == 401 || p.status == 403 {
+                continue;
+            }
+            if p.status >= 200 && p.status < 500 && p.status != 404 && p.status != 405 {
+                if unauthenticated_completion(&p) {
+                    findings.push(llm_hardening_finding(
+                        engine_id,
+                        "LLM endpoint accepts unauthenticated completion",
+                        "high",
+                        mitre,
+                        &format!(
+                            "{} accepted POST without Authorization (HTTP {}). Safe canary prompt returned model output — verify auth and network ACLs.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    ));
+                } else if p.status == 200
+                    && p.body.to_ascii_lowercase().contains("probe_ok")
+                {
+                    findings.push(llm_hardening_finding(
+                        engine_id,
+                        "Prompt-injection canary reflected in response",
+                        "medium",
+                        mitre,
+                        &format!(
+                            "{} echoed the safe injection canary in its HTTP {} body — review prompt isolation and output filtering.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    ));
+                } else if (p.status == 200 || p.status == 422 || p.status == 400)
+                    && rate_limit_headers_absent(&p.headers)
+                {
+                    findings.push(llm_hardening_finding(
+                        engine_id,
+                        "LLM endpoint lacks rate-limit headers",
+                        "low",
+                        mitre,
+                        &format!(
+                            "{} responded HTTP {} without x-ratelimit-* / Retry-After headers while accepting inference traffic — verify throttling and quota enforcement.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+
+        if let Some(no_auth) = http_post_json_with_headers(&client, &url, &chat_payload, &[]).await
+        {
+            if let Some(with_key) = http_post_json_with_headers(
+                &client,
+                &url,
+                &chat_payload,
+                &[("Authorization", "Bearer probe-invalid-key")],
+            )
+            .await
+            {
+                if no_auth.status >= 200
+                    && no_auth.status < 300
+                    && (with_key.status == 401 || with_key.status == 403)
+                {
+                    findings.push(llm_hardening_finding(
+                        engine_id,
+                        "Missing Authorization header bypasses API key check",
+                        "high",
+                        mitre,
+                        &format!(
+                            "{} accepts requests with no Authorization (HTTP {}) but rejects an invalid key (HTTP {}) — enforce auth on every inference route.",
+                            no_auth.final_url, no_auth.status, with_key.status
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+    }
+    findings
+}
 
 async fn probe_llm_surface(target: &str) -> Vec<(String, u16)> {
     let client = http_client().await;
@@ -165,23 +344,23 @@ pub async fn run_ai_supply_chain_attack_result(target: &str) -> EngineResult {
 }
 cli_wrapper!(run_ai_supply_chain_attack, run_ai_supply_chain_attack_result);
 
-// Generic LLM-surface result helper (used for engines whose detection is "endpoint exists")
+// Generic LLM-surface result helper (hardening checks beyond reachability)
 async fn llm_surface_engine(
     target: &str,
     engine_id: &str,
-    title: &str,
-    severity: &str,
+    _title: &str,
+    _severity: &str,
     mitre: &str,
 ) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let eps = probe_llm_surface(target).await;
-    let findings = ai_finding(engine_id, title, severity, mitre, target, &eps);
+    let findings = probe_llm_hardening(target, engine_id, mitre, &[]).await;
     if findings.is_empty() {
         empty_ok(engine_id, target)
     } else {
-        EngineResult::ok(findings, format!("{}: live endpoint surface", engine_id))
+        let n = findings.len();
+        EngineResult::ok(findings, format!("{}: {} hardening gap(s)", engine_id, n))
     }
 }
 
@@ -206,7 +385,19 @@ pub async fn run_data_poisoning_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_data_poisoning_engine, run_data_poisoning_engine_result);
 
 pub async fn run_deepfake_synthesis_result(t: &str) -> EngineResult {
-    llm_surface_engine(t, "deepfake_synthesis", "Generative endpoint reachable", "low", "T1565.002").await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let findings = probe_llm_hardening(t, "deepfake_synthesis", "T1565.002", GENERATIVE_PATHS).await;
+    if findings.is_empty() {
+        empty_ok("deepfake_synthesis", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(
+            findings,
+            format!("deepfake_synthesis: {} generative-surface gap(s)", n),
+        )
+    }
 }
 cli_wrapper!(run_deepfake_synthesis, run_deepfake_synthesis_result);
 
@@ -296,3 +487,39 @@ pub async fn run_model_stealing_engine_result(t: &str) -> EngineResult {
     llm_surface_engine(t, "model_stealing_engine", "Inference endpoint reachable", "low", "T1588.005").await
 }
 cli_wrapper!(run_model_stealing_engine, run_model_stealing_engine_result);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn models_listing_requires_model_metadata() {
+        let exposed = crate::engine_probes::HttpProbe {
+            status: 200,
+            headers: vec![],
+            body: r#"{"object":"list","data":[{"id":"gpt-4","object":"model"}]}"#.into(),
+            final_url: "https://example.com/v1/models".into(),
+        };
+        assert!(models_listing_exposed(&exposed));
+        let denied = crate::engine_probes::HttpProbe {
+            status: 401,
+            headers: vec![],
+            body: "unauthorized".into(),
+            final_url: "https://example.com/v1/models".into(),
+        };
+        assert!(!models_listing_exposed(&denied));
+    }
+
+    #[test]
+    fn llm_hardening_finding_has_probe_depth() {
+        let f = llm_hardening_finding(
+            "llm_agent_hijack",
+            "test",
+            "high",
+            "T1059.008",
+            "desc",
+            "https://example.com",
+        );
+        assert_eq!(f["probe_depth"], "llm_surface_hardening");
+    }
+}

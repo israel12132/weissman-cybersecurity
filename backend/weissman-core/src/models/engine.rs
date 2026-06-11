@@ -259,6 +259,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "vlan_hopping_attack",
     "dhcp_attack_engine",
     "dns_cache_poisoning",
+    "dns_rebinding",
+    "can_bus_surface",
     "ntp_amplification",
     "snmp_exploitation",
     "rdp_attack_engine",
@@ -534,6 +536,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "cloud_function_escape",
     "modbus_exploit",
     "plc_logic_bomb",
+    "lora_attack",
     "lorawan_attack",
     "hmi_exploit",
     "can_fd_attack",
@@ -771,6 +774,13 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "mqtt_attack",
     "coap_attack",
     "opcua_attack",
+    "modbus_exploit",
+    "plc_logic_bomb",
+    "lorawan_attack",
+    "voltage_glitch_attack",
+    "tpm_firmware_attack",
+    "cold_boot_attack",
+    "hospital_hl7_attack",
     "plc_logic_attack",
     "hmi_attack",
     "satellite_comm_attack",
@@ -812,6 +822,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "vlan_hopping_attack",
     "dhcp_attack_engine",
     "dns_cache_poisoning",
+    "dns_rebinding",
+    "can_bus_surface",
     "snmp_exploitation",
     "rdp_attack_engine",
     "ldap_injection_engine",
@@ -1051,11 +1063,10 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "firmware_exploit" | "firmware_emulation" | "medical_device_exploit"
         | "implantable_device_hack" | "jtag_swd_exploitation" => "iot_firmware",
         "satellite_attack" => "satellite_comm_attack",
-        "automotive_can_bus" | "can_fd_attack" => "rfid_nfc_attack",
+        "automotive_can_bus" | "can_fd_attack" => "can_bus_surface",
         "hardware_implant" => "iot_firmware",
-        "modbus_exploit" | "plc_logic_bomb" | "hmi_exploit" | "ics_historian_attack"
-        | "hospital_hl7_attack" => "scada_ics",
-        "lorawan_attack" => "ble_rf",
+        "hmi_exploit" | "ics_historian_attack" => "scada_ics",
+        "lora_attack" => "lorawan_attack",
         // Legacy stealth / evasion aliases.
         "data_exfiltration" => "http_covert_exfil",
         "physical_security" | "evil_maid_engine" | "badusb_hid_attack" => {
@@ -1092,13 +1103,10 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "ntlm_relay" => "smb_netbios",
         "golden_ticket" => "kerberos_attack_suite",
         "key_derivation_flaw" => "crypto_engine",
-        "tpm_firmware_attack" | "cold_boot_attack" | "voltage_glitch_attack" => {
-            "crypto_engine"
-        }
         // Legacy network aliases.
         "lateral_movement" => "lateral_movement_engine",
         "wireless_attack" | "wifi_attack" => "wifi_attack_engine",
-        "dns_rebinding" => "dns_cache_poisoning",
+        // dns_rebinding uses dedicated Host/TTL probe — not dns_cache_poisoning.
         "spear_phishing" => "spear_phishing_engine",
         "vlan_bypass" => "vlan_hopping_attack",
         "insider_threat" => "insider_threat_engine",

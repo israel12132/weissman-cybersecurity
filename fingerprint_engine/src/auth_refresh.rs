@@ -1,6 +1,6 @@
 //! Opaque refresh tokens stored as SHA-256 at rest; rotation invalidates the previous row.
 
-use rand::RngCore;
+use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use thiserror::Error;
@@ -47,11 +47,89 @@ pub async fn build_session_cookie_headers(
     let (role, is_superadmin) = user_rbac_snapshot(pool, user_id)
         .await?
         .ok_or(SessionCookieError::InactiveUser)?;
-    let access =
+    let minted =
         crate::auth_jwt::create_access_token(user_id, tenant_id, role.as_str(), is_superadmin)?;
-    let access_line = crate::auth_jwt::session_cookie_value(&access);
-    let refresh = issue_refresh_token(pool, user_id, tenant_id).await?;
-    Ok((access, access_line, refresh_cookie_value(&refresh)))
+    let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
+    let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
+    Ok((minted.token, access_line, refresh_cookie_value(&refresh)))
+}
+
+/// Re-read live RBAC from DB; returns `None` when user inactive or missing.
+pub async fn revalidate_auth_context(
+    pool: &PgPool,
+    auth: &crate::auth_jwt::AuthContext,
+) -> Result<Option<crate::auth_jwt::AuthContext>, sqlx::Error> {
+    let Some((role, is_superadmin)) = user_rbac_snapshot(pool, auth.user_id).await? else {
+        return Ok(None);
+    };
+    Ok(Some(crate::auth_jwt::AuthContext {
+        user_id: auth.user_id,
+        tenant_id: auth.tenant_id,
+        role,
+        is_superadmin,
+        agent_id: auth.agent_id.clone(),
+        jti: auth.jti.clone(),
+    }))
+}
+
+/// True when the access JWT `jti` was revoked (logout).
+pub async fn is_access_jti_revoked(pool: &PgPool, jti: &str) -> Result<bool, sqlx::Error> {
+    let revoked: Option<i32> = sqlx::query_scalar(
+        "SELECT 1 FROM weissman_revoked_tokens WHERE jti = $1 AND expires_at > now() LIMIT 1",
+    )
+    .bind(jti)
+    .fetch_optional(pool)
+    .await?;
+    Ok(revoked.is_some())
+}
+
+/// Record revoked access JWT until its natural expiry.
+pub async fn revoke_access_jti(
+    pool: &PgPool,
+    jti: &str,
+    expires_at: chrono::DateTime<chrono::Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO weissman_revoked_tokens (jti, expires_at)
+           VALUES ($1, $2)
+           ON CONFLICT (jti) DO NOTHING"#,
+    )
+    .bind(jti)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Link the current access JWT jti to the active refresh row.
+pub async fn store_refresh_access_jti(
+    pool: &PgPool,
+    refresh_raw: &str,
+    access_jti: &str,
+) -> Result<(), sqlx::Error> {
+    let th = hash_token(refresh_raw);
+    sqlx::query(
+        r#"UPDATE user_refresh_tokens SET access_jti = $2
+           WHERE token_hash = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(&th)
+    .bind(access_jti)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Revoke opaque refresh token from cookie value.
+pub async fn revoke_refresh_token_by_raw(pool: &PgPool, raw: &str) -> Result<(), sqlx::Error> {
+    let th = hash_token(raw);
+    sqlx::query(
+        r#"UPDATE user_refresh_tokens SET revoked_at = now()
+           WHERE token_hash = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(&th)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub const REFRESH_COOKIE_NAME: &str = "weissman_refresh";
@@ -80,7 +158,7 @@ fn hash_token(raw: &str) -> Vec<u8> {
 
 fn generate_opaque_token() -> String {
     let mut b = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut b);
+    OsRng.fill_bytes(&mut b);
     base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, &b)
 }
 
@@ -89,18 +167,20 @@ pub async fn issue_refresh_token(
     pool: &PgPool,
     user_id: i64,
     tenant_id: i64,
+    access_jti: Option<&str>,
 ) -> Result<String, sqlx::Error> {
     let raw = generate_opaque_token();
     let th = hash_token(&raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
     sqlx::query(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at)
-           VALUES ($1, $2, $3, $4)"#,
+        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
+           VALUES ($1, $2, $3, $4, $5)"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&th)
     .bind(exp)
+    .bind(access_jti)
     .execute(pool)
     .await?;
     Ok(raw)
@@ -133,8 +213,8 @@ pub async fn rotate_refresh_token(
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
 
     let new_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at)
-           VALUES ($1, $2, $3, $4) RETURNING id"#,
+        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
+           VALUES ($1, $2, $3, $4, NULL) RETURNING id"#,
     )
     .bind(user_id)
     .bind(tenant_id)

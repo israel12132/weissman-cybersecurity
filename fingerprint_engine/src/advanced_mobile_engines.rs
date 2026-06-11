@@ -1,8 +1,32 @@
-//! Advanced Mobile-engines — public app-store / mobile-API probes.
+//! Advanced Mobile engines — public app-store, deep-link, and mobile-backend API probes.
 
-use crate::engine_probes::{empty_ok, finding, http_client, http_get, normalize_url};
+use crate::engine_probes::{
+    empty_ok, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
+
+const MOBILE_PROBE_DEPTH: &str = "mobile_api_surface";
+
+fn mobile_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        MOBILE_PROBE_DEPTH,
+    )
+}
 
 macro_rules! cli_wrapper {
     ($name:ident, $result_fn:ident) => {
@@ -12,6 +36,112 @@ macro_rules! cli_wrapper {
     };
 }
 
+const MOBILE_API_PATHS: &[(&str, &str)] = &[
+    ("/api/mobile", "Mobile REST API"),
+    ("/api/v1/mobile", "Mobile REST API v1"),
+    ("/api/v1/register", "Mobile registration endpoint"),
+    ("/api/v1/login", "Mobile login endpoint"),
+    ("/api/push/register", "Push notification registration"),
+    ("/mobile/api", "Mobile API gateway"),
+    ("/graphql", "GraphQL mobile backend"),
+    ("/api/v1/devices", "Device enrollment API"),
+    ("/api/v1/user/profile", "Mobile user profile API"),
+];
+
+const MOBILE_ASSET_PATHS: &[(&str, &str)] = &[
+    ("/.well-known/apple-app-site-association", "Apple Universal Links (AASA)"),
+    ("/.well-known/assetlinks.json", "Android App Links"),
+    ("/manifest.json", "Web/PWA manifest"),
+    ("/index.bundle", "React Native bundle"),
+    ("/cordova.js", "Cordova runtime"),
+    ("/flutter_service_worker.js", "Flutter service worker"),
+    ("/api/config/mobile", "Mobile app config"),
+    ("/api/v1/app/config", "Mobile app config v1"),
+];
+
+async fn probe_mobile_api_surface(
+    t: &str,
+    engine_id: &str,
+    mitre: &str,
+    extra_paths: &[(&str, &str)],
+) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let mut findings: Vec<Value> = Vec::new();
+
+    for (path, label) in MOBILE_API_PATHS.iter().chain(extra_paths.iter()) {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            let api_signal = p.status < 500
+                && p.status != 404
+                && (p.body.contains("\"token\"")
+                    || p.body.contains("\"access_token\"")
+                    || p.body.contains("\"user\"")
+                    || p.body.contains("\"data\"")
+                    || p.body.contains("graphql")
+                    || p.body.contains("Unauthorized")
+                    || p.body.contains("application/json")
+                    || header_value(&p.headers, "content-type")
+                        .is_some_and(|ct| ct.contains("json")));
+            if api_signal {
+                findings.push(mobile_finding(
+                    engine_id,
+                    &format!("{} reachable", label),
+                    if p.status == 401 || p.status == 403 {
+                        "medium"
+                    } else {
+                        "high"
+                    },
+                    mitre,
+                    &format!(
+                        "{} responded HTTP {} — mobile backend surface exposed; review auth and rate limits.",
+                        p.final_url, p.status
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+
+    for (path, label) in MOBILE_ASSET_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status == 200 && p.body.len() > 32 {
+                let relevant = path.contains("apple-app-site-association")
+                    || path.contains("assetlinks")
+                    || path.contains("bundle")
+                    || path.contains("cordova")
+                    || path.contains("flutter")
+                    || p.body.contains("\"applinks\"")
+                    || p.body.contains("\"apps\"")
+                    || p.body.contains("ReactNative");
+                if relevant {
+                    findings.push(mobile_finding(
+                        engine_id,
+                        &format!("{} published", label),
+                        "info",
+                        mitre,
+                        &format!(
+                            "{} is publicly readable — review for hardcoded secrets and over-broad deep links.",
+                            p.final_url
+                        ),
+                        t,
+                    ));
+                }
+            }
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok(engine_id, t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+    }
+}
+
 async fn store_probe(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
     if t.trim().is_empty() {
         return EngineResult::error("target required");
@@ -19,32 +149,47 @@ async fn store_probe(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let q = urlencoding::encode(t.trim());
-    let urls = [
-        format!("https://play.google.com/store/apps/details?id={}", q),
-        format!("https://itunes.apple.com/lookup?bundleId={}", q),
-    ];
-    for url in urls.iter() {
-        if let Some(p) = http_get(&client, url).await {
-            if p.status == 200 && p.body.len() > 500 {
-                findings.push(finding(
-                    engine_id,
-                    "Public app-store record",
-                    "info",
-                    mitre,
-                    &format!("Store page reachable at {}.", url),
-                    t,
-                ));
-            }
+    let play_url = format!("https://play.google.com/store/apps/details?id={}", q);
+    if let Some(p) = http_get(&client, &play_url).await {
+        if p.status == 200 && p.body.contains("itemprop=\"name\"") {
+            findings.push(mobile_finding(
+                engine_id,
+                "Google Play listing found",
+                "info",
+                mitre,
+                &format!("Play Store page reachable for bundle id {}.", q),
+                t,
+            ));
         }
     }
-    if findings.is_empty() { empty_ok(engine_id, t) }
-    else { EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len())) }
+    let itunes_url = format!("https://itunes.apple.com/lookup?bundleId={}", q);
+    if let Some(p) = http_get(&client, &itunes_url).await {
+        if p.status == 200 && p.body.contains("\"resultCount\"") && !p.body.contains("\"resultCount\":0") {
+            findings.push(mobile_finding(
+                engine_id,
+                "App Store listing found",
+                "info",
+                mitre,
+                &format!("iTunes lookup returned a published app for bundle id {}.", q),
+                t,
+            ));
+        }
+    }
+    if findings.is_empty() {
+        empty_ok(engine_id, t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+    }
 }
 
-pub async fn run_android_malware_engine_result(t: &str) -> EngineResult { store_probe(t, "android_malware_engine", "T1444").await }
+pub async fn run_android_malware_engine_result(t: &str) -> EngineResult {
+    store_probe(t, "android_malware_engine", "T1444").await
+}
 cli_wrapper!(run_android_malware_engine, run_android_malware_engine_result);
 
-pub async fn run_ios_exploit_engine_result(t: &str) -> EngineResult { store_probe(t, "ios_exploit_engine", "T1444").await }
+pub async fn run_ios_exploit_engine_result(t: &str) -> EngineResult {
+    store_probe(t, "ios_exploit_engine", "T1444").await
+}
 cli_wrapper!(run_ios_exploit_engine, run_ios_exploit_engine_result);
 
 pub async fn run_mobile_mitm_result(t: &str) -> EngineResult {
@@ -60,29 +205,74 @@ pub async fn run_ssl_pinning_bypass_result(t: &str) -> EngineResult {
     let url = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if crate::engine_probes::header_value(&p.headers, "public-key-pins").is_none() {
-            findings.push(finding(
+        let ct = header_value(&p.headers, "content-type").unwrap_or_default();
+        if url.starts_with("http://") {
+            findings.push(mobile_finding(
                 "ssl_pinning_bypass",
-                "No public-key-pins header",
-                "low",
+                "Mobile API served over cleartext HTTP",
+                "high",
                 "T1556",
-                &format!("{} does not advertise HPKP — mobile MITM possible with rooted device.", p.final_url),
+                &format!(
+                    "{} is reachable without TLS — certificate pinning cannot protect this channel.",
+                    p.final_url
+                ),
                 t,
             ));
+        } else if ct.contains("json") && !p.body.contains("Strict-Transport-Security") {
+            if header_value(&p.headers, "strict-transport-security").is_none() {
+                findings.push(mobile_finding(
+                    "ssl_pinning_bypass",
+                    "JSON mobile API without HSTS",
+                    "medium",
+                    "T1556",
+                    &format!(
+                        "{} serves JSON without Strict-Transport-Security — downgrade/MITM risk on first connect.",
+                        p.final_url
+                    ),
+                    t,
+                ));
+            }
         }
     }
-    if findings.is_empty() { empty_ok("ssl_pinning_bypass", t) }
-    else { EngineResult::ok(findings.clone(), format!("ssl_pinning_bypass: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("ssl_pinning_bypass", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("ssl_pinning_bypass: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_ssl_pinning_bypass, run_ssl_pinning_bypass_result);
 
-pub async fn run_android_intent_attack_result(t: &str) -> EngineResult { store_probe(t, "android_intent_attack", "T1444").await }
+pub async fn run_android_intent_attack_result(t: &str) -> EngineResult {
+    probe_mobile_api_surface(
+        t,
+        "android_intent_attack",
+        "T1444",
+        &[("/.well-known/assetlinks.json", "Android App Links manifest")],
+    )
+    .await
+}
 cli_wrapper!(run_android_intent_attack, run_android_intent_attack_result);
 
-pub async fn run_ios_url_scheme_attack_result(t: &str) -> EngineResult { store_probe(t, "ios_url_scheme_attack", "T1444").await }
+pub async fn run_ios_url_scheme_attack_result(t: &str) -> EngineResult {
+    probe_mobile_api_surface(
+        t,
+        "ios_url_scheme_attack",
+        "T1444",
+        &[(
+            "/.well-known/apple-app-site-association",
+            "Apple Universal Links manifest",
+        )],
+    )
+    .await
+}
 cli_wrapper!(run_ios_url_scheme_attack, run_ios_url_scheme_attack_result);
 
-pub async fn run_mobile_overlay_attack_result(t: &str) -> EngineResult { store_probe(t, "mobile_overlay_attack", "T1404").await }
+pub async fn run_mobile_overlay_attack_result(t: &str) -> EngineResult {
+    probe_mobile_api_surface(t, "mobile_overlay_attack", "T1404", &[]).await
+}
 cli_wrapper!(run_mobile_overlay_attack, run_mobile_overlay_attack_result);
 
 pub async fn run_sim_swap_engine_result(t: &str) -> EngineResult {
@@ -95,41 +285,86 @@ pub async fn run_sim_swap_engine_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_sim_swap_engine, run_sim_swap_engine_result);
 
-pub async fn run_mobile_banking_trojan_result(t: &str) -> EngineResult { store_probe(t, "mobile_banking_trojan", "T1444").await }
+pub async fn run_mobile_banking_trojan_result(t: &str) -> EngineResult {
+    probe_mobile_api_surface(
+        t,
+        "mobile_banking_trojan",
+        "T1444",
+        &[("/api/v1/banking", "Mobile banking API"), ("/api/v1/payments", "Mobile payments API")],
+    )
+    .await
+}
 cli_wrapper!(run_mobile_banking_trojan, run_mobile_banking_trojan_result);
 
-pub async fn run_app_store_attack_result(t: &str) -> EngineResult { store_probe(t, "app_store_attack", "T1195").await }
+pub async fn run_app_store_attack_result(t: &str) -> EngineResult {
+    store_probe(t, "app_store_attack", "T1195").await
+}
 cli_wrapper!(run_app_store_attack, run_app_store_attack_result);
 
 pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
-    // Remote-observable: known MDM admin / device-enrollment endpoints exposed publicly.
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
     let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    let mdm_paths: &[(&str, &str)] = &[
-        ("/manage/ServerHealth.action",     "VMware Workspace ONE"),
-        ("/enrollmentserver/Discovery.svc", "Microsoft Intune / Windows MDM"),
-        ("/v1/server/health",                "Jamf Pro"),
-        ("/api/users/auth",                  "Jamf Pro"),
-        ("/MDM/Configuration",               "MobileIron"),
-        ("/enroll/ios",                       "Mobile-device enrollment endpoint"),
-        ("/.well-known/airwatch-mdm",        "AirWatch / Workspace ONE"),
+    let mdm_paths: &[(&str, &str, &[&str])] = &[
+        (
+            "/manage/ServerHealth.action",
+            "VMware Workspace ONE",
+            &["Workspace ONE", "ServerHealth"],
+        ),
+        (
+            "/enrollmentserver/Discovery.svc",
+            "Microsoft Intune / Windows MDM",
+            &["EnrollmentServer", "DiscoveryService"],
+        ),
+        (
+            "/v1/server/health",
+            "Jamf Pro",
+            &["Jamf", "health"],
+        ),
+        (
+            "/api/users/auth",
+            "Jamf Pro auth",
+            &["Jamf", "auth"],
+        ),
+        (
+            "/MDM/Configuration",
+            "MobileIron",
+            &["MobileIron", "MDM"],
+        ),
+        (
+            "/.well-known/airwatch-mdm",
+            "AirWatch / Workspace ONE",
+            &["airwatch", "Workspace"],
+        ),
     ];
-    for (path, vendor) in mdm_paths {
+    for (path, vendor, markers) in mdm_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status < 500 && (p.body.contains(vendor.split(' ').next().unwrap_or("")) || p.status == 200 || p.status == 401) {
-                findings.push(finding(
+            let marker_hit = markers.iter().any(|m| p.body.contains(m));
+            if p.status == 200 && marker_hit {
+                findings.push(mobile_finding(
                     "mdm_bypass_engine",
                     &format!("Public {} endpoint reachable", vendor),
                     "medium",
                     "T1556",
                     &format!(
-                        "{} appears reachable at {} (HTTP {}). MDM admin / enrollment surfaces should be behind VPN + IP allow-list.",
-                        vendor, p.final_url, p.status
+                        "{} returned HTTP 200 with {} markers — MDM admin/enrollment should not be internet-facing.",
+                        p.final_url, vendor
+                    ),
+                    t,
+                ));
+            } else if p.status == 401 && marker_hit {
+                findings.push(mobile_finding(
+                    "mdm_bypass_engine",
+                    &format!("{} endpoint exposed (auth required)", vendor),
+                    "low",
+                    "T1556",
+                    &format!(
+                        "{} is reachable (HTTP 401) — confirms {} surface; restrict to VPN.",
+                        p.final_url, vendor
                     ),
                     t,
                 ));
@@ -139,7 +374,10 @@ pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("mdm_bypass_engine", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("mdm_bypass_engine: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("mdm_bypass_engine: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_mdm_bypass_engine, run_mdm_bypass_engine_result);
@@ -164,7 +402,9 @@ pub async fn run_nfc_relay_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_nfc_relay_attack, run_nfc_relay_attack_result);
 
-pub async fn run_mobile_spyware_engine_result(t: &str) -> EngineResult { store_probe(t, "mobile_spyware_engine", "T1444").await }
+pub async fn run_mobile_spyware_engine_result(t: &str) -> EngineResult {
+    store_probe(t, "mobile_spyware_engine", "T1444").await
+}
 cli_wrapper!(run_mobile_spyware_engine, run_mobile_spyware_engine_result);
 
 pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
@@ -172,21 +412,53 @@ pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(t);
+    let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        if p.body.contains("react-native") || p.body.contains("__REACT_DEVTOOLS_GLOBAL_HOOK__") {
-            findings.push(finding(
-                "react_native_attack",
-                "React-native fingerprint",
-                "info",
-                "T1190",
-                &format!("{} ships React/RN code — review bundle for hardcoded secrets.", p.final_url),
-                t,
-            ));
+    for path in ["/index.bundle", "/main.jsbundle", "/assets/index.bundle"] {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status == 200
+                && (p.body.contains("__d(") || p.body.contains("react-native") || p.body.len() > 4096)
+            {
+                findings.push(mobile_finding(
+                    "react_native_attack",
+                    "React Native JS bundle exposed",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "{} ships a React Native bundle — decompile for hardcoded API keys and deep-link handlers.",
+                        p.final_url
+                    ),
+                    t,
+                ));
+                break;
+            }
         }
     }
-    if findings.is_empty() { empty_ok("react_native_attack", t) }
-    else { EngineResult::ok(findings.clone(), format!("react_native_attack: {}", findings.len())) }
+    if findings.is_empty() {
+        if let Some(p) = http_get(&client, &base).await {
+            if p.body.contains("react-native") || p.body.contains("__REACT_DEVTOOLS_GLOBAL_HOOK__") {
+                findings.push(mobile_finding(
+                    "react_native_attack",
+                    "React Native fingerprint in HTML",
+                    "info",
+                    "T1190",
+                    &format!(
+                        "{} references React Native — review web shell and API endpoints.",
+                        p.final_url
+                    ),
+                    t,
+                ));
+            }
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("react_native_attack", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("react_native_attack: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_react_native_attack, run_react_native_attack_result);

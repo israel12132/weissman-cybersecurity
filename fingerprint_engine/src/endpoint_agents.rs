@@ -558,13 +558,19 @@ pub struct ConsumedToken {
 pub async fn consume_enrollment_token(
     pool: &PgPool,
     plaintext: &str,
+    rate_key: Option<&str>,
 ) -> Result<ConsumedToken, String> {
-    let hash = hash_token(plaintext);
+    let trimmed = plaintext.trim();
+    if trimmed.is_empty() || trimmed.len() > 128 {
+        return Err("invalid enrollment token".to_string());
+    }
+    let hash = hash_token(trimmed);
     let row = sqlx::query_as::<_, (i64, i64)>(
         r#"SELECT out_tenant_id, out_client_id
-             FROM consume_endpoint_agent_enrollment_token($1)"#,
+             FROM consume_endpoint_agent_enrollment_token($1, $2)"#,
     )
     .bind(&hash)
+    .bind(rate_key)
     .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?

@@ -295,10 +295,14 @@ async fn auth_guard(
         return next.run(request).await;
     }
     if path == "/api/openapi.json" && method == Method::GET {
-        return next.run(request).await;
+        if !weissman_core::tls_policy::is_production_environment() {
+            return next.run(request).await;
+        }
     }
     if (path == "/api/docs" || path == "/api/docs/") && method == Method::GET {
-        return next.run(request).await;
+        if !weissman_core::tls_policy::is_production_environment() {
+            return next.run(request).await;
+        }
     }
     if path == "/api/auth/signup" && method == Method::POST {
         return next.run(request).await;
@@ -317,38 +321,52 @@ async fn auth_guard(
         if let Some((t, source)) = extracted {
             if let Some(ctx) = verify_token_for_request(&t, path, source) {
                 if auth_jwt::is_user_access_context(&ctx) {
-                    if let Some(ref jti) = ctx.jti {
-                        match crate::auth_refresh::is_access_jti_revoked(
-                            state.auth_pool.as_ref(),
-                            jti,
+                    let Some(ref jti) = ctx.jti else {
+                        tracing::debug!(
+                            target: "auth_guard",
+                            path = %path,
+                            "Access token missing jti — re-login required"
+                        );
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({
+                                "detail": "Token missing jti; re-login required",
+                                "ok": false,
+                                "code": "token_missing_jti",
+                            })),
                         )
-                        .await
-                        {
-                            Ok(true) => {
-                                tracing::debug!(
-                                    target: "auth_guard",
-                                    path = %path,
-                                    "Access token jti revoked"
-                                );
-                                return (
-                                    StatusCode::UNAUTHORIZED,
-                                    Json(json!({"detail": "Unauthorized", "ok": false})),
-                                )
-                                    .into_response();
-                            }
-                            Ok(false) => {}
-                            Err(e) => {
-                                tracing::error!(
-                                    target: "auth_guard",
-                                    error = %e,
-                                    "revocation lookup failed"
-                                );
-                                return (
-                                    StatusCode::SERVICE_UNAVAILABLE,
-                                    Json(json!({"detail": "Auth service unavailable", "ok": false})),
-                                )
-                                    .into_response();
-                            }
+                            .into_response();
+                    };
+                    match crate::auth_refresh::is_access_jti_revoked(
+                        state.auth_pool.as_ref(),
+                        jti,
+                    )
+                    .await
+                    {
+                        Ok(true) => {
+                            tracing::debug!(
+                                target: "auth_guard",
+                                path = %path,
+                                "Access token jti revoked"
+                            );
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(json!({"detail": "Unauthorized", "ok": false})),
+                            )
+                                .into_response();
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            tracing::error!(
+                                target: "auth_guard",
+                                error = %e,
+                                "revocation lookup failed"
+                            );
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(json!({"detail": "Auth service unavailable", "ok": false})),
+                            )
+                                .into_response();
                         }
                     }
                 }
@@ -1921,6 +1939,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             state.clone(),
             auth_guard,
         ))
+        .layer(middleware::from_fn(crate::http::api_rate_limit_middleware))
         .layer(middleware::from_fn(
             crate::observability::http_metrics_middleware,
         ))

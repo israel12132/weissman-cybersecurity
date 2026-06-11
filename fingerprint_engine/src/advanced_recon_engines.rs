@@ -1,8 +1,8 @@
 //! Advanced Recon Engines — real OSINT/DNS/HTTP probes. No simulated content.
 
 use crate::engine_probes::{
-    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
-    normalize_url,
+    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client,
+    http_get, http_get_with_headers, http_post_json_with_headers, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -47,27 +47,134 @@ pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
 }
 cli_wrapper!(run_satellite_recon, run_satellite_recon_result);
 
-// ── darkweb_intel ─────────────────────────────────────────────────────────────
+// ── darkweb_intel / deepweb_intel ─────────────────────────────────────────────
+fn intelx_api_key() -> String {
+    std::env::var("INTELX_API_KEY")
+        .or_else(|_| std::env::var("WEISSMAN_INTELX_KEY"))
+        .unwrap_or_default()
+}
+
+fn intelx_api_base() -> String {
+    std::env::var("INTELX_API_URL")
+        .or_else(|_| std::env::var("WEISSMAN_INTELX_URL"))
+        .unwrap_or_else(|_| "https://2.intelx.io".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
 pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
     let host = extract_host(target);
+    let key = intelx_api_key();
+
+    if key.is_empty() {
+        let finding = finding(
+            "darkweb_intel",
+            "IntelX deep-web lookup requires API key",
+            "info",
+            "T1597",
+            &format!(
+                "Intelligence X indexes leaks, paste sites, and dark-web mentions. Set INTELX_API_KEY (or WEISSMAN_INTELX_KEY) to query records for '{}'. Without a key, only manual lookup at https://intelx.io/?s={} is available.",
+                host, urlencoding::encode(&host)
+            ),
+            target,
+        );
+        return EngineResult::ok(
+            vec![finding],
+            format!("darkweb_intel: API key required for live lookup on {}", host),
+        );
+    }
+
+    let base = intelx_api_base();
+    let search_url = format!("{}/intelligent/search", base);
+    let payload = serde_json::json!({
+        "term": host,
+        "buckets": [],
+        "lookuplevel": 0,
+        "maxresults": 20,
+        "timeout": 0,
+        "datefrom": "",
+        "dateto": "",
+        "sort": 4,
+        "media": 0,
+        "terminate": []
+    });
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!("https://api.intelx.io/intelligent/search?term={}", urlencoding::encode(&host));
-    if let Some(p) = http_get(&client, &url).await {
+
+    if let Some(p) = http_post_json_with_headers(
+        &client,
+        &search_url,
+        &payload,
+        &[("x-key", key.as_str())],
+    )
+    .await
+    {
         if p.status == 401 || p.status == 403 {
             findings.push(finding(
                 "darkweb_intel",
-                "IntelX search reachable (auth required)",
+                "IntelX API rejected credentials",
                 "info",
                 "T1597",
-                &format!("IntelX search endpoint reachable for {} — supply WEISSMAN_INTELX_KEY for full lookup.", host),
+                &format!(
+                    "IntelX returned HTTP {} — verify INTELX_API_KEY and INTELX_API_URL (default 2.intelx.io for paid keys).",
+                    p.status
+                ),
                 target,
             ));
+        } else if p.status == 200 {
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                if let Some(search_id) = v.get("id").and_then(|id| id.as_str()) {
+                    let result_url = format!("{}/intelligent/search/result?id={}", base, search_id);
+                    if let Some(rp) = http_get_with_headers(
+                        &client,
+                        &result_url,
+                        &[("x-key", key.as_str())],
+                    )
+                    .await
+                    {
+                        let record_count = rp
+                            .body
+                            .matches("\"record\"")
+                            .count()
+                            .max(rp.body.matches("\"name\"").count());
+                        let status = rp
+                            .body
+                            .contains("\"status\":0")
+                            || rp.body.contains("\"status\": 0");
+                        if status && record_count > 0 {
+                            findings.push(finding(
+                                "darkweb_intel",
+                                &format!("IntelX returned {} candidate record(s) for {}", record_count, host),
+                                "medium",
+                                "T1597",
+                                &format!(
+                                    "Intelligence X search id {} returned {} hits referencing '{}'. Review for leaked credentials and breach exposure.",
+                                    search_id, record_count, host
+                                ),
+                                target,
+                            ));
+                        } else if status {
+                            findings.push(finding(
+                                "darkweb_intel",
+                                "IntelX search completed — no indexed records",
+                                "info",
+                                "T1597",
+                                &format!(
+                                    "Intelligence X query for '{}' completed with zero indexed records in configured buckets.",
+                                    host
+                                ),
+                                target,
+                            ));
+                        }
+                    }
+                }
+            }
         }
     }
+
     if findings.is_empty() {
         empty_ok("darkweb_intel", target)
     } else {

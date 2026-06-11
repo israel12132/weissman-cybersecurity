@@ -1,97 +1,143 @@
-//! PQC Readiness Scanner — checks post-quantum cryptography support and TLS posture.
+//! PQC Readiness Scanner — live TLS cert/key analysis and PQC capability discovery.
 
+use crate::engine_probes::{
+    empty_ok, extract_host, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url, tls_cert_details,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
-use std::time::Duration;
+use serde_json::{json, Value};
 
-async fn build_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
+const PQC_PROBE_DEPTH: &str = "pqc_tls_posture";
 
-fn normalize_target(target: &str) -> String {
-    let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
+fn pqc_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+    let mut f = finding_with_probe_depth(
+        "pqc_scanner",
+        title,
+        severity,
+        "T1600",
+        description,
+        target,
+        PQC_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
     }
-}
-
-fn extract_domain(target: &str) -> String {
-    let t = target.trim();
-    let stripped = t
-        .strip_prefix("https://")
-        .or_else(|| t.strip_prefix("http://"))
-        .unwrap_or(t);
-    stripped.split('/').next().unwrap_or(stripped).to_string()
+    f
 }
 
 pub async fn run_pqc_scanner_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let base = normalize_target(target);
-    let domain = extract_domain(&base);
-    let client = build_client().await;
-    let mut findings: Vec<serde_json::Value> = Vec::new();
+    let base = normalize_url(target);
+    let domain = extract_host(target);
+    let client = http_client().await;
+    let mut findings: Vec<Value> = Vec::new();
 
-    // Probe root for TLS/security headers
-    if let Ok(resp) = client.get(&base).send().await {
-        let headers = resp.headers().clone();
-
-        // Check HSTS
-        let hsts = headers
-            .get("strict-transport-security")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        if hsts.is_empty() {
-            findings.push(json!({
-                "type": "pqc_scanner",
-                "title": format!("Missing HSTS header on {}", domain),
-                "severity": "medium",
-                "mitre_attack": "T1600",
-                "description": "Strict-Transport-Security header is absent. Without HSTS, connections may be \
-                    downgraded by quantum-capable adversaries intercepting the initial HTTP request.",
-                "value": base
-            }));
-        } else if !hsts.contains("preload") {
-            findings.push(json!({
-                "type": "pqc_scanner",
-                "title": format!("HSTS without preload on {}", domain),
-                "severity": "low",
-                "mitre_attack": "T1600",
-                "description": format!(
-                    "HSTS header present ({}) but lacks 'preload' directive. Preloading provides stronger \
-                    protection against downgrade attacks relevant to post-quantum threat scenarios.",
-                    hsts
+    if let Some(cert) = tls_cert_details(&domain).await {
+        if cert.expired {
+            findings.push(pqc_finding(
+                &format!("Expired TLS certificate for {}", domain),
+                "high",
+                &format!(
+                    "Live cert for {} is expired (issuer: {}). Expired certs block crypto-agility migrations including PQC hybrid rollouts.",
+                    domain, cert.issuer
                 ),
-                "value": base
-            }));
+                target,
+                json!({ "issuer": cert.issuer, "subject": cert.subject }),
+            ));
+        } else if cert.days_until_expiry < 30 {
+            findings.push(pqc_finding(
+                &format!("TLS certificate expires in {} days", cert.days_until_expiry),
+                "medium",
+                &format!(
+                    "Certificate for {} expires in {} days (sig: {}, {}-bit key). Short runway complicates staged PQC hybrid cutover.",
+                    domain, cert.days_until_expiry, cert.signature_algorithm, cert.public_key_bits
+                ),
+                target,
+                json!({ "days_until_expiry": cert.days_until_expiry }),
+            ));
         }
 
-        // Check for certificate transparency header
-        let ct = headers
-            .get("expect-ct")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        if ct.is_empty() {
-            findings.push(json!({
-                "type": "pqc_scanner",
-                "title": format!("No Certificate Transparency enforcement on {}", domain),
-                "severity": "info",
-                "mitre_attack": "T1600",
-                "description": "Expect-CT header is absent. Certificate Transparency is part of a robust \
-                    PKI posture needed before migrating to post-quantum certificates.",
-                "value": base
-            }));
+        if cert.self_signed {
+            findings.push(pqc_finding(
+                "Self-signed TLS certificate",
+                "high",
+                &format!(
+                    "Peer cert for {} is self-signed (subject={}). No public CA path — PQC migration must include a new trust anchor.",
+                    domain, cert.subject
+                ),
+                target,
+                json!({ "subject": cert.subject }),
+            ));
+        }
+
+        if cert.is_rsa && cert.public_key_bits < 2048 {
+            findings.push(pqc_finding(
+                &format!("Weak RSA key ({} bits)", cert.public_key_bits),
+                "high",
+                &format!(
+                    "Live cert uses {}-bit RSA with {} signature — below NIST minimum and quantum-vulnerable. Migrate to ≥2048-bit RSA or ECDSA, then plan ML-KEM hybrid.",
+                    cert.public_key_bits, cert.signature_algorithm
+                ),
+                target,
+                json!({ "public_key_bits": cert.public_key_bits, "signature_algorithm": cert.signature_algorithm }),
+            ));
+        } else if cert.is_rsa {
+            findings.push(pqc_finding(
+                &format!("RSA {}-bit certificate in use", cert.public_key_bits),
+                "medium",
+                &format!(
+                    "Live TLS cert for {} uses RSA {}-bit / {} — vulnerable to Shor's algorithm at scale. Plan ML-KEM (FIPS 203) hybrid key exchange and ML-DSA (FIPS 204) signatures.",
+                    domain, cert.public_key_bits, cert.signature_algorithm
+                ),
+                target,
+                json!({ "public_key_bits": cert.public_key_bits, "is_rsa": true }),
+            ));
+        }
+
+        if cert.is_ec && cert.public_key_bits <= 256 {
+            findings.push(pqc_finding(
+                &format!("ECDSA P-{} certificate", cert.public_key_bits),
+                "info",
+                &format!(
+                    "ECDSA {}-bit curve in use (sig: {}). Prefer hybrid X25519MLKEM768 when the TLS stack supports it.",
+                    cert.public_key_bits, cert.signature_algorithm
+                ),
+                target,
+                json!({ "public_key_bits": cert.public_key_bits, "is_ec": true }),
+            ));
         }
     }
 
-    // Probe well-known PQC endpoints
+    if let Some(p) = http_get(&client, &base).await {
+        let hsts = header_value(&p.headers, "strict-transport-security").unwrap_or("");
+        if hsts.is_empty() {
+            findings.push(pqc_finding(
+                "Missing HSTS header",
+                "medium",
+                &format!(
+                    "HTTPS response from {} lacks Strict-Transport-Security — initial HTTP downgrade remains possible during PQC migration windows.",
+                    p.final_url
+                ),
+                target,
+                json!({}),
+            ));
+        } else if !hsts.contains("preload") {
+            findings.push(pqc_finding(
+                "HSTS without preload directive",
+                "low",
+                &format!("HSTS present ('{}') but lacks preload — weaker downgrade resistance.", hsts),
+                target,
+                json!({ "hsts": hsts }),
+            ));
+        }
+    }
+
     let pqc_paths = [
         "/.well-known/pqc-capabilities",
         "/.well-known/quantum-safe",
@@ -100,75 +146,70 @@ pub async fn run_pqc_scanner_result(target: &str) -> EngineResult {
     ];
     for path in &pqc_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Ok(r) = client.get(&url).send().await {
-            if r.status().is_success() {
-                findings.push(json!({
-                    "type": "pqc_scanner",
-                    "title": format!("PQC capabilities endpoint found: {}", url),
-                    "severity": "info",
-                    "mitre_attack": "T1600",
-                    "description": format!(
-                        "A PQC capabilities endpoint exists at {}. Review it to confirm supported \
-                        post-quantum algorithms (e.g. X25519MLKEM768, Kyber, CRYSTALS-Dilithium).",
-                        url
-                    ),
-                    "value": url
-                }));
-            }
-        }
-    }
-
-    // Check crt.sh for certificate details
-    let crt_url = format!("https://crt.sh/?q={}&output=json", domain);
-    if let Ok(resp) = client.get(&crt_url).send().await {
-        if let Ok(certs) = resp.json::<serde_json::Value>().await {
-            if let Some(arr) = certs.as_array() {
-                // Look for RSA certificates (quantum-vulnerable)
-                let has_rsa = arr.iter().any(|c| {
-                    c.get("issuer_name")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_lowercase().contains("rsa"))
-                        .unwrap_or(false)
-                });
-                if has_rsa {
-                    findings.push(json!({
-                        "type": "pqc_scanner",
-                        "title": format!("RSA certificate in use for {} — quantum-vulnerable", domain),
-                        "severity": "medium",
-                        "mitre_attack": "T1600",
-                        "description": format!(
-                            "Certificate Transparency logs show RSA certificates for {}. RSA is vulnerable \
-                            to Shor's algorithm on a sufficiently large quantum computer. Migration to \
-                            post-quantum algorithms (CRYSTALS-Kyber, CRYSTALS-Dilithium, FALCON, SPHINCS+) \
-                            should be planned.",
-                            domain
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status >= 200 && p.status < 300 && p.body.len() > 8 {
+                let body_low = p.body.to_ascii_lowercase();
+                if body_low.contains("kyber")
+                    || body_low.contains("ml-kem")
+                    || body_low.contains("dilithium")
+                    || body_low.contains("ml-dsa")
+                    || body_low.contains("pqc")
+                {
+                    findings.push(pqc_finding(
+                        &format!("PQC capabilities document at {}", path),
+                        "info",
+                        &format!(
+                            "Endpoint {} advertises post-quantum algorithms in the response body — review supported hybrids (e.g. X25519MLKEM768).",
+                            p.final_url
                         ),
-                        "value": domain
-                    }));
+                        target,
+                        json!({ "url": p.final_url }),
+                    ));
+                    break;
                 }
             }
         }
     }
 
-    // Overall PQC readiness assessment
-    findings.push(json!({
-        "type": "pqc_scanner",
-        "title": format!("PQC readiness assessment for {}", domain),
-        "severity": "info",
-        "mitre_attack": "T1600",
-        "description": format!(
-            "Post-quantum cryptography readiness scan completed for {}. \
-            NIST PQC standards (FIPS 203 ML-KEM/Kyber, FIPS 204 ML-DSA/Dilithium, FIPS 205 SLH-DSA/SPHINCS+) \
-            are now finalized. Verify TLS library support for X25519MLKEM768 hybrid key exchange.",
-            domain
-        ),
-        "value": domain
-    }));
+    let crt_url = format!("https://crt.sh/?q={}&output=json", domain);
+    if let Some(p) = http_get(&client, &crt_url).await {
+        if p.status == 200 && p.body.starts_with('[') {
+            if let Ok(certs) = serde_json::from_str::<Value>(&p.body) {
+                if let Some(arr) = certs.as_array() {
+                    let rsa_certs = arr
+                        .iter()
+                        .filter(|c| {
+                            c.get("name_value")
+                                .and_then(|v| v.as_str())
+                                .is_some()
+                        })
+                        .count();
+                    if rsa_certs > 0 && findings.iter().all(|f| {
+                        f.get("title")
+                            .and_then(|t| t.as_str())
+                            .is_none_or(|t| !t.contains("RSA"))
+                    }) {
+                        findings.push(pqc_finding(
+                            &format!("{} CT log entries for {}", arr.len(), domain),
+                            "info",
+                            &format!(
+                                "crt.sh returned {} certificate transparency entries for {}. Inventory all active RSA certs before PQC hybrid rollout.",
+                                arr.len(), domain
+                            ),
+                            target,
+                            json!({ "ct_count": arr.len() }),
+                        ));
+                    }
+                }
+            }
+        }
+    }
 
-    EngineResult::ok(
-        findings.clone(),
-        format!("PQCScanner: {} findings", findings.len()),
-    )
+    if findings.is_empty() {
+        empty_ok("pqc_scanner", target)
+    } else {
+        EngineResult::ok(findings.clone(), format!("pqc_scanner: {} live finding(s)", findings.len()))
+    }
 }
 
 pub async fn run_pqc_scanner(target: &str) {

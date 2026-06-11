@@ -85,6 +85,15 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "pretexting_engine",
     "insider_threat_engine",
     "physical_social_eng",
+    // OT / physical bus-level (no remote HTTP/crypto stand-in)
+    "modbus_exploit",
+    "plc_logic_bomb",
+    "lorawan_attack",
+    "lora_attack",
+    "voltage_glitch_attack",
+    "tpm_firmware_attack",
+    "cold_boot_attack",
+    "hospital_hl7_attack",
 ];
 
 #[must_use]
@@ -567,6 +576,8 @@ async fn dispatch_engine_match(
         "vlan_hopping_attack" => crate::advanced_network_engines::run_vlan_hopping_attack_result(target).await,
         "dhcp_attack_engine" => crate::advanced_network_engines::run_dhcp_attack_engine_result(target).await,
         "dns_cache_poisoning" => crate::advanced_network_engines::run_dns_cache_poisoning_result(target).await,
+        "dns_rebinding" => crate::advanced_network_engines::run_dns_rebinding_result(target).await,
+        "can_bus_surface" => crate::advanced_network_engines::run_can_bus_surface_result(target).await,
         "ntp_amplification" => crate::advanced_network_engines::run_ntp_amplification_result(target).await,
         "snmp_exploitation" => crate::advanced_network_engines::run_snmp_exploitation_result(target).await,
         "rdp_attack_engine" => crate::advanced_network_engines::run_rdp_attack_engine_result(target).await,
@@ -689,6 +700,13 @@ async fn dispatch_engine_match(
 
         // ── Advanced OT engines (new live probes) ──────────────────────────────
         "modbus_attack" => crate::advanced_ot_engines::run_modbus_attack_result(target).await,
+        "modbus_exploit" => crate::advanced_ot_engines::run_modbus_exploit_result(target).await,
+        "plc_logic_bomb" => crate::advanced_ot_engines::run_plc_logic_bomb_result(target).await,
+        "lorawan_attack" | "lora_attack" => crate::advanced_ot_engines::run_lorawan_attack_result(target).await,
+        "voltage_glitch_attack" => crate::advanced_ot_engines::run_voltage_glitch_attack_result(target).await,
+        "tpm_firmware_attack" => crate::advanced_ot_engines::run_tpm_firmware_attack_result(target).await,
+        "cold_boot_attack" => crate::advanced_ot_engines::run_cold_boot_attack_result(target).await,
+        "hospital_hl7_attack" => crate::advanced_ot_engines::run_hospital_hl7_attack_result(target).await,
         "mqtt_attack" => crate::advanced_ot_engines::run_mqtt_attack_result(target).await,
         "coap_attack" => crate::advanced_ot_engines::run_coap_attack_result(target).await,
         "opcua_attack" => crate::advanced_ot_engines::run_opcua_attack_result(target).await,

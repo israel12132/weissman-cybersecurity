@@ -2,10 +2,32 @@
 //! and SaaS APIs reachable from the target. No simulated findings.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, header_value, http_client, http_get, normalize_url,
+    dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value, http_client,
+    http_get, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
+
+const CLOUD_PROBE_DEPTH: &str = "cloud_remote_surface";
+
+fn cloud_finding(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        CLOUD_PROBE_DEPTH,
+    )
+}
 
 macro_rules! cli_wrapper {
     ($name:ident, $result_fn:ident) => {
@@ -38,7 +60,7 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
                     || p.body.contains("computeMetadata")
                     || p.body.contains("instanceId")
                 {
-                    findings.push(finding(
+                    findings.push(cloud_finding(
                         "cloud_metadata_ssrf",
                         "Cloud metadata reflected via SSRF param",
                         "critical",
@@ -84,7 +106,7 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
     for url in bucket_guesses.iter() {
         if let Some(p) = http_get(&client, url).await {
             if p.status == 200 && p.body.contains("<ListBucketResult") {
-                findings.push(finding(
+                findings.push(cloud_finding(
                     "s3_bucket_attack",
                     "Public S3 bucket listing",
                     "high",
@@ -92,13 +114,13 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
                     &format!("Bucket listing readable at {} (HTTP 200).", url),
                     target,
                 ));
-            } else if p.status == 200 && p.body.contains("AccessDenied") {
-                findings.push(finding(
+            } else if p.status == 403 && p.body.contains("AccessDenied") {
+                findings.push(cloud_finding(
                     "s3_bucket_attack",
                     "S3 bucket exists (AccessDenied)",
                     "info",
                     "T1530",
-                    &format!("{} confirms bucket existence — review ACL.", url),
+                    &format!("{} returned HTTP 403 AccessDenied — bucket name resolves.", url),
                     target,
                 ));
             }
@@ -124,7 +146,7 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
         if header_value(&p.headers, "x-amzn-requestid").is_some()
             || header_value(&p.headers, "x-amz-apigw-id").is_some()
         {
-            findings.push(finding(
+            findings.push(cloud_finding(
                 "lambda_escape",
                 "AWS Lambda / API Gateway detected",
                 "info",
@@ -159,15 +181,21 @@ pub async fn run_kubernetes_rbac_escape_result(target: &str) -> EngineResult {
     for path in ["/api/v1/namespaces", "/healthz", "/api", "/apis", "/openapi/v2"] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200
-                && (p.body.contains("Kubernetes") || p.body.contains("kind\":\"Status\""))
-            {
-                findings.push(finding(
+            let k8s_api = p.status == 200
+                && (p.body.contains("\"kind\":\"APIVersions\"")
+                    || p.body.contains("\"kind\":\"NamespaceList\"")
+                    || p.body.contains("\"kind\":\"PodList\"")
+                    || (p.body.contains("Kubernetes") && p.body.contains("/api/v1")));
+            if k8s_api {
+                findings.push(cloud_finding(
                     "kubernetes_rbac_escape",
                     "Public Kubernetes API surface",
                     "high",
                     "T1610",
-                    &format!("Kubernetes API accessible at {} — verify anonymous access ClusterRole bindings.", p.final_url),
+                    &format!(
+                        "Kubernetes API response at {} — verify anonymous RBAC bindings.",
+                        p.final_url
+                    ),
                     target,
                 ));
             }
@@ -196,7 +224,7 @@ pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
     for url in candidates.iter() {
         if let Some(p) = http_get(&client, url).await {
             if p.status == 200 && p.body.contains("value") && p.body.contains("name") {
-                findings.push(finding(
+                findings.push(cloud_finding(
                     "azure_devops_attack",
                     "Public Azure DevOps projects",
                     "high",
@@ -233,7 +261,7 @@ pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && p.body.contains("\"terraform_version\"") {
-                findings.push(finding(
+                findings.push(cloud_finding(
                     "terraform_state_attack",
                     "Public terraform.tfstate file",
                     "critical",
@@ -264,7 +292,7 @@ pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && (p.body.contains("AWSTemplateFormatVersion") || p.body.contains("Resources:")) {
-                findings.push(finding(
+                findings.push(cloud_finding(
                     "cloudformation_injection",
                     "Public CloudFormation template",
                     "high",
@@ -295,7 +323,7 @@ pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
         if header_value(&p.headers, "x-envoy-upstream-service-time").is_some()
             || header_value(&p.headers, "x-istio-attempt-count").is_some()
         {
-            findings.push(finding(
+            findings.push(cloud_finding(
                 "service_mesh_attack",
                 "Istio/Envoy header observed",
                 "info",
@@ -322,16 +350,21 @@ pub async fn run_cloud_audit_evasion_result(target: &str) -> EngineResult {
     let url = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if header_value(&p.headers, "x-aws-cloudtrail").is_some()
-            || header_value(&p.headers, "x-trace-id").is_none()
-        {
-            // No trace-id is itself a weak signal.
-            findings.push(finding(
+        let aws_hosted = header_value(&p.headers, "x-amzn-requestid").is_some()
+            || header_value(&p.headers, "x-amz-apigw-id").is_some();
+        let has_trace = header_value(&p.headers, "x-amzn-trace-id").is_some()
+            || header_value(&p.headers, "x-request-id").is_some()
+            || header_value(&p.headers, "x-cloud-trace-context").is_some();
+        if aws_hosted && !has_trace {
+            findings.push(cloud_finding(
                 "cloud_audit_evasion",
-                "Tracing headers absent",
-                "low",
+                "AWS front-end without distributed trace headers",
+                "info",
                 "T1562.008",
-                &format!("Response from {} has no X-Trace-Id / X-Request-Id — audit chain may be incomplete.", p.final_url),
+                &format!(
+                    "{} is AWS-hosted but returned no x-amzn-trace-id / x-request-id — verify CloudTrail and X-Ray coverage.",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -356,25 +389,36 @@ pub async fn run_multi_cloud_pivot_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
-    let ips = crate::engine_probes::dns_a(&host).await;
+    let txt = dns_txt(&host).await;
     let mut findings: Vec<Value> = Vec::new();
     let mut providers: Vec<&str> = Vec::new();
-    for ip in ips.iter() {
-        if ip.starts_with("52.") || ip.starts_with("54.") || ip.starts_with("18.") {
-            providers.push("AWS");
-        } else if ip.starts_with("20.") || ip.starts_with("40.") {
-            providers.push("Azure");
-        } else if ip.starts_with("34.") || ip.starts_with("35.") {
+    for record in txt.iter() {
+        let r = record.to_ascii_lowercase();
+        if r.contains("google-site-verification") || r.contains("google-domain-verification") {
             providers.push("GCP");
         }
+        if r.starts_with("ms=") {
+            providers.push("Azure");
+        }
+        if r.contains("amazonses") || r.contains("_amazonses") {
+            providers.push("AWS");
+        }
+        if r.contains("atlassian-domain-verification") {
+            providers.push("Atlassian");
+        }
     }
+    providers.sort_unstable();
+    providers.dedup();
     if providers.len() > 1 {
-        findings.push(finding(
+        findings.push(cloud_finding(
             "multi_cloud_pivot",
-            "Resolves to multiple cloud providers",
+            "Multiple cloud SaaS verification records",
             "info",
             "T1583.003",
-            &format!("{} resolves to IPs in {:?} — possible multi-cloud surface.", host, providers),
+            &format!(
+                "TXT records for {} reference {:?} — multi-cloud identity/email surface.",
+                host, providers
+            ),
             target,
         ));
     }
@@ -440,7 +484,7 @@ pub async fn run_secrets_manager_attack_result(target: &str) -> EngineResult {
                     || p.body.contains("AWS_ACCESS_KEY")
                     || p.body.contains("aws_access_key"))
             {
-                findings.push(finding(
+                findings.push(cloud_finding(
                     "secrets_manager_attack",
                     &format!("Possible secret file: {}", path),
                     "critical",

@@ -1,128 +1,152 @@
-//! SSRF Advanced Engine — parameter injection with cloud metadata URLs, open redirect probing.
+//! SSRF Advanced Engine — differential metadata probes and open-redirect confirmation.
 //! MITRE: T1090 (Proxy).
 
+use crate::engine_probes::{
+    empty_ok, finding_with_probe_depth, header_value, http_client, http_get, normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
-use std::time::Duration;
+use serde_json::{json, Value};
 
-fn make_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+const SSRF_PROBE_DEPTH: &str = "ssrf_fetch_surface";
+
+fn ssrf_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+    let mut f = finding_with_probe_depth(
+        "ssrf_advanced",
+        title,
+        severity,
+        "T1090",
+        description,
+        target,
+        SSRF_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    f
 }
 
-fn base_url(target: &str) -> String {
-    let t = target.trim().trim_end_matches('/');
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
-    }
+const METADATA_CANARIES: &[(&str, &[&str])] = &[
+    (
+        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+        &["AccessKeyId", "SecretAccessKey", "Token", "ami-id", "instance-id"],
+    ),
+    (
+        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+        &["access_token", "computeMetadata", "serviceAccounts"],
+    ),
+    (
+        "http://169.254.169.254/metadata/v1/",
+        &["droplet", "region", "interfaces"],
+    ),
+];
+
+fn metadata_hit(body: &str, canaries: &[&str]) -> bool {
+    canaries.iter().any(|c| body.contains(c))
 }
 
 pub async fn run_ssrf_advanced_result(target: &str) -> EngineResult {
-    let client = make_client();
-    let base = base_url(target);
-    let mut findings = Vec::new();
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings: Vec<Value> = Vec::new();
 
-    let ssrf_params = ["url", "webhook", "redirect", "callback", "fetch", "endpoint", "uri", "target", "src", "source", "dest", "destination", "load"];
-    let metadata_urls = [
-        "http://169.254.169.254/latest/meta-data/",
-        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
-        "http://metadata.google.internal/computeMetadata/v1/",
-        "http://169.254.169.254/metadata/v1/",
-        // Azure IMDS
-        "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+    let baseline = http_get(&client, &base).await;
+    let baseline_body_len = baseline.as_ref().map(|p| p.body.len()).unwrap_or(0);
+    let baseline_status = baseline.as_ref().map(|p| p.status).unwrap_or(0);
+
+    let ssrf_params = [
+        "url", "webhook", "redirect", "callback", "fetch", "endpoint", "uri", "target", "src",
+        "source", "dest", "destination", "load", "link", "path", "proxy",
     ];
 
-    // Probe SSRF via GET query parameters
-    for param in &ssrf_params {
-        for meta_url in &metadata_urls {
-            let probe_url = format!("{}/?{}={}", base, param, meta_url);
-            if let Ok(resp) = client.get(&probe_url).send().await {
-                let status = resp.status().as_u16();
-                let body = resp.text().await.unwrap_or_default();
-                // Cloud metadata response indicators
-                let hit = body.contains("ami-id")
-                    || body.contains("instance-id")
-                    || body.contains("iam")
-                    || body.contains("computeMetadata")
-                    || body.contains("project-id")
-                    || body.contains("serviceAccounts")
-                    || (status == 200 && body.len() > 20 && body.contains("169.254"));
-
-                if hit {
-                    findings.push(json!({
-                        "type": "ssrf_advanced",
-                        "title": "SSRF: Cloud Metadata Accessible via Parameter",
-                        "severity": "critical",
-                        "mitre_attack": "T1090",
-                        "description": format!(
-                            "SSRF confirmed: parameter '{}' at {} fetched cloud instance metadata from {}. Credential theft is likely possible.",
-                            param, base, meta_url
+    'outer: for param in &ssrf_params {
+        for (meta_url, canaries) in METADATA_CANARIES {
+            let probe_url = format!(
+                "{}/?{}={}",
+                base.trim_end_matches('/'),
+                param,
+                urlencoding::encode(meta_url)
+            );
+            if let Some(p) = http_get(&client, &probe_url).await {
+                if metadata_hit(&p.body, canaries) {
+                    findings.push(ssrf_finding(
+                        "SSRF: cloud metadata content in response",
+                        "critical",
+                        &format!(
+                            "Parameter '{}' at {} returned cloud metadata canaries after fetching {} (HTTP {}). Credential theft is likely.",
+                            param, base, meta_url, p.status
                         ),
-                        "value": probe_url
-                    }));
-                    break;
+                        target,
+                        json!({ "parameter": param, "probe_url": probe_url, "metadata_url": meta_url }),
+                    ));
+                    break 'outer;
                 }
-                // Parameter accepted and returned 200 — candidate for further testing
-                if status == 200 && !body.is_empty() {
-                    findings.push(json!({
-                        "type": "ssrf_advanced",
-                        "title": format!("Potential SSRF Parameter Detected: {}", param),
-                        "severity": "medium",
-                        "mitre_attack": "T1090",
-                        "description": format!(
-                            "The parameter '{}' at {} accepted an external URL (HTTP {}). Manual SSRF testing with out-of-band callbacks is recommended.",
-                            param, base, status
+                let body_delta = (p.body.len() as i64 - baseline_body_len as i64).abs();
+                if p.status >= 200
+                    && p.status < 300
+                    && body_delta > 64
+                    && !p.body.contains(meta_url)
+                    && baseline_status != p.status
+                {
+                    findings.push(ssrf_finding(
+                        "SSRF: differential response to metadata URL",
+                        "high",
+                        &format!(
+                            "Parameter '{}' changed response vs baseline (HTTP {} → {}, body Δ{} B) when passed {}. Manual OAST verification recommended.",
+                            param, baseline_status, p.status, body_delta, meta_url
                         ),
-                        "value": probe_url
-                    }));
-                    break;
+                        target,
+                        json!({ "parameter": param, "probe_url": probe_url }),
+                    ));
+                    break 'outer;
                 }
             }
         }
     }
 
-    // Probe open redirectors
-    let redirect_params = ["url", "next", "return", "returnUrl", "return_url", "redirect", "redir", "goto", "forward"];
+    let redirect_params = [
+        "url", "next", "return", "returnUrl", "return_url", "redirect", "redir", "goto", "forward",
+    ];
     let redirect_target = "https://example.com/ssrf-open-redirect-test";
     for param in &redirect_params {
-        let probe_url = format!("{}/?{}={}", base, param, redirect_target);
-        if let Ok(resp) = client
-            .get(&probe_url)
-            .send()
-            .await
-        {
-            let status = resp.status().as_u16();
-            if status == 301 || status == 302 || status == 307 || status == 308 {
-                if let Some(loc) = resp.headers().get("location") {
-                    if loc.to_str().unwrap_or("").contains("example.com") {
-                        findings.push(json!({
-                            "type": "ssrf_advanced",
-                            "title": "Open Redirect Confirmed",
-                            "severity": "high",
-                            "mitre_attack": "T1090",
-                            "description": format!(
-                                "Open redirect confirmed at {} via parameter '{}'. Redirects to attacker-controlled URL, enabling phishing and SSRF chaining.",
-                                probe_url, param
+        let probe_url = format!(
+            "{}/?{}={}",
+            base.trim_end_matches('/'),
+            param,
+            urlencoding::encode(redirect_target)
+        );
+        if let Some(p) = http_get(&client, &probe_url).await {
+            if matches!(p.status, 301 | 302 | 307 | 308) {
+                if let Some(loc) = header_value(&p.headers, "location") {
+                    if loc.contains("example.com") {
+                        findings.push(ssrf_finding(
+                            "Open redirect confirmed via Location header",
+                            "high",
+                            &format!(
+                                "{} via parameter '{}' returned {} Location: {} — enables phishing and SSRF chaining.",
+                                probe_url, param, p.status, loc
                             ),
-                            "value": probe_url
-                        }));
+                            target,
+                            json!({ "parameter": param, "location": loc }),
+                        ));
                     }
                 }
             }
         }
     }
 
-    let message = if findings.is_empty() {
-        "No SSRF indicators detected".to_string()
+    if findings.is_empty() {
+        empty_ok("ssrf_advanced", target)
     } else {
-        format!("{} SSRF issue(s) found", findings.len())
-    };
-    EngineResult::ok(findings, message)
+        let n = findings.len();
+        EngineResult::ok(findings, format!("ssrf_advanced: {} live finding(s)", n))
+    }
 }
 
 pub async fn run_ssrf_advanced(target: &str) {

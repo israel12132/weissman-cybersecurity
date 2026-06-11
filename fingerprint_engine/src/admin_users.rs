@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::Row;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 
 use crate::auth_jwt::AuthContext;
@@ -45,10 +45,49 @@ struct UserInfo {
     created_at: Option<String>,
 }
 
-/// Check if the caller is superadmin or CEO
-fn require_admin_access(auth: &AuthContext) -> Result<(), Response> {
+/// Allow the DB `guard_users_ceo_role` trigger for this transaction.
+async fn allow_ceo_role_assignment(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<(), Response> {
+    sqlx::query("SET LOCAL app.ceo_role_assignment = '1'")
+        .execute(&mut **tx)
+        .await
+        .map(|_| ())
+        .map_err(|e| {
+            tracing::error!(target: "admin", error = %e, "set ceo_role_assignment guc failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "Failed to authorize CEO role assignment"})),
+            )
+                .into_response()
+        })
+}
+
+/// Check if the caller is superadmin or CEO (uses live DB role, not JWT alone).
+async fn require_admin_access(
+    pool: &PgPool,
+    auth: &AuthContext,
+) -> Result<AuthContext, Response> {
+    let auth = match crate::auth_refresh::revalidate_auth_context(pool, auth).await {
+        Ok(Some(a)) => a,
+        Ok(None) => {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"ok": false, "detail": "Account inactive or not found"})),
+            )
+                .into_response());
+        }
+        Err(e) => {
+            tracing::error!(target: "admin", error = %e, "RBAC revalidation failed");
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "RBAC lookup failed"})),
+            )
+                .into_response());
+        }
+    };
     if auth.is_superadmin || auth.role.to_lowercase() == "ceo" || auth.role.to_lowercase() == "admin" {
-        Ok(())
+        Ok(auth)
     } else {
         Err((
             StatusCode::FORBIDDEN,
@@ -63,11 +102,12 @@ pub async fn api_admin_users_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    if let Err(r) = require_admin_access(&auth) {
-        return r;
-    }
+    let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
 
-    // `users` is RLS-forced — the policy compares to `current_setting('app.current_tenant_id')`.
+    // `users` is RLS-forced
     // We MUST open a tenant-scoped transaction so the GUC is set, otherwise even superuser hits
     // "permission denied" because the row simply isn't visible. Use the app_pool which goes
     // through begin_tenant_tx; users live in the same DB.
@@ -134,9 +174,10 @@ pub async fn api_admin_users_create(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<CreateUserBody>,
 ) -> Response {
-    if let Err(r) = require_admin_access(&auth) {
-        return r;
-    }
+    let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
 
     let email = body.email.trim().to_lowercase();
     if email.is_empty() {
@@ -176,16 +217,10 @@ pub async fn api_admin_users_create(
         "viewer".to_string()
     };
 
-    if role == crate::rbac::roles::CEO && !crate::rbac::can_assign_ceo_role(&auth) {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({
-                "ok": false,
-                "detail": "Only CEO or superadmin may assign the CEO role",
-                "error_code": "rbac_denied",
-            })),
-        )
-            .into_response();
+    if role == crate::rbac::roles::CEO {
+        if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
+            return r;
+        }
     }
 
     // Only superadmin can create superadmin users
@@ -224,6 +259,12 @@ pub async fn api_admin_users_create(
             Json(json!({"ok": false, "detail": "User with this email already exists"})),
         )
             .into_response();
+    }
+
+    if role == crate::rbac::roles::CEO {
+        if let Err(r) = allow_ceo_role_assignment(&mut tx).await {
+            return r;
+        }
     }
 
     let query = r#"
@@ -274,9 +315,10 @@ pub async fn api_admin_users_update(
     Path(user_id): Path<i64>,
     Json(body): Json<UpdateUserBody>,
 ) -> Response {
-    if let Err(r) = require_admin_access(&auth) {
-        return r;
-    }
+    let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
 
     let mut tx = match crate::db::begin_tenant_tx(state.app_pool.as_ref(), auth.tenant_id).await {
         Ok(tx) => tx,
@@ -321,16 +363,10 @@ pub async fn api_admin_users_update(
     }).flatten();
 
     if let Some(ref role) = valid_role {
-        if role == crate::rbac::roles::CEO && !crate::rbac::can_assign_ceo_role(&auth) {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({
-                    "ok": false,
-                    "detail": "Only CEO or superadmin may assign the CEO role",
-                    "error_code": "rbac_denied",
-                })),
-            )
-                .into_response();
+        if role == crate::rbac::roles::CEO {
+            if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
+                return r;
+            }
         }
     }
 
@@ -344,6 +380,14 @@ pub async fn api_admin_users_update(
             Json(json!({"ok": true, "detail": "No changes"})),
         )
             .into_response();
+    }
+
+    if let Some(ref role) = valid_role {
+        if role == crate::rbac::roles::CEO {
+            if let Err(r) = allow_ceo_role_assignment(&mut tx).await {
+                return r;
+            }
+        }
     }
 
     // Execute update with proper parameter binding
@@ -400,6 +444,14 @@ pub async fn api_admin_users_update(
 
     match update_sql {
         Ok(_) => {
+            if let Err(e) = tx.commit().await {
+                tracing::error!(target: "admin", error = %e, "Failed to commit user update");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": "Failed to update user"})),
+                )
+                    .into_response();
+            }
             tracing::info!(target: "admin", user_id = user_id, "User updated by admin");
             (StatusCode::OK, Json(json!({"ok": true}))).into_response()
         }
@@ -420,9 +472,10 @@ pub async fn api_admin_users_deactivate(
     Extension(auth): Extension<AuthContext>,
     Path(user_id): Path<i64>,
 ) -> Response {
-    if let Err(r) = require_admin_access(&auth) {
-        return r;
-    }
+    let auth = match require_admin_access(state.auth_pool.as_ref(), &auth).await {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
 
     // Don't allow deactivating yourself
     if user_id == auth.user_id {

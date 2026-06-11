@@ -9,7 +9,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { apiUrl } from '../lib/apiBase'
+import { api } from '../utils/apiFetch'
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
 
@@ -336,9 +337,7 @@ export default function SsoDashboard() {
   const fetchIdps = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch('/api/sso/idps')
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      const data = await api.get('/api/sso/idps')
       setIdps(data.idps ?? [])
     } catch (e) {
       showToast('Failed to load IdPs: ' + e.message, false)
@@ -353,14 +352,10 @@ export default function SsoDashboard() {
     setSaving(true)
     try {
       if (editingIdp) {
-        const r = await apiFetch(`/api/sso/idps/${editingIdp.id}`, { method: 'PATCH', body: JSON.stringify(formData) })
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+        await api.patch(`/api/sso/idps/${editingIdp.id}`, formData)
         showToast('Connection updated.')
       } else {
-        const r = await apiFetch('/api/sso/idps', { method: 'POST', body: JSON.stringify(formData) })
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+        await api.post('/api/sso/idps', formData)
         showToast('Connection created.')
       }
       setSelectedProv(null)
@@ -376,9 +371,7 @@ export default function SsoDashboard() {
   const handleDelete = useCallback(async (id) => {
     if (!window.confirm('Remove this IdP connection?')) return
     try {
-      const r = await apiFetch(`/api/sso/idps/${id}`, { method: 'DELETE' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      await api.delete(`/api/sso/idps/${id}`)
       showToast('Connection removed.')
       await fetchIdps()
     } catch (e) {
@@ -388,9 +381,7 @@ export default function SsoDashboard() {
 
   const handleToggle = useCallback(async (id) => {
     try {
-      const r = await apiFetch(`/api/sso/idps/${id}/toggle`, { method: 'POST' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      const data = await api.post(`/api/sso/idps/${id}/toggle`)
       setIdps(prev => prev.map(i => i.id === id ? { ...i, active: data.active } : i))
     } catch (e) {
       showToast('Toggle failed: ' + e.message, false)
@@ -400,9 +391,7 @@ export default function SsoDashboard() {
   const handleTest = useCallback(async (id) => {
     setTestingId(id)
     try {
-      const r = await apiFetch(`/api/sso/idps/${id}/test`, { method: 'POST' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`)
+      const data = await api.post(`/api/sso/idps/${id}/test`)
       if (data.ok) {
         showToast('✓ Connection test passed — IdP is reachable.')
       } else {
@@ -523,10 +512,10 @@ export default function SsoDashboard() {
           <h4 className="text-[11px] font-mono text-white/35 uppercase">SP Metadata / Callback URLs</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { label: 'OIDC Callback URL', value: `${window.location.origin}/api/auth/oidc/callback` },
-              { label: 'SAML ACS URL', value: `${window.location.origin}/api/auth/saml/acs` },
-              { label: 'OIDC Login Initiation', value: `${window.location.origin}/api/auth/oidc/begin?tenant_slug=TENANT&idp_name=NAME` },
-              { label: 'SAML Login Initiation', value: `${window.location.origin}/api/auth/saml/begin?tenant_slug=TENANT&idp_name=NAME` },
+              { label: 'OIDC Callback URL', value: apiUrl('/api/auth/oidc/callback') },
+              { label: 'SAML ACS URL', value: apiUrl('/api/auth/saml/acs') },
+              { label: 'OIDC Login Initiation', value: `${apiUrl('/api/auth/oidc/begin')}?tenant_slug=TENANT&idp_name=NAME` },
+              { label: 'SAML Login Initiation', value: `${apiUrl('/api/auth/saml/begin')}?tenant_slug=TENANT&idp_name=NAME` },
             ].map(item => (
               <div key={item.label} className="space-y-0.5">
                 <p className="text-[9px] font-mono text-white/25 uppercase">{item.label}</p>

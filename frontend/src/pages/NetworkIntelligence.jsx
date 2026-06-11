@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
+import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 
 const NETWORK_ENGINES = [
   {
@@ -34,12 +36,12 @@ const NETWORK_ENGINES = [
   },
 ]
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
   const map = {
-    running: { label: 'RUNNING', cls: 'text-[#22d3ee] border-[#22d3ee]/30 bg-[#22d3ee]/10' },
-    completed: { label: 'DONE', cls: 'text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10' },
-    error: { label: 'ERROR', cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: 'IDLE', cls: 'text-white/30 border-white/10 bg-white/5' },
+    running: { label: t('pages.networkIntelligence.status_running'), cls: 'text-[#22d3ee] border-[#22d3ee]/30 bg-[#22d3ee]/10' },
+    completed: { label: t('pages.networkIntelligence.status_done'), cls: 'text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10' },
+    error: { label: t('pages.networkIntelligence.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
+    idle: { label: t('pages.networkIntelligence.status_idle'), cls: 'text-white/30 border-white/10 bg-white/5' },
   }
   const { label, cls } = map[status] ?? map.idle
   return (
@@ -49,14 +51,31 @@ function StatusBadge({ status }) {
   )
 }
 
-function NetworkEngineCard({ engine, clientId, showToast }) {
+function NetworkEngineCard({ engine, clientId, showToast, t }) {
   const [status, setStatus] = useState('idle')
   const [findings, setFindings] = useState([])
   const [lastRun, setLastRun] = useState(null)
+  const [pendingJobId, setPendingJobId] = useState(null)
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: async (job) => {
+      const terminal = uiJobStatus(job.status)
+      setStatus(terminal)
+      setLastRun(new Date().toLocaleTimeString())
+      const resolved = await resolveJobFindings(job, engine.id, clientId)
+      setFindings(resolved)
+      setPendingJobId(null)
+    },
+  })
 
   const handleRun = useCallback(async () => {
-    if (!clientId) { showToast('error', 'Select a client first'); return }
+    if (!clientId) {
+      showToast('error', t('pages.networkIntelligence.select_client_first'))
+      return
+    }
     setStatus('running')
+    setFindings([])
     try {
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
@@ -66,17 +85,18 @@ function NetworkEngineCard({ engine, clientId, showToast }) {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
         setStatus('error')
-        showToast('error', d.detail || 'Scan failed')
+        showToast('error', d.detail || t('pages.networkIntelligence.scan_failed'))
         return
       }
-      showToast('info', `${engine.label}: queued ${d.job_id ?? ''}`)
-      setStatus('completed')
-      setLastRun(new Date().toLocaleTimeString())
+      const jobId = d.job_id ?? ''
+      showToast('info', t('pages.networkIntelligence.queued', { label: engine.label, jobId }))
+      if (jobId) setPendingJobId(jobId)
+      else setStatus('error')
     } catch (e) {
       setStatus('error')
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.networkIntelligence.scan_failed'))
     }
-  }, [clientId, engine, showToast])
+  }, [clientId, engine, showToast, t])
 
   return (
     <motion.div
@@ -89,7 +109,7 @@ function NetworkEngineCard({ engine, clientId, showToast }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-sm font-semibold text-white">{engine.label}</h3>
-            <StatusBadge status={status} />
+            <StatusBadge status={status} t={t} />
           </div>
           <span className="text-[9px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
             {engine.mitre}
@@ -101,18 +121,21 @@ function NetworkEngineCard({ engine, clientId, showToast }) {
           disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#f97316]/30 text-[#f97316]/70 hover:bg-[#f97316]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          {status === 'running' ? '⟳' : '▶ Scan'}
+          {status === 'running' ? '⟳' : t('pages.networkIntelligence.scan')}
         </button>
       </div>
 
       <p className="text-[11px] text-white/45 leading-relaxed">{engine.description}</p>
 
       {lastRun && (
-        <p className="text-[10px] font-mono text-white/25">Last scan: {lastRun}</p>
+        <p className="text-[10px] font-mono text-white/25">
+          {t('pages.networkIntelligence.last_scan', { time: lastRun })}
+        </p>
       )}
 
       {findings.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-white/5">
+          <p className="text-[10px] font-mono text-white/35">{findings.length} findings</p>
           {findings.slice(0, 3).map((f, i) => (
             <div key={i} className="text-[11px] font-mono text-white/60 bg-white/5 rounded px-2 py-1 truncate">
               {f.title ?? f.type}
@@ -125,6 +148,7 @@ function NetworkEngineCard({ engine, clientId, showToast }) {
 }
 
 export default function NetworkIntelligence() {
+  const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -139,19 +163,24 @@ export default function NetworkIntelligence() {
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
     setToast({ id, sev, msg })
-    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
+    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
   }, [])
 
   return (
-    <PageShell title="Network Intelligence" badge="NETWORK / PROTOCOL" badgeColor="#f97316" subtitle={`${NETWORK_ENGINES.length} engines`}>
+    <PageShell
+      title={t('pages.networkIntelligence.title')}
+      badge={t('pages.networkIntelligence.badge')}
+      badgeColor="#f97316"
+      subtitle={t('pages.networkIntelligence.subtitle', { count: NETWORK_ENGINES.length })}
+    >
       <div className="flex items-center gap-2 mb-6">
-        <span className="text-[11px] font-mono text-white/40">Client:</span>
+        <span className="text-[11px] font-mono text-white/40">{t('pages.networkIntelligence.client_label')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
           className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#f97316]/40"
         >
-          <option value="">— Select client —</option>
+          <option value="">{t('pages.networkIntelligence.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
@@ -164,7 +193,7 @@ export default function NetworkIntelligence() {
 
       {!selectedClientId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
-          Select a client to enable scan controls.
+          {t('pages.networkIntelligence.select_client_warning')}
         </div>
       )}
 
@@ -175,6 +204,7 @@ export default function NetworkIntelligence() {
             engine={engine}
             clientId={selectedClientId}
             showToast={showToast}
+            t={t}
           />
         ))}
       </div>

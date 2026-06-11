@@ -139,10 +139,21 @@ async fn run_subscriber(
 /// Start Redis pub-sub for the process-wide agent registry (no-op without `REDIS_URL`).
 pub fn spawn_agent_registry_redis_sync(registry: Arc<crate::endpoint_agents::AgentRegistry>) {
     let Some(sync) = AgentRegistrySync::from_env() else {
-        tracing::info!(
-            target: "agent_registry_sync",
-            "REDIS_URL not set; agent registry single-replica mode"
-        );
+        let redis_configured = std::env::var("REDIS_URL")
+            .ok()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+        if redis_configured {
+            tracing::warn!(
+                target: "agent_registry_sync",
+                "REDIS_URL set but Redis client unavailable; agent registry single-replica mode"
+            );
+        } else {
+            tracing::info!(
+                target: "agent_registry_sync",
+                "REDIS_URL not set; agent registry single-replica mode"
+            );
+        }
         return;
     };
     registry.set_sync(sync.clone());

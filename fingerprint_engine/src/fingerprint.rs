@@ -4,7 +4,7 @@
 
 use futures::future::join_all;
 use ipnetwork::IpNetwork;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -76,7 +76,7 @@ pub fn get_top_ports(limit: usize) -> Vec<u16> {
 
 fn random_ua() -> &'static str {
     USER_AGENTS
-        .choose(&mut rand::thread_rng())
+        .choose(&mut rand::rng())
         .unwrap_or(&USER_AGENTS[0])
 }
 
@@ -117,7 +117,7 @@ fn random_proxy() -> Option<String> {
     if list.is_empty() {
         return None;
     }
-    list.choose(&mut rand::thread_rng()).cloned()
+    list.choose(&mut rand::rng()).cloned()
 }
 
 /// Builds an HTTP client with timeout, invalid cert acceptance, stealth headers, and optional proxy rotation.

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
+import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 
 const CLOUD_TABS = [
   { id: 'aws', label: 'AWS', engine: 'aws_attack', color: '#f97316', icon: '☁' },
@@ -50,14 +52,26 @@ function CloudTab({ tab, active, onClick }) {
   )
 }
 
-function CloudEnginePanel({ tab, clientId, target, showToast }) {
+function CloudEnginePanel({ tab, clientId, target, showToast, t }) {
   const [status, setStatus] = useState('idle')
   const [lastRun, setLastRun] = useState(null)
   const [findings, setFindings] = useState([])
+  const [pendingJobId, setPendingJobId] = useState(null)
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: async (job) => {
+      setStatus(uiJobStatus(job.status))
+      setLastRun(new Date().toLocaleTimeString())
+      setFindings(await resolveJobFindings(job, tab.engine, clientId))
+      setPendingJobId(null)
+    },
+  })
 
   const handleRun = useCallback(async () => {
-    if (!clientId) { showToast('error', 'Select a client first'); return }
+    if (!clientId) { showToast('error', t('pages.cloudControlTower.select_client_first')); return }
     setStatus('running')
+    setFindings([])
     try {
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
@@ -65,15 +79,16 @@ function CloudEnginePanel({ tab, clientId, target, showToast }) {
         body: JSON.stringify({ engine: tab.engine, client_id: Number(clientId), ...(target ? { target } : {}) }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
-      showToast('info', `${tab.label}: queued ${d.job_id ?? ''}`)
-      setStatus('completed')
-      setLastRun(new Date().toLocaleTimeString())
+      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.cloudControlTower.scan_failed')); return }
+      const jobId = d.job_id ?? ''
+      showToast('info', t('pages.cloudControlTower.queued', { label: tab.label, jobId }))
+      if (jobId) setPendingJobId(jobId)
+      else setStatus('error')
     } catch (e) {
       setStatus('error')
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.cloudControlTower.scan_failed'))
     }
-  }, [clientId, tab, showToast])
+  }, [clientId, tab, target, showToast, t])
 
   const statusColor = { idle: '#374151', running: tab.color, completed: '#4ade80', error: '#ef4444' }[status]
 
@@ -90,12 +105,12 @@ function CloudEnginePanel({ tab, clientId, target, showToast }) {
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl" style={{ color: tab.color }}>{tab.icon}</span>
               <div>
-                <h2 className="text-lg font-bold text-white">{tab.label} Attack Surface</h2>
+                <h2 className="text-lg font-bold text-white">{t('pages.cloudControlTower.attack_surface', { label: tab.label })}</h2>
                 <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">{tab.engine}</span>
               </div>
             </div>
             <p className="text-sm text-white/50 leading-relaxed">
-              {ENGINE_DESCRIPTIONS[tab.engine] ?? 'Cloud infrastructure attack surface scanning'}
+              {ENGINE_DESCRIPTIONS[tab.engine] ?? t('pages.cloudControlTower.default_description')}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
@@ -113,21 +128,21 @@ function CloudEnginePanel({ tab, clientId, target, showToast }) {
               className="px-4 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ borderColor: `${tab.color}40`, color: tab.color, backgroundColor: `${tab.color}10` }}
             >
-              {status === 'running' ? '⟳ Scanning…' : '▶ Run Scan'}
+              {status === 'running' ? t('pages.cloudControlTower.scanning') : t('pages.cloudControlTower.run_scan')}
             </button>
           </div>
         </div>
 
         {lastRun && (
-          <p className="text-[10px] font-mono text-white/25 mt-2">Last completed: {lastRun}</p>
+          <p className="text-[10px] font-mono text-white/25 mt-2">{t('pages.cloudControlTower.last_completed', { time: lastRun })}</p>
         )}
 
         {findings.length === 0 && status !== 'running' && (
           <div className="mt-4 rounded-xl bg-white/5 border border-white/5 p-4 text-center">
             <p className="text-[11px] font-mono text-white/25">
               {status === 'completed'
-                ? 'No findings returned — environment appears clean for this engine.'
-                : 'Run the engine to populate findings.'}
+                ? t('pages.cloudControlTower.no_findings_clean')
+                : t('pages.cloudControlTower.run_to_populate')}
             </p>
           </div>
         )}
@@ -147,6 +162,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast }) {
 }
 
 export default function CloudControlTower() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -170,16 +186,15 @@ export default function CloudControlTower() {
   const clientTarget = firstClientTarget(selectedClient)
 
   return (
-    <PageShell title="Cloud Control Tower" badge="CLOUD / INFRA" badgeColor="#3b82f6" subtitle={`${CLOUD_TABS.length} providers`}>
-      {/* Client selector */}
+    <PageShell title={t('pages.cloudControlTower.title')} badge={t('pages.cloudControlTower.badge')} badgeColor="#3b82f6" subtitle={t('pages.cloudControlTower.subtitle', { count: CLOUD_TABS.length })}>
       <div className="flex items-center gap-2 mb-6">
-        <span className="text-[11px] font-mono text-white/40">Client:</span>
+        <span className="text-[11px] font-mono text-white/40">{t('pages.cloudControlTower.client_label')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
           className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-blue-500/40"
         >
-          <option value="">— Select client —</option>
+          <option value="">{t('pages.cloudControlTower.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
@@ -199,7 +214,7 @@ export default function CloudControlTower() {
 
       {!selectedClientId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
-          Select a client to enable scan controls. The scan uses the first approved client domain as target.
+          {t('pages.cloudControlTower.select_client_warning')}
         </div>
       )}
 
@@ -209,6 +224,7 @@ export default function CloudControlTower() {
         clientId={selectedClientId}
         target={clientTarget}
         showToast={showToast}
+        t={t}
       />
     </PageShell>
   )

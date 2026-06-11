@@ -28,6 +28,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -44,6 +46,7 @@ services:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_MIGRATIONS_DIR: /srv/migrations
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_PUBLIC_BASE_URL: http://localhost
       WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}

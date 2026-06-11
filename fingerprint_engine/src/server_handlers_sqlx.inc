@@ -1374,6 +1374,11 @@ async fn collect_engine_history_json(
     .map_err(|e| format!("direct jobs query: {}", e))?;
 
     for r in direct_rows {
+        let payload = r
+            .try_get::<Option<serde_json::Value>, _>("payload")
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| json!({}));
         let result_json = r
             .try_get::<Option<serde_json::Value>, _>("result_json")
             .ok()
@@ -1384,6 +1389,11 @@ async fn collect_engine_history_json(
             .and_then(Value::as_array)
             .map(|a| a.len())
             .unwrap_or(0);
+        let target = payload
+            .get("target")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         jobs.push(json!({
             "job_id": r.try_get::<uuid::Uuid,_>("id").map(|v| v.to_string()).unwrap_or_default(),
             "kind": r.try_get::<String,_>("kind").unwrap_or_default(),
@@ -1392,6 +1402,7 @@ async fn collect_engine_history_json(
             "updated_at": r.try_get::<chrono::DateTime<Utc>,_>("updated_at").ok().map(|d| d.to_rfc3339()),
             "last_error": r.try_get::<Option<String>,_>("last_error").ok().flatten(),
             "findings_count": findings_count,
+            "target": target,
             "source": "engine_job",
         }));
     }
@@ -1686,6 +1697,9 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             }
         },
     };
+    if let Some(retry_after) = crate::http::check_lockout(tenant_key, email) {
+        return crate::http::locked_response(retry_after);
+    }
     if let Err(e) = weissman_db::auth_access::record_auth_access(
         state.auth_pool.as_ref(),
         tenant_key,
@@ -1755,9 +1769,15 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
             r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
         ),
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response(),
+        None => {
+            crate::http::record_failure(tenant_key, email);
+            return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
+        }
     };
-    if hash.is_empty() { return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response(); }
+    if hash.is_empty() {
+        crate::http::record_failure(tenant_key, email);
+        return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
+    }
     let mut password_ok = matches!(bcrypt::verify(password, &hash), Ok(true));
     if !password_ok
         && !weissman_core::tls_policy::is_production_environment()
@@ -1871,10 +1891,12 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 })),
             )
                 .into_response();
+            crate::http::clear_failures(tenant_id, email);
             append_set_cookie(response.headers_mut(), &access_cookie);
             append_set_cookie(response.headers_mut(), &refresh_cookie);
             response
         } else {
+            crate::http::record_failure(tenant_key, email);
             (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response()
         }
 }

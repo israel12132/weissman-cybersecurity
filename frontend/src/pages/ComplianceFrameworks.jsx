@@ -33,16 +33,15 @@ export default function ComplianceFrameworks() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, compliant, non-compliant, partial
 
-  const frameworksList = [
-    { id: 'cis', name: 'CIS Benchmarks', icon: '🛡️' },
-    { id: 'pci-dss', name: 'PCI-DSS', icon: '💳' },
-    { id: 'nist', name: 'NIST CSF', icon: '🏛️' },
-    { id: 'hipaa', name: 'HIPAA', icon: '🏥' },
-    { id: 'soc2', name: 'SOC 2', icon: '📊' },
-    { id: 'gdpr', name: 'GDPR', icon: '🇪🇺' },
-    { id: 'iso27001', name: 'ISO 27001', icon: '🔐' },
-    { id: 'fedramp', name: 'FedRAMP', icon: '🇺🇸' },
-  ];
+  const FRAMEWORK_ICONS = {
+    iso27001: '🔐',
+    soc2: '📊',
+    nis2: '🇪🇺',
+    gdpr: '🇪🇺',
+    iec62443: '⚙️',
+    pci: '💳',
+    'csa-ccm': '☁️',
+  };
 
   useEffect(() => {
     fetchFrameworks();
@@ -141,30 +140,43 @@ export default function ComplianceFrameworks() {
       <div className="space-y-6">
         {/* Framework Selector */}
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
-          {frameworksList.map((fw) => {
-            const frameworkData = frameworks.find((f) => f.id === fw.id);
-            const isSelected = selectedFramework?.id === fw.id;
+          {loading && frameworks.length === 0 ? (
+            <div className="text-sm text-gray-500 px-4 py-3">Loading frameworks...</div>
+          ) : frameworks.length === 0 ? (
+            <div className="text-sm text-gray-500 px-4 py-3">No compliance frameworks available from the API.</div>
+          ) : (
+            frameworks.map((fw) => {
+              const isSelected = selectedFramework?.id === fw.id;
+              const hasData = Boolean(fw.id && fw.name);
+              const scoreLabel = selectedFramework?.id === fw.id && controls.length > 0
+                ? `${stats.score}% compliant`
+                : fw.scope;
 
-            return (
-              <button
-                key={fw.id}
-                onClick={() => setSelectedFramework(frameworkData || fw)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
-                  isSelected
-                    ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-                    : 'bg-black/40 text-gray-400 border-white/10 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <span className="text-xl">{fw.icon}</span>
-                <div className="text-left">
-                  <div className="text-sm font-semibold">{fw.name}</div>
-                  {frameworkData && (
-                    <div className="text-xs opacity-75">{frameworkData.score}% compliant</div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={fw.id}
+                  type="button"
+                  disabled={!hasData}
+                  onClick={() => hasData && setSelectedFramework(fw)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
+                    !hasData
+                      ? 'bg-black/20 text-gray-600 border-white/5 cursor-not-allowed opacity-50'
+                      : isSelected
+                      ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
+                      : 'bg-black/40 text-gray-400 border-white/10 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <span className="text-xl">{FRAMEWORK_ICONS[fw.id] || '🛡️'}</span>
+                  <div className="text-left">
+                    <div className="text-sm font-semibold">{fw.name}</div>
+                    {scoreLabel && (
+                      <div className="text-xs opacity-75 truncate max-w-[180px]">{scoreLabel}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
 
         {/* Stats */}

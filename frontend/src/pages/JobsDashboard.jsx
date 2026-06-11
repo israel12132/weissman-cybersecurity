@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
 import { normalizeJobStatus } from '../lib/useJobPoll'
 import { useAuth } from '../context/AuthContext'
 
@@ -16,28 +16,15 @@ const STATUS_COLORS = {
 
 export default function JobsDashboard() {
   const { t } = useTranslation()
-  const { isCeo } = useAuth()
+  const { isCeo, isLoading: authLoading } = useAuth()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const hasLoadedRef = useRef(false)
 
-  useEffect(() => {
-    loadJobs()
-  }, [])
-
-  useEffect(() => {
-    if (!autoRefresh) return
-    const interval = setInterval(() => {
-      loadJobs()
-    }, 5000) // Refresh every 5 seconds
-    return () => clearInterval(interval)
-  }, [autoRefresh])
-
-  async function loadJobs() {
+  const loadJobs = useCallback(async () => {
     try {
-      // Note: This endpoint may need to be implemented in the backend
-      // For now, we'll try different possible endpoints
       let response = await apiFetch('/api/jobs?limit=50')
 
       if (!response.ok && isCeo) {
@@ -45,7 +32,7 @@ export default function JobsDashboard() {
       }
 
       if (!response.ok) {
-        if (!loading) return // Don't show error on refresh if already loaded
+        if (hasLoadedRef.current) return
         const text = await response.text().catch(() => 'Failed to load jobs')
         setError(t('pages.jobsDashboard.load_failed', { detail: text }))
         setLoading(false)
@@ -53,17 +40,30 @@ export default function JobsDashboard() {
       }
 
       const data = await response.json()
-      // Handle different response formats
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setError('')
+      hasLoadedRef.current = true
     } catch (err) {
-      if (!loading) return // Don't show error on refresh
+      if (hasLoadedRef.current) return
       setError(t('pages.jobsDashboard.load_error', { detail: err.message }))
     } finally {
       setLoading(false)
     }
-  }
+  }, [isCeo, t])
+
+  useEffect(() => {
+    if (authLoading) return
+    loadJobs()
+  }, [authLoading, loadJobs])
+
+  useEffect(() => {
+    if (!autoRefresh || authLoading) return
+    const interval = setInterval(() => {
+      loadJobs()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [autoRefresh, authLoading, loadJobs])
 
   function getStatusBadgeClass(status) {
     const statusLower = normalizeJobStatus(status)

@@ -1,6 +1,13 @@
 // Alert rules CRUD — `/api/alerts/rules` (AlertRulesEngine.jsx).
 
-fn alert_rule_from_row(id: i64, name: &str, condition: &Value, actions: &Value, enabled: bool) -> Value {
+fn alert_rule_from_row(
+    id: i64,
+    name: &str,
+    condition: &Value,
+    actions: &Value,
+    enabled: bool,
+    triggered_count: i64,
+) -> Value {
     let description = condition
         .get("description")
         .and_then(|v| v.as_str())
@@ -32,7 +39,7 @@ fn alert_rule_from_row(id: i64, name: &str, condition: &Value, actions: &Value, 
         "priority": priority,
         "conditions": conditions,
         "channels": channels,
-        "triggered_count": 0,
+        "triggered_count": triggered_count,
     })
 }
 
@@ -59,9 +66,15 @@ async fn api_alert_rules_list(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "rules": []}))).into_response();
     };
     let rows = sqlx::query(
-        r#"SELECT id, name, condition, actions, enabled
-             FROM weissman_alert_rules
-            ORDER BY enabled DESC, updated_at DESC"#,
+        r#"SELECT r.id, r.name, r.condition, r.actions, r.enabled,
+                  COALESCE(f.cnt, 0)::bigint AS triggered_count
+             FROM weissman_alert_rules r
+             LEFT JOIN (
+               SELECT rule_id, COUNT(*)::bigint AS cnt
+                 FROM weissman_alert_rule_fires
+                GROUP BY rule_id
+             ) f ON f.rule_id = r.id
+            ORDER BY r.enabled DESC, r.updated_at DESC"#,
     )
     .fetch_all(&mut *tx)
     .await
@@ -76,7 +89,8 @@ async fn api_alert_rules_list(
             let condition: Value = r.try_get("condition").unwrap_or(json!({}));
             let actions: Value = r.try_get("actions").unwrap_or(json!({}));
             let enabled = r.try_get::<bool, _>("enabled").unwrap_or(false);
-            alert_rule_from_row(id, &name, &condition, &actions, enabled)
+            let triggered_count = r.try_get::<i64, _>("triggered_count").unwrap_or(0);
+            alert_rule_from_row(id, &name, &condition, &actions, enabled, triggered_count)
         })
         .collect();
     (StatusCode::OK, Json(json!({"ok": true, "rules": rules}))).into_response()

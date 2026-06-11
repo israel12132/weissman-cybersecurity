@@ -85,6 +85,17 @@ pub fn can_assign_ceo_role(auth: &AuthContext) -> bool {
     auth.is_superadmin || auth.role.eq_ignore_ascii_case(roles::CEO)
 }
 
+/// HTTP gate for handlers that assign `role = ceo`.
+pub fn require_can_assign_ceo(auth: &AuthContext) -> Result<(), Response> {
+    if can_assign_ceo_role(auth) {
+        return Ok(());
+    }
+    Err(forbidden(
+        auth,
+        "Only CEO or superadmin may assign the CEO role",
+    ))
+}
+
 /// Endpoint-agent WebSocket / fleet APIs — only JWTs with `role=agent` (not human RBAC ranks).
 #[inline]
 pub fn require_agent(auth: &AuthContext) -> Result<(), Response> {
@@ -126,6 +137,7 @@ mod tests {
             role: role.to_string(),
             is_superadmin: superadmin,
             agent_id: None,
+            jti: None,
         }
     }
 
@@ -161,5 +173,7 @@ mod tests {
         assert!(can_assign_ceo_role(&ctx("admin", true)));
         assert!(!can_assign_ceo_role(&ctx("admin", false)));
         assert!(!can_assign_ceo_role(&ctx("operator", false)));
+        assert!(require_can_assign_ceo(&ctx("ceo", false)).is_ok());
+        assert!(require_can_assign_ceo(&ctx("admin", false)).is_err());
     }
 }
