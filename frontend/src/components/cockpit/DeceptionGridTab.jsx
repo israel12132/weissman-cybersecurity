@@ -1,19 +1,17 @@
 /**
  * CNAPP Layer 4: Deception Grid — honeytokens, active cloud injection map, CRITICAL on trigger.
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { ShieldAlert, Plus, MapPin, AlertTriangle, Key, Cloud, Loader2 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
-const ASSET_TYPES = [
-  { value: 'api_key', label: 'API Key' },
-  { value: 'aws_key', label: 'AWS Key' },
-  { value: 'db_cred', label: 'DB Credential' },
-  { value: 'shadow_endpoint', label: 'Shadow Endpoint' },
-]
+const NS = 'components.cockpitTabs.deceptionGrid'
+
+const ASSET_TYPE_VALUES = ['api_key', 'aws_key', 'db_cred', 'shadow_endpoint']
 
 function parseAssetIds(raw) {
   return raw
@@ -23,6 +21,7 @@ function parseAssetIds(raw) {
 }
 
 export default function DeceptionGridTab() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const { lastTelemetry } = useWarRoom?.() || {}
   const [assets, setAssets] = useState([])
@@ -38,6 +37,11 @@ export default function DeceptionGridTab() {
     ssm_parameter_path: '',
   })
   const [deployMsg, setDeployMsg] = useState(null)
+
+  const assetTypes = useMemo(
+    () => ASSET_TYPE_VALUES.map(value => ({ value, label: t(`${NS}.assetTypes.${value}`) })),
+    [t],
+  )
 
   const fetchAssets = useCallback(async () => {
     if (!selectedClientId) {
@@ -64,10 +68,10 @@ export default function DeceptionGridTab() {
   }, [fetchAssets])
 
   useEffect(() => {
-    const t =
+    const triggered =
       lastTelemetry?.event === 'deception_triggered' &&
       String(lastTelemetry?.client_id ?? '') === String(selectedClientId ?? '')
-    if (t) fetchAssets()
+    if (triggered) fetchAssets()
   }, [lastTelemetry, selectedClientId, fetchAssets])
 
   const generate = async () => {
@@ -88,7 +92,7 @@ export default function DeceptionGridTab() {
     if (!selectedClientId) return
     const ids = parseAssetIds(deployForm.asset_ids)
     if (ids.length === 0) {
-      setDeployMsg({ ok: false, text: 'Enter one or more asset IDs (comma-separated).' })
+      setDeployMsg({ ok: false, text: t(`${NS}.enterAssetIds`) })
       return
     }
     setDeploying(true)
@@ -110,7 +114,10 @@ export default function DeceptionGridTab() {
       if (r.ok && d.ok) {
         setDeployMsg({
           ok: true,
-          text: `Deployed ${d.deployed ?? 0}. ${(d.errors || []).length ? d.errors.join('; ') : ''}`,
+          text: t(`${NS}.deployed`, {
+            count: d.deployed ?? 0,
+            errors: (d.errors || []).length ? d.errors.join('; ') : '',
+          }),
         })
       } else {
         setDeployMsg({ ok: false, text: d.detail || JSON.stringify(d) || r.statusText })
@@ -125,7 +132,7 @@ export default function DeceptionGridTab() {
   if (!selectedClientId) {
     return (
       <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
-        Select a client to manage deception assets.
+        {t(`${NS}.selectClient`)}
       </div>
     )
   }
@@ -137,57 +144,65 @@ export default function DeceptionGridTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-5 h-5 text-amber-400" />
-        <h2 className="text-lg font-semibold text-white">Deception Grid</h2>
+        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
 
       {triggered.length > 0 && (
         <div className="rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3 flex items-center gap-2 text-red-400">
           <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span className="font-medium">{triggered.length} honeytoken(s) triggered — CRITICAL. Attacker fingerprint logged.</span>
+          <span className="font-medium">{t(`${NS}.triggeredAlert`, { count: triggered.length })}</span>
         </div>
       )}
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">Active cloud injection (STS assume-role)</h3>
+        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.cloudInjectionTitle`)}</h3>
         <p className="text-[11px] text-white/50 mb-3">
-          Configure the client&apos;s cross-account role (Phase 3). For <code className="text-[#22d3ee]">aws_key</code> set S3 bucket + object key;
-          for <code className="text-[#22d3ee]">db_cred</code> / <code className="text-[#22d3ee]">api_key</code> set SSM parameter path. Forward CloudTrail /
-          GuardDuty JSON to <code className="text-[#22d3ee]">POST /api/deception/aws-events</code> with header{' '}
-          <code className="text-[#22d3ee]">X-Weissman-Signature: sha256=…</code> (HMAC-SHA256 body, secret{' '}
-          <code className="text-[#22d3ee]">WEISSMAN_DECEPTION_WEBHOOK_SECRET</code>).
+          {t(`${NS}.cloudInjectionHintBeforeAwsKey`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintAwsKey`)}</code>
+          {t(`${NS}.cloudInjectionHintMiddle`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintDbCred`)}</code>
+          {t(`${NS}.cloudInjectionHintAnd`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintApiKey`)}</code>
+          {t(`${NS}.cloudInjectionHintAfterTypes`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintEndpoint`)}</code>
+          {t(`${NS}.cloudInjectionHintWithHeader`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintSignature`)}</code>
+          {t(`${NS}.cloudInjectionHintHmac`)}
+          <code className="text-[#22d3ee]">{t(`${NS}.cloudInjectionHintSecret`)}</code>
+          {t(`${NS}.cloudInjectionHintEnd`)}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input
             type="text"
-            placeholder="Asset IDs (e.g. 12, 14)"
+            placeholder={t(`${NS}.assetIds`)}
             value={deployForm.asset_ids}
             onChange={e => setDeployForm(f => ({ ...f, asset_ids: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm md:col-span-2"
           />
           <input
             type="text"
-            placeholder="S3 bucket"
+            placeholder={t(`${NS}.s3Bucket`)}
             value={deployForm.s3_bucket}
             onChange={e => setDeployForm(f => ({ ...f, s3_bucket: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="S3 object key"
+            placeholder={t(`${NS}.s3ObjectKey`)}
             value={deployForm.s3_object_key}
             onChange={e => setDeployForm(f => ({ ...f, s3_object_key: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="S3 region (optional)"
+            placeholder={t(`${NS}.s3Region`)}
             value={deployForm.s3_region}
             onChange={e => setDeployForm(f => ({ ...f, s3_region: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="SSM parameter path (e.g. /weissman/honey/db)"
+            placeholder={t(`${NS}.ssmParameterPath`)}
             value={deployForm.ssm_parameter_path}
             onChange={e => setDeployForm(f => ({ ...f, ssm_parameter_path: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
@@ -200,7 +215,7 @@ export default function DeceptionGridTab() {
           className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl border border-sky-500/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-50"
         >
           {deploying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
-          {deploying ? 'Injecting…' : 'Deploy to tenant AWS'}
+          {deploying ? t(`${NS}.injecting`) : t(`${NS}.deployButton`)}
         </button>
         {deployMsg && (
           <p className={`mt-2 text-xs ${deployMsg.ok ? 'text-[#10b981]' : 'text-red-400'}`}>{deployMsg.text}</p>
@@ -210,7 +225,7 @@ export default function DeceptionGridTab() {
       {injected.length > 0 && (
         <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
           <h4 className="text-xs font-medium text-sky-300 mb-2 flex items-center gap-2">
-            <MapPin className="w-4 h-4" /> Cloud injection map
+            <MapPin className="w-4 h-4" /> {t(`${NS}.cloudInjectionMap`)}
           </h4>
           <ul className="space-y-1 text-[11px] font-mono text-white/70">
             {injected.map(a => (
@@ -223,16 +238,16 @@ export default function DeceptionGridTab() {
       )}
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">Generate honeytokens</h3>
+        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.generateHoneytokens`)}</h3>
         <div className="flex flex-wrap gap-2 mb-3">
-          {ASSET_TYPES.map(({ value, label }) => (
+          {assetTypes.map(({ value, label }) => (
             <label key={value} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={typesToGenerate.includes(value)}
                 onChange={e => {
-                  if (e.target.checked) setTypesToGenerate(t => [...t, value])
-                  else setTypesToGenerate(t => t.filter(x => x !== value))
+                  if (e.target.checked) setTypesToGenerate(prev => [...prev, value])
+                  else setTypesToGenerate(prev => prev.filter(x => x !== value))
                 }}
                 className="rounded border-white/20"
               />
@@ -247,21 +262,21 @@ export default function DeceptionGridTab() {
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
-          {generating ? 'Generating…' : 'Generate tokens'}
+          {generating ? t(`${NS}.generating`) : t(`${NS}.generateTokens`)}
         </button>
       </div>
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-sm font-medium text-white/90">Honeytoken inventory</span>
+          <span className="text-sm font-medium text-white/90">{t(`${NS}.honeytokenInventory`)}</span>
           <button type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
-            Refresh
+            {t(`${NS}.refresh`)}
           </button>
         </div>
         {loading ? (
-          <div className="p-6 text-center text-white/50 text-sm">Loading…</div>
+          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
         ) : assets.length === 0 ? (
-          <div className="p-6 text-center text-white/50 text-sm">No deception assets. Generate tokens, then deploy to AWS above.</div>
+          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noAssets`)}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {assets.map(a => (
@@ -283,7 +298,7 @@ export default function DeceptionGridTab() {
                 </div>
                 {a.canary_access_key_id ? (
                   <div className="mt-1 text-[9px] text-amber-200/80 font-mono truncate" title={a.canary_access_key_id}>
-                    canary AKIA: {a.canary_access_key_id}
+                    {t(`${NS}.canaryAkia`, { id: a.canary_access_key_id })}
                   </div>
                 ) : null}
                 {a.deployment_location && (

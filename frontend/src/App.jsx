@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import CinematicBackground from './components/CinematicBackground'
 import EmergencyAlert from './components/EmergencyAlert'
 import Globe from './components/Globe'
@@ -29,6 +30,7 @@ function resolveTargetToLatLon(globeData, targetName) {
 }
 
 export default function App() {
+  const { t } = useTranslation()
   // Use the robust WebSocket hook
   const {
     events: tickerEvents,
@@ -136,33 +138,33 @@ export default function App() {
 
       <header className="soc-header">
         <nav className="flex gap-4 text-sm font-mono flex-wrap items-center">
-          <a href="/" className="nav-link">Dashboard</a>
-          <a href="/clients" className="nav-link">Clients</a>
-          <Link to="/engines" className="nav-link nav-link-active">Engine Matrix</Link>
-          <Link to="/threat-intel" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>Threat Intel</Link>
-          <Link to="/threat-emulation" className="nav-link">APT Emulation</Link>
-          <Link to="/cloud" className="nav-link">Cloud</Link>
-          <Link to="/supply-chain" className="nav-link">Supply Chain</Link>
-          <Link to="/network" className="nav-link">Network</Link>
-          <Link to="/domain-discovery" className="nav-link">Discovery</Link>
-          <Link to="/pqc-radar" className="nav-link">PQC Radar</Link>
-          <Link to="/oast" className="nav-link">OAST</Link>
-          <Link to="/digital-twin" className="nav-link">Digital Twin</Link>
-          <Link to="/zero-day-radar" className="nav-link">Zero-Day</Link>
+          <a href="/" className="nav-link">{t('components.intelMap.dashboard')}</a>
+          <a href="/clients" className="nav-link">{t('components.intelMap.clients')}</a>
+          <Link to="/engines" className="nav-link nav-link-active">{t('components.intelMap.engine_matrix')}</Link>
+          <Link to="/threat-intel" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>{t('components.intelMap.threat_intel')}</Link>
+          <Link to="/threat-emulation" className="nav-link">{t('components.intelMap.apt_emulation')}</Link>
+          <Link to="/cloud" className="nav-link">{t('components.intelMap.cloud')}</Link>
+          <Link to="/supply-chain" className="nav-link">{t('components.intelMap.supply_chain')}</Link>
+          <Link to="/network" className="nav-link">{t('components.intelMap.network')}</Link>
+          <Link to="/domain-discovery" className="nav-link">{t('components.intelMap.discovery')}</Link>
+          <Link to="/pqc-radar" className="nav-link">{t('components.intelMap.pqc_radar')}</Link>
+          <Link to="/oast" className="nav-link">{t('components.intelMap.oast')}</Link>
+          <Link to="/digital-twin" className="nav-link">{t('components.intelMap.digital_twin')}</Link>
+          <Link to="/zero-day-radar" className="nav-link">{t('components.intelMap.zero_day')}</Link>
           <span className="text-white/10">|</span>
-          <Link to="/findings" className="nav-link nav-link-findings">Findings C2</Link>
-          <Link to="/incident-response" className="nav-link" style={{ color: 'rgba(239,68,68,0.85)' }}>IR Center</Link>
-          <Link to="/vuln-intel" className="nav-link" style={{ color: 'rgba(249,115,22,0.85)' }}>Vuln Intel</Link>
-          <Link to="/dark-web" className="nav-link" style={{ color: 'rgba(167,139,250,0.85)' }}>Dark Web</Link>
-          <Link to="/threat-hunting" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>Threat Hunt</Link>
+          <Link to="/findings" className="nav-link nav-link-findings">{t('components.intelMap.findings_c2')}</Link>
+          <Link to="/incident-response" className="nav-link" style={{ color: 'rgba(239,68,68,0.85)' }}>{t('components.intelMap.ir_center')}</Link>
+          <Link to="/vuln-intel" className="nav-link" style={{ color: 'rgba(249,115,22,0.85)' }}>{t('components.intelMap.vuln_intel')}</Link>
+          <Link to="/dark-web" className="nav-link" style={{ color: 'rgba(167,139,250,0.85)' }}>{t('components.intelMap.dark_web')}</Link>
+          <Link to="/threat-hunting" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>{t('components.intelMap.threat_hunt')}</Link>
           <span className="text-white/10">|</span>
-          <Link to="/council-queue" className="nav-link" style={{ color: 'rgba(251,191,36,0.7)' }}>Council</Link>
-          <Link to="/sso-config" className="nav-link" style={{ color: 'rgba(168,85,247,0.7)' }}>SSO</Link>
-          <Link to="/admin" className="nav-link" style={{ color: 'rgba(251,191,36,0.9)' }}>Admin</Link>
-          <Link to="/system-core" className="nav-link">System Core</Link>
+          <Link to="/council-queue" className="nav-link" style={{ color: 'rgba(251,191,36,0.7)' }}>{t('components.intelMap.council')}</Link>
+          <Link to="/sso-config" className="nav-link" style={{ color: 'rgba(168,85,247,0.7)' }}>{t('components.intelMap.sso')}</Link>
+          <Link to="/admin" className="nav-link" style={{ color: 'rgba(251,191,36,0.9)' }}>{t('components.intelMap.admin')}</Link>
+          <Link to="/system-core" className="nav-link">{t('components.intelMap.system_core')}</Link>
           <span className="text-white/10">|</span>
-          <a href={apiUrl('/api/export/findings')} className="nav-link" download>Export CSV</a>
-          <a href="/logout" className="nav-link nav-link-danger">Logout</a>
+          <a href={apiUrl('/api/export/findings')} className="nav-link" download>{t('components.intelMap.export_csv')}</a>
+          <a href="/logout" className="nav-link nav-link-danger">{t('components.intelMap.logout')}</a>
         </nav>
       </header>
 
@@ -182,12 +184,12 @@ export default function App() {
         <div className="soc-branding-corner soc-branding-bl" />
         <div className="soc-branding-corner soc-branding-br" />
         <span className="soc-branding-status soc-branding-status-tl">
-          {connectionStatus === 'online' ? now.toISOString().slice(11, 23) : 'CONNECTION LOST'}
+          {connectionStatus === 'online' ? now.toISOString().slice(11, 23) : t('components.intelMap.connection_lost')}
         </span>
         <span className="soc-branding-status soc-branding-status-tr">
-          {connectionStatus === 'online' ? 'Scanning...' : '—'}
+          {connectionStatus === 'online' ? t('components.intelMap.scanning') : '—'}
         </span>
-        <h1 className="soc-title soc-title-ultimate">WEISSMAN | ADVANCED OFFENSIVE INTELLIGENCE</h1>
+        <h1 className="soc-title soc-title-ultimate">{t('components.intelMap.title')}</h1>
         <GlobalThreatTicker scoreData={scoreData} globeData={globeData} intelCount={tickerEvents.length} />
       </div>
 

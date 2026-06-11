@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
@@ -7,6 +8,7 @@ function approvalsHave(req) {
 }
 
 export default function RoeApprovals() {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [requests, setRequests] = useState([])
@@ -18,20 +20,20 @@ export default function RoeApprovals() {
     try {
       const r = await apiFetch('/api/roe/override-requests?status=pending')
       if (!r.ok) {
-        const t = await r.text().catch(() => '')
-        setError(`Failed to load requests (HTTP ${r.status}) ${t}`)
+        const detail = await r.text().catch(() => '')
+        setError(t('pages.roeApprovals.load_failed', { status: r.status, detail }))
         setRequests([])
         return
       }
       const data = await r.json().catch(() => ({}))
       setRequests(Array.isArray(data.requests) ? data.requests : [])
     } catch (e) {
-      setError(e?.message || 'Network error')
+      setError(e?.message || t('pages.roeApprovals.network_error'))
       setRequests([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()
@@ -43,7 +45,7 @@ export default function RoeApprovals() {
       const r = await apiFetch(`/api/roe/override-requests/${req.id}/approve`, { method: 'POST' })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert(data?.detail || `Approve failed (HTTP ${r.status})`)
+        alert(data?.detail || t('pages.roeApprovals.approve_failed', { status: r.status }))
         return
       }
       await load()
@@ -53,7 +55,7 @@ export default function RoeApprovals() {
   }
 
   async function reject(req) {
-    const reason = prompt('Reject reason (optional):', '')
+    const reason = prompt(t('pages.roeApprovals.reject_prompt'), '')
     if (reason === null) return
     setActionId(req.id)
     try {
@@ -64,7 +66,7 @@ export default function RoeApprovals() {
       })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert(data?.detail || `Reject failed (HTTP ${r.status})`)
+        alert(data?.detail || t('pages.roeApprovals.reject_failed', { status: r.status }))
         return
       }
       await load()
@@ -75,8 +77,8 @@ export default function RoeApprovals() {
 
   return (
     <PageShell
-      title="ROE Approvals"
-      subtitle="Weaponized ROE requires two distinct admin approvals. Approvals auto-apply client config."
+      title={t('pages.roeApprovals.title')}
+      subtitle={t('pages.roeApprovals.subtitle')}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         {error && (
@@ -87,7 +89,7 @@ export default function RoeApprovals() {
 
         <div className="flex items-center justify-between">
           <div className="text-xs text-slate-500 font-mono">
-            Pending: {requests.length}
+            {t('pages.roeApprovals.pending', { count: requests.length })}
           </div>
           <button
             type="button"
@@ -95,18 +97,18 @@ export default function RoeApprovals() {
             className="px-3 py-1.5 text-xs border border-slate-700 text-slate-300 rounded hover:bg-slate-800"
             disabled={loading}
           >
-            Refresh
+            {t('pages.roeApprovals.refresh')}
           </button>
         </div>
 
         {loading ? (
           <div className="text-center py-12 text-slate-400">
             <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-4">Loading approvals…</p>
+            <p className="mt-4">{t('pages.roeApprovals.loading')}</p>
           </div>
         ) : requests.length === 0 ? (
           <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
-            No pending weaponization requests.
+            {t('pages.roeApprovals.empty')}
           </div>
         ) : (
           <div className="space-y-3">
@@ -120,14 +122,20 @@ export default function RoeApprovals() {
                         {req.status}
                       </span>
                       <span className="text-[11px] font-mono text-white/50">
-                        approvals {approvalsHave(req)}/2
+                        {t('pages.roeApprovals.approvals_count', { count: approvalsHave(req) })}
                       </span>
                     </div>
                     <div className="mt-2 text-sm font-medium text-white truncate">
-                      Client {req.client_id}{req.client_name ? ` — ${req.client_name}` : ''}
+                      {t('pages.roeApprovals.client', {
+                        id: req.client_id,
+                        name: req.client_name ? ` — ${req.client_name}` : '',
+                      })}
                     </div>
                     <div className="mt-1 text-[11px] font-mono text-white/35">
-                      desired: {req.desired_roe_mode} · expires: {req.expires_at ? new Date(req.expires_at).toLocaleString() : '—'}
+                      {t('pages.roeApprovals.desired', {
+                        mode: req.desired_roe_mode,
+                        expires: req.expires_at ? new Date(req.expires_at).toLocaleString() : '—',
+                      })}
                     </div>
                     {req.justification && (
                       <div className="mt-2 text-[11px] text-white/55 whitespace-pre-wrap">
@@ -143,7 +151,7 @@ export default function RoeApprovals() {
                       disabled={actionId === req.id}
                       className="px-3 py-1.5 text-xs border border-emerald-500/40 text-emerald-200 rounded hover:bg-emerald-900/20 disabled:opacity-50"
                     >
-                      Approve
+                      {t('pages.roeApprovals.approve')}
                     </button>
                     <button
                       type="button"
@@ -151,7 +159,7 @@ export default function RoeApprovals() {
                       disabled={actionId === req.id}
                       className="px-3 py-1.5 text-xs border border-rose-500/40 text-rose-200 rounded hover:bg-rose-900/20 disabled:opacity-50"
                     >
-                      Reject
+                      {t('pages.roeApprovals.reject')}
                     </button>
                   </div>
                 </div>
@@ -163,4 +171,3 @@ export default function RoeApprovals() {
     </PageShell>
   )
 }
-

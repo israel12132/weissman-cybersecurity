@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
@@ -6,14 +7,6 @@ import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
 const MAX_LINES = 500
 const ENGINE_ID = 'osint'
 const SAFE_JOB_ID_RE = /^[A-Za-z0-9._:-]+$/
-
-const OSINT_CAPABILITIES = [
-  'Certificate Transparency harvesting (crt.sh) for subdomain intelligence',
-  'WHOIS/hostsearch enrichment (HackerTarget) for additional discovered hosts',
-  'Canonical target normalization (domain extraction from URL/host input)',
-  'De-duplication and wildcard filtering for clean actionable asset output',
-  'Structured JSON findings with confidence, severity, and risk impact metadata',
-]
 
 const OSINT_OUTPUT_FIELDS = [
   'type',
@@ -26,6 +19,7 @@ const OSINT_OUTPUT_FIELDS = [
 ]
 
 function Terminal({ lines }) {
+  const { t } = useTranslation()
   const ref = useRef(null)
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
@@ -37,7 +31,7 @@ function Terminal({ lines }) {
       className="h-72 overflow-auto rounded-xl bg-black/80 border border-white/5 p-3 font-mono text-[11px] leading-relaxed"
     >
       {lines.length === 0 ? (
-        <span className="text-white/20">{`> OSINT idle. Queue a run to start telemetry.`}</span>
+        <span className="text-white/20">{t('pages.osintEngineProfile.terminal_idle')}</span>
       ) : (
         lines.map((line, i) => (
           <div
@@ -59,6 +53,7 @@ function Terminal({ lines }) {
 }
 
 export default function OsintEngineProfile() {
+  const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [target, setTarget] = useState('')
@@ -72,6 +67,17 @@ export default function OsintEngineProfile() {
     eventSourceRef.current = null
     if (es.readyState !== EventSource.CLOSED) es.close()
   }, [])
+
+  const capabilities = useMemo(
+    () => [
+      t('pages.osintEngineProfile.capability_1'),
+      t('pages.osintEngineProfile.capability_2'),
+      t('pages.osintEngineProfile.capability_3'),
+      t('pages.osintEngineProfile.capability_4'),
+      t('pages.osintEngineProfile.capability_5'),
+    ],
+    [t],
+  )
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -103,21 +109,21 @@ export default function OsintEngineProfile() {
   const showToast = useCallback((severity, message) => {
     const id = Date.now()
     setToast({ id, severity, message })
-    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
+    setTimeout(() => setToast((prev) => (prev?.id === id ? null : prev)), 5000)
   }, [])
 
   const selectedClientName = useMemo(
-    () => clients.find((c) => String(c.id) === String(selectedClientId))?.name ?? 'No client selected',
-    [clients, selectedClientId],
+    () => clients.find((c) => String(c.id) === String(selectedClientId))?.name ?? t('pages.osintEngineProfile.no_client_selected'),
+    [clients, selectedClientId, t],
   )
 
   const handleRun = useCallback(async () => {
     if (!selectedClientId) {
-      showToast('error', 'Select a client first')
+      showToast('error', t('pages.osintEngineProfile.select_client_first'))
       return
     }
     if (!target.trim()) {
-      showToast('error', 'Target domain/URL is required for OSINT')
+      showToast('error', t('pages.osintEngineProfile.target_required'))
       return
     }
 
@@ -136,19 +142,22 @@ export default function OsintEngineProfile() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        showToast('error', d.detail || d.error || `Scan failed (${r.status})`)
+        showToast('error', d.detail || d.error || t('pages.osintEngineProfile.scan_failed', { status: r.status }))
         setRunning(false)
         return
       }
 
       const jobId = d.job_id || ''
-      setLines([`> OSINT queued: ${jobId || '(no id)'}`, '> Connecting to telemetry stream...'])
+      setLines([
+        t('pages.osintEngineProfile.queued', { jobId: jobId || '(no id)' }),
+        t('pages.osintEngineProfile.connecting'),
+      ])
       if (!jobId) {
         setRunning(false)
         return
       }
       if (!SAFE_JOB_ID_RE.test(String(jobId))) {
-        showToast('error', 'Received invalid job id from server')
+        showToast('error', t('pages.osintEngineProfile.invalid_job_id'))
         setRunning(false)
         return
       }
@@ -185,16 +194,16 @@ export default function OsintEngineProfile() {
         closeStream()
       }
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.osintEngineProfile.network_error'))
       setRunning(false)
     }
-  }, [closeStream, selectedClientId, target, showToast])
+  }, [closeStream, selectedClientId, target, showToast, t])
 
   return (
     <PageShell
-      title="OSINT Engine"
-      subtitle="Dedicated profile · first engine in registry"
-      badge="RECON"
+      title={t('pages.osintEngineProfile.title')}
+      subtitle={t('pages.osintEngineProfile.subtitle')}
+      badge={t('pages.osintEngineProfile.badge')}
       badgeColor="#06b6d4"
     >
       {toast && (
@@ -218,20 +227,19 @@ export default function OsintEngineProfile() {
               <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/50">MITRE T1589</span>
             </div>
             <p className="text-sm text-white/70 leading-relaxed">
-              Deep external reconnaissance engine for mapping publicly exposed domain assets with validated,
-              deduplicated intelligence ready for attack-surface expansion and follow-on scanning workflows.
+              {t('pages.osintEngineProfile.description')}
             </p>
             <div className="flex flex-wrap gap-2 text-[11px] font-mono">
-              <Link to="/engines" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors">Engine Matrix</Link>
-              <Link to="/engine-catalog" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-emerald-300 hover:border-emerald-500/40 transition-colors">Client Catalog</Link>
-              <Link to="/threat-intel" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-purple-300 hover:border-purple-500/40 transition-colors">Threat Intel Hub</Link>
+              <Link to="/engines" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors">{t('pages.osintEngineProfile.link_engine_matrix')}</Link>
+              <Link to="/engine-catalog" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-emerald-300 hover:border-emerald-500/40 transition-colors">{t('pages.osintEngineProfile.link_catalog')}</Link>
+              <Link to="/threat-intel" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-purple-300 hover:border-purple-500/40 transition-colors">{t('pages.osintEngineProfile.link_threat_intel')}</Link>
             </div>
           </div>
 
           <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">What this engine does</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.capabilities_heading')}</h3>
             <ul className="space-y-2 text-sm text-white/70">
-              {OSINT_CAPABILITIES.map((capability) => (
+              {capabilities.map((capability) => (
                 <li key={capability} className="flex items-start gap-2">
                   <span className="text-cyan-300">•</span>
                   <span>{capability}</span>
@@ -241,7 +249,7 @@ export default function OsintEngineProfile() {
           </div>
 
           <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">Output schema</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.output_schema')}</h3>
             <div className="flex flex-wrap gap-2">
               {OSINT_OUTPUT_FIELDS.map((field) => (
                 <span key={field} className="px-2 py-1 rounded border border-white/10 bg-white/5 text-[11px] font-mono text-white/65">
@@ -254,28 +262,28 @@ export default function OsintEngineProfile() {
 
         <div className="space-y-6">
           <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-4">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">Run OSINT precisely</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.osintEngineProfile.run_heading')}</h3>
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">Client</label>
+              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.client_label')}</label>
               <select
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
                 className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono focus:outline-none focus:border-cyan-500/40"
               >
-                <option value="">— Select client —</option>
+                <option value="">{t('pages.osintEngineProfile.select_client')}</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <div className="text-[10px] text-white/35 font-mono mt-1">Active: {selectedClientName}</div>
+              <div className="text-[10px] text-white/35 font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
             </div>
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">Target URL / Domain</label>
+              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.target_label')}</label>
               <input
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="https://target.com"
+                placeholder={t('pages.osintEngineProfile.target_placeholder')}
                 disabled={running}
                 className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
               />
@@ -286,12 +294,12 @@ export default function OsintEngineProfile() {
               disabled={running}
               className="px-4 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {running ? '⟳ Running OSINT…' : '▶ Run OSINT'}
+              {running ? t('pages.osintEngineProfile.running') : t('pages.osintEngineProfile.run_btn')}
             </button>
           </div>
 
           <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">Live telemetry</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.osintEngineProfile.live_telemetry')}</h3>
             <Terminal lines={lines} />
           </div>
         </div>

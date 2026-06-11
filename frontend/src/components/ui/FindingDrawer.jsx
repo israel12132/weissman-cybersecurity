@@ -1,17 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, X } from 'lucide-react'
 import SeverityBadge, { getSeverityMeta } from './SeverityBadge'
 import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
-
-const DEFAULT_STATUS_OPTIONS = [
-  { value: 'OPEN', label: 'Open' },
-  { value: 'ACKNOWLEDGED', label: 'Acknowledged' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'FIXED', label: 'Fixed' },
-  { value: 'FALSE_POSITIVE', label: 'False Positive' },
-]
 
 function Section({ title, children, className = '' }) {
   return (
@@ -42,7 +35,7 @@ function MetaRow({ label, value, copyable = false }) {
   )
 }
 
-function EvidenceBlock({ title, content, copyable = true }) {
+function EvidenceBlock({ title, content, copyable = true, evidenceLabel, copyLabel }) {
   if (!content) return null
   const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2)
   return (
@@ -50,9 +43,9 @@ function EvidenceBlock({ title, content, copyable = true }) {
       <div className="relative rounded-xl border border-white/[0.08] bg-black/50 overflow-hidden">
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.06] bg-white/[0.02]">
           <span className="text-[9px] font-mono uppercase tracking-wider text-white/35">
-            Evidence
+            {evidenceLabel}
           </span>
-          {copyable && <CopyButton value={text} size="md" label="Copy" />}
+          {copyable && <CopyButton value={text} size="md" label={copyLabel} />}
         </div>
         <pre className="p-3 text-[11px] font-mono text-emerald-300/85 overflow-x-auto max-h-72 whitespace-pre-wrap break-all leading-relaxed m-0 custom-scroll">
           {text}
@@ -64,26 +57,31 @@ function EvidenceBlock({ title, content, copyable = true }) {
 
 /**
  * Right-side finding detail drawer with framer-motion slide-in.
- *
- * Props:
- *  - finding — full finding object; renders nothing when null
- *  - onClose
- *  - onStatusUpdate — optional (rawId, newStatus) => void
- *  - statusOptions — override status dropdown entries
- *  - headerExtra — React node below title (e.g. engine group badge)
- *  - actions — [{ label, onClick, variant?: 'primary'|'ghost' }]
- *  - subtitle — override subtitle line
  */
 export default function FindingDrawer({
   finding,
   onClose,
   onStatusUpdate,
-  statusOptions = DEFAULT_STATUS_OPTIONS,
+  statusOptions,
   headerExtra,
   actions = [],
   subtitle,
 }) {
+  const { t } = useTranslation()
   const [statusUpdating, setStatusUpdating] = useState(false)
+
+  const defaultStatusOptions = useMemo(
+    () => [
+      { value: 'OPEN', label: t('components.findingDrawer.statusOpen') },
+      { value: 'ACKNOWLEDGED', label: t('components.findingDrawer.statusAcknowledged') },
+      { value: 'IN_PROGRESS', label: t('components.findingDrawer.statusInProgress') },
+      { value: 'FIXED', label: t('components.findingDrawer.statusFixed') },
+      { value: 'FALSE_POSITIVE', label: t('components.findingDrawer.statusFalsePositive') },
+    ],
+    [t],
+  )
+
+  const resolvedStatusOptions = statusOptions ?? defaultStatusOptions
 
   useEffect(() => {
     if (!finding) return undefined
@@ -156,7 +154,7 @@ export default function FindingDrawer({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[9000] bg-black/65 backdrop-blur-sm border-0 cursor-default"
             onClick={onClose}
-            aria-label="Close drawer"
+            aria-label={t('components.findingDrawer.closeDrawer')}
           />
 
           <motion.aside
@@ -187,7 +185,7 @@ export default function FindingDrawer({
                     id="finding-drawer-title"
                     className="text-base font-semibold text-[var(--accent-strong)] leading-snug"
                   >
-                    {finding.title || finding.type || 'Finding'}
+                    {finding.title || finding.type || t('components.findingDrawer.defaultTitle')}
                   </h2>
 
                   {(subtitle || finding.target) && (
@@ -212,7 +210,7 @@ export default function FindingDrawer({
                         {cve}
                         <ExternalLink className="w-3 h-3" />
                       </a>
-                      <CopyButton value={cve} size="sm" label="Copy CVE" />
+                      <CopyButton value={cve} size="sm" label={t('components.findingDrawer.copyCve')} />
                     </div>
                   )}
 
@@ -233,7 +231,7 @@ export default function FindingDrawer({
                   type="button"
                   onClick={onClose}
                   className="shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white/90 hover:bg-white/5 transition-colors"
-                  aria-label="Close"
+                  aria-label={t('components.findingDrawer.close')}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -245,7 +243,7 @@ export default function FindingDrawer({
                   {onStatusUpdate && (
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">
-                        Status
+                        {t('components.findingDrawer.status')}
                       </span>
                       <select
                         value={finding.status || 'OPEN'}
@@ -253,7 +251,7 @@ export default function FindingDrawer({
                         disabled={statusUpdating}
                         className="bg-black/60 border border-white/15 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white/75 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
                       >
-                        {statusOptions.map((s) => (
+                        {resolvedStatusOptions.map((s) => (
                           <option key={s.value} value={s.value}>
                             {s.label}
                           </option>
@@ -285,7 +283,7 @@ export default function FindingDrawer({
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6 custom-scroll text-sm">
               {finding.description && (
-                <Section title="Description">
+                <Section title={t('components.findingDrawer.description')}>
                   <p className="text-[13px] text-white/72 leading-relaxed whitespace-pre-wrap">
                     {finding.description}
                   </p>
@@ -293,39 +291,39 @@ export default function FindingDrawer({
               )}
 
               {finding.remediation && (
-                <Section title="Remediation">
+                <Section title={t('components.findingDrawer.remediation')}>
                   <p className="text-[13px] text-white/72 leading-relaxed whitespace-pre-wrap">
                     {finding.remediation}
                   </p>
                 </Section>
               )}
 
-              <Section title="Technical Details">
+              <Section title={t('components.findingDrawer.technicalDetails')}>
                 <dl>
-                  <MetaRow label="Target" value={finding.target} copyable />
+                  <MetaRow label={t('components.findingDrawer.target')} value={finding.target} copyable />
                   <MetaRow
-                    label="Affected URL"
+                    label={t('components.findingDrawer.affectedUrl')}
                     value={finding.url ?? finding.affected_url ?? finding.target_url}
                     copyable
                   />
-                  <MetaRow label="Risk Score" value={finding.risk_score} />
-                  <MetaRow label="CVSS" value={finding.cvss_score ?? finding.score} />
-                  <MetaRow label="CWE" value={finding.cwe_id ?? finding.cwe ?? finding.cweId} />
-                  <MetaRow label="Source" value={finding.source ?? finding.engine} />
-                  <MetaRow label="Status" value={finding.status} />
+                  <MetaRow label={t('components.findingDrawer.riskScore')} value={finding.risk_score} />
+                  <MetaRow label={t('components.findingDrawer.cvss')} value={finding.cvss_score ?? finding.score} />
+                  <MetaRow label={t('components.findingDrawer.cwe')} value={finding.cwe_id ?? finding.cwe ?? finding.cweId} />
+                  <MetaRow label={t('components.findingDrawer.source')} value={finding.source ?? finding.engine} />
+                  <MetaRow label={t('components.findingDrawer.status')} value={finding.status} />
                   <MetaRow
-                    label="Discovered"
+                    label={t('components.findingDrawer.discovered')}
                     value={
                       finding.discovered_at || finding.created_at
                         ? new Date(finding.discovered_at || finding.created_at).toLocaleString()
                         : null
                     }
                   />
-                  <MetaRow label="Finding ID" value={finding.finding_id} copyable />
-                  <MetaRow label="Client ID" value={finding.client_id} copyable />
-                  <MetaRow label="Run ID" value={finding.run_id} copyable />
+                  <MetaRow label={t('components.findingDrawer.findingId')} value={finding.finding_id} copyable />
+                  <MetaRow label={t('components.findingDrawer.clientId')} value={finding.client_id} copyable />
+                  <MetaRow label={t('components.findingDrawer.runId')} value={finding.run_id} copyable />
                   <MetaRow
-                    label="PoC SHA-256"
+                    label={t('components.findingDrawer.pocSha256')}
                     value={finding.poc_commitment_sha256}
                     copyable
                   />
@@ -333,7 +331,7 @@ export default function FindingDrawer({
               </Section>
 
               {compliance.length > 0 && (
-                <Section title="Compliance Impact">
+                <Section title={t('components.findingDrawer.complianceImpact')}>
                   <div className="flex flex-wrap gap-1.5">
                     {compliance.map((tag, i) => (
                       <span
@@ -348,11 +346,17 @@ export default function FindingDrawer({
               )}
 
               {pocText && (
-                <EvidenceBlock title="Proof / PoC" content={String(pocText)} copyable />
+                <EvidenceBlock
+                  title={t('components.findingDrawer.proofPoc')}
+                  content={String(pocText)}
+                  copyable
+                  evidenceLabel={t('components.findingDrawer.evidence')}
+                  copyLabel={t('components.findingDrawer.copy')}
+                />
               )}
 
               {references.length > 0 && (
-                <Section title="References">
+                <Section title={t('components.findingDrawer.references')}>
                   <ul className="space-y-1.5">
                     {references.slice(0, 50).map((u, idx) => {
                       const isHttp = /^https?:\/\//i.test(u)
@@ -379,7 +383,13 @@ export default function FindingDrawer({
               )}
 
               {finding.raw != null && (
-                <EvidenceBlock title="Raw Evidence" content={finding.raw} copyable />
+                <EvidenceBlock
+                  title={t('components.findingDrawer.rawEvidence')}
+                  content={finding.raw}
+                  copyable
+                  evidenceLabel={t('components.findingDrawer.evidence')}
+                  copyLabel={t('components.findingDrawer.copy')}
+                />
               )}
             </div>
           </motion.aside>

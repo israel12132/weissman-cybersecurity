@@ -1,39 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../../lib/apiBase'
 
-/**
- * MITRE ATT&CK coverage heatmap — inspired by CrowdStrike Falcon's coverage matrix and
- * AttackIQ's Validation Lab. Each column is one of the 14 ATT&CK enterprise tactics;
- * each cell is a technique observed in our findings. Cell intensity scales with hit
- * count; clicking a cell deep-links to findings filtered by that technique.
- *
- * Data: `/api/dashboard/exec-kpis.mitre_top` already returns the top techniques with
- * tactic + hits. We render the full tactic header even when no techniques have hits
- * — gives the user a sense of *coverage* (Falcon's killer move).
- */
+const NS = 'components.cockpitWidgets.mitreCoverageHeatmap'
 
 const TACTICS = [
-  { id: 'reconnaissance',     label: 'Recon',         icon: '⌕' },
-  { id: 'resource_development', label: 'Resources',   icon: '⚙' },
-  { id: 'initial_access',     label: 'Init. Access',  icon: '⇲' },
-  { id: 'execution',          label: 'Execution',     icon: '▶' },
-  { id: 'persistence',        label: 'Persistence',   icon: '⛁' },
-  { id: 'privilege_escalation', label: 'Priv. Esc',   icon: '↑' },
-  { id: 'defense_evasion',    label: 'Defense Evas.', icon: '◯' },
-  { id: 'credential_access',  label: 'Credentials',   icon: '🔑' },
-  { id: 'discovery',          label: 'Discovery',     icon: '☉' },
-  { id: 'lateral_movement',   label: 'Lateral',       icon: '⇆' },
-  { id: 'collection',         label: 'Collection',    icon: '⊞' },
-  { id: 'command_and_control', label: 'C2',           icon: '✦' },
-  { id: 'exfiltration',       label: 'Exfil',         icon: '⇗' },
-  { id: 'impact',             label: 'Impact',        icon: '☢' },
+  { id: 'reconnaissance',     icon: '⌕' },
+  { id: 'resource_development', icon: '⚙' },
+  { id: 'initial_access',     icon: '⇲' },
+  { id: 'execution',          icon: '▶' },
+  { id: 'persistence',        icon: '⛁' },
+  { id: 'privilege_escalation', icon: '↑' },
+  { id: 'defense_evasion',    icon: '◯' },
+  { id: 'credential_access',  icon: '🔑' },
+  { id: 'discovery',          icon: '☉' },
+  { id: 'lateral_movement',   icon: '⇆' },
+  { id: 'collection',         icon: '⊞' },
+  { id: 'command_and_control', icon: '✦' },
+  { id: 'exfiltration',       icon: '⇗' },
+  { id: 'impact',             icon: '☢' },
 ]
 
 function cellColor(hits, max) {
   if (!hits || hits <= 0) return { bg: 'rgba(255,255,255,0.025)', border: 'rgba(255,255,255,0.04)', text: 'rgba(255,255,255,0.25)' }
   const intensity = Math.min(1, hits / Math.max(1, max))
-  // gradient red → orange → yellow as intensity grows (defensive-color palette)
   const r = 239
   const g = Math.round(68 + (1 - intensity) * 130)
   const b = Math.round(68 + (1 - intensity) * 50)
@@ -45,6 +36,7 @@ function cellColor(hits, max) {
 }
 
 export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }) {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -67,23 +59,23 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
       }
     }
     load()
-    const t = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(t) }
+    const timer = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(timer) }
   }, [])
 
   const { byTactic, max, totalHits, totalTechniques } = useMemo(() => {
     const grouped = {}
-    let max = 0
-    let totalHits = 0
+    let maxHits = 0
+    let hits = 0
     const techniques = data?.mitre_top || []
-    for (const t of techniques) {
-      const tactic = t.tactic || 'unknown'
+    for (const tac of techniques) {
+      const tactic = tac.tactic || 'unknown'
       if (!grouped[tactic]) grouped[tactic] = []
-      grouped[tactic].push({ id: t.id, hits: t.hits })
-      if (t.hits > max) max = t.hits
-      totalHits += Number(t.hits || 0)
+      grouped[tactic].push({ id: tac.id, hits: tac.hits })
+      if (tac.hits > maxHits) maxHits = tac.hits
+      hits += Number(tac.hits || 0)
     }
-    return { byTactic: grouped, max, totalHits, totalTechniques: techniques.length }
+    return { byTactic: grouped, max: maxHits, totalHits: hits, totalTechniques: techniques.length }
   }, [data])
 
   if (loading && !data) {
@@ -97,15 +89,15 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
   return (
     <section
       className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
-      aria-label="MITRE ATT&CK coverage"
+      aria-label={t(`${NS}.ariaLabel`)}
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
         <div className="min-w-0">
           <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75">
-            MITRE ATT&amp;CK · live coverage
+            {t(`${NS}.title`)}
           </h3>
           <p className="text-[10px] font-mono text-white/40 mt-0.5">
-            {totalTechniques} techniques · {totalHits} active findings
+            {t(`${NS}.summary`, { techniques: totalTechniques, hits: totalHits })}
           </p>
         </div>
         <a
@@ -114,7 +106,7 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
           rel="noopener noreferrer"
           className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
         >
-          ATT&amp;CK ↗
+          {t(`${NS}.attackLink`)}
         </a>
       </header>
 
@@ -126,6 +118,7 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
         <div className="flex gap-1 p-2 min-w-max">
           {TACTICS.map((tac) => {
             const techniques = byTactic[tac.id] || []
+            const tacticLabel = t(`${NS}.tactics.${tac.id}`)
             return (
               <div key={tac.id} className="flex flex-col gap-1 min-w-[88px]">
                 <header className="text-center px-1 py-1 bg-white/[0.04] rounded border border-white/[0.06]">
@@ -133,7 +126,7 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
                     {tac.icon}
                   </div>
                   <div className="text-[9px] font-mono uppercase tracking-widest text-white/65 truncate">
-                    {tac.label}
+                    {tacticLabel}
                   </div>
                   <div className="text-[9px] font-mono text-white/30 mt-0.5">
                     {techniques.length || 0}
@@ -142,27 +135,27 @@ export default function MitreCoverageHeatmap({ className = '', maxHeight = 320 }
                 {techniques.length === 0 ? (
                   <div
                     className="text-center text-[9px] font-mono py-3 rounded border border-dashed border-white/[0.06] text-white/25"
-                    aria-label={`No findings under ${tac.label}`}
+                    aria-label={t(`${NS}.noFindings`, { tactic: tacticLabel })}
                   >
                     —
                   </div>
                 ) : (
-                  techniques.map((t) => {
-                    const c = cellColor(t.hits, max)
+                  techniques.map((tech) => {
+                    const c = cellColor(tech.hits, max)
                     return (
                       <Link
-                        key={t.id}
-                        to={`/findings?mitre=${encodeURIComponent(t.id)}`}
+                        key={tech.id}
+                        to={`/findings?mitre=${encodeURIComponent(tech.id)}`}
                         className="block px-1.5 py-1 rounded text-[10px] font-mono text-center transition-all hover:scale-[1.04]"
                         style={{
                           background: c.bg,
                           border: `1px solid ${c.border}`,
                           color: c.text,
                         }}
-                        title={`${t.id} — ${t.hits} active findings`}
+                        title={t(`${NS}.techniqueTitle`, { id: tech.id, hits: tech.hits })}
                       >
-                        <div className="font-semibold truncate">{t.id}</div>
-                        <div className="text-[9px] opacity-80">{t.hits}</div>
+                        <div className="font-semibold truncate">{tech.id}</div>
+                        <div className="text-[9px] opacity-80">{tech.hits}</div>
                       </Link>
                     )
                   })

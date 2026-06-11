@@ -3,7 +3,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+
+const NS = 'components.tools.zeroDayRadar'
 
 const WS_BASE = () => {
   if (typeof window === 'undefined') return ''
@@ -12,6 +15,7 @@ const WS_BASE = () => {
 }
 
 export default function ZeroDayRadar() {
+  const { t } = useTranslation()
   const [feedItems, setFeedItems] = useState([])
   const [synthesisLog, setSynthesisLog] = useState([])
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 })
@@ -35,8 +39,8 @@ export default function ZeroDayRadar() {
 
   useEffect(() => {
     loadFeed()
-    const t = setInterval(loadFeed, 60000)
-    return () => clearInterval(t)
+    const tInterval = setInterval(loadFeed, 60000)
+    return () => clearInterval(tInterval)
   }, [loadFeed])
 
   useEffect(() => {
@@ -101,22 +105,24 @@ export default function ZeroDayRadar() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">← War Room</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Global Threat Radar</h1>
+            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
+            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
           </div>
-          <span className="text-slate-500 text-sm">NVD + custom feeds • Safe probe synthesis</span>
+          <span className="text-slate-500 text-sm">{t(`${NS}.subtitle`)}</span>
         </div>
 
         {exposure && (
           <div className="mb-6 rounded-xl border-2 border-red-500 bg-red-500/20 p-4 animate-pulse">
-            <div className="font-bold text-red-400 text-lg">ZERO-DAY EXPOSURE DETECTED</div>
+            <div className="font-bold text-red-400 text-lg">{t(`${NS}.exposure_title`)}</div>
             <div className="text-slate-200 mt-2">{exposure.title}</div>
-            <div className="text-sm text-slate-400 mt-1">CVE: {exposure.cve_id} • Target: {exposure.target_url}</div>
+            <div className="text-sm text-slate-400 mt-1">
+              {t(`${NS}.cve_target`, { cve: exposure.cve_id, target: exposure.target_url })}
+            </div>
             <a
               href={`/command-center/report/${exposure.client_id}`}
               className="inline-block mt-3 text-cyan-400 hover:text-cyan-300 text-sm font-medium"
             >
-              View report & remediation →
+              {t(`${NS}.view_report`)}
             </a>
           </div>
         )}
@@ -127,20 +133,20 @@ export default function ZeroDayRadar() {
             disabled={running}
             className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white font-medium text-sm"
           >
-            {running ? 'Scanning…' : 'Run Zero-Day Scan'}
+            {running ? t(`${NS}.scanning`) : t(`${NS}.run_scan`)}
           </button>
           <button onClick={loadFeed} disabled={loadingFeed} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm">
-            {loadingFeed ? 'Loading…' : 'Refresh feed'}
+            {loadingFeed ? t(`${NS}.loading_feed`) : t(`${NS}.refresh_feed`)}
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
             <div className="bg-slate-700/40 border-b border-slate-700 px-4 py-2 font-semibold text-slate-300">
-              Live Intelligence Feed
+              {t(`${NS}.feed_title`)}
             </div>
             <div className="h-96 overflow-y-auto p-4 space-y-3" id="feed-scroll">
-              {feedItems.length === 0 && !loadingFeed && <p className="text-slate-500 text-sm">No feed items. Run refresh or start a scan.</p>}
+              {feedItems.length === 0 && !loadingFeed && <p className="text-slate-500 text-sm">{t(`${NS}.feed_empty`)}</p>}
               {feedItems.map((item, i) => (
                 <div key={i} className="rounded-lg bg-slate-800/60 p-3 border border-slate-700/60">
                   <div className="flex items-center gap-2">
@@ -159,15 +165,15 @@ export default function ZeroDayRadar() {
 
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
             <div className="bg-slate-700/40 border-b border-slate-700 px-4 py-2 font-semibold text-slate-300 flex items-center justify-between">
-              Synthesis Terminal
+              {t(`${NS}.synthesis_title`)}
               {scanProgress.total > 0 && (
                 <span className="text-xs text-cyan-400">
-                  {scanProgress.current}/{scanProgress.total} threats
+                  {t(`${NS}.threats_progress`, { current: scanProgress.current, total: scanProgress.total })}
                 </span>
               )}
             </div>
             <div className="h-96 overflow-y-auto p-4 font-mono text-sm bg-slate-950/80">
-              {synthesisLog.length === 0 && !running && <p className="text-slate-500">Synthesizing AI Probe... and scan progress will appear here.</p>}
+              {synthesisLog.length === 0 && !running && <p className="text-slate-500">{t(`${NS}.synthesis_empty`)}</p>}
               {synthesisLog.map((line, i) => (
                 <div key={i} className={line.startsWith('ZERO-DAY') ? 'text-red-400 font-semibold' : 'text-slate-300'}>
                   &gt; {line}
@@ -188,7 +194,7 @@ export default function ZeroDayRadar() {
           </div>
         </div>
         <p className="text-slate-500 text-xs mt-4">
-          Probes are safe detection-only (no destructive exploits). Findings saved with source <code className="bg-slate-800 px-1 rounded">zero_day_radar</code>.
+          {t(`${NS}.footer`)}
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
@@ -27,22 +28,22 @@ import CeoMissionControlTab from './CeoMissionControlTab'
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../lib/apiBase'
 
-const TABS = [
-  { id: 'overview', label: 'Overview', Component: OverviewTab },
-  { id: 'engine-room', label: 'Engine Room', Component: EngineRoomTab },
-  { id: 'findings', label: 'Findings & Reports', Component: FindingsTab },
-  { id: 'identity-matrix', label: 'Identity Matrix', Component: IdentityMatrixTab },
-  { id: 'risk-graph', label: 'Risk Graph', Component: RiskGraphTab },
-  { id: 'auto-heal', label: 'Auto-Heal', Component: AutoHealTab },
-  { id: 'deception', label: 'Deception Grid', Component: DeceptionGridTab },
-  { id: 'pipeline', label: 'Pipeline Monitor', Component: LivePipelineMonitor },
-  { id: 'audit-trail', label: 'Audit Trail', Component: AuditTrailTab },
-  { id: 'settings-alerts', label: 'Settings & Alerts', Component: SettingsAlertsTab },
-  { id: 'compliance', label: 'Compliance', Component: ComplianceDashboardTab },
-  { id: 'swarm-mind', label: 'Swarm Mind', Component: SwarmMindTab },
-  { id: 'containment', label: 'Auto-Containment', Component: ContainmentRulesTab },
-  { id: 'ai-model-risk', label: 'AI Model Risk', Component: AIModelRiskTab },
-  { id: 'edge-swarm', label: 'Edge Swarm Map', Component: GlobalEdgeSwarmMap },
+const TAB_DEFS = [
+  { id: 'overview', labelKey: 'overview', Component: OverviewTab },
+  { id: 'engine-room', labelKey: 'engine_room', Component: EngineRoomTab },
+  { id: 'findings', labelKey: 'findings', Component: FindingsTab },
+  { id: 'identity-matrix', labelKey: 'identity_matrix', Component: IdentityMatrixTab },
+  { id: 'risk-graph', labelKey: 'risk_graph', Component: RiskGraphTab },
+  { id: 'auto-heal', labelKey: 'auto_heal', Component: AutoHealTab },
+  { id: 'deception', labelKey: 'deception', Component: DeceptionGridTab },
+  { id: 'pipeline', labelKey: 'pipeline', Component: LivePipelineMonitor },
+  { id: 'audit-trail', labelKey: 'audit_trail', Component: AuditTrailTab },
+  { id: 'settings-alerts', labelKey: 'settings_alerts', Component: SettingsAlertsTab },
+  { id: 'compliance', labelKey: 'compliance', Component: ComplianceDashboardTab },
+  { id: 'swarm-mind', labelKey: 'swarm_mind', Component: SwarmMindTab },
+  { id: 'containment', labelKey: 'containment', Component: ContainmentRulesTab },
+  { id: 'ai-model-risk', labelKey: 'ai_model_risk', Component: AIModelRiskTab },
+  { id: 'edge-swarm', labelKey: 'edge_swarm', Component: GlobalEdgeSwarmMap },
 ]
 
 function targetUrlFromClient(client) {
@@ -63,6 +64,7 @@ function targetUrlFromClient(client) {
 }
 
 export default function ClientCockpit({ ceoIntegrated = false }) {
+  const { t } = useTranslation()
   const [neuralWrapRef, neuralSize] = useContainerChartSize(120)
   const { selectedClient, selectedClientId, refreshClients, setPoeJobId } = useClient()
   const [activeTab, setActiveTab] = useState(() =>
@@ -70,12 +72,16 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   )
 
   const tabs = useMemo(() => {
-    if (!ceoIntegrated) return TABS
+    const base = TAB_DEFS.map((tab) => ({
+      ...tab,
+      label: t(`components.cockpit.tabs.${tab.labelKey}`),
+    }))
+    if (!ceoIntegrated) return base
     return [
-      { id: 'mission-control', label: 'Mission Control', Component: CeoMissionControlTab },
-      ...TABS,
+      { id: 'mission-control', label: t('components.cockpit.tabs.mission_control'), Component: CeoMissionControlTab },
+      ...base,
     ]
-  }, [ceoIntegrated])
+  }, [ceoIntegrated, t])
   const [engageLoading, setEngageLoading] = useState(false)
   const [healthSummary, setHealthSummary] = useState(null)
   const [safeMode, setSafeMode] = useState(false)
@@ -123,7 +129,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       const r = await apiFetch(`/api/reports/executive${q}`)
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        window.alert(err.detail || err.error || 'Board report failed')
+        window.alert(err.detail || err.error || t('components.cockpit.board_failed'))
         return
       }
       const blob = await r.blob()
@@ -143,7 +149,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch {
-      window.alert('Network error generating board report')
+      window.alert(t('components.cockpit.board_network_error'))
     }
     setBoardReportLoading(false)
   }
@@ -178,9 +184,9 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         <main className="flex-1 flex flex-col min-h-0 min-w-0 w-full bg-black/15 backdrop-blur-sm relative isolate overflow-hidden border-s border-white/[0.04]">
           <WarRoomSoundscape />
           <header className="shrink-0 bg-[#080c14]/70 backdrop-blur-md border-b border-white/[0.06] px-4 sm:px-6 py-3 z-10">
-            <h1 className="text-sm font-semibold text-white tracking-tight">CEO secured cockpit</h1>
+            <h1 className="text-sm font-semibold text-white tracking-tight">{t('components.cockpit.ceo_secured_title')}</h1>
             <p className="text-[9px] text-white/35 font-mono uppercase tracking-[0.2em] mt-1">
-              Mission control below · pick a client in Global Nexus for target-scoped tabs
+              {t('components.cockpit.ceo_secured_hint')}
             </p>
           </header>
           <div className="flex-1 min-h-0 overflow-auto z-10">
@@ -192,8 +198,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
     return (
       <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-black/15 backdrop-blur-sm overflow-auto border-s border-white/[0.04]">
         <div className="text-center px-6 py-8 rounded-xl bg-[#080c14]/60 backdrop-blur-md border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-sm font-medium text-white/90 mb-1 tracking-wide">No client selected</p>
-          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">Select a client from the sidebar</p>
+          <p className="text-sm font-medium text-white/90 mb-1 tracking-wide">{t('components.cockpit.no_client')}</p>
+          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">{t('components.cockpit.select_sidebar')}</p>
         </div>
       </main>
     )
@@ -230,7 +236,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           transition={{ repeat: Infinity, duration: 1.2 }}
           className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-lg border border-red-500/60 bg-red-950/90 backdrop-blur text-xs font-bold text-red-400 tracking-widest"
         >
-          SYSTEM EXPLOITATION ACTIVE — ROE OVERRIDDEN
+          {t('components.cockpit.exploitation_active')}
         </motion.div>
       )}
       <TacticalFindingOverlay />
@@ -239,7 +245,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3.5 max-w-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-3 sm:gap-6 min-w-0">
             <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate min-w-0 max-w-full">
-              {selectedClient?.name || `Client ${selectedClientId}`}
+              {selectedClient?.name || t('components.cockpit.client_fallback', { id: selectedClientId })}
             </h1>
             <span
               className="px-3 py-1 rounded-lg text-xs font-mono font-medium border border-[#22d3ee]/30 max-w-full sm:max-w-[280px] truncate"
@@ -247,11 +253,12 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               title={healthSummary ? JSON.stringify(healthSummary) : ''}
             >
               {healthSummary
-                ? `Health: ${Math.floor((healthSummary.uptime_secs || 0) / 60)}m · DB ${(
-                    (healthSummary.db_bytes || 0) /
-                    (1024 * 1024)
-                  ).toFixed(1)}MB${healthSummary.scanning_active ? ' · SCAN' : ''}`
-                : 'Health: —'}
+                ? t('components.cockpit.health', {
+                    mins: Math.floor((healthSummary.uptime_secs || 0) / 60),
+                    mb: ((healthSummary.db_bytes || 0) / (1024 * 1024)).toFixed(1),
+                    scan: healthSummary.scanning_active ? t('components.cockpit.health_scan') : '',
+                  })
+                : t('components.cockpit.health_empty')}
             </span>
             <button
               id="cockpit-safe-mode-toggle"
@@ -264,7 +271,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
                   : 'border-white/25 bg-white/5 text-white/60 hover:text-white/90'
               } disabled:opacity-50`}
             >
-              {safeMode ? 'Safe mode ON' : 'Safe mode OFF'}
+              {safeMode ? t('components.cockpit.safe_mode_on') : t('components.cockpit.safe_mode_off')}
             </button>
           </div>
           <div className="flex flex-wrap items-stretch sm:items-center gap-2 shrink-0">
@@ -275,7 +282,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               disabled={boardReportLoading}
               className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-white/20 bg-white/5 text-white/85 hover:bg-white/10 hover:border-white/30 disabled:opacity-50"
             >
-              {boardReportLoading ? 'PDF…' : 'Board report'}
+              {boardReportLoading ? t('components.cockpit.board_report_loading') : t('components.cockpit.board_report')}
             </button>
             <button
               id="cockpit-engage-scan-btn"
@@ -284,7 +291,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               disabled={engageLoading}
               className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm tracking-wide transition-all border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {engageLoading ? 'ENGAGING…' : 'ENGAGE'}
+              {engageLoading ? t('components.cockpit.engaging') : t('components.cockpit.engage')}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Lock, Key, Shield, Eye, EyeOff, Plus, Trash2, Edit, Copy, Check } from 'lucide-react';
 import PageShell from './PageShell'
 import { api } from '../utils/apiFetch';
@@ -16,6 +17,7 @@ import { api } from '../utils/apiFetch';
  * - Expiration tracking
  */
 export default function CeoVault() {
+  const { t } = useTranslation();
   const [secrets, setSecrets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSecret, setShowSecret] = useState({});
@@ -57,7 +59,7 @@ export default function CeoVault() {
   };
 
   const deleteSecret = async (secretId) => {
-    if (!confirm('Are you sure you want to delete this secret?')) return;
+    if (!confirm(t('pages.ceoVault.delete_confirm'))) return;
 
     try {
       await api.delete(`/api/ceo/vault/secrets/${secretId}`);
@@ -92,13 +94,13 @@ export default function CeoVault() {
   };
 
   return (
-    <PageShell title="CEO Vault" icon={<Lock />}>
+    <PageShell title={t('pages.ceoVault.title')} icon={<Lock />}>
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Secrets</span>
+              <span className="text-sm text-gray-400">{t('pages.ceoVault.total_secrets')}</span>
               <Lock className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{secrets.length}</div>
@@ -106,7 +108,7 @@ export default function CeoVault() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">API Keys</span>
+              <span className="text-sm text-gray-400">{t('pages.ceoVault.api_keys')}</span>
               <Key className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -116,7 +118,7 @@ export default function CeoVault() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Expiring Soon</span>
+              <span className="text-sm text-gray-400">{t('pages.ceoVault.expiring_soon')}</span>
               <Shield className="w-4 h-4 text-orange-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -134,7 +136,7 @@ export default function CeoVault() {
 
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Expired</span>
+              <span className="text-sm text-gray-400">{t('pages.ceoVault.expired')}</span>
               <Shield className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">
@@ -155,7 +157,7 @@ export default function CeoVault() {
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add Secret
+            {t('pages.ceoVault.add_secret')}
           </button>
         </div>
 
@@ -164,18 +166,18 @@ export default function CeoVault() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Lock className="w-4 h-4 text-cyan-400" />
-              Stored Secrets
+              {t('pages.ceoVault.stored_secrets')}
             </h3>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading secrets...
+              {t('pages.ceoVault.loading')}
             </div>
           ) : secrets.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No secrets stored yet. Click "Add Secret" to get started.
+              {t('pages.ceoVault.empty')}
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -195,7 +197,7 @@ export default function CeoVault() {
                             {secret.name}
                           </h4>
                           <p className="text-xs text-gray-400">
-                            {secret.description || 'No description'}
+                            {secret.description || t('pages.ceoVault.no_description')}
                           </p>
                         </div>
                         <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-md text-xs font-medium">
@@ -241,19 +243,19 @@ export default function CeoVault() {
 
                       {/* Metadata */}
                       <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
-                        <span>Created: {secret.created_at}</span>
+                        <span>{t('pages.ceoVault.created', { date: secret.created_at })}</span>
                         {secret.expires_at && (
                           <>
                             <span>•</span>
                             <span className={getExpirationColor(secret.expires_at)}>
-                              Expires: {secret.expires_at}
+                              {t('pages.ceoVault.expires', { date: secret.expires_at })}
                             </span>
                           </>
                         )}
                         {secret.last_accessed && (
                           <>
                             <span>•</span>
-                            <span>Last accessed: {secret.last_accessed}</span>
+                            <span>{t('pages.ceoVault.last_accessed', { date: secret.last_accessed })}</span>
                           </>
                         )}
                       </div>
@@ -305,6 +307,7 @@ export default function CeoVault() {
  * Secret Create/Edit Modal
  */
 function SecretModal({ secret, onClose, onSave }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: secret?.name || '',
     description: secret?.description || '',
@@ -335,7 +338,7 @@ function SecretModal({ secret, onClose, onSave }) {
       <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
-            {secret ? 'Edit Secret' : 'Create Secret'}
+            {secret ? t('pages.ceoVault.edit_secret') : t('pages.ceoVault.create_secret')}
           </h3>
           <button
             onClick={onClose}
@@ -348,20 +351,20 @@ function SecretModal({ secret, onClose, onSave }) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Name
+              {t('pages.ceoVault.name')}
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Production API Key"
+              placeholder={t('pages.ceoVault.name_placeholder')}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Description (optional)
+              {t('pages.ceoVault.description_optional')}
             </label>
             <input
               type="text"
@@ -370,42 +373,42 @@ function SecretModal({ secret, onClose, onSave }) {
                 setFormData({ ...formData, description: e.target.value })
               }
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Used for external API integration"
+              placeholder={t('pages.ceoVault.description_placeholder')}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Type
+              {t('pages.ceoVault.type')}
             </label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
-              <option value="api_key">API Key</option>
-              <option value="password">Password</option>
-              <option value="certificate">Certificate</option>
-              <option value="token">Token</option>
+              <option value="api_key">{t('pages.ceoVault.type_api_key')}</option>
+              <option value="password">{t('pages.ceoVault.type_password')}</option>
+              <option value="certificate">{t('pages.ceoVault.type_certificate')}</option>
+              <option value="token">{t('pages.ceoVault.type_token')}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Secret Value
+              {t('pages.ceoVault.secret_value')}
             </label>
             <textarea
               value={formData.value}
               onChange={(e) => setFormData({ ...formData, value: e.target.value })}
               rows={4}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Enter the secret value..."
+              placeholder={t('pages.ceoVault.secret_placeholder')}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Expiration Date (optional)
+              {t('pages.ceoVault.expiration_optional')}
             </label>
             <input
               type="date"
@@ -423,14 +426,14 @@ function SecretModal({ secret, onClose, onSave }) {
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
           >
-            Cancel
+            {t('pages.ceoVault.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !formData.name || !formData.value}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? 'Saving...' : 'Save Secret'}
+            {saving ? t('pages.ceoVault.saving') : t('pages.ceoVault.save_secret')}
           </button>
         </div>
       </div>

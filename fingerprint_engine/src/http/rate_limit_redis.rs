@@ -58,6 +58,43 @@ pub async fn incr_api_ip(client_ip: &str) -> Option<u64> {
     .await
 }
 
+/// Agent enrollment counter per IP (60s window).
+pub async fn incr_enroll_ip(client_ip: &str) -> Option<u64> {
+    incr_window(
+        &format!("weissman:rl:enroll:{client_ip}"),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
+async fn get_count_and_ttl(key: &str) -> Option<(u64, u64)> {
+    let rl = shared()?;
+    let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
+    let count: u64 = conn
+        .get::<_, Option<u64>>(key)
+        .await
+        .ok()?
+        .unwrap_or(0);
+    let ttl: i64 = conn.ttl(key).await.ok()?;
+    let reset_in = if ttl > 0 { ttl as u64 } else { 0 };
+    Some((count, reset_in))
+}
+
+/// Current tenant scan count (read-only, 60s window).
+pub async fn current_tenant_scan(tenant_id: i64) -> Option<(u64, u64)> {
+    get_count_and_ttl(&format!("weissman:rl:scan:{tenant_id}")).await
+}
+
+/// Current login count per IP (read-only).
+pub async fn current_login_ip(client_ip: &str) -> Option<(u64, u64)> {
+    get_count_and_ttl(&format!("weissman:rl:login:{client_ip}")).await
+}
+
+/// Current API count per IP (read-only).
+pub async fn current_api_ip(client_ip: &str) -> Option<(u64, u64)> {
+    get_count_and_ttl(&format!("weissman:rl:api:{client_ip}")).await
+}
+
 /// Record violation JSON line in tenant-scoped Redis list (trimmed).
 pub async fn push_violation(tenant_id: i64, kind: &str, endpoint: &str) {
     let Some(rl) = shared() else {

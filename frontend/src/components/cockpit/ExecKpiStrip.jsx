@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
@@ -24,9 +25,13 @@ function fmtAgo(unix) {
 }
 
 function DeltaArrow({ value }) {
+  const { t } = useTranslation()
   if (value == null || value === 0) {
     return (
-      <span className="inline-flex items-center text-white/25" title="No change vs. 24h">
+      <span
+        className="inline-flex items-center text-white/25"
+        title={t('components.cockpitTabs.execKpiStrip.no_change_vs_24h')}
+      >
         <Minus className="w-2.5 h-2.5" strokeWidth={2} />
       </span>
     )
@@ -38,7 +43,10 @@ function DeltaArrow({ value }) {
       className={`inline-flex items-center gap-0.5 text-[9px] font-mono tabular-nums ${
         up ? 'text-rose-400' : 'text-emerald-400'
       }`}
-      title={`${up ? '+' : ''}${value} vs. 24h ago`}
+      title={t('components.cockpitTabs.execKpiStrip.delta_vs_24h', {
+        sign: up ? '+' : '',
+        value,
+      })}
     >
       <Icon className="w-2.5 h-2.5" strokeWidth={2.5} />
       {Math.abs(value)}
@@ -117,6 +125,7 @@ function MiniSpark({ values, color = '#22d3ee', height = 24 }) {
 }
 
 export default function ExecKpiStrip() {
+  const { t } = useTranslation()
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -132,7 +141,9 @@ export default function ExecKpiStrip() {
         setErr(null)
       }
     } catch (e) {
-      if (!cancelRef.current) setErr(e?.message || 'fetch failed')
+      if (!cancelRef.current) {
+        setErr(e?.message || t('components.cockpitTabs.execKpiStrip.fetch_failed'))
+      }
     } finally {
       if (!cancelRef.current) setLoading(false)
     }
@@ -141,14 +152,15 @@ export default function ExecKpiStrip() {
   useEffect(() => {
     cancelRef.current = false
     refresh()
-    const t = setInterval(refresh, REFRESH_MS)
+    const timer = setInterval(refresh, REFRESH_MS)
     const onFocus = () => refresh()
     window.addEventListener('focus', onFocus)
     return () => {
       cancelRef.current = true
-      clearInterval(t)
+      clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (loading && !kpis) {
@@ -167,7 +179,7 @@ export default function ExecKpiStrip() {
   if (err && !kpis) {
     return (
       <div className="px-4 py-2.5 border-b border-rose-500/25 bg-rose-950/25 text-[11px] font-mono text-rose-200">
-        Could not load executive KPIs: {err}
+        {t('components.cockpitTabs.execKpiStrip.load_error', { err })}
       </div>
     )
   }
@@ -198,14 +210,19 @@ export default function ExecKpiStrip() {
         <div className="flex items-center gap-2 text-white/45">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" aria-hidden />
-            <span className="text-emerald-400/80">Live</span>
+            <span className="text-emerald-400/80">{t('components.cockpitTabs.execKpiStrip.live')}</span>
           </span>
           <span className="text-white/20">|</span>
-          <span>{fmtCount(jobs.running || 0)} run</span>
+          <span>{t('components.cockpitTabs.execKpiStrip.run_count', { count: fmtCount(jobs.running || 0) })}</span>
           <span className="text-white/20">|</span>
-          <span>{fmtCount(jobs.pending || 0)} q</span>
+          <span>{t('components.cockpitTabs.execKpiStrip.queue_count', { count: fmtCount(jobs.pending || 0) })}</span>
           <span className="text-white/20 hidden sm:inline">|</span>
-          <span className="hidden sm:inline">{fmtCount(agents.online || 0)}/{fmtCount(agents.registered || 0)} agt</span>
+          <span className="hidden sm:inline">
+            {t('components.cockpitTabs.execKpiStrip.agents_count', {
+              online: fmtCount(agents.online || 0),
+              registered: fmtCount(agents.registered || 0),
+            })}
+          </span>
         </div>
         <div className="text-white/30 flex items-center gap-1.5 tabular-nums">
           <span>{fmtAgo(lastUpdated)}</span>
@@ -213,8 +230,8 @@ export default function ExecKpiStrip() {
             type="button"
             onClick={refresh}
             className="text-cyan-400/50 hover:text-cyan-300/80 transition-colors p-0.5"
-            title="Refresh now"
-            aria-label="Refresh KPIs"
+            title={t('components.cockpitTabs.execKpiStrip.refresh_now')}
+            aria-label={t('components.cockpitTabs.execKpiStrip.refresh_kpis')}
           >
             <RefreshCw className="w-3 h-3" strokeWidth={2} />
           </button>
@@ -224,7 +241,7 @@ export default function ExecKpiStrip() {
       {/* KPI strip — Bloomberg-style dense row */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px bg-white/[0.03] mx-0">
         <Tile
-          label="Score"
+          label={t('components.cockpitTabs.execKpiStrip.score')}
           value={
             <span className="flex items-baseline gap-0.5">
               <span style={{ color: scoreColor }}>{fmtCount(score)}</span>
@@ -233,13 +250,13 @@ export default function ExecKpiStrip() {
           }
           color={scoreColor}
           to="/findings"
-          ariaLabel={`Security score ${score} out of 100`}
-          footer={kpis?.scoring?.method || 'severity-weighted'}
+          ariaLabel={t('components.cockpitTabs.execKpiStrip.score_aria', { score })}
+          footer={kpis?.scoring?.method || t('components.cockpitTabs.execKpiStrip.severity_weighted')}
           intensity={2}
           showDivider
         />
         <Tile
-          label="Critical"
+          label={t('components.cockpitTabs.execKpiStrip.critical')}
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(sev.critical)}</span>
@@ -248,11 +265,11 @@ export default function ExecKpiStrip() {
           }
           color="#ef4444"
           to="/findings?severity=critical"
-          footer={`${fmtCount(totalOpen)} open`}
+          footer={t('components.cockpitTabs.execKpiStrip.open_count', { count: fmtCount(totalOpen) })}
           showDivider
         />
         <Tile
-          label="High"
+          label={t('components.cockpitTabs.execKpiStrip.high')}
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(sev.high)}</span>
@@ -261,37 +278,41 @@ export default function ExecKpiStrip() {
           }
           color="#f97316"
           to="/findings?severity=high"
-          footer={`${fmtCount(sev.medium)} med`}
+          footer={t('components.cockpitTabs.execKpiStrip.med_count', { count: fmtCount(sev.medium) })}
           showDivider
         />
         <Tile
-          label="MTTR"
+          label={t('components.cockpitTabs.execKpiStrip.mttr')}
           value={
             <span className="flex items-baseline gap-0.5">
               <span>{mttr > 0 ? mttr.toFixed(1) : '—'}</span>
-              <span className="text-[10px] text-white/30 font-mono font-normal">h</span>
+              <span className="text-[10px] text-white/30 font-mono font-normal">
+                {t('components.cockpitTabs.execKpiStrip.hours_abbr')}
+              </span>
             </span>
           }
           color="#a855f7"
           to="/findings?status=FIXED"
-          footer="30d window"
+          footer={t('components.cockpitTabs.execKpiStrip.window_30d')}
           showDivider
         />
         <Tile
-          label="Assets"
+          label={t('components.cockpitTabs.execKpiStrip.assets')}
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(assets.total_clients)}</span>
-              <span className="text-[10px] text-white/35 font-mono font-normal">/{fmtCount(assets.with_findings)} risk</span>
+              <span className="text-[10px] text-white/35 font-mono font-normal">
+                {t('components.cockpitTabs.execKpiStrip.risk_suffix', { count: fmtCount(assets.with_findings) })}
+              </span>
             </span>
           }
           color="#22d3ee"
           to="/clients"
-          footer="monitored"
+          footer={t('components.cockpitTabs.execKpiStrip.monitored')}
           showDivider
         />
         <Tile
-          label="Agents"
+          label={t('components.cockpitTabs.execKpiStrip.agents')}
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(agents.online)}</span>
@@ -300,16 +321,19 @@ export default function ExecKpiStrip() {
           }
           color={agents.online > 0 ? '#22c55e' : '#64748b'}
           to="/agents"
-          footer={`${agents.stale || 0} stale`}
+          footer={t('components.cockpitTabs.execKpiStrip.stale_count', { count: agents.stale || 0 })}
           showDivider
         />
         <Tile
-          label="Jobs"
+          label={t('components.cockpitTabs.execKpiStrip.jobs')}
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(jobs.completed_24h)}</span>
               {jobs.failed_24h > 0 && (
-                <span className="text-[9px] text-rose-400 font-mono" title="failed in last 24h">
+                <span
+                  className="text-[9px] text-rose-400 font-mono"
+                  title={t('components.cockpitTabs.execKpiStrip.failed_last_24h')}
+                >
                   {jobs.failed_24h}✕
                 </span>
               )}
@@ -317,15 +341,19 @@ export default function ExecKpiStrip() {
           }
           color="#3b82f6"
           to="/jobs"
-          footer={`${(kpis?.scan_velocity?.avg_scan_secs || 0).toFixed(1)}s avg`}
+          footer={t('components.cockpitTabs.execKpiStrip.avg_scan', {
+            seconds: (kpis?.scan_velocity?.avg_scan_secs || 0).toFixed(1),
+          })}
           showDivider
         />
         <Tile
-          label="Trend"
+          label={t('components.cockpitTabs.execKpiStrip.trend')}
           value={<MiniSpark values={trend.discovered || []} color="#ef4444" height={24} />}
           color="#ef4444"
           to="/findings"
-          footer={`${fmtCount((trend.discovered || []).reduce((a, b) => a + b, 0))} 24h`}
+          footer={t('components.cockpitTabs.execKpiStrip.trend_24h', {
+            count: fmtCount((trend.discovered || []).reduce((a, b) => a + b, 0)),
+          })}
           showDivider
         />
       </div>

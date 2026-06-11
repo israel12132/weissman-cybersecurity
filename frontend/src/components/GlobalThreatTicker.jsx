@@ -1,6 +1,10 @@
+import { useTranslation } from 'react-i18next'
 import LiveCounter from './LiveCounter'
 
+const NS = 'components.intelWidgets.globalThreatTicker'
+
 export default function GlobalThreatTicker({ scoreData, globeData, intelCount = 0 }) {
+  const { t } = useTranslation()
   const score = scoreData?.score ?? 0
   const critical = (scoreData?.bySeverity && scoreData.bySeverity.critical) || 0
   const high = (scoreData?.bySeverity && scoreData.bySeverity.high) || 0
@@ -10,22 +14,22 @@ export default function GlobalThreatTicker({ scoreData, globeData, intelCount = 
   return (
     <div className="global-threat-ticker overflow-hidden flex items-center justify-center gap-10 py-2">
       <span className="font-mono text-xs text-cyber-cyan/90 tracking-wider">
-        SCORE: <LiveCounter value={Math.round(score)} className="text-cyber-cyan" />
+        {t(`${NS}.score`)}: <LiveCounter value={Math.round(score)} className="text-cyber-cyan" />
       </span>
       <span className="font-mono text-xs text-war-red/95 tracking-wider">
-        CRIT: <LiveCounter value={critical} className="text-war-red" />
+        {t(`${NS}.crit`)}: <LiveCounter value={critical} className="text-war-red" />
       </span>
       <span className="font-mono text-xs text-amber-400/90 tracking-wider">
-        HIGH: <LiveCounter value={high} className="text-amber-400" />
+        {t(`${NS}.high`)}: <LiveCounter value={high} className="text-amber-400" />
       </span>
       <span className="font-mono text-xs text-cyber-cyan/90 tracking-wider">
-        PULSES: <LiveCounter value={pulses} className="text-cyber-cyan" />
+        {t(`${NS}.pulses`)}: <LiveCounter value={pulses} className="text-cyber-cyan" />
       </span>
       <span className="font-mono text-xs text-cyber-cyan/90 tracking-wider">
-        VULNS: <LiveCounter value={vulns} className="text-cyber-cyan" />
+        {t(`${NS}.vulns`)}: <LiveCounter value={vulns} className="text-cyber-cyan" />
       </span>
       <span className="font-mono text-xs text-slate-400 tracking-wider">
-        IT: <LiveCounter value={intelCount} className="text-slate-300" />
+        {t(`${NS}.intel`)}: <LiveCounter value={intelCount} className="text-slate-300" />
       </span>
     </div>
   )

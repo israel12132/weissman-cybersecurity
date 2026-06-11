@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   LineChart,
   Line,
@@ -17,6 +18,8 @@ import {
 } from 'recharts'
 import { apiFetch } from '../lib/apiBase'
 
+const NS = 'components.tools.quantumTimingProfiler'
+
 const WS_BASE = () => {
   if (typeof window === 'undefined') return ''
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -26,6 +29,7 @@ const WS_BASE = () => {
 const MAX_POINTS = 200
 
 export default function QuantumTimingProfiler() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [target, setTarget] = useState('')
   const [client, setClient] = useState(null)
@@ -69,7 +73,7 @@ export default function QuantumTimingProfiler() {
         ? { client_id: String(clientId) }
         : null
     if (!body) {
-      setError('Enter target URL or open from a client.')
+      setError(t(`${NS}.no_target_error`))
       return
     }
     setError('')
@@ -119,10 +123,10 @@ export default function QuantumTimingProfiler() {
         ws.onerror = () => setRunning(false)
       })
       .catch((e) => {
-        setError(e?.message || 'Failed to start')
+        setError(e?.message || t(`${NS}.start_failed`))
         setRunning(false)
       })
-  }, [target, clientId])
+  }, [target, clientId, t])
 
   useEffect(() => {
     return () => {
@@ -143,28 +147,28 @@ export default function QuantumTimingProfiler() {
               to="/"
               className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
             >
-              ← War Room
+              {t(`${NS}.back_war_room`)}
             </Link>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Quantum Timing Profiler
+              {t(`${NS}.title`)}
             </h1>
           </div>
           <span className="text-slate-500 text-sm">
-            Microsecond latency • Z-Score anomaly detection
+            {t(`${NS}.subtitle`)}
           </span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
             <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">
-              Target URL or run by client
+              {t(`${NS}.target_label`)}
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="https://example.com or leave empty to use client"
+                placeholder={t(`${NS}.target_placeholder`)}
                 className="flex-1 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500/50"
                 disabled={running}
               />
@@ -173,12 +177,13 @@ export default function QuantumTimingProfiler() {
                 disabled={running}
                 className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 text-white font-medium text-sm"
               >
-                {running ? 'Scanning…' : 'Start scan'}
+                {running ? t(`${NS}.scanning`) : t(`${NS}.start_scan`)}
               </button>
             </div>
             {clientId && (
               <p className="mt-2 text-slate-500 text-xs">
-                Client ID: {clientId} {client?.name && `(${client.name})`}
+                {t(`${NS}.client_id`, { id: clientId })}
+                {client?.name && ` ${t(`${NS}.client_name`, { name: client.name })}`}
               </p>
             )}
             {error && (
@@ -188,24 +193,24 @@ export default function QuantumTimingProfiler() {
 
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
             <div className="text-slate-400 text-xs uppercase tracking-wider mb-2">
-              Live stats
+              {t(`${NS}.live_stats`)}
             </div>
             <div className="space-y-2 text-sm">
               {baselineMean != null && (
                 <div>
-                  <span className="text-slate-500">Baseline μ:</span>{' '}
+                  <span className="text-slate-500">{t(`${NS}.baseline_mu`)}</span>{' '}
                   <span className="text-cyan-400 font-mono">{baselineMean.toFixed(0)} μs</span>
                 </div>
               )}
               {baselineStd != null && baselineStd > 0 && (
                 <div>
-                  <span className="text-slate-500">Baseline σ:</span>{' '}
+                  <span className="text-slate-500">{t(`${NS}.baseline_sigma`)}</span>{' '}
                   <span className="text-cyan-400 font-mono">{baselineStd.toFixed(0)} μs</span>
                 </div>
               )}
               {zScore != null && (
                 <div>
-                  <span className="text-slate-500">Z-Score:</span>{' '}
+                  <span className="text-slate-500">{t(`${NS}.z_score`)}</span>{' '}
                   <span className={zScore >= 3 ? 'text-red-400 font-bold' : 'text-amber-400 font-mono'}>
                     {zScore.toFixed(2)}
                   </span>
@@ -213,15 +218,15 @@ export default function QuantumTimingProfiler() {
               )}
               {confidencePct != null && (
                 <div>
-                  <span className="text-slate-500">Confidence:</span>{' '}
+                  <span className="text-slate-500">{t(`${NS}.confidence`)}</span>{' '}
                   <span className="text-emerald-400 font-mono">
-                    {confidencePct.toFixed(1)}% {confidencePct >= 99 ? '(Boolean True)' : ''}
+                    {confidencePct.toFixed(1)}% {confidencePct >= 99 ? t(`${NS}.boolean_true`) : ''}
                   </span>
                 </div>
               )}
               {payloadUsed && (
                 <div className="text-slate-500 text-xs truncate" title={payloadUsed}>
-                  Payload: {payloadUsed}
+                  {t(`${NS}.payload_label`, { text: payloadUsed })}
                 </div>
               )}
             </div>
@@ -231,11 +236,11 @@ export default function QuantumTimingProfiler() {
         <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">
-              Latency oscilloscope
+              {t(`${NS}.oscilloscope_title`)}
             </h2>
             <div className="flex gap-4 text-xs">
-              <span className="text-cyan-400">— Baseline (μs)</span>
-              <span className="text-red-400">— Payload (μs)</span>
+              <span className="text-cyan-400">{t(`${NS}.baseline_legend`)}</span>
+              <span className="text-red-400">{t(`${NS}.payload_legend`)}</span>
             </div>
           </div>
           <div className="h-[360px]">
@@ -272,7 +277,7 @@ export default function QuantumTimingProfiler() {
                 <Line
                   type="monotone"
                   dataKey="baseline_us"
-                  name="Baseline (μs)"
+                  name={t(`${NS}.chart_baseline`)}
                   stroke="#06b6d4"
                   strokeWidth={2}
                   dot={false}
@@ -281,7 +286,7 @@ export default function QuantumTimingProfiler() {
                 <Line
                   type="monotone"
                   dataKey="payload_us"
-                  name="Payload (μs)"
+                  name={t(`${NS}.chart_payload`)}
                   stroke="#ef4444"
                   strokeWidth={2}
                   dot={false}
@@ -291,7 +296,7 @@ export default function QuantumTimingProfiler() {
             </ResponsiveContainer>
           </div>
           <p className="text-slate-500 text-xs mt-2">
-            This report is cryptographically sealed. Response times measured with real network latency; Z-Score &gt; 3 indicates critical blind injection timing deviation.
+            {t(`${NS}.footer`)}
           </p>
         </div>
       </div>

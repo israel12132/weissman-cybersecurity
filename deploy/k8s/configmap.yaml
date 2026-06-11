@@ -5,5 +5,7 @@ metadata:
 data:
   PORT: "8000"
   WEISSMAN_PUBLIC_BASE_URL: "https://weissmancyber.com"
-  # DATABASE_URL, WEISSMAN_AUTH_DATABASE_URL, WEISSMAN_MIGRATE_URL, WEISSMAN_JWT_SECRET
-  # must be supplied via Secrets in production.
+  WEISSMAN_MIGRATIONS_DIR: "/srv/migrations"
+  # DATABASE_URL, WEISSMAN_AUTH_DATABASE_URL, WEISSMAN_MIGRATE_URL, WEISSMAN_JWT_SECRET,
+  # REDIS_URL, WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET must be supplied via Secrets in production.
+  # Run weissman-worker Deployment alongside backend (see worker-deployment.yaml).

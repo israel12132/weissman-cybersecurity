@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch, apiUrl } from '../lib/apiBase'
@@ -28,6 +29,7 @@ function formatBytes(n) {
 }
 
 export default function ClientEvidenceVault() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -59,22 +61,22 @@ export default function ClientEvidenceVault() {
       ])
 
       if (!clientRes.ok) {
-        setError(`Failed to load client (HTTP ${clientRes.status})`)
+        setError(t('pages.clientEvidenceVault.load_client_failed', { status: clientRes.status }))
         setLoading(false)
         return
       }
       setClient(await clientRes.json().catch(() => null))
 
       if (!evidenceRes.ok) {
-        const t = await evidenceRes.text().catch(() => '')
-        setError(`Failed to load evidence (HTTP ${evidenceRes.status}) ${t}`)
+        const detail = await evidenceRes.text().catch(() => '')
+        setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceRes.status, detail }))
         setLoading(false)
         return
       }
       const data = await evidenceRes.json().catch(() => ({}))
       setEvidence(Array.isArray(data.evidence) ? data.evidence : [])
     } catch (e) {
-      setError(e?.message || 'Network error')
+      setError(e?.message || t('pages.clientEvidenceVault.network_error'))
     } finally {
       setLoading(false)
     }
@@ -82,11 +84,11 @@ export default function ClientEvidenceVault() {
 
   async function uploadEvidence() {
     if (!file) {
-      alert('Select a file first.')
+      alert(t('pages.clientEvidenceVault.select_file'))
       return
     }
     if (file.size > 8 * 1024 * 1024) {
-      alert('Evidence file too large (max 8MB for now).')
+      alert(t('pages.clientEvidenceVault.file_too_large'))
       return
     }
     setUploading(true)
@@ -119,14 +121,14 @@ export default function ClientEvidenceVault() {
       setFile(null)
       await loadAll()
     } catch (e) {
-      setError(e?.message || 'Upload failed')
+      setError(e?.message || t('pages.clientEvidenceVault.upload_failed'))
     } finally {
       setUploading(false)
     }
   }
 
   async function deleteEvidence(item) {
-    if (!confirm(`Delete evidence "${item.filename}"?`)) return
+    if (!confirm(t('pages.clientEvidenceVault.delete_confirm', { name: item.filename }))) return
     try {
       const res = await apiFetch(`/api/evidence/${item.id}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
@@ -136,7 +138,7 @@ export default function ClientEvidenceVault() {
       }
       await loadAll()
     } catch (e) {
-      alert(e?.message || 'Delete failed')
+      alert(e?.message || t('pages.clientEvidenceVault.delete_failed'))
     }
   }
 
@@ -146,10 +148,10 @@ export default function ClientEvidenceVault() {
 
   if (loading) {
     return (
-      <PageShell title="Evidence Vault" subtitle="Loading...">
+      <PageShell title={t('pages.clientEvidenceVault.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">Loading evidence vault...</p>
+          <p className="mt-4 text-slate-400">{t('pages.clientEvidenceVault.loading')}</p>
         </div>
       </PageShell>
     )
@@ -157,15 +159,17 @@ export default function ClientEvidenceVault() {
 
   return (
     <PageShell
-      title={`Evidence Vault${client?.name ? ` — ${client.name}` : ''}`}
-      subtitle="Upload and manage operator evidence artifacts (screenshots, logs, exports)"
+      title={client?.name
+        ? t('pages.clientEvidenceVault.title_with_client', { name: client.name })
+        : t('pages.clientEvidenceVault.title')}
+      subtitle={t('pages.clientEvidenceVault.subtitle')}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Link to={`/clients/${clientId}`} className="text-sm text-slate-400 hover:text-slate-200">
-            ← Back to Client
+            {t('pages.clientEvidenceVault.back_to_client')}
           </Link>
-          <div className="text-xs text-slate-500 font-mono">Client ID: {clientId}</div>
+          <div className="text-xs text-slate-500 font-mono">{t('pages.clientEvidenceVault.client_id', { id: clientId })}</div>
         </div>
 
         {error && (
@@ -177,8 +181,8 @@ export default function ClientEvidenceVault() {
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Upload Evidence</h2>
-              <p className="text-xs text-slate-400 mt-1">Max 8MB per file (MVP). Uploads are audit-logged.</p>
+              <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.upload_heading')}</h2>
+              <p className="text-xs text-slate-400 mt-1">{t('pages.clientEvidenceVault.upload_body')}</p>
             </div>
             <button
               type="button"
@@ -186,13 +190,13 @@ export default function ClientEvidenceVault() {
               disabled={uploading}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
             >
-              {uploading ? 'Uploading…' : 'Upload'}
+              {uploading ? t('pages.clientEvidenceVault.uploading') : t('pages.clientEvidenceVault.upload')}
             </button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">File</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEvidenceVault.file')}</label>
               <input
                 type="file"
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
@@ -206,17 +210,17 @@ export default function ClientEvidenceVault() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Label (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEvidenceVault.label_optional')}</label>
               <input
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="Phishing screenshot, auth logs, export…"
+                placeholder={t('pages.clientEvidenceVault.label_placeholder')}
               />
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Engagement ID (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEvidenceVault.engagement_id_optional')}</label>
               <input
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white font-mono"
                 value={engagementId}
@@ -226,7 +230,7 @@ export default function ClientEvidenceVault() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Finding/Vuln ID (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEvidenceVault.vuln_id_optional')}</label>
               <input
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white font-mono"
                 value={vulnerabilityId}
@@ -236,12 +240,12 @@ export default function ClientEvidenceVault() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEvidenceVault.notes_optional')}</label>
               <textarea
                 className="w-full min-h-24 px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Context, reproduction notes, timestamps, operator initials…"
+                placeholder={t('pages.clientEvidenceVault.notes_placeholder')}
               />
             </div>
           </div>
@@ -249,23 +253,23 @@ export default function ClientEvidenceVault() {
 
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Evidence Items</h2>
-            <span className="text-xs text-slate-500">{evidence.length} total</span>
+            <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.items_heading')}</h2>
+            <span className="text-xs text-slate-500">{t('pages.clientEvidenceVault.total', { count: evidence.length })}</span>
           </div>
 
           {evidence.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-400">No evidence uploaded yet.</div>
+            <div className="mt-4 text-sm text-slate-400">{t('pages.clientEvidenceVault.empty')}</div>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-slate-400 border-b border-slate-700">
-                    <th className="py-2 pr-4">File</th>
-                    <th className="py-2 pr-4">Label</th>
-                    <th className="py-2 pr-4">Size</th>
-                    <th className="py-2 pr-4">SHA-256</th>
-                    <th className="py-2 pr-4">Links</th>
-                    <th className="py-2 pr-2">Actions</th>
+                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_file')}</th>
+                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_label')}</th>
+                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_size')}</th>
+                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_sha')}</th>
+                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_links')}</th>
+                    <th className="py-2 pr-2">{t('pages.clientEvidenceVault.col_actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -281,8 +285,8 @@ export default function ClientEvidenceVault() {
                         {(ev.sha256_hex || '').slice(0, 16)}…
                       </td>
                       <td className="py-2 pr-4 text-slate-300 font-mono text-[11px]">
-                        <div>eng: {ev.engagement_id ?? '—'}</div>
-                        <div>vuln: {ev.vulnerability_id ?? '—'}</div>
+                        <div>{t('pages.clientEvidenceVault.eng_link', { id: ev.engagement_id ?? '—' })}</div>
+                        <div>{t('pages.clientEvidenceVault.vuln_link', { id: ev.vulnerability_id ?? '—' })}</div>
                       </td>
                       <td className="py-2 pr-2">
                         <div className="flex items-center gap-2">
@@ -291,14 +295,14 @@ export default function ClientEvidenceVault() {
                             onClick={() => downloadEvidence(ev)}
                             className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
                           >
-                            Download
+                            {t('pages.clientEvidenceVault.download')}
                           </button>
                           <button
                             type="button"
                             onClick={() => deleteEvidence(ev)}
                             className="px-3 py-1 text-xs bg-red-900/30 text-red-200 rounded hover:bg-red-900/50 border border-red-500/20"
                           >
-                            Delete
+                            {t('pages.clientEvidenceVault.delete')}
                           </button>
                         </div>
                       </td>

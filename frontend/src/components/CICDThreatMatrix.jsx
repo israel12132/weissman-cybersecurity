@@ -4,11 +4,14 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 
-const STAGES = ['Commit', 'Build', 'Test', 'Deploy']
+const STAGE_KEYS = ['commit', 'build', 'test', 'deploy']
 
 export default function CICDThreatMatrix() {
+  const { t } = useTranslation()
+  const NS = 'components.tools.cicdThreatMatrix'
   const { clientId } = useParams()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,6 +19,12 @@ export default function CICDThreatMatrix() {
   const [runRepoUrl, setRunRepoUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [client, setClient] = useState(null)
+
+  const STAGES = STAGE_KEYS.map((key) => ({
+    key,
+    label: t(`${NS}.stages.${key}`),
+    apiName: key.charAt(0).toUpperCase() + key.slice(1),
+  }))
 
   const fetchFindings = useCallback(() => {
     if (!clientId) return
@@ -43,7 +52,7 @@ export default function CICDThreatMatrix() {
   }, [clientId])
 
   const findingsByStage = STAGES.reduce((acc, stage) => {
-    acc[stage] = findings.filter((f) => (f.stage || 'Build') === stage)
+    acc[stage.apiName] = findings.filter((f) => (f.stage || 'Build') === stage.apiName)
     return acc
   }, {})
 
@@ -65,10 +74,12 @@ export default function CICDThreatMatrix() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">← War Room</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Phantom Pipeline / CI/CD Matrix</h1>
+            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
+            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
           </div>
-          {clientId && client && <span className="text-slate-500 text-sm">{client.name} (ID: {clientId})</span>}
+          {clientId && client && (
+            <span className="text-slate-500 text-sm">{t(`${NS}.client_meta`, { name: client.name, id: clientId })}</span>
+          )}
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">
@@ -76,7 +87,7 @@ export default function CICDThreatMatrix() {
             type="text"
             value={runRepoUrl}
             onChange={(e) => setRunRepoUrl(e.target.value)}
-            placeholder="https://github.com/owner/repo"
+            placeholder={t(`${NS}.repo_placeholder`)}
             className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 w-80"
           />
           <button
@@ -84,32 +95,32 @@ export default function CICDThreatMatrix() {
             disabled={running || !clientId}
             className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-slate-600 text-white text-sm font-medium"
           >
-            {running ? 'Scanning…' : 'Run pipeline scan'}
+            {running ? t(`${NS}.scanning`) : t(`${NS}.run_scan`)}
           </button>
         </div>
 
         <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">Pipeline</h2>
+          <h2 className="text-lg font-semibold text-slate-200 mb-4">{t(`${NS}.pipeline_title`)}</h2>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            {STAGES.map((stage) => {
-              const count = (findingsByStage[stage] || []).length
+            {STAGES.map((stage, idx) => {
+              const count = (findingsByStage[stage.apiName] || []).length
               const isRed = count > 0
               return (
-                <div key={stage} className="flex items-center gap-2">
+                <div key={stage.key} className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => count > 0 && setModalFinding(findingsByStage[stage][0])}
-                    title={count > 0 ? `View ${count} finding(s)` : ''}
+                    onClick={() => count > 0 && setModalFinding(findingsByStage[stage.apiName][0])}
+                    title={count > 0 ? t(`${NS}.view_findings`, { count }) : ''}
                     className={`rounded-xl px-6 py-4 font-bold text-sm transition-all ${
                       isRed
                         ? 'bg-red-500/30 border-2 border-red-500 text-red-200 hover:bg-red-500/50'
                         : 'bg-slate-800 border border-slate-600 text-slate-300 hover:border-slate-500'
                     }`}
                   >
-                    {stage}
+                    {stage.label}
                     {count > 0 && <span className="ml-2 text-xs">({count})</span>}
                   </button>
-                  {stage !== STAGES[STAGES.length - 1] && (
+                  {idx < STAGES.length - 1 && (
                     <span className="text-slate-600">→</span>
                   )}
                 </div>
@@ -118,9 +129,9 @@ export default function CICDThreatMatrix() {
           </div>
         </div>
 
-        {loading && <p className="text-slate-500 mt-4">Loading findings…</p>}
+        {loading && <p className="text-slate-500 mt-4">{t(`${NS}.loading_findings`)}</p>}
         {!loading && findings.length === 0 && (
-          <p className="text-slate-500 mt-4">No CI/CD findings. Run a pipeline scan with a GitHub repo URL.</p>
+          <p className="text-slate-500 mt-4">{t(`${NS}.no_findings`)}</p>
         )}
 
         {modalFinding && (
@@ -133,7 +144,7 @@ export default function CICDThreatMatrix() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-red-400">Attacker&apos;s Playbook</h3>
+                <h3 className="text-lg font-bold text-red-400">{t(`${NS}.playbook_title`)}</h3>
                 <button
                   type="button"
                   onClick={() => setModalFinding(null)}
@@ -143,17 +154,17 @@ export default function CICDThreatMatrix() {
                 </button>
               </div>
               <div className="p-4 text-sm text-amber-200 bg-amber-500/10 border-b border-slate-700">
-                <strong>Blast radius:</strong> {modalFinding.blast_radius || '—'}
+                <strong>{t(`${NS}.blast_radius`)}</strong> {modalFinding.blast_radius || '—'}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 overflow-auto flex-1">
                 <div>
-                  <div className="text-slate-400 text-xs uppercase mb-2">Vulnerable client code ({modalFinding.file_path})</div>
+                  <div className="text-slate-400 text-xs uppercase mb-2">{t(`${NS}.vulnerable_code`, { path: modalFinding.file_path })}</div>
                   <pre className="rounded-lg bg-slate-950 p-4 text-slate-300 text-xs overflow-x-auto whitespace-pre-wrap border border-slate-700">
                     {modalFinding.vulnerable_snippet || '—'}
                   </pre>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-xs uppercase mb-2">Ollama-generated PoC (stored only, never deployed)</div>
+                  <div className="text-slate-400 text-xs uppercase mb-2">{t(`${NS}.poc_code`)}</div>
                   <pre className="rounded-lg bg-slate-950 p-4 text-red-200/90 text-xs overflow-x-auto whitespace-pre-wrap border border-red-900/50">
                     {modalFinding.poc_exploit || '—'}
                   </pre>

@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../lib/apiBase'
@@ -53,7 +54,10 @@ function StateNode({ data }) {
 
 const nodeTypes = { stateNode: StateNode }
 
+const NS = 'components.tools.semanticLogicEngine'
+
 export default function SemanticLogicEngine() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [stateMachine, setStateMachine] = useState({ nodes: [], edges: [], target: '', message: '' })
   const [reasoning, setReasoning] = useState('')
@@ -76,9 +80,9 @@ export default function SemanticLogicEngine() {
         setNodes(n)
         setEdges(e)
       })
-      .catch(e => setError(e?.message || 'Load failed'))
+      .catch(e => setError(e?.message || t(`${NS}.load_failed`)))
       .finally(() => setLoading(false))
-  }, [clientId, setNodes, setEdges])
+  }, [clientId, setNodes, setEdges, t])
 
   useEffect(() => {
     load()
@@ -89,7 +93,7 @@ export default function SemanticLogicEngine() {
   if (loading && !stateMachine.nodes?.length) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">Loading Semantic Logic Engine…</p>
+        <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
       </div>
     )
   }
@@ -97,11 +101,11 @@ export default function SemanticLogicEngine() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col">
       <header className="flex items-center justify-between border-b border-slate-700 px-6 py-3">
-        <h1 className="text-lg font-bold text-cyan-400">Semantic Logic Engine</h1>
+        <h1 className="text-lg font-bold text-cyan-400">{t(`${NS}.title`)}</h1>
         <div className="flex items-center gap-4">
-          {stateMachine.target && <span className="text-xs text-slate-500">Target: {stateMachine.target}</span>}
-          <button type="button" onClick={load} className="text-sm text-slate-400 hover:text-cyan-400">Refresh</button>
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">← War Room</Link>
+          {stateMachine.target && <span className="text-xs text-slate-500">{t(`${NS}.target_label`, { target: stateMachine.target })}</span>}
+          <button type="button" onClick={load} className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.refresh`)}</button>
+          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.back_war_room`)}</Link>
         </div>
       </header>
       {error && (
@@ -111,7 +115,7 @@ export default function SemanticLogicEngine() {
       )}
       <div className="flex-1 flex gap-4 p-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
         <div className="flex-1 rounded-xl border border-slate-600/80 bg-slate-900/40 overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">State Machine (API flow)</div>
+          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">{t(`${NS}.state_machine_title`)}</div>
           <div className="h-full min-h-[400px]">
             {nodes.length > 0 ? (
               <ReactFlow
@@ -130,15 +134,15 @@ export default function SemanticLogicEngine() {
               </ReactFlow>
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-                {stateMachine.message || 'No OpenAPI/Swagger at target. Add a client and run a scan.'}
+                {stateMachine.message || t(`${NS}.no_openapi`)}
               </div>
             )}
           </div>
         </div>
         <div className="w-[420px] flex flex-col rounded-xl border border-slate-600/80 bg-slate-900/40 overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">LLM Reasoning</div>
+          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">{t(`${NS}.reasoning_title`)}</div>
           <pre className="flex-1 p-4 overflow-auto text-xs text-slate-400 font-mono whitespace-pre-wrap bg-slate-950/80 min-h-[200px]">
-            {reasoning || 'No reasoning log yet. Run a scan with Semantic Logic Engine enabled.'}
+            {reasoning || t(`${NS}.no_reasoning`)}
           </pre>
         </div>
       </div>

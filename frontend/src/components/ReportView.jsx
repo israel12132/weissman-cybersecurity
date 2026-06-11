@@ -4,9 +4,11 @@
  */
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 
 export default function ReportView() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [client, setClient] = useState(null)
   const [findings, setFindings] = useState([])
@@ -27,19 +29,19 @@ export default function ReportView() {
         setFindings(Array.isArray(findingsList) ? findingsList.filter((f) => String(f.client) === String(clientId)) : [])
         setCryptoProof(proof?.audit_root_hash ? proof : null)
       })
-      .catch((e) => setError(e?.message || 'Load failed'))
+      .catch((e) => setError(e?.message || t('components.reportView.load_failed')))
       .finally(() => setLoading(false))
-  }, [clientId])
+  }, [clientId, t])
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">Loading report…</p>
+        <p className="text-cyan-400">{t('components.reportView.loading')}</p>
       </div>
     )
   }
 
-  const clientName = client?.name || `Client ${clientId}`
+  const clientName = client?.name || t('components.reportView.client_fallback', { id: clientId })
   const verifiedFindings = findings.filter((f) => !!f?.verified || !!f?.poc_sealed)
   const verificationBreakdown = verifiedFindings.reduce((acc, f) => {
     const raw = String(f?.verification_method || (f?.poc_sealed ? 'crypto_seal' : 'verified') || '').trim()
@@ -52,16 +54,16 @@ export default function ReportView() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-6 max-w-4xl mx-auto">
       <header className="flex items-center justify-between border-b border-slate-700 pb-4 mb-6">
-        <h1 className="text-xl font-bold text-cyan-400">Report — {clientName}</h1>
+        <h1 className="text-xl font-bold text-cyan-400">{t('components.reportView.title', { name: clientName })}</h1>
         <div className="flex gap-4">
           <a
             href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
             download
             className="text-sm text-cyan-400 hover:underline"
           >
-            Download PDF (HTML)
+            {t('components.reportView.download_pdf')}
           </a>
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">← War Room</Link>
+          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t('components.reportView.back_war_room')}</Link>
         </div>
       </header>
 
@@ -72,32 +74,36 @@ export default function ReportView() {
       )}
 
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-200 mb-2">Executive Summary</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-2">{t('components.reportView.executive_summary')}</h2>
         <p className="text-slate-400 text-sm">
-          Security assessment for <strong className="text-slate-300">{clientName}</strong>. Findings are live from the database.
+          <Trans
+            i18nKey="components.reportView.summary_body"
+            values={{ name: clientName }}
+            components={{ 1: <strong className="text-slate-300" /> }}
+          />
         </p>
         <p className="text-slate-500 text-xs mt-2">
-          Total findings: {findings.length} · Verified: {verifiedFindings.length}
+          {t('components.reportView.total_findings', { total: findings.length, verified: verifiedFindings.length })}
         </p>
         {breakdownPairs.length > 0 && (
           <p className="text-slate-500 text-xs mt-1">
-            Verified by: {breakdownPairs.map(([k, v]) => `${k}=${v}`).join(' · ')}
+            {t('components.reportView.verified_breakdown')}: {breakdownPairs.map(([k, v]) => `${k}=${v}`).join(' · ')}
           </p>
         )}
       </section>
 
       {findings.length > 0 && (
         <section className="mb-8 overflow-x-auto">
-          <h2 className="text-lg font-semibold text-slate-200 mb-2">Recent Findings</h2>
+          <h2 className="text-lg font-semibold text-slate-200 mb-2">{t('components.reportView.recent_findings')}</h2>
           <table className="w-full border-collapse border border-slate-600">
             <thead>
               <tr className="bg-slate-800/80">
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">ID</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Title</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Severity</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Source</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">Verified</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">How</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_id')}</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_title')}</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_severity')}</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_source')}</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_verified')}</th>
+                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_how')}</th>
               </tr>
             </thead>
             <tbody>
@@ -117,9 +123,9 @@ export default function ReportView() {
       )}
 
       <section className="rounded-xl border border-cyan-500/40 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-cyan-400 mb-2">Cryptographic Proof of Integrity</h2>
+        <h2 className="text-lg font-semibold text-cyan-400 mb-2">{t('components.reportView.crypto_proof')}</h2>
         <p className="text-slate-400 text-sm mb-4">
-          This report is cryptographically sealed. Scanning this QR code verifies the exact microsecond timestamp and HTTP payloads of all findings against the central Rust orchestrator.
+          {t('components.reportView.crypto_sealed_body')}
         </p>
         {cryptoProof?.audit_root_hash ? (
           <div className="flex flex-wrap items-start gap-6">
@@ -132,7 +138,7 @@ export default function ReportView() {
             )}
             <div className="min-w-0 flex-1">
               <p className="text-slate-300 text-sm break-all font-mono">
-                <strong className="text-cyan-400">Audit Root Hash (SHA-256):</strong><br />
+                <strong className="text-cyan-400">{t('components.reportView.audit_root_hash_label')}</strong><br />
                 {cryptoProof.audit_root_hash}
               </p>
               {cryptoProof.verification_url && (
@@ -143,7 +149,7 @@ export default function ReportView() {
                     rel="noopener noreferrer"
                     className="text-cyan-400 hover:underline"
                   >
-                    Verify: {cryptoProof.verification_url}
+                    {t('components.reportView.verify_link', { url: cryptoProof.verification_url })}
                   </a>
                 </p>
               )}
@@ -151,7 +157,7 @@ export default function ReportView() {
           </div>
         ) : (
           <p className="text-slate-500 text-sm">
-            No sealed run for this client yet. Run a scan to generate the audit trail.
+            {t('components.reportView.no_sealed_run')}
           </p>
         )}
       </section>

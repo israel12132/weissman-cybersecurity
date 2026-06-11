@@ -1,58 +1,59 @@
-Weissman — production on a Cloud VPS (Ubuntu or NixOS)
-======================================================
+Weissman — production deployment
+================================
 
-Goal: no Vite dev server, no Cloudflare Tunnel. Browser → HTTPS (443) → reverse proxy → Rust :8000 → static UI from frontend/dist.
+Recommended path: Docker Compose (full stack)
+---------------------------------------------
+From repository root:
 
-1) Clone and install system deps (Ubuntu example)
-   - Postgres reachable from the VPS (not localhost on your laptop).
-   - For source builds on Linux: libhwloc-dev, pkg-config, OpenSSL dev headers, etc. (see project README / Nix flake).
+  cp PRODUCTION.env.template .env
+  # Edit .env: POSTGRES_*, DB_APP_*, DB_AUTH_*, WEISSMAN_JWT_SECRET,
+  # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (required for destructive actions in prod)
 
-2) Build the Command Center (production static assets)
-   From repository root:
+  docker compose up -d --build
 
-     ./deploy/build-frontend.sh
+Services: postgres (pgvector), redis, backend (weissman-server), worker (weissman-worker), gateway (nginx SPA).
 
-   Or manually:
+- Migrations run once at backend boot when WEISSMAN_MIGRATE_URL is set.
+- REDIS_URL is set automatically in compose for distributed rate limits.
+- Worker polls weissman_async_jobs — required for scans and async engines.
 
-     cd frontend && npm ci && npm run build
+Verify: curl -sf http://localhost/api/health
 
-   Output: frontend/dist/  (served under URL path /command-center/ by the Rust app.)
+Sync migrations locally before deploy:
 
-3) Configure environment
-   Copy .env.example to /run/secrets/weissman.env (or /etc/weissman.env), chmod 600.
-   Set at least the variables in the "PRODUCTION (VPS)" section of .env.example:
-   - DATABASE_URL, WEISSMAN_PUBLIC_BASE_URL=https://your-domain.com, PORT=8000
-   - Optional: WEISSMAN_STATIC=/absolute/path/to/frontend/dist if the binary is not run from repo root.
+  bash scripts/check-migration-sync.sh
 
-4) Run the Rust server (binds 0.0.0.0:PORT; use 8000 behind the proxy)
-   Examples:
+---
 
-     cd /path/to/security-assessment-bot
-     export $(grep -v '^#' /etc/weissman.env | xargs)
-     ./target/release/weissman-server
+systemd / VPS (bare metal)
+--------------------------
+1. Build frontend: ./deploy/build-frontend.sh  (or cd frontend && npm ci && npm run build)
+2. Build Rust: cargo build --release -p weissman-server
+3. Install units: sudo bash deploy/systemd/install-weissman-systemd.sh
+4. Configure /etc/weissman/weissman.env (see deploy/systemd/weissman.env.example):
+   - DATABASE_URL, WEISSMAN_JWT_SECRET, WEISSMAN_COOKIE_SECURE=1
+   - WEISSMAN_MIGRATE_URL (superuser, for boot migrations)
+   - REDIS_URL=redis://127.0.0.1:6379/0 (deploy Redis separately)
+   - WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+5. Enable: sudo systemctl enable --now weissman-server weissman-worker weissman.target
+6. Reverse proxy: deploy/Caddyfile or deploy/nginx-weissman.conf
 
-   Or fingerprint_engine:
+---
 
-     ./target/release/fingerprint_engine serve --port 8000
+Kubernetes
+----------
+Manifests in deploy/k8s/:
+- backend-deployment.yaml — weissman-server (set WEISSMAN_MIGRATE_URL on one replica or use a Job)
+- worker-deployment.yaml — weissman-worker (same image, no migrations)
+- redis-deployment.yaml — Redis for rate limits
+- gateway-deployment.yaml, ingress.yaml
 
-   weissman-server auto-detects frontend/dist when cwd is the repo root; otherwise set WEISSMAN_STATIC.
+Secrets (weissman-secrets): database_url, auth_database_url, migrate_url, jwt_secret,
+redis_url, destructive_confirm_secret.
 
-5) Reverse proxy (pick one)
+---
 
-   Caddy (recommended — automatic HTTPS):
-     sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-     Edit the site name (weissman.example.com → your FQDN).
-     sudo systemctl reload caddy
-
-   Nginx + certbot:
-     sudo cp deploy/nginx-snippet-websocket-map.conf /etc/nginx/conf.d/00-websocket-map.conf
-     sudo cp deploy/nginx-weissman.conf /etc/nginx/sites-available/weissman
-     Edit server_name and ssl_certificate paths; obtain certs with certbot.
-     sudo nginx -t && sudo systemctl reload nginx
-
-6) Idempotent systemd (sketch)
-   Use EnvironmentFile=/etc/weissman.env, WorkingDirectory=/path/to/repo or a install prefix,
-   ExecStart=/usr/local/bin/weissman-server, After=network-online.target postgresql.service (if local DB).
-
-NixOS users: use flake packages + nixosModules.weissman-bot and optionally nixosModules.weissman-hpc;
-put secrets in environmentFile. Caddy/Nginx can be configured via corresponding NixOS services.
+Manual migration (optional)
+---------------------------
+  export WEISSMAN_MIGRATE_URL=postgres://postgres:PASSWORD@host:5432/weissman
+  cargo run --example run_migrate -p weissman-db

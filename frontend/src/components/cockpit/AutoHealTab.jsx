@@ -2,10 +2,13 @@
  * CNAPP Layer 3–4: Auto-Heal with 200% Docker verification — live sandbox steps, then PR.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { Shield, GitPullRequest, CheckCircle, Clock, ExternalLink, Loader2, Container } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+
+const NS = 'components.cockpitTabs.autoHeal'
 
 function terminalStep(s) {
   if (s === 'verified') return 'ok'
@@ -15,6 +18,7 @@ function terminalStep(s) {
 }
 
 export default function AutoHealTab() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
@@ -136,7 +140,7 @@ export default function AutoHealTab() {
   if (!selectedClientId) {
     return (
       <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
-        Select a client to use Auto-Heal.
+        {t(`${NS}.selectClient`)}
       </div>
     )
   }
@@ -145,68 +149,68 @@ export default function AutoHealTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Shield className="w-5 h-5 text-[#10b981]" />
-        <h2 className="text-lg font-semibold text-white">1-Click Auto-Heal</h2>
+        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-3">Create remediation PR (200% Docker verify first)</h3>
+        <h3 className="text-sm font-medium text-white/90 mb-3">{t(`${NS}.formTitle`)}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input
             type="text"
-            placeholder="Finding ID"
+            placeholder={t(`${NS}.findingId`)}
             value={healForm.finding_id}
             onChange={e => setHealForm(f => ({ ...f, finding_id: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="Repo (owner/repo)"
+            placeholder={t(`${NS}.repoSlug`)}
             value={healForm.repo_slug}
             onChange={e => setHealForm(f => ({ ...f, repo_slug: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="password"
-            placeholder="Git token"
+            placeholder={t(`${NS}.gitToken`)}
             value={healForm.git_token}
             onChange={e => setHealForm(f => ({ ...f, git_token: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="Base branch"
+            placeholder={t(`${NS}.baseBranch`)}
             value={healForm.base_branch}
             onChange={e => setHealForm(f => ({ ...f, base_branch: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <div className="md:col-span-2 flex items-center gap-2 text-white/50 text-xs">
             <Container className="w-4 h-4 shrink-0" />
-            <span>Ephemeral sandbox (bollard / Docker API)</span>
+            <span>{t(`${NS}.ephemeralSandbox`)}</span>
           </div>
           <input
             type="text"
-            placeholder="Docker socket"
+            placeholder={t(`${NS}.dockerSocket`)}
             value={healForm.docker_socket}
             onChange={e => setHealForm(f => ({ ...f, docker_socket: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm font-mono text-xs"
           />
           <input
             type="text"
-            placeholder="Image (e.g. node:20-bookworm)"
+            placeholder={t(`${NS}.image`)}
             value={healForm.image}
             onChange={e => setHealForm(f => ({ ...f, image: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
           <input
             type="text"
-            placeholder="Container app port"
+            placeholder={t(`${NS}.containerPort`)}
             value={healForm.container_port}
             onChange={e => setHealForm(f => ({ ...f, container_port: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
         </div>
         <p className="mt-2 text-[10px] text-white/40">
-          Set <code className="text-[#22d3ee]">WEISSMAN_AUTOHEAL_SKIP_SANDBOX=1</code> on the engine to open PRs without Docker (not recommended).
+          {t(`${NS}.skipSandboxHint`)}
         </p>
         <button
           type="button"
@@ -215,24 +219,24 @@ export default function AutoHealTab() {
           className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl border border-[#10b981]/50 bg-[#10b981]/10 text-[#10b981] hover:bg-[#10b981]/20 disabled:opacity-50"
         >
           {healing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitPullRequest className="w-4 h-4" />}
-          {healing ? 'Starting…' : 'Verify in sandbox & open PR'}
+          {healing ? t(`${NS}.starting`) : t(`${NS}.verifyButton`)}
         </button>
       </div>
 
       {(verifyJobId || verifySteps.length > 0) && (
         <div className="rounded-2xl bg-black/50 border border-[#22d3ee]/30 p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-[#22d3ee]">Sandbox verification (live)</span>
+            <span className="text-sm font-medium text-[#22d3ee]">{t(`${NS}.sandboxVerificationLive`)}</span>
             {verifyJobId && (
               <span className="text-[10px] font-mono text-white/40 truncate max-w-[200px]" title={verifyJobId}>
-                job {verifyJobId.slice(0, 8)}…
+                {t(`${NS}.jobPrefix`, { id: verifyJobId.slice(0, 8) })}
               </span>
             )}
           </div>
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {verifySteps.length === 0 && (
               <li className="text-xs text-white/50 flex items-center gap-2">
-                <Loader2 className="w-3 h-3 animate-spin" /> Waiting for engine steps…
+                <Loader2 className="w-3 h-3 animate-spin" /> {t(`${NS}.waitingSteps`)}
               </li>
             )}
             {verifySteps.map((st, i) => (
@@ -256,15 +260,15 @@ export default function AutoHealTab() {
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-sm font-medium text-white/90">Heal requests</span>
+          <span className="text-sm font-medium text-white/90">{t(`${NS}.healRequests`)}</span>
           <button type="button" onClick={fetchRequests} className="text-xs text-[#22d3ee] hover:underline">
-            Refresh
+            {t(`${NS}.refresh`)}
           </button>
         </div>
         {loading ? (
-          <div className="p-6 text-center text-white/50 text-sm">Loading…</div>
+          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
         ) : requests.length === 0 ? (
-          <div className="p-6 text-center text-white/50 text-sm">No heal requests yet. Trigger one above.</div>
+          <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.noRequests`)}</div>
         ) : (
           <ul className="divide-y divide-white/10">
             {requests.map(req => (
@@ -285,7 +289,9 @@ export default function AutoHealTab() {
                     )}
                 </div>
                 {req.verification_job_id ? (
-                  <div className="mt-1 text-[10px] text-white/40 font-mono">verify job: {req.verification_job_id}</div>
+                  <div className="mt-1 text-[10px] text-white/40 font-mono">
+                    {t(`${NS}.verifyJobPrefix`, { id: req.verification_job_id })}
+                  </div>
                 ) : null}
                 {req.diff_summary && (
                   <pre className="mt-2 p-2 rounded-lg bg-black/60 border border-white/10 text-[10px] text-[#4ade80] font-mono overflow-x-auto max-h-24 overflow-y-auto">
@@ -301,7 +307,7 @@ export default function AutoHealTab() {
                     className="inline-flex items-center gap-1 mt-2 text-xs text-[#22d3ee] hover:underline"
                   >
                     <ExternalLink className="w-3 h-3" />
-                    Open PR / Approve & merge
+                    {t(`${NS}.openPr`)}
                   </a>
                 )}
               </li>

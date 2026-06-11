@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation, Trans } from 'react-i18next'
 import {
   Building2,
   CheckCircle2,
@@ -14,9 +15,9 @@ import { apiFetch } from '../../lib/apiBase'
 import { formatApiErrorFromBody } from '../../lib/apiError'
 
 const STEPS = [
-  { id: 1, label: 'Client', icon: Building2 },
-  { id: 2, label: 'Scope', icon: Shield },
-  { id: 3, label: 'Launch', icon: Radar },
+  { id: 1, labelKey: 'client', icon: Building2 },
+  { id: 2, labelKey: 'scope', icon: Shield },
+  { id: 3, labelKey: 'launch', icon: Radar },
 ]
 
 function parseDomains(raw) {
@@ -32,6 +33,7 @@ function domainsToJson(raw) {
 }
 
 export default function OnboardingWizard({ open, onComplete }) {
+  const { t } = useTranslation()
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
   const [domain, setDomain] = useState('')
@@ -50,11 +52,11 @@ export default function OnboardingWizard({ open, onComplete }) {
     setError('')
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setError('Client name is required')
+      setError(t('components.onboarding.name_required'))
       return
     }
     if (domains.length === 0) {
-      setError('Enter at least one authorized domain')
+      setError(t('components.onboarding.domain_required'))
       return
     }
     setSubmitting(true)
@@ -81,7 +83,7 @@ export default function OnboardingWizard({ open, onComplete }) {
       setClientId(String(d.id))
       setStep(2)
     } catch (err) {
-      setError(err?.message || 'Network error — could not reach API')
+      setError(err?.message || t('components.onboarding.network_error'))
     }
     setSubmitting(false)
   }
@@ -94,19 +96,19 @@ export default function OnboardingWizard({ open, onComplete }) {
       const r = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        setError(d.detail || d.message || `Scan launch failed (HTTP ${r.status})`)
+        setError(d.detail || d.message || t('components.onboarding.scan_failed', { status: r.status }))
         setSubmitting(false)
         return
       }
       setScanResult({
-        message: d.message || 'Scan queued successfully',
+        message: d.message || t('components.onboarding.scan_queued_default'),
         jobs_queued: d.jobs_queued ?? 0,
       })
       setTimeout(() => {
         onComplete?.({ clientId, scan: d })
       }, 1800)
     } catch (err) {
-      setError(err?.message || 'Network error launching scan')
+      setError(err?.message || t('components.onboarding.scan_network_error'))
       setSubmitting(false)
     }
   }
@@ -147,13 +149,13 @@ export default function OnboardingWizard({ open, onComplete }) {
             </div>
             <div>
               <p className="text-[9px] font-mono uppercase tracking-[0.28em] text-cyan-400/70 mb-1">
-                First-time setup
+                {t('components.onboarding.badge')}
               </p>
               <h2 id="onboarding-wizard-title" className="text-lg font-semibold text-white tracking-tight">
-                Welcome to Weissman Command Center
+                {t('components.onboarding.title')}
               </h2>
               <p className="text-[13px] text-white/45 mt-1 leading-relaxed">
-                Add your first client, confirm authorized scope, and launch your inaugural scan.
+                {t('components.onboarding.subtitle')}
               </p>
             </div>
           </div>
@@ -179,7 +181,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     ) : (
                       <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
                     )}
-                    <span>{s.label}</span>
+                    <span>{t(`components.onboarding.steps.${s.labelKey}`)}</span>
                   </div>
                   {i < STEPS.length - 1 && (
                     <ChevronRight className="w-3.5 h-3.5 text-white/15 shrink-0" aria-hidden />
@@ -204,21 +206,21 @@ export default function OnboardingWizard({ open, onComplete }) {
               >
                 <div>
                   <label htmlFor="onboarding-name" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-white/45 mb-2">
-                    Client name
+                    {t('components.onboarding.client_name')}
                   </label>
                   <input
                     id="onboarding-name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Acme Corporation"
+                    placeholder={t('components.onboarding.client_placeholder')}
                     autoFocus
                     className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />
                 </div>
                 <div>
                   <label htmlFor="onboarding-domain" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-white/45 mb-2">
-                    Authorized domain
+                    {t('components.onboarding.authorized_domain')}
                   </label>
                   <div className="relative">
                     <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
@@ -227,12 +229,12 @@ export default function OnboardingWizard({ open, onComplete }) {
                       type="text"
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
-                      placeholder="example.com"
+                      placeholder={t('components.onboarding.domain_placeholder')}
                       className="w-full pl-11 pr-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-white/25 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                     />
                   </div>
                   <p className="mt-2 text-[11px] text-white/30">
-                    Comma or newline separated. Wildcards supported (e.g. *.example.com).
+                    {t('components.onboarding.domain_hint')}
                   </p>
                 </div>
                 {error && (
@@ -248,11 +250,11 @@ export default function OnboardingWizard({ open, onComplete }) {
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Creating client…
+                      {t('components.onboarding.creating')}
                     </>
                   ) : (
                     <>
-                      Continue
+                      {t('components.onboarding.continue')}
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
@@ -271,11 +273,11 @@ export default function OnboardingWizard({ open, onComplete }) {
               >
                 <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 space-y-4">
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">Client</p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{t('components.onboarding.client_label')}</p>
                     <p className="text-base font-semibold text-white">{name.trim()}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-2">Authorized domains</p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-2">{t('components.onboarding.domains_label')}</p>
                     <ul className="space-y-1.5">
                       {domains.map((d) => (
                         <li
@@ -290,8 +292,10 @@ export default function OnboardingWizard({ open, onComplete }) {
                   </div>
                   <div className="pt-2 border-t border-white/[0.06]">
                     <p className="text-[11px] text-white/40 leading-relaxed">
-                      Scans run in <span className="text-emerald-400/90 font-medium">safe proofs</span> mode by default.
-                      Only assets within the declared scope will be assessed.
+                      <Trans
+                        i18nKey="components.onboarding.scope_hint"
+                        components={{ 1: <span className="text-emerald-400/90 font-medium" /> }}
+                      />
                     </p>
                   </div>
                 </div>
@@ -304,7 +308,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     className="mt-0.5 w-4 h-4 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
                   />
                   <span className="text-sm text-white/60 group-hover:text-white/80 transition-colors leading-relaxed">
-                    I confirm these domains are authorized for security assessment under my organization&apos;s rules of engagement.
+                    {t('components.onboarding.scope_confirm')}
                   </span>
                 </label>
 
@@ -320,7 +324,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     onClick={() => { setStep(1); setError('') }}
                     className="px-4 py-3 rounded-xl text-sm font-medium border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
                   >
-                    Back
+                    {t('components.onboarding.back')}
                   </button>
                   <button
                     type="button"
@@ -328,7 +332,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     onClick={() => { setError(''); setStep(3) }}
                     className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm tracking-wide border border-cyan-500/50 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                   >
-                    Confirm scope
+                    {t('components.onboarding.confirm_scope')}
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -353,15 +357,17 @@ export default function OnboardingWizard({ open, onComplete }) {
                     >
                       <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                     </motion.div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Scan launched</h3>
+                    <h3 className="text-lg font-semibold text-white mb-1">{t('components.onboarding.scan_launched')}</h3>
                     <p className="text-sm text-white/50 max-w-sm">{scanResult.message}</p>
                     {scanResult.jobs_queued > 0 && (
                       <p className="mt-2 text-[11px] font-mono text-cyan-400/80">
-                        {scanResult.jobs_queued} job{scanResult.jobs_queued !== 1 ? 's' : ''} queued
+                        {scanResult.jobs_queued === 1
+                          ? t('components.onboarding.jobs_queued', { count: scanResult.jobs_queued })
+                          : t('components.onboarding.jobs_queued_plural', { count: scanResult.jobs_queued })}
                       </p>
                     )}
                     <p className="mt-4 text-[11px] text-white/30 font-mono uppercase tracking-[0.15em]">
-                      Opening cockpit…
+                      {t('components.onboarding.opening_cockpit')}
                     </p>
                   </div>
                 ) : (
@@ -370,10 +376,13 @@ export default function OnboardingWizard({ open, onComplete }) {
                       <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl border border-violet-500/30 bg-violet-500/10 mb-4">
                         <Radar className="w-7 h-7 text-violet-400" strokeWidth={1.5} />
                       </div>
-                      <h3 className="text-base font-semibold text-white mb-2">Ready to scan</h3>
+                      <h3 className="text-base font-semibold text-white mb-2">{t('components.onboarding.ready_title')}</h3>
                       <p className="text-sm text-white/45 leading-relaxed max-w-sm mx-auto">
-                        Launch a full assessment across all enabled engines for{' '}
-                        <span className="text-white/80 font-medium">{name.trim()}</span>.
+                        <Trans
+                          i18nKey="components.onboarding.ready_body"
+                          values={{ name: name.trim() }}
+                          components={{ 1: <span className="text-white/80 font-medium" /> }}
+                        />
                       </p>
                     </div>
 
@@ -390,7 +399,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                         disabled={submitting}
                         className="px-4 py-3 rounded-xl text-sm font-medium border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors disabled:opacity-50"
                       >
-                        Back
+                        {t('components.onboarding.back')}
                       </button>
                       <button
                         type="button"
@@ -401,12 +410,12 @@ export default function OnboardingWizard({ open, onComplete }) {
                         {submitting ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Launching…
+                            {t('components.onboarding.launching')}
                           </>
                         ) : (
                           <>
                             <Radar className="w-4 h-4" />
-                            Launch full scan
+                            {t('components.onboarding.launch_full_scan')}
                           </>
                         )}
                       </button>

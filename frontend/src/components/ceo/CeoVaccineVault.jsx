@@ -1,14 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiUrl, apiFetch } from '../../lib/apiBase'
 
-const TABS = [
-  { id: 'chain', label: 'Attack chain' },
-  { id: 'transcript', label: 'Council transcript' },
-  { id: 'patch', label: 'Patch' },
-  { id: 'sig', label: 'Detection signature' },
-]
-
 export default function CeoVaccineVault() {
+  const { t } = useTranslation()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -16,6 +11,13 @@ export default function CeoVaccineVault() {
   const [tab, setTab] = useState('chain')
   const [matchBusy, setMatchBusy] = useState(false)
   const [matchMsg, setMatchMsg] = useState('')
+
+  const tabs = [
+    { id: 'chain', label: t('components.ceo.vaccineVault.tabChain') },
+    { id: 'transcript', label: t('components.ceo.vaccineVault.tabTranscript') },
+    { id: 'patch', label: t('components.ceo.vaccineVault.tabPatch') },
+    { id: 'sig', label: t('components.ceo.vaccineVault.tabSig') },
+  ]
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -26,12 +28,12 @@ export default function CeoVaccineVault() {
       if (!r.ok) throw new Error(d.detail || r.statusText)
       setRows(Array.isArray(d) ? d : [])
     } catch (e) {
-      setErr(e.message || 'load failed')
+      setErr(e.message || t('components.ceo.vaccineVault.loadFailed'))
       setRows([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()
@@ -48,7 +50,7 @@ export default function CeoVaccineVault() {
       if (!r.ok) throw new Error(d.detail || r.statusText)
       setMatchMsg(JSON.stringify(d, null, 2))
     } catch (e) {
-      setMatchMsg(e.message || 'match failed')
+      setMatchMsg(e.message || t('components.ceo.vaccineVault.matchFailed'))
     } finally {
       setMatchBusy(false)
     }
@@ -57,35 +59,37 @@ export default function CeoVaccineVault() {
   return (
     <div className="rounded-lg border border-white/10 bg-black/35 overflow-hidden">
       <div className="px-4 py-3 border-b border-white/10 flex flex-wrap justify-between gap-2 items-center">
-        <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-widest">Vaccine vault</h2>
+        <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-widest">
+          {t('components.ceo.vaccineVault.title')}
+        </h2>
         <div className="flex gap-2">
           <a
             href={apiUrl('/api/ceo/vault/export/criticals')}
             className="text-xs font-mono px-3 py-1.5 rounded border border-white/20 text-slate-300 hover:bg-white/5"
             download
           >
-            Export criticals CSV
+            {t('components.ceo.vaccineVault.exportCriticals')}
           </a>
           <button
             type="button"
             onClick={load}
             className="text-xs font-mono px-3 py-1.5 rounded border border-cyan-500/30 text-cyan-200 hover:bg-cyan-950/40"
           >
-            Refresh
+            {t('components.ceo.vaccineVault.refresh')}
           </button>
         </div>
       </div>
-      {loading && <p className="p-4 text-xs text-slate-500 font-mono">Loading…</p>}
+      {loading && <p className="p-4 text-xs text-slate-500 font-mono">{t('components.ceo.vaccineVault.loading')}</p>}
       {err && <p className="p-4 text-xs text-red-400 font-mono">{err}</p>}
       <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
         <table className="w-full text-left text-xs font-mono text-slate-300">
           <thead className="sticky top-0 bg-slate-950/95 border-b border-white/10 text-[10px] uppercase text-slate-500">
             <tr>
-              <th className="p-2 pl-4">ID</th>
-              <th className="p-2">Fingerprint</th>
-              <th className="p-2">Severity</th>
-              <th className="p-2">Validated</th>
-              <th className="p-2 pr-4">Component</th>
+              <th className="p-2 pl-4">{t('components.ceo.vaccineVault.colId')}</th>
+              <th className="p-2">{t('components.ceo.vaccineVault.colFingerprint')}</th>
+              <th className="p-2">{t('components.ceo.vaccineVault.colSeverity')}</th>
+              <th className="p-2">{t('components.ceo.vaccineVault.colValidated')}</th>
+              <th className="p-2 pr-4">{t('components.ceo.vaccineVault.colComponent')}</th>
             </tr>
           </thead>
           <tbody>
@@ -107,7 +111,11 @@ export default function CeoVaccineVault() {
                   {row.tech_fingerprint}
                 </td>
                 <td className="p-2">{row.severity}</td>
-                <td className="p-2">{row.preemptive_validated ? 'yes' : 'no'}</td>
+                <td className="p-2">
+                  {row.preemptive_validated
+                    ? t('components.ceo.vaccineVault.yes')
+                    : t('components.ceo.vaccineVault.no')}
+                </td>
                 <td className="p-2 pr-4 max-w-[200px] truncate" title={row.component_ref}>
                   {row.component_ref}
                 </td>
@@ -120,14 +128,18 @@ export default function CeoVaccineVault() {
       {selected && (
         <div className="border-t border-white/10 bg-slate-950/80 p-4 space-y-3">
           <div className="flex flex-wrap gap-2 items-center justify-between">
-            <span className="text-xs font-mono text-slate-400">Row #{selected.id}</span>
+            <span className="text-xs font-mono text-slate-400">
+              {t('components.ceo.vaccineVault.rowLabel', { id: selected.id })}
+            </span>
             <button
               type="button"
               disabled={matchBusy}
               onClick={runMatch}
               className="text-xs font-mono px-3 py-2 rounded bg-violet-950/80 border border-violet-400/40 text-violet-100 disabled:opacity-50"
             >
-              {matchBusy ? 'Running…' : 'Run knowledge match'}
+              {matchBusy
+                ? t('components.ceo.vaccineVault.running')
+                : t('components.ceo.vaccineVault.runMatch')}
             </button>
           </div>
           {matchMsg && (
@@ -136,17 +148,17 @@ export default function CeoVaccineVault() {
             </pre>
           )}
           <div className="flex gap-1 border-b border-white/10 pb-2">
-            {TABS.map((t) => (
+            {tabs.map((tabItem) => (
               <button
-                key={t.id}
+                key={tabItem.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(tabItem.id)}
                 className={
                   'text-[10px] font-mono uppercase px-3 py-1 rounded-t ' +
-                  (tab === t.id ? 'bg-white/10 text-cyan-200' : 'text-slate-500 hover:text-slate-300')
+                  (tab === tabItem.id ? 'bg-white/10 text-cyan-200' : 'text-slate-500 hover:text-slate-300')
                 }
               >
-                {t.label}
+                {tabItem.label}
               </button>
             ))}
           </div>

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
+const NS = 'components.intelWidgets.globe'
 const CYAN = 0x00f3ff
 const MAGENTA = 0xff00ff
 const emptyGlobeData = { scanPulses: [], threatStreams: [], criticalVulns: [], intelNodes: [] }
@@ -33,7 +35,7 @@ function createTextSprite(text, color = 0x00f3ff, options = {}) {
   if (badge) {
     ctx.font = 'bold 10px JetBrains Mono, monospace'
     ctx.fillStyle = '#ff3366'
-    ctx.fillText('VERIFIED', 160, 58)
+    ctx.fillText(options.verifiedText || 'VERIFIED', 160, 58)
   }
   const tex = new THREE.CanvasTexture(canvas)
   tex.needsUpdate = true
@@ -65,6 +67,7 @@ function bezierArc(from, to, segments = 24) {
 }
 
 export default function Globe({ data, realtimeArcs = [], realtimePulses = [], connectionStatus = 'online' }) {
+  const { t, i18n } = useTranslation()
   const containerRef = useRef(null)
   const rendererRef = useRef(null)
   const controlsRef = useRef(null)
@@ -163,7 +166,7 @@ export default function Globe({ data, realtimeArcs = [], realtimePulses = [], co
         pulsePos[i * 3] = v.x
         pulsePos[i * 3 + 1] = v.y
         pulsePos[i * 3 + 2] = v.z
-        const label = (p.name || `Client ${p.client_id || i}`).toString().toUpperCase().slice(0, 12)
+        const label = (p.name || t(`${NS}.clientFallback`, { id: p.client_id || i })).toString().toUpperCase().slice(0, 12)
         const tag = createTextSprite(label, CYAN)
         tag.position.copy(v).multiplyScalar(1.08)
         scene.add(tag)
@@ -188,8 +191,8 @@ export default function Globe({ data, realtimeArcs = [], realtimePulses = [], co
         vulnPos[i * 3] = vec.x
         vulnPos[i * 3 + 1] = vec.y
         vulnPos[i * 3 + 2] = vec.z
-        const label = (v.client_name || 'TARGET').toString().toUpperCase().slice(0, 10)
-        const tag = createTextSprite(label, 0xff3366, { badge: true })
+        const label = (v.client_name || t(`${NS}.targetFallback`)).toString().toUpperCase().slice(0, 10)
+        const tag = createTextSprite(label, 0xff3366, { badge: true, verifiedText: t(`${NS}.verified`) })
         tag.position.copy(vec).multiplyScalar(1.12)
         scene.add(tag)
         tagSpritesRef.current.push({ sprite: tag, pulse: false, verified: true })
@@ -329,7 +332,7 @@ export default function Globe({ data, realtimeArcs = [], realtimePulses = [], co
       sceneRef.current = null
       clockRef.current = null
     }
-  }, [safeData, isOffline])
+  }, [safeData, isOffline, i18n.language, t])
 
   const addedArcIdsRef = useRef(new Set())
   const addedPulseIdsRef = useRef(new Set())
@@ -353,13 +356,13 @@ export default function Globe({ data, realtimeArcs = [], realtimePulses = [], co
       })
       const arcLine = new THREE.Line(arcGeo, arcMat)
       scene.add(arcLine)
-      const label = (arc.label || 'INTEL').toString().slice(0, 14)
+      const label = (arc.label || t(`${NS}.intelFallback`)).toString().slice(0, 14)
       const sprite = createTextSprite(label, arc.severity === 'critical' ? 0xff3366 : CYAN)
       sprite.position.copy(to).multiplyScalar(1.12)
       scene.add(sprite)
       arcsRef.current.push({ id: arc.id, line: arcLine, birth: elapsed, sprite })
     })
-  }, [realtimeArcs, isOffline])
+  }, [realtimeArcs, isOffline, i18n.language, t])
 
   useEffect(() => {
     if (isOffline) {
@@ -401,7 +404,7 @@ export default function Globe({ data, realtimeArcs = [], realtimePulses = [], co
       <div ref={containerRef} className="w-full h-full min-h-0" />
       {isOffline && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none connection-lost-overlay">
-          <span className="connection-lost-text">CONNECTION LOST</span>
+          <span className="connection-lost-text">{t(`${NS}.connectionLost`)}</span>
         </div>
       )}
     </div>

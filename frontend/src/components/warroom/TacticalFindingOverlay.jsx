@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { useClient } from '../../context/ClientContext'
 import { X, Copy, Check } from 'lucide-react'
 
+const NS = 'components.cockpitWidgets.tacticalFindingOverlay'
+
 export default function TacticalFindingOverlay() {
+  const { t } = useTranslation()
   const { lastFinding, setLastFinding } = useWarRoom()
   const { selectedClientId } = useClient()
   const [copied, setCopied] = useState(false)
@@ -48,13 +52,13 @@ export default function TacticalFindingOverlay() {
         <div className="rounded-xl border bg-slate-950/95 backdrop-blur-md shadow-2xl overflow-hidden border-white/10">
           <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
             <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
-              Live finding — backend confirmed
+              {t(`${NS}.header`)}
             </span>
             <button
               type="button"
               onClick={() => setLastFinding(null)}
               className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Dismiss"
+              aria-label={t(`${NS}.dismiss`)}
             >
               <X className="w-4 h-4" />
             </button>
@@ -71,13 +75,13 @@ export default function TacticalFindingOverlay() {
               )}
             </div>
             <p className="text-sm font-medium text-white">
-              {lastFinding.title || 'Finding'}
+              {lastFinding.title || t(`${NS}.findingFallback`)}
             </p>
             {lastFinding.poc_exploit && (
               <div className="rounded-lg bg-black/60 border border-white/10 p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider">
-                    Zero false-positive proof (cURL / payload)
+                    {t(`${NS}.proofTitle`)}
                   </span>
                   {!pocSealed && (
                     <button
@@ -86,14 +90,13 @@ export default function TacticalFindingOverlay() {
                       className="flex items-center gap-1 text-[10px] font-mono text-white/60 hover:text-[#22d3ee] transition-colors"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      {copied ? 'Copied' : 'Copy'}
+                      {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}
                     </button>
                   )}
                 </div>
                 {pocSealed ? (
                   <p className="text-[11px] text-amber-400/90 m-0">
-                    Sealed exploit evidence — open <strong>Findings</strong> and use «Decrypt Exploit Evidence» in the
-                    Digital Evidence HUD (audit logged).
+                    {t(`${NS}.sealedMessage`)}
                   </p>
                 ) : (
                   <pre className="text-[11px] font-mono text-[#4ade80]/90 whitespace-pre-wrap break-all overflow-x-auto max-h-32 overflow-y-auto m-0">

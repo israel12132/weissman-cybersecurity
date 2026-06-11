@@ -1,20 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
 
-/**
- * 24-hour findings velocity chart — discovered vs resolved per hour. Two overlaid
- * area lines (red=discovered, green=resolved) with axis labels and a small legend.
- * Inspired by Snyk "Issues over time" and Datadog "Anomaly hours" charts.
- *
- * Self-contained SVG — no external charting dependency, ~3 kB at runtime.
- */
+const NS = 'components.cockpitWidgets.severityTrendChart'
 
 function buildArea(values, width, height, padding) {
   if (!values || values.length === 0) {
     return { path: '', linePath: '' }
   }
   const innerW = width - padding * 2
-  const innerH = height - padding * 2 - 12 // bottom labels
+  const innerH = height - padding * 2 - 12
   const max = Math.max(1, ...values)
   const step = innerW / Math.max(1, values.length - 1)
   const points = values.map((v, i) => {
@@ -34,6 +29,7 @@ function buildArea(values, width, height, padding) {
 }
 
 export default function SeverityTrendChart({ className = '', height = 180 }) {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -47,8 +43,8 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
       finally { if (!cancelled) setLoading(false) }
     }
     load()
-    const t = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(t) }
+    const timer = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(timer) }
   }, [])
 
   const w = 720
@@ -77,23 +73,23 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   return (
     <section
       className={`rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
-      aria-label="24-hour findings trend"
+      aria-label={t(`${NS}.ariaLabel`)}
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
         <div className="min-w-0">
           <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75">
-            24-hour velocity
+            {t(`${NS}.title`)}
           </h3>
           <p className="text-[10px] font-mono text-white/40 mt-0.5">
-            findings discovered vs. resolved per hour
+            {t(`${NS}.subtitle`)}
           </p>
         </div>
         <div className="flex items-center gap-3 text-[10px] font-mono shrink-0">
           <span className="flex items-center gap-1 text-rose-300">
-            <span className="w-2 h-2 rounded-full bg-rose-400" /> {totalDisc} discovered
+            <span className="w-2 h-2 rounded-full bg-rose-400" /> {t(`${NS}.discovered`, { count: totalDisc })}
           </span>
           <span className="flex items-center gap-1 text-emerald-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" /> {totalRes} resolved
+            <span className="w-2 h-2 rounded-full bg-emerald-400" /> {t(`${NS}.resolved`, { count: totalRes })}
           </span>
         </div>
       </header>
@@ -105,7 +101,7 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
           width="100%"
           height={h}
           role="img"
-          aria-label="Findings discovered vs resolved over the last 24 hours"
+          aria-label={t(`${NS}.chartAria`)}
         >
           <defs>
             <linearGradient id="trendDisc" x1="0" y1="0" x2="0" y2="1">
@@ -118,7 +114,6 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
             </linearGradient>
           </defs>
 
-          {/* gridlines */}
           {[0.25, 0.5, 0.75].map((p) => {
             const y = padding + (h - padding * 2 - 12) * p
             return (
@@ -147,7 +142,6 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
             </>
           )}
 
-          {/* x-axis labels — show every 4th hour to avoid overlap */}
           {labels.map((lbl, i) => {
             if (i % 4 !== 0 && i !== labels.length - 1) return null
             const x = padding + (i * (w - padding * 2)) / Math.max(1, labels.length - 1)
@@ -166,7 +160,6 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
             )
           })}
 
-          {/* y-axis max */}
           <text
             x={padding}
             y={padding + 8}

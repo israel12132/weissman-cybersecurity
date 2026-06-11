@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Command, Search, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../lib/apiBase';
@@ -9,6 +10,7 @@ import { apiFetch } from '../lib/apiBase';
  * Backed by GET /api/search?q=
  */
 export default function GlobalSearch() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -36,7 +38,7 @@ export default function GlobalSearch() {
       return undefined;
     }
     const ctrl = new AbortController();
-    const t = setTimeout(async () => {
+    const tmr = setTimeout(async () => {
       setLoading(true);
       try {
         const r = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
@@ -51,7 +53,7 @@ export default function GlobalSearch() {
       }
     }, 200);
     return () => {
-      clearTimeout(t);
+      clearTimeout(tmr);
       ctrl.abort();
     };
   }, [query]);
@@ -87,7 +89,7 @@ export default function GlobalSearch() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search anything... (pages, engines, findings, clients)"
+              placeholder={t('components.globalSearch.placeholder')}
               className="flex-1 bg-transparent text-white placeholder-gray-500 outline-none text-lg"
               autoFocus
             />
@@ -96,15 +98,15 @@ export default function GlobalSearch() {
 
           <div className="max-h-[60vh] overflow-y-auto">
             {loading && query.length >= 2 ? (
-              <div className="p-8 text-center text-gray-500">Searching…</div>
+              <div className="p-8 text-center text-gray-500">{t('components.globalSearch.searching')}</div>
             ) : results.length === 0 && query.length >= 2 ? (
               <div className="p-8 text-center text-gray-500">
-                No results found for &quot;{query}&quot;
+                {t('components.globalSearch.noResults', { query })}
               </div>
             ) : results.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Command className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                Start typing to search…
+                {t('components.globalSearch.startTyping')}
               </div>
             ) : (
               <div className="divide-y divide-white/5">
@@ -130,10 +132,10 @@ export default function GlobalSearch() {
           <div className="flex items-center justify-between p-3 border-t border-white/10 bg-white/5 text-xs text-gray-500">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded">Enter</kbd> Select
+                <kbd className="px-1.5 py-0.5 bg-white/10 rounded">Enter</kbd> {t('components.globalSearch.select')}
               </span>
             </div>
-            <span>Weissman Global Search</span>
+            <span>{t('components.globalSearch.brand')}</span>
           </div>
         </motion.div>
       </motion.div>

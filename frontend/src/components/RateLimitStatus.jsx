@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { apiFetch } from '../lib/apiBase';
+
+const NS = 'components.intelWidgets.rateLimitStatus';
 
 /**
  * RateLimitStatus - Real-time rate limit monitoring component
@@ -17,6 +20,7 @@ import { apiFetch } from '../lib/apiBase';
  * - Auto-refresh every 5 seconds
  */
 export default function RateLimitStatus({ compact = false }) {
+  const { t } = useTranslation();
   const [limits, setLimits] = useState({
     scans: { current: 0, max: 24, resetIn: 0 },
     logins: { current: 0, max: 8, resetIn: 0 },
@@ -75,7 +79,7 @@ export default function RateLimitStatus({ compact = false }) {
   };
 
   const formatResetTime = (seconds) => {
-    if (seconds <= 0) return 'Now';
+    if (seconds <= 0) return t(`${NS}.resetNow`);
     if (seconds < 60) return `${seconds}s`;
     return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   };
@@ -84,7 +88,7 @@ export default function RateLimitStatus({ compact = false }) {
     return (
       <div className="flex items-center gap-2 text-xs text-gray-400">
         <Activity className="w-3 h-3 animate-pulse" />
-        <span>Loading limits...</span>
+        <span>{t(`${NS}.loading`)}</span>
       </div>
     );
   }
@@ -98,7 +102,7 @@ export default function RateLimitStatus({ compact = false }) {
       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor(scanStatus)}`}>
         {StatusIcon}
         <span className="text-xs font-medium">
-          {limits.scans.current}/{limits.scans.max} scans
+          {t(`${NS}.scansCompact`, { current: limits.scans.current, max: limits.scans.max })}
         </span>
       </div>
     );
@@ -110,10 +114,10 @@ export default function RateLimitStatus({ compact = false }) {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Activity className="w-4 h-4 text-cyan-400" />
-          Rate Limits
+          {t(`${NS}.title`)}
         </h3>
         <span className="text-xs text-gray-400">
-          Updated {new Date().toLocaleTimeString()}
+          {t(`${NS}.updated`, { time: new Date().toLocaleTimeString() })}
         </span>
       </div>
 
@@ -121,7 +125,7 @@ export default function RateLimitStatus({ compact = false }) {
         {Object.entries(limits).map(([key, { current, max, resetIn }]) => {
           const status = getStatus(current, max);
           const percentage = (current / max) * 100;
-          const label = key.charAt(0).toUpperCase() + key.slice(1);
+          const label = t(`${NS}.labels.${key}`, { defaultValue: key });
 
           return (
             <div key={key} className="space-y-1.5">
@@ -139,7 +143,7 @@ export default function RateLimitStatus({ compact = false }) {
                     {current}/{max}
                   </span>
                   <span className="text-gray-500">
-                    Reset: {formatResetTime(resetIn)}
+                    {t(`${NS}.reset`, { time: formatResetTime(resetIn) })}
                   </span>
                 </div>
               </div>
@@ -165,7 +169,7 @@ export default function RateLimitStatus({ compact = false }) {
         <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
           <p className="text-xs text-red-400">
             <AlertTriangle className="w-3 h-3 inline mr-1" />
-            Rate limit approaching. Requests will be throttled.
+            {t(`${NS}.warning`)}
           </p>
         </div>
       )}

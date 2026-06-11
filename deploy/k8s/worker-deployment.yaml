@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weissman-worker
+  template:
+    metadata:
+      labels:
+        app: weissman-worker
+    spec:
+      containers:
+        - name: worker
+          image: your-registry/weissman-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/weissman-worker"]
+          envFrom:
+            - configMapRef:
+                name: weissman-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: database_url
+            - name: WEISSMAN_AUTH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: auth_database_url
+            - name: WEISSMAN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: jwt_secret
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: redis_url
+                  optional: true
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -x weissman-worker || test -d /proc/1 && grep -q weissman-worker /proc/1/comm"
+            initialDelaySeconds: 30
+            periodSeconds: 30

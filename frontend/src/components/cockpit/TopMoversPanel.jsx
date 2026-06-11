@@ -1,19 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../../lib/apiBase'
 
-/**
- * Top Movers — three side-by-side ranked lists:
- *   1. Engines by active findings (which detectors are firing hardest)
- *   2. Clients/assets by open critical findings (where the risk concentrates)
- *   3. CVEs by frequency (which exploit IDs we keep tripping on)
- *
- * Inspiration: Snyk "Top issues", Tenable "Top exposures", Wiz "Issues overview".
- * Every row is a `<Link>` deep into the relevant filtered view.
- *
- * Data comes from the same `/api/dashboard/exec-kpis` payload that the KPI strip
- * uses — re-uses the cached fetch instead of firing 3 more requests.
- */
+const NS = 'components.cockpitWidgets.topMoversPanel'
 
 const SEV_COLOR = {
   critical: '#ef4444',
@@ -73,6 +63,7 @@ function EmptyRow({ label }) {
 }
 
 export default function TopMoversPanel({ className = '' }) {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -89,8 +80,8 @@ export default function TopMoversPanel({ className = '' }) {
       }
     }
     load()
-    const t = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(t) }
+    const timer = setInterval(load, 30_000)
+    return () => { cancelled = true; clearInterval(timer) }
   }, [])
 
   if (loading && !data) {
@@ -113,10 +104,9 @@ export default function TopMoversPanel({ className = '' }) {
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${className}`}>
-      {/* Engines */}
-      <Card title="Top engines" count={engines.length} footer="by active findings" accent="#22d3ee">
+      <Card title={t(`${NS}.enginesTitle`)} count={engines.length} footer={t(`${NS}.enginesFooter`)} accent="#22d3ee">
         {engines.length === 0 ? (
-          <EmptyRow label="No engine activity yet" />
+          <EmptyRow label={t(`${NS}.enginesEmpty`)} />
         ) : (
           engines.map((e) => (
             <Link
@@ -128,7 +118,7 @@ export default function TopMoversPanel({ className = '' }) {
                 <span className="text-[12px] text-white/80 font-mono truncate">{e.id}</span>
                 <span className="flex items-baseline gap-1.5 text-[11px] font-mono shrink-0">
                   {e.critical > 0 && (
-                    <span className="text-rose-400" title={`${e.critical} critical`}>
+                    <span className="text-rose-400" title={t(`${NS}.criticalCount`, { count: e.critical })}>
                       ●{e.critical}
                     </span>
                   )}
@@ -141,10 +131,9 @@ export default function TopMoversPanel({ className = '' }) {
         )}
       </Card>
 
-      {/* Clients */}
-      <Card title="Top assets at risk" count={clients.length} footer="by open critical findings" accent="#ef4444">
+      <Card title={t(`${NS}.assetsTitle`)} count={clients.length} footer={t(`${NS}.assetsFooter`)} accent="#ef4444">
         {clients.length === 0 ? (
-          <EmptyRow label="No clients onboarded" />
+          <EmptyRow label={t(`${NS}.assetsEmpty`)} />
         ) : (
           clients.map((c) => (
             <Link
@@ -156,7 +145,7 @@ export default function TopMoversPanel({ className = '' }) {
                 <span className="text-[12px] text-white/80 truncate font-medium">{c.name}</span>
                 <span className="flex items-baseline gap-1.5 text-[11px] font-mono shrink-0">
                   {c.open_critical > 0 && (
-                    <span className="text-rose-400" title={`${c.open_critical} critical open`}>
+                    <span className="text-rose-400" title={t(`${NS}.criticalOpen`, { count: c.open_critical })}>
                       ●{c.open_critical}
                     </span>
                   )}
@@ -173,10 +162,9 @@ export default function TopMoversPanel({ className = '' }) {
         )}
       </Card>
 
-      {/* CVEs */}
-      <Card title="Top CVEs" count={cves.length} footer="most frequent across assets" accent="#a855f7">
+      <Card title={t(`${NS}.cvesTitle`)} count={cves.length} footer={t(`${NS}.cvesFooter`)} accent="#a855f7">
         {cves.length === 0 ? (
-          <EmptyRow label="No CVE-correlated findings yet" />
+          <EmptyRow label={t(`${NS}.cvesEmpty`)} />
         ) : (
           cves.map((c) => {
             const sev = (c.severity || 'info').toLowerCase()

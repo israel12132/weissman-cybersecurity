@@ -1,14 +1,20 @@
+import { useTranslation } from 'react-i18next'
+
+const NS = 'components.intelWidgets.killChainVisualizer'
+
 const PHASES = [
-  { id: 'recon', label: 'Recon', short: 'RECON' },
-  { id: 'delivery', label: 'Delivery', short: 'DELIVERY' },
-  { id: 'exploitation', label: 'Exploitation', short: 'EXPLOIT' },
+  { id: 'recon' },
+  { id: 'delivery' },
+  { id: 'exploitation' },
 ]
 
 export default function KillChainVisualizer() {
+  const { t } = useTranslation()
+
   return (
     <div className="kill-chain-visualizer">
       <div className="text-cyber-cyan font-semibold text-xs tracking-widest mb-3 uppercase">
-        Kill-Chain
+        {t(`${NS}.title`)}
       </div>
       <div className="flex flex-col gap-2">
         {PHASES.map((phase, i) => {
@@ -26,7 +32,7 @@ export default function KillChainVisualizer() {
               }`}
             >
               <span className="tabular-nums text-slate-500 mr-2">0{i + 1}</span>
-              {phase.short}
+              {t(`${NS}.phases.${phase.id}`)}
               {isActive && <span className="ml-1 animate-pulse">▸</span>}
             </div>
           )

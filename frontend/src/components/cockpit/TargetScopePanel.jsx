@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
+
+const NS = 'components.cockpitWidgets.targetScopePanel'
 
 function parseJsonArray(val) {
   if (val == null) return []
@@ -14,7 +17,8 @@ function parseJsonArray(val) {
   }
 }
 
-function CopyableTag({ value, label }) {
+function CopyableTag({ value }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
     if (navigator.clipboard) {
@@ -32,12 +36,13 @@ function CopyableTag({ value, label }) {
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-white/80 font-mono text-xs cursor-pointer hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-all"
     >
       <span className="truncate max-w-[140px]">{value}</span>
-      <span className="text-[10px] shrink-0">{copied ? 'Copied' : 'Copy'}</span>
+      <span className="text-[10px] shrink-0">{copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}</span>
     </span>
   )
 }
 
 export default function TargetScopePanel({ ceoIntegrated = false }) {
+  const { t } = useTranslation()
   const { selectedClient, selectedClientId, clientConfig, patchConfig, configLoading } = useClient()
   const [zeroDayFindings, setZeroDayFindings] = useState([])
   const [loading, setLoading] = useState(false)
@@ -68,7 +73,7 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
     }
     return (
       <aside className="hidden lg:flex w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-black/40 backdrop-blur-md flex-col items-center justify-center p-6 text-white/50">
-        <p className="text-sm">Select a client to view target scope.</p>
+        <p className="text-sm">{t(`${NS}.selectClient`)}</p>
       </aside>
     )
   }
@@ -76,7 +81,7 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
   return (
     <aside className="w-full max-w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-black/40 backdrop-blur-md overflow-y-auto overflow-x-hidden flex flex-col max-h-[min(36vh,280px)] lg:max-h-none lg:h-full">
       <div className="p-4 border-b border-white/10">
-        <h2 className="text-xs uppercase tracking-[0.2em] text-white/50 font-medium">Target Scope</h2>
+        <h2 className="text-xs uppercase tracking-[0.2em] text-white/50 font-medium">{t(`${NS}.title`)}</h2>
         <p className="text-sm font-medium text-white mt-1 truncate">{selectedClient.name}</p>
       </div>
 
@@ -84,9 +89,9 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         <section className="rounded-xl border border-amber-500/25 bg-amber-950/20 p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-[10px] uppercase tracking-widest text-amber-200/80 font-medium">Industrial network (OT)</h3>
+              <h3 className="text-[10px] uppercase tracking-widest text-amber-200/80 font-medium">{t(`${NS}.otTitle`)}</h3>
               <p className="text-[10px] text-white/45 mt-1 leading-snug">
-                Enables passive Modbus / EtherNet-IP / S7 fingerprinting on domains + IP ranges only. Off by default for fragile controllers.
+                {t(`${NS}.otDescription`)}
               </p>
             </div>
             <button
@@ -105,17 +110,17 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">Domains & IPs</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.domainsIps`)}</h3>
           <div className="flex flex-wrap gap-2">
             {domains.length === 0 && ipRanges.length === 0 ? (
-              <span className="text-xs text-white/40">None configured</span>
+              <span className="text-xs text-white/40">{t(`${NS}.noneConfigured`)}</span>
             ) : (
               <>
                 {domains.map((d) => (
-                  <CopyableTag key={d} value={d} label="Domain" />
+                  <CopyableTag key={d} value={d} />
                 ))}
                 {ipRanges.map((ip) => (
-                  <CopyableTag key={ip} value={ip} label="IP" />
+                  <CopyableTag key={ip} value={ip} />
                 ))}
               </>
             )}
@@ -123,17 +128,17 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">Tech Stack</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.techStack`)}</h3>
           <div className="flex flex-wrap gap-2">
             {techStack.length === 0 ? (
-              <span className="text-xs text-white/40">Not set or auto-detect</span>
+              <span className="text-xs text-white/40">{t(`${NS}.techStackEmpty`)}</span>
             ) : (
-              techStack.map((t) => (
+              techStack.map((tech) => (
                 <span
-                  key={t}
+                  key={tech}
                   className="px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-white/70 font-mono text-xs"
                 >
-                  {t}
+                  {tech}
                 </span>
               ))
             )}
@@ -141,11 +146,11 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">Zero-Day Radar Exposure</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.zeroDayTitle`)}</h3>
           {loading ? (
-            <p className="text-xs text-white/40">Loading…</p>
+            <p className="text-xs text-white/40">{t(`${NS}.loading`)}</p>
           ) : zeroDayFindings.length === 0 ? (
-            <p className="text-xs text-[#4ade80]/90">No zero-day findings</p>
+            <p className="text-xs text-[#4ade80]/90">{t(`${NS}.noZeroDay`)}</p>
           ) : (
             <ul className="space-y-2">
               {zeroDayFindings.slice(0, 10).map((f) => (
@@ -153,14 +158,14 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
                   key={f.id}
                   className="text-xs border-l-2 border-[#ef4444] pl-2 py-1 bg-red-500/10 text-red-300/90 rounded-r-lg"
                 >
-                  <span className="font-medium">{f.title || 'Finding'}</span>
+                  <span className="font-medium">{f.title || t(`${NS}.findingFallback`)}</span>
                   {f.severity && (
                     <span className="ml-1 text-[10px] text-white/50">({f.severity})</span>
                   )}
                 </li>
               ))}
               {zeroDayFindings.length > 10 && (
-                <li className="text-[10px] text-white/40">+{zeroDayFindings.length - 10} more</li>
+                <li className="text-[10px] text-white/40">{t(`${NS}.moreCount`, { count: zeroDayFindings.length - 10 })}</li>
               )}
             </ul>
           )}
