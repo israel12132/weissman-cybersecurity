@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { motion } from 'framer-motion'
@@ -6,6 +7,7 @@ import { ShieldAlert, UserPlus, Trash2, ArrowRight, Zap, Sparkles } from 'lucide
 import { apiFetch } from '../../lib/apiBase'
 
 export default function IdentityMatrixTab() {
+  const { t } = useTranslation()
   const { selectedClientId, clientConfig, patchConfig } = useClient()
   const { lastHarvestedToken, setLastHarvestedToken } = useWarRoom()
   const [contexts, setContexts] = useState([])
@@ -51,10 +53,10 @@ export default function IdentityMatrixTab() {
 
   useEffect(() => {
     if (!polling || !selectedClientId) return
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       fetchEvents()
     }, 4000)
-    return () => clearInterval(t)
+    return () => clearInterval(timer)
   }, [polling, selectedClientId, fetchEvents])
 
   useEffect(() => {
@@ -63,8 +65,8 @@ export default function IdentityMatrixTab() {
     fetchContexts().then(() => {
       setLastHarvestedToken?.(null)
     })
-    const t = setTimeout(() => setHarvestAlert(false), 8000)
-    return () => clearTimeout(t)
+    const timeout = setTimeout(() => setHarvestAlert(false), 8000)
+    return () => clearTimeout(timeout)
   }, [lastHarvestedToken, selectedClientId, fetchContexts, setLastHarvestedToken])
 
   const autoHarvest = clientConfig?.auto_harvest !== false
@@ -109,7 +111,7 @@ export default function IdentityMatrixTab() {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
-          <p className="text-sm text-white/70">Select a client to manage Identity Matrix.</p>
+          <p className="text-sm text-white/70">{t('components.cockpitTabs.identityMatrix.select_client')}</p>
         </div>
       </div>
     )
@@ -133,19 +135,19 @@ export default function IdentityMatrixTab() {
         >
           <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
-            <p className="font-medium text-amber-200">High-Privilege token auto-harvested</p>
-            <p className="text-xs text-amber-200/80">Backend escalated privileges; new context added to the table. Shadow Replay will use it on next run.</p>
+            <p className="font-medium text-amber-200">{t('components.cockpitTabs.identityMatrix.harvest_alert_title')}</p>
+            <p className="text-xs text-amber-200/80">{t('components.cockpitTabs.identityMatrix.harvest_alert_body')}</p>
           </div>
         </motion.div>
       )}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2 text-white/90">
           <ShieldAlert className="w-5 h-5 text-amber-500" />
-          <h2 className="text-lg font-semibold tracking-wide">Identity Matrix</h2>
-          <span className="text-xs text-white/50">Multi-role tokens for Shadow Replay & privilege escalation</span>
+          <h2 className="text-lg font-semibold tracking-wide">{t('components.cockpitTabs.identityMatrix.title')}</h2>
+          <span className="text-xs text-white/50">{t('components.cockpitTabs.identityMatrix.subtitle')}</span>
         </div>
         <label className="flex items-center gap-2 ml-auto cursor-pointer">
-          <span className="text-sm text-white/70">Auto-Harvest</span>
+          <span className="text-sm text-white/70">{t('components.cockpitTabs.identityMatrix.auto_harvest')}</span>
           <button
             type="button"
             role="switch"
@@ -155,7 +157,9 @@ export default function IdentityMatrixTab() {
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${autoHarvest ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
-          <span className="text-xs text-white/50">{autoHarvest ? 'ON' : 'OFF'}</span>
+          <span className="text-xs text-white/50">
+            {autoHarvest ? t('components.cockpitTabs.identityMatrix.on') : t('components.cockpitTabs.identityMatrix.off')}
+          </span>
         </label>
       </div>
 
@@ -168,17 +172,21 @@ export default function IdentityMatrixTab() {
       >
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">Role name</label>
+            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+              {t('components.cockpitTabs.identityMatrix.form.role_name')}
+            </label>
             <input
               type="text"
               value={form.role_name}
               onChange={(e) => setForm((f) => ({ ...f, role_name: e.target.value }))}
-              placeholder="Admin / User / Guest"
+              placeholder={t('components.cockpitTabs.identityMatrix.form.role_placeholder')}
               className="w-40 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">Privilege order (higher = more privileged)</label>
+            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+              {t('components.cockpitTabs.identityMatrix.form.privilege_order')}
+            </label>
             <input
               type="number"
               value={form.privilege_order}
@@ -187,23 +195,31 @@ export default function IdentityMatrixTab() {
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">Token type</label>
+            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+              {t('components.cockpitTabs.identityMatrix.form.token_type')}
+            </label>
             <select
               value={form.token_type}
               onChange={(e) => setForm((f) => ({ ...f, token_type: e.target.value }))}
               className="rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white focus:border-[#22d3ee]/50 focus:outline-none"
             >
-              <option value="bearer">Bearer</option>
-              <option value="cookie">Cookie</option>
+              <option value="bearer">{t('components.cockpitTabs.identityMatrix.form.bearer')}</option>
+              <option value="cookie">{t('components.cockpitTabs.identityMatrix.form.cookie')}</option>
             </select>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">Token value</label>
+            <label className="block text-[10px] uppercase tracking-wider text-white/50 mb-1">
+              {t('components.cockpitTabs.identityMatrix.form.token_value')}
+            </label>
             <input
               type="password"
               value={form.token_value}
               onChange={(e) => setForm((f) => ({ ...f, token_value: e.target.value }))}
-              placeholder={form.token_type === 'cookie' ? 'session=…; auth=…' : 'JWT or Bearer token'}
+              placeholder={
+                form.token_type === 'cookie'
+                  ? t('components.cockpitTabs.identityMatrix.form.token_placeholder_cookie')
+                  : t('components.cockpitTabs.identityMatrix.form.token_placeholder_bearer')
+              }
               className="w-full rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
@@ -212,7 +228,7 @@ export default function IdentityMatrixTab() {
             disabled={submitting || !form.role_name.trim()}
             className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-50"
           >
-            <UserPlus className="w-4 h-4" /> Add context
+            <UserPlus className="w-4 h-4" /> {t('components.cockpitTabs.identityMatrix.add_context')}
           </button>
         </div>
       </motion.form>
@@ -220,14 +236,18 @@ export default function IdentityMatrixTab() {
       {/* Current contexts table */}
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-          <span className="text-xs uppercase tracking-wider text-white/50">Session contexts ({contexts.length})</span>
+          <span className="text-xs uppercase tracking-wider text-white/50">
+            {t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
+          </span>
           {contexts.length >= 2 && (
             <button
               type="button"
               onClick={() => setPolling((p) => !p)}
               className={`text-xs px-2 py-1 rounded ${polling ? 'bg-amber-500/20 text-amber-400' : 'text-white/50 hover:text-white/70'}`}
             >
-              {polling ? 'Live updates ON' : 'Enable live updates'}
+              {polling
+                ? t('components.cockpitTabs.identityMatrix.live_updates_on')
+                : t('components.cockpitTabs.identityMatrix.enable_live_updates')}
             </button>
           )}
         </div>
@@ -235,10 +255,18 @@ export default function IdentityMatrixTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 bg-white/5">
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">Role</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">Privilege order</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">Token type</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">Token</th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
+                  {t('components.cockpitTabs.identityMatrix.table.role')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
+                  {t('components.cockpitTabs.identityMatrix.table.privilege_order')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
+                  {t('components.cockpitTabs.identityMatrix.table.token_type')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
+                  {t('components.cockpitTabs.identityMatrix.table.token')}
+                </th>
                 <th className="w-20" />
               </tr>
             </thead>
@@ -246,7 +274,7 @@ export default function IdentityMatrixTab() {
               {contexts.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-white/50">
-                    Add at least two contexts (e.g. Admin, User) to run Shadow Replay. Run ENGAGE TARGET to trigger BOLA + identity tests.
+                    {t('components.cockpitTabs.identityMatrix.empty_contexts')}
                   </td>
                 </tr>
               )}
@@ -261,7 +289,7 @@ export default function IdentityMatrixTab() {
                       type="button"
                       onClick={() => handleDelete(ctx.id)}
                       className="p-1.5 rounded text-red-400/80 hover:bg-red-500/20 hover:text-red-400"
-                      aria-label="Delete"
+                      aria-label={t('components.cockpitTabs.identityMatrix.delete')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -277,13 +305,17 @@ export default function IdentityMatrixTab() {
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
           <Zap className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-medium text-white/90">Privilege Escalation (Kill Chain)</span>
-          <span className="text-xs text-white/50">— low-priv context executed high-priv action</span>
+          <span className="text-sm font-medium text-white/90">
+            {t('components.cockpitTabs.identityMatrix.escalation.title')}
+          </span>
+          <span className="text-xs text-white/50">
+            {t('components.cockpitTabs.identityMatrix.escalation.subtitle')}
+          </span>
         </div>
         <div className="p-4">
           {events.length === 0 ? (
             <p className="text-sm text-white/50 py-6 text-center">
-              No privilege escalation events yet. Add contexts, run ENGAGE TARGET; Shadow Engine will record when a lower-privilege token succeeds on an admin path.
+              {t('components.cockpitTabs.identityMatrix.escalation.empty')}
             </p>
           ) : (
             <div className="space-y-3">

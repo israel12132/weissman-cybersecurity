@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../lib/apiBase'
@@ -30,16 +31,17 @@ function ConfidenceBadge({ confidence }) {
 }
 
 function LiveBadge({ live, https }) {
+  const { t } = useTranslation()
   if (!live) {
     return (
       <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-red-500/20 text-red-400">
-        Offline
+        {t('pages.domainDiscovery.offline')}
       </span>
     )
   }
   return (
     <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-green-500/20 text-green-400">
-      {https ? '🔒 Live' : 'Live'}
+      {https ? t('pages.domainDiscovery.live_badge') : t('pages.domainDiscovery.live')}
     </span>
   )
 }
@@ -59,6 +61,7 @@ function StageBadge({ stage }) {
 // ─── Domain Card ─────────────────────────────────────────────────────────────
 
 function DomainCard({ domain, selected, onSelect, onScanClick }) {
+  const { t } = useTranslation()
   return (
     <motion.div
       layout
@@ -99,10 +102,10 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
       {/* IPs */}
       {domain.ip_addresses && domain.ip_addresses.length > 0 && (
         <div className="mb-2">
-          <span className="text-[10px] font-mono text-white/40">IPs: </span>
+          <span className="text-[10px] font-mono text-white/40">{t('pages.domainDiscovery.ips')} </span>
           <span className="text-[10px] font-mono text-white/60">
             {domain.ip_addresses.slice(0, 3).join(', ')}
-            {domain.ip_addresses.length > 3 && ` +${domain.ip_addresses.length - 3} more`}
+            {domain.ip_addresses.length > 3 && t('pages.domainDiscovery.more_ips', { count: domain.ip_addresses.length - 3 })}
           </span>
         </div>
       )}
@@ -121,7 +124,7 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
         disabled={!domain.live}
         className="w-full px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-950/40 hover:text-cyan-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
-        Add to Scan
+        {t('pages.domainDiscovery.add_to_scan')}
       </button>
     </motion.div>
   )
@@ -130,24 +133,25 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
 // ─── Stats Bar ───────────────────────────────────────────────────────────────
 
 function StatsBar({ result, selectedCount }) {
+  const { t } = useTranslation()
   if (!result) return null
   return (
     <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-black/40 border border-white/10">
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-white">{result.total_discovered}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">Total Discovered</span>
+        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.total_discovered')}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-green-400">{result.live_domains}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">Live Domains</span>
+        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.live_domains')}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-cyan-400">{selectedCount}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">Selected</span>
+        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.selected')}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-lg font-semibold text-white/70">{result.stages_completed?.length || 0}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">Stages</span>
+        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.stages')}</span>
       </div>
     </div>
   )
@@ -156,6 +160,7 @@ function StatsBar({ result, selectedCount }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function DomainDiscovery() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -201,7 +206,7 @@ export default function DomainDiscovery() {
 
   const handleDiscover = useCallback(async () => {
     if (!target.trim()) {
-      showToast('error', 'Enter a target domain')
+      showToast('error', t('pages.domainDiscovery.enter_target'))
       return
     }
     setLoading(true)
@@ -223,9 +228,9 @@ export default function DomainDiscovery() {
         return
       }
       setResult(d)
-      showToast('info', `Discovered ${d.total_discovered} domains (${d.live_domains} live)`)
+      showToast('info', t('pages.domainDiscovery.discovered_toast', { total: d.total_discovered, live: d.live_domains }))
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.domainDiscovery.network_error'))
     } finally {
       setLoading(false)
     }
@@ -255,7 +260,7 @@ export default function DomainDiscovery() {
 
   const handleScanSingle = useCallback(async (domain) => {
     if (!selectedClientId) {
-      showToast('error', 'Select a client first')
+      showToast('error', t('pages.domainDiscovery.select_client_first'))
       return
     }
     navigate(`/engines?target=${encodeURIComponent(domain)}`)
@@ -263,11 +268,11 @@ export default function DomainDiscovery() {
 
   const handleScanAll = useCallback(async () => {
     if (!selectedClientId) {
-      showToast('error', 'Select a client first')
+      showToast('error', t('pages.domainDiscovery.select_client_first'))
       return
     }
     if (selectedDomains.size === 0) {
-      showToast('error', 'Select at least one domain')
+      showToast('error', t('pages.domainDiscovery.select_one_domain'))
       return
     }
     setScanAllLoading(true)
@@ -285,9 +290,9 @@ export default function DomainDiscovery() {
         showToast('error', d.detail || `Scan failed (${r.status})`)
         return
       }
-      showToast('info', `Scan queued for ${d.domains_count} domains (Job: ${d.job_id})`)
+      showToast('info', t('pages.domainDiscovery.scan_queued', { count: d.domains_count, jobId: d.job_id }))
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.domainDiscovery.network_error'))
     } finally {
       setScanAllLoading(false)
     }
@@ -320,24 +325,24 @@ export default function DomainDiscovery() {
         <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
-              ← Dashboard
+              {t('pages.domainDiscovery.dashboard')}
             </Link>
             <span className="text-white/20 text-xs">|</span>
-            <h1 className="text-sm font-bold tracking-tight text-white">Domain Discovery</h1>
+            <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.domainDiscovery.title')}</h1>
             <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
-              Auto-Enumerate Company Assets
+              {t('pages.domainDiscovery.tagline')}
             </span>
           </div>
 
           {/* Client selector */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-white/40">Client:</span>
+            <span className="text-[11px] font-mono text-white/40">{t('pages.domainDiscovery.client')}</span>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
               className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
             >
-              <option value="">— Select client —</option>
+              <option value="">{t('pages.domainDiscovery.select_client')}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -372,29 +377,29 @@ export default function DomainDiscovery() {
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4"
         >
-          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">Discovery Configuration</h2>
+          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.domainDiscovery.config_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
-                Target Domain / URL
+                {t('pages.domainDiscovery.target_label')}
               </label>
               <input
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="example.com or https://example.com"
+                placeholder={t('pages.domainDiscovery.target_placeholder')}
                 className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
             <div>
               <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
-                Company Name (optional)
+                {t('pages.domainDiscovery.company_optional')}
               </label>
               <input
                 type="text"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Example Corp"
+                placeholder={t('pages.domainDiscovery.company_placeholder')}
                 className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
@@ -405,12 +410,12 @@ export default function DomainDiscovery() {
                 disabled={loading || !target.trim()}
                 className="w-full px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
-                {loading ? '⟳ Discovering…' : '🔍 Discover Domains'}
+                {loading ? t('pages.domainDiscovery.discovering') : t('pages.domainDiscovery.discover')}
               </button>
             </div>
           </div>
           <p className="text-[11px] text-white/40">
-            Multi-stage discovery: Certificate Transparency, DNS enumeration, web crawl, email records, and pattern generation.
+            {t('pages.domainDiscovery.stages_hint')}
           </p>
         </motion.section>
 
@@ -429,7 +434,7 @@ export default function DomainDiscovery() {
                   onChange={(e) => setFilterStage(e.target.value)}
                   className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
                 >
-                  <option value="all">All Stages</option>
+                  <option value="all">{t('pages.domainDiscovery.filter_all_stages')}</option>
                   {uniqueStages.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
@@ -439,12 +444,12 @@ export default function DomainDiscovery() {
                   onChange={(e) => setFilterLive(e.target.value)}
                   className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
                 >
-                  <option value="all">All Status</option>
-                  <option value="live">Live Only</option>
-                  <option value="offline">Offline Only</option>
+                  <option value="all">{t('pages.domainDiscovery.filter_all_status')}</option>
+                  <option value="live">{t('pages.domainDiscovery.filter_live_only')}</option>
+                  <option value="offline">{t('pages.domainDiscovery.filter_offline_only')}</option>
                 </select>
                 <span className="text-[10px] font-mono text-white/40">
-                  {filteredDomains.length} shown
+                  {t('pages.domainDiscovery.shown', { count: filteredDomains.length })}
                 </span>
               </div>
 
@@ -455,14 +460,14 @@ export default function DomainDiscovery() {
                   onClick={handleSelectAll}
                   className="px-3 py-1 rounded-lg text-[11px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
                 >
-                  Select All ({filteredDomains.length})
+                  {t('pages.domainDiscovery.select_all_count', { count: filteredDomains.length })}
                 </button>
                 <button
                   type="button"
                   onClick={handleSelectNone}
                   className="px-3 py-1 rounded-lg text-[11px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
                 >
-                  Deselect All
+                  {t('pages.domainDiscovery.deselect_all')}
                 </button>
                 <button
                   type="button"
@@ -470,7 +475,7 @@ export default function DomainDiscovery() {
                   disabled={scanAllLoading || selectedDomains.size === 0 || !selectedClientId}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  {scanAllLoading ? '⟳ Scanning…' : `🚀 Scan All Selected (${selectedDomains.size})`}
+                  {scanAllLoading ? t('pages.domainDiscovery.scanning') : t('pages.domainDiscovery.scan_all_selected', { count: selectedDomains.size })}
                 </button>
               </div>
             </div>
@@ -492,7 +497,7 @@ export default function DomainDiscovery() {
 
             {filteredDomains.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-white/40 font-mono text-sm">No domains match the current filters.</p>
+                <p className="text-white/40 font-mono text-sm">{t('pages.domainDiscovery.no_filter_match')}</p>
               </div>
             )}
           </>
@@ -502,10 +507,9 @@ export default function DomainDiscovery() {
         {!result && !loading && (
           <div className="text-center py-16">
             <div className="text-4xl mb-4">🌐</div>
-            <h3 className="text-lg font-semibold text-white/70 mb-2">Auto Domain Discovery</h3>
+            <h3 className="text-lg font-semibold text-white/70 mb-2">{t('pages.domainDiscovery.empty_title')}</h3>
             <p className="text-white/40 text-sm max-w-md mx-auto">
-              Enter a target domain to automatically discover all related domains, subdomains, 
-              and assets through multiple reconnaissance stages.
+              {t('pages.domainDiscovery.empty_body')}
             </p>
           </div>
         )}

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 
 function SpinnerTiny() {
   return (
@@ -19,7 +20,7 @@ function SpinnerTiny() {
   )
 }
 
-function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
+function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
   const tenantOn = !!engine.tenant_policy_includes
   const n = engine.clients_enabled_count ?? 0
   const tot = engine.clients_total ?? 0
@@ -37,7 +38,7 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
       {scanning && (
         <span
           className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse shadow-[0_0_8px_rgba(251,146,60,0.8)]"
-          title="Orchestrator scanning flag active"
+          title={t('components.ceo.engineMatrix.scanningFlagTitle')}
         />
       )}
       <p className="text-[9px] font-mono uppercase tracking-wider text-slate-500 truncate" title={engine.id}>
@@ -46,7 +47,9 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
       <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">{engine.id}</p>
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-[8px] font-mono uppercase tracking-wide text-slate-600">Orchestrator policy</span>
+          <span className="text-[8px] font-mono uppercase tracking-wide text-slate-600">
+            {t('components.ceo.engineMatrix.orchestratorPolicy')}
+          </span>
           <button
             type="button"
             role="switch"
@@ -61,8 +64,8 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
             }}
             title={
               busy
-                ? 'Updating system_configs.active_engines…'
-                : 'Toggle engine in default-tenant active_engines (PUT /api/ceo/tenant/engines)'
+                ? t('components.ceo.engineMatrix.updatingConfig')
+                : t('components.ceo.engineMatrix.toggleEngineTitle')
             }
             className={`
               group relative flex items-center gap-2 rounded-full pl-0.5 pr-2 py-0.5 transition-all duration-200
@@ -93,12 +96,12 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
               {busy ? (
                 <span className="inline-flex items-center gap-1">
                   <SpinnerTiny />
-                  sync
+                  {t('components.ceo.engineMatrix.sync')}
                 </span>
               ) : tenantOn ? (
-                'on'
+                t('components.ceo.engineMatrix.on')
               ) : (
-                'off'
+                t('components.ceo.engineMatrix.off')
               )}
             </span>
           </button>
@@ -107,7 +110,9 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy }) {
           {n}/{tot}
         </span>
       </div>
-      <p className="text-[8px] text-slate-600 font-mono mt-1.5 uppercase">clients w/ engine</p>
+      <p className="text-[8px] text-slate-600 font-mono mt-1.5 uppercase">
+        {t('components.ceo.engineMatrix.clientsWithEngine')}
+      </p>
     </div>
   )
 }
@@ -119,10 +124,12 @@ export default function GodModeEngineMatrix({
   onTenantEngineToggle,
   engineToggleBusy,
 }) {
+  const { t } = useTranslation()
+
   if (godErr) {
     return (
       <div className="rounded-2xl border border-rose-500/25 bg-rose-950/15 p-4 text-[11px] font-mono text-rose-200">
-        Engine matrix: {godErr}
+        {t('components.ceo.engineMatrix.errorPrefix')} {godErr}
       </div>
     )
   }
@@ -140,18 +147,28 @@ export default function GodModeEngineMatrix({
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
           <h3 className="text-[10px] font-mono uppercase tracking-[0.3em] text-slate-400">
-            Engine matrix
+            {t('components.ceo.engineMatrix.title')}
           </h3>
           <p className="text-xs text-slate-500 mt-1 font-mono">
-            KNOWN_ENGINE_IDS · tenant <span className="text-slate-400">active_engines</span> · per-client{' '}
-            <span className="text-slate-400">enabled_engines</span>
+            <Trans
+              i18nKey="components.ceo.engineMatrix.subtitle"
+              components={{
+                1: <span className="text-slate-400" />,
+                2: <span className="text-slate-400" />,
+              }}
+            />
           </p>
           <p className="text-[10px] text-slate-600 mt-2 max-w-2xl leading-relaxed">
-            Use the <span className="text-slate-500">orchestrator policy</span> switch to update{' '}
-            <span className="text-slate-500">system_configs.active_engines</span> for the{' '}
-            <span className="text-emerald-600/90">default</span> tenant via{' '}
-            <span className="text-slate-500">PUT /api/ceo/tenant/engines</span>. Client-level allow-lists still use{' '}
-            <span className="text-slate-500">enabled_engines</span> in Engine Room.
+            <Trans
+              i18nKey="components.ceo.engineMatrix.helpText"
+              components={{
+                1: <span className="text-slate-500" />,
+                2: <span className="text-slate-500" />,
+                3: <span className="text-emerald-600/90" />,
+                4: <span className="text-slate-500" />,
+                5: <span className="text-slate-500" />,
+              }}
+            />
           </p>
         </div>
         <div
@@ -161,7 +178,9 @@ export default function GodModeEngineMatrix({
               : 'border-white/15 text-slate-500 bg-white/5'
           }`}
         >
-          orchestrator {scanningActive ? 'scanning' : 'idle'}
+          {scanningActive
+            ? t('components.ceo.engineMatrix.orchestratorScanning')
+            : t('components.ceo.engineMatrix.orchestratorIdle')}
         </div>
       </div>
 
@@ -173,6 +192,7 @@ export default function GodModeEngineMatrix({
             scanning={!!scanningActive}
             onTenantEngineToggle={onTenantEngineToggle}
             engineToggleBusy={engineToggleBusy}
+            t={t}
           />
         ))}
       </div>
@@ -180,24 +200,33 @@ export default function GodModeEngineMatrix({
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="rounded-xl border border-amber-500/25 bg-amber-950/15 px-4 py-3">
           <p className="text-[9px] font-mono uppercase tracking-widest text-amber-200/90 mb-2">
-            Zero-Day radar
+            {t('components.ceo.engineMatrix.zeroDayRadar')}
           </p>
           <div className="flex flex-wrap gap-3 text-[11px] font-mono">
             <span className={zd.tenant_threat_intel_probing_enabled ? 'text-amber-300' : 'text-slate-500'}>
-              threat_intel probing: {zd.tenant_threat_intel_probing_enabled ? 'ON' : 'off'}
+              {t('components.ceo.engineMatrix.threatIntelProbing')}{' '}
+              {zd.tenant_threat_intel_probing_enabled
+                ? t('components.ceo.engineMatrix.on').toUpperCase()
+                : t('components.ceo.engineMatrix.off')}
             </span>
             <span className="text-slate-400">
-              clients w/ <code className="text-cyan-400/90">zero_day_radar</code>: {zd.clients_with_zero_day_radar_engine ?? 0} /{' '}
-              {zd.clients_total ?? 0}
+              <Trans
+                i18nKey="components.ceo.engineMatrix.clientsWithZeroDay"
+                components={{ 1: <code className="text-cyan-400/90" /> }}
+              />{' '}
+              {zd.clients_with_zero_day_radar_engine ?? 0} / {zd.clients_total ?? 0}
             </span>
           </div>
         </div>
         <div className="rounded-xl border border-violet-500/25 bg-violet-950/15 px-4 py-3">
           <p className="text-[9px] font-mono uppercase tracking-widest text-violet-200/90 mb-2">
-            OT / ICS passive
+            {t('components.ceo.engineMatrix.otIcsPassive')}
           </p>
           <p className="text-[11px] font-mono text-slate-400">
-            clients w/ <code className="text-violet-300/90">industrial_ot_enabled</code>:{' '}
+            <Trans
+              i18nKey="components.ceo.engineMatrix.clientsWithOt"
+              components={{ 1: <code className="text-violet-300/90" /> }}
+            />{' '}
             <span className="text-white tabular-nums">{ot.clients_with_industrial_ot_enabled ?? 0}</span> /{' '}
             {ot.clients_total ?? 0}
           </p>

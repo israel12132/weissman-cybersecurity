@@ -1,38 +1,27 @@
 import React, { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTelemetry } from '../../context/TelemetryContext'
 
-/**
- * Live Activity Feed — scrolling event panel inspired by Datadog Security Signals and
- * CrowdStrike Falcon "Activity Stream". Subscribes to the existing SSE telemetry
- * channel and renders the last N events with:
- *   - severity-tinted dot
- *   - icon per event kind (scan / finding / agent / orchestrator / error)
- *   - relative timestamp ("12s ago") that updates live
- *   - "scope" badges (engine id, target host, client id) when present
- *   - filter chips (All / Errors / Findings / Scans / Agents)
- *
- * Pure presentation — all state comes from `TelemetryContext`. Component is safe to
- * mount anywhere; multiple instances share the same feed.
- */
+const NS = 'components.cockpitWidgets.liveActivityFeed'
 
 const KIND_META = {
-  finding:      { icon: '◉', color: '#f97316', label: 'Finding' },
-  scan_start:   { icon: '▶', color: '#22d3ee', label: 'Scan' },
-  scan_done:    { icon: '✓', color: '#22c55e', label: 'Done' },
-  agent:        { icon: '⬢', color: '#a855f7', label: 'Agent' },
-  orchestrator: { icon: '◆', color: '#3b82f6', label: 'Orch' },
-  heartbeat:    { icon: '·', color: '#475569', label: 'Beat' },
-  error:        { icon: '⚠', color: '#ef4444', label: 'Error' },
-  info:         { icon: 'ℹ', color: '#94a3b8', label: 'Info' },
-  raw:          { icon: '?', color: '#64748b', label: 'Raw' },
+  finding:      { icon: '◉', color: '#f97316', labelKey: 'kinds.finding' },
+  scan_start:   { icon: '▶', color: '#22d3ee', labelKey: 'kinds.scan_start' },
+  scan_done:    { icon: '✓', color: '#22c55e', labelKey: 'kinds.scan_done' },
+  agent:        { icon: '⬢', color: '#a855f7', labelKey: 'kinds.agent' },
+  orchestrator: { icon: '◆', color: '#3b82f6', labelKey: 'kinds.orchestrator' },
+  heartbeat:    { icon: '·', color: '#475569', labelKey: 'kinds.heartbeat' },
+  error:        { icon: '⚠', color: '#ef4444', labelKey: 'kinds.error' },
+  info:         { icon: 'ℹ', color: '#94a3b8', labelKey: 'kinds.info' },
+  raw:          { icon: '?', color: '#64748b', labelKey: 'kinds.raw' },
 }
 
 const FILTERS = [
-  { id: 'all',      label: 'All' },
-  { id: 'finding',  label: 'Findings' },
-  { id: 'scan',     label: 'Scans' },
-  { id: 'agent',    label: 'Agents' },
-  { id: 'error',    label: 'Errors' },
+  { id: 'all',      labelKey: 'filters.all' },
+  { id: 'finding',  labelKey: 'filters.finding' },
+  { id: 'scan',     labelKey: 'filters.scan' },
+  { id: 'agent',    labelKey: 'filters.agent' },
+  { id: 'error',    labelKey: 'filters.error' },
 ]
 
 function fmtAgo(ts, nowMs) {
@@ -49,6 +38,7 @@ function matchFilter(filter, kind) {
 }
 
 export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
+  const { t } = useTranslation()
   const { activity, connected, clearActivity } = useTelemetry()
   const [filter, setFilter] = useState('all')
   const [paused, setPaused] = useState(false)
@@ -56,8 +46,8 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
   const pausedSnapshot = React.useRef([])
 
   React.useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
   }, [])
 
   React.useEffect(() => {
@@ -74,9 +64,8 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
   return (
     <section
       className={`flex flex-col rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md ${className}`}
-      aria-label="Live activity feed"
+      aria-label={t(`${NS}.ariaLabel`)}
     >
-      {/* Header */}
       <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.06]">
         <div className="flex items-center gap-2 min-w-0">
           <span
@@ -84,10 +73,10 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
               connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
             }`}
             aria-hidden="true"
-            title={connected ? 'Telemetry connected' : 'Reconnecting…'}
+            title={connected ? t(`${NS}.connected`) : t(`${NS}.reconnecting`)}
           />
           <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/75 truncate">
-            Activity stream
+            {t(`${NS}.title`)}
           </h3>
           <span className="text-[10px] font-mono text-white/35 ml-1">
             {activity.length}
@@ -102,23 +91,22 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
                 ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
                 : 'border-white/10 text-white/55 hover:text-white/85'
             }`}
-            title={paused ? 'Resume' : 'Pause stream'}
+            title={paused ? t(`${NS}.resumeTitle`) : t(`${NS}.pauseTitle`)}
             aria-pressed={paused}
           >
-            {paused ? '▶ Resume' : '⏸ Pause'}
+            {paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
           </button>
           <button
             type="button"
             onClick={clearActivity}
             className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/80"
-            title="Clear log"
+            title={t(`${NS}.clearTitle`)}
           >
-            Clear
+            {t(`${NS}.clear`)}
           </button>
         </div>
       </header>
 
-      {/* Filter chips */}
       <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/[0.04] overflow-x-auto">
         {FILTERS.map((f) => {
           const active = filter === f.id
@@ -134,13 +122,12 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
                   : 'text-white/50 hover:text-white/85 border border-transparent'
               }`}
             >
-              {f.label}
+              {t(`${NS}.${f.labelKey}`)}
             </button>
           )
         })}
       </div>
 
-      {/* Event list */}
       <div
         className="overflow-y-auto divide-y divide-white/[0.04] custom-scroll"
         style={{ maxHeight }}
@@ -149,8 +136,8 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
         {visible.length === 0 ? (
           <div className="px-3 py-12 text-center text-[11px] font-mono text-white/35">
             {activity.length === 0
-              ? 'Waiting for telemetry events…'
-              : 'Nothing matches this filter.'}
+              ? t(`${NS}.waiting`)
+              : t(`${NS}.noMatch`)}
           </div>
         ) : (
           visible.map((e) => {
@@ -173,7 +160,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                    <span style={{ color: meta.color }}>{meta.label}</span>
+                    <span style={{ color: meta.color }}>{t(`${NS}.${meta.labelKey}`)}</span>
                     {e.engine && (
                       <>
                         <span className="text-white/15">·</span>
@@ -187,7 +174,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
                       </>
                     )}
                     <span className="ms-auto text-white/30 normal-case">
-                      {fmtAgo(e.t, now)} ago
+                      {fmtAgo(e.t, now)} {t(`${NS}.ago`)}
                     </span>
                   </div>
                   <p className="text-[12px] text-white/80 leading-snug break-words mt-0.5">

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
 
@@ -14,6 +15,7 @@ function CodeBlock({ label, value }) {
 }
 
 export default function TemplateEngineWorkbench() {
+  const { t } = useTranslation()
   const [templates, setTemplates] = useState([])
   const [selectedId, setSelectedId] = useState('http_baseline')
   const [targetUrl, setTargetUrl] = useState('')
@@ -39,12 +41,12 @@ export default function TemplateEngineWorkbench() {
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(d?.error || 'Failed to load template')
+        if (!r.ok) throw new Error(d?.error || t('pages.templateEngineWorkbench.load_failed'))
         setYaml(String(d?.yaml || ''))
       })
-      .catch((e) => setError(e?.message || 'Failed to load template'))
+      .catch((e) => setError(e?.message || t('pages.templateEngineWorkbench.load_failed')))
       .finally(() => setLoadingYaml(false))
-  }, [selectedId])
+  }, [selectedId, t])
 
   const run = useCallback(async () => {
     if (!canRun) return
@@ -62,30 +64,32 @@ export default function TemplateEngineWorkbench() {
         }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d?.error || d?.detail || 'Run failed')
+      if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.templateEngineWorkbench.run_failed'))
       setRunResult(d)
     } catch (e) {
-      setError(e?.message || 'Run failed')
+      setError(e?.message || t('pages.templateEngineWorkbench.run_failed'))
     } finally {
       setRunning(false)
     }
-  }, [canRun, targetUrl, yaml])
+  }, [canRun, targetUrl, yaml, t])
 
   return (
     <PageShell
-      title="Template Engine"
-      badge="YAML"
+      title={t('pages.templateEngineWorkbench.title')}
+      badge={t('pages.templateEngineWorkbench.badge')}
       badgeColor="#60a5fa"
-      subtitle="Run request/matcher rules from YAML without changing core code."
+      subtitle={t('pages.templateEngineWorkbench.subtitle')}
     >
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <div className="space-y-4">
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">Runner</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+              {t('pages.templateEngineWorkbench.runner')}
+            </h3>
             <input
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
-              placeholder="Target URL (e.g. https://app.target.com)"
+              placeholder={t('pages.templateEngineWorkbench.target_placeholder')}
               className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-blue-500/40"
             />
             <div className="flex items-center gap-3 flex-wrap">
@@ -94,8 +98,8 @@ export default function TemplateEngineWorkbench() {
                 onChange={(e) => setSelectedId(e.target.value)}
                 className="rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-blue-500/40"
               >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
                 ))}
                 {templates.length === 0 && <option value="http_baseline">http_baseline</option>}
               </select>
@@ -105,7 +109,7 @@ export default function TemplateEngineWorkbench() {
                 onClick={run}
                 className="px-4 py-2 rounded-xl border border-blue-500/30 text-blue-300/70 text-[12px] font-mono uppercase hover:bg-blue-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                {running ? '⟳ Running…' : '▶ Run'}
+                {running ? `⟳ ${t('pages.templateEngineWorkbench.running')}` : `▶ ${t('pages.templateEngineWorkbench.run')}`}
               </button>
             </div>
             {error && (
@@ -117,8 +121,12 @@ export default function TemplateEngineWorkbench() {
 
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">Template YAML</h3>
-              <span className="text-[10px] font-mono text-white/25">{loadingYaml ? 'Loading…' : 'Editable'}</span>
+              <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+                {t('pages.templateEngineWorkbench.template_yaml')}
+              </h3>
+              <span className="text-[10px] font-mono text-white/25">
+                {loadingYaml ? t('pages.templateEngineWorkbench.loading') : t('pages.templateEngineWorkbench.editable')}
+              </span>
             </div>
             <textarea
               value={yaml}
@@ -131,10 +139,14 @@ export default function TemplateEngineWorkbench() {
 
         <div className="space-y-4">
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">Result</h3>
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+              {t('pages.templateEngineWorkbench.result')}
+            </h3>
             {!runResult ? (
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] font-mono text-white/25">Run a template to see step-by-step evidence.</p>
+                <p className="text-[11px] font-mono text-white/25">
+                  {t('pages.templateEngineWorkbench.result_empty')}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -142,12 +154,14 @@ export default function TemplateEngineWorkbench() {
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                     runResult?.verification?.verified ? 'border-green-500/30 text-green-400 bg-green-900/10' : 'border-white/10 text-white/30'
                   }`}>
-                    {runResult?.verification?.verified ? '✓ VERIFIED' : 'NOT VERIFIED'}
+                    {runResult?.verification?.verified
+                      ? `✓ ${t('pages.templateEngineWorkbench.verified')}`
+                      : t('pages.templateEngineWorkbench.not_verified')}
                   </span>
                 </div>
 
-                <CodeBlock label="Verification" value={JSON.stringify(runResult.verification || {}, null, 2)} />
-                <CodeBlock label="Steps" value={JSON.stringify(runResult.steps || [], null, 2)} />
+                <CodeBlock label={t('pages.templateEngineWorkbench.verification')} value={JSON.stringify(runResult.verification || {}, null, 2)} />
+                <CodeBlock label={t('pages.templateEngineWorkbench.steps')} value={JSON.stringify(runResult.steps || [], null, 2)} />
               </div>
             )}
           </div>

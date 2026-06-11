@@ -4,19 +4,26 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { FixedSizeList as List } from 'react-window'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
 
+const NS = 'components.tools.memoryForensicsLab'
 const ENTROPY_MAX = 8
 const ENTROPY_SAFE = 4
 const ENTROPY_WARN = 7
 
 /** Semi-circle Entropy Gauge (0–8). 0–4 blue, 4–6.9 yellow, 7–8 crimson. */
 function EntropyGauge({ value, isLeak }) {
+  const { t } = useTranslation()
   const v = Math.min(ENTROPY_MAX, Math.max(0, Number(value) ?? 0))
   const rotation = -90 + (v / ENTROPY_MAX) * 180
   const zone = v >= ENTROPY_WARN ? 'critical' : v >= ENTROPY_SAFE ? 'warning' : 'safe'
-  const colors = { safe: { stroke: '#3b82f6', label: 'Safe' }, warning: { stroke: '#eab308', label: 'Warning' }, critical: { stroke: '#dc2626', label: 'Critical' } }
+  const colors = {
+    safe: { stroke: '#3b82f6', label: t(`${NS}.entropy_safe`) },
+    warning: { stroke: '#eab308', label: t(`${NS}.entropy_warning`) },
+    critical: { stroke: '#dc2626', label: t(`${NS}.entropy_critical`) },
+  }
   const c = colors[zone]
   return (
     <div className="relative flex flex-col items-center">
@@ -50,7 +57,7 @@ function EntropyGauge({ value, isLeak }) {
       </div>
       {isLeak && (
         <div className="mt-2 px-3 py-1.5 rounded bg-red-500/20 border border-red-500/60 animate-pulse">
-          <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Silent Memory Leak Detected</span>
+          <span className="text-red-400 font-bold text-xs uppercase tracking-wider">{t(`${NS}.memory_leak`)}</span>
         </div>
       )}
     </div>
@@ -59,15 +66,16 @@ function EntropyGauge({ value, isLeak }) {
 
 /** Deception Badge: HTTP 200 (green) + TRUE STATE DATA BLEED (red). */
 function DeceptionBadge() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-medium border border-emerald-500/50">
-        HTTP 200 OK
+        {t(`${NS}.http_200`)}
       </span>
       <span className="text-slate-500 text-sm">→</span>
       <span className="px-3 py-1.5 rounded-full bg-red-500/25 text-red-400 text-sm font-semibold border-2 border-red-500/70 flex items-center gap-1.5">
         <span className="text-red-400">⚠</span>
-        TRUE STATE: DATA BLEED (High Entropy Bypass)
+        {t(`${NS}.data_bleed`)}
       </span>
     </div>
   )
@@ -83,6 +91,7 @@ const STACK_LAYOUT_64 = [
 ]
 
 export default function MemoryForensicsLab() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [findings, setFindings] = useState([])
   const [selected, setSelected] = useState(null)
@@ -321,10 +330,12 @@ export default function MemoryForensicsLab() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">← War Room</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Exploit Synthesis &amp; Memory Lab</h1>
+            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
+            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
           </div>
-          {clientId && client && <span className="text-slate-500 text-sm">{client.name} (ID: {clientId})</span>}
+          {clientId && client && (
+            <span className="text-slate-500 text-sm">{t(`${NS}.client_meta`, { name: client.name, id: clientId })}</span>
+          )}
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2 items-center">
@@ -332,7 +343,7 @@ export default function MemoryForensicsLab() {
             type="text"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
-            placeholder="https://target.example.com"
+            placeholder={t(`${NS}.target_placeholder`)}
             className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 w-80"
           />
           <button
@@ -340,31 +351,34 @@ export default function MemoryForensicsLab() {
             disabled={running || !clientId}
             className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-slate-600 text-white text-sm font-medium"
           >
-            {running ? 'PoE scan running…' : 'Run PoE scan'}
+            {running ? t(`${NS}.running`) : t(`${NS}.run_scan`)}
           </button>
           {jobId && (
             <span className="text-slate-400 text-sm font-mono">
-              Job: {jobId}
+              {t(`${NS}.job`, { id: jobId })}
               {jobStatus?.status === 'running' && (
                 <>
-                  {' (live stream…)'}
+                  {' '}{t(`${NS}.live_stream`)}
                   {(jobStatus?.bytes_ingested != null || jobStatus?.chunks_ingested != null) && (
                     <span className="text-cyan-400 ml-2">
-                      Live Data Ingestion: {Number(jobStatus.bytes_ingested ?? 0).toLocaleString()} bytes, {Number(jobStatus.chunks_ingested ?? 0).toLocaleString()} chunks
+                      {t(`${NS}.live_ingestion`, {
+                        bytes: Number(jobStatus.bytes_ingested ?? 0).toLocaleString(),
+                        chunks: Number(jobStatus.chunks_ingested ?? 0).toLocaleString(),
+                      })}
                     </span>
                   )}
                 </>
               )}
-              {jobStatus?.status === 'completed' && ` — ${jobStatus?.findings_count ?? 0} findings.`}
-              {jobStatus?.status === 'failed' && ` — Failed: ${jobStatus?.error || 'unknown'}`}
+              {jobStatus?.status === 'completed' && t(`${NS}.findings_done`, { count: jobStatus?.findings_count ?? 0 })}
+              {jobStatus?.status === 'failed' && t(`${NS}.job_failed`, { error: jobStatus?.error || 'unknown' })}
             </span>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
-            <h2 className="text-lg font-semibold text-slate-200 mb-2">64-bit Stack Frame (x86_64)</h2>
-            <p className="text-xs text-slate-500 mb-4">Buffer → Padding → RBP (8B) → RIP (8B) → Shellcode. Hover hex bytes to highlight.</p>
+            <h2 className="text-lg font-semibold text-slate-200 mb-2">{t(`${NS}.stack_title`)}</h2>
+            <p className="text-xs text-slate-500 mb-4">{t(`${NS}.stack_hint`)}</p>
             <div className="space-y-2 font-mono text-sm">
               {STACK_LAYOUT_64.map((slot) => (
                 <div
@@ -380,60 +394,60 @@ export default function MemoryForensicsLab() {
             </div>
             {selected && (
               <div className="mt-4 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs">
-                Payload overwrite: fills Buffer, then RBP/RIP (8 bytes each). 64-bit addresses. Safe PoE only.
+                {t(`${NS}.payload_overwrite`)}
               </div>
             )}
           </div>
 
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-200">Weaponization Status</h2>
+              <h2 className="text-lg font-semibold text-slate-200">{t(`${NS}.weaponization_title`)}</h2>
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-medium border border-emerald-500/40">
-                SAFE (Proof of Exploitability Only)
+                {t(`${NS}.safe_badge`)}
               </span>
             </div>
             <p className="text-sm text-slate-400 mb-4">
-              All synthesized payloads are read-only PoC. No reverse shells, no malware. Verified exploitability only.
+              {t(`${NS}.weaponization_body`)}
             </p>
             {selected ? (
               <div className="space-y-4 text-sm">
                 {isMemoryLeakFinding && (
                   <>
                     <div className="border border-slate-600 rounded-lg p-4 bg-slate-950/80">
-                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">Entropy Gauge (Richter scale)</p>
+                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">{t(`${NS}.entropy_gauge`)}</p>
                       <EntropyGauge value={entropyDisplay} isLeak={isEntropyCritical} />
                     </div>
                     <div>
-                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">Deception — WAF bypass</p>
+                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">{t(`${NS}.deception_title`)}</p>
                       <DeceptionBadge />
                     </div>
                   </>
                 )}
                 {selected.trigger_reason && (
                   <p>
-                    <span className="text-slate-500">Triggered by:</span>{' '}
+                    <span className="text-slate-500">{t(`${NS}.triggered_by`)}</span>{' '}
                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 font-medium">
                       {selected.trigger_reason}
                     </span>
                   </p>
                 )}
-                <p><span className="text-slate-500">Title:</span> <span className="text-slate-200">{selected.title}</span></p>
-                <p><span className="text-slate-500">Severity:</span> <span className={selected.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}>{selected.severity}</span></p>
-                <p><span className="text-slate-500">Verified:</span> {selected.verified ? <span className="text-emerald-400">Yes</span> : <span className="text-slate-500">No</span>}
+                <p><span className="text-slate-500">{t(`${NS}.label_title`)}</span> <span className="text-slate-200">{selected.title}</span></p>
+                <p><span className="text-slate-500">{t(`${NS}.label_severity`)}</span> <span className={selected.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}>{selected.severity}</span></p>
+                <p><span className="text-slate-500">{t(`${NS}.label_verified`)}</span> {selected.verified ? <span className="text-emerald-400">{t(`${NS}.yes`)}</span> : <span className="text-slate-500">{t(`${NS}.no`)}</span>}
                 </p>
-                <p><span className="text-slate-500">Status:</span> {selected.weaponization_status || 'SAFE (Proof of Exploitability Only)'}</p>
+                <p><span className="text-slate-500">{t(`${NS}.label_status`)}</span> {selected.weaponization_status || t(`${NS}.safe_badge`)}</p>
               </div>
             ) : (
-              <p className="text-slate-500 text-sm">Select a finding to see details.</p>
+              <p className="text-slate-500 text-sm">{t(`${NS}.select_finding`)}</p>
             )}
           </div>
         </div>
 
         <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">PoE Findings</h2>
-          {loading && <p className="text-slate-500">Loading…</p>}
+          <h2 className="text-lg font-semibold text-slate-200 mb-4">{t(`${NS}.poe_findings`)}</h2>
+          {loading && <p className="text-slate-500">{t(`${NS}.loading`)}</p>}
           {!loading && findings.length === 0 && (
-            <p className="text-slate-500">No PoE findings. Run a PoE scan with a target URL.</p>
+            <p className="text-slate-500">{t(`${NS}.no_findings`)}</p>
           )}
           {!loading && findings.length > 0 && (
             <ul className="space-y-2">
@@ -452,7 +466,7 @@ export default function MemoryForensicsLab() {
                     <span className={`ml-2 text-xs ${f.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`}>
                       {f.severity}
                     </span>
-                    {f.verified && <span className="ml-2 text-xs text-emerald-400">Verified</span>}
+                    {f.verified && <span className="ml-2 text-xs text-emerald-400">{t(`${NS}.verified`)}</span>}
                     {f.trigger_reason && (
                       <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40" title={f.trigger_reason}>
                         {f.trigger_reason.length > 28 ? f.trigger_reason.slice(0, 28) + '…' : f.trigger_reason}
@@ -468,30 +482,30 @@ export default function MemoryForensicsLab() {
         {selected && (
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
             <h2 className="text-lg font-semibold text-slate-200 mb-2">
-              {hasEntropyMap || bleedStartOffset != null ? 'Hex Heatmap (Memory X-Ray)' : 'Hex Viewer (IDA-style)'} — hover to highlight 64-bit stack (RBP/RIP)
+              {hasEntropyMap || bleedStartOffset != null ? t(`${NS}.hex_heatmap`) : t(`${NS}.hex_viewer`)} {t(`${NS}.hex_stack_hint`)}
             </h2>
             <p className="text-xs text-slate-500 mb-4">
               {hasEntropyMap || bleedStartOffset != null
                 ? (bleedStartOffset != null
-                  ? `Bleed start at offset ${bleedStartOffset} (sliding-window entropy). Color by block entropy.`
-                  : 'Color by per-block entropy (256-byte windows).')
-                : 'Offset 0-63: Buffer | 64-71: RBP | 72-79: RIP | 80+: Shellcode. Scroll for full payload.'}
+                  ? t(`${NS}.bleed_hint`, { offset: bleedStartOffset })
+                  : t(`${NS}.entropy_blocks_hint`))
+                : t(`${NS}.offset_layout_hint`)}
             </p>
             <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
               <div className="px-3 py-2 border-b border-slate-700 text-slate-500 text-xs font-mono flex flex-wrap items-center gap-2">
                 <span>VLN-{selected.id}</span>
                 <span>{selected.weaponization_status || 'SAFE'}</span>
                 {selected.trigger_reason && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">Triggered by: {selected.trigger_reason}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">{t(`${NS}.triggered_by_chip`, { reason: selected.trigger_reason })}</span>
                 )}
                 {selected.expected_verification && (
-                  <span className="text-emerald-400">Expected: &quot;{selected.expected_verification}&quot;</span>
+                  <span className="text-emerald-400">{t(`${NS}.expected`, { text: selected.expected_verification })}</span>
                 )}
                 {hoveredSlot && <span className="text-cyan-400">→ {hoveredSlot}</span>}
               </div>
               <div className="p-4 overflow-x-auto" onMouseLeave={() => setHoveredSlot(null)}>
                 {payloadBytes.length === 0 ? (
-                  <span className="text-slate-500">(empty)</span>
+                  <span className="text-slate-500">{t(`${NS}.empty`)}</span>
                 ) : (
                   <List
                     height={HEX_VIEWER_HEIGHT}
@@ -506,12 +520,12 @@ export default function MemoryForensicsLab() {
               </div>
               <div className="px-3 py-2 border-t border-slate-700 text-slate-500 text-xs">
                 {hasEntropyMap || bleedStartOffset != null
-                  ? 'Raw payload (Memory X-Ray: color by entropy map; red = bleed zone from backend)'
-                  : 'Raw payload (virtualized, full length)'}:
+                  ? t(`${NS}.raw_entropy`)
+                  : t(`${NS}.raw_default`)}:
               </div>
               <div className="p-4 overflow-x-auto max-h-96 overflow-y-auto" onMouseLeave={() => setHoveredSlot(null)}>
                 {rawChunks.length === 0 ? (
-                  <span className="text-slate-500">(none)</span>
+                  <span className="text-slate-500">{t(`${NS}.none`)}</span>
                 ) : (
                   <List
                     height={HEX_VIEWER_HEIGHT}
@@ -527,7 +541,7 @@ export default function MemoryForensicsLab() {
             </div>
             {selected.footprint && (
               <div className="mt-4 p-3 rounded-lg bg-slate-800/60 border border-slate-600 text-slate-400 text-xs font-mono">
-                <strong className="text-slate-300">Crash footprint:</strong> {selected.footprint}
+                <strong className="text-slate-300">{t(`${NS}.crash_footprint`)}</strong> {selected.footprint}
               </div>
             )}
           </div>

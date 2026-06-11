@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useId } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
@@ -132,6 +133,7 @@ function RiskGauge({ score }) {
 }
 
 export default function OverviewTab() {
+  const { t } = useTranslation()
   const { selectedClient, selectedClientId } = useClient()
   const { suggestedWidget, setSuggestedWidget } = useWarRoom()
   const [stats, setStats] = useState({
@@ -183,10 +185,10 @@ export default function OverviewTab() {
     if (critical > 0 && setSuggestedWidget) {
       setSuggestedWidget({
         type: 'severity_breakdown',
-        message: 'High-critical finding detected. AI suggests: View severity breakdown and prioritize remediation.',
+        message: t('components.cockpitTabs.overview.ai_suggested_widget_message'),
       })
     }
-  }, [critical, setSuggestedWidget])
+  }, [critical, setSuggestedWidget, t])
   const medium = findings.filter((f) =>
     (f.severity || '').toLowerCase().includes('medium') || (f.severity || '').toLowerCase().includes('med'),
   ).length
@@ -194,9 +196,9 @@ export default function OverviewTab() {
   const score = selectedClientId ? (stats.security_score ?? 0) : 0
 
   const severityBarData = [
-    { name: 'Critical', count: critical, color: '#ef4444' },
-    { name: 'High', count: high, color: '#a855f7' },
-    { name: 'Medium', count: medium, color: '#22d3ee' },
+    { name: t('components.cockpitTabs.overview.severity.critical'), count: critical, color: '#ef4444' },
+    { name: t('components.cockpitTabs.overview.severity.high'), count: high, color: '#a855f7' },
+    { name: t('components.cockpitTabs.overview.severity.medium'), count: medium, color: '#22d3ee' },
   ].filter((d) => d.count > 0)
 
   const sparkData = [
@@ -211,28 +213,52 @@ export default function OverviewTab() {
 
   const attackSurfaceTargets = stats.attack_surface_targets ?? 0
   const attackSurfacePaths = stats.attack_surface_paths ?? 0
-  const attackSurfaceTotal = Math.max(1, attackSurfaceTargets + attackSurfacePaths)
   const attackSurfaceData = [
-    { label: 'Targets (OSINT+ASM)', value: attackSurfaceTargets, color: '#22d3ee' },
-    { label: 'Paths (wordlist)', value: attackSurfacePaths, color: '#a855f7' },
+    {
+      labelKey: 'targets_osint',
+      label: t('components.cockpitTabs.overview.attack_surface.targets_osint'),
+      value: attackSurfaceTargets,
+      color: '#22d3ee',
+    },
+    {
+      labelKey: 'paths_wordlist',
+      label: t('components.cockpitTabs.overview.attack_surface.paths_wordlist'),
+      value: attackSurfacePaths,
+      color: '#a855f7',
+    },
   ].filter((d) => d.value > 0)
   const attackSurfaceDataWithDefaults = attackSurfaceData.length
     ? attackSurfaceData
     : [
-        { label: 'Targets', value: 0, color: '#22d3ee' },
-        { label: 'Paths', value: 0, color: '#a855f7' },
+        {
+          labelKey: 'targets',
+          label: t('components.cockpitTabs.overview.attack_surface.targets'),
+          value: 0,
+          color: '#22d3ee',
+        },
+        {
+          labelKey: 'paths',
+          label: t('components.cockpitTabs.overview.attack_surface.paths'),
+          value: 0,
+          color: '#a855f7',
+        },
       ]
 
   if (!selectedClientId) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[400px]">
         <div className={`${GLASS_CARD} max-w-md text-center py-12`}>
-          <p className="text-white/80 text-sm uppercase tracking-widest mb-2">No client selected</p>
-          <p className="text-white/50 text-xs">Select a client from the sidebar to view the overview.</p>
+          <p className="text-white/80 text-sm uppercase tracking-widest mb-2">
+            {t('components.cockpitTabs.overview.no_client')}
+          </p>
+          <p className="text-white/50 text-xs">{t('components.cockpitTabs.overview.select_sidebar')}</p>
         </div>
       </div>
     )
   }
+
+  const clientLabel =
+    selectedClient?.name || t('components.cockpitTabs.overview.client_fallback', { id: selectedClientId })
 
   return (
     <div className="p-6 md:p-8 space-y-6">
@@ -240,15 +266,15 @@ export default function OverviewTab() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xs font-semibold text-white/60 uppercase tracking-[0.2em] mb-1">
-            Security Overview
+            {t('components.cockpitTabs.overview.title')}
           </h2>
           <p className="text-white/40 text-sm">
-            {selectedClient?.name || `Client ${selectedClientId}`} — real-time metrics
+            {t('components.cockpitTabs.overview.subtitle', { client: clientLabel })}
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Live · auto-refresh 30s
+          {t('components.cockpitTabs.overview.live_auto_refresh')}
         </span>
       </div>
 
@@ -271,7 +297,9 @@ export default function OverviewTab() {
         >
           <span className="text-2xl">⚡</span>
           <div>
-            <p className="text-xs font-semibold text-[#22d3ee] uppercase tracking-wider">AI Suggestion</p>
+            <p className="text-xs font-semibold text-[#22d3ee] uppercase tracking-wider">
+              {t('components.cockpitTabs.overview.ai_suggestion')}
+            </p>
             <p className="text-sm text-white/90 mt-0.5">{suggestedWidget.message}</p>
           </div>
         </motion.div>
@@ -282,7 +310,7 @@ export default function OverviewTab() {
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
-              Active Incidents
+              {t('components.cockpitTabs.overview.active_incidents')}
             </span>
             <AlertTriangle className="w-4 h-4 text-amber-400/80" />
           </div>
@@ -294,7 +322,7 @@ export default function OverviewTab() {
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
-              Threat Exposure
+              {t('components.cockpitTabs.overview.threat_exposure')}
             </span>
             <ShieldAlert className="w-4 h-4 text-[#22d3ee]/80" />
           </div>
@@ -306,7 +334,7 @@ export default function OverviewTab() {
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
-              Zero-Day Risk
+              {t('components.cockpitTabs.overview.zero_day_risk')}
             </span>
             <Zap className="w-4 h-4 text-[#a855f7]/80" />
           </div>
@@ -321,7 +349,7 @@ export default function OverviewTab() {
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-white/50 uppercase tracking-widest">
-              System Health
+              {t('components.cockpitTabs.overview.system_health')}
             </span>
             <Activity className="w-4 h-4 text-emerald-400/80" />
           </div>
@@ -341,13 +369,13 @@ export default function OverviewTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={`${GLASS_CARD} flex flex-col items-center justify-center min-h-[320px]`}>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">
-            Security Risk Grade
+            {t('components.cockpitTabs.overview.security_risk_grade')}
           </h3>
           <RiskGauge score={score} />
         </div>
         <div className={`${GLASS_CARD} min-h-[320px]`}>
           <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-4">
-            Vulnerabilities by Severity
+            {t('components.cockpitTabs.overview.vulnerabilities_by_severity')}
           </h3>
           {severityBarData.length > 0 ? (
             <div className="h-64 mt-2">
@@ -373,7 +401,7 @@ export default function OverviewTab() {
             </div>
           ) : (
             <div className="h-64 flex items-center justify-center text-white/30 text-sm">
-              No severity data yet
+              {t('components.cockpitTabs.overview.no_severity_data')}
             </div>
           )}
         </div>
@@ -382,16 +410,16 @@ export default function OverviewTab() {
       {/* Bottom: Attack Surface Growth (OSINT → ASM → path wordlist) */}
       <div className={GLASS_CARD}>
         <h3 className="text-xs font-semibold text-white/50 uppercase tracking-widest mb-6">
-          Attack Surface Growth
+          {t('components.cockpitTabs.overview.attack_surface_growth')}
         </h3>
         <div className="space-y-5">
-          {attackSurfaceDataWithDefaults.map(({ label, value, color }) => (
-            <div key={label}>
+          {attackSurfaceDataWithDefaults.map(({ labelKey, label, value, color }) => (
+            <div key={labelKey}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-white/80 flex items-center gap-2">
-                  {label === 'Web' && <Globe className="w-4 h-4 text-[#22d3ee]/80" />}
-                  {label === 'Mobile' && <Smartphone className="w-4 h-4 text-[#a855f7]/80" />}
-                  {label === 'Cloud' && <Cloud className="w-4 h-4 text-[#4ade80]/80" />}
+                  {labelKey === 'web' && <Globe className="w-4 h-4 text-[#22d3ee]/80" />}
+                  {labelKey === 'mobile' && <Smartphone className="w-4 h-4 text-[#a855f7]/80" />}
+                  {labelKey === 'cloud' && <Cloud className="w-4 h-4 text-[#4ade80]/80" />}
                   {label}
                 </span>
                 <span className="text-xs font-mono text-white/50 tabular-nums">{value}%</span>

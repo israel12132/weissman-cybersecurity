@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FixedSizeList as List } from 'react-window'
+
+const NS = 'components.intelWidgets.liveIntelTerminal'
 
 function severityColor(severity) {
   const s = (severity || '').toLowerCase()
@@ -19,17 +22,14 @@ function parseEvent(e) {
 
 const ROW_HEIGHT = 24
 
-const IDLE_ONLINE = 'SYSTEM ARMED: AWAITING LIVE TELEMETRY'
-const IDLE_OFFLINE = 'CONNECTION LOST — Reconnecting...'
-const IDLE_MONITORING = 'Monitoring infrastructure...'
-
 export default function LiveIntelTerminal({ events, highlightedEventId, connectionStatus, matrixStyle = false }) {
+  const { t } = useTranslation()
   const listRef = useRef(null)
   const containerRef = useRef(null)
   const [listHeight, setListHeight] = useState(400)
   const parsed = (events || []).map(parseEvent)
   const isOnline = connectionStatus === 'online'
-  const idleMessage = isOnline ? IDLE_ONLINE : IDLE_OFFLINE
+  const idleMessage = isOnline ? t(`${NS}.idleOnline`) : t(`${NS}.idleOffline`)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -69,14 +69,14 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
   return (
     <div className={`tactical-terminal flex flex-col h-full min-h-0 ${matrixStyle ? 'matrix-style' : ''}`}>
       <div className="terminal-header shrink-0">
-        <span className="text-cyber-cyan font-semibold tracking-wider">LIVE INTEL</span>
-        <span className="text-slate-500 text-xs font-mono">// {isOnline ? 'FEED.ACTIVE' : 'RECONNECTING'}</span>
+        <span className="text-cyber-cyan font-semibold tracking-wider">{t(`${NS}.title`)}</span>
+        <span className="text-slate-500 text-xs font-mono">// {isOnline ? t(`${NS}.feedActive`) : t(`${NS}.reconnecting`)}</span>
       </div>
       <div ref={containerRef} className="terminal-log flex-1 min-h-0 overflow-hidden">
         {parsed.length === 0 ? (
           <div className="text-cyan-400/90 px-3 py-4 font-mono text-xs border border-cyan-500/20 rounded bg-black/20">
             {idleMessage}
-            <div className="text-slate-500 mt-1 text-[10px]">{IDLE_MONITORING}</div>
+            <div className="text-slate-500 mt-1 text-[10px]">{t(`${NS}.idleMonitoring`)}</div>
           </div>
         ) : (
           <List

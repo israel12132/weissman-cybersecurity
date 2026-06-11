@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useTelemetry } from '../../context/TelemetryContext'
@@ -7,22 +8,24 @@ import { apiFetch, apiEventSourceUrl } from '../../lib/apiBase'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
 import { ENGINES_BY_ID } from '../../lib/enginesRegistry'
 
+const NS = 'components.cockpitWidgets.engineCard'
 const MAX_TERMINAL_LINES = 80
 
-function formatSseLine(data) {
+function formatSseLine(data, t) {
   if (typeof data !== 'object' || data === null) return null
-  if (data.error) return `[ERROR] ${data.error}`
+  if (data.error) return t(`${NS}.terminalError`, { error: data.error })
   if (data.message) return data.message
   const b = data.bytes_ingested
   const c = data.chunks_ingested
-  if (b != null && c != null) return `Live: ${b} bytes, ${c} chunks`
+  if (b != null && c != null) return t(`${NS}.terminalLive`, { bytes: b, chunks: c })
   if (data.status === 'running' && data.message) return data.message
-  if (data.status === 'completed') return `Completed. ${data.message || ''}`.trim()
-  if (data.status === 'failed') return data.error ? `[ERROR] ${data.error}` : 'Failed.'
+  if (data.status === 'completed') return t(`${NS}.terminalCompleted`, { message: data.message || '' }).trim()
+  if (data.status === 'failed') return data.error ? t(`${NS}.terminalError`, { error: data.error }) : t(`${NS}.terminalFailed`)
   return null
 }
 
 export default function EngineCard({ engineId, label, enabled, onToggle, disabled, sseJobId, showCommandConfirmed }) {
+  const { t } = useTranslation()
   const [poeJobLines, setPoeJobLines] = useState([])
   const [hasError, setHasError] = useState(false)
   const [runBusy, setRunBusy] = useState(false)
@@ -43,11 +46,11 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
 
   const runScanNow = useCallback(async () => {
     if (!enabled || runBusy || cidNum == null || Number.isNaN(cidNum)) {
-      addToast('error', 'Select a client and enable the engine first', engineId)
+      addToast('error', t(`${NS}.toastSelectClient`), engineId)
       return
     }
     if (!canRunTargeted) {
-      addToast('error', 'Add at least one domain for this client', engineId)
+      addToast('error', t(`${NS}.toastAddDomain`), engineId)
       return
     }
     setRunBusy(true)
@@ -63,17 +66,19 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        const msg = d.detail || d.error || r.statusText || 'Scan request failed'
+        const msg = d.detail || d.error || r.statusText || t(`${NS}.toastScanFailed`)
         addToast('error', String(msg), engineId)
-        addProgress(String(cidNum), engineId, `[queue failed] ${msg}`)
+        addProgress(String(cidNum), engineId, t(`${NS}.toastQueueFailed`, { msg }))
         return
       }
       const jid = d.job_id || d.jobId || ''
-      const line = jid ? `Queued job ${jid} (${d.job_kind || engineId})` : (d.message || 'Scan queued')
+      const line = jid
+        ? t(`${NS}.toastQueuedJob`, { jobId: jid, kind: d.job_kind || engineId })
+        : (d.message || t(`${NS}.toastQueued`))
       addToast('info', line, engineId)
       addProgress(String(cidNum), engineId, line)
     } catch (e) {
-      addToast('error', e?.message || 'Network error', engineId)
+      addToast('error', e?.message || t(`${NS}.toastNetworkError`), engineId)
     } finally {
       setRunBusy(false)
     }
@@ -86,6 +91,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     engineId,
     addToast,
     addProgress,
+    t,
   ])
 
   useEffect(() => {
@@ -95,11 +101,11 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     const path = `/api/poe-scan/stream/${encodeURIComponent(sseJobId)}`
     const url = apiEventSourceUrl(path)
     const es = new EventSource(url, { withCredentials: true })
-    setPoeJobLines((prev) => [...prev, '> Connecting to stream...'])
+    setPoeJobLines((prev) => [...prev, t(`${NS}.terminalConnecting`)])
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data || '{}')
-        const line = formatSseLine(data)
+        const line = formatSseLine(data, t)
         if (line) {
           setPoeJobLines((prev) => {
             const next = [...prev, `> ${line}`].slice(-MAX_TERMINAL_LINES)
@@ -111,7 +117,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
           }
         }
       } catch (_) {
-        setPoeJobLines((prev) => [...prev.slice(-MAX_TERMINAL_LINES), '> [parse error]'])
+        setPoeJobLines((prev) => [...prev.slice(-MAX_TERMINAL_LINES), t(`${NS}.terminalParseError`)])
       }
     }
     es.onerror = () => {
@@ -120,7 +126,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     return () => {
       es.close()
     }
-  }, [sseJobId, engineId, addToast])
+  }, [sseJobId, engineId, addToast, t])
 
   const linesToScroll = engineId === 'poe_synthesis' && poeJobLines.length > 0 ? poeJobLines : globalLines
   useEffect(() => {
@@ -132,12 +138,11 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     let base = ''
     if (engineId === 'poe_synthesis' && poeJobLines.length > 0) base = poeJobLines.join('\n')
     else if (globalLines.length > 0) base = globalLines.join('\n')
-    else base = enabled ? '> System idle...' : '> Engine offline'
-    if (showConfirmed) base += '\n> Command Confirmed'
+    else base = enabled ? t(`${NS}.terminalIdle`) : t(`${NS}.terminalOffline`)
+    if (showConfirmed) base += `\n> ${t(`${NS}.commandConfirmed`)}`
     return base
   })()
 
-  // MITRE badge from engine registry
   const registryEntry = ENGINES_BY_ID[engineId]
   const mitreId = registryEntry?.mitre ?? null
 
@@ -159,16 +164,16 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
             type="button"
             title={
               !enabled
-                ? 'Enable engine first'
+                ? t(`${NS}.enableFirst`)
                 : !canRunTargeted
-                  ? 'Add a domain to run URL-based engines'
-                  : 'Queue this engine on the worker (async job)'
+                  ? t(`${NS}.addDomain`)
+                  : t(`${NS}.queueHint`)
             }
             disabled={disabled || !enabled || runBusy || !canRunTargeted}
             onClick={() => runScanNow()}
             className="px-2 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wide border border-cyan-500/40 text-cyan-200/90 hover:bg-cyan-950/50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {runBusy ? '…' : 'Run'}
+            {runBusy ? t(`${NS}.runBusy`) : t(`${NS}.run`)}
           </button>
           <button
             type="button"
@@ -196,7 +201,6 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
         </div>
       </div>
 
-      {/* MITRE badge */}
       {mitreId && (
         <div className="mb-2">
           <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 border border-white/10 text-white/40 tracking-wider">
@@ -225,7 +229,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
               className="absolute bottom-2 right-2 text-[10px] font-mono text-[#22d3ee]"
               style={{ textShadow: '0 0 8px rgba(34,211,238,0.8)' }}
             >
-              Command Confirmed
+              {t(`${NS}.commandConfirmed`)}
             </motion.div>
           )}
         </AnimatePresence>

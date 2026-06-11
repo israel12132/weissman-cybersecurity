@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+
+const NS = 'components.intelWidgets.attackLifecycleTicker'
 
 export default function AttackLifecycleTicker({ events }) {
+  const { t } = useTranslation()
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -11,7 +15,7 @@ export default function AttackLifecycleTicker({ events }) {
   if (!events?.length) {
     return (
       <div className="flex-shrink-0 h-10 border-t border-war-border bg-war-dark flex items-center px-4">
-        <span className="text-war-silver/50 text-xs font-mono">Attack Lifecycle Ticker — Waiting for activity...</span>
+        <span className="text-war-silver/50 text-xs font-mono">{t(`${NS}.waiting`)}</span>
       </div>
     )
   }

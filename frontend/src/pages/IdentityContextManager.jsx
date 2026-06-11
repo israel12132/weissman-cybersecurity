@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, Shield, Key, AlertTriangle, CheckCircle, Clock, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from './PageShell'
@@ -18,6 +19,7 @@ import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
  * - Insider threat detection
  */
 export default function IdentityContextManager() {
+  const { t } = useTranslation();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [identities, setIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function IdentityContextManager() {
       setIdentities(data.identities || []);
     } catch (err) {
       console.error('Failed to fetch identities:', err);
-      setError('Unable to load identity data. Please try again later.');
+      setError(t('pages.identityContextManager.load_error'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +65,7 @@ export default function IdentityContextManager() {
   };
 
   return (
-    <PageShell title="Identity Context Manager" icon={<Users />}>
+    <PageShell title={t('pages.identityContextManager.title')} icon={<Users />}>
       <div className="space-y-6">
         {/* Error Banner */}
         {error && (
@@ -81,7 +83,7 @@ export default function IdentityContextManager() {
                 onClick={() => clientId != null && fetchIdentities(clientId)}
                 className="text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors"
               >
-                Retry
+                {t('pages.identityContextManager.retry')}
               </button>
             </div>
           </motion.div>
@@ -96,7 +98,7 @@ export default function IdentityContextManager() {
             className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Identities</span>
+              <span className="text-sm text-gray-400">{t('pages.identityContextManager.total_identities')}</span>
               <Users className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -109,7 +111,7 @@ export default function IdentityContextManager() {
             className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-red-400">High Risk</span>
+              <span className="text-sm text-red-400">{t('pages.identityContextManager.high_risk')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">{stats.highRisk}</div>
@@ -122,7 +124,7 @@ export default function IdentityContextManager() {
             className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-purple-400">Privileged</span>
+              <span className="text-sm text-purple-400">{t('pages.identityContextManager.privileged')}</span>
               <Key className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-400">{stats.privileged}</div>
@@ -135,7 +137,7 @@ export default function IdentityContextManager() {
             className="bg-yellow-500/10 backdrop-blur-md border border-yellow-500/30 rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-yellow-400">Anomalies</span>
+              <span className="text-sm text-yellow-400">{t('pages.identityContextManager.anomalies')}</span>
               <AlertTriangle className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-yellow-400">{stats.anomalies}</div>
@@ -147,7 +149,7 @@ export default function IdentityContextManager() {
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
-              User Identities ({identities.length})
+              {t('pages.identityContextManager.identities_heading', { count: identities.length })}
             </h3>
           </div>
 
@@ -158,7 +160,7 @@ export default function IdentityContextManager() {
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 className="w-10 h-10 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full mx-auto mb-4"
               />
-              <p className="text-sm text-gray-400 font-mono">Loading identities...</p>
+              <p className="text-sm text-gray-400 font-mono">{t('pages.identityContextManager.loading')}</p>
             </div>
           ) : identities.length === 0 ? (
             <motion.div
@@ -167,8 +169,8 @@ export default function IdentityContextManager() {
               className="p-12 text-center"
             >
               <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-sm text-gray-400 mb-2">No identities found</p>
-              <p className="text-xs text-gray-500">Identity tracking will appear here once configured</p>
+              <p className="text-sm text-gray-400 mb-2">{t('pages.identityContextManager.empty_title')}</p>
+              <p className="text-xs text-gray-500">{t('pages.identityContextManager.empty_body')}</p>
             </motion.div>
           ) : (
             <div className="divide-y divide-white/5 max-h-[70vh] overflow-y-auto">
@@ -183,7 +185,7 @@ export default function IdentityContextManager() {
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => e.key === 'Enter' && setSelectedIdentity(identity)}
-                  aria-label={`View details for ${identity.username}`}
+                  aria-label={t('pages.identityContextManager.view_details', { username: identity.username })}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
@@ -196,7 +198,7 @@ export default function IdentityContextManager() {
                           <h4 className="text-sm font-semibold text-white">{identity.username}</h4>
                           {identity.is_privileged && (
                             <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
-                              PRIVILEGED
+                              {t('pages.identityContextManager.privileged_badge')}
                             </span>
                           )}
                           <span
@@ -204,18 +206,20 @@ export default function IdentityContextManager() {
                               identity.risk_score
                             )}`}
                           >
-                            Risk: {identity.risk_score}
+                            {t('pages.identityContextManager.risk_score', { score: identity.risk_score })}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <span>Email: {identity.email}</span>
+                          <span>{t('pages.identityContextManager.email', { email: identity.email })}</span>
                           {identity.last_login && (
                             <>
                               <span>•</span>
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                Last login: {new Date(identity.last_login).toLocaleString()}
+                                {t('pages.identityContextManager.last_login', {
+                                  time: new Date(identity.last_login).toLocaleString(),
+                                })}
                               </span>
                             </>
                           )}
@@ -223,7 +227,7 @@ export default function IdentityContextManager() {
                             <>
                               <span>•</span>
                               <span className="text-yellow-400">
-                                {identity.anomaly_count} anomalies
+                                {t('pages.identityContextManager.anomaly_count', { count: identity.anomaly_count })}
                               </span>
                             </>
                           )}
@@ -260,10 +264,10 @@ export default function IdentityContextManager() {
           >
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">High Risk Identities Detected</h3>
+              <h3 className="text-sm font-semibold text-white">{t('pages.identityContextManager.high_risk_title')}</h3>
             </div>
             <p className="text-sm text-gray-300">
-              {stats.highRisk} users have been flagged as high risk. Review their activity immediately.
+              {t('pages.identityContextManager.high_risk_body', { count: stats.highRisk })}
             </p>
           </motion.div>
         )}
@@ -286,6 +290,8 @@ export default function IdentityContextManager() {
  * Identity Detail Modal
  */
 function IdentityDetailModal({ identity, onClose }) {
+  const { t } = useTranslation();
+
   // Close on Escape key
   useEffect(() => {
     const handleEsc = (e) => {
@@ -324,7 +330,7 @@ function IdentityDetailModal({ identity, onClose }) {
             <button
               onClick={onClose}
               className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
-              aria-label="Close modal"
+              aria-label={t('pages.identityContextManager.close_modal')}
             >
               <X className="w-5 h-5" />
             </button>
@@ -337,7 +343,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">Email</span>
+                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.email_label')}</span>
                 <div className="text-sm text-white">{identity.email}</div>
               </motion.div>
               <motion.div
@@ -345,7 +351,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">Risk Score</span>
+                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.risk_score_label')}</span>
                 <div className="text-sm font-semibold text-white">{identity.risk_score}</div>
               </motion.div>
               <motion.div
@@ -353,9 +359,9 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">Last Login</span>
+                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.last_login_label')}</span>
                 <div className="text-sm text-white">
-                  {identity.last_login ? new Date(identity.last_login).toLocaleString() : 'Never'}
+                  {identity.last_login ? new Date(identity.last_login).toLocaleString() : t('pages.identityContextManager.never')}
                 </div>
               </motion.div>
               <motion.div
@@ -363,7 +369,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">Anomalies</span>
+                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.anomalies_label')}</span>
                 <div className="text-sm text-white">{identity.anomaly_count || 0}</div>
               </motion.div>
             </div>
@@ -375,7 +381,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <h4 className="text-sm font-semibold text-white mb-3">Recent Activity</h4>
+                <h4 className="text-sm font-semibold text-white mb-3">{t('pages.identityContextManager.recent_activity')}</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {identity.recent_activity.map((activity, i) => (
                     <motion.div
@@ -408,7 +414,7 @@ function IdentityDetailModal({ identity, onClose }) {
               onClick={onClose}
               className="w-full px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900"
             >
-              Close
+              {t('pages.identityContextManager.close')}
             </button>
           </motion.div>
         </motion.div>

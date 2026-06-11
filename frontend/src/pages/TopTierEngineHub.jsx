@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
@@ -11,6 +12,7 @@ function badgeClass(kind) {
 }
 
 export default function TopTierEngineHub() {
+  const { t } = useTranslation()
   const [audit, setAudit] = useState(null)
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState([])
@@ -123,7 +125,7 @@ export default function TopTierEngineHub() {
   }, [probeJobId, probeRunning])
 
   async function startHealthProbe() {
-    setProbeSummary('Queueing top-tier health probe...')
+    setProbeSummary(t('pages.topTierEngineHub.queueing'))
     setProbeByEngine({})
     const payload = {}
     if (clientId) payload.client_id = Number(clientId)
@@ -135,13 +137,13 @@ export default function TopTierEngineHub() {
     })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) {
-      setProbeSummary(d.detail || `Probe failed to queue (${r.status})`)
+      setProbeSummary(d.detail || t('pages.topTierEngineHub.probe_failed', { status: r.status }))
       setProbeRunning(false)
       return
     }
     setProbeJobId(d.job_id || '')
     setProbeRunning(true)
-    setProbeSummary(`Probe queued. Job: ${d.job_id || 'unknown'}`)
+    setProbeSummary(t('pages.topTierEngineHub.probe_queued', { jobId: d.job_id || 'unknown' }))
   }
 
   function probeBadge(status) {
@@ -156,22 +158,26 @@ export default function TopTierEngineHub() {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/55 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">&larr; Engine Matrix</Link>
+            <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">{t('pages.topTierEngineHub.back_matrix')}</Link>
             <span className="text-white/20 text-xs">|</span>
-            <h1 className="text-sm font-bold tracking-tight text-white">Top-Tier Engine Control Hub</h1>
+            <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineHub.title')}</h1>
           </div>
           <div className="text-[11px] font-mono text-white/50">
-            {loading ? 'Auditing...' : `${audit?.connected_count ?? 0}/${audit?.top_tier_count ?? TOP_TIER_ENGINE_IDS.length} connected`}
+            {loading
+              ? t('pages.topTierEngineHub.auditing')
+              : t('pages.topTierEngineHub.connected', {
+                  connected: audit?.connected_count ?? 0,
+                  total: audit?.top_tier_count ?? TOP_TIER_ENGINE_IDS.length,
+                })}
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5">
-          <h2 className="text-sm font-semibold text-white mb-2">Connectivity Reality Check</h2>
+          <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
           <p className="text-sm text-white/60 leading-relaxed">
-            This page audits each Top-Tier engine against catalog registration, canonical resolution, and runtime execution path.
-            Green engines are runnable from the Command Center flow.
+            {t('pages.topTierEngineHub.reality_body')}
           </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
             <select
@@ -179,7 +185,7 @@ export default function TopTierEngineHub() {
               onChange={(e) => setClientId(e.target.value)}
               className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
             >
-              <option value="">Client (optional)</option>
+              <option value="">{t('pages.topTierEngineHub.client_optional')}</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -187,7 +193,7 @@ export default function TopTierEngineHub() {
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="https://target.example"
+              placeholder={t('pages.topTierEngineHub.target_placeholder')}
               className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 md:col-span-2"
             />
             <button
@@ -196,7 +202,7 @@ export default function TopTierEngineHub() {
               disabled={probeRunning}
               className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
             >
-              {probeRunning ? 'Running probe...' : 'Run health probe'}
+              {probeRunning ? t('pages.topTierEngineHub.running_probe') : t('pages.topTierEngineHub.run_health_probe')}
             </button>
           </div>
           {probeSummary && <div className="mt-3 text-xs font-mono text-white/65">{probeSummary}</div>}
@@ -212,7 +218,7 @@ export default function TopTierEngineHub() {
               <article key={id} className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-mono text-white/40">Top-Tier #{idx + 1}</div>
+                    <div className="text-[11px] font-mono text-white/40">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
                     <h3 className="text-base font-semibold text-white">{engine?.label || id}</h3>
                     <div className="text-[11px] font-mono text-white/40">{id}</div>
                   </div>
@@ -221,24 +227,31 @@ export default function TopTierEngineHub() {
                   </span>
                 </div>
 
-                <p className="text-sm text-white/55 min-h-[40px]">{engine?.description || 'No description found in registry.'}</p>
+                <p className="text-sm text-white/55 min-h-[40px]">{engine?.description || t('pages.topTierEngineHub.no_description')}</p>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-white/60">
                   <div className="rounded border border-white/10 bg-black/30 p-2">
-                    <div className="text-white/35">canonical</div>
+                    <div className="text-white/35">{t('pages.topTierEngineHub.canonical_label')}</div>
                     <div>{row?.canonical_engine || '-'}</div>
                   </div>
                   <div className="rounded border border-white/10 bg-black/30 p-2">
-                    <div className="text-white/35">production</div>
-                    <div>{row?.is_production_runnable ? 'yes' : 'no'}</div>
+                    <div className="text-white/35">{t('pages.topTierEngineHub.production_label')}</div>
+                    <div>{row?.is_production_runnable ? t('common.yes') : t('common.no')}</div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-[11px] font-mono">
                   <span className={`px-2 py-1 rounded border uppercase tracking-wider ${probeBadge(probe?.status || 'pending')}`}>
-                    probe: {probe?.status || 'pending'}
+                    {t('pages.topTierEngineHub.probe_label', { status: probe?.status || 'pending' })}
                   </span>
-                  {probe && <span className="text-white/50">{probe.findings_count} findings · {probe.duration_ms}ms</span>}
+                  {probe && (
+                    <span className="text-white/50">
+                      {t('pages.topTierEngineHub.findings_duration', {
+                        count: probe.findings_count,
+                        ms: probe.duration_ms,
+                      })}
+                    </span>
+                  )}
                 </div>
                 {probe?.message && <div className="text-[11px] text-white/50">{probe.message}</div>}
 
@@ -247,13 +260,13 @@ export default function TopTierEngineHub() {
                     to={`/engines/top-tier/${id}`}
                     className="px-3 py-1.5 rounded-lg text-xs font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 transition-colors"
                   >
-                    Open dedicated page
+                    {t('pages.topTierEngineHub.open_dedicated')}
                   </Link>
                   <Link
                     to={`/engines/${id}`}
                     className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20 text-white/70 hover:bg-white/5 transition-colors"
                   >
-                    Open engine detail
+                    {t('pages.topTierEngineHub.open_engine_detail')}
                   </Link>
                 </div>
               </article>

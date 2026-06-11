@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { ShieldAlert, ListOrdered } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.tools.attackChainView'
+
 /** Coerce API / partial rows into safe render models */
-function normalizeSteps(raw) {
+function normalizeSteps(raw, t) {
   if (!Array.isArray(raw)) return []
   return raw
     .map((s, i) => {
@@ -15,23 +18,24 @@ function normalizeSteps(raw) {
       if (typeof order !== 'number' || Number.isNaN(order)) order = i + 1
       const label = s.step_label != null && String(s.step_label).trim() !== ''
         ? String(s.step_label)
-        : `Step ${i + 1}`
+        : t(`${NS}.step_fallback`, { n: i + 1 })
       const payload = s.payload_or_action != null ? String(s.payload_or_action) : ''
       return { step_order: order, step_label: label, payload_or_action: payload }
     })
     .filter(Boolean)
 }
 
-function parseAttackChainPayload(json) {
+function parseAttackChainPayload(json, t) {
   if (json == null || typeof json !== 'object' || Array.isArray(json)) {
     return { steps: [], run_id: null }
   }
   const run_id = json.run_id != null ? json.run_id : null
-  const steps = normalizeSteps(json.steps)
+  const steps = normalizeSteps(json.steps, t)
   return { steps, run_id }
 }
 
 export default function AttackChainView() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [data, setData] = useState({ steps: [], run_id: null })
   const [loading, setLoading] = useState(true)
@@ -53,7 +57,7 @@ export default function AttackChainView() {
       .then((d) => {
         if (cancelled) return
         try {
-          setData(parseAttackChainPayload(d))
+          setData(parseAttackChainPayload(d, t))
         } catch {
           setData({ steps: [], run_id: null })
         }
@@ -65,7 +69,7 @@ export default function AttackChainView() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [clientId])
+  }, [clientId, t])
 
   const steps = useMemo(() => (Array.isArray(data?.steps) ? data.steps : []), [data])
   const runId = data?.run_id
@@ -73,7 +77,7 @@ export default function AttackChainView() {
   if (!clientId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
-        <p className="text-white/60">No client selected.</p>
+        <p className="text-white/60">{t(`${NS}.no_client`)}</p>
       </div>
     )
   }
@@ -81,7 +85,7 @@ export default function AttackChainView() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
-        <div className="text-cyan-400/80 animate-pulse">Loading attack chain…</div>
+        <div className="text-cyan-400/80 animate-pulse">{t(`${NS}.loading`)}</div>
       </div>
     )
   }
@@ -90,7 +94,7 @@ export default function AttackChainView() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] gap-4">
         <div className="text-red-400">{error}</div>
-        <Link to="/" className="text-sm text-cyan-400/90 hover:text-cyan-300">← Back to War Room</Link>
+        <Link to="/" className="text-sm text-cyan-400/90 hover:text-cyan-300">{t(`${NS}.back_war_room`)}</Link>
       </div>
     )
   }
@@ -103,14 +107,14 @@ export default function AttackChainView() {
             to="/"
             className="text-sm text-cyan-400/90 hover:text-cyan-300 transition-colors"
           >
-            ← Back to War Room
+            {t(`${NS}.back_war_room`)}
           </Link>
           <div className="flex items-center gap-2 text-white/90">
             <ShieldAlert className="w-5 h-5 text-amber-500" />
-            <h1 className="text-xl font-semibold tracking-wide">Strategic Attack Chain</h1>
+            <h1 className="text-xl font-semibold tracking-wide">{t(`${NS}.title`)}</h1>
           </div>
           {runId != null && runId !== '' && (
-            <span className="text-xs text-white/50 ml-auto">Run #{String(runId)}</span>
+            <span className="text-xs text-white/50 ml-auto">{t(`${NS}.run_label`, { id: String(runId) })}</span>
           )}
         </div>
 
@@ -121,8 +125,8 @@ export default function AttackChainView() {
             className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-8 text-center"
           >
             <ListOrdered className="w-12 h-12 mx-auto mb-3 text-white/30" />
-            <p className="text-white/60">No attack chain for this client yet.</p>
-            <p className="text-sm text-white/40 mt-1">Run a scan with findings to generate a chain.</p>
+            <p className="text-white/60">{t(`${NS}.no_chain`)}</p>
+            <p className="text-sm text-white/40 mt-1">{t(`${NS}.no_chain_hint`)}</p>
           </motion.div>
         ) : (
           <div className="space-y-0">

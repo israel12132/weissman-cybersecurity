@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiUrl } from '../lib/apiBase'
@@ -40,6 +41,7 @@ function ChainSteps({ steps }) {
 }
 
 function HitlItem({ item, onApprove, onReject, loading }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [note, setNote] = useState('')
   const isPending = item.status === 'PENDING_APPROVAL'
@@ -66,7 +68,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
           <p className="text-sm font-medium text-white truncate max-w-lg">{item.target_brief}</p>
           <p className="text-[10px] font-mono text-white/25">
             {item.proposed_at ? new Date(item.proposed_at).toLocaleString() : ''}
-            {item.client_id ? ` · client ${item.client_id}` : ''}
+            {item.client_id ? t('pages.councilHitlQueue.client_suffix', { id: item.client_id }) : ''}
           </p>
         </div>
         <button
@@ -74,7 +76,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
           onClick={() => setExpanded(v => !v)}
           className="shrink-0 text-[11px] font-mono text-white/40 hover:text-white/70 transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
         >
-          {expanded ? '▲ collapse' : '▼ details'}
+          {expanded ? t('pages.councilHitlQueue.collapse') : t('pages.councilHitlQueue.details')}
         </button>
       </div>
 
@@ -89,7 +91,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
           >
             {/* Chain steps */}
             <div>
-              <p className="text-[10px] font-mono text-white/30 uppercase mb-1">Chain Steps</p>
+              <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.chain_steps')}</p>
               <div className="rounded-xl bg-white/5 border border-white/10 p-3">
                 <ChainSteps steps={item.chain_steps} />
               </div>
@@ -98,7 +100,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {/* Payload preview */}
             {item.payload_preview && (
               <div>
-                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">Payload Preview (safe excerpt)</p>
+                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.payload_preview')}</p>
                 <pre className="rounded-xl bg-white/5 border border-white/10 p-3 text-[11px] font-mono text-cyan-300/70 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
                   {item.payload_preview}
                 </pre>
@@ -108,7 +110,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {/* Rationale */}
             {item.rationale && (
               <div>
-                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">Rationale</p>
+                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.rationale')}</p>
                 <p className="text-[11px] text-white/55 leading-relaxed">{item.rationale}</p>
               </div>
             )}
@@ -116,11 +118,12 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {/* Fired job link */}
             {item.fired_job_id && (
               <p className="text-[11px] font-mono text-cyan-400/70">
-                Fired job: <a href={apiUrl(`/api/jobs/${item.fired_job_id}`)} className="underline" target="_blank" rel="noreferrer">{item.fired_job_id}</a>
+                {t('pages.councilHitlQueue.fired_job')}{' '}
+                <a href={apiUrl(`/api/jobs/${item.fired_job_id}`)} className="underline" target="_blank" rel="noreferrer">{item.fired_job_id}</a>
               </p>
             )}
             {item.review_note && (
-              <p className="text-[11px] text-white/40 italic">Note: {item.review_note}</p>
+              <p className="text-[11px] text-white/40 italic">{t('pages.councilHitlQueue.review_note', { note: item.review_note })}</p>
             )}
           </motion.div>
         )}
@@ -131,7 +134,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
         <div className="flex flex-col sm:flex-row gap-3 pt-1">
           <input
             type="text"
-            placeholder="Operator note (optional)"
+            placeholder={t('pages.councilHitlQueue.operator_note')}
             value={note}
             onChange={e => setNote(e.target.value)}
             className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-1.5 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
@@ -142,7 +145,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             onClick={() => onApprove(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-green-500/40 text-green-400 hover:bg-green-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            ✓ Approve & Fire
+            {t('pages.councilHitlQueue.approve_fire')}
           </button>
           <button
             type="button"
@@ -150,7 +153,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             onClick={() => onReject(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-rose-500/40 text-rose-400 hover:bg-rose-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            ✗ Reject
+            {t('pages.councilHitlQueue.reject')}
           </button>
         </div>
       )}
@@ -161,6 +164,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
 const STATUS_TABS = ['ALL', 'PENDING_APPROVAL', 'FIRED', 'REJECTED']
 
 export default function CouncilHitlQueue() {
+  const { t } = useTranslation()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('PENDING_APPROVAL')
@@ -177,7 +181,7 @@ export default function CouncilHitlQueue() {
       const data = await api.get(`/api/council/hitl/queue${qs}`)
       setItems(data.items ?? [])
     } catch (e) {
-      showToast('Failed to load queue: ' + e.message, false)
+      showToast(t('pages.councilHitlQueue.load_failed', { message: e.message }), false)
     }
   }, [activeTab, showToast])
 
@@ -187,10 +191,10 @@ export default function CouncilHitlQueue() {
     setLoading(true)
     try {
       const data = await api.post(`/api/council/hitl/${id}/approve`, { review_note: note || null })
-      showToast(`Approved & fired — job ${data.job_id?.slice(0, 8)}…`)
+      showToast(t('pages.councilHitlQueue.approved_toast', { jobId: data.job_id?.slice(0, 8) }))
       await fetchQueue()
     } catch (e) {
-      showToast('Approval failed: ' + e.message, false)
+      showToast(t('pages.councilHitlQueue.approval_failed', { message: e.message }), false)
     } finally {
       setLoading(false)
     }
@@ -200,10 +204,10 @@ export default function CouncilHitlQueue() {
     setLoading(true)
     try {
       await api.post(`/api/council/hitl/${id}/reject`, { review_note: note || null })
-      showToast('Proposal rejected.')
+      showToast(t('pages.councilHitlQueue.rejected_toast'))
       await fetchQueue()
     } catch (e) {
-      showToast('Rejection failed: ' + e.message, false)
+      showToast(t('pages.councilHitlQueue.rejection_failed', { message: e.message }), false)
     } finally {
       setLoading(false)
     }
@@ -219,19 +223,19 @@ export default function CouncilHitlQueue() {
           {/* Header */}
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-white tracking-tight">Council HITL Queue</h1>
+              <h1 className="text-xl font-bold text-white tracking-tight">{t('pages.councilHitlQueue.title')}</h1>
               {pending > 0 && (
                 <span className="relative flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-mono">
                   <span className="relative flex w-1.5 h-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
                     <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-amber-400" />
                   </span>
-                  {pending} pending
+                  {t('pages.councilHitlQueue.pending_badge', { count: pending })}
                 </span>
               )}
             </div>
             <p className="text-[12px] text-white/40">
-              Review Council-proposed attack chains before they are executed. Safety rails (no shells) are always enforced.
+              {t('pages.councilHitlQueue.subtitle')}
             </p>
           </div>
 
@@ -239,9 +243,9 @@ export default function CouncilHitlQueue() {
           <div className="rounded-2xl bg-green-900/10 border border-green-500/20 px-4 py-3 flex items-start gap-3">
             <span className="text-green-400 mt-0.5">🔒</span>
             <div>
-              <p className="text-[12px] font-semibold text-green-300">Safety rails active</p>
+              <p className="text-[12px] font-semibold text-green-300">{t('pages.councilHitlQueue.safety_title')}</p>
               <p className="text-[11px] text-white/40 mt-0.5">
-                <code className="font-mono">safety_rails_no_shells = true</code> is enforced on every fired job. No shell payloads, stagers, or reverse connections are generated. Approval triggers OOB/OAST-safe benign proof-of-concept only.
+                {t('pages.councilHitlQueue.safety_body')}
               </p>
             </div>
           </div>
@@ -267,7 +271,7 @@ export default function CouncilHitlQueue() {
               onClick={fetchQueue}
               className="ml-auto px-3 py-1.5 rounded-xl text-[11px] font-mono border border-white/10 text-white/40 hover:border-white/20 hover:text-white/60 transition-all"
             >
-              ↻ Refresh
+              {t('pages.councilHitlQueue.refresh')}
             </button>
           </div>
 
@@ -280,7 +284,7 @@ export default function CouncilHitlQueue() {
                   animate={{ opacity: 1 }}
                   className="text-center text-white/25 text-[12px] py-16"
                 >
-                  No items in this queue
+                  {t('pages.councilHitlQueue.empty')}
                 </motion.p>
               ) : (
                 items.map(item => (

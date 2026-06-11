@@ -3,15 +3,16 @@
  * "Scan all clients" runs all 5 engines on all clients from DB.
  */
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
 
-const ENGINES = [
-  { id: 'supply_chain', label: 'Supply Chain', short: 'SC', color: 'emerald' },
-  { id: 'llm_path_fuzz', label: 'AI Fuzz (vLLM)', short: 'AI', color: 'cyan' },
-  { id: 'bola_idor', label: 'BOLA/IDOR', short: 'IDOR', color: 'crimson' },
-  { id: 'osint', label: 'OSINT / Dark Web', short: 'OSINT', color: 'amber' },
-  { id: 'asm', label: 'Attack Surface', short: 'ASM', color: 'violet' },
+const ENGINE_IDS = [
+  { id: 'supply_chain', color: 'emerald' },
+  { id: 'llm_path_fuzz', color: 'cyan' },
+  { id: 'bola_idor', color: 'crimson' },
+  { id: 'osint', color: 'amber' },
+  { id: 'asm', color: 'violet' },
 ]
 
 const COLOR_CLASSES = {
@@ -32,6 +33,7 @@ function getFirstTarget(client) {
 }
 
 export default function CommandBar({ onScanLaunched, onError }) {
+  const { t } = useTranslation()
   const [target, setTarget] = useState('')
   const [clients, setClients] = useState([])
   const [clientsError, setClientsError] = useState(null)
@@ -48,7 +50,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
         if (r.ok) {
           const list = await r.json()
           setClients(Array.isArray(list) ? list : [])
-          setClientsError(Array.isArray(list) ? null : 'Unexpected /api/clients response.')
+          setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
         } else {
           setClients([])
           setClientsError(await formatApiErrorResponse(r))
@@ -56,14 +58,14 @@ export default function CommandBar({ onScanLaunched, onError }) {
       } catch (e) {
         if (!cancelled) {
           setClients([])
-          setClientsError(e?.message || 'Network error')
+          setClientsError(e?.message || t('components.commandBar.network_error'))
         }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (!selectedClientId) return
@@ -91,7 +93,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
       setLastResult({ engine: 'run-all', job_id: 'all', status: 'started' })
       if (onScanLaunched) onScanLaunched('run-all', data)
     } catch (e) {
-      const msg = e?.message || 'Network error'
+      const msg = e?.message || t('components.commandBar.network_error')
       if (onError) onError(msg)
       setLastResult({ engine: 'run-all', error: msg })
     } finally {
@@ -100,9 +102,9 @@ export default function CommandBar({ onScanLaunched, onError }) {
   }
 
   async function launchScan(engineId) {
-    const t = (target || '').trim()
-    if (!t) {
-      if (onError) onError('Select a client above or enter a target URL.')
+    const tTarget = (target || '').trim()
+    if (!tTarget) {
+      if (onError) onError(t('components.commandBar.no_target_error'))
       return
     }
     setLoading(engineId)
@@ -111,7 +113,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
       const r = await apiFetch('/api/command-center/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engineId, target: t }),
+        body: JSON.stringify({ engine: engineId, target: tTarget }),
       })
       let data = null
       try {
@@ -128,7 +130,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
       setLastResult({ engine: engineId, job_id: data?.job_id, status: data?.status })
       if (onScanLaunched) onScanLaunched(engineId, data)
     } catch (e) {
-      const msg = e?.message || 'Network error'
+      const msg = e?.message || t('components.commandBar.network_error')
       if (onError) onError(msg)
       setLastResult({ engine: engineId, error: msg })
     } finally {
@@ -140,18 +142,18 @@ export default function CommandBar({ onScanLaunched, onError }) {
     <div className="soc-command-bar">
       {clientsError && (
         <div className="px-3 py-2 text-xs text-rose-300 bg-rose-950/40 border-b border-rose-500/30" role="alert">
-          Clients: {clientsError}
+          {t('components.commandBar.clients_prefix')} {clientsError}
         </div>
       )}
       <div className="soc-command-bar-inner">
-        <label className="soc-command-bar-label">TARGET</label>
+        <label className="soc-command-bar-label">{t('components.commandBar.target_label')}</label>
         <select
           className="soc-command-bar-select"
           value={selectedClientId}
           onChange={(e) => setSelectedClientId(e.target.value)}
-          aria-label="Client from dashboard"
+          aria-label={t('components.commandBar.client_aria')}
         >
-          <option value="">— Select client (from dashboard) —</option>
+          <option value="">{t('components.commandBar.select_client')}</option>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name || c.id} {getFirstTarget(c) ? `(${getFirstTarget(c)})` : ''}
@@ -160,34 +162,38 @@ export default function CommandBar({ onScanLaunched, onError }) {
         </select>
         <input
           type="text"
-          placeholder="Or enter URL / scope"
+          placeholder={t('components.commandBar.target_url_placeholder')}
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           className="soc-command-bar-input"
-          aria-label="Target URL or scope"
+          aria-label={t('components.commandBar.target_placeholder')}
         />
         <button
           type="button"
           disabled={loading != null}
           onClick={runFullScanAllClients}
           className="soc-command-bar-btn bg-violet-500/20 border-violet-400/50 text-violet-300 hover:bg-violet-500/30 hover:border-violet-400 font-semibold"
-          title="Run all 5 engines on all clients from DB"
+          title={t('components.commandBar.scan_all_hint')}
         >
-          {loading === 'run-all' ? '…' : 'Scan all clients'}
+          {loading === 'run-all' ? '…' : t('components.commandBar.scan_all')}
         </button>
         <div className="soc-command-bar-engines">
-          {ENGINES.map(({ id, label, short, color }) => (
-            <button
-              key={id}
-              type="button"
-              disabled={loading != null}
-              onClick={() => launchScan(id)}
-              className={`soc-command-bar-btn ${COLOR_CLASSES[color]}`}
-              title={label}
-            >
-              {loading === id ? '…' : short}
-            </button>
-          ))}
+          {ENGINE_IDS.map(({ id, color }) => {
+            const label = t(`components.commandBar.engines.${id}.label`)
+            const short = t(`components.commandBar.engines.${id}.short`)
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={loading != null}
+                onClick={() => launchScan(id)}
+                className={`soc-command-bar-btn ${COLOR_CLASSES[color]}`}
+                title={label}
+              >
+                {loading === id ? '…' : short}
+              </button>
+            )
+          })}
         </div>
       </div>
       {lastResult?.error && (

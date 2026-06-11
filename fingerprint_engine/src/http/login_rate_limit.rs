@@ -94,8 +94,12 @@ pub async fn login_rate_limit_middleware(
         UnauthPostKind::Enroll => (enroll_limiter(), enroll_per_minute(), enroll_burst(), "Agent enroll"),
     };
 
-    if kind == UnauthPostKind::Login && super::rate_limit_redis::is_enabled() {
-        if let Some(count) = super::rate_limit_redis::incr_login_ip(&ip).await {
+    if super::rate_limit_redis::is_enabled() {
+        let redis_count = match kind {
+            UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip(&ip).await,
+            UnauthPostKind::Enroll => super::rate_limit_redis::incr_enroll_ip(&ip).await,
+        };
+        if let Some(count) = redis_count {
             let max = limit.get() as u64;
             if count > max {
                 rate_limit_metrics::record_login_denied(&ip, &path);

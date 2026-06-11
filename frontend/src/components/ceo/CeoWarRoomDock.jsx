@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { apiUrl, apiFetch, apiEventSourceUrl, formatHttpApiError } from '../../lib/apiBase'
+import { apiFetch, apiEventSourceUrl, formatHttpApiError } from '../../lib/apiBase'
 
 function phaseStyle(phase) {
   const p = (phase || '').toLowerCase()
@@ -42,7 +43,18 @@ const HEAVY_KINDS = new Set([
   'general_mission',
 ])
 
+const STREAM_STATUS_KEYS = {
+  idle: 'components.ceo.warRoomDock.streamStatus.idle',
+  stopped: 'components.ceo.warRoomDock.streamStatus.stopped',
+  connecting: 'components.ceo.warRoomDock.streamStatus.connecting',
+  live: 'components.ceo.warRoomDock.streamStatus.live',
+  reconnecting: 'components.ceo.warRoomDock.streamStatus.reconnecting',
+  'connection error': 'components.ceo.warRoomDock.streamStatus.connectionError',
+  'error: no job id': 'components.ceo.warRoomDock.streamStatus.noJobId',
+}
+
 export default function CeoWarRoomDock() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const [jobs, setJobs] = useState([])
   const [jobsErr, setJobsErr] = useState('')
@@ -54,6 +66,11 @@ export default function CeoWarRoomDock() {
   const esRef = useRef(null)
   const scrollRef = useRef(null)
   const sinceRef = useRef(0)
+
+  const streamStatusLabel = (status) => {
+    const key = STREAM_STATUS_KEYS[status]
+    return key ? t(key) : status
+  }
 
   const selectedCidRaw = selectedClientId != null ? String(selectedClientId).trim() : ''
   const selectedCidNum = selectedCidRaw ? Number(selectedCidRaw) : NaN
@@ -73,14 +90,14 @@ export default function CeoWarRoomDock() {
       setJobs(Array.isArray(d.jobs) ? d.jobs : [])
     } catch (e) {
       setJobs([])
-      setJobsErr(e.message || 'failed to load jobs')
+      setJobsErr(e.message || t('components.ceo.warRoomDock.loadJobsFailed'))
     }
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     loadJobs()
-    const t = setInterval(loadJobs, 5000)
-    return () => clearInterval(t)
+    const timer = setInterval(loadJobs, 5000)
+    return () => clearInterval(timer)
   }, [loadJobs])
 
   const stopStream = useCallback(() => {
@@ -148,7 +165,7 @@ export default function CeoWarRoomDock() {
             {
               phase: 'connected',
               severity: 'info',
-              payload: { message: 'SSE stream subscribed', raw: ev.data },
+              payload: { message: t('components.ceo.warRoomDock.sseSubscribed'), raw: ev.data },
               ts: new Date().toISOString(),
             },
           ])
@@ -168,7 +185,7 @@ export default function CeoWarRoomDock() {
             {
               phase: 'stream_error',
               severity: 'high',
-              payload: { message: 'SSE error' },
+              payload: { message: t('components.ceo.warRoomDock.sseError') },
               ts: new Date().toISOString(),
             },
           ])
@@ -181,7 +198,7 @@ export default function CeoWarRoomDock() {
 
       es.onopen = () => setStreamStatus('live')
     },
-    [stopStream],
+    [stopStream, t],
   )
 
   useEffect(() => () => stopStream(), [stopStream])
@@ -201,23 +218,25 @@ export default function CeoWarRoomDock() {
       ? jobs.filter((j) => HEAVY_KINDS.has((j.kind || '').trim()))
       : jobs
 
+  const statusDisplay = streamStatusLabel(streamStatus)
+
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-b from-slate-950/95 to-black/90 overflow-hidden shadow-[0_0_40px_rgba(34,211,238,0.06)]">
       <div className="px-4 py-3 border-b border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 bg-black/50">
         <div>
           <h3 className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300/90">
-            War room · live jobs and event stream
+            {t('components.ceo.warRoomDock.title')}
           </h3>
           <p className="text-[10px] text-slate-500 font-mono mt-0.5">
             {jobsScopedToClient
-              ? `Showing jobs for the selected client · stream cursor ${since} · ${streamStatus}`
-              : `All tenant jobs · stream cursor ${since} · ${streamStatus}`}
+              ? t('components.ceo.warRoomDock.jobsForClient', { since, status: statusDisplay })
+              : t('components.ceo.warRoomDock.jobsAllTenant', { since, status: statusDisplay })}
             {selectedId ? ` · ${selectedId.slice(0, 8)}…` : ''}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {[
-              ['all', 'All jobs'],
-              ['heavy', 'Heavy ops'],
+              ['all', t('components.ceo.warRoomDock.filterAll')],
+              ['heavy', t('components.ceo.warRoomDock.filterHeavy')],
             ].map(([k, lab]) => (
               <button
                 key={k}
@@ -240,14 +259,14 @@ export default function CeoWarRoomDock() {
             onClick={() => loadJobs()}
             className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-[10px] font-mono uppercase text-slate-300 hover:bg-white/10"
           >
-            Refresh jobs
+            {t('components.ceo.warRoomDock.refreshJobs')}
           </button>
           <button
             type="button"
             onClick={stopStream}
             className="px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-950/40 text-[10px] font-mono uppercase text-red-200 hover:bg-red-900/50"
           >
-            Stop stream
+            {t('components.ceo.warRoomDock.stopStream')}
           </button>
         </div>
       </div>
@@ -255,12 +274,16 @@ export default function CeoWarRoomDock() {
       <div className="grid lg:grid-cols-5 gap-0 min-h-[320px]">
         <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-cyan-500/10 p-3 max-h-[320px] overflow-y-auto bg-black/30">
           <p className="text-[9px] uppercase tracking-widest text-slate-500 font-mono mb-2">
-            {jobsScopedToClient ? 'Live jobs (selected client)' : 'Live jobs (whole tenant)'}
+            {jobsScopedToClient
+              ? t('components.ceo.warRoomDock.liveJobsClient')
+              : t('components.ceo.warRoomDock.liveJobsTenant')}
           </p>
           {jobsErr && <p className="text-[10px] text-red-400 font-mono mb-2">{jobsErr}</p>}
           {filteredJobs.length === 0 && !jobsErr && (
             <p className="text-[11px] text-slate-600 font-mono italic">
-              {jobs.length === 0 ? 'No pending or running jobs.' : 'No jobs in this filter.'}
+              {jobs.length === 0
+                ? t('components.ceo.warRoomDock.noJobs')
+                : t('components.ceo.warRoomDock.noJobsInFilter')}
             </p>
           )}
           <ul className="space-y-1.5">
@@ -305,28 +328,25 @@ export default function CeoWarRoomDock() {
             {lines.length === 0 && (
               <div className="text-slate-500 text-[11px] leading-relaxed font-mono space-y-1">
                 {!selectedId && (
-                  <p className="text-cyan-900/90 italic">Select a job on the left to open its live event stream.</p>
+                  <p className="text-cyan-900/90 italic">{t('components.ceo.warRoomDock.selectJobHint')}</p>
                 )}
                 {selectedId && streamStatus === 'connecting' && (
                   <p className="flex items-center gap-2 text-cyan-200/70">
                     <span className="inline-block w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
-                    Opening SSE to council session stream…
+                    {t('components.ceo.warRoomDock.openingSse')}
                   </p>
                 )}
                 {selectedId && streamStatus === 'live' && (
-                  <p className="text-slate-500">
-                    Connected. Waiting for orchestrator events for this job. Heavy runs (full tenant scan, council,
-                    synthesis) stream progress here; short tasks may finish without extra lines.
-                  </p>
+                  <p className="text-slate-500">{t('components.ceo.warRoomDock.connectedWaiting')}</p>
                 )}
                 {selectedId &&
                   streamStatus !== 'connecting' &&
                   streamStatus !== 'live' &&
                   !streamStatus.startsWith('error') && (
-                    <p className="text-amber-200/70">{streamStatus}</p>
+                    <p className="text-amber-200/70">{statusDisplay}</p>
                   )}
                 {selectedId && streamStatus.startsWith('error') && (
-                  <p className="text-rose-300/90">{streamStatus}</p>
+                  <p className="text-rose-300/90">{statusDisplay}</p>
                 )}
               </div>
             )}

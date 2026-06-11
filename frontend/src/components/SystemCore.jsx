@@ -3,10 +3,12 @@
  * Saves to system_configs (GET/POST /api/system/configs). No mock data.
  */
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 
 export default function SystemCore() {
+  const { t } = useTranslation()
   const [configs, setConfigs] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -121,9 +123,9 @@ export default function SystemCore() {
           .then((data) => setRecentPayloads(Array.isArray(data?.payloads) ? data.payloads : []))
           .catch(() => {})
       })
-      .catch((e) => setError(e?.message || 'Load failed'))
+      .catch(() => setError(t('components.systemCore.load_failed')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [t])
 
   function saveConfig(key, value) {
     setSaving(true)
@@ -135,8 +137,8 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => {
-        setError(e?.message || 'Save failed')
+      .catch(() => {
+        setError(t('components.systemCore.save_failed'))
         setSaving(false)
       })
   }
@@ -165,7 +167,7 @@ export default function SystemCore() {
     ])
       .then(([r]) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => { setJitterMinMs(minMs); setJitterMaxMs(maxMs); setSaving(false) })
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   function handleJitterSlider(v) {
@@ -201,7 +203,7 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   function saveZeroDayConfig() {
@@ -220,7 +222,7 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   function handleZeroDayToggle(enabled) {
@@ -243,7 +245,7 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   function saveTimingConfig() {
@@ -261,7 +263,7 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   function saveSemanticConfig() {
@@ -281,13 +283,13 @@ export default function SystemCore() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
-      .catch((e) => { setError(e?.message || 'Save failed'); setSaving(false) })
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">Loading System Core…</p>
+        <p className="text-cyan-400">{t('components.systemCore.loading')}</p>
       </div>
     )
   }
@@ -295,8 +297,8 @@ export default function SystemCore() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
       <header className="flex items-center justify-between border-b border-slate-700 pb-4 mb-6">
-        <h1 className="text-xl font-bold text-cyan-400">System Core</h1>
-        <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">← War Room</Link>
+        <h1 className="text-xl font-bold text-cyan-400">{t('components.systemCore.title')}</h1>
+        <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t('components.systemCore.back_war_room')}</Link>
       </header>
 
       {error && (
@@ -305,15 +307,15 @@ export default function SystemCore() {
         </div>
       )}
       {saving && (
-        <p className="mb-2 text-amber-400 text-sm">Saving…</p>
+        <p className="mb-2 text-amber-400 text-sm">{t('components.systemCore.saving')}</p>
       )}
 
       <section className="max-w-2xl rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Cryptography & Chain of Custody</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.crypto_heading')}</h2>
 
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">Enable RFC 3161 PDF Signing & Immutable Audit Trail</label>
+            <label className="text-sm text-slate-300">{t('components.systemCore.rfc3161_label')}</label>
             <button
               type="button"
               role="switch"
@@ -328,36 +330,36 @@ export default function SystemCore() {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Custom X.509 Certificate Path</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.x509_label')}</label>
             <input
               type="text"
               value={x509CertPath}
               onChange={(e) => setX509CertPath(e.target.value)}
               onBlur={handleCertPathBlur}
-              placeholder="Leave empty for auto-generated self-signed (data/certs)"
+              placeholder={t('components.systemCore.x509_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Settings are stored in system_configs and apply in real time. No restart required.
+          {t('components.systemCore.crypto_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Ghost Network & WAF Evasion</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.ghost_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Distribute requests and emulate human browsing delays. Config applies to all attack engines in real time.
+          {t('components.systemCore.ghost_body')}
         </p>
 
         <div className="space-y-6">
           <div>
             <label className="block text-sm text-slate-300 mb-2">
-              Jitter intensity (human emulation)
+              {t('components.systemCore.jitter_label')}
             </label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 w-24">Aggressive (0 ms)</span>
+              <span className="text-xs text-slate-500 w-24">{t('components.systemCore.jitter_aggressive')}</span>
               <input
                 type="range"
                 min={0}
@@ -366,27 +368,27 @@ export default function SystemCore() {
                 onChange={(e) => handleJitterSlider(e.target.value)}
                 className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
               />
-              <span className="text-xs text-slate-500 w-28">Stealth (500–2500 ms)</span>
+              <span className="text-xs text-slate-500 w-28">{t('components.systemCore.jitter_stealth')}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Current: {jitterMinMs}–{jitterMaxMs} ms delay before each request
+              {t('components.systemCore.jitter_current', { min: jitterMinMs, max: jitterMaxMs })}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Global proxy swarm (one proxy per line or comma-separated)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.proxy_label')}</label>
             <textarea
               value={proxySwarm}
               onChange={(e) => setProxySwarm(e.target.value)}
               onBlur={handleProxySwarmBlur}
-              placeholder="http://proxy1:8080, http://proxy2:3128"
+              placeholder={t('components.systemCore.proxy_placeholder')}
               rows={4}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono text-sm"
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">Enable identity morphing (browser fingerprint rotation)</label>
+            <label className="text-sm text-slate-300">{t('components.systemCore.morphing_label')}</label>
             <button
               type="button"
               role="switch"
@@ -406,43 +408,43 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save Ghost Network settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_ghost')}
           </button>
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Jitter, proxy rotation, and morphing apply to OSINT, ASM, supply chain, BOLA/IDOR, and LLM-driven fuzzing. No restart required.
+          {t('components.systemCore.ghost_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Semantic Logic Engine (Module 4)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.semantic_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Control AI-driven business logic fuzzing: local vLLM (OpenAI-compatible) endpoint, model id, temperature, and how many API endpoints to analyze per target.
+          {t('components.systemCore.semantic_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">LLM base URL (OpenAI API, include /v1)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_url_label')}</label>
             <input
               type="text"
               value={llmBaseUrl}
               onChange={(e) => setLlmBaseUrl(e.target.value)}
-              placeholder="https://your-vllm-host.example/v1"
+              placeholder={t('components.systemCore.llm_url_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Model id (optional if WEISSMAN_LLM_MODEL is set on server)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_model_label')}</label>
             <input
               type="text"
               value={llmModel}
               onChange={(e) => setLlmModel(e.target.value)}
-              placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct"
+              placeholder={t('components.systemCore.llm_model_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">LLM temperature</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_temp_label')}</label>
             <div className="flex items-center gap-4">
               <span className="text-xs text-slate-500 w-12">0.0</span>
               <input
@@ -455,10 +457,10 @@ export default function SystemCore() {
               />
               <span className="text-xs text-slate-500 w-12">2.0</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Current: {llmTemperature.toFixed(2)} — higher = more creative payloads</p>
+            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.llm_temp_current', { value: llmTemperature.toFixed(2) })}</p>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Max Sequence Depth</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.max_depth_label')}</label>
             <div className="flex items-center gap-4">
               <span className="text-xs text-slate-500">1</span>
               <input
@@ -471,7 +473,7 @@ export default function SystemCore() {
               />
               <span className="text-xs text-slate-500">20</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Max API endpoints to analyze per target: {maxSequenceDepth}</p>
+            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.max_depth_current', { value: maxSequenceDepth })}</p>
           </div>
           <button
             type="button"
@@ -479,22 +481,22 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save Semantic Logic settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_semantic')}
           </button>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Findings are saved with source <code className="bg-slate-800 px-1 rounded">semantic_ai_fuzz</code> and appear in the Executive PDF with AI remediation.
+          {t('components.systemCore.semantic_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Quantum Timing Profiler (Module 5)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.timing_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Microsecond timing attacks: baseline sample size and Z-Score sensitivity for blind injection detection. Used by the orchestrator and the Timing Profiler UI.
+          {t('components.systemCore.timing_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Timing sample size (baseline + payload requests)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.timing_sample_label')}</label>
             <div className="flex items-center gap-4">
               <span className="text-xs text-slate-500 w-10">50</span>
               <input
@@ -507,10 +509,10 @@ export default function SystemCore() {
               />
               <span className="text-xs text-slate-500 w-10">500</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Current: {timingSampleSize} requests per phase</p>
+            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.timing_sample_current', { value: timingSampleSize })}</p>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Z-Score sensitivity (anomaly threshold)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.zscore_label')}</label>
             <div className="flex items-center gap-4">
               <span className="text-xs text-slate-500 w-10">2.0</span>
               <input
@@ -523,7 +525,7 @@ export default function SystemCore() {
               />
               <span className="text-xs text-slate-500 w-10">5.0</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Z-Score &gt; {zScoreSensitivity} = critical timing deviation. Current: {zScoreSensitivity.toFixed(1)}</p>
+            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.zscore_current', { value: zScoreSensitivity.toFixed(1), current: zScoreSensitivity.toFixed(1) })}</p>
           </div>
           <button
             type="button"
@@ -531,39 +533,39 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save Timing Profiler settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_timing')}
           </button>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Findings are saved with source <code className="bg-slate-800 px-1 rounded">microsecond_timing</code>; delta_us, z_score and payload appear in the report.
+          {t('components.systemCore.timing_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">AI Red Teaming Arena (Module 6)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.redteam_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Target AI endpoint and adversarial strategy for LLM red teaming (OWASP LLM01). Used by the orchestrator and the AI Combat Arena.
+          {t('components.systemCore.redteam_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Target AI Endpoint URL</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.redteam_endpoint_label')}</label>
             <input
               type="text"
               value={aiRedteamEndpoint}
               onChange={(e) => setAiRedteamEndpoint(e.target.value)}
-              placeholder="https://target.com/chat (empty = use client target + /chat)"
+              placeholder={t('components.systemCore.redteam_endpoint_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Adversarial Strategy</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.redteam_strategy_label')}</label>
             <select
               value={adversarialStrategy}
               onChange={(e) => setAdversarialStrategy(e.target.value)}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             >
-              <option value="data_leak">Data Leak (prompt extraction, jailbreaks)</option>
-              <option value="code_execution">Code Execution (run commands, bypass safety)</option>
+              <option value="data_leak">{t('components.systemCore.strategy_data_leak')}</option>
+              <option value="code_execution">{t('components.systemCore.strategy_code_exec')}</option>
             </select>
           </div>
           <button
@@ -572,22 +574,22 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save AI Red Team settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_redteam')}
           </button>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Findings saved with source <code className="bg-slate-800 px-1 rounded">ai_adversarial_redteam</code>; include AI vulnerabilities section in Executive PDF.
+          {t('components.systemCore.redteam_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Zero-Day Radar (Module 7)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.zeroday_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Autonomous zero-day detection: NVD + custom feeds, Ollama-safe probe synthesis, scan client assets. Probes are detection-only (no destructive exploits).
+          {t('components.systemCore.zeroday_body')}
         </p>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">Enable Autonomous Zero-Day Probing</label>
+            <label className="text-sm text-slate-300">{t('components.systemCore.zeroday_enable')}</label>
             <button
               type="button"
               role="switch"
@@ -599,11 +601,11 @@ export default function SystemCore() {
             </button>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Custom RSS / Threat Feed URLs (one per line)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.feed_urls_label')}</label>
             <textarea
               value={customFeedUrls}
               onChange={(e) => setCustomFeedUrls(e.target.value)}
-              placeholder="https://example.com/security.rss"
+              placeholder={t('components.systemCore.feed_urls_placeholder')}
               rows={3}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 font-mono text-sm"
             />
@@ -614,38 +616,38 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save Zero-Day Radar settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_zeroday')}
           </button>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Findings saved with source <code className="bg-slate-800 px-1 rounded">zero_day_radar</code>; safe probe matches only.
+          {t('components.systemCore.zeroday_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">CI/CD Integrations (Module 8)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.cicd_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          GitHub PAT and GitLab API URL for IaC pipeline scan. Repo content is fetched dynamically; PoC is stored only, never deployed.
+          {t('components.systemCore.cicd_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">GitHub Personal Access Token</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.github_token_label')}</label>
             <input
               type="password"
               value={githubToken}
               onChange={(e) => setGithubToken(e.target.value)}
-              placeholder="ghp_..."
+              placeholder={t('components.systemCore.github_token_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500"
               autoComplete="off"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">GitLab API URL</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.gitlab_url_label')}</label>
             <input
               type="text"
               value={gitlabApiUrl}
               onChange={(e) => setGitlabApiUrl(e.target.value)}
-              placeholder="https://gitlab.com/api/v4"
+              placeholder={t('components.systemCore.gitlab_url_placeholder')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500"
             />
           </div>
@@ -655,18 +657,18 @@ export default function SystemCore() {
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
-            {saving ? 'Saving…' : 'Save CI/CD settings'}
+            {saving ? t('components.systemCore.saving') : t('components.systemCore.save_cicd')}
           </button>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Used by Phantom Pipeline / CI/CD Matrix. PoC exploit stored in <code className="bg-slate-800 px-1 rounded">poc_exploit</code> column only.
+          {t('components.systemCore.cicd_hint')}
         </p>
       </section>
 
       <section className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">Safety Rails — Proof-of-Exploitability (Module 9)</h2>
+        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.poe_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Control autonomous PoE synthesis. All payloads are SAFE (no reverse shells or malware). Only benign proof-of-concept detection.
+          {t('components.systemCore.poe_body')}
         </p>
         <div className="space-y-6">
           <div className="flex items-center gap-3">
@@ -682,7 +684,7 @@ export default function SystemCore() {
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${enablePoeSynthesis ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-slate-300">Enable PoE Synthesis (crash triage + safe PoC)</span>
+            <span className="text-sm text-slate-300">{t('components.systemCore.poe_enable')}</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -697,10 +699,10 @@ export default function SystemCore() {
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${safetyRailsNoShells ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-slate-300">Never generate reverse/bind shell payloads</span>
+            <span className="text-sm text-slate-300">{t('components.systemCore.poe_no_shells')}</span>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Max PoC payload length (chars; 0 = unlimited streaming)</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.poe_max_length')}</label>
             <input
               type="number"
               min={0}
@@ -712,20 +714,20 @@ export default function SystemCore() {
           </div>
 
           <div className="rounded-lg border border-slate-600/80 bg-slate-800/40 p-4">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3">Threat Intelligence Feed (Live Ammo)</h3>
+            <h3 className="text-sm font-semibold text-slate-200 mb-3">{t('components.systemCore.threat_feed_heading')}</h3>
             <div className="flex flex-wrap items-center gap-4 mb-3">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${payloadSyncActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-600/40 text-slate-400'}`}>
                 <span className={`w-2 h-2 rounded-full ${payloadSyncActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                Auto-Sync Active
+                {t('components.systemCore.auto_sync_active')}
               </span>
               <span className="text-xs text-slate-400">
-                Last Synced: {payloadSyncLastAt ? new Date(payloadSyncLastAt).toLocaleString() : 'Never'}
+                {t('components.systemCore.last_synced', { value: payloadSyncLastAt ? new Date(payloadSyncLastAt).toLocaleString() : t('components.systemCore.last_synced_never') })}
               </span>
               <span className="text-xs text-slate-300 font-mono">
-                Live Payloads (Last 60 Days): <strong className="text-amber-400">{livePayloadsCount}</strong>
+                {t('components.systemCore.live_payloads', { count: livePayloadsCount })}
               </span>
               <span className="text-xs text-slate-300 font-mono">
-                Active Ephemeral Payloads (7-day warehouse): <strong className="text-violet-400">{activeEphemeralCount}</strong>
+                {t('components.systemCore.ephemeral_payloads', { count: activeEphemeralCount })}
               </span>
               <button
                 type="button"
@@ -735,7 +737,7 @@ export default function SystemCore() {
                   try {
                     const r = await apiFetch(`/api/payload-sync/run`, { method: 'POST' })
                     if (r.ok) setError('')
-                    else setError('Sync request failed')
+                    else setError(t('components.systemCore.sync_failed'))
                   } finally {
                     setPayloadSyncRunning(false)
                     const st = await apiFetch(`/api/payload-sync/status`).then((res) => res.ok ? res.json() : {})
@@ -748,16 +750,16 @@ export default function SystemCore() {
                 }}
                 className="ml-auto px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium"
               >
-                {payloadSyncRunning ? 'Syncing…' : 'Sync Intelligence Now'}
+                {payloadSyncRunning ? t('components.systemCore.syncing') : t('components.systemCore.sync_now')}
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-2">Recently fetched payloads (read-only); engine uses these before Ollama.</p>
+            <p className="text-xs text-slate-500 mb-2">{t('components.systemCore.payloads_hint')}</p>
             <p className="text-xs text-slate-500 mb-2">
-              Engine: <strong className="text-slate-400">Uncapped concurrency</strong> (hardware limit) · <strong className="text-slate-400">Forensic context</strong> (smoking guns only to Ollama) · <strong className="text-slate-400">Ephemeral payloads</strong> 7-day auto-purge after first use · <strong className="text-slate-400">Global hunt</strong> (Exploit-DB/GitHub when ammo missing).
+              {t('components.systemCore.engine_hint')}
             </p>
             <div className="max-h-48 overflow-y-auto rounded border border-slate-600/60 bg-slate-900/60 divide-y divide-slate-700/60">
               {recentPayloads.length === 0 ? (
-                <div className="py-4 px-3 text-xs text-slate-500 text-center">No payloads yet. Sync runs every 12h.</div>
+                <div className="py-4 px-3 text-xs text-slate-500 text-center">{t('components.systemCore.no_payloads')}</div>
               ) : (
                 recentPayloads.map((p) => (
                   <div key={p.id} className="py-2 px-3 text-left">
@@ -787,8 +789,8 @@ export default function SystemCore() {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Safe Gadget Chains (JSON) — framework ID → benign payload only</label>
-            <p className="text-xs text-slate-500 mb-2">e.g. {`{"CommonsCollections4":"<safe OOB DNS payload>","Jackson":"<safe echo payload>"}`}. No weaponized RCE.</p>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.gadget_chains_label')}</label>
+            <p className="text-xs text-slate-500 mb-2">{t('components.systemCore.gadget_chains_hint')}</p>
             <textarea
               value={poeGadgetChains}
               onChange={(e) => setPoeGadgetChains(e.target.value)}
@@ -799,12 +801,12 @@ export default function SystemCore() {
                 } catch (_) {}
               }}
               className="w-full min-h-[120px] rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 font-mono text-sm"
-              placeholder='{"CommonsCollections4":"","Jackson":""}'
+              placeholder={t('components.systemCore.gadget_chains_placeholder')}
             />
           </div>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Used by Exploit Synthesis &amp; Memory Lab. Verified Exploitability Matrix appears in PDF report with cryptographic timestamp.
+          {t('components.systemCore.poe_footer')}
         </p>
       </section>
     </div>

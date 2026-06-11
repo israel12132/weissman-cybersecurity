@@ -1,4 +1,7 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+
+const NS = 'components.intelWidgets.securityScoreGauge'
 
 function GaugeSvg({ score }) {
   const safeScore = Math.min(100, Math.max(0, Number(score) ?? 0))
@@ -52,28 +55,37 @@ function GaugeSvg({ score }) {
 }
 
 export default function SecurityScoreGauge({ data }) {
+  const { t } = useTranslation()
   const score = useMemo(() => {
     if (data?.score != null) return data.score
     return null
   }, [data])
 
+  const severityLabel = (sev) => t(`${NS}.severity.${sev}`, { defaultValue: sev })
+
   return (
     <div className="border border-war-border rounded-lg bg-war-dark p-4">
       <p className="text-war-cyan text-xs font-semibold tracking-wider uppercase mb-2">
-        Weissman Security Score
+        {t(`${NS}.title`)}
       </p>
       <GaugeSvg score={score ?? 0} />
       <p className="text-[10px] text-war-silver/60 mt-2 text-center">
-        CVSS × EPSS × Asset Criticality
+        {t(`${NS}.formula`)}
       </p>
       {data?.benchmark?.vs_label && (
-        <p className="text-[10px] text-war-cyan/90 mt-2 text-center font-medium" title="C-level industry benchmark">
-          vs {data.benchmark.sector_name}: {data.benchmark.vs_label}
+        <p
+          className="text-[10px] text-war-cyan/90 mt-2 text-center font-medium"
+          title={t(`${NS}.benchmarkTitle`)}
+        >
+          {t(`${NS}.benchmarkVs`, {
+            sector: data.benchmark.sector_name,
+            label: data.benchmark.vs_label,
+          })}
         </p>
       )}
       {data?.benchmark?.percentile_rank != null && (
         <p className="text-[9px] text-war-silver/70 text-center">
-          Percentile vs sectors: {data.benchmark.percentile_rank}%
+          {t(`${NS}.percentile`, { rank: data.benchmark.percentile_rank })}
         </p>
       )}
       {data?.bySeverity && Object.keys(data.bySeverity).length > 0 && (
@@ -81,7 +93,7 @@ export default function SecurityScoreGauge({ data }) {
           {Object.entries(data.bySeverity).map(([sev, count]) => (
             <li key={sev} className="flex justify-between">
               <span className={sev === 'critical' ? 'text-war-red' : sev === 'high' ? 'text-war-gold' : 'text-war-silver/80'}>
-                {sev}
+                {severityLabel(sev)}
               </span>
               <span>{count}</span>
             </li>

@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../lib/apiBase'
@@ -101,14 +102,17 @@ function CustomNode({ data }) {
 
 const nodeTypes = { asmNode: CustomNode }
 
-const REMEDIATION = {
-  takeover: 'Remediation: Remove the dangling DNS record or reclaim the CNAME target (e.g. create the S3 bucket / GitHub Pages site) so an attacker cannot host content on your subdomain.',
-  exposed: 'Remediation: Restrict bucket/container to private or enforce authentication. Remove public list/read ACLs and block public access.',
-  secure: 'No critical finding. Ensure CNAME target remains valid and storage is not exposed.',
-}
+const NS = 'components.tools.attackSurfaceGraph'
 
 export default function AttackSurfaceGraph() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
+
+  const remediation = {
+    takeover: t(`${NS}.remediation_takeover`),
+    exposed: t(`${NS}.remediation_exposed`),
+    secure: t(`${NS}.remediation_secure`),
+  }
   const [graph, setGraph] = useState({ nodes: [], edges: [], run_id: null, message: '' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -120,16 +124,16 @@ export default function AttackSurfaceGraph() {
     if (!clientId) return
     setLoading(true)
     apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error('Failed to load graph'))))
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(t(`${NS}.load_failed`)))))
       .then(data => {
         setGraph(data)
         const { nodes: layoutN, edges: layoutE } = layoutNodes(data.nodes || [], data.edges || [])
         setNodes(layoutN)
         setEdges(layoutE)
       })
-      .catch(e => setError(e?.message || 'Load failed'))
+      .catch(e => setError(e?.message || t(`${NS}.load_failed`)))
       .finally(() => setLoading(false))
-  }, [clientId, setNodes, setEdges])
+  }, [clientId, setNodes, setEdges, t])
 
   const onNodeClick = useCallback((_, node) => {
     setSelectedNode(node?.data ? { ...node.data, id: node.id } : null)
@@ -138,7 +142,7 @@ export default function AttackSurfaceGraph() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">Loading Attack Surface Graph…</p>
+        <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
       </div>
     )
   }
@@ -146,12 +150,12 @@ export default function AttackSurfaceGraph() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col">
       <header className="flex items-center justify-between border-b border-slate-700 px-6 py-3">
-        <h1 className="text-lg font-bold text-cyan-400">Attack Surface Graph</h1>
+        <h1 className="text-lg font-bold text-cyan-400">{t(`${NS}.title`)}</h1>
         <div className="flex items-center gap-4">
           {graph.run_id != null && (
-            <span className="text-xs text-slate-500">Run ID: {graph.run_id}</span>
+            <span className="text-xs text-slate-500">{t(`${NS}.run_id`, { id: graph.run_id })}</span>
           )}
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">← War Room</Link>
+          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.back_war_room`)}</Link>
         </div>
       </header>
       {error && (
@@ -189,23 +193,23 @@ export default function AttackSurfaceGraph() {
         </div>
         {selectedNode && (
           <aside className="w-96 border-l border-slate-700 bg-slate-900/95 p-4 overflow-y-auto">
-            <h3 className="text-sm font-semibold text-slate-200 mb-2">Node details</h3>
-            <p className="text-xs text-slate-400 mb-1">ID: {selectedNode.id}</p>
+            <h3 className="text-sm font-semibold text-slate-200 mb-2">{t(`${NS}.node_details`)}</h3>
+            <p className="text-xs text-slate-400 mb-1">{t(`${NS}.label_id`)} {selectedNode.id}</p>
             <p className="text-sm text-slate-300 mb-2">{selectedNode.label}</p>
-            <p className="text-xs text-slate-500 mb-2">Type: {selectedNode.node_type} · Status: {selectedNode.status}</p>
-            {selectedNode.source && <p className="text-xs text-amber-400 mb-2">Source: {selectedNode.source}</p>}
-            {selectedNode.finding_id && <p className="text-xs text-slate-500 mb-2">Finding: {selectedNode.finding_id}</p>}
+            <p className="text-xs text-slate-500 mb-2">{t(`${NS}.label_type`)} {selectedNode.node_type} · {t(`${NS}.label_status`)} {selectedNode.status}</p>
+            {selectedNode.source && <p className="text-xs text-amber-400 mb-2">{t(`${NS}.label_source`)} {selectedNode.source}</p>}
+            {selectedNode.finding_id && <p className="text-xs text-slate-500 mb-2">{t(`${NS}.label_finding`)} {selectedNode.finding_id}</p>}
             {selectedNode.cname_target && (
-              <p className="text-xs text-cyan-400 mb-2">CNAME → {selectedNode.cname_target}</p>
+              <p className="text-xs text-cyan-400 mb-2">{t(`${NS}.cname_target`, { target: selectedNode.cname_target })}</p>
             )}
             {selectedNode.raw_finding && (
               <pre className="text-xs bg-slate-800 rounded p-2 text-slate-400 mb-3 overflow-x-auto">
                 {JSON.stringify(selectedNode.raw_finding, null, 2)}
               </pre>
             )}
-            <h4 className="text-xs font-semibold text-slate-400 uppercase mb-1">AI Remediation</h4>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase mb-1">{t(`${NS}.ai_remediation`)}</h4>
             <p className="text-sm text-slate-300">
-              {REMEDIATION[selectedNode.status] || REMEDIATION.secure}
+              {remediation[selectedNode.status] || remediation.secure}
             </p>
           </aside>
         )}

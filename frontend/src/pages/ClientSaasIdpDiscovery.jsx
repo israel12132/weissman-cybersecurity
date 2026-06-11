@@ -1,21 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch } from '../lib/apiBase'
-
-function prettyVendor(v) {
-  const m = {
-    okta: 'Okta',
-    azure_ad: 'Azure AD / Entra ID',
-    google: 'Google Workspace',
-    ping: 'Ping Identity',
-    onelogin: 'OneLogin',
-    jumpcloud: 'JumpCloud',
-    duo: 'Duo',
-    adfs: 'ADFS (on-prem)',
-  }
-  return m[String(v || '').toLowerCase()] || String(v || 'Unknown')
-}
 
 function pct(n) {
   const v = Number(n)
@@ -24,6 +11,7 @@ function pct(n) {
 }
 
 export default function ClientSaasIdpDiscovery() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -32,6 +20,13 @@ export default function ClientSaasIdpDiscovery() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
+
+  function vendorLabel(vendor) {
+    const key = String(vendor || '').toLowerCase()
+    return t(`pages.clientSaasIdpDiscovery.vendors.${key}`, {
+      defaultValue: String(vendor || t('pages.clientSaasIdpDiscovery.vendor_unknown')),
+    })
+  }
 
   useEffect(() => {
     if (!clientId) return
@@ -46,27 +41,27 @@ export default function ClientSaasIdpDiscovery() {
       const res = await apiFetch(`/api/clients/${clientId}/discovery/saas-idp`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data?.detail || data?.error || `Discovery failed (HTTP ${res.status})`)
+        setError(data?.detail || data?.error || t('pages.clientSaasIdpDiscovery.discovery_failed', { status: res.status }))
         return
       }
       setClientName(data?.client_name || '')
       setReport(data?.report || null)
     } catch (e) {
-      setError(e?.message || 'Network error')
+      setError(e?.message || t('pages.clientSaasIdpDiscovery.network_error'))
     } finally {
       setLoading(false)
       setRunning(false)
     }
   }
 
-  async function copy(text) {
-    const t = String(text || '').trim()
-    if (!t) return
+  async function copy(value) {
+    const text = String(value || '').trim()
+    if (!text) return
     try {
-      await navigator.clipboard.writeText(t)
-      alert('Copied to clipboard.')
+      await navigator.clipboard.writeText(text)
+      alert(t('pages.clientSaasIdpDiscovery.copied'))
     } catch {
-      alert(t)
+      alert(text)
     }
   }
 
@@ -76,10 +71,10 @@ export default function ClientSaasIdpDiscovery() {
 
   if (loading) {
     return (
-      <PageShell title="SaaS / IdP Discovery" subtitle="Loading...">
+      <PageShell title={t('pages.clientSaasIdpDiscovery.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">Running discovery...</p>
+          <p className="mt-4 text-slate-400">{t('pages.clientSaasIdpDiscovery.loading')}</p>
         </div>
       </PageShell>
     )
@@ -87,13 +82,13 @@ export default function ClientSaasIdpDiscovery() {
 
   return (
     <PageShell
-      title={`SaaS / IdP Discovery${clientName ? ` — ${clientName}` : ''}`}
-      subtitle="Best-effort hints from DNS + OIDC discovery + landing probes (audit logged)"
+      title={clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
+      subtitle={t('pages.clientSaasIdpDiscovery.subtitle')}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Link to={`/clients/${clientId}`} className="text-sm text-slate-400 hover:text-slate-200">
-            ← Back to Client
+            {t('pages.clientSaasIdpDiscovery.back_to_client')}
           </Link>
           <button
             type="button"
@@ -101,7 +96,7 @@ export default function ClientSaasIdpDiscovery() {
             disabled={running}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
           >
-            {running ? 'Running…' : 'Re-run Discovery'}
+            {running ? t('pages.clientSaasIdpDiscovery.running') : t('pages.clientSaasIdpDiscovery.rerun')}
           </button>
         </div>
 
@@ -112,10 +107,10 @@ export default function ClientSaasIdpDiscovery() {
         )}
 
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
-          <h2 className="text-lg font-semibold text-white">Domains Considered</h2>
+          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
           <div className="mt-2 text-sm text-slate-300">
             {domains.length === 0 ? (
-              <span className="text-slate-400">No domains configured for this client yet.</span>
+              <span className="text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_domains')}</span>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {domains.map((d) => (
@@ -127,14 +122,14 @@ export default function ClientSaasIdpDiscovery() {
             )}
           </div>
           <div className="mt-3 text-xs text-slate-500">
-            Configure domains in the client record to improve discovery coverage.
+            {t('pages.clientSaasIdpDiscovery.domains_hint')}
           </div>
         </div>
 
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
-          <h2 className="text-lg font-semibold text-white">IdP Candidates</h2>
+          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.idp_heading')}</h2>
           {idps.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-400">No strong IdP signals detected yet.</div>
+            <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_idp')}</div>
           ) : (
             <div className="mt-4 space-y-3">
               {idps
@@ -148,9 +143,9 @@ export default function ClientSaasIdpDiscovery() {
                     <div key={c.vendor} className="p-4 bg-slate-900/40 border border-slate-700 rounded-lg">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-white font-semibold">{prettyVendor(c.vendor)}</div>
+                          <div className="text-white font-semibold">{vendorLabel(c.vendor)}</div>
                           <div className="text-xs text-slate-400 mt-1">
-                            Confidence: <span className="font-mono text-slate-200">{pct(c.confidence)}</span>
+                            {t('pages.clientSaasIdpDiscovery.confidence', { pct: pct(c.confidence) })}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -160,7 +155,7 @@ export default function ClientSaasIdpDiscovery() {
                               onClick={() => copy(issuer)}
                               className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
                             >
-                              Copy Issuer URL
+                              {t('pages.clientSaasIdpDiscovery.copy_issuer')}
                             </button>
                           )}
                           {finalHost && (
@@ -169,30 +164,30 @@ export default function ClientSaasIdpDiscovery() {
                               onClick={() => copy(finalHost)}
                               className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
                             >
-                              Copy Host
+                              {t('pages.clientSaasIdpDiscovery.copy_host')}
                             </button>
                           )}
                           <Link
                             to="/sso-config"
                             className="px-3 py-1 text-xs bg-purple-700 text-white rounded hover:bg-purple-600"
                           >
-                            Go to SSO Config
+                            {t('pages.clientSaasIdpDiscovery.go_sso_config')}
                           </Link>
                         </div>
                       </div>
 
                       {issuer && (
                         <div className="mt-3 text-[12px] text-slate-300 font-mono break-all">
-                          issuer: {issuer}
+                          {t('pages.clientSaasIdpDiscovery.issuer_label', { value: issuer })}
                         </div>
                       )}
                       {finalHost && (
                         <div className="mt-1 text-[12px] text-slate-400 font-mono break-all">
-                          host: {finalHost}
+                          {t('pages.clientSaasIdpDiscovery.host_label', { value: finalHost })}
                         </div>
                       )}
                       <div className="mt-3 text-xs text-slate-500">
-                        This is a hint engine — verify the IdP settings before enabling production SSO.
+                        {t('pages.clientSaasIdpDiscovery.idp_hint')}
                       </div>
                     </div>
                   )
@@ -202,9 +197,9 @@ export default function ClientSaasIdpDiscovery() {
         </div>
 
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
-          <h2 className="text-lg font-semibold text-white">SaaS Signals</h2>
+          <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.saas_heading')}</h2>
           {saas.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-400">No SaaS signals from SPF includes yet.</div>
+            <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_saas')}</div>
           ) : (
             <div className="mt-4 space-y-3">
               {saas.map((s) => (
@@ -224,4 +219,3 @@ export default function ClientSaasIdpDiscovery() {
     </PageShell>
   )
 }
-

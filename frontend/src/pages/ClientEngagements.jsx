@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
 import { apiFetch, apiUrl } from '../lib/apiBase'
@@ -10,6 +11,7 @@ function isoNowLocal() {
 }
 
 export default function ClientEngagements() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -41,7 +43,7 @@ export default function ClientEngagements() {
       ])
 
       if (!clientRes.ok) {
-        setError(`Failed to load client (HTTP ${clientRes.status})`)
+        setError(t('pages.clientEngagements.load_client_failed', { status: clientRes.status }))
         setLoading(false)
         return
       }
@@ -49,15 +51,15 @@ export default function ClientEngagements() {
       setClient(clientData)
 
       if (!listRes.ok) {
-        const t = await listRes.text().catch(() => '')
-        setError(`Failed to load engagements (HTTP ${listRes.status}) ${t}`)
+        const detail = await listRes.text().catch(() => '')
+        setError(t('pages.clientEngagements.load_failed', { status: listRes.status, detail }))
         setLoading(false)
         return
       }
       const listData = await listRes.json().catch(() => ({}))
       setEngagements(Array.isArray(listData.engagements) ? listData.engagements : [])
     } catch (e) {
-      setError(e?.message || 'Network error')
+      setError(e?.message || t('pages.clientEngagements.network_error'))
     } finally {
       setLoading(false)
     }
@@ -66,7 +68,7 @@ export default function ClientEngagements() {
   async function createEngagement() {
     const n = name.trim()
     if (!n) {
-      alert('Engagement name is required.')
+      alert(t('pages.clientEngagements.name_required'))
       return
     }
     setCreating(true)
@@ -94,14 +96,14 @@ export default function ClientEngagements() {
       setEndAt('')
       await loadAll()
     } catch (e) {
-      setError(e?.message || 'Create failed')
+      setError(e?.message || t('pages.clientEngagements.create_failed'))
     } finally {
       setCreating(false)
     }
   }
 
   async function closeEngagement(engagement) {
-    if (!confirm(`Close engagement "${engagement.name}"?`)) return
+    if (!confirm(t('pages.clientEngagements.close_confirm', { name: engagement.name }))) return
     try {
       const res = await apiFetch(`/api/engagements/${engagement.id}`, {
         method: 'PATCH',
@@ -115,16 +117,16 @@ export default function ClientEngagements() {
       }
       await loadAll()
     } catch (e) {
-      alert(e?.message || 'Close failed')
+      alert(e?.message || t('pages.clientEngagements.close_failed'))
     }
   }
 
   if (loading) {
     return (
-      <PageShell title="Engagements" subtitle="Loading...">
+      <PageShell title={t('pages.clientEngagements.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">Loading engagements...</p>
+          <p className="mt-4 text-slate-400">{t('pages.clientEngagements.loading')}</p>
         </div>
       </PageShell>
     )
@@ -132,16 +134,18 @@ export default function ClientEngagements() {
 
   return (
     <PageShell
-      title={`Engagements${client?.name ? ` — ${client.name}` : ''}`}
-      subtitle="Formalize Red Team execution windows and ROE per client"
+      title={client?.name
+        ? t('pages.clientEngagements.title_with_client', { name: client.name })
+        : t('pages.clientEngagements.title')}
+      subtitle={t('pages.clientEngagements.subtitle')}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Link to={`/clients/${clientId}`} className="text-sm text-slate-400 hover:text-slate-200">
-            ← Back to Client
+            {t('pages.clientEngagements.back_to_client')}
           </Link>
           <div className="text-xs text-slate-500 font-mono">
-            Client ID: {clientId}
+            {t('pages.clientEngagements.client_id', { id: clientId })}
           </div>
         </div>
 
@@ -154,8 +158,8 @@ export default function ClientEngagements() {
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Create Engagement</h2>
-              <p className="text-xs text-slate-400 mt-1">Tracks ROE mode and time window for authorized execution.</p>
+              <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.create_heading')}</h2>
+              <p className="text-xs text-slate-400 mt-1">{t('pages.clientEngagements.create_body')}</p>
             </div>
             <button
               type="button"
@@ -163,35 +167,35 @@ export default function ClientEngagements() {
               disabled={creating}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
             >
-              {creating ? 'Creating…' : 'Create'}
+              {creating ? t('pages.clientEngagements.creating') : t('pages.clientEngagements.create')}
             </button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Name</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.name')}</label>
               <input
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Q2 2026 Red Team — External Perimeter"
+                placeholder={t('pages.clientEngagements.name_placeholder')}
               />
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">ROE Mode</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.roe_mode')}</label>
               <select
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
                 value={roeMode}
                 onChange={(e) => setRoeMode(e.target.value)}
               >
-                <option value="safe_proofs">safe_proofs (recommended)</option>
-                <option value="weaponized_god_mode">weaponized_god_mode (high risk)</option>
+                <option value="safe_proofs">{t('pages.clientEngagements.roe_safe')}</option>
+                <option value="weaponized_god_mode">{t('pages.clientEngagements.roe_weaponized')}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Start</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.start')}</label>
               <input
                 type="datetime-local"
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
@@ -201,7 +205,7 @@ export default function ClientEngagements() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">End (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.end_optional')}</label>
               <input
                 type="datetime-local"
                 className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
@@ -211,12 +215,12 @@ export default function ClientEngagements() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.notes_optional')}</label>
               <textarea
                 className="w-full min-h-24 px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Exclusions, deconfliction contacts, allowed hours, safe mode constraints…"
+                placeholder={t('pages.clientEngagements.notes_placeholder')}
               />
             </div>
           </div>
@@ -224,13 +228,13 @@ export default function ClientEngagements() {
 
         <div className="p-6 bg-slate-900/30 border border-slate-800 rounded-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Engagement History</h2>
-            <span className="text-xs text-slate-500">{engagements.length} total</span>
+            <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.history_heading')}</h2>
+            <span className="text-xs text-slate-500">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
           </div>
 
           {engagements.length === 0 ? (
             <div className="text-center py-10 text-slate-500">
-              No engagements yet.
+              {t('pages.clientEngagements.empty')}
             </div>
           ) : (
             <div className="mt-4 space-y-3">
@@ -252,7 +256,7 @@ export default function ClientEngagements() {
                         rel="noopener noreferrer"
                         title="Open engagement JSON from API"
                       >
-                        API
+                        {t('pages.clientEngagements.api')}
                       </a>
                       {e.status !== 'closed' && (
                         <button
@@ -260,7 +264,7 @@ export default function ClientEngagements() {
                           onClick={() => closeEngagement(e)}
                           className="px-3 py-1 text-xs border border-red-500/40 text-red-300 rounded hover:bg-red-900/20"
                         >
-                          Close
+                          {t('pages.clientEngagements.close')}
                         </button>
                       )}
                     </div>

@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.cockpitWidgets.systemPulseEkg'
+
 export default function SystemPulseEKG() {
+  const { t } = useTranslation()
   const { selectedClient } = useClient()
   const { latencyHistory, addLatency, setLastLatencyMs, resetLatencyHistory } = useWarRoom()
   const intervalRef = useRef(null)
@@ -82,7 +86,6 @@ export default function SystemPulseEKG() {
 
   const recentBad =
     data.length > 0 && data.slice(-10).every((d) => d.flatline || d.ms === 0)
-  /** Pre-filled null history used to falsely show FLATLINE before any probe ran. */
   const hasFlatline = Boolean(targetUrl && hadSuccessRef.current && recentBad && !probePending)
   const showUnreachable = Boolean(targetUrl && !probePending && recentBad && !hadSuccessRef.current)
 
@@ -95,7 +98,7 @@ export default function SystemPulseEKG() {
     >
       <div className="flex items-center justify-between mb-1 px-1">
         <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
-          System pulse
+          {t(`${NS}.title`)}
         </span>
         {probePending && targetUrl && (
           <motion.span
@@ -103,15 +106,15 @@ export default function SystemPulseEKG() {
             animate={{ opacity: [0.7, 1, 0.7] }}
             transition={{ repeat: Infinity, duration: 1.2 }}
           >
-            Scanning…
+            {t(`${NS}.scanning`)}
           </motion.span>
         )}
         {!targetUrl && !probePending && (
-          <span className="text-[10px] font-mono text-slate-500">No domain · add target URL</span>
+          <span className="text-[10px] font-mono text-slate-500">{t(`${NS}.noDomain`)}</span>
         )}
         {showUnreachable && (
-          <span className="text-[10px] font-mono text-amber-400/95" title="latency-probe returned no RTT (TLS, block, or bad URL)">
-            Target unreachable
+          <span className="text-[10px] font-mono text-amber-400/95" title={t(`${NS}.unreachableTitle`)}>
+            {t(`${NS}.unreachable`)}
           </span>
         )}
         {hasFlatline && (
@@ -120,7 +123,7 @@ export default function SystemPulseEKG() {
             animate={{ opacity: [1, 0.4, 1] }}
             transition={{ repeat: Infinity, duration: 1.5 }}
           >
-            Signal lost
+            {t(`${NS}.signalLost`)}
           </motion.span>
         )}
       </div>

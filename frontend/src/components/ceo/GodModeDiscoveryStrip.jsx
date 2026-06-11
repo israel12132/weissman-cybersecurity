@@ -1,17 +1,20 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 export default function GodModeDiscoveryStrip({ discovery, godErr }) {
+  const { t } = useTranslation()
+
   if (godErr) {
     return (
       <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-[11px] font-mono text-rose-200">
-        Discovery snapshot: {godErr}
+        {t('components.ceo.discoveryStrip.errorPrefix')} {godErr}
       </div>
     )
   }
   if (!discovery || typeof discovery !== 'object') {
     return (
       <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-[11px] font-mono text-slate-500">
-        No discovery phase snapshot yet — runs when orchestrator completes ASM-path discovery for a client.
+        {t('components.ceo.discoveryStrip.empty')}
       </div>
     )
   }
@@ -31,7 +34,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-cyan-400/90 mb-1">
-            Tenant discovery · last ASM merge
+            {t('components.ceo.discoveryStrip.title')}
           </p>
           <p className="text-sm font-semibold text-white tracking-tight">
             <span className="text-cyan-200/90">{name}</span>
@@ -41,15 +44,21 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
         </div>
         <div className="flex flex-wrap gap-4 text-right">
           <div>
-            <p className="text-[9px] uppercase text-slate-500 font-mono">target_list</p>
+            <p className="text-[9px] uppercase text-slate-500 font-mono">
+              {t('components.ceo.discoveryStrip.targetList')}
+            </p>
             <p className="text-xl font-mono text-white tabular-nums">{tl != null ? tl : '—'}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-slate-500 font-mono">discovered_paths</p>
+            <p className="text-[9px] uppercase text-slate-500 font-mono">
+              {t('components.ceo.discoveryStrip.discoveredPaths')}
+            </p>
             <p className="text-xl font-mono text-emerald-300/90 tabular-nums">{dp != null ? dp : '—'}</p>
           </div>
           <div className="text-left min-w-[140px]">
-            <p className="text-[9px] uppercase text-slate-500 font-mono">updated</p>
+            <p className="text-[9px] uppercase text-slate-500 font-mono">
+              {t('components.ceo.discoveryStrip.updated')}
+            </p>
             <p className="text-[10px] font-mono text-slate-400">{at}</p>
           </div>
         </div>

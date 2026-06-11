@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
 
 export default function CeoSovereignLab() {
+  const { t } = useTranslation()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -17,12 +19,12 @@ export default function CeoSovereignLab() {
       if (!r.ok) throw new Error(d.detail || r.statusText)
       setRows(Array.isArray(d) ? d : [])
     } catch (e) {
-      setErr(e.message || 'load failed')
+      setErr(e.message || t('components.ceo.sovereignLab.loadFailed'))
       setRows([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()
@@ -42,10 +44,10 @@ export default function CeoSovereignLab() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.detail || r.statusText)
-      setToast('Enqueued job ' + (d.job_id || ''))
+      setToast(t('components.ceo.sovereignLab.enqueuedJob', { jobId: d.job_id || '' }))
       await load()
     } catch (e) {
-      setToast(e.message || 'enqueue failed')
+      setToast(e.message || t('components.ceo.sovereignLab.enqueueFailed'))
     } finally {
       setBusyId(null)
     }
@@ -55,9 +57,11 @@ export default function CeoSovereignLab() {
     <div className="rounded-lg border border-violet-500/25 bg-violet-950/10 overflow-hidden">
       <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center flex-wrap gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-violet-100 uppercase tracking-widest">Sovereign lab</h2>
+          <h2 className="text-sm font-semibold text-violet-100 uppercase tracking-widest">
+            {t('components.ceo.sovereignLab.title')}
+          </h2>
           <p className="text-[10px] font-mono text-slate-500 mt-1">
-            Learning buffer: WAF failures queued for critic and polymorphic bypass synthesis.
+            {t('components.ceo.sovereignLab.subtitle')}
           </p>
         </div>
         <button
@@ -65,7 +69,7 @@ export default function CeoSovereignLab() {
           onClick={load}
           className="text-xs font-mono px-3 py-1.5 rounded border border-violet-400/30 text-violet-200 hover:bg-violet-950/50"
         >
-          Refresh
+          {t('components.ceo.sovereignLab.refresh')}
         </button>
       </div>
       {toast && (
@@ -73,17 +77,19 @@ export default function CeoSovereignLab() {
           {toast}
         </div>
       )}
-      {loading && <p className="p-4 text-xs text-slate-500 font-mono">Loading buffer…</p>}
+      {loading && (
+        <p className="p-4 text-xs text-slate-500 font-mono">{t('components.ceo.sovereignLab.loading')}</p>
+      )}
       {err && <p className="p-4 text-xs text-red-400 font-mono">{err}</p>}
       <div className="overflow-x-auto max-h-[min(480px,55vh)] overflow-y-auto">
         <table className="w-full text-left text-xs font-mono text-slate-300">
           <thead className="sticky top-0 bg-slate-950/95 border-b border-white/10 text-[10px] uppercase text-slate-500">
             <tr>
-              <th className="p-2 pl-4">ID</th>
-              <th className="p-2">Target FP</th>
-              <th className="p-2">Status</th>
-              <th className="p-2">Updated</th>
-              <th className="p-2 pr-4">Action</th>
+              <th className="p-2 pl-4">{t('components.ceo.sovereignLab.colId')}</th>
+              <th className="p-2">{t('components.ceo.sovereignLab.colTargetFp')}</th>
+              <th className="p-2">{t('components.ceo.sovereignLab.colStatus')}</th>
+              <th className="p-2">{t('components.ceo.sovereignLab.colUpdated')}</th>
+              <th className="p-2 pr-4">{t('components.ceo.sovereignLab.colAction')}</th>
             </tr>
           </thead>
           <tbody>
@@ -102,7 +108,7 @@ export default function CeoSovereignLab() {
                     onClick={() => trigger(row.id)}
                     className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-violet-900/60 border border-violet-400/35 text-violet-100 disabled:opacity-40"
                   >
-                    {busyId === row.id ? '…' : 'Trigger shadow preflight'}
+                    {busyId === row.id ? '…' : t('components.ceo.sovereignLab.triggerPreflight')}
                   </button>
                 </td>
               </tr>

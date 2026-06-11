@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.cockpitTabs.auditTrail'
+
 export default function AuditTrailTab() {
+  const { t } = useTranslation()
   const [rows, setRows] = useState([])
   const [err, setErr] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -24,14 +28,14 @@ export default function AuditTrailTab() {
         const data = await r.json()
         if (!Array.isArray(data)) {
           setRows([])
-          setErr('Unexpected response from audit API (expected a list).')
+          setErr(t(`${NS}.unexpectedResponse`))
           return
         }
         setRows(data)
       } catch (e) {
         if (!cancelled) {
           setRows([])
-          setErr(e?.message || 'Failed to load audit trail')
+          setErr(e?.message || t(`${NS}.loadFailed`))
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -40,15 +44,15 @@ export default function AuditTrailTab() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   return (
     <div className="p-6 text-white/90 max-w-6xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">Audit trail</h2>
+      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">{t(`${NS}.title`)}</h2>
       <p className="text-xs text-white/50 mb-6 uppercase tracking-widest">
-        Immutable log — login, scans, safe mode, auto-heal, RoE changes
+        {t(`${NS}.subtitle`)}
       </p>
-      {loading && <p className="text-sm text-white/40">Loading…</p>}
+      {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
       {err && (
         <div className="text-sm text-red-300 mb-4 rounded-lg border border-red-500/40 bg-red-950/30 px-4 py-3" role="alert">
           {err}
@@ -59,19 +63,19 @@ export default function AuditTrailTab() {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
-                <th className="p-3 font-medium">Time</th>
-                <th className="p-3 font-medium">User</th>
-                <th className="p-3 font-medium">User ID</th>
-                <th className="p-3 font-medium">Action</th>
-                <th className="p-3 font-medium">IP</th>
-                <th className="p-3 font-medium">Details</th>
+                <th className="p-3 font-medium">{t(`${NS}.colTime`)}</th>
+                <th className="p-3 font-medium">{t(`${NS}.colUser`)}</th>
+                <th className="p-3 font-medium">{t(`${NS}.colUserId`)}</th>
+                <th className="p-3 font-medium">{t(`${NS}.colAction`)}</th>
+                <th className="p-3 font-medium">{t(`${NS}.colIp`)}</th>
+                <th className="p-3 font-medium">{t(`${NS}.colDetails`)}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-6 text-center text-white/40">
-                    No audit entries yet
+                    {t(`${NS}.noEntries`)}
                   </td>
                 </tr>
               )}

@@ -326,6 +326,39 @@ pub fn status_for(tenant_id: i64, client_ip: &str) -> Value {
     })
 }
 
+/// Like [`status_for`] but reads distributed Redis counters when `REDIS_URL` is set.
+pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
+    if !super::rate_limit_redis::is_enabled() {
+        return status_for(tenant_id, client_ip);
+    }
+    let scan_max = scan_limit_per_minute();
+    let login_max = login_limit_per_minute();
+    let api_max = api_limit_per_sec();
+
+    let (scan_cur, scan_reset) = super::rate_limit_redis::current_tenant_scan(tenant_id)
+        .await
+        .map(|(c, r)| (c as usize, r))
+        .unwrap_or_else(|| {
+            window_count_i64(&store().scan_windows, tenant_id, Duration::from_secs(60))
+        });
+    let (login_cur, login_reset) = super::rate_limit_redis::current_login_ip(client_ip)
+        .await
+        .map(|(c, r)| (c as usize, r))
+        .unwrap_or_else(|| {
+            window_count(&store().login_windows, client_ip, Duration::from_secs(60))
+        });
+    let (api_cur, api_reset) = super::rate_limit_redis::current_api_ip(client_ip)
+        .await
+        .map(|(c, r)| (c as usize, r))
+        .unwrap_or_else(|| window_count(&store().api_windows, client_ip, Duration::from_secs(1)));
+
+    json!({
+        "scans": limit_block(scan_cur, scan_max, scan_reset),
+        "logins": limit_block(login_cur, login_max, login_reset),
+        "api": limit_block(api_cur, api_max, api_reset),
+    })
+}
+
 fn range_params(range: &str) -> (i64, i64, &'static str) {
     match range {
         "6h" => (6 * 3600, 300, "%H:%M"),
@@ -367,9 +400,10 @@ fn aggregate_history(range_secs: i64, bucket_secs: i64, time_fmt: &str) -> Vec<V
 }
 
 pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Value {
-    let (scan_cur, _) = window_count_i64(&store().scan_windows, tenant_id, Duration::from_secs(60));
-    let (login_cur, _) = window_count(&store().login_windows, client_ip, Duration::from_secs(60));
-    let (api_cur, _) = window_count(&store().api_windows, client_ip, Duration::from_secs(1));
+    let status = status_for_async(tenant_id, client_ip).await;
+    let scan_cur = status["scans"]["current"].as_u64().unwrap_or(0) as usize;
+    let login_cur = status["logins"]["current"].as_u64().unwrap_or(0) as usize;
+    let api_cur = status["api"]["current"].as_u64().unwrap_or(0) as usize;
 
     let (range_secs, bucket_secs, time_fmt) = range_params(range);
     let history = aggregate_history(range_secs, bucket_secs, time_fmt);
@@ -485,7 +519,7 @@ pub async fn api_rate_limits_status(
     headers: HeaderMap,
 ) -> Response {
     let ip = extract_client_ip(&headers, peer);
-    let limits = status_for(auth.tenant_id, &ip);
+    let limits = status_for_async(auth.tenant_id, &ip).await;
     let source = if super::rate_limit_redis::is_enabled() {
         "redis"
     } else {

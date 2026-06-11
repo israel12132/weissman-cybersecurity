@@ -1,12 +1,18 @@
+import { useTranslation } from 'react-i18next'
+
+const NS = 'components.intelWidgets.assetHexGrid'
+
 const COLS = 4
 const ROWS = 3
 const TOTAL = COLS * ROWS
 
 export default function AssetHexGrid() {
+  const { t } = useTranslation()
+
   return (
     <div className="asset-hex-grid">
       <div className="text-cyber-cyan font-semibold text-xs tracking-widest mb-2 uppercase">
-        Asset Grid
+        {t(`${NS}.title`)}
       </div>
       <div
         className="grid gap-1.5 justify-items-center"

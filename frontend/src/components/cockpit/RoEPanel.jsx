@@ -1,7 +1,11 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 
+const NS = 'components.cockpitWidgets.roePanel'
+
 export default function RoEPanel() {
+  const { t } = useTranslation()
   const { clientConfig, setClientConfig, configLoading } = useClient()
   const isTakeover = (clientConfig?.roe_mode || 'safe_proofs') === 'weaponized_god_mode'
 
@@ -14,14 +18,14 @@ export default function RoEPanel() {
   return (
     <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 transition-all duration-300 hover:border-white/20">
       <div className="text-xs font-semibold text-white/50 uppercase tracking-[0.2em] mb-4">
-        System Exploitation Mode
+        {t(`${NS}.title`)}
       </div>
       <div className="flex flex-wrap items-center gap-6">
         <div className="flex flex-col gap-2">
           <span className="text-xs text-white/60">
             {isTakeover
-              ? 'Full Physical Takeover — reverse shells, persistence (weaponized_god_mode)'
-              : 'Proof of Concept Only — benign validation (whoami, ls)'}
+              ? t(`${NS}.takeoverDescription`)
+              : t(`${NS}.safeDescription`)}
           </span>
           <button
             type="button"
@@ -37,7 +41,7 @@ export default function RoEPanel() {
               }
             `}
           >
-            {!isTakeover ? 'Proof of Concept Only' : 'Full Physical Takeover'}
+            {!isTakeover ? t(`${NS}.safeButton`) : t(`${NS}.takeoverButton`)}
           </button>
         </div>
       </div>

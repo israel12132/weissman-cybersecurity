@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
 import CeoGenesisPanel from './CeoGenesisPanel'
@@ -8,12 +9,12 @@ import CeoSovereignLab from './CeoSovereignLab'
 import GodModeDiscoveryStrip from './GodModeDiscoveryStrip'
 import GodModeEngineMatrix from './GodModeEngineMatrix'
 
-function formatUptime(sec) {
+function formatUptime(sec, t) {
   const s = Number(sec) || 0
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
+  if (h > 0) return t('components.ceo.integratedCommandDeck.uptimeHours', { h, m })
+  return t('components.ceo.integratedCommandDeck.uptimeMinutes', { m })
 }
 
 function MetricCard({ label, value, sub, accent }) {
@@ -31,6 +32,7 @@ function MetricCard({ label, value, sub, accent }) {
 }
 
 export default function CeoIntegratedCommandDeck() {
+  const { t } = useTranslation()
   const { refreshSession } = useAuth()
   const [tel, setTel] = useState(null)
   const [telErr, setTelErr] = useState('')
@@ -64,9 +66,9 @@ export default function CeoIntegratedCommandDeck() {
       const d = await fetchCeoGet('/api/ceo/telemetry')
       setTel(d)
     } catch (e) {
-      setTelErr(e.message || 'telemetry failed')
+      setTelErr(e.message || t('components.ceo.integratedCommandDeck.telemetryFailed'))
     }
-  }, [fetchCeoGet])
+  }, [fetchCeoGet, t])
 
   const loadGodSnapshot = useCallback(async () => {
     setGodErr('')
@@ -75,9 +77,9 @@ export default function CeoIntegratedCommandDeck() {
       setGod(d)
       if (d.scan_interval_secs != null) setIntervalInput(String(d.scan_interval_secs))
     } catch (e) {
-      setGodErr(e.message || 'god-mode snapshot failed')
+      setGodErr(e.message || t('components.ceo.integratedCommandDeck.godModeSnapshotFailed'))
     }
-  }, [fetchCeoGet])
+  }, [fetchCeoGet, t])
 
   useEffect(() => {
     loadTelemetry()
@@ -108,7 +110,7 @@ export default function CeoIntegratedCommandDeck() {
       await loadTelemetry()
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || 'Global safe mode update failed')
+      window.alert(e.message || t('components.ceo.integratedCommandDeck.globalSafeModeFailed'))
     }
     setSafeSaving(false)
   }
@@ -125,7 +127,7 @@ export default function CeoIntegratedCommandDeck() {
       if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || 'Tenant engine toggle failed')
+      window.alert(e.message || t('components.ceo.integratedCommandDeck.tenantEngineToggleFailed'))
     }
     setEngineToggleBusy(null)
   }
@@ -145,7 +147,7 @@ export default function CeoIntegratedCommandDeck() {
       if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadTelemetry()
     } catch (e) {
-      window.alert(e.message || 'Genesis kill switch failed')
+      window.alert(e.message || t('components.ceo.integratedCommandDeck.genesisKillSwitchFailed'))
     }
     setKillSaving(false)
   }
@@ -153,7 +155,7 @@ export default function CeoIntegratedCommandDeck() {
   const saveScanInterval = async () => {
     const n = Math.floor(Number(intervalInput))
     if (!Number.isFinite(n) || n < 10 || n > 86400) {
-      window.alert('scan_interval_secs must be between 10 and 86400')
+      window.alert(t('components.ceo.integratedCommandDeck.scanIntervalRange'))
       return
     }
     setIntervalSaving(true)
@@ -168,7 +170,7 @@ export default function CeoIntegratedCommandDeck() {
       if (d.scan_interval_secs != null) setIntervalInput(String(d.scan_interval_secs))
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || 'Scan interval update failed')
+      window.alert(e.message || t('components.ceo.integratedCommandDeck.scanIntervalUpdateFailed'))
     }
     setIntervalSaving(false)
   }
@@ -198,62 +200,82 @@ export default function CeoIntegratedCommandDeck() {
         <div className="relative flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.4em] text-cyan-500/90 mb-2">
-              Weissman · God mode
+              {t('components.ceo.integratedCommandDeck.brandLine')}
             </p>
-            <h2 className="text-xl font-bold text-white tracking-tight">Command authority</h2>
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              {t('components.ceo.integratedCommandDeck.title')}
+            </h2>
             <p className="text-[11px] font-mono text-slate-500 mt-2 max-w-xl leading-relaxed">
-              Live cockpit: PostgreSQL <span className="text-slate-400">system_configs</span>,{' '}
-              <span className="text-slate-400">weissman_async_jobs</span>, orchestrator telemetry — zero mock
-              payloads.
+              <Trans
+                i18nKey="components.ceo.integratedCommandDeck.subtitle"
+                components={{
+                  1: <span className="text-slate-400" />,
+                  2: <span className="text-slate-400" />,
+                }}
+              />
             </p>
           </div>
           {(telErr || godErr) && (
             <div className="text-[10px] font-mono text-red-300 px-3 py-2 rounded-lg border border-red-500/30 bg-red-950/40 max-w-md">
-              {telErr && <div>Telemetry: {telErr}</div>}
-              {godErr && <div>Snapshot: {godErr}</div>}
+              {telErr && (
+                <div>{t('components.ceo.integratedCommandDeck.telemetryError', { error: telErr })}</div>
+              )}
+              {godErr && (
+                <div>{t('components.ceo.integratedCommandDeck.snapshotError', { error: godErr })}</div>
+              )}
             </div>
           )}
         </div>
 
         <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <MetricCard
-            label="Server uptime"
-            value={tel ? formatUptime(tel.uptime_secs) : '—'}
+            label={t('components.ceo.integratedCommandDeck.serverUptime')}
+            value={tel ? formatUptime(tel.uptime_secs, t) : '—'}
             accent="border-cyan-500/25"
           />
           <MetricCard
-            label="Process RSS"
+            label={t('components.ceo.integratedCommandDeck.processRss')}
             value={tel ? `${rssMb} MB` : '—'}
-            sub="weissman-server process"
+            sub={t('components.ceo.integratedCommandDeck.processRssSub')}
             accent="border-violet-500/25"
           />
           <MetricCard
-            label="Worker IDs (tenant)"
+            label={t('components.ceo.integratedCommandDeck.workerIds')}
             value={tel != null ? String(tel.distinct_worker_ids_on_tenant_jobs ?? 0) : '—'}
             accent="border-emerald-500/25"
           />
           <MetricCard
-            label="Jobs (tenant)"
+            label={t('components.ceo.integratedCommandDeck.jobsTenant')}
             value={
               tel != null
-                ? `${tel.tenant_jobs_running ?? 0} run / ${tel.tenant_jobs_pending ?? 0} pend`
+                ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
+                    running: tel.tenant_jobs_running ?? 0,
+                    pending: tel.tenant_jobs_pending ?? 0,
+                  })
                 : '—'
             }
             accent="border-white/10"
           />
           <MetricCard
-            label="Queue (global)"
+            label={t('components.ceo.integratedCommandDeck.queueGlobal')}
             value={
               tel != null
-                ? `${tel.queue_global_running ?? 0} run / ${tel.queue_global_pending ?? 0} pend`
+                ? t('components.ceo.integratedCommandDeck.jobsRunningPending', {
+                    running: tel.queue_global_running ?? 0,
+                    pending: tel.queue_global_pending ?? 0,
+                  })
                 : '—'
             }
-            sub="all tenants"
+            sub={t('components.ceo.integratedCommandDeck.allTenants')}
             accent="border-slate-600/40"
           />
           <MetricCard
-            label="Scanning"
-            value={scanningActive ? 'ACTIVE' : 'idle'}
+            label={t('components.ceo.integratedCommandDeck.scanning')}
+            value={
+              scanningActive
+                ? t('components.ceo.integratedCommandDeck.scanningActive')
+                : t('components.ceo.integratedCommandDeck.scanningIdle')
+            }
             accent={scanningActive ? 'border-orange-500/40' : 'border-white/10'}
           />
         </div>
@@ -262,10 +284,13 @@ export default function CeoIntegratedCommandDeck() {
         <div className="relative grid gap-4 lg:grid-cols-12">
           <div className="lg:col-span-4 rounded-xl border border-red-500/35 bg-red-950/25 p-4 backdrop-blur-sm">
             <p className="text-[10px] font-mono uppercase tracking-widest text-red-300/90 mb-2">
-              Global safe mode
+              {t('components.ceo.integratedCommandDeck.globalSafeMode')}
             </p>
             <p className="text-[10px] text-slate-500 font-mono mb-3 leading-snug">
-              DB: <code className="text-slate-400">global_safe_mode</code> — extra jitter + 2.5s between engines.
+              <Trans
+                i18nKey="components.ceo.integratedCommandDeck.globalSafeModeHint"
+                components={{ 1: <code className="text-slate-400" /> }}
+              />
             </p>
             <button
               type="button"
@@ -277,17 +302,26 @@ export default function CeoIntegratedCommandDeck() {
                   : 'border-red-500/50 bg-red-950/50 text-red-100 hover:bg-red-900/40'
               } disabled:opacity-40`}
             >
-              {safeSaving ? '…' : globalSafe ? 'Safe ON — release' : 'Engage safe mode'}
+              {safeSaving
+                ? '…'
+                : globalSafe
+                  ? t('components.ceo.integratedCommandDeck.safeOnRelease')
+                  : t('components.ceo.integratedCommandDeck.engageSafeMode')}
             </button>
           </div>
 
           <div className="lg:col-span-4 rounded-xl border border-amber-500/30 bg-amber-950/15 p-4 backdrop-blur-sm">
             <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/90 mb-2">
-              Orchestrator interval
+              {t('components.ceo.integratedCommandDeck.orchestratorInterval')}
             </p>
             <p className="text-[10px] text-slate-500 font-mono mb-2 leading-snug">
-              Updates <code className="text-slate-400">scan_interval_secs</code> for tenant{' '}
-              <code className="text-amber-600/90">slug=default</code> (server loop).
+              <Trans
+                i18nKey="components.ceo.integratedCommandDeck.orchestratorIntervalHint"
+                components={{
+                  1: <code className="text-slate-400" />,
+                  2: <code className="text-amber-600/90" />,
+                }}
+              />
             </p>
             <div className="flex gap-2 items-center">
               <input
@@ -304,18 +338,20 @@ export default function CeoIntegratedCommandDeck() {
                 onClick={saveScanInterval}
                 className="shrink-0 px-4 py-2 rounded-lg border border-amber-500/50 bg-amber-950/40 text-amber-100 text-[10px] font-mono uppercase hover:bg-amber-900/40 disabled:opacity-40"
               >
-                {intervalSaving ? '…' : 'Apply'}
+                {intervalSaving ? '…' : t('components.ceo.integratedCommandDeck.apply')}
               </button>
             </div>
           </div>
 
           <div className="lg:col-span-4 rounded-xl border border-rose-500/40 bg-rose-950/20 p-4 backdrop-blur-sm">
             <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/90 mb-2">
-              Genesis kill switch
+              {t('components.ceo.integratedCommandDeck.genesisKillSwitch')}
             </p>
             <p className="text-[10px] text-slate-500 font-mono mb-3 leading-snug">
-              CEO strategy / <code className="text-slate-400">genesis_kill_switch</code> — hibernates Genesis
-              workers.
+              <Trans
+                i18nKey="components.ceo.integratedCommandDeck.genesisKillSwitchHint"
+                components={{ 1: <code className="text-slate-400" /> }}
+              />
             </p>
             <button
               type="button"
@@ -327,7 +363,11 @@ export default function CeoIntegratedCommandDeck() {
                   : 'border-white/20 bg-white/5 text-slate-200 hover:bg-white/10'
               } disabled:opacity-40`}
             >
-              {killSaving ? '…' : genesisKill ? 'ARMED — disarm' : 'Arm kill switch'}
+              {killSaving
+                ? '…'
+                : genesisKill
+                  ? t('components.ceo.integratedCommandDeck.armedDisarm')
+                  : t('components.ceo.integratedCommandDeck.armKillSwitch')}
             </button>
           </div>
         </div>
@@ -347,7 +387,7 @@ export default function CeoIntegratedCommandDeck() {
 
       <div>
         <h3 className="text-[10px] font-mono uppercase tracking-[0.25em] text-emerald-400/90 mb-3">
-          HPC routing · Genesis RAM (PUT/POST → /api/ceo/hpc/policy)
+          {t('components.ceo.integratedCommandDeck.hpcRoutingHeading')}
         </h3>
         <CeoGenesisPanel />
       </div>
@@ -360,7 +400,7 @@ export default function CeoIntegratedCommandDeck() {
             className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-cyan-950/20 hover:bg-cyan-950/30"
           >
             <span className="text-xs font-mono uppercase tracking-widest text-cyan-200/90">
-              Vaccine vault
+              {t('components.ceo.integratedCommandDeck.vaccineVault')}
             </span>
             <span className="text-[10px] text-slate-500 font-mono">{vaultOpen ? '−' : '+'}</span>
           </button>
@@ -377,7 +417,7 @@ export default function CeoIntegratedCommandDeck() {
             className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-violet-950/20 hover:bg-violet-950/30"
           >
             <span className="text-xs font-mono uppercase tracking-widest text-violet-200/90">
-              Sovereign lab
+              {t('components.ceo.integratedCommandDeck.sovereignLab')}
             </span>
             <span className="text-[10px] text-slate-500 font-mono">{sovereignOpen ? '−' : '+'}</span>
           </button>

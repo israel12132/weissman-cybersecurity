@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { apiEventSourceUrl } from '../../lib/apiBase'
 
 function phaseStyle(phase) {
@@ -18,13 +19,29 @@ function phaseStyle(phase) {
   return { border: '1px solid rgba(148,163,184,0.35)', color: '#e2e8f0', bg: 'rgba(15,23,42,0.6)' }
 }
 
+const STREAM_STATUS_KEYS = {
+  idle: 'components.ceo.warRoomStream.streamStatus.idle',
+  stopped: 'components.ceo.warRoomStream.streamStatus.stopped',
+  connecting: 'components.ceo.warRoomStream.streamStatus.connecting',
+  live: 'components.ceo.warRoomStream.streamStatus.live',
+  reconnecting: 'components.ceo.warRoomStream.streamStatus.reconnecting',
+  'connection error': 'components.ceo.warRoomStream.streamStatus.connectionError',
+  'error: enter async job UUID': 'components.ceo.warRoomStream.streamStatus.noJobUuid',
+}
+
 export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
+  const { t } = useTranslation()
   const [lines, setLines] = useState([])
   const [status, setStatus] = useState('idle')
   const [since, setSince] = useState(0)
   const esRef = useRef(null)
   const scrollRef = useRef(null)
   const sinceRef = useRef(0)
+
+  const statusLabel = (value) => {
+    const key = STREAM_STATUS_KEYS[value]
+    return key ? t(key) : value
+  }
 
   const stop = useCallback(() => {
     if (esRef.current) {
@@ -82,7 +99,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
           {
             phase: 'stream_error',
             severity: 'high',
-            payload: { message: 'SSE error' },
+            payload: { message: t('components.ceo.warRoomStream.sseError') },
             ts: new Date().toISOString(),
           },
         ])
@@ -94,7 +111,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
     }
 
     es.onopen = () => setStatus('live')
-  }, [jobId, stop])
+  }, [jobId, stop, t])
 
   useEffect(() => () => stop(), [stop])
 
@@ -108,12 +125,12 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
       <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
           <label className="block text-[10px] uppercase tracking-widest text-slate-500 mb-1 font-mono">
-            Async job UUID (session)
+            {t('components.ceo.warRoomStream.jobUuidLabel')}
           </label>
           <input
             value={jobId}
             onChange={(e) => onJobIdChange(e.target.value)}
-            placeholder="genesis job id"
+            placeholder={t('components.ceo.warRoomStream.jobUuidPlaceholder')}
             className="w-full font-mono text-sm bg-slate-950/80 border border-white/15 rounded px-3 py-2 text-slate-100 placeholder:text-slate-600"
           />
         </div>
@@ -123,18 +140,22 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
             onClick={start}
             className="px-4 py-2 rounded bg-red-950/80 border border-red-500/40 text-red-100 text-xs font-mono uppercase tracking-wide hover:bg-red-900/80"
           >
-            Subscribe SSE
+            {t('components.ceo.warRoomStream.subscribeSse')}
           </button>
           <button
             type="button"
             onClick={stop}
             className="px-4 py-2 rounded bg-slate-900 border border-white/15 text-slate-300 text-xs font-mono uppercase tracking-wide hover:bg-slate-800"
           >
-            Stop
+            {t('components.ceo.warRoomStream.stop')}
           </button>
         </div>
         <div className="text-[10px] font-mono text-slate-500">
-          cursor: <span className="text-cyan-400/90">{since}</span> · {status}
+          <Trans
+            i18nKey="components.ceo.warRoomStream.cursorStatus"
+            values={{ since, status: statusLabel(status) }}
+            components={{ 1: <span className="text-cyan-400/90" /> }}
+          />
         </div>
       </div>
       <div
@@ -142,7 +163,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
         className="h-[min(420px,50vh)] overflow-y-auto p-3 font-mono text-[11px] leading-relaxed space-y-2 bg-[#050508]"
       >
         {lines.length === 0 && (
-          <div className="text-slate-600 italic">No events yet. Subscribe with a council job session id.</div>
+          <div className="text-slate-600 italic">{t('components.ceo.warRoomStream.noEvents')}</div>
         )}
         {lines.map((row, i) => {
           const phase = row.phase || 'event'

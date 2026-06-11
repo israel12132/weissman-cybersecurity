@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 'react-simple-maps'
 import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
 function fallbackCoord(region, pop) {
@@ -18,6 +20,7 @@ function fallbackCoord(region, pop) {
 }
 
 export default function GlobalEdgeSwarmMap() {
+  const { t } = useTranslation()
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,17 +39,17 @@ export default function GlobalEdgeSwarmMap() {
       if (mr.ok) setManifest(await mr.json())
       else setManifest(null)
     } catch (e) {
-      setError('Failed to load edge swarm')
+      setError(t(`${NS}.loadFailed`))
       setNodes([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 45000)
-    return () => clearInterval(t)
+    const timer = setInterval(load, 45000)
+    return () => clearInterval(timer)
   }, [load])
 
   return (
@@ -55,10 +58,10 @@ export default function GlobalEdgeSwarmMap() {
         <div className="flex items-center gap-2">
           <Radio className="w-5 h-5 text-violet-400" />
           <div>
-            <h2 className="text-lg font-semibold text-white tracking-wide">Global edge swarm</h2>
+            <h2 className="text-lg font-semibold text-white tracking-wide">{t(`${NS}.title`)}</h2>
             <p className="text-xs text-white/50 max-w-xl">
-              WASM fuzz payload nodes (`fuzz_core`, wasm32-unknown-unknown). Workers register via{' '}
-              <code className="text-violet-300/90">POST /api/edge-swarm/heartbeat</code> — bypasses regional choke points when deployed to Cloudflare / Lambda@Edge.
+              {t(`${NS}.description`)}{' '}
+              <code className="text-violet-300/90">{t(`${NS}.heartbeatEndpoint`)}</code> {t(`${NS}.descriptionSuffix`)}
             </p>
           </div>
         </div>
@@ -69,14 +72,17 @@ export default function GlobalEdgeSwarmMap() {
           className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-950/40 text-violet-200 text-sm hover:bg-violet-900/50 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t(`${NS}.refresh`)}
         </button>
       </div>
 
       {manifest && (
         <div className="text-[11px] font-mono text-white/40 border border-white/10 rounded-lg px-3 py-2 bg-black/30">
-          Crate: {manifest.crate ?? 'fuzz_core'} · target: {manifest.rust_target ?? 'wasm32-unknown-unknown'} · build:{' '}
-          {manifest.build_command ?? 'scripts/build_fuzz_wasm.sh'}
+          {t(`${NS}.manifest`, {
+            crate: manifest.crate ?? 'fuzz_core',
+            target: manifest.rust_target ?? 'wasm32-unknown-unknown',
+            build: manifest.build_command ?? 'scripts/build_fuzz_wasm.sh',
+          })}
         </div>
       )}
 
@@ -109,7 +115,7 @@ export default function GlobalEdgeSwarmMap() {
                 <Marker key={n.id} coordinates={[lng, lat]}>
                   <circle r={6 + Math.min(jobs, 8)} fill="rgba(167,139,250,0.95)" stroke="#fff" strokeWidth={1} />
                   <text textAnchor="middle" y={-12} fill="rgba(221,214,254,0.95)" fontSize={9} style={{ fontFamily: 'ui-monospace, monospace' }}>
-                    {n.pop_label || n.region_code || 'POP'}
+                    {n.pop_label || n.region_code || t(`${NS}.popFallback`)}
                   </text>
                 </Marker>
               )
@@ -120,8 +126,8 @@ export default function GlobalEdgeSwarmMap() {
 
       {nodes.length === 0 && !loading && (
         <p className="text-sm text-white/45">
-          No edge nodes registered. From a worker, POST{' '}
-          <code className="text-cyan-300/90">region_code</code>, <code className="text-cyan-300/90">pop_label</code>, optional lat/lng and{' '}
+          {t(`${NS}.noNodes`)}{' '}
+          <code className="text-cyan-300/90">region_code</code>, <code className="text-cyan-300/90">pop_label</code>, {t(`${NS}.noNodesSuffix`)}{' '}
           <code className="text-cyan-300/90">wasm_revision</code>.
         </p>
       )}
@@ -131,7 +137,7 @@ export default function GlobalEdgeSwarmMap() {
           {nodes.map((n) => (
             <li key={n.id} className="border border-white/10 rounded-lg px-3 py-2 bg-black/30 font-mono">
               <span className="text-violet-300">{n.region_code}</span> · {n.pop_label}{' '}
-              <span className="text-white/40">jobs={n.active_jobs ?? 0}</span>{' '}
+              <span className="text-white/40">{t(`${NS}.jobs`, { count: n.active_jobs ?? 0 })}</span>{' '}
               {n.provider && <span className="text-white/35">· {n.provider}</span>}
             </li>
           ))}

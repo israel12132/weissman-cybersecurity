@@ -3,6 +3,7 @@
  * Data from GET /api/pipeline/state, GET /api/dag, and SSE pipeline_stage events.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useClient } from '../../context/ClientContext'
@@ -10,13 +11,11 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { Layers, Pause, Play, Radio, GitBranch } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
-const STAGE_LABELS = [
-  'Global Intel (Zero-Day Radar)',
-  'Deep Discovery (OSINT, ASM)',
-  'Vulnerability Scanning',
-  'Kill Shot (PoE, Deception)',
-  'Compliance (Audit, PDF)',
-]
+const NS = 'components.cockpitTabs.livePipelineMonitor'
+
+function defaultStageLabels(t) {
+  return [0, 1, 2, 3, 4].map(i => t(`${NS}.defaultStages.${i}`))
+}
 
 function nodeStatusForStage(stageToNodes, currentStage, nodeId) {
   if (!stageToNodes || currentStage == null) return 'pending'
@@ -76,17 +75,21 @@ function buildDagLayout(dag, stageToNodes, currentStage) {
 }
 
 export default function LivePipelineMonitor() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const { lastTelemetry } = useWarRoom?.() || {}
-  const [viewMode, setViewMode] = useState('stages') // 'stages' | 'dag'
+  const [viewMode, setViewMode] = useState('stages')
   const [dag, setDag] = useState(null)
   const [runId, setRunId] = useState(null)
   const [states, setStates] = useState([])
-  const [stageLabels, setStageLabels] = useState(STAGE_LABELS)
+  const [apiStageLabels, setApiStageLabels] = useState(null)
   const [loading, setLoading] = useState(false)
   const [patching, setPatching] = useState(false)
   const [dagNodes, setDagNodes, onDagNodesChange] = useNodesState([])
   const [dagEdges, setDagEdges, onDagEdgesChange] = useEdgesState([])
+
+  const defaultLabels = useMemo(() => defaultStageLabels(t), [t])
+  const stageLabels = apiStageLabels ?? defaultLabels
 
   const fetchState = useCallback(async () => {
     setLoading(true)
@@ -100,7 +103,9 @@ export default function LivePipelineMonitor() {
         setRunId(d.run_id ?? null)
         setStates(d.states ?? [])
         if (Array.isArray(d.stage_labels) && d.stage_labels.length) {
-          setStageLabels(d.stage_labels.map((s) => s.label || s))
+          setApiStageLabels(d.stage_labels.map((s) => s.label || s))
+        } else {
+          setApiStageLabels(null)
         }
       }
     } catch (_) {
@@ -166,16 +171,16 @@ export default function LivePipelineMonitor() {
     const { nodes, edges } = buildDagLayout(dag, dag.stage_to_nodes || {}, currentStage)
     setDagNodes(nodes)
     setDagEdges(edges)
-  }, [viewMode, dag, currentStage])
+  }, [viewMode, dag, currentStage, setDagNodes, setDagEdges])
 
   return (
     <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-[#22d3ee]" />
-          <span className="font-semibold text-white">Live Pipeline Monitor</span>
+          <span className="font-semibold text-white">{t(`${NS}.title`)}</span>
           {runId != null && (
-            <span className="text-xs text-white/50 font-mono">Run #{runId}</span>
+            <span className="text-xs text-white/50 font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
           )}
           <div className="flex rounded-lg border border-white/10 overflow-hidden">
             <button
@@ -183,14 +188,14 @@ export default function LivePipelineMonitor() {
               onClick={() => setViewMode('stages')}
               className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
             >
-              Stages
+              {t(`${NS}.stages`)}
             </button>
             <button
               type="button"
               onClick={() => setViewMode('dag')}
               className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
             >
-              <GitBranch className="w-3 h-3" /> DAG tree
+              <GitBranch className="w-3 h-3" /> {t(`${NS}.dagTree`)}
             </button>
           </div>
         </div>
@@ -200,7 +205,7 @@ export default function LivePipelineMonitor() {
           disabled={loading}
           className="text-xs text-[#22d3ee] hover:underline disabled:opacity-50"
         >
-          Refresh
+          {t(`${NS}.refresh`)}
         </button>
       </div>
       <div className="p-4 space-y-4">
@@ -227,9 +232,9 @@ export default function LivePipelineMonitor() {
           </div>
         )}
         {loading && !states.length ? (
-          <p className="text-sm text-white/50">Loading pipeline state…</p>
+          <p className="text-sm text-white/50">{t(`${NS}.loading`)}</p>
         ) : !runId ? (
-          <p className="text-sm text-white/50">No active run. Start a scan to see stages 0→4.</p>
+          <p className="text-sm text-white/50">{t(`${NS}.noActiveRun`)}</p>
         ) : viewMode === 'stages' ? (
           <>
             <div className="grid grid-cols-1 gap-4">
@@ -240,7 +245,7 @@ export default function LivePipelineMonitor() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-medium text-white/80">
-                      {s.client_id === '__global__' ? 'Global' : s.client_id}
+                      {s.client_id === '__global__' ? t(`${NS}.global`) : s.client_id}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -250,7 +255,7 @@ export default function LivePipelineMonitor() {
                         className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/20 text-xs text-white/80 hover:bg-white/10 disabled:opacity-50"
                       >
                         {s.paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                        {s.paused ? 'Resume' : 'Pause'}
+                        {s.paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
                       </button>
                       <select
                         className="bg-black/60 border border-white/10 rounded-lg text-xs text-white px-2 py-1"
@@ -263,10 +268,10 @@ export default function LivePipelineMonitor() {
                           e.target.value = ''
                         }}
                       >
-                        <option value="">Skip to…</option>
+                        <option value="">{t(`${NS}.skipTo`)}</option>
                         {stageLabels.map((label, i) => (
                           <option key={i} value={i}>
-                            Stage {i}: {label}
+                            {t(`${NS}.stageOption`, { index: i, label })}
                           </option>
                         ))}
                       </select>
@@ -297,7 +302,7 @@ export default function LivePipelineMonitor() {
               ))}
             </div>
             {displayStates.length === 0 && runId && (
-              <p className="text-sm text-white/50">No pipeline state for this client yet.</p>
+              <p className="text-sm text-white/50">{t(`${NS}.noStateForClient`)}</p>
             )}
           </>
         ) : null}

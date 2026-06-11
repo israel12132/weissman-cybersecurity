@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+
+const NS = 'components.intelWidgets.cyberRadar'
 
 export default function CyberRadar() {
+  const { t } = useTranslation()
   const canvasRef = useRef(null)
   useEffect(() => {
     if (!canvasRef.current) return
@@ -39,12 +43,12 @@ export default function CyberRadar() {
   return (
     <div className="cyber-radar">
       <div className="text-cyber-cyan font-semibold text-xs tracking-widest mb-2 uppercase">
-        Cyber Radar
+        {t(`${NS}.title`)}
       </div>
       <div className="relative inline-block">
         <canvas ref={canvasRef} className="block rounded-full border border-cyber-cyan/30" />
       </div>
-      <p className="text-[10px] text-slate-500 mt-1 font-mono">Dark Web intel</p>
+      <p className="text-[10px] text-slate-500 mt-1 font-mono">{t(`${NS}.subtitle`)}</p>
     </div>
   )
 }

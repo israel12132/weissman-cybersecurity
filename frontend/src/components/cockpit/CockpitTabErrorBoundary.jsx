@@ -1,4 +1,7 @@
 import React from 'react'
+import i18n from '../../i18n'
+
+const NS = 'components.cockpitWidgets.cockpitTabErrorBoundary'
 
 /**
  * Isolates cockpit tab render failures so one bad view does not blank the whole command center.
@@ -22,13 +25,15 @@ export default class CockpitTabErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
-      const msg = this.state.error?.message || 'Unexpected error'
+      const msg = this.state.error?.message || i18n.t(`${NS}.unexpected`)
       return (
         <div className="p-8 max-w-2xl mx-auto">
-          <h2 className="text-sm font-semibold text-red-400 mb-2">Tab error</h2>
+          <h2 className="text-sm font-semibold text-red-400 mb-2">{i18n.t(`${NS}.title`)}</h2>
           <p className="text-xs text-white/50 mb-3">
-            {this.props.tabLabel ? `“${this.props.tabLabel}” could not render.` : 'This view could not render.'}{' '}
-            Switch to another tab or retry.
+            {this.props.tabLabel
+              ? i18n.t(`${NS}.tabFailed`, { label: this.props.tabLabel })
+              : i18n.t(`${NS}.viewFailed`)}{' '}
+            {i18n.t(`${NS}.switchHint`)}
           </p>
           <p className="text-[11px] font-mono text-white/40 break-words mb-4">{msg}</p>
           <button
@@ -36,7 +41,7 @@ export default class CockpitTabErrorBoundary extends React.Component {
             onClick={() => this.setState({ error: null })}
             className="px-4 py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10"
           >
-            Retry
+            {i18n.t(`${NS}.retry`)}
           </button>
         </div>
       )

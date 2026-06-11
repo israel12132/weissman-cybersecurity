@@ -55,6 +55,20 @@ spec:
                   name: weissman-secrets
                   key: admin_password
                   optional: true
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: redis_url
+                  optional: true
+            - name: WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: destructive_confirm_secret
+                  optional: true
+            - name: WEISSMAN_MIGRATIONS_DIR
+              value: "/srv/migrations"
           readinessProbe:
             httpGet:
               path: /api/health

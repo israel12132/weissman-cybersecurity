@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import RuntimeExecutionFlow from '../cockpit/RuntimeExecutionFlow'
 import { formatApiErrorFromBody } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import { apiFetch } from '../../lib/apiBase'
+
+const NS = 'components.cockpitWidgets.digitalEvidenceHud'
 
 function parseDescription(description) {
   if (!description || typeof description !== 'string') return {}
@@ -23,13 +26,12 @@ function parseDescription(description) {
   }
 }
 
-const AWAITING_POE = 'Awaiting PoE Synthesis…'
-
-function CopyableBlock({ label, value, disableCopy }) {
+function CopyableBlock({ label, value, disableCopy, awaitingText }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const raw = value ?? ''
-  const isAwaiting = raw === AWAITING_POE
-  const text = isAwaiting ? AWAITING_POE : raw.trim() ? sanitizeFindingPlainText(raw) : ''
+  const isAwaiting = raw === awaitingText
+  const text = isAwaiting ? awaitingText : raw.trim() ? sanitizeFindingPlainText(raw) : ''
   const copy = () => {
     if (disableCopy || !text.trim() || isAwaiting) return
     navigator.clipboard.writeText(text).then(() => {
@@ -43,7 +45,7 @@ function CopyableBlock({ label, value, disableCopy }) {
         <span className="text-[10px] uppercase tracking-wider text-white/50 font-mono">{label}</span>
         {!disableCopy && !isAwaiting && text.trim() ? (
           <button type="button" onClick={copy} className="text-xs text-[#22d3ee] hover:text-[#67e8f9]">
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}
           </button>
         ) : null}
       </div>
@@ -58,9 +60,9 @@ function CopyableBlock({ label, value, disableCopy }) {
   )
 }
 
-function forensicBody(finding, desc) {
+function forensicBody(finding, desc, t) {
   if (desc.response_bleed_preview) {
-    return `Bleed preview:\n${desc.response_bleed_preview}`
+    return t(`${NS}.bleedPreview`, { preview: desc.response_bleed_preview })
   }
   if (Array.isArray(desc.entropy_map) && desc.entropy_map.length > 0) {
     return JSON.stringify(desc.entropy_map, null, 2)
@@ -76,10 +78,10 @@ function forensicBody(finding, desc) {
   if (raw && String(raw).trim()) {
     return String(raw)
   }
-  return 'No forensic envelope stored for this finding yet.'
+  return t(`${NS}.noForensic`)
 }
 
-function proofCurlText(finding, decryptedCurl) {
+function proofCurlText(finding, decryptedCurl, awaitingText) {
   if (decryptedCurl && String(decryptedCurl).trim()) {
     return String(decryptedCurl).trim()
   }
@@ -87,17 +89,19 @@ function proofCurlText(finding, decryptedCurl) {
   if (p && String(p).trim()) {
     return String(p).trim()
   }
-  return AWAITING_POE
+  return awaitingText
 }
 
 export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
+  const { t } = useTranslation()
+  const awaitingPoe = t(`${NS}.awaitingPoe`)
   const [phase, setPhase] = useState('decrypt')
   const [revealIndex, setRevealIndex] = useState(0)
   const [decryptedCurl, setDecryptedCurl] = useState('')
   const [decryptBusy, setDecryptBusy] = useState(false)
   const [decryptErr, setDecryptErr] = useState('')
 
-  const title = sanitizeFindingPlainText(finding?.title || 'Digital Evidence', 500)
+  const title = sanitizeFindingPlainText(finding?.title || t(`${NS}.defaultTitle`), 500)
   const fullLength = title.length + 20
   const isSealed = Boolean(finding?.poc_sealed)
 
@@ -153,8 +157,8 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
   if (!finding) return null
 
   const desc = parseDescription(finding.description)
-  const proofText = proofCurlText(finding, decryptedCurl)
-  const forensicText = sanitizeFindingPlainText(forensicBody(finding, desc))
+  const proofText = proofCurlText(finding, decryptedCurl, awaitingPoe)
+  const forensicText = sanitizeFindingPlainText(forensicBody(finding, desc, t))
 
   return (
     <AnimatePresence>
@@ -178,11 +182,10 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/40">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-widest">
-                Digital Evidence File
+                {t(`${NS}.title`)}
               </span>
               {phase === 'decrypt' && (
                 <motion.span
@@ -196,7 +199,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
               type="button"
               onClick={onClose}
               className="text-white/60 hover:text-white text-lg leading-none px-2 py-1"
-              aria-label="Close"
+              aria-label={t(`${NS}.close`)}
             >
               ×
             </button>
@@ -209,7 +212,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <span className="text-white/50">DECRYPTING </span>
+                <span className="text-white/50">{t(`${NS}.decrypting`)} </span>
                 <span>{title.slice(0, revealIndex)}</span>
                 <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.5 }}>
                   _
@@ -224,12 +227,12 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
                 className="space-y-4 mb-4"
               >
                 <p className="text-sm text-amber-400/90">
-                  Exploit evidence is sealed at rest (AES-GCM + commitment + HMAC proof). Decryption is audited.
+                  {t(`${NS}.sealedMessage`)}
                 </p>
                 {finding.poc_commitment_sha256 ? (
                   <div>
                     <h3 className="text-[10px] font-mono text-white/50 uppercase tracking-wider mb-1">
-                      SHA-256 commitment (proof of existence)
+                      {t(`${NS}.commitmentTitle`)}
                     </h3>
                     <pre className="text-[10px] font-mono text-emerald-400/80 break-all bg-black/50 p-2 rounded border border-white/10 m-0">
                       {finding.poc_commitment_sha256}
@@ -243,7 +246,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
                   onClick={decryptExploit}
                   className="w-full py-3 rounded-xl font-semibold text-sm border border-amber-500/60 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
                 >
-                  {decryptBusy ? 'Decrypting…' : 'Decrypt Exploit Evidence'}
+                  {decryptBusy ? t(`${NS}.decryptingBtn`) : t(`${NS}.decryptBtn`)}
                 </button>
               </motion.div>
             )}
@@ -275,7 +278,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
 
                 <div>
                   <h3 className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider mb-1">
-                    Forensic Evidence
+                    {t(`${NS}.forensicEvidence`)}
                   </h3>
                   <pre className="rounded-lg bg-black/60 p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-28 overflow-y-auto m-0">
                     {forensicText}
@@ -284,15 +287,16 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
 
                 <div>
                   <h3 className="text-[10px] font-mono text-[#22d3ee] uppercase tracking-wider mb-1">
-                    Zero False-Positive Proof (cURL)
+                    {t(`${NS}.proofTitle`)}
                   </h3>
                   {isSealed && !decryptedCurl ? (
-                    <p className="text-xs text-white/50">Use «Decrypt Exploit Evidence» above to reveal the raw command.</p>
+                    <p className="text-xs text-white/50">{t(`${NS}.sealedHint`)}</p>
                   ) : (
                     <CopyableBlock
                       value={proofText}
-                      label="Reproduce"
-                      disableCopy={proofText === AWAITING_POE}
+                      label={t(`${NS}.reproduce`)}
+                      disableCopy={proofText === awaitingPoe}
+                      awaitingText={awaitingPoe}
                     />
                   )}
                 </div>
@@ -300,17 +304,17 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
                 {desc.remediation_snippet && (
                   <div>
                     <h3 className="text-[10px] font-mono text-[#10b981] uppercase tracking-wider mb-1">
-                      Remediation
+                      {t(`${NS}.remediation`)}
                     </h3>
-                    <CopyableBlock value={desc.remediation_snippet} label="Patch" />
+                    <CopyableBlock value={desc.remediation_snippet} label={t(`${NS}.patch`)} awaitingText={awaitingPoe} />
                   </div>
                 )}
                 {desc.generated_patch && (
                   <div>
                     <h3 className="text-[10px] font-mono text-[#34d399] uppercase tracking-wider mb-1">
-                      Generated Patch
+                      {t(`${NS}.generatedPatch`)}
                     </h3>
-                    <CopyableBlock value={desc.generated_patch} label="Code" />
+                    <CopyableBlock value={desc.generated_patch} label={t(`${NS}.code`)} awaitingText={awaitingPoe} />
                   </div>
                 )}
                 {clientId && (

@@ -1,6 +1,28 @@
 import React, { useEffect, useState, Component } from 'react'
+import { useTranslation } from 'react-i18next'
 import { loadDestructiveConfirmToken, saveDestructiveConfirmToken } from '../../utils/destructiveConfirm'
 import { apiFetch } from '../../lib/apiBase'
+
+const NS = 'components.cockpitTabs.settingsAlerts'
+
+function SettingsAlertsTabCrashUI({ error, onRetry }) {
+  const { t } = useTranslation()
+  const msg = error?.message || t(`${NS}.unexpectedError`)
+  return (
+    <div className="p-6 text-white/90 max-w-xl mx-auto">
+      <h2 className="text-lg font-semibold text-red-400 mb-2">{t(`${NS}.crashTitle`)}</h2>
+      <p className="text-sm text-white/60 mb-4">{t(`${NS}.crashBody`)}</p>
+      <p className="text-xs font-mono text-white/50 break-words mb-4">{msg}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="px-4 py-2 rounded-xl text-sm border border-white/20 text-white/80 hover:bg-white/10"
+      >
+        {t(`${NS}.tryAgain`)}
+      </button>
+    </div>
+  )
+}
 
 class SettingsAlertsTabBoundary extends Component {
   constructor(props) {
@@ -18,22 +40,11 @@ class SettingsAlertsTabBoundary extends Component {
 
   render() {
     if (this.state.error) {
-      const msg = this.state.error?.message || 'Unexpected error'
       return (
-        <div className="p-6 text-white/90 max-w-xl mx-auto">
-          <h2 className="text-lg font-semibold text-red-400 mb-2">Settings &amp; alerts</h2>
-          <p className="text-sm text-white/60 mb-4">
-            This tab crashed. You can retry or return to another cockpit view.
-          </p>
-          <p className="text-xs font-mono text-white/50 break-words mb-4">{msg}</p>
-          <button
-            type="button"
-            onClick={() => this.setState({ error: null })}
-            className="px-4 py-2 rounded-xl text-sm border border-white/20 text-white/80 hover:bg-white/10"
-          >
-            Try again
-          </button>
-        </div>
+        <SettingsAlertsTabCrashUI
+          error={this.state.error}
+          onRetry={() => this.setState({ error: null })}
+        />
       )
     }
     return this.props.children
@@ -41,6 +52,7 @@ class SettingsAlertsTabBoundary extends Component {
 }
 
 function SettingsAlertsTabInner() {
+  const { t } = useTranslation()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [safeMode, setSafeMode] = useState(false)
   const [destructiveToken, setDestructiveToken] = useState('')
@@ -57,7 +69,7 @@ function SettingsAlertsTabInner() {
         setWebhookUrl(typeof d.alert_webhook_url === 'string' ? d.alert_webhook_url : '')
         setSafeMode(!!d.global_safe_mode)
       })
-      .catch(() => setMsg({ type: 'err', text: 'Could not load settings' }))
+      .catch(() => setMsg({ type: 'err', text: t(`${NS}.loadFailed`) }))
       .finally(() => setLoading(false))
   }
 
@@ -68,7 +80,7 @@ function SettingsAlertsTabInner() {
     } catch {
       setDestructiveToken('')
     }
-  }, [])
+  }, [t])
 
   const save = async () => {
     setMsg(null)
@@ -82,10 +94,10 @@ function SettingsAlertsTabInner() {
         }),
       })
       const d = await r.json().catch(() => ({}))
-      if (r.ok) setMsg({ type: 'ok', text: 'Saved' })
-      else setMsg({ type: 'err', text: (d && d.detail) || 'Save failed' })
+      if (r.ok) setMsg({ type: 'ok', text: t(`${NS}.saved`) })
+      else setMsg({ type: 'err', text: (d && d.detail) || t(`${NS}.saveFailed`) })
     } catch {
-      setMsg({ type: 'err', text: 'Network error' })
+      setMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
   }
 
@@ -96,35 +108,35 @@ function SettingsAlertsTabInner() {
         method: 'POST',
       })
       const d = await r.json().catch(() => ({}))
-      if (r.ok && d?.path) setBackupMsg({ type: 'ok', text: `Backup: ${d.path}` })
-      else setBackupMsg({ type: 'err', text: (d && d.detail) || 'Backup failed' })
+      if (r.ok && d?.path) setBackupMsg({ type: 'ok', text: t(`${NS}.backupPath`, { path: d.path }) })
+      else setBackupMsg({ type: 'err', text: (d && d.detail) || t(`${NS}.backupFailed`) })
     } catch {
-      setBackupMsg({ type: 'err', text: 'Network error' })
+      setBackupMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
   }
 
   return (
     <div className="p-6 text-white/90 max-w-xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">Settings &amp; alerts</h2>
+      <h2 className="text-lg font-semibold mb-1 tracking-tight text-white">{t(`${NS}.title`)}</h2>
       <p className="text-xs text-white/50 mb-6 uppercase tracking-widest">
-        Webhooks (Slack / Discord) and optional SMTP via server .env
+        {t(`${NS}.subtitle`)}
       </p>
-      {loading && <p className="text-sm text-white/40">Loading…</p>}
+      {loading && <p className="text-sm text-white/40">{t(`${NS}.loading`)}</p>}
       {!loading && (
         <div className="space-y-6 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6">
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-white/50 block mb-2">
-              Alert webhook URL
+              {t(`${NS}.webhookLabel`)}
             </span>
             <input
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://hooks.slack.com/... or Discord webhook"
+              placeholder={t(`${NS}.webhookPlaceholder`)}
               className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
             />
             <span className="text-[10px] text-white/40 mt-1 block">
-              Critical findings with cURL PoE trigger a JSON POST. Override with WEISSMAN_ALERT_WEBHOOK_URL in .env.
+              {t(`${NS}.webhookHint`)}
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer">
@@ -134,11 +146,11 @@ function SettingsAlertsTabInner() {
               onChange={(e) => setSafeMode(e.target.checked)}
               className="rounded border-white/20 bg-black/50 w-4 h-4 accent-[#22d3ee]"
             />
-            <span className="text-sm text-white/80">Mirror global safe mode (same as header toggle)</span>
+            <span className="text-sm text-white/80">{t(`${NS}.safeModeLabel`)}</span>
           </label>
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-amber-200/80 block mb-2">
-              Destructive action confirm (browser only)
+              {t(`${NS}.destructiveLabel`)}
             </span>
             <input
               type="password"
@@ -146,12 +158,13 @@ function SettingsAlertsTabInner() {
               value={destructiveToken}
               onChange={(e) => setDestructiveToken(e.target.value)}
               onBlur={() => saveDestructiveConfirmToken(destructiveToken)}
-              placeholder="Matches server WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET"
+              placeholder={t(`${NS}.destructivePlaceholder`)}
               className="w-full rounded-lg bg-black/50 border border-amber-500/25 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-amber-400/50 focus:outline-none"
             />
             <span className="text-[10px] text-white/40 mt-1 block">
-              When set on the server, Auto-Heal, containment execute, and deception cloud deploy send header{' '}
-              <code className="text-amber-200/70">X-Weissman-Destructive-Confirm</code>. Stored in sessionStorage for this tab only.
+              {t(`${NS}.destructiveHintBefore`)}
+              <code className="text-amber-200/70">X-Weissman-Destructive-Confirm</code>
+              {t(`${NS}.destructiveHintAfter`)}
             </span>
           </label>
           {msg && (
@@ -164,7 +177,7 @@ function SettingsAlertsTabInner() {
               onClick={save}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20"
             >
-              Save settings
+              {t(`${NS}.saveSettings`)}
             </button>
             <button
               id="settings-backup-btn"
@@ -172,7 +185,7 @@ function SettingsAlertsTabInner() {
               onClick={runBackup}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
             >
-              Backup database now
+              {t(`${NS}.backupDatabase`)}
             </button>
           </div>
           {backupMsg && (
@@ -186,10 +199,7 @@ function SettingsAlertsTabInner() {
             </p>
           )}
           <div className="text-[10px] text-white/35 space-y-1 border-t border-white/10 pt-4">
-            <p>
-              SMTP: set WEISSMAN_SMTP_ENABLED=true plus WEISSMAN_SMTP_HOST, WEISSMAN_SMTP_FROM, WEISSMAN_SMTP_TO (see
-              .env.example).
-            </p>
+            <p>{t(`${NS}.smtpHint`)}</p>
           </div>
         </div>
       )}

@@ -4,7 +4,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+
+const NS = 'components.tools.aiRedteamArena'
 
 const WS_BASE = () => {
   if (typeof window === 'undefined') return ''
@@ -13,6 +16,7 @@ const WS_BASE = () => {
 }
 
 export default function AIRedteamArena() {
+  const { t } = useTranslation()
   const { clientId } = useParams()
   const [target, setTarget] = useState('')
   const [aiEndpoint, setAiEndpoint] = useState('')
@@ -21,7 +25,7 @@ export default function AIRedteamArena() {
   const [error, setError] = useState('')
   const [attackerLog, setAttackerLog] = useState([])
   const [defenderLog, setDefenderLog] = useState([])
-  const [centerStatus, setCenterStatus] = useState(null) // { status: 'ANALYZING_RESPONSE' | 'JAILBREAK_SUCCESS' | 'SECURE', verdict?, explanation? }
+  const [centerStatus, setCenterStatus] = useState(null)
   const wsRef = useRef(null)
 
   const fetchClient = useCallback(() => {
@@ -51,7 +55,7 @@ export default function AIRedteamArena() {
     if (clientId) body.client_id = String(clientId)
     if (aiEndpoint.trim()) body.ai_endpoint = aiEndpoint.trim()
     if (!body.target && !body.client_id) {
-      setError('Enter target URL or open from a client.')
+      setError(t(`${NS}.no_target_error`))
       return
     }
     setError('')
@@ -100,10 +104,10 @@ export default function AIRedteamArena() {
         ws.onerror = () => setRunning(false)
       })
       .catch((e) => {
-        setError(e?.message || 'Failed to start')
+        setError(e?.message || t(`${NS}.start_failed`))
         setRunning(false)
       })
-  }, [target, clientId, aiEndpoint])
+  }, [target, clientId, aiEndpoint, t])
 
   useEffect(() => {
     return () => {
@@ -117,34 +121,34 @@ export default function AIRedteamArena() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">
-              ← War Room
+              {t(`${NS}.back_war_room`)}
             </Link>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              AI Red Teaming Arena
+              {t(`${NS}.title`)}
             </h1>
           </div>
-          <span className="text-slate-500 text-sm">AI vs AI • OWASP LLM01</span>
+          <span className="text-slate-500 text-sm">{t(`${NS}.subtitle`)}</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-2">
-            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">Target URL (or use client)</label>
+            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">{t(`${NS}.target_label`)}</label>
             <input
               type="text"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="https://target.com"
+              placeholder={t(`${NS}.target_placeholder`)}
               className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500"
               disabled={running}
             />
           </div>
           <div className="lg:col-span-2">
-            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">Target AI Endpoint URL (optional override)</label>
+            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">{t(`${NS}.ai_endpoint_label`)}</label>
             <input
               type="text"
               value={aiEndpoint}
               onChange={(e) => setAiEndpoint(e.target.value)}
-              placeholder="https://target.com/chat or leave empty"
+              placeholder={t(`${NS}.ai_endpoint_placeholder`)}
               className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500"
               disabled={running}
             />
@@ -156,15 +160,17 @@ export default function AIRedteamArena() {
             disabled={running}
             className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-slate-600 text-white font-medium text-sm"
           >
-            {running ? 'Running…' : 'Launch AI vs AI'}
+            {running ? t(`${NS}.running`) : t(`${NS}.launch`)}
           </button>
           {clientId && (
-            <span className="text-slate-500 text-sm self-center">Client ID: {clientId} {client?.name && `(${client.name})`}</span>
+            <span className="text-slate-500 text-sm self-center">
+              {t(`${NS}.client_id`, { id: clientId })}
+              {client?.name && ` ${t(`${NS}.client_name`, { name: client.name })}`}
+            </span>
           )}
         </div>
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-        {/* Center: Live status */}
         <div className="mb-6 flex justify-center">
           <div
             className={`rounded-xl border-2 px-6 py-4 min-w-[280px] text-center font-bold text-lg ${
@@ -175,24 +181,23 @@ export default function AIRedteamArena() {
                   : 'border-slate-600 bg-slate-800/80 text-slate-300'
             }`}
           >
-            {centerStatus?.status === 'JAILBREAK_SUCCESS' && <>JAILBREAK SUCCESS</>}
-            {centerStatus?.status === 'SECURE' && <>SECURE</>}
-            {(centerStatus?.status === 'ANALYZING_RESPONSE' || !centerStatus) && (running ? 'ANALYZING RESPONSE…' : '—')}
+            {centerStatus?.status === 'JAILBREAK_SUCCESS' && <>{t(`${NS}.jailbreak_success`)}</>}
+            {centerStatus?.status === 'SECURE' && <>{t(`${NS}.secure`)}</>}
+            {(centerStatus?.status === 'ANALYZING_RESPONSE' || !centerStatus) && (running ? t(`${NS}.analyzing`) : '—')}
             {centerStatus?.explanation && (
               <p className="text-sm font-normal mt-2 opacity-90">{centerStatus.explanation}</p>
             )}
           </div>
         </div>
 
-        {/* Split-screen terminals */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
             <div className="bg-rose-900/40 border-b border-slate-700 px-4 py-2 font-semibold text-rose-300">
-              Our LLM (Attacker)
+              {t(`${NS}.attacker_title`)}
             </div>
             <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-slate-950/80">
               {attackerLog.length === 0 && (
-                <span className="text-slate-500">Generated adversarial payloads will stream here…</span>
+                <span className="text-slate-500">{t(`${NS}.attacker_empty`)}</span>
               )}
               {attackerLog.map((entry, i) => (
                 <div key={i} className="mb-2">
@@ -208,11 +213,11 @@ export default function AIRedteamArena() {
           </div>
           <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
             <div className="bg-slate-700/40 border-b border-slate-700 px-4 py-2 font-semibold text-slate-300">
-              Target LLM (Defender)
+              {t(`${NS}.defender_title`)}
             </div>
             <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-slate-950/80">
               {defenderLog.length === 0 && (
-                <span className="text-slate-500">Target responses will stream here…</span>
+                <span className="text-slate-500">{t(`${NS}.defender_empty`)}</span>
               )}
               {defenderLog.map((entry, i) => (
                 <div key={i} className="mb-2 text-slate-300 break-words">
@@ -223,7 +228,7 @@ export default function AIRedteamArena() {
           </div>
         </div>
         <p className="text-slate-500 text-xs mt-4">
-          Findings are saved with source <code className="bg-slate-800 px-1 rounded">ai_adversarial_redteam</code> and appear in the Executive PDF Report.
+          {t(`${NS}.footer`)}
         </p>
       </div>
     </div>

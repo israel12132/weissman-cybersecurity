@@ -1,10 +1,14 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { Skull } from 'lucide-react'
 
+const NS = 'components.intelWidgets.redTeamSkullSwitch'
+
 export default function RedTeamSkullSwitch() {
+  const { t } = useTranslation()
   const { selectedClientId, clientConfig, patchConfig, configLoading } = useClient()
   const { redTeamActive, setRedTeamActive, confirmCommand, refuseCommand, commandRefused } = useWarRoom()
   const isWeaponized = (clientConfig?.roe_mode || 'safe_proofs') === 'weaponized_god_mode'
@@ -37,11 +41,11 @@ export default function RedTeamSkullSwitch() {
           animate={{ opacity: [1, 0.3, 1], x: [0, 2, -2, 0] }}
           transition={{ repeat: 2, duration: 0.15 }}
         >
-          COMMAND REFUSED
+          {t(`${NS}.commandRefused`)}
         </motion.span>
       )}
       <span className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.2em]">
-        Weaponization
+        {t(`${NS}.weaponization`)}
       </span>
       <button
         type="button"
@@ -56,12 +60,12 @@ export default function RedTeamSkullSwitch() {
             : 'border-white/20 bg-white/5 text-white/60 hover:border-white/40 hover:text-white/80'
           }
         `}
-        aria-label={isWeaponized ? 'Disable Red Team' : 'Enable Red Team'}
+        aria-label={isWeaponized ? t(`${NS}.disableRedTeam`) : t(`${NS}.enableRedTeam`)}
       >
         <Skull className="w-7 h-7" strokeWidth={2} />
       </button>
       <span className="text-[10px] text-white/60">
-        {isWeaponized ? 'Red Team ON' : 'Proof only'}
+        {isWeaponized ? t(`${NS}.redTeamOn`) : t(`${NS}.proofOnly`)}
       </span>
     </motion.div>
   )

@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
 
 export default function CeoGenesisPanel() {
+  const { t } = useTranslation()
   const [strategyLoading, setStrategyLoading] = useState(true)
   const [strategyErr, setStrategyErr] = useState('')
   const [ramMb, setRamMb] = useState(4096)
@@ -34,11 +36,11 @@ export default function CeoGenesisPanel() {
       setKillSwitch(!!e.genesis_kill_switch)
       setProtocolOn(!!e.genesis_protocol_enabled)
     } catch (err) {
-      setStrategyErr(err.message || 'load failed')
+      setStrategyErr(err.message || t('components.ceo.genesisPanel.loadFailed'))
     } finally {
       setStrategyLoading(false)
     }
-  }, [])
+  }, [t])
 
   const loadHpc = useCallback(async () => {
     setHpcLoading(true)
@@ -54,11 +56,11 @@ export default function CeoGenesisPanel() {
       setClientAff(des.client_scan_cpu_affinity || '16-31')
       setRoutingNote(des.routing_note || '')
     } catch (err) {
-      setHpcErr(err.message || 'load failed')
+      setHpcErr(err.message || t('components.ceo.genesisPanel.loadFailed'))
     } finally {
       setHpcLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadStrategy()
@@ -88,7 +90,7 @@ export default function CeoGenesisPanel() {
       if (!r.ok) throw new Error(d.detail || r.statusText)
       await loadStrategy()
     } catch (err) {
-      setStrategyErr(err.message || 'save failed')
+      setStrategyErr(err.message || t('components.ceo.genesisPanel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -113,7 +115,7 @@ export default function CeoGenesisPanel() {
       if (!r.ok) throw new Error(d.detail || r.statusText)
       await loadHpc()
     } catch (err) {
-      setHpcErr(err.message || 'save failed')
+      setHpcErr(err.message || t('components.ceo.genesisPanel.saveFailed'))
     } finally {
       setHpcSaving(false)
     }
@@ -124,19 +126,25 @@ export default function CeoGenesisPanel() {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <form onSubmit={saveStrategy} className="rounded-lg border border-white/10 bg-black/35 p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-widest">Genesis operations</h2>
-        {strategyLoading && <p className="text-xs text-slate-500 font-mono">Loading strategy…</p>}
+        <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-widest">
+          {t('components.ceo.genesisPanel.title')}
+        </h2>
+        {strategyLoading && (
+          <p className="text-xs text-slate-500 font-mono">{t('components.ceo.genesisPanel.loadingStrategy')}</p>
+        )}
         {strategyErr && <p className="text-xs text-red-400 font-mono">{strategyErr}</p>}
         <label className="flex items-center gap-2 text-xs text-slate-300 font-mono cursor-pointer">
           <input type="checkbox" checked={protocolOn} onChange={(e) => setProtocolOn(e.target.checked)} />
-          Genesis protocol enabled (DB)
+          {t('components.ceo.genesisPanel.protocolEnabled')}
         </label>
         <label className="flex items-center gap-2 text-xs text-red-300 font-mono cursor-pointer">
           <input type="checkbox" checked={killSwitch} onChange={(e) => setKillSwitch(e.target.checked)} />
-          Global kill switch (hibernate workers)
+          {t('components.ceo.genesisPanel.globalKillSwitch')}
         </label>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">RAM budget (MB)</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.ramBudget')}
+          </label>
           <input
             type="number"
             min={64}
@@ -147,7 +155,9 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">Seed repos (URLs, comma or newline)</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.seedRepos')}
+          </label>
           <textarea
             value={seedsRepos}
             onChange={(e) => setSeedsRepos(e.target.value)}
@@ -156,7 +166,9 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">Seed NPM (comma / newline)</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.seedNpm')}
+          </label>
           <textarea
             value={seedsNpm}
             onChange={(e) => setSeedsNpm(e.target.value)}
@@ -170,24 +182,30 @@ export default function CeoGenesisPanel() {
           disabled={saving}
           className="px-4 py-2 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-100 text-xs font-mono uppercase disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Apply strategy'}
+          {saving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyStrategy')}
         </button>
       </form>
 
       <form onSubmit={applyHpc} className="rounded-lg border border-amber-500/20 bg-amber-950/10 p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-amber-100/90 uppercase tracking-widest">HPC routing policy</h2>
+        <h2 className="text-sm font-semibold text-amber-100/90 uppercase tracking-widest">
+          {t('components.ceo.genesisPanel.hpcTitle')}
+        </h2>
         <div
           role="alert"
           className="text-[11px] font-mono text-amber-200/90 bg-black/40 border border-amber-500/30 rounded p-3 leading-snug"
         >
-          Changes job-routing policy for workers using <code className="text-cyan-300">WEISSMAN_WORKER_POOL</code>. Takes
-          effect on the next async worker claim cycle (honest model — not live Tokio re-pinning).
+          <Trans
+            i18nKey="components.ceo.genesisPanel.hpcNotice"
+            components={{ 1: <code className="text-cyan-300" /> }}
+          />
         </div>
-        {hpcLoading && <p className="text-xs text-slate-500 font-mono">Loading policy…</p>}
+        {hpcLoading && (
+          <p className="text-xs text-slate-500 font-mono">{t('components.ceo.genesisPanel.loadingPolicy')}</p>
+        )}
         {hpcErr && <p className="text-xs text-red-400 font-mono">{hpcErr}</p>}
         <div>
           <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
-            Research core share: {researchPct}% (target)
+            {t('components.ceo.genesisPanel.researchCoreShare', { pct: researchPct })}
           </label>
           <input
             type="range"
@@ -199,7 +217,9 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">Research CPU affinity</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.researchCpuAffinity')}
+          </label>
           <input
             value={researchAff}
             onChange={(e) => setResearchAff(e.target.value)}
@@ -207,7 +227,9 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">Client scan CPU affinity</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.clientScanCpuAffinity')}
+          </label>
           <input
             value={clientAff}
             onChange={(e) => setClientAff(e.target.value)}
@@ -215,7 +237,9 @@ export default function CeoGenesisPanel() {
           />
         </div>
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">Routing note</label>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1 font-mono">
+            {t('components.ceo.genesisPanel.routingNote')}
+          </label>
           <input
             value={routingNote}
             onChange={(e) => setRoutingNote(e.target.value)}
@@ -228,21 +252,23 @@ export default function CeoGenesisPanel() {
           disabled={hpcSaving}
           className="px-4 py-2 rounded bg-amber-900/60 border border-amber-500/40 text-amber-50 text-xs font-mono uppercase disabled:opacity-50"
         >
-          {hpcSaving ? 'Saving…' : 'Apply HPC policy'}
+          {hpcSaving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyHpcPolicy')}
         </button>
         {eff && (
           <div className="text-[10px] font-mono text-slate-400 space-y-1 border-t border-white/10 pt-3 mt-2">
             <div>
-              Worker pool env: <span className="text-cyan-300">{eff.worker_pool_env || '—'}</span>
+              {t('components.ceo.genesisPanel.workerPoolEnv')}{' '}
+              <span className="text-cyan-300">{eff.worker_pool_env || '—'}</span>
             </div>
             <div>
-              Running research jobs:{' '}
-              <span className="text-emerald-300">{eff.running_research_jobs ?? '—'}</span> · client:{' '}
+              {t('components.ceo.genesisPanel.runningResearchJobs')}{' '}
+              <span className="text-emerald-300">{eff.running_research_jobs ?? '—'}</span> ·{' '}
+              {t('components.ceo.genesisPanel.clientJobs')}{' '}
               <span className="text-sky-300">{eff.running_client_jobs ?? '—'}</span>
             </div>
             {eff.actual_research_share_percent_of_running != null && (
               <div>
-                Actual research share (running):{' '}
+                {t('components.ceo.genesisPanel.actualResearchShare')}{' '}
                 <span className="text-amber-200">{eff.actual_research_share_percent_of_running}%</span>
               </div>
             )}

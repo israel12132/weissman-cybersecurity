@@ -3,6 +3,7 @@
  * All data from live API; no hardcoded nodes.
  */
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useClient } from '../../context/ClientContext'
@@ -64,6 +65,7 @@ function layoutFromApi(nodes, edges) {
 }
 
 export default function RiskGraphTab() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -82,7 +84,7 @@ export default function RiskGraphTab() {
     try {
       const r = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
       if (!r.ok) {
-        setError('Failed to load risk graph')
+        setError(t('components.cockpitTabs.riskGraph.load_failed'))
         return
       }
       const d = await r.json()
@@ -90,11 +92,11 @@ export default function RiskGraphTab() {
       setNodes(n)
       setEdges(e)
     } catch (_) {
-      setError('Network error')
+      setError(t('components.cockpitTabs.riskGraph.network_error'))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId, setNodes, setEdges])
+  }, [selectedClientId, setNodes, setEdges, t])
 
   useEffect(() => {
     fetchGraph()
@@ -110,12 +112,12 @@ export default function RiskGraphTab() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        setError(d.error || 'Build failed')
+        setError(d.error || t('components.cockpitTabs.riskGraph.build_failed'))
         return
       }
       await fetchGraph()
     } catch (_) {
-      setError('Build request failed')
+      setError(t('components.cockpitTabs.riskGraph.build_request_failed'))
     } finally {
       setBuilding(false)
     }
@@ -124,7 +126,7 @@ export default function RiskGraphTab() {
   if (!selectedClientId) {
     return (
       <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
-        Select a client to view the Contextual Risk Graph.
+        {t('components.cockpitTabs.riskGraph.select_client')}
       </div>
     )
   }
@@ -134,7 +136,9 @@ export default function RiskGraphTab() {
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Network className="w-5 h-5 text-[#22d3ee]" />
-          <h2 className="text-lg font-semibold text-white tracking-wide">Contextual Risk Graph</h2>
+          <h2 className="text-lg font-semibold text-white tracking-wide">
+            {t('components.cockpitTabs.riskGraph.title')}
+          </h2>
         </div>
         <button
           type="button"
@@ -143,7 +147,9 @@ export default function RiskGraphTab() {
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-50 transition-all"
         >
           <RefreshCw className={`w-4 h-4 ${building ? 'animate-spin' : ''}`} />
-          {building ? 'Building…' : 'Build / Refresh Graph'}
+          {building
+            ? t('components.cockpitTabs.riskGraph.building')
+            : t('components.cockpitTabs.riskGraph.build_refresh_graph')}
         </button>
       </div>
       {error && (
@@ -154,17 +160,19 @@ export default function RiskGraphTab() {
       )}
       <div className="flex-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-hidden min-h-[400px]">
         {loading ? (
-          <div className="flex items-center justify-center h-full text-white/50">Loading graph…</div>
+          <div className="flex items-center justify-center h-full text-white/50">
+            {t('components.cockpitTabs.riskGraph.loading_graph')}
+          </div>
         ) : nodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">
-            <p>No graph data. Run scans (ASM, findings, identity contexts) then click Build.</p>
+            <p>{t('components.cockpitTabs.riskGraph.no_graph_data')}</p>
             <button
               type="button"
               onClick={buildGraph}
               disabled={building}
               className="px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:bg-white/5"
             >
-              Build graph
+              {t('components.cockpitTabs.riskGraph.build_graph')}
             </button>
           </div>
         ) : (

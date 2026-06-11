@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useClient } from '../../context/ClientContext'
 import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
@@ -40,6 +41,7 @@ function parseDescription(description, source) {
 }
 
 function CopyableBlock({ label, value }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const raw = value || '—'
   const text = raw === '—' ? '—' : sanitizeFindingPlainText(raw)
@@ -59,7 +61,7 @@ function CopyableBlock({ label, value }) {
           onClick={copy}
           className="text-xs font-medium text-[#22d3ee] hover:text-[#67e8f9] transition-colors"
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('components.cockpitTabs.findings.copy.copied') : t('components.cockpitTabs.findings.copy.copy')}
         </button>
       </div>
       <pre className="p-3 font-mono text-[11px] text-[#4ade80] whitespace-pre-wrap break-all overflow-x-auto m-0 max-h-48 overflow-y-auto">
@@ -69,16 +71,19 @@ function CopyableBlock({ label, value }) {
   )
 }
 
-const AWAITING_POE = 'Awaiting PoE Synthesis…'
-
 /** Forensic / PoE text is rendered as plain React children (escaped) — never HTML. */
 function ExpandedRow({ finding, onClose }) {
+  const { t } = useTranslation()
   const desc = parseDescription(finding.description, finding.source)
-  const proofText = finding.poc_exploit?.trim() ? finding.poc_exploit.trim() : AWAITING_POE
+  const proofText = finding.poc_exploit?.trim()
+    ? finding.poc_exploit.trim()
+    : t('components.cockpitTabs.findings.awaiting_poe')
   const forensicContent = desc.response_bleed_preview
-    ? `Bleed preview (64-byte window):\n${desc.response_bleed_preview}`
+    ? t('components.cockpitTabs.findings.expanded.bleed_preview', { preview: desc.response_bleed_preview })
     : Array.isArray(desc.entropy_map) && desc.entropy_map.length > 0
-      ? `Entropy map:\n${JSON.stringify(desc.entropy_map, null, 2)}`
+      ? t('components.cockpitTabs.findings.expanded.entropy_map', {
+          map: JSON.stringify(desc.entropy_map, null, 2),
+        })
       : finding.description && String(finding.description).trim().startsWith('{')
         ? (() => {
             try {
@@ -87,8 +92,8 @@ function ExpandedRow({ finding, onClose }) {
               return finding.description
             }
           })()
-        : finding.description || 'No forensic envelope stored for this finding yet.'
-  const crimeScene = desc.footprint || finding.description || 'No crime scene report.'
+        : t('components.cockpitTabs.findings.expanded.no_forensic_envelope')
+  const crimeScene = desc.footprint || finding.description || t('components.cockpitTabs.findings.expanded.no_crime_scene')
   const remediation = desc.remediation_snippet?.trim() || '—'
   const generatedPatch = desc.generated_patch?.trim() || ''
   const pocCommit = finding.poc_commitment_sha256?.trim() || ''
@@ -102,19 +107,23 @@ function ExpandedRow({ finding, onClose }) {
             type="button"
             onClick={onClose}
             className="absolute top-2 right-2 text-[#6b7280] hover:text-white text-sm"
-            aria-label="Close"
+            aria-label={t('components.cockpitTabs.findings.expanded.close')}
           >
-            × Close
+            {t('components.cockpitTabs.findings.expanded.close_button')}
           </button>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 pr-20">
             <div>
-              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">Forensic Evidence</h4>
+              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">
+                {t('components.cockpitTabs.findings.expanded.forensic_evidence')}
+              </h4>
               <div className="rounded-xl border border-white/10 bg-black/80 shadow-inner p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
                 {forensicContent}
               </div>
             </div>
             <div>
-              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">Crime Scene Report</h4>
+              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">
+                {t('components.cockpitTabs.findings.expanded.crime_scene_report')}
+              </h4>
               <div className="rounded-xl border border-white/10 bg-black/80 shadow-inner p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
                 {crimeScene}
               </div>
@@ -122,15 +131,18 @@ function ExpandedRow({ finding, onClose }) {
           </div>
           <div className="px-4 pt-4 space-y-3">
             <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#10b981' }}>
-              Recommended Remediation (AI Generated)
+              {t('components.cockpitTabs.findings.expanded.recommended_remediation')}
             </h4>
-            <CopyableBlock label="Remediation / patch" value={remediation} />
+            <CopyableBlock
+              label={t('components.cockpitTabs.findings.expanded.remediation_patch')}
+              value={remediation}
+            />
             {findingId ? <CopyableBlock label="finding_id" value={findingId} /> : null}
             {pocCommit ? <CopyableBlock label="poc_commitment_sha256" value={pocCommit} /> : null}
             {generatedPatch ? (
               <>
                 <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#34d399' }}>
-                  Generated Patch (Code / Config Fix)
+                  {t('components.cockpitTabs.findings.expanded.generated_patch_title')}
                 </h4>
                 <CopyableBlock label="generated_patch" value={generatedPatch} />
               </>
@@ -139,9 +151,12 @@ function ExpandedRow({ finding, onClose }) {
         </div>
         <div className="px-4 pb-4">
           <h4 className="text-xs font-semibold text-[#f87171] mb-2 uppercase tracking-wider">
-            Zero False-Positive Proof (cURL / Reproduce)
+            {t('components.cockpitTabs.findings.expanded.zero_fp_proof')}
           </h4>
-          <CopyableBlock label="Reproduction payload / command" value={proofText} />
+          <CopyableBlock
+            label={t('components.cockpitTabs.findings.expanded.reproduction_payload')}
+            value={proofText}
+          />
         </div>
       </td>
     </tr>
@@ -149,6 +164,7 @@ function ExpandedRow({ finding, onClose }) {
 }
 
 export default function FindingsTab() {
+  const { t } = useTranslation()
   const { selectedClientId, selectedClient } = useClient()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(false)
@@ -170,7 +186,7 @@ export default function FindingsTab() {
         const d = await r.json()
         setFindings(Array.isArray(d.findings) ? d.findings : [])
         if (!Array.isArray(d.findings)) {
-          setFindingsError('Unexpected findings response from API.')
+          setFindingsError(t('components.cockpitTabs.findings.unexpected_response'))
         }
       } else {
         setFindings([])
@@ -178,11 +194,11 @@ export default function FindingsTab() {
       }
     } catch (e) {
       setFindings([])
-      setFindingsError(e?.message || 'Network error')
+      setFindingsError(e?.message || t('components.cockpitTabs.findings.network_error'))
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId])
+  }, [selectedClientId, t])
 
   useEffect(() => {
     fetchFindings()
@@ -199,7 +215,9 @@ export default function FindingsTab() {
         return
       }
       if (!contentType.includes('application/pdf')) {
-        setFindingsError(`Report endpoint returned unexpected type: ${contentType || 'unknown'}`)
+        setFindingsError(
+          t('components.cockpitTabs.findings.report_unexpected_type', { type: contentType || 'unknown' }),
+        )
         return
       }
       const blob = await r.blob()
@@ -216,7 +234,7 @@ export default function FindingsTab() {
       document.body.removeChild(a)
       URL.revokeObjectURL(objectUrl)
     } catch (e) {
-      setFindingsError(e?.message || 'Failed to download PDF')
+      setFindingsError(e?.message || t('components.cockpitTabs.findings.pdf_download_failed'))
     }
   }
 
@@ -224,7 +242,7 @@ export default function FindingsTab() {
     return (
       <div className="p-8">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">Select a client from the sidebar to view findings.</p>
+          <p className="text-sm text-white/70">{t('components.cockpitTabs.findings.select_client')}</p>
         </div>
       </div>
     )
@@ -247,7 +265,7 @@ export default function FindingsTab() {
             to={`/attack-chain/${selectedClientId}`}
             className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all duration-300"
           >
-            View Attack Chain
+            {t('components.cockpitTabs.findings.view_attack_chain')}
           </Link>
         )}
         <button
@@ -255,7 +273,7 @@ export default function FindingsTab() {
           onClick={openPdf}
           className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300"
         >
-          GENERATE EXECUTIVE PDF
+          {t('components.cockpitTabs.findings.generate_executive_pdf')}
         </button>
       </div>
 
@@ -265,10 +283,18 @@ export default function FindingsTab() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-white/10 bg-white/5">
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-24">Severity</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-28">CVSS</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono">Title</th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-40">Engine/Source</th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-24">
+                  {t('components.cockpitTabs.findings.table.severity')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-28">
+                  {t('components.cockpitTabs.findings.table.cvss')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono">
+                  {t('components.cockpitTabs.findings.table.title')}
+                </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-40">
+                  {t('components.cockpitTabs.findings.table.engine_source')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -284,8 +310,8 @@ export default function FindingsTab() {
                   <td colSpan={4} className="p-0 border-0">
                     <EmptyState
                       icon="search-x"
-                      title="No findings for this client"
-                      body="Run a scan or select a different client to view results."
+                      title={t('components.cockpitTabs.findings.empty.title')}
+                      body={t('components.cockpitTabs.findings.empty.body')}
                       compact
                       className="border-0 bg-transparent rounded-none"
                     />
@@ -311,6 +337,9 @@ export default function FindingsTab() {
                       {f.source || '—'}
                     </td>
                   </tr>
+                  {expandedId === f.id && (
+                    <ExpandedRow finding={f} onClose={() => setExpandedId(null)} />
+                  )}
                 </React.Fragment>
               ))}
             </tbody>

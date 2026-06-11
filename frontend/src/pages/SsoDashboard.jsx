@@ -7,6 +7,7 @@
  *  3. Active IdP Table — list of configured IdPs with status, Test Connection, edit/delete
  */
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
 import { apiUrl } from '../lib/apiBase'
@@ -15,75 +16,25 @@ import { api } from '../utils/apiFetch'
 // ── Provider catalogue ────────────────────────────────────────────────────────
 
 const PROVIDERS = [
-  {
-    id: 'okta',
-    label: 'Okta',
-    protocol: 'oidc',
-    color: '#009ae0',
-    logo: '🔷',
-    description: 'Workforce Identity Cloud',
-    fields: ['okta_domain', 'client_id', 'client_secret'],
-  },
-  {
-    id: 'azure_ad',
-    label: 'Azure AD',
-    protocol: 'oidc',
-    color: '#0078d4',
-    logo: '🪟',
-    description: 'Microsoft Entra ID',
-    fields: ['azure_tenant_id', 'client_id', 'client_secret'],
-  },
-  {
-    id: 'google',
-    label: 'Google Workspace',
-    protocol: 'oidc',
-    color: '#4285f4',
-    logo: '🔵',
-    description: 'Google Cloud Identity',
-    fields: ['client_id', 'client_secret'],
-  },
-  {
-    id: 'ping',
-    label: 'Ping Identity',
-    protocol: 'oidc',
-    color: '#e4002b',
-    logo: '🔴',
-    description: 'PingFederate / PingOne',
-    fields: ['issuer_url', 'client_id', 'client_secret'],
-  },
-  {
-    id: 'saml_custom',
-    label: 'Custom SAML 2.0',
-    protocol: 'saml',
-    color: '#f59e0b',
-    logo: '🔐',
-    description: 'Any SAML 2.0 Identity Provider',
-    fields: ['saml_idp_sso_url', 'saml_idp_cert_pem', 'sp_entity_id'],
-  },
-  {
-    id: 'oidc_custom',
-    label: 'Custom OIDC',
-    protocol: 'oidc',
-    color: '#8b5cf6',
-    logo: '🟣',
-    description: 'Any OpenID Connect provider',
-    fields: ['issuer_url', 'client_id', 'client_secret'],
-  },
+  { id: 'okta', protocol: 'oidc', color: '#009ae0', logo: '🔷', fields: ['okta_domain', 'client_id', 'client_secret'] },
+  { id: 'azure_ad', protocol: 'oidc', color: '#0078d4', logo: '🪟', fields: ['azure_tenant_id', 'client_id', 'client_secret'] },
+  { id: 'google', protocol: 'oidc', color: '#4285f4', logo: '🔵', fields: ['client_id', 'client_secret'] },
+  { id: 'ping', protocol: 'oidc', color: '#e4002b', logo: '🔴', fields: ['issuer_url', 'client_id', 'client_secret'] },
+  { id: 'saml_custom', protocol: 'saml', color: '#f59e0b', logo: '🔐', fields: ['saml_idp_sso_url', 'saml_idp_cert_pem', 'sp_entity_id'] },
+  { id: 'oidc_custom', protocol: 'oidc', color: '#8b5cf6', logo: '🟣', fields: ['issuer_url', 'client_id', 'client_secret'] },
 ]
 
-// ── Field definitions ─────────────────────────────────────────────────────────
-
-const FIELD_DEFS = {
-  name:              { label: 'Connection Name',      placeholder: 'e.g. Okta Production', required: true, type: 'text' },
-  okta_domain:       { label: 'Okta Domain',          placeholder: 'company.okta.com', required: true, type: 'text' },
-  azure_tenant_id:   { label: 'Azure Tenant ID',      placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true, type: 'text' },
-  issuer_url:        { label: 'Issuer / Discovery URL',placeholder: 'https://idp.example.com', required: true, type: 'text' },
-  client_id:         { label: 'Client ID',             placeholder: 'OAuth 2.0 Client ID', required: true, type: 'text' },
-  client_secret:     { label: 'Client Secret',         placeholder: '••••••••', required: false, type: 'password', note: 'Leave blank to keep existing' },
-  saml_idp_sso_url:  { label: 'IdP SSO URL / Metadata URL', placeholder: 'https://idp.example.com/metadata.xml', required: true, type: 'text' },
-  saml_idp_cert_pem: { label: 'IdP Certificate (PEM)',placeholder: '-----BEGIN CERTIFICATE-----\n...', required: false, type: 'textarea' },
-  sp_entity_id:      { label: 'SP Entity ID',          placeholder: 'https://app.weissman.io (leave blank for default)', required: false, type: 'text' },
-  email_claim:       { label: 'Email Claim',           placeholder: 'email', required: false, type: 'text' },
+const FIELD_META = {
+  name: { required: true, type: 'text' },
+  okta_domain: { required: true, type: 'text' },
+  azure_tenant_id: { required: true, type: 'text' },
+  issuer_url: { required: true, type: 'text' },
+  client_id: { required: true, type: 'text' },
+  client_secret: { required: false, type: 'password', hasNote: true },
+  saml_idp_sso_url: { required: true, type: 'text' },
+  saml_idp_cert_pem: { required: false, type: 'textarea' },
+  sp_entity_id: { required: false, type: 'text' },
+  email_claim: { required: false, type: 'text' },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -116,23 +67,25 @@ function deriveIssuerUrl(vendor, form) {
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function ActiveBadge({ active, lastOk }) {
+  const { t } = useTranslation()
   if (!active) return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-white/10 text-white/30">Inactive</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-white/10 text-white/30">{t('pages.ssoDashboard.status_inactive')}</span>
   )
   if (lastOk === true) return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-green-500/30 bg-green-900/10 text-green-400">✓ Active</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-green-500/30 bg-green-900/10 text-green-400">{t('pages.ssoDashboard.status_active_ok')}</span>
   )
   if (lastOk === false) return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-amber-500/30 bg-amber-900/10 text-amber-400">⚠ Active / Test Failed</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-amber-500/30 bg-amber-900/10 text-amber-400">{t('pages.ssoDashboard.status_active_failed')}</span>
   )
   return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-cyan-500/30 bg-cyan-900/10 text-cyan-400">Active</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-cyan-500/30 bg-cyan-900/10 text-cyan-400">{t('pages.ssoDashboard.status_active')}</span>
   )
 }
 
 // ── Provider Selection Cards ──────────────────────────────────────────────────
 
 function ProviderCard({ prov, onClick }) {
+  const { t } = useTranslation()
   return (
     <motion.button
       type="button"
@@ -144,12 +97,12 @@ function ProviderCard({ prov, onClick }) {
       <div className="flex items-center gap-3">
         <span className="text-2xl">{prov.logo}</span>
         <div>
-          <p className="font-semibold text-white text-sm">{prov.label}</p>
+          <p className="font-semibold text-white text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
           <p className="text-[10px] font-mono text-white/30 uppercase">{prov.protocol}</p>
         </div>
       </div>
-      <p className="text-[11px] text-white/45">{prov.description}</p>
-      <div className="text-[10px] font-mono text-white/20 group-hover:text-white/50 transition-colors">→ Configure</div>
+      <p className="text-[11px] text-white/45">{t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
+      <div className="text-[10px] font-mono text-white/20 group-hover:text-white/50 transition-colors">{t('pages.ssoDashboard.configure_card')}</div>
     </motion.button>
   )
 }
@@ -157,6 +110,7 @@ function ProviderCard({ prov, onClick }) {
 // ── Configuration Form ────────────────────────────────────────────────────────
 
 function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     okta_domain: initial?.okta_domain ?? '',
@@ -191,8 +145,8 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
       <div className="flex items-center gap-3">
         <span className="text-xl">{prov.logo}</span>
         <div>
-          <h3 className="text-sm font-bold text-white">{prov.label} — Configure SSO</h3>
-          <p className="text-[10px] font-mono text-white/30 uppercase">{prov.protocol} · {prov.description}</p>
+          <h3 className="text-sm font-bold text-white">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
+          <p className="text-[10px] font-mono text-white/30 uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
         </div>
         <button type="button" onClick={onCancel} className="ml-auto text-white/30 hover:text-white/60 text-lg transition-colors">✕</button>
       </div>
@@ -200,14 +154,17 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {allFields.map(key => {
-            const def = FIELD_DEFS[key]
-            if (!def) return null
-            if (def.type === 'textarea') return (
+            const meta = FIELD_META[key]
+            if (!meta) return null
+            const label = t(`pages.ssoDashboard.fields.${key}.label`)
+            const placeholder = t(`pages.ssoDashboard.fields.${key}.placeholder`)
+            const note = meta.hasNote ? t(`pages.ssoDashboard.fields.${key}.note`, { defaultValue: '' }) : ''
+            if (meta.type === 'textarea') return (
               <div key={key} className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-mono text-white/40 uppercase">{def.label}{def.required && <span className="text-rose-400 ml-0.5">*</span>}</label>
+                <label className="text-[11px] font-mono text-white/40 uppercase">{label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}</label>
                 <textarea
                   rows={5}
-                  placeholder={def.placeholder}
+                  placeholder={placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
                   className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] font-mono text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
@@ -217,17 +174,17 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
             return (
               <div key={key} className={`space-y-1 ${key === 'name' ? 'sm:col-span-2' : ''}`}>
                 <label className="text-[11px] font-mono text-white/40 uppercase">
-                  {def.label}{def.required && <span className="text-rose-400 ml-0.5">*</span>}
+                  {label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}
                 </label>
                 <input
-                  type={def.type}
-                  placeholder={def.placeholder}
+                  type={meta.type}
+                  placeholder={placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
-                  required={def.required && (!initial || !form[key])}
+                  required={meta.required && (!initial || !form[key])}
                   className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
-                {def.note && <p className="text-[10px] text-white/25">{def.note}</p>}
+                {note && <p className="text-[10px] text-white/25">{note}</p>}
               </div>
             )
           })}
@@ -239,10 +196,10 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
             disabled={saving}
             className="flex-1 px-4 py-2 rounded-xl border border-cyan-500/40 text-cyan-300/80 text-[12px] font-mono uppercase hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            {saving ? '⟳ Saving…' : initial ? '↺ Update Connection' : '＋ Add Connection'}
+            {saving ? t('pages.ssoDashboard.saving') : initial ? t('pages.ssoDashboard.update_connection') : t('pages.ssoDashboard.add_connection_btn')}
           </button>
           <button type="button" onClick={onCancel} className="px-4 py-2 rounded-xl border border-white/10 text-white/40 text-[12px] font-mono hover:border-white/20 transition-all">
-            Cancel
+            {t('pages.ssoDashboard.cancel')}
           </button>
         </div>
       </form>
@@ -253,6 +210,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
 // ── IdP Table Row ─────────────────────────────────────────────────────────────
 
 function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
+  const { t } = useTranslation()
   const prov = PROVIDERS.find(p => p.id === idp.vendor_hint) ?? PROVIDERS[5]
 
   return (
@@ -270,7 +228,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
           <p className="text-[10px] font-mono text-white/30 truncate">{idp.issuer_url || idp.saml_idp_sso_url || '—'}</p>
           {idp.last_test_at && (
             <p className="text-[10px] text-white/20 mt-0.5">
-              Last tested: {new Date(idp.last_test_at).toLocaleString()}
+              {t('pages.ssoDashboard.last_tested', { time: new Date(idp.last_test_at).toLocaleString() })}
               {idp.last_test_error && <span className="text-rose-400/70 ml-1">— {idp.last_test_error.slice(0, 60)}</span>}
             </p>
           )}
@@ -286,7 +244,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
           onClick={() => onTest(idp.id)}
           className="text-[11px] font-mono border border-white/10 text-white/40 hover:text-cyan-300/70 hover:border-cyan-500/30 px-2.5 py-1 rounded-xl transition-all disabled:opacity-40"
         >
-          {testing ? '⟳' : '⚡ Test'}
+          {testing ? t('pages.ssoDashboard.testing') : t('pages.ssoDashboard.test_btn')}
         </button>
         <button
           type="button"
@@ -297,14 +255,14 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
               : 'border-green-500/20 text-green-400/60 hover:bg-green-900/20'
           }`}
         >
-          {idp.active ? 'Disable' : 'Enable'}
+          {idp.active ? t('pages.ssoDashboard.disable') : t('pages.ssoDashboard.enable')}
         </button>
         <button
           type="button"
           onClick={() => onEdit(idp)}
           className="text-[11px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 px-2.5 py-1 rounded-xl transition-all"
         >
-          Edit
+          {t('pages.ssoDashboard.edit')}
         </button>
         <button
           type="button"
@@ -321,6 +279,7 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SsoDashboard() {
+  const { t } = useTranslation()
   const [idps, setIdps] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedProv, setSelectedProv] = useState(null)
@@ -340,11 +299,11 @@ export default function SsoDashboard() {
       const data = await api.get('/api/sso/idps')
       setIdps(data.idps ?? [])
     } catch (e) {
-      showToast('Failed to load IdPs: ' + e.message, false)
+      showToast(t('pages.ssoDashboard.load_failed', { message: e.message }), false)
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, t])
 
   useEffect(() => { fetchIdps() }, [fetchIdps])
 
@@ -353,57 +312,57 @@ export default function SsoDashboard() {
     try {
       if (editingIdp) {
         await api.patch(`/api/sso/idps/${editingIdp.id}`, formData)
-        showToast('Connection updated.')
+        showToast(t('pages.ssoDashboard.connection_updated'))
       } else {
         await api.post('/api/sso/idps', formData)
-        showToast('Connection created.')
+        showToast(t('pages.ssoDashboard.connection_created'))
       }
       setSelectedProv(null)
       setEditingIdp(null)
       await fetchIdps()
     } catch (e) {
-      showToast('Save failed: ' + e.message, false)
+      showToast(t('pages.ssoDashboard.save_failed', { message: e.message }), false)
     } finally {
       setSaving(false)
     }
-  }, [editingIdp, fetchIdps, showToast])
+  }, [editingIdp, fetchIdps, showToast, t])
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Remove this IdP connection?')) return
+    if (!window.confirm(t('pages.ssoDashboard.delete_confirm'))) return
     try {
       await api.delete(`/api/sso/idps/${id}`)
-      showToast('Connection removed.')
+      showToast(t('pages.ssoDashboard.connection_removed'))
       await fetchIdps()
     } catch (e) {
-      showToast('Delete failed: ' + e.message, false)
+      showToast(t('pages.ssoDashboard.delete_failed', { message: e.message }), false)
     }
-  }, [fetchIdps, showToast])
+  }, [fetchIdps, showToast, t])
 
   const handleToggle = useCallback(async (id) => {
     try {
       const data = await api.post(`/api/sso/idps/${id}/toggle`)
       setIdps(prev => prev.map(i => i.id === id ? { ...i, active: data.active } : i))
     } catch (e) {
-      showToast('Toggle failed: ' + e.message, false)
+      showToast(t('pages.ssoDashboard.toggle_failed', { message: e.message }), false)
     }
-  }, [showToast])
+  }, [showToast, t])
 
   const handleTest = useCallback(async (id) => {
     setTestingId(id)
     try {
       const data = await api.post(`/api/sso/idps/${id}/test`)
       if (data.ok) {
-        showToast('✓ Connection test passed — IdP is reachable.')
+        showToast(t('pages.ssoDashboard.test_passed'))
       } else {
-        showToast('Test failed: ' + (data.error ?? 'unknown error'), false)
+        showToast(t('pages.ssoDashboard.test_failed', { message: data.error ?? 'unknown error' }), false)
       }
       await fetchIdps()
     } catch (e) {
-      showToast('Test failed: ' + e.message, false)
+      showToast(t('pages.ssoDashboard.test_failed', { message: e.message }), false)
     } finally {
       setTestingId(null)
     }
-  }, [fetchIdps, showToast])
+  }, [fetchIdps, showToast, t])
 
   const handleEdit = useCallback((idp) => {
     const prov = PROVIDERS.find(p => p.id === idp.vendor_hint) ?? PROVIDERS[5]
@@ -416,15 +375,14 @@ export default function SsoDashboard() {
   const showForm = selectedProv !== null
 
   return (
-    <PageShell title="SSO Configuration" badge="ENTERPRISE SSO" badgeColor="#8b5cf6" subtitle="SAML 2.0 · OIDC · Multi-Provider">
+    <PageShell title={t('pages.ssoDashboard.title')} badge={t('pages.ssoDashboard.badge')} badgeColor="#8b5cf6" subtitle={t('pages.ssoDashboard.subtitle')}>
       <div className="max-w-5xl mx-auto space-y-10">
 
         {/* Header */}
         <div className="space-y-1">
-          <h2 className="text-lg font-bold text-white">Single Sign-On Management</h2>
+          <h2 className="text-lg font-bold text-white">{t('pages.ssoDashboard.title')}</h2>
           <p className="text-[12px] text-white/40">
-            Configure IdP connections for Okta, Azure AD, Google Workspace, Ping Identity, or any SAML 2.0 / OIDC provider.
-            All credentials are stored encrypted server-side. Client secrets are write-only and never returned in API responses.
+            {t('pages.ssoDashboard.header_detail')}
           </p>
         </div>
 
@@ -438,7 +396,7 @@ export default function SsoDashboard() {
               className="space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">Add Provider</h3>
+                <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">{t('pages.ssoDashboard.add_connection')}</h3>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {PROVIDERS.map(prov => (
@@ -466,20 +424,20 @@ export default function SsoDashboard() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">
-              Configured Connections
-              {idps.length > 0 && <span className="ml-2 text-white/25">({idps.length})</span>}
+              {t('pages.ssoDashboard.configured_connections')}
+              {idps.length > 0 && <span className="ml-2 text-white/25">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
             </h3>
             <button
               type="button"
               onClick={fetchIdps}
               className="text-[11px] font-mono border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 px-2.5 py-1 rounded-xl transition-all"
             >
-              ↻ Refresh
+              {t('pages.ssoDashboard.refresh')}
             </button>
           </div>
 
           {loading && (
-            <p className="text-[11px] text-white/25 font-mono animate-pulse">Loading…</p>
+            <p className="text-[11px] text-white/25 font-mono animate-pulse">{t('pages.ssoDashboard.loading')}</p>
           )}
 
           <AnimatePresence>
@@ -489,8 +447,8 @@ export default function SsoDashboard() {
                 animate={{ opacity: 1 }}
                 className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
               >
-                <p className="text-white/20 text-[12px]">No IdP connections configured yet.</p>
-                <p className="text-white/15 text-[11px] mt-1">Select a provider above to get started.</p>
+                <p className="text-white/20 text-[12px]">{t('pages.ssoDashboard.no_idps')}</p>
+                <p className="text-white/15 text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
               </motion.div>
             )}
             {idps.map(idp => (
@@ -509,13 +467,13 @@ export default function SsoDashboard() {
 
         {/* SP Metadata info */}
         <div className="rounded-2xl bg-white/[0.02] border border-white/8 px-5 py-4 space-y-2">
-          <h4 className="text-[11px] font-mono text-white/35 uppercase">SP Metadata / Callback URLs</h4>
+          <h4 className="text-[11px] font-mono text-white/35 uppercase">{t('pages.ssoDashboard.sp_metadata')}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { label: 'OIDC Callback URL', value: apiUrl('/api/auth/oidc/callback') },
-              { label: 'SAML ACS URL', value: apiUrl('/api/auth/saml/acs') },
-              { label: 'OIDC Login Initiation', value: `${apiUrl('/api/auth/oidc/begin')}?tenant_slug=TENANT&idp_name=NAME` },
-              { label: 'SAML Login Initiation', value: `${apiUrl('/api/auth/saml/begin')}?tenant_slug=TENANT&idp_name=NAME` },
+              { label: t('pages.ssoDashboard.oidc_callback'), value: apiUrl('/api/auth/oidc/callback') },
+              { label: t('pages.ssoDashboard.saml_acs'), value: apiUrl('/api/auth/saml/acs') },
+              { label: t('pages.ssoDashboard.oidc_login'), value: `${apiUrl('/api/auth/oidc/begin')}?tenant_slug=TENANT&idp_name=NAME` },
+              { label: t('pages.ssoDashboard.saml_login'), value: `${apiUrl('/api/auth/saml/begin')}?tenant_slug=TENANT&idp_name=NAME` },
             ].map(item => (
               <div key={item.label} className="space-y-0.5">
                 <p className="text-[9px] font-mono text-white/25 uppercase">{item.label}</p>

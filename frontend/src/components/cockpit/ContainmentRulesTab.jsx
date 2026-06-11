@@ -2,12 +2,16 @@
  * Phase 5: Auto-containment — CISO pre-approved AWS SG swap + K8s NetworkPolicy quarantine.
  */
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { ShieldOff, Plus, AlertTriangle, Server, Container } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.cockpitTabs.containmentRules'
+
 export default function ContainmentRulesTab() {
+  const { t } = useTranslation()
   const { selectedClientId } = useClient()
   const [rules, setRules] = useState([])
   const [loading, setLoading] = useState(false)
@@ -60,7 +64,7 @@ export default function ContainmentRulesTab() {
       })
       const d = await r.json().catch(() => ({}))
       if (r.ok) {
-        setMsg({ ok: true, text: 'Rule saved. Enable + pre-approve before execute.' })
+        setMsg({ ok: true, text: t(`${NS}.ruleSaved`) })
         await fetchRules()
       } else {
         setMsg({ ok: false, text: d.error || r.statusText })
@@ -74,7 +78,7 @@ export default function ContainmentRulesTab() {
     if (!selectedClientId) return
     const rid = parseInt(exec.rule_id, 10)
     if (!Number.isFinite(rid)) {
-      setMsg({ ok: false, text: 'Select rule id' })
+      setMsg({ ok: false, text: t(`${NS}.selectRuleId`) })
       return
     }
     setMsg(null)
@@ -99,7 +103,7 @@ export default function ContainmentRulesTab() {
   if (!selectedClientId) {
     return (
       <div className="p-8 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-center text-white/70">
-        Select a client to configure containment.
+        {t(`${NS}.selectClient`)}
       </div>
     )
   }
@@ -108,41 +112,39 @@ export default function ContainmentRulesTab() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <ShieldOff className="w-5 h-5 text-orange-400" />
-        <h2 className="text-lg font-semibold text-white">Auto-Containment Rules</h2>
+        <h2 className="text-lg font-semibold text-white">{t(`${NS}.title`)}</h2>
       </div>
 
       <div className="rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 flex gap-2 text-orange-200 text-sm">
         <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
         <div>
-          <strong>Production impact:</strong> AWS mode replaces the instance security group with a forensic-only group. K8s mode posts a
-          deny-by-default <code className="text-orange-100">NetworkPolicy</code>. Requires cross-account IAM (AWS) or API server URL + bearer
-          token in an <strong>environment variable</strong> on the engine host (never stored in DB).
+          <strong>{t(`${NS}.productionImpact`)}</strong> {t(`${NS}.productionWarning`)}
         </div>
       </div>
 
       <div className="rounded-2xl bg-black/40 border border-white/10 p-4 space-y-3">
-        <h3 className="text-sm font-medium text-white/90">New rule</h3>
+        <h3 className="text-sm font-medium text-white/90">{t(`${NS}.newRule`)}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <input
-            placeholder="Rule name"
+            placeholder={t(`${NS}.ruleName`)}
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           />
           <input
-            placeholder="AWS region (e.g. us-east-1)"
+            placeholder={t(`${NS}.awsRegion`)}
             value={form.aws_region}
             onChange={e => setForm(f => ({ ...f, aws_region: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           />
           <input
-            placeholder="Forensic source CIDR"
+            placeholder={t(`${NS}.forensicSourceCidr`)}
             value={form.forensic_source_cidr}
             onChange={e => setForm(f => ({ ...f, forensic_source_cidr: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           />
           <input
-            placeholder="Forensic ports CSV"
+            placeholder={t(`${NS}.forensicPortsCsv`)}
             value={form.forensic_ports_csv}
             onChange={e => setForm(f => ({ ...f, forensic_ports_csv: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
@@ -153,7 +155,7 @@ export default function ContainmentRulesTab() {
               checked={form.enabled}
               onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))}
             />
-            Enabled
+            {t(`${NS}.enabled`)}
           </label>
           <label className="flex items-center gap-2 text-sm text-white/80">
             <input
@@ -161,7 +163,7 @@ export default function ContainmentRulesTab() {
               checked={form.pre_approved}
               onChange={e => setForm(f => ({ ...f, pre_approved: e.target.checked }))}
             />
-            Pre-approved (required to execute)
+            {t(`${NS}.preApproved`)}
           </label>
           <label className="flex items-center gap-2 text-sm text-white/80 md:col-span-2">
             <input
@@ -169,38 +171,38 @@ export default function ContainmentRulesTab() {
               checked={form.allow_dns_egress}
               onChange={e => setForm(f => ({ ...f, allow_dns_egress: e.target.checked }))}
             />
-            Allow UDP/53 egress to WEISSMAN_QUARANTINE_VPC_DNS_CIDR (AWS)
+            {t(`${NS}.allowDnsEgress`)}
           </label>
           <div className="md:col-span-2 flex items-center gap-2 text-white/50 text-xs">
             <Container className="w-4 h-4" />
-            Kubernetes (optional)
+            {t(`${NS}.kubernetesOptional`)}
           </div>
           <input
-            placeholder="K8s API server base URL"
+            placeholder={t(`${NS}.k8sApiServer`)}
             value={form.k8s_api_server}
             onChange={e => setForm(f => ({ ...f, k8s_api_server: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
           />
           <input
-            placeholder="Env var name holding bearer token (e.g. WEISSMAN_K8S_TOKEN)"
+            placeholder={t(`${NS}.k8sTokenEnvVar`)}
             value={form.k8s_token_env_var}
             onChange={e => setForm(f => ({ ...f, k8s_token_env_var: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
           />
           <input
-            placeholder="Namespace"
+            placeholder={t(`${NS}.namespace`)}
             value={form.k8s_namespace}
             onChange={e => setForm(f => ({ ...f, k8s_namespace: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           />
           <input
-            placeholder="Pod label key"
+            placeholder={t(`${NS}.podLabelKey`)}
             value={form.k8s_pod_label_key}
             onChange={e => setForm(f => ({ ...f, k8s_pod_label_key: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           />
           <input
-            placeholder="Pod label value"
+            placeholder={t(`${NS}.podLabelValue`)}
             value={form.k8s_pod_label_value}
             onChange={e => setForm(f => ({ ...f, k8s_pod_label_value: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
@@ -212,19 +214,19 @@ export default function ContainmentRulesTab() {
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-orange-500/50 bg-orange-500/10 text-orange-300"
         >
           <Plus className="w-4 h-4" />
-          Save rule
+          {t(`${NS}.saveRule`)}
         </button>
       </div>
 
       <div className="rounded-2xl bg-black/40 border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-white/90 mb-2">Execute (incident)</h3>
+        <h3 className="text-sm font-medium text-white/90 mb-2">{t(`${NS}.executeTitle`)}</h3>
         <div className="flex flex-wrap gap-2 items-end">
           <select
             value={exec.rule_id}
             onChange={e => setExec(x => ({ ...x, rule_id: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm"
           >
-            <option value="">Rule…</option>
+            <option value="">{t(`${NS}.rulePlaceholder`)}</option>
             {rules.map(r => (
               <option key={r.id} value={r.id}>
                 #{r.id} {r.name} {r.pre_approved ? '✓' : '—'}
@@ -240,7 +242,7 @@ export default function ContainmentRulesTab() {
             <option value="k8s_netpol">k8s_netpol</option>
           </select>
           <input
-            placeholder="i-xxxxxxxx (AWS)"
+            placeholder={t(`${NS}.awsInstanceId`)}
             value={exec.aws_instance_id}
             onChange={e => setExec(x => ({ ...x, aws_instance_id: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm font-mono"
@@ -250,7 +252,7 @@ export default function ContainmentRulesTab() {
             onClick={execute}
             className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600"
           >
-            Execute quarantine
+            {t(`${NS}.executeQuarantine`)}
           </button>
         </div>
       </div>
@@ -259,15 +261,15 @@ export default function ContainmentRulesTab() {
 
       <div className="rounded-2xl bg-black/40 border border-white/10 overflow-hidden">
         <div className="px-4 py-2 border-b border-white/10 flex justify-between items-center">
-          <span className="text-sm text-white/80">Saved rules</span>
+          <span className="text-sm text-white/80">{t(`${NS}.savedRules`)}</span>
           <button type="button" onClick={fetchRules} className="text-xs text-cyan-400 hover:underline">
-            Refresh
+            {t(`${NS}.refresh`)}
           </button>
         </div>
         {loading ? (
-          <div className="p-6 text-white/50 text-sm">Loading…</div>
+          <div className="p-6 text-white/50 text-sm">{t(`${NS}.loading`)}</div>
         ) : rules.length === 0 ? (
-          <div className="p-6 text-white/50 text-sm">No rules. Create one above.</div>
+          <div className="p-6 text-white/50 text-sm">{t(`${NS}.noRules`)}</div>
         ) : (
           <ul className="divide-y divide-white/10">
             {rules.map(r => (
@@ -275,9 +277,11 @@ export default function ContainmentRulesTab() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Server className="w-4 h-4 text-white/50" />
                   <span className="text-white font-medium">#{r.id} {r.name}</span>
-                  <span className={r.enabled ? 'text-emerald-400' : 'text-white/40'}>{r.enabled ? 'on' : 'off'}</span>
+                  <span className={r.enabled ? 'text-emerald-400' : 'text-white/40'}>
+                    {r.enabled ? t(`${NS}.on`) : t(`${NS}.off`)}
+                  </span>
                   <span className={r.pre_approved ? 'text-amber-400' : 'text-white/40'}>
-                    {r.pre_approved ? 'pre-approved' : 'not approved'}
+                    {r.pre_approved ? t(`${NS}.preApprovedStatus`) : t(`${NS}.notApprovedStatus`)}
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-white/50 font-mono">

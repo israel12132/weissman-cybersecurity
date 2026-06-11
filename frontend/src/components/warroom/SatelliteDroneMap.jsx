@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker, Line } from 'react-simple-maps'
 import { useClient } from '../../context/ClientContext'
@@ -7,6 +8,7 @@ import { useWarRoomSound } from '../../hooks/useWarRoomSound'
 import { stableGeoFromLabel } from '../../lib/stableGeoFromLabel'
 import { apiFetch } from '../../lib/apiBase'
 
+const NS = 'components.cockpitWidgets.satelliteDroneMap'
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 const US_CENTER = [37.09, -95.71]
 const PATROL_IDLE_MS = 30000
@@ -17,6 +19,7 @@ function geoForTarget(domainOrName) {
 }
 
 export default function SatelliteDroneMap() {
+  const { t } = useTranslation()
   const { selectedClient, selectedClientId } = useClient()
   const { vulnMarkers, setVulnMarkers, mapZoomComplete, setMapZoomComplete, lastNewTarget, setLastNewTarget, discoveredTargets, lastLatencyMs, US_CENTER: usCenter } = useWarRoom()
   const { playZoom } = useWarRoomSound()
@@ -55,11 +58,11 @@ export default function SatelliteDroneMap() {
 
   useEffect(() => {
     if (zoomPhase !== 'zooming') return
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setZoomPhase('done')
       setMapZoomComplete(true)
     }, 1200)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [zoomPhase, setMapZoomComplete])
 
   useEffect(() => {
@@ -101,6 +104,14 @@ export default function SatelliteDroneMap() {
       })
       .catch(() => {})
   }, [zoomPhase, selectedClientId, targetCoord, setVulnMarkers])
+
+  const statusLabel = patrolMode
+    ? t(`${NS}.patrolMode`)
+    : zoomPhase === 'zooming'
+      ? t(`${NS}.zooming`)
+      : mapZoomComplete
+        ? t(`${NS}.markersActive`)
+        : t(`${NS}.satellite`)
 
   return (
     <motion.div
@@ -203,7 +214,7 @@ export default function SatelliteDroneMap() {
         </ComposableMap>
       </div>
       <div className="absolute bottom-2 left-2 text-[10px] font-mono text-white/50 uppercase tracking-wider">
-        {patrolMode ? 'Patrol mode' : zoomPhase === 'zooming' ? 'Drone zooming…' : mapZoomComplete ? 'Markers active' : 'Satellite'}
+        {statusLabel}
       </div>
     </motion.div>
   )
