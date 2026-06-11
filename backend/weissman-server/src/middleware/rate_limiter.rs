@@ -98,7 +98,7 @@ pub async fn edge_multi_rate_limit_middleware(
     let limited = match (method.as_str(), path.as_str()) {
         ("POST", "/api/login") => {
             if limiter_login().check_key(&key).is_err() {
-                fingerprint_engine::http::rate_limit_metrics::record_login_denied(&ip_str);
+                fingerprint_engine::http::rate_limit_metrics::record_login_denied(&ip_str, "/api/login");
                 true
             } else {
                 fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);
