@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch, apiEventSourceUrl, apiUrl } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 
 const ENGINE_ID = 'nexus_sovereign_swarm'
@@ -173,14 +173,89 @@ export default function NexusSovereignSwarm() {
   const [lines, setLines] = useState([])
   const [metrics, setMetrics] = useState(null)
   const [findings, setFindings] = useState([])
+  const [endpointAgents, setEndpointAgents] = useState([])
+  const [fleetBusy, setFleetBusy] = useState(false)
+  const [swarmWsLive, setSwarmWsLive] = useState(false)
   const esRef = useRef(null)
+  const wsRef = useRef(null)
 
-  useEffect(() => {
-    apiFetch('/api/clients')
+  const fleetForClient = useMemo(
+    () => endpointAgents.filter((a) => String(a.client_id) === String(selectedClientId)),
+    [endpointAgents, selectedClientId],
+  )
+  const fleetOnline = useMemo(
+    () => fleetForClient.filter((a) => a.status === 'online' || a.live).length,
+    [fleetForClient],
+  )
+
+  const loadAgents = useCallback(() => {
+    apiFetch('/api/agents/status')
       .then((r) => (r.ok ? r.json() : []))
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
+      .then((d) => { if (Array.isArray(d)) setEndpointAgents(d) })
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    loadAgents()
+    const id = setInterval(loadAgents, 15000)
+    return () => clearInterval(id)
+  }, [loadAgents])
+
+  const appendLine = useCallback((msg) => {
+    setLines((prev) => [...prev.slice(-400), msg])
+  }, [])
+
+  const connectSwarmWs = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    const wsUrl = apiUrl('/ws/swarm').replace(/^http/, 'ws')
+    try {
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+      ws.onopen = () => setSwarmWsLive(true)
+      ws.onmessage = (ev) => {
+        try {
+          const p = JSON.parse(ev.data)
+          if (p.event) appendLine(`[${p.agent || 'Swarm'}] ${p.event}`)
+        } catch { /* ignore */ }
+      }
+      ws.onclose = () => setSwarmWsLive(false)
+      ws.onerror = () => setSwarmWsLive(false)
+    } catch { /* ignore */ }
+  }, [appendLine])
+
+  const broadcastFleet = useCallback(async () => {
+    if (!selectedClientId || !target.trim()) return
+    setFleetBusy(true)
+    appendLine('[NSSI] Broadcasting fleet to all endpoint agents…')
+    try {
+      const r = await apiFetch('/api/agents/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: Number(selectedClientId),
+          engine: 'process_inventory',
+          target: target.trim(),
+          fleet_broadcast: true,
+          params: { nssi_bridge: true, source: 'nexus_sovereign_swarm' },
+        }),
+      })
+      const data = await r.json()
+      if (r.ok) {
+        appendLine(`[NSSI] Fleet broadcast: ${data.live_dispatched ?? 0} live / ${data.engines_dispatched ?? 0} engines`)
+      } else {
+        appendLine(`[FLEET] ${data.detail || 'dispatch failed'}`)
+      }
+      await apiFetch(`/api/clients/${selectedClientId}/swarm/run`, { method: 'POST' }).catch(() => {})
+    } catch (e) {
+      appendLine(`[FLEET] ${e.message}`)
+    } finally {
+      setFleetBusy(false)
+      loadAgents()
+    }
+  }, [selectedClientId, target, appendLine, loadAgents])
 
   useEffect(() => {
     if (!selectedClientId) return
@@ -194,8 +269,16 @@ export default function NexusSovereignSwarm() {
     if (first) setTarget(first.startsWith('http') ? first : `https://${first}`)
   }, [selectedClientId, clients])
 
-  const appendLine = useCallback((msg) => {
-    setLines((prev) => [...prev.slice(-400), msg])
+  useEffect(() => {
+    apiFetch('/api/clients')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (Array.isArray(d)) setClients(d) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => () => {
+    if (esRef.current) esRef.current.close()
+    if (wsRef.current) wsRef.current.close()
   }, [])
 
   const handleRun = useCallback(async () => {
@@ -205,7 +288,11 @@ export default function NexusSovereignSwarm() {
     setLines([])
     setMetrics(null)
     setFindings([])
+    connectSwarmWs()
     appendLine(`[NSSI] Initializing hive deployment — ${params.agent_count} agents...`)
+    if (params.endpoint_bridge === 'true') {
+      await broadcastFleet()
+    }
 
     const body = {
       engine: ENGINE_ID,
@@ -264,9 +351,7 @@ export default function NexusSovereignSwarm() {
       appendLine(`[ERROR] ${e.message}`)
       setRunning(false)
     }
-  }, [selectedClientId, target, params, appendLine])
-
-  useEffect(() => () => { if (esRef.current) esRef.current.close() }, [])
+  }, [selectedClientId, target, params, appendLine, connectSwarmWs, broadcastFleet])
 
   const agentCount = parseInt(params.agent_count, 10) || 2048
 
@@ -340,7 +425,43 @@ export default function NexusSovereignSwarm() {
               <MetricTile label="Agents" value={metrics?.agents_deployed?.toLocaleString() ?? agentCount.toLocaleString()} accent="#22d3ee" />
               <MetricTile label="Signals" value={metrics?.raw_signals} accent="#ef4444" />
               <MetricTile label="Consensus" value={metrics?.consensus_findings} accent="#a855f7" />
-              <MetricTile label="Endpoints" value={metrics?.endpoint_agents_bridged} accent="#f59e0b" />
+              <MetricTile label="Endpoints" value={metrics?.endpoint_agents_bridged ?? fleetOnline} accent="#f59e0b" />
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                  {t('nexusSwarm.endpoint_fleet', 'Endpoint Agent Fleet')}
+                </p>
+                {swarmWsLive && (
+                  <span className="text-[9px] font-mono text-emerald-400">{t('nexusSwarm.swarm_ws_live')}</span>
+                )}
+              </div>
+              <p className="text-[11px] text-white/50">
+                {fleetForClient.length
+                  ? t('nexusSwarm.fleet_online', { online: fleetOnline, total: fleetForClient.length })
+                  : t('nexusSwarm.no_agents')}
+              </p>
+              {fleetForClient.slice(0, 6).map((a) => (
+                <div key={a.agent_uuid} className="flex items-center justify-between text-[10px] font-mono text-white/45">
+                  <span className="truncate">{a.hostname || a.device_name || a.agent_uuid?.slice(0, 8)}</span>
+                  <span className={a.status === 'online' || a.live ? 'text-emerald-400' : 'text-white/25'}>
+                    {a.status === 'online' || a.live ? '● online' : '○ offline'}
+                  </span>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={broadcastFleet}
+                  disabled={fleetBusy || !selectedClientId || !target.trim()}
+                  className="flex-1 py-2 rounded-lg text-[10px] font-mono uppercase border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
+                >
+                  {fleetBusy ? t('nexusSwarm.fleet_broadcasting') : t('nexusSwarm.fleet_broadcast')}
+                </button>
+                <Link to="/agents" className="py-2 px-3 rounded-lg text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70">
+                  Agents →
+                </Link>
+              </div>
             </div>
           </div>
         </div>

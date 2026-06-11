@@ -123,7 +123,12 @@ fn normalize_base(target: &str) -> String {
     }
 }
 
-fn build_surface(ctx: &EngineRunContext, base: &str) -> Vec<(String, String)> {
+fn build_surface(
+    ctx: &EngineRunContext,
+    base: &str,
+    extra_paths: &[String],
+    extra_bases: &[String],
+) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut seen = HashSet::new();
     let push = |out: &mut Vec<(String, String)>, seen: &mut HashSet<String>, base: &str, path: &str| {
@@ -138,10 +143,17 @@ fn build_surface(ctx: &EngineRunContext, base: &str) -> Vec<(String, String)> {
     for path in pipeline_context::expanded_path_wordlist().iter().take(120) {
         push(&mut out, &mut seen, base, path);
     }
-    for path in ctx.discovered_paths.iter().take(200) {
+    for path in ctx.discovered_paths.iter().chain(extra_paths.iter()).take(400) {
         push(&mut out, &mut seen, base, path);
     }
-    for sub in ctx.recon_subdomains.iter().take(50) {
+    if let Some(arr) = ctx.job_params.get("discovered_paths").and_then(|v| v.as_array()) {
+        for x in arr {
+            if let Some(p) = x.as_str() {
+                push(&mut out, &mut seen, base, p);
+            }
+        }
+    }
+    for sub in ctx.recon_subdomains.iter().chain(extra_bases.iter()).take(80) {
         let sub_base = if sub.starts_with("http") {
             sub.clone()
         } else {
@@ -153,8 +165,82 @@ fn build_surface(ctx: &EngineRunContext, base: &str) -> Vec<(String, String)> {
         let b = normalize_base(url);
         push(&mut out, &mut seen, &b, "/");
     }
+    for b in extra_bases {
+        push(&mut out, &mut seen, b, "/");
+    }
     out.truncate(MAX_SURFACE_POINTS);
     out
+}
+
+async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<String>) {
+    let mut paths = Vec::new();
+    let mut bases = Vec::new();
+    let (Some(pool), Some(client_id), Some(tenant_id)) =
+        (ctx.app_pool.as_ref(), ctx.client_id, ctx.tenant_id)
+    else {
+        return (paths, bases);
+    };
+    let Ok(mut conn) = pool.acquire().await else {
+        return (paths, bases);
+    };
+    if crate::db::set_tenant_conn(&mut *conn, tenant_id).await.is_err() {
+        return (paths, bases);
+    }
+    if let Ok(Some(domains_json)) = sqlx::query_scalar::<_, String>(
+        "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(client_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    {
+        if let Ok(v) = serde_json::from_str::<Value>(&domains_json) {
+            if let Some(arr) = v.as_array() {
+                for d in arr {
+                    if let Some(s) = d.as_str() {
+                        let t = s.trim();
+                        if !t.is_empty() {
+                            bases.push(normalize_base(t));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let ip_rows = sqlx::query_scalar::<_, String>(
+        "SELECT NULLIF(trim(ip_ranges), '') FROM clients WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(client_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .ok()
+    .flatten();
+    if let Some(ip_json) = ip_rows.filter(|s| !s.is_empty()) {
+        if let Ok(v) = serde_json::from_str::<Value>(&ip_json) {
+            if let Some(arr) = v.as_array() {
+                for ip in arr {
+                    if let Some(s) = ip.as_str() {
+                        let t = s.trim();
+                        if !t.is_empty() {
+                            bases.push(normalize_base(t));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let title_paths = sqlx::query_scalar::<_, String>(
+        r#"SELECT DISTINCT title FROM vulnerabilities
+           WHERE tenant_id = $1 AND client_id = $2 AND title LIKE '/%' LIMIT 200"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_all(&mut *conn)
+    .await
+    .unwrap_or_default();
+    paths.extend(title_paths);
+    (paths, bases)
 }
 
 fn assign_agents(config: &SwarmConfig, surface: &[(String, String)]) -> Vec<AgentTask> {
@@ -520,7 +606,8 @@ pub async fn run_nexus_sovereign_swarm_result(
 
     let config = SwarmConfig::from_ctx(ctx);
     let base = normalize_base(target);
-    let surface = build_surface(ctx, &base);
+    let (db_paths, db_bases) = load_db_surface_extras(ctx).await;
+    let surface = build_surface(ctx, &base, &db_paths, &db_bases);
     if surface.is_empty() {
         return EngineResult::error("no attack surface points to deploy swarm agents");
     }

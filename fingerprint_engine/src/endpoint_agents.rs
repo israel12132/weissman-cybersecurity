@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
@@ -25,13 +25,14 @@ use uuid::Uuid;
 pub const REMOTE_PRESENCE_STALE_AFTER: Duration = Duration::from_secs(120);
 
 /// Maximum endpoint agents dispatched per fleet operation (NSSI bridge, round-robin).
-pub const FLEET_MAX_AGENTS: i32 = 30;
+pub const FLEET_MAX_AGENTS: i32 = 100;
 /// Pending tasks replayed when an agent reconnects.
 pub const PENDING_TASK_REPLAY_LIMIT: i32 = 500;
 /// Agent status listing cap (dashboard).
 pub const AGENT_STATUS_LIMIT: i32 = 10_000;
 
 static GLOBAL_REGISTRY: OnceLock<Arc<AgentRegistry>> = OnceLock::new();
+static NEXT_LOCAL_SESSION: AtomicU64 = AtomicU64::new(1);
 
 /// Engines dispatched to real endpoint agents during NSSI `endpoint_bridge`.
 pub const NSSI_BRIDGE_ENGINES: &[&str] = &[
@@ -110,6 +111,12 @@ pub struct EnrollResponse {
 }
 
 #[derive(Clone, Debug)]
+struct LocalSession {
+    tx: Sender<ServerToAgent>,
+    session: u64,
+}
+
+#[derive(Clone, Debug)]
 struct RemotePresence {
     replica_id: String,
     #[allow(dead_code)]
@@ -119,7 +126,7 @@ struct RemotePresence {
 }
 
 pub struct AgentRegistry {
-    inner: RwLock<HashMap<String, Sender<ServerToAgent>>>,
+    inner: RwLock<HashMap<String, LocalSession>>,
     remote: RwLock<HashMap<String, RemotePresence>>,
     dispatch_cursor: AtomicUsize,
     sync: OnceLock<Arc<crate::agent_registry_sync::AgentRegistrySync>>,
@@ -260,10 +267,15 @@ impl AgentRegistry {
         });
     }
 
-    pub async fn attach(&self, agent_uuid: &str, tenant_id: i64, tx: Sender<ServerToAgent>) {
+    /// Register a live WebSocket session. Returns a session id the caller must pass to [`Self::detach`].
+    pub async fn attach(&self, agent_uuid: &str, tenant_id: i64, tx: Sender<ServerToAgent>) -> u64 {
+        let session = NEXT_LOCAL_SESSION.fetch_add(1, Ordering::Relaxed);
         {
             let mut g = self.inner.write().await;
-            g.insert(agent_uuid.to_string(), tx);
+            g.insert(
+                agent_uuid.to_string(),
+                LocalSession { tx, session },
+            );
         }
         {
             let mut remote = self.remote.write().await;
@@ -277,12 +289,20 @@ impl AgentRegistry {
             );
             sync.publish(&event).await;
         }
+        session
     }
 
-    pub async fn detach(&self, agent_uuid: &str) {
+    /// Remove a session only when it still owns the registry slot (latest-connection-wins).
+    pub async fn detach(&self, agent_uuid: &str, session: u64) -> bool {
         let removed = {
             let mut g = self.inner.write().await;
-            g.remove(agent_uuid).is_some()
+            match g.get(agent_uuid) {
+                Some(entry) if entry.session == session => {
+                    g.remove(agent_uuid);
+                    true
+                }
+                _ => false,
+            }
         };
         if removed {
             if let Some(sync) = self.sync() {
@@ -293,6 +313,7 @@ impl AgentRegistry {
                 sync.publish(&event).await;
             }
         }
+        removed
     }
 
     /// Propagate agent status to peer replicas (heartbeats, explicit offline).
@@ -314,10 +335,10 @@ impl AgentRegistry {
         msg: ServerToAgent,
     ) -> Result<(), String> {
         let g = self.inner.read().await;
-        let Some(tx) = g.get(agent_uuid) else {
+        let Some(entry) = g.get(agent_uuid) else {
             return Err("agent not connected".into());
         };
-        tx.send(msg).await.map_err(|e| e.to_string())
+        entry.tx.send(msg).await.map_err(|e| e.to_string())
     }
 
     pub async fn is_online(&self, agent_uuid: &str) -> bool {
@@ -487,9 +508,9 @@ pub fn hash_token(token: &str) -> String {
 
 /// Generate a 256-bit URL-safe token. Caller stores the hash, returns the plaintext exactly once.
 pub fn generate_enrollment_token() -> String {
-    use rand::RngCore;
+    use rand_core::{OsRng, RngCore};
     let mut buf = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut buf);
+    OsRng.fill_bytes(&mut buf);
     let alphabet: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut out = String::with_capacity(48);
     for b in buf {

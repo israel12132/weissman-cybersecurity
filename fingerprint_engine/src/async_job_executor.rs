@@ -162,6 +162,35 @@ async fn persist_findings_grouped_by_client_field(
     total
 }
 
+fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
+    let severity = if v.oob_token.is_some() {
+        "critical"
+    } else {
+        "high"
+    };
+    let title: String = v.anomaly_type.chars().take(500).collect();
+    let payload_excerpt: String = v.payload.chars().take(4000).collect();
+    let mut description =
+        format!("{}\n\nPayload excerpt:\n{}", v.baseline_vs_anomaly, payload_excerpt);
+    if let Some(ref tok) = v.oob_token {
+        description.push_str(&format!("\n\nOAST correlation token: {tok}"));
+    }
+    if v.llm_user_prompt.is_some() {
+        description.push_str(
+            "\n\n[Generative] Payload produced by vLLM; see generative_fuzz_winning_payloads.llm_user_prompt.",
+        );
+    }
+    json!({
+        "title": title,
+        "severity": severity,
+        "target_url": v.target_url,
+        "description": description,
+        "poc": v.payload.chars().take(32_000).collect::<String>(),
+        "type": "feedback_fuzz",
+        "anomaly_type": v.anomaly_type,
+    })
+}
+
 /// Run one job to completion JSON (success) or error string (failure).
 pub async fn execute_job(
     app_pool: Arc<PgPool>,
@@ -194,9 +223,20 @@ pub async fn execute_job(
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
             let _ = tx.commit().await;
             let job_params = p.clone();
+            let discovered_paths: Vec<String> = p
+                .get("discovered_paths")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(str::to_string))
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default();
             let ctx = crate::engine_dispatch::EngineRunContext {
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
+                discovered_paths,
                 github_token,
                 llm_base_url: llm_base.unwrap_or_default(),
                 llm_model: llm_model.unwrap_or_default(),
@@ -556,26 +596,15 @@ pub async fn execute_job(
                     "summary": result.summary,
                 }));
                 
-                // Save findings to DB
-                if !result.findings.is_empty() {
-                    if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
-                        for finding in &result.findings {
-                            let _ = sqlx::query(
-                                "INSERT INTO vulnerabilities (tenant_id, client_id, raw_data, severity, source, created_at, updated_at)
-                                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-                                 ON CONFLICT DO NOTHING"
-                            )
-                            .bind(tid)
-                            .bind(client_id)
-                            .bind(finding)
-                            .bind(finding.get("severity").and_then(Value::as_str).unwrap_or("info"))
-                            .bind(engine_id.as_str())
-                            .execute(&mut *tx)
-                            .await;
-                        }
-                        let _ = tx.commit().await;
-                    }
-                }
+                let _ = persist_findings_best_effort(
+                    app.as_ref(),
+                    tid,
+                    Some(client_id),
+                    engine_id,
+                    &target,
+                    &result.findings,
+                )
+                .await;
             }
             
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
@@ -631,27 +660,16 @@ pub async fn execute_job(
                     };
                     
                     total_findings += result.findings.len();
-                    
-                    // Save findings
-                    if !result.findings.is_empty() {
-                        if let Ok(mut tx) = db::begin_tenant_tx(&app, tid).await {
-                            for finding in &result.findings {
-                                let _ = sqlx::query(
-                                    "INSERT INTO vulnerabilities (tenant_id, client_id, raw_data, severity, source, created_at, updated_at)
-                                     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-                                     ON CONFLICT DO NOTHING"
-                                )
-                                .bind(tid)
-                                .bind(client_id)
-                                .bind(finding)
-                                .bind(finding.get("severity").and_then(Value::as_str).unwrap_or("info"))
-                                .bind(format!("{}:{}", engine_id, domain))
-                                .execute(&mut *tx)
-                                .await;
-                            }
-                            let _ = tx.commit().await;
-                        }
-                    }
+
+                    let _ = persist_findings_best_effort(
+                        app.as_ref(),
+                        tid,
+                        Some(client_id),
+                        engine_id,
+                        &target,
+                        &result.findings,
+                    )
+                    .await;
                 }
             }
             
@@ -1696,28 +1714,10 @@ pub async fn execute_job(
             .fetch_one(&mut *tx)
             .await
             .unwrap_or(false);
+            let _ = tx.commit().await;
             if !ok {
-                let _ = tx.rollback().await;
                 return Err("client not found".into());
             }
-            let summary = json!({
-                "engine": "http_feedback_fuzz",
-                "target": &target,
-                "async_job_id": job.id.to_string(),
-                "oast_interaction_token": job_oast_token.as_deref(),
-            })
-            .to_string();
-            let run_id: i64 = sqlx::query_scalar(
-                r#"INSERT INTO report_runs (tenant_id, region, findings_json, summary)
-                   VALUES ($1, $2, '[]', $3) RETURNING id"#,
-            )
-            .bind(tid)
-            .bind("async_feedback_fuzz")
-            .bind(&summary)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-            let _ = tx.commit().await.map_err(|e| e.to_string())?;
 
             let cognitive: Option<String> = p
                 .get("cognitive_dictionary")
@@ -1740,58 +1740,42 @@ pub async fn execute_job(
             )
             .await;
 
-            let mut tx2 = db::begin_tenant_tx(app_pool.as_ref(), tid)
-                .await
-                .map_err(|e| e.to_string())?;
-            for (i, v) in findings.iter().enumerate() {
-                let fid = format!("feedback-fuzz-{}-{}", run_id, i);
-                let severity = if v.oob_token.is_some() {
-                    "critical"
-                } else {
-                    "high"
-                };
-                let title: String = v.anomaly_type.chars().take(500).collect();
-                let payload_excerpt: String = v.payload.chars().take(4000).collect();
-                let mut description = format!("{}\n\nPayload excerpt:\n{}", v.baseline_vs_anomaly, payload_excerpt);
-                if let Some(ref tok) = v.oob_token {
-                    description.push_str(&format!("\n\nOAST correlation token: {}", tok));
-                }
-                if v.llm_user_prompt.is_some() {
-                    description.push_str("\n\n[Generative] Payload produced by vLLM; see generative_fuzz_winning_payloads.llm_user_prompt.");
-                }
-                let poc: String = v.payload.chars().take(32_000).collect();
-                let _ = sqlx::query(
-                    r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, discovered_at)
-                       VALUES ($1, $2, $3, $4, $5, $6, 'http_feedback_fuzz', $7, 'OPEN', $8, now())"#,
-                )
-                .bind(run_id)
-                .bind(tid)
-                .bind(client_id)
-                .bind(&fid)
-                .bind(&title)
-                .bind(severity)
-                .bind(&description)
-                .bind(&poc)
-                .execute(&mut *tx2)
-                .await;
-                if let Some(ref prompt) = v.llm_user_prompt {
-                    let _ = sqlx::query(
-                        r#"INSERT INTO generative_fuzz_winning_payloads (tenant_id, client_id, run_id, target_url, payload, llm_user_prompt, anomaly_type, baseline_vs_anomaly)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
-                    )
-                    .bind(tid)
-                    .bind(client_id)
-                    .bind(run_id)
-                    .bind(&v.target_url)
-                    .bind(&v.payload)
-                    .bind(prompt)
-                    .bind(&v.anomaly_type)
-                    .bind(&v.baseline_vs_anomaly)
-                    .execute(&mut *tx2)
-                    .await;
+            let finding_values: Vec<Value> = findings
+                .iter()
+                .map(feedback_fuzz_anomaly_to_finding)
+                .collect();
+            let persisted = persist_findings_best_effort(
+                app_pool.as_ref(),
+                tid,
+                Some(client_id),
+                "http_feedback_fuzz",
+                &target,
+                &finding_values,
+            )
+            .await;
+
+            if findings.iter().any(|v| v.llm_user_prompt.is_some()) {
+                if let Ok(mut tx2) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
+                    for v in &findings {
+                        if let Some(ref prompt) = v.llm_user_prompt {
+                            let _ = sqlx::query(
+                                r#"INSERT INTO generative_fuzz_winning_payloads (tenant_id, client_id, run_id, target_url, payload, llm_user_prompt, anomaly_type, baseline_vs_anomaly)
+                                   VALUES ($1, $2, NULL, $3, $4, $5, $6, $7)"#,
+                            )
+                            .bind(tid)
+                            .bind(client_id)
+                            .bind(&v.target_url)
+                            .bind(&v.payload)
+                            .bind(prompt)
+                            .bind(&v.anomaly_type)
+                            .bind(&v.baseline_vs_anomaly)
+                            .execute(&mut *tx2)
+                            .await;
+                        }
+                    }
+                    let _ = tx2.commit().await;
                 }
             }
-            let _ = tx2.commit().await.map_err(|e| e.to_string())?;
 
             if !findings.is_empty() {
                 crate::notifications::spawn_ascension_poe_followup(
@@ -1803,9 +1787,9 @@ pub async fn execute_job(
 
             Ok(json!({
                 "ok": true,
-                "run_id": run_id,
                 "findings_count": findings.len(),
-                "message": "feedback fuzz completed; findings persisted to vulnerabilities",
+                "findings_persisted": persisted,
+                "message": "feedback fuzz completed; findings persisted via findings_persist",
             }))
         }
         _ => Err(format!("unknown job kind: {}", job.kind)),

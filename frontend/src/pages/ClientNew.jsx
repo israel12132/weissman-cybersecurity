@@ -86,6 +86,7 @@ export default function ClientNew() {
             'semantic_ai_fuzz',
             'microsecond_timing',
             'ai_adversarial_redteam',
+            'nexus_sovereign_swarm',
           ],
           roe_mode: 'safe_proofs',
           stealth_level: 50,

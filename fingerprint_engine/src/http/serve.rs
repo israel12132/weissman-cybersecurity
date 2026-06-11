@@ -143,6 +143,7 @@ fn utc_str_to_israel(utc_str: &str) -> String {
 enum TokenSource {
     HeaderOrCookie,
     QuerySseAccessToken,
+    QuerySseTicket,
     QueryAgentWsToken,
 }
 
@@ -155,6 +156,19 @@ fn sse_accepts_query_access_token(path: &str) -> bool {
 
 /// Extract JWT from Cookie (`weissman_token`), `Authorization: Bearer`, or path-scoped query params.
 fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String, TokenSource)> {
+    // Agent WS: prefer `?token=` so a human session cookie cannot shadow the agent JWT.
+    if path == "/ws/agent" {
+        if let Some(q) = req.uri().query() {
+            for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
+                if k == "token" {
+                    let t = v.trim();
+                    if !t.is_empty() {
+                        return Some((t.to_owned(), TokenSource::QueryAgentWsToken));
+                    }
+                }
+            }
+        }
+    }
     if let Some(cookie_h) = req.headers().get(axum::http::header::COOKIE) {
         if let Ok(s) = cookie_h.to_str() {
             for part in s.split(';') {
@@ -182,18 +196,15 @@ fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String
     let Some(q) = req.uri().query() else {
         return None;
     };
-    if path == "/ws/agent" {
+    if sse_accepts_query_access_token(path) {
         for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
-            if k == "token" {
+            if k == "sse_ticket" {
                 let t = v.trim();
                 if !t.is_empty() {
-                    return Some((t.to_owned(), TokenSource::QueryAgentWsToken));
+                    return Some((t.to_owned(), TokenSource::QuerySseTicket));
                 }
             }
         }
-        return None;
-    }
-    if sse_accepts_query_access_token(path) {
         for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
             if k == "access_token" {
                 let t = v.trim();
@@ -208,8 +219,13 @@ fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String
 
 fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Option<AuthContext> {
     match source {
-        TokenSource::HeaderOrCookie => auth_jwt::verify_access_token(token)
-            .filter(auth_jwt::is_user_access_context),
+        TokenSource::HeaderOrCookie => {
+            if path == "/ws/agent" {
+                auth_jwt::verify_agent_session_token(token)
+            } else {
+                auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
+            }
+        }
         TokenSource::QueryAgentWsToken => {
             if path != "/ws/agent" {
                 return None;
@@ -223,21 +239,32 @@ fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Opt
             tracing::warn!(
                 target: "auth_guard",
                 path = %path,
-                "Deprecated: JWT passed via ?access_token= query (EventSource only; prefer cookie auth)"
+                "Deprecated: JWT passed via ?access_token= query (EventSource only; prefer cookie auth or sse_ticket)"
             );
             auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
+        }
+        TokenSource::QuerySseTicket => {
+            if !sse_accepts_query_access_token(path) {
+                return None;
+            }
+            auth_jwt::verify_sse_ticket(token)
         }
     }
 }
 
 /// Auth middleware: allow only POST /api/login; all other /api/* require valid JWT.
-async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
+async fn auth_guard(
+    State(state): State<Arc<AppState>>,
+    mut request: Request<Body>,
+    next: Next,
+) -> Response {
     let path = request.uri().path();
     let method = request.method();
     if path == "/api/health" && method == Method::GET {
         return next.run(request).await;
     }
-    if path == "/api/login" && method == Method::POST {
+    // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
+    if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
     }
     if path == "/api/logout" && method == Method::POST {
@@ -285,13 +312,46 @@ async fn auth_guard(mut request: Request<Body>, next: Next) -> Response {
     if path == "/api/agents/enroll" && method == Method::POST {
         return next.run(request).await;
     }
-    if path == "/api/auth/mfa/verify" && method == Method::POST {
-        return next.run(request).await;
-    }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
         if let Some((t, source)) = extracted {
             if let Some(ctx) = verify_token_for_request(&t, path, source) {
+                if auth_jwt::is_user_access_context(&ctx) {
+                    if let Some(ref jti) = ctx.jti {
+                        match crate::auth_refresh::is_access_jti_revoked(
+                            state.auth_pool.as_ref(),
+                            jti,
+                        )
+                        .await
+                        {
+                            Ok(true) => {
+                                tracing::debug!(
+                                    target: "auth_guard",
+                                    path = %path,
+                                    "Access token jti revoked"
+                                );
+                                return (
+                                    StatusCode::UNAUTHORIZED,
+                                    Json(json!({"detail": "Unauthorized", "ok": false})),
+                                )
+                                    .into_response();
+                            }
+                            Ok(false) => {}
+                            Err(e) => {
+                                tracing::error!(
+                                    target: "auth_guard",
+                                    error = %e,
+                                    "revocation lookup failed"
+                                );
+                                return (
+                                    StatusCode::SERVICE_UNAVAILABLE,
+                                    Json(json!({"detail": "Auth service unavailable", "ok": false})),
+                                )
+                                    .into_response();
+                            }
+                        }
+                    }
+                }
                 request.extensions_mut().insert(ctx);
                 return next.run(request).await;
             }
@@ -1127,7 +1187,7 @@ struct DeceptionDeployCloudBody {
     ssm_parameter_path: Option<String>,
 }
 
-const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
+const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam","nexus_sovereign_swarm"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
 
 // Handlers: see `handler_fragments.rs` (single wiring point for all `.inc` fragments).
 include!("handler_fragments.rs");
@@ -1256,6 +1316,14 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         auth_pool.clone(),
         state.telemetry_broadcast_tx.clone(),
     );
+    crate::scan_schedule_worker::spawn_scan_schedule_worker(
+        app_pool.clone(),
+        auth_pool.clone(),
+    );
+    crate::alert_evaluator_worker::spawn_alert_evaluator_worker(
+        app_pool.clone(),
+        auth_pool.clone(),
+    );
     crate::threat_intel_ingestor::spawn_ingest_worker(
         app_pool.clone(),
         intel_pool.clone(),
@@ -1370,12 +1438,6 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
-        .route(
-            "/api/tenant/engines",
-            get(api_tenant_engines_get)
-                .put(api_tenant_engines_put)
-                .patch(api_tenant_engines_put),
-        )
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/docs", get(crate::api_docs::api_docs_swagger))
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
@@ -1452,6 +1514,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/health", get(api_health))
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/auth/me", get(api_auth_me))
+        .route("/api/auth/sse-ticket", get(api_auth_sse_ticket))
         // ── Admin user management (CEO/Superadmin only) ───────────────────────
         .route("/api/admin/users", get(crate::admin_users::api_admin_users_list).post(crate::admin_users::api_admin_users_create))
         .route("/api/admin/users/:id", patch(crate::admin_users::api_admin_users_update))
@@ -1693,11 +1756,20 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/ot-ics/devices", get(api_ot_ics_devices))
         .route("/api/mobile-security/apps", get(api_mobile_security_apps))
         .route("/api/soc/incidents", get(api_soc_incidents))
+        .route(
+            "/api/soc/incidents/:id/playbook-steps",
+            patch(api_soc_incident_playbook_steps_patch),
+        )
         .route("/api/soc/hunts", get(api_soc_hunts))
+        .route("/api/soc/iocs", get(api_soc_iocs))
         .route("/api/soc/kill-chains", get(api_soc_kill_chains))
         .route("/api/soc/exploit-lab", get(api_soc_exploit_lab))
         .route("/api/soc/ai-patterns", get(api_soc_ai_patterns))
         .route("/api/soc/social-engineering", get(api_soc_social_engineering))
+        .route(
+            "/api/soc/social-engineering/campaigns",
+            post(api_soc_social_engineering_campaigns_post),
+        )
         .route("/api/soc/network-protocols", get(api_soc_network_protocols))
         .route("/api/reports/executive", get(api_reports_executive))
         .route(
@@ -1838,16 +1910,17 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             post(api_ceo_suspended_resume),
         )
         .route("/api/ceo/suspended-graphs/:id", get(api_ceo_suspended_get))
-        .layer(middleware::from_fn(
-            crate::http::login_rate_limit::login_rate_limit_middleware,
-        ))
+        .layer(middleware::from_fn(crate::http::login_rate_limit_middleware))
         .layer(middleware::from_fn(
             crate::http::tenant_scan_limit::tenant_scan_rate_limit_middleware,
         ))
         .layer(middleware::from_fn(
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
-        .layer(middleware::from_fn(auth_guard))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_guard,
+        ))
         .layer(middleware::from_fn(
             crate::observability::http_metrics_middleware,
         ))
