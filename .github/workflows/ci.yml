@@ -41,7 +41,7 @@ jobs:
         run: pip-audit -r requirements.txt --progress-spinner off
 
       - name: Run ruff linter
-        run: ruff check src/ --select E,F,W --ignore E501 || true
+        run: ruff check src/ --select E,F,W --ignore E501
 
       - name: Run pytest (if tests exist)
         run: |
@@ -52,7 +52,7 @@ jobs:
           fi
 
   rust-audit:
-    name: Rust — cargo audit & build
+    name: Rust — audit, lint, test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,15 +81,39 @@ jobs:
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104
 
-      - name: Build Rust workspace
-        run: cargo build --workspace --release
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+  frontend-build:
+    name: Frontend — build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
 
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -117,9 +141,13 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
         uses: actions/cache@v4
@@ -134,8 +162,22 @@ jobs:
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend production bundle
+        run: npm run build
+        working-directory: frontend
+
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
+
+      - name: Build Docker production images
+        run: docker compose build backend worker gateway
+
+      - name: Validate docker-compose.test.yml
+        run: docker compose -f docker-compose.test.yml config > /dev/null
 
       - name: Start weissman-server
         env:
@@ -144,6 +186,9 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+          WEISSMAN_METRICS_TOKEN: ci-metrics-token-32-bytes-minimum
+          WEISSMAN_ENV: production
+          WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: changeme
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
@@ -157,6 +202,7 @@ jobs:
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+          WEISSMAN_ENV: production
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health

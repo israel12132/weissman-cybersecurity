@@ -28,6 +28,7 @@
 | Var | Default | Effect |
 |-----|---------|--------|
 | `WEISSMAN_SELF_SERVE_SIGNUP` | unset → 503 | `true` opens `/api/auth/signup` to the public |
+| `WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION` | unset | Required with `WEISSMAN_SELF_SERVE_SIGNUP=true` in production (explicit operator acknowledgement) |
 | `WEISSMAN_SIGNUP_RETURN_LINK` | unset | `1` returns the verification link in the response (DEV ONLY) |
 | `WEISSMAN_BILLING_STRICT` | derived | When `true`, client-create + scan-run require an active Paddle subscription |
 | `WEISSMAN_INTEL_KEV_ENABLED` | `true` | Disable to skip CISA KEV mirror refresh |
@@ -51,6 +52,7 @@
 | `WEISSMAN_ALERT_WEBHOOK_URL` | Generic webhook for critical-PoE alerts and SOAR fallback |
 | `WEISSMAN_PAGER_WEBHOOK_URL` | PagerDuty / OpsGenie endpoint for `page_oncall` action |
 | `WEISSMAN_SMTP_ENABLED` + `WEISSMAN_SMTP_*` | SMTP for verification + critical alert emails |
+| `WEISSMAN_METRICS_TOKEN` | Required in production; protects `GET /api/metrics` via Bearer token |
 
 ### Pool tuning
 
@@ -65,6 +67,13 @@
 | Var | Effect |
 |-----|--------|
 | `WEISSMAN_ALLOW_INSECURE_TLS` | `1` only outside production; backend refuses to start in production when set |
+
+### Proxy trust / real client IP
+
+| Var | Effect |
+|-----|--------|
+| `WEISSMAN_TRUST_PROXY_HEADERS` | Enables use of `X-Forwarded-For` / `X-Real-IP` for audit + rate limit client identity |
+| `WEISSMAN_TRUST_PROXY_CIDRS` | Optional comma-separated trusted proxy CIDRs; when set, only peers in this list are allowed to supply forwarded client IP |
 
 ---
 

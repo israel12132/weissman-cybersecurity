@@ -15,8 +15,23 @@ const WEAK_DB_PASSWORD_FRAGMENTS: &[&str] = &[
     "weissman_ro_dev",
 ];
 
-/// Refuse production boot when known-weak credentials or dev bypass flags are set.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StartupScope {
+    Server,
+    Worker,
+}
+
+/// Refuse production server boot when known-weak credentials or dev bypass flags are set.
 pub fn enforce_production_security_policy() -> Result<(), String> {
+    enforce_production_security_policy_with_scope(StartupScope::Server)
+}
+
+/// Refuse production worker boot when known-weak credentials or dev bypass flags are set.
+pub fn enforce_worker_production_security_policy() -> Result<(), String> {
+    enforce_production_security_policy_with_scope(StartupScope::Worker)
+}
+
+fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<(), String> {
     if !is_production_environment() {
         return Ok(());
     }
@@ -38,29 +53,25 @@ pub fn enforce_production_security_policy() -> Result<(), String> {
                     .into(),
             );
         }
+    } else {
+        return Err("WEISSMAN_JWT_SECRET must be set in production".into());
     }
 
-    if matches!(
-        std::env::var("WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD").as_deref(),
-        Ok("1") | Ok("true") | Ok("yes")
-    ) {
+    if env_truthy("WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD") {
         return Err(
             "WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD is set in production; unset it and configure WEISSMAN_ADMIN_PASSWORD"
                 .into(),
         );
     }
 
-    if matches!(
-        std::env::var("WEISSMAN_SAML_INSECURE_SKIP_VERIFY").as_deref(),
-        Ok("1") | Ok("true") | Ok("yes")
-    ) {
+    if env_truthy("WEISSMAN_SAML_INSECURE_SKIP_VERIFY") {
         return Err(
             "WEISSMAN_SAML_INSECURE_SKIP_VERIFY is set in production; configure WEISSMAN_XMLSEC1_BINARY instead"
                 .into(),
         );
     }
 
-    if !crate::auth_jwt::cookie_use_secure() {
+    if matches!(scope, StartupScope::Server) && !crate::auth_jwt::cookie_use_secure() {
         return Err(
             "WEISSMAN_COOKIE_SECURE must be 1 in production (HTTPS-only session cookies)".into(),
         );
@@ -81,5 +92,45 @@ pub fn enforce_production_security_policy() -> Result<(), String> {
         }
     }
 
+    if matches!(scope, StartupScope::Server) {
+        if std::env::var("WEISSMAN_MIGRATE_URL")
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+        {
+            return Err(
+                "WEISSMAN_MIGRATE_URL must be set in production so schema migrations run at boot"
+                    .into(),
+            );
+        }
+
+        let metrics_token = std::env::var("WEISSMAN_METRICS_TOKEN").unwrap_or_default();
+        if metrics_token.trim().len() < 32 {
+            return Err(
+                "WEISSMAN_METRICS_TOKEN must be set to a strong (>=32 chars) value in production".into(),
+            );
+        }
+
+        if env_truthy("WEISSMAN_SELF_SERVE_SIGNUP")
+            && !env_truthy("WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION")
+        {
+            return Err(
+                "WEISSMAN_SELF_SERVE_SIGNUP is enabled in production; set WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION=1 to acknowledge public signup exposure"
+                    .into(),
+            );
+        }
+    }
+
     Ok(())
+}
+
+fn env_truthy(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
 }

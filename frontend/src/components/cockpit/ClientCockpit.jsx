@@ -1,30 +1,30 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
-import OverviewTab from './OverviewTab'
-import EngineRoomTab from './EngineRoomTab'
-import FindingsTab from './FindingsTab'
-import IdentityMatrixTab from './IdentityMatrixTab'
-import RiskGraphTab from './RiskGraphTab'
-import AutoHealTab from './AutoHealTab'
-import DeceptionGridTab from './DeceptionGridTab'
-import LivePipelineMonitor from './LivePipelineMonitor'
-import AuditTrailTab from './AuditTrailTab'
-import SettingsAlertsTab from './SettingsAlertsTab'
-import ComplianceDashboardTab from './ComplianceDashboardTab'
-import SwarmMindTab from './SwarmMindTab'
-import ContainmentRulesTab from './ContainmentRulesTab'
-import AIModelRiskTab from './AIModelRiskTab'
-import GlobalEdgeSwarmMap from './GlobalEdgeSwarmMap'
-import SatelliteDroneMap from '../warroom/SatelliteDroneMap'
-import NeuralEngineWeb from '../warroom/NeuralEngineWeb'
-import SystemPulseEKG from '../warroom/SystemPulseEKG'
+const OverviewTab = lazy(() => import('./OverviewTab'))
+const EngineRoomTab = lazy(() => import('./EngineRoomTab'))
+const FindingsTab = lazy(() => import('./FindingsTab'))
+const IdentityMatrixTab = lazy(() => import('./IdentityMatrixTab'))
+const RiskGraphTab = lazy(() => import('./RiskGraphTab'))
+const AutoHealTab = lazy(() => import('./AutoHealTab'))
+const DeceptionGridTab = lazy(() => import('./DeceptionGridTab'))
+const LivePipelineMonitor = lazy(() => import('./LivePipelineMonitor'))
+const AuditTrailTab = lazy(() => import('./AuditTrailTab'))
+const SettingsAlertsTab = lazy(() => import('./SettingsAlertsTab'))
+const ComplianceDashboardTab = lazy(() => import('./ComplianceDashboardTab'))
+const SwarmMindTab = lazy(() => import('./SwarmMindTab'))
+const ContainmentRulesTab = lazy(() => import('./ContainmentRulesTab'))
+const AIModelRiskTab = lazy(() => import('./AIModelRiskTab'))
+const GlobalEdgeSwarmMap = lazy(() => import('./GlobalEdgeSwarmMap'))
+const SatelliteDroneMap = lazy(() => import('../warroom/SatelliteDroneMap'))
+const NeuralEngineWeb = lazy(() => import('../warroom/NeuralEngineWeb'))
+const SystemPulseEKG = lazy(() => import('../warroom/SystemPulseEKG'))
 import TacticalFindingOverlay from '../warroom/TacticalFindingOverlay'
 import WarRoomSoundscape from '../warroom/WarRoomSoundscape'
 import CockpitTabErrorBoundary from './CockpitTabErrorBoundary'
-import CeoMissionControlTab from './CeoMissionControlTab'
+const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../lib/apiBase'
 
@@ -88,6 +88,12 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   const [safeSaving, setSafeSaving] = useState(false)
   const [boardReportLoading, setBoardReportLoading] = useState(false)
   const { redTeamActive } = useWarRoom()
+  const [showWarRoomVisuals, setShowWarRoomVisuals] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowWarRoomVisuals(true), 600)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     const loadHealth = () => {
@@ -190,7 +196,9 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
             </p>
           </header>
           <div className="flex-1 min-h-0 overflow-auto z-10">
-            <CeoMissionControlTab />
+            <Suspense fallback={<div className="p-6 text-white/60 text-sm">Loading mission control...</div>}>
+              <CeoMissionControlTab />
+            </Suspense>
           </div>
         </main>
       )
@@ -324,7 +332,13 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <SatelliteDroneMap />
+          {showWarRoomVisuals ? (
+            <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+              <SatelliteDroneMap />
+            </Suspense>
+          ) : (
+            <div className="h-full w-full bg-slate-950/80" />
+          )}
         </motion.div>
         <motion.div
           ref={neuralWrapRef}
@@ -333,20 +347,30 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.05 }}
         >
-          <NeuralEngineWeb width={neuralSize.width} height={neuralSize.height} />
+          {showWarRoomVisuals ? (
+            <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+              <NeuralEngineWeb width={neuralSize.width} height={neuralSize.height} />
+            </Suspense>
+          ) : (
+            <div className="h-full w-full bg-slate-950/80" />
+          )}
         </motion.div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative z-10 min-w-0 max-w-full">
         <CockpitTabErrorBoundary key={activeTab} tabId={activeTab} tabLabel={activeTabMeta?.label}>
-          <ActiveComponent />
+          <Suspense fallback={<div className="p-6 text-white/60 text-sm">Loading cockpit tab...</div>}>
+            <ActiveComponent />
+          </Suspense>
         </CockpitTabErrorBoundary>
       </div>
 
       {/* System Pulse EKG */}
       <div className="shrink-0 px-4 py-2.5 border-t border-white/[0.06] relative z-10">
-        <SystemPulseEKG />
+        <Suspense fallback={<div className="h-16 w-full bg-slate-950/70 rounded-lg" />}>
+          <SystemPulseEKG />
+        </Suspense>
       </div>
     </main>
   )

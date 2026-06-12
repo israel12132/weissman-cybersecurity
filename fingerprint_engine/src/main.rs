@@ -49,7 +49,7 @@ fn main() {
     }
 
     let cmd = args[0].as_str();
-    let target = args.get(1).map(|s| s.as_str()).unwrap_or("");
+    let target = args.get(1).map_or("", String::as_str);
 
     if cmd == "serve" {
         eprintln!(
@@ -270,7 +270,7 @@ fn main() {
 
     if args.first().map(|s| s.as_str()) == Some("fuzz") {
         let _ = tracing_subscriber::fmt::try_init();
-        let url = args.get(1).map(|s| s.as_str()).unwrap_or("");
+        let url = args.get(1).map_or("", String::as_str);
         let payload = args
             .get(2)
             .map(|s| s.as_str())
@@ -303,14 +303,14 @@ fn main() {
         let results: HashMap<String, Vec<String>> =
             scan_ip_ranges_concurrent_with_port_limit(&cidrs, port_limit).await;
         match serde_json::to_string(&results) {
-            Ok(s) => println!("{}", s),
+            Ok(s) => println!("{s}"),
             Err(_) => println!("{}", serde_json::json!({})),
         }
         return;
     }
 
     if args.first().map(|s| s.as_str()) == Some("subdomains") {
-        let domain = args.get(1).map(|s| s.as_str()).unwrap_or("").to_string();
+        let domain = args.get(1).map_or("", String::as_str).to_string();
         let mut wordlist: Vec<String> = fingerprint_engine::DEFAULT_SUBDOMAINS
             .iter()
             .map(|s| (*s).to_string())
@@ -340,22 +340,22 @@ fn main() {
             enum_subdomains(&domain, &wordlist, 200).await
         };
         match serde_json::to_string(&found) {
-            Ok(s) => println!("{}", s),
+            Ok(s) => println!("{s}"),
             Err(_) => println!("[]"),
         }
         return;
     }
 
     if args.first().map(|s| s.as_str()) == Some("safe-probe") {
-        let url = args.get(1).map(|s| s.as_str()).unwrap_or("");
-        let tech_hint = args.get(2).map(|s| s.as_str()).unwrap_or("");
+        let url = args.get(1).map_or("", String::as_str);
+        let tech_hint = args.get(2).map_or("", String::as_str);
         if url.is_empty() {
             eprintln!("safe-probe requires <url> [tech_hint]");
             std::process::exit(1);
         }
         if let Some(result) = safe_probe(url, tech_hint).await {
             if let Ok(s) = serde_json::to_string(&result) {
-                println!("{}", s);
+                println!("{s}");
             }
         } else {
             println!("{}", serde_json::json!({"error": "probe_failed"}));
@@ -367,7 +367,7 @@ fn main() {
     let results: HashMap<String, Vec<String>> = scan_targets_concurrent(&urls).await;
 
     match serde_json::to_string(&results) {
-        Ok(s) => println!("{}", s),
+        Ok(s) => println!("{s}"),
         Err(_) => println!("{}", serde_json::json!({})),
     }
     });

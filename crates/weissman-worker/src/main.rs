@@ -104,7 +104,7 @@ async fn process_one(
             if hb_stop_bg.load(Ordering::SeqCst) {
                 break;
             }
-            if let Err(e) = job_queue::heartbeat(pool_clone.as_ref(), jid).await {
+            if let Err(e) = job_queue::heartbeat(pool_clone.as_ref(), jid, LOCK_SECS).await {
                 warn!(target: "weissman_worker", job_id = %jid, error = %e, "heartbeat failed");
             }
         }
@@ -136,6 +136,9 @@ async fn process_one(
 
     // Hard wall-clock cap per job kind so a stuck engine cannot park a worker forever.
     let timeout = job_kind_timeout(&job_kind_for_timeout);
+    // Keep an abort handle: on timeout, actually cancel the task instead of detaching it
+    // (a dropped JoinHandle does NOT stop the work — it would keep burning CPU/DB conns).
+    let exec_abort = exec_handle.abort_handle();
     let outcome: Result<serde_json::Value, String> = match tokio::time::timeout(timeout, exec_handle).await {
         Ok(Ok(inner)) => inner,
         Ok(Err(join_err)) => Err(if join_err.is_cancelled() {
@@ -145,11 +148,14 @@ async fn process_one(
         } else {
             format!("job task join error: {join_err}")
         }),
-        Err(_) => Err(format!(
-            "job timed out after {}s ({})",
-            timeout.as_secs(),
-            job_kind_for_timeout
-        )),
+        Err(_) => {
+            exec_abort.abort();
+            Err(format!(
+                "job timed out after {}s ({})",
+                timeout.as_secs(),
+                job_kind_for_timeout
+            ))
+        }
     };
 
     hb_stop.store(true, Ordering::SeqCst);
@@ -194,6 +200,10 @@ async fn main() {
     // BLOCKER #5: TLS policy guard in production. Worker also runs scans, so this matters here too.
     if let Err(msg) = weissman_core::tls_policy::enforce_production_tls_policy() {
         eprintln!("[startup] worker TLS policy refusal: {msg}");
+        std::process::exit(2);
+    }
+    if let Err(msg) = fingerprint_engine::security_startup::enforce_worker_production_security_policy() {
+        eprintln!("[startup] worker security policy refusal: {msg}");
         std::process::exit(2);
     }
 

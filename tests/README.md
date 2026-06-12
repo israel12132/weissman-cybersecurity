@@ -87,10 +87,8 @@ Target coverage by module:
 
 Tests run automatically on:
 - Pull requests
-- Commits to main branch
-- Nightly builds
+- Pushes to active branches
 
 Minimum requirements for PR merge:
 - All tests pass
-- Coverage > 80%
 - No security vulnerabilities

@@ -1,8 +1,8 @@
 # Production: Vite build + Nginx gateway (static SPA + /api /ws → backend)
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
