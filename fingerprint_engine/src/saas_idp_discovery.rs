@@ -28,7 +28,9 @@ fn build_client() -> reqwest::Client {
 
 fn spf_include_re() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"(?i)\binclude:([a-z0-9._-]+)\b").unwrap_or_else(|_| Regex::new("$^").unwrap()))
+    R.get_or_init(|| {
+        Regex::new(r"(?i)\binclude:([a-z0-9._-]+)\b").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    })
 }
 
 fn normalize_domain(d: &str) -> Option<String> {
@@ -62,7 +64,9 @@ fn host_candidates_for_domain(domain: &str) -> Vec<String> {
     }
     // Many orgs expose the IdP as the apex or via a dedicated "sso.".
     out.push(domain.to_string());
-    out.into_iter().take(MAX_HOST_CANDIDATES_PER_DOMAIN).collect()
+    out.into_iter()
+        .take(MAX_HOST_CANDIDATES_PER_DOMAIN)
+        .collect()
 }
 
 fn classify_idp_from_issuer_or_host(host: &str) -> Option<&'static str> {
@@ -70,10 +74,16 @@ fn classify_idp_from_issuer_or_host(host: &str) -> Option<&'static str> {
     if h.contains("okta.com") || h.contains("oktapreview.com") || h.contains("okta-emea.com") {
         return Some("okta");
     }
-    if h.contains("microsoftonline.com") || h.contains("sts.windows.net") || h.contains("b2clogin.com") {
+    if h.contains("microsoftonline.com")
+        || h.contains("sts.windows.net")
+        || h.contains("b2clogin.com")
+    {
         return Some("azure_ad");
     }
-    if h.contains("google.com") || h.contains("googleusercontent.com") || h.contains("accounts.google") {
+    if h.contains("google.com")
+        || h.contains("googleusercontent.com")
+        || h.contains("accounts.google")
+    {
         return Some("google");
     }
     if h.contains("pingone.com") || h.contains("pingidentity.com") {
@@ -127,7 +137,11 @@ async fn doh_txt_records(domain: &str) -> Vec<String> {
         return Vec::new();
     };
     ans.iter()
-        .filter_map(|a| a.get("data").and_then(|d| d.as_str()).map(|s| s.to_string()))
+        .filter_map(|a| {
+            a.get("data")
+                .and_then(|d| d.as_str())
+                .map(|s| s.to_string())
+        })
         .collect()
 }
 
@@ -168,7 +182,11 @@ async fn probe_https_landing(
     Some((final_host, status, snippet, hdrs))
 }
 
-fn detect_vendor_from_landing(snippet: &str, headers: &HashMap<String, String>, final_host: &str) -> Option<&'static str> {
+fn detect_vendor_from_landing(
+    snippet: &str,
+    headers: &HashMap<String, String>,
+    final_host: &str,
+) -> Option<&'static str> {
     if let Some(v) = headers.get("x-okta-request-id") {
         if !v.is_empty() {
             return Some("okta");
@@ -183,7 +201,10 @@ fn detect_vendor_from_landing(snippet: &str, headers: &HashMap<String, String>, 
     if lower.contains("okta") {
         return Some("okta");
     }
-    if lower.contains("azure active directory") || lower.contains("microsoft entra") || lower.contains("microsoftonline") {
+    if lower.contains("azure active directory")
+        || lower.contains("microsoft entra")
+        || lower.contains("microsoftonline")
+    {
         return Some("azure_ad");
     }
     if lower.contains("google workspace") || lower.contains("sign in with google") {
@@ -262,8 +283,11 @@ pub async fn discover(domains: &[String]) -> Value {
                     "vendor_host": vendor_host,
                     "confidence": 0.95,
                 }));
-            } else if let Some((final_host, status, snippet, headers)) = probe_https_landing(&c, &host).await {
-                let vendor = detect_vendor_from_landing(&snippet, &headers, &final_host).map(|s| s.to_string());
+            } else if let Some((final_host, status, snippet, headers)) =
+                probe_https_landing(&c, &host).await
+            {
+                let vendor = detect_vendor_from_landing(&snippet, &headers, &final_host)
+                    .map(|s| s.to_string());
                 if vendor.is_some() {
                     signals.push(json!({
                         "kind": "landing_probe",
@@ -292,7 +316,10 @@ pub async fn discover(domains: &[String]) -> Value {
         if let Some(arr) = v.get("signals").and_then(|s| s.as_array()) {
             for sig in arr {
                 if let Some(vendor) = sig.get("vendor").and_then(|x| x.as_str()) {
-                    idp_candidates.entry(vendor.to_string()).or_default().push(sig.clone());
+                    idp_candidates
+                        .entry(vendor.to_string())
+                        .or_default()
+                        .push(sig.clone());
                 }
             }
         }
@@ -331,4 +358,3 @@ pub async fn discover(domains: &[String]) -> Value {
         }
     })
 }
-

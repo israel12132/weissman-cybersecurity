@@ -65,11 +65,14 @@ async fn oauth_misconfig_hints(t: &str, engine_id: &str, mitre: &str) -> Vec<Val
                 ),
                 t,
             ));
-            if let Some(response_types) = doc.get("response_types_supported").and_then(|v| v.as_array())
+            if let Some(response_types) = doc
+                .get("response_types_supported")
+                .and_then(|v| v.as_array())
             {
-                let has_implicit = response_types.iter().filter_map(|v| v.as_str()).any(|rt| {
-                    rt == "token" || (rt.contains("token") && rt != "code token")
-                });
+                let has_implicit = response_types
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .any(|rt| rt == "token" || (rt.contains("token") && rt != "code token"));
                 if has_implicit {
                     findings.push(social_finding(
                         engine_id,
@@ -104,10 +107,15 @@ async fn oauth_misconfig_hints(t: &str, engine_id: &str, mitre: &str) -> Vec<Val
             }
         }
     }
-    for path in ["/oauth/authorize", "/oauth2/authorize", "/connect/authorize"] {
+    for path in [
+        "/oauth/authorize",
+        "/oauth2/authorize",
+        "/connect/authorize",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status != 404 && (p.body.contains("redirect_uri") || p.body.contains("client_id")) {
+            if p.status != 404 && (p.body.contains("redirect_uri") || p.body.contains("client_id"))
+            {
                 findings.push(social_finding(
                     engine_id,
                     "OAuth authorize endpoint reachable",
@@ -137,7 +145,9 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
     let mut findings: Vec<Value> = Vec::new();
     let has_spf = txt.iter().any(|r| r.starts_with("v=spf1"));
     let has_dmarc = dmarc_txt.iter().any(|r| r.contains("v=DMARC1"));
-    let has_dkim = txt.iter().any(|r| r.contains("v=DKIM1") || r.contains("k=rsa"));
+    let has_dkim = txt
+        .iter()
+        .any(|r| r.contains("v=DKIM1") || r.contains("k=rsa"));
     let dmarc_reject = dmarc_txt.iter().any(|r| {
         let r = r.to_ascii_lowercase();
         r.contains("p=reject") || r.contains("p=quarantine")
@@ -148,7 +158,10 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
             "Domain accepts mail but lacks SPF",
             "medium",
             mitre,
-            &format!("MX={:?} for {} but no v=spf1 TXT — domain spoofing-friendly.", mx, host),
+            &format!(
+                "MX={:?} for {} but no v=spf1 TXT — domain spoofing-friendly.",
+                mx, host
+            ),
             t,
         ));
     }
@@ -167,7 +180,10 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
             "Weak DMARC policy (p=none)",
             "low",
             mitre,
-            &format!("_dmarc.{} publishes DMARC but not p=reject/quarantine.", host),
+            &format!(
+                "_dmarc.{} publishes DMARC but not p=reject/quarantine.",
+                host
+            ),
             t,
         ));
     }
@@ -177,7 +193,10 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
             "No DKIM selector in apex TXT",
             "low",
             mitre,
-            &format!("{} accepts mail but apex TXT lacks DKIM hints — verify selector records.", host),
+            &format!(
+                "{} accepts mail but apex TXT lacks DKIM hints — verify selector records.",
+                host
+            ),
             t,
         ));
     }
@@ -185,7 +204,10 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
     if findings.is_empty() {
         empty_ok(engine_id, t)
     } else {
-        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("{}: {}", engine_id, findings.len()),
+        )
     }
 }
 
@@ -196,7 +218,13 @@ async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> Engine
     let client = http_client().await;
     let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/login", "/signin", "/auth/login", "/account/login", "/sso/login"] {
+    for path in [
+        "/login",
+        "/signin",
+        "/auth/login",
+        "/account/login",
+        "/sso/login",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             let body = p.body.to_ascii_lowercase();
@@ -207,7 +235,10 @@ async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> Engine
                 let offsite_action = body.contains("action=\"http://")
                     || body.contains("action='http://")
                     || (body.contains("action=\"https://")
-                        && !body.contains(&format!("action=\"https://{}", extract_host(t).to_ascii_lowercase())));
+                        && !body.contains(&format!(
+                            "action=\"https://{}",
+                            extract_host(t).to_ascii_lowercase()
+                        )));
                 findings.push(social_finding(
                     engine_id,
                     "Public login form detected",
@@ -230,7 +261,10 @@ async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> Engine
     if findings.is_empty() {
         empty_ok(engine_id, t)
     } else {
-        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("{}: {}", engine_id, findings.len()),
+        )
     }
 }
 
@@ -258,7 +292,10 @@ pub async fn run_qr_phishing_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let body = p.body.to_ascii_lowercase();
-        if body.contains("qrcode") || body.contains("qr-code") || body.contains("data:image/svg+xml") {
+        if body.contains("qrcode")
+            || body.contains("qr-code")
+            || body.contains("data:image/svg+xml")
+        {
             findings.push(social_finding(
                 "qr_phishing",
                 "Inline QR-code generator detected",
@@ -293,7 +330,10 @@ cli_wrapper!(run_deepfake_voice_engine, run_deepfake_voice_engine_result);
 pub async fn run_business_email_compromise_result(t: &str) -> EngineResult {
     email_auth_audit(t, "business_email_compromise", "T1566.001").await
 }
-cli_wrapper!(run_business_email_compromise, run_business_email_compromise_result);
+cli_wrapper!(
+    run_business_email_compromise,
+    run_business_email_compromise_result
+);
 
 pub async fn run_watering_hole_attack_result(t: &str) -> EngineResult {
     if t.trim().is_empty() {
@@ -363,7 +403,9 @@ pub async fn run_fake_update_engine_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let body = p.body.to_ascii_lowercase();
-        if body.contains("chrome update") || body.contains("update.exe") || body.contains("urgent security patch")
+        if body.contains("chrome update")
+            || body.contains("update.exe")
+            || body.contains("urgent security patch")
         {
             findings.push(social_finding(
                 "fake_update_engine",
@@ -412,4 +454,7 @@ cli_wrapper!(run_physical_social_eng, run_physical_social_eng_result);
 pub async fn run_typosquatting_phishing_result(t: &str) -> EngineResult {
     crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(t).await
 }
-cli_wrapper!(run_typosquatting_phishing, run_typosquatting_phishing_result);
+cli_wrapper!(
+    run_typosquatting_phishing,
+    run_typosquatting_phishing_result
+);

@@ -89,7 +89,10 @@ pub async fn patch_tenant_active_engine(
 }
 
 /// Load ordered active engine ids for a tenant from `system_configs.active_engines`.
-pub async fn load_tenant_active_engines(pool: &PgPool, tenant_id: i64) -> Result<Vec<String>, String> {
+pub async fn load_tenant_active_engines(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<Vec<String>, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;

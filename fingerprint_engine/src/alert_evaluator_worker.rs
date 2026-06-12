@@ -174,14 +174,8 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             .ok()
             .flatten();
 
-            let delivered = deliver_alert(
-                app_pool,
-                tenant_id,
-                &rule_info,
-                &finding_info,
-                &channels,
-            )
-            .await;
+            let delivered =
+                deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await;
 
             if delivered {
                 if let Some(id) = fire_id {

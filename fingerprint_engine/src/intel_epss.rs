@@ -81,14 +81,8 @@ fn normalize_cve(raw: &str) -> Option<String> {
 ///
 /// We always read from the cache first; only CVEs that are missing OR stale
 /// (>24h old) are re-fetched.
-pub async fn fetch_epss_for_cves(
-    pool: &PgPool,
-    cves: &[String],
-) -> HashMap<String, EpssScore> {
-    let mut normalized: Vec<String> = cves
-        .iter()
-        .filter_map(|c| normalize_cve(c))
-        .collect();
+pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<String, EpssScore> {
+    let mut normalized: Vec<String> = cves.iter().filter_map(|c| normalize_cve(c)).collect();
     normalized.sort();
     normalized.dedup();
     if normalized.is_empty() {
@@ -119,12 +113,15 @@ pub async fn fetch_epss_for_cves(
         let date: chrono::NaiveDate = r
             .try_get::<chrono::NaiveDate, _>("epss_date")
             .unwrap_or_else(|_| chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
-        let refreshed: chrono::DateTime<chrono::Utc> =
-            r.try_get("refreshed_at").unwrap_or(now);
+        let refreshed: chrono::DateTime<chrono::Utc> = r.try_get("refreshed_at").unwrap_or(now);
         let age_h = (now - refreshed).num_hours();
         out.insert(
             cve.clone(),
-            EpssScore { score, percentile, date },
+            EpssScore {
+                score,
+                percentile,
+                date,
+            },
         );
         have.insert(cve.clone());
         if age_h > STALE_AFTER_HOURS {
@@ -180,13 +177,14 @@ fn parse_score(r: &EpssApiRow) -> Option<EpssScore> {
     let percentile: f32 = r.percentile.trim().parse().ok()?;
     let date = chrono::NaiveDate::parse_from_str(r.date.trim(), "%Y-%m-%d")
         .unwrap_or_else(|_| chrono::Utc::now().date_naive());
-    Some(EpssScore { score, percentile, date })
+    Some(EpssScore {
+        score,
+        percentile,
+        date,
+    })
 }
 
-async fn fetch_batch(
-    client: &reqwest::Client,
-    cves: &[String],
-) -> Result<Vec<EpssApiRow>, String> {
+async fn fetch_batch(client: &reqwest::Client, cves: &[String]) -> Result<Vec<EpssApiRow>, String> {
     if cves.is_empty() {
         return Ok(vec![]);
     }
@@ -207,7 +205,9 @@ async fn upsert_rows(pool: &PgPool, rows: &[EpssApiRow]) -> Result<(), String> {
     }
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     for r in rows {
-        let Some(parsed) = parse_score(r) else { continue };
+        let Some(parsed) = parse_score(r) else {
+            continue;
+        };
         let cve = r.cve.to_ascii_uppercase();
         sqlx::query(
             r#"INSERT INTO epss_intel (cve, score, percentile, epss_date, refreshed_at)
@@ -243,7 +243,9 @@ pub fn bootstrap_epss_backfill(pool: Arc<PgPool>) {
         tokio::time::sleep(Duration::from_secs(8)).await;
         match run_one_cycle(&pool).await {
             Ok(()) => tracing::info!(target: "intel_epss", "EPSS bootstrap cycle complete"),
-            Err(e) => tracing::warn!(target: "intel_epss", error = %e, "EPSS bootstrap cycle failed"),
+            Err(e) => {
+                tracing::warn!(target: "intel_epss", error = %e, "EPSS bootstrap cycle failed")
+            }
         }
     });
 }

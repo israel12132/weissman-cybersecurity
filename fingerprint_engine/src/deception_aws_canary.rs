@@ -17,10 +17,11 @@ pub struct CanaryIamPair {
 
 /// Creates a dedicated IAM user with an explicit deny-all policy and a single access key.
 /// Uses the process default credential chain (`AWS_PROFILE`, env keys, IMDS, etc.).
-pub async fn create_real_canary_pair(tenant_id: i64, client_id: i64) -> Result<CanaryIamPair, String> {
-    let cfg = aws_config::defaults(BehaviorVersion::latest())
-        .load()
-        .await;
+pub async fn create_real_canary_pair(
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<CanaryIamPair, String> {
+    let cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
     let client = IamClient::new(&cfg);
     let prefix = std::env::var("WEISSMAN_AWS_CANARY_USER_PREFIX")
         .unwrap_or_else(|_| "weissman-canary".to_string());
@@ -42,7 +43,8 @@ pub async fn create_real_canary_pair(tenant_id: i64, client_id: i64) -> Result<C
         .await
         .map_err(|e| format!("iam CreateUser: {e}"))?;
 
-    let policy_doc = r#"{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"*","Resource":"*"}]}"#;
+    let policy_doc =
+        r#"{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"*","Resource":"*"}]}"#;
     if let Err(e) = client
         .put_user_policy()
         .user_name(&user_name)
@@ -55,7 +57,12 @@ pub async fn create_real_canary_pair(tenant_id: i64, client_id: i64) -> Result<C
         return Err(format!("iam PutUserPolicy: {e}"));
     }
 
-    let keys = match client.create_access_key().user_name(&user_name).send().await {
+    let keys = match client
+        .create_access_key()
+        .user_name(&user_name)
+        .send()
+        .await
+    {
         Ok(k) => k,
         Err(e) => {
             let _ = delete_canary_iam_user_internal(&client, &user_name).await;
@@ -104,9 +111,7 @@ async fn delete_canary_iam_user_internal(client: &IamClient, user_name: &str) {
 
 /// Best-effort cleanup (e.g. after failed DB insert).
 pub async fn delete_canary_iam_user(user_name: &str) {
-    let cfg = aws_config::defaults(BehaviorVersion::latest())
-        .load()
-        .await;
+    let cfg = aws_config::defaults(BehaviorVersion::latest()).load().await;
     let client = IamClient::new(&cfg);
     delete_canary_iam_user_internal(&client, user_name).await;
 }
@@ -249,5 +254,10 @@ pub async fn build_live_aws_decoy_content(
         &pair.secret_access_key,
         oast_with_path,
     );
-    ensure_key_material_present(&substituted, &pair.access_key_id, &pair.secret_access_key, oast_with_path)
+    ensure_key_material_present(
+        &substituted,
+        &pair.access_key_id,
+        &pair.secret_access_key,
+        oast_with_path,
+    )
 }

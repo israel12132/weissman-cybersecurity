@@ -29,8 +29,12 @@ fn levenshtein(a: &str, b: &str) -> usize {
     let m = a.len();
     let n = b.len();
     let mut dp = vec![vec![0usize; n + 1]; m + 1];
-    for i in 0..=m { dp[i][0] = i; }
-    for j in 0..=n { dp[0][j] = j; }
+    for i in 0..=m {
+        dp[i][0] = i;
+    }
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
     for i in 1..=m {
         for j in 1..=n {
             dp[i][j] = if a[i - 1] == b[j - 1] {
@@ -49,8 +53,15 @@ fn generate_typos(name: &str) -> Vec<String> {
 
     // Omission (drop one character)
     for i in 0..chars.len() {
-        let t: String = chars.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, c)| c).collect();
-        if !t.is_empty() && t != name { typos.push(t); }
+        let t: String = chars
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| *j != i)
+            .map(|(_, c)| c)
+            .collect();
+        if !t.is_empty() && t != name {
+            typos.push(t);
+        }
     }
 
     // Addition (double one character)
@@ -58,16 +69,28 @@ fn generate_typos(name: &str) -> Vec<String> {
         let mut t = String::new();
         for (j, c) in chars.iter().enumerate() {
             t.push(*c);
-            if j == i { t.push(*c); }
+            if j == i {
+                t.push(*c);
+            }
         }
-        if t != name { typos.push(t); }
+        if t != name {
+            typos.push(t);
+        }
     }
 
     // Substitution (common keyboard neighbors)
     let neighbors: &[(&str, &str)] = &[
-        ("a", "s"), ("s", "a"), ("d", "f"), ("f", "d"),
-        ("o", "0"), ("0", "o"), ("1", "l"), ("l", "1"),
-        ("i", "1"), ("e", "3"), ("3", "e"),
+        ("a", "s"),
+        ("s", "a"),
+        ("d", "f"),
+        ("f", "d"),
+        ("o", "0"),
+        ("0", "o"),
+        ("1", "l"),
+        ("l", "1"),
+        ("i", "1"),
+        ("e", "3"),
+        ("3", "e"),
     ];
     for (from, to) in neighbors {
         if name.contains(from) {
@@ -76,8 +99,12 @@ fn generate_typos(name: &str) -> Vec<String> {
     }
 
     // Hyphen/underscore swap
-    if name.contains('-') { typos.push(name.replace('-', "_")); }
-    if name.contains('_') { typos.push(name.replace('_', "-")); }
+    if name.contains('-') {
+        typos.push(name.replace('-', "_"));
+    }
+    if name.contains('_') {
+        typos.push(name.replace('_', "-"));
+    }
 
     // Prefix/suffix confusion
     typos.push(format!("{}-js", name));
@@ -183,7 +210,11 @@ pub async fn run_typosquatting_monitor_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!("TyposquattingMonitor: {} findings for org '{}'", findings.len(), org),
+        format!(
+            "TyposquattingMonitor: {} findings for org '{}'",
+            findings.len(),
+            org
+        ),
     )
 }
 

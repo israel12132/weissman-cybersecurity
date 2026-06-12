@@ -13,14 +13,28 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        format!("https://{}", t)
+    }
 }
 
 pub async fn run_ble_rf_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let client = build_client().await;
     let base = normalize_target(target);
-    let paths = ["/api/ble/devices", "/api/wireless", "/api/bluetooth", "/api/zigbee", "/api/zwave", "/api/rf", "/api/network/wireless"];
+    let paths = [
+        "/api/ble/devices",
+        "/api/wireless",
+        "/api/bluetooth",
+        "/api/zigbee",
+        "/api/zwave",
+        "/api/rf",
+        "/api/network/wireless",
+    ];
     let mut findings: Vec<serde_json::Value> = Vec::new();
     for path in &paths {
         let url = format!("{}{}", base, path);
@@ -36,7 +50,10 @@ pub async fn run_ble_rf_result(target: &str) -> EngineResult {
             }
         }
     }
-    EngineResult::ok(findings.clone(), format!("BLE/RF: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("BLE/RF: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_ble_rf(target: &str) {

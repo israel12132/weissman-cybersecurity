@@ -1,8 +1,8 @@
 //! Advanced Recon Engines — real OSINT/DNS/HTTP probes. No simulated content.
 
 use crate::engine_probes::{
-    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client,
-    http_get, http_get_with_headers, http_post_json_with_headers, normalize_url,
+    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
+    http_get_with_headers, http_post_json_with_headers, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -42,7 +42,10 @@ pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("satellite_recon", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("satellite_recon: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("satellite_recon: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_satellite_recon, run_satellite_recon_result);
@@ -84,7 +87,10 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
         );
         return EngineResult::ok(
             vec![finding],
-            format!("darkweb_intel: API key required for live lookup on {}", host),
+            format!(
+                "darkweb_intel: API key required for live lookup on {}",
+                host
+            ),
         );
     }
 
@@ -104,13 +110,9 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     });
     let mut findings: Vec<Value> = Vec::new();
 
-    if let Some(p) = http_post_json_with_headers(
-        &client,
-        &search_url,
-        &payload,
-        &[("x-key", key.as_str())],
-    )
-    .await
+    if let Some(p) =
+        http_post_json_with_headers(&client, &search_url, &payload, &[("x-key", key.as_str())])
+            .await
     {
         if p.status == 401 || p.status == 403 {
             findings.push(finding(
@@ -128,22 +130,17 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
             if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
                 if let Some(search_id) = v.get("id").and_then(|id| id.as_str()) {
                     let result_url = format!("{}/intelligent/search/result?id={}", base, search_id);
-                    if let Some(rp) = http_get_with_headers(
-                        &client,
-                        &result_url,
-                        &[("x-key", key.as_str())],
-                    )
-                    .await
+                    if let Some(rp) =
+                        http_get_with_headers(&client, &result_url, &[("x-key", key.as_str())])
+                            .await
                     {
                         let record_count = rp
                             .body
                             .matches("\"record\"")
                             .count()
                             .max(rp.body.matches("\"name\"").count());
-                        let status = rp
-                            .body
-                            .contains("\"status\":0")
-                            || rp.body.contains("\"status\": 0");
+                        let status =
+                            rp.body.contains("\"status\":0") || rp.body.contains("\"status\": 0");
                         if status && record_count > 0 {
                             findings.push(finding(
                                 "darkweb_intel",
@@ -178,7 +175,10 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("darkweb_intel", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("darkweb_intel: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("darkweb_intel: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_darkweb_intel, run_darkweb_intel_result);
@@ -191,16 +191,23 @@ pub async fn run_financial_osint_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!("https://www.sec.gov/cgi-bin/browse-edgar?company={}&action=getcompany", urlencoding::encode(&host));
+    let url = format!(
+        "https://www.sec.gov/cgi-bin/browse-edgar?company={}&action=getcompany",
+        urlencoding::encode(&host)
+    );
     if let Some(p) = http_get(&client, &url).await {
         if p.status == 200 && p.body.contains("EDGAR") {
-            let has_filings = p.body.to_lowercase().contains("annual report") || p.body.contains("10-K");
+            let has_filings =
+                p.body.to_lowercase().contains("annual report") || p.body.contains("10-K");
             findings.push(finding(
                 "financial_osint",
                 "SEC EDGAR query reachable",
                 "info",
                 "T1591.002",
-                &format!("EDGAR search returned 200 for company keyword '{}' (filings={}).", host, has_filings),
+                &format!(
+                    "EDGAR search returned 200 for company keyword '{}' (filings={}).",
+                    host, has_filings
+                ),
                 target,
             ));
         }
@@ -208,7 +215,10 @@ pub async fn run_financial_osint_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("financial_osint", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("financial_osint: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("financial_osint: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_financial_osint, run_financial_osint_result);
@@ -223,7 +233,10 @@ pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if t.starts_with("0x") && t.len() == 42 && t[2..].chars().all(|c| c.is_ascii_hexdigit()) {
         let client = http_client().await;
-        let url = format!("https://api.etherscan.io/api?module=account&action=balance&address={}&tag=latest", t);
+        let url = format!(
+            "https://api.etherscan.io/api?module=account&action=balance&address={}&tag=latest",
+            t
+        );
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && p.body.contains("result") {
                 findings.push(finding(
@@ -240,7 +253,10 @@ pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("blockchain_trace", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("blockchain_trace: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("blockchain_trace: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_blockchain_trace, run_blockchain_trace_result);
@@ -253,7 +269,12 @@ pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/robots.txt", "/sitemap.xml", "/.well-known/security.txt", "/humans.txt"] {
+    for path in [
+        "/robots.txt",
+        "/sitemap.xml",
+        "/.well-known/security.txt",
+        "/humans.txt",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && !p.body.trim().is_empty() {
@@ -262,7 +283,11 @@ pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
                     &format!("Public metadata file: {}", path),
                     "info",
                     "T1592.002",
-                    &format!("{} returned HTTP 200 ({} B) — extract hidden paths/contact emails.", p.final_url, p.body.len()),
+                    &format!(
+                        "{} returned HTTP 200 ({} B) — extract hidden paths/contact emails.",
+                        p.final_url,
+                        p.body.len()
+                    ),
                     target,
                 ));
             }
@@ -271,7 +296,10 @@ pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("metadata_harvest", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("metadata_harvest: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("metadata_harvest: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_metadata_harvest, run_metadata_harvest_result);
@@ -284,7 +312,10 @@ pub async fn run_patent_recon_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!("https://patents.google.com/?q={}", urlencoding::encode(&host));
+    let url = format!(
+        "https://patents.google.com/?q={}",
+        urlencoding::encode(&host)
+    );
     if let Some(p) = http_get(&client, &url).await {
         if p.status == 200 && p.body.contains("patent") {
             findings.push(finding(
@@ -300,7 +331,10 @@ pub async fn run_patent_recon_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("patent_recon", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("patent_recon: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("patent_recon: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_patent_recon, run_patent_recon_result);
@@ -326,7 +360,10 @@ pub async fn run_telecom_osint_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("telecom_osint", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("telecom_osint: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("telecom_osint: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_telecom_osint, run_telecom_osint_result);
@@ -349,7 +386,10 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
                     "Shodan host metadata available",
                     "medium",
                     "T1595.001",
-                    &format!("Shodan returned host metadata for {} (review exposed ports/services).", host),
+                    &format!(
+                        "Shodan returned host metadata for {} (review exposed ports/services).",
+                        host
+                    ),
                     target,
                 ));
             }
@@ -358,7 +398,10 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("iot_shodan_scan", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("iot_shodan_scan: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("iot_shodan_scan: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_iot_shodan_scan, run_iot_shodan_scan_result);
@@ -372,8 +415,14 @@ pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let urls = [
-        format!("https://www.linkedin.com/jobs/search?keywords={}", urlencoding::encode(&host)),
-        format!("https://www.indeed.com/jobs?q={}", urlencoding::encode(&host)),
+        format!(
+            "https://www.linkedin.com/jobs/search?keywords={}",
+            urlencoding::encode(&host)
+        ),
+        format!(
+            "https://www.indeed.com/jobs?q={}",
+            urlencoding::encode(&host)
+        ),
     ];
     for u in urls.iter() {
         if let Some(p) = http_get(&client, u).await {
@@ -393,7 +442,10 @@ pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("job_posting_osint", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("job_posting_osint: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("job_posting_osint: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_job_posting_osint, run_job_posting_osint_result);
@@ -431,7 +483,10 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = format!("https://urlhaus.abuse.ch/api/?{}=", urlencoding::encode(&host));
+    let url = format!(
+        "https://urlhaus.abuse.ch/api/?{}=",
+        urlencoding::encode(&host)
+    );
     if let Some(p) = http_get(&client, &url).await {
         if p.status == 200 && p.body.to_ascii_lowercase().contains("urlhaus") {
             findings.push(finding(
@@ -447,7 +502,10 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("threat_intel_fusion", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("threat_intel_fusion: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("threat_intel_fusion: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_threat_intel_fusion, run_threat_intel_fusion_result);
@@ -465,19 +523,31 @@ pub async fn run_attack_surface_quantify_result(target: &str) -> EngineResult {
         &format!("Attack-surface quantification = {} indicators", cnt),
         "info",
         "T1595",
-        &format!("ASM engine reported {} discoverable assets/ports for {}.", cnt, target),
+        &format!(
+            "ASM engine reported {} discoverable assets/ports for {}.",
+            cnt, target
+        ),
         target,
     ));
-    EngineResult::ok(findings, format!("attack_surface_quantify: {} indicators", cnt))
+    EngineResult::ok(
+        findings,
+        format!("attack_surface_quantify: {} indicators", cnt),
+    )
 }
-cli_wrapper!(run_attack_surface_quantify, run_attack_surface_quantify_result);
+cli_wrapper!(
+    run_attack_surface_quantify,
+    run_attack_surface_quantify_result
+);
 
 // ── adversarial_simulation ────────────────────────────────────────────────────
 pub async fn run_adversarial_simulation_result(target: &str) -> EngineResult {
     // Reuse the real threat emulation engine to drive an end-to-end live probe.
     crate::threat_emulation_engine::run_threat_emulation_result(target).await
 }
-cli_wrapper!(run_adversarial_simulation, run_adversarial_simulation_result);
+cli_wrapper!(
+    run_adversarial_simulation,
+    run_adversarial_simulation_result
+);
 
 // ── dark_web_monitor ──────────────────────────────────────────────────────────
 pub async fn run_dark_web_monitor_result(target: &str) -> EngineResult {
@@ -485,7 +555,10 @@ pub async fn run_dark_web_monitor_result(target: &str) -> EngineResult {
     let mut r = run_darkweb_intel_result(target).await;
     for f in r.findings.iter_mut() {
         if let Some(obj) = f.as_object_mut() {
-            obj.insert("type".into(), serde_json::Value::String("dark_web_monitor".into()));
+            obj.insert(
+                "type".into(),
+                serde_json::Value::String("dark_web_monitor".into()),
+            );
         }
     }
     r
@@ -515,7 +588,10 @@ pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
         ),
         target,
     ));
-    EngineResult::ok(findings.clone(), format!("passive_dns_forensics: {} record set(s)", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("passive_dns_forensics: {} record set(s)", findings.len()),
+    )
 }
 cli_wrapper!(run_passive_dns_forensics, run_passive_dns_forensics_result);
 

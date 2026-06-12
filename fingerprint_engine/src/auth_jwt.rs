@@ -89,9 +89,7 @@ pub fn init_jwt_secret_from_env() -> Result<(), String> {
         return Err("WEISSMAN_JWT_SECRET is set but empty".to_string());
     }
     if weissman_core::tls_policy::is_production_environment() && trimmed.len() < 32 {
-        return Err(
-            "WEISSMAN_JWT_SECRET must be at least 32 characters in production".to_string(),
-        );
+        return Err("WEISSMAN_JWT_SECRET must be at least 32 characters in production".to_string());
     }
     JWT_SECRET
         .set(trimmed.as_bytes().to_vec())
@@ -459,9 +457,8 @@ pub fn verify_agent_session_token(token: &str) -> Option<AuthContext> {
             if c.typ.as_deref() != Some("agent") {
                 return None;
             }
-            auth_context_from_claims(c).filter(|ctx| {
-                ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent")
-            })
+            auth_context_from_claims(c)
+                .filter(|ctx| ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent"))
         })
 }
 
@@ -558,9 +555,13 @@ mod agent_token_tests {
         .expect("mint");
         let mut validation = Validation::default();
         validation.validate_exp = true;
-        let c = decode::<JwtClaims>(token.as_str(), &DecodingKey::from_secret(secret), &validation)
-            .expect("decode")
-            .claims;
+        let c = decode::<JwtClaims>(
+            token.as_str(),
+            &DecodingKey::from_secret(secret),
+            &validation,
+        )
+        .expect("decode")
+        .claims;
         let ctx = auth_context_from_claims(c).expect("agent ctx");
         assert_eq!(ctx.role, "agent");
         assert_eq!(ctx.tenant_id, 42);

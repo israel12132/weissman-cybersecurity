@@ -38,10 +38,22 @@ const ML_PATHS: &[&str] = &[
 const ADVERSARIAL_PAYLOADS: &[(&str, &str)] = &[
     ("malformed_json", "{not valid json at all ][}"),
     ("empty_input", r#"{"input": null}"#),
-    ("large_payload", r#"{"input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}"#),
-    ("type_confusion", r#"{"input": {"nested": {"deeply": {"key": [1, 2, 3, null, true, "string"]}}}}"#),
-    ("negative_values", r#"{"input": [-999999999, -1.7976931348623157e+308, 0, 1.7976931348623157e+308]}"#),
-    ("unicode_fuzzing", r#"{"input": "\u0000\u0001\u0002\uFFFF\uD800\uDFFF"}"#),
+    (
+        "large_payload",
+        r#"{"input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}"#,
+    ),
+    (
+        "type_confusion",
+        r#"{"input": {"nested": {"deeply": {"key": [1, 2, 3, null, true, "string"]}}}}"#,
+    ),
+    (
+        "negative_values",
+        r#"{"input": [-999999999, -1.7976931348623157e+308, 0, 1.7976931348623157e+308]}"#,
+    ),
+    (
+        "unicode_fuzzing",
+        r#"{"input": "\u0000\u0001\u0002\uFFFF\uD800\uDFFF"}"#,
+    ),
 ];
 
 const ARCH_LEAK_INDICATORS: &[&str] = &[
@@ -147,7 +159,10 @@ pub async fn run_adversarial_ml_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("Adversarial ML: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Adversarial ML: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_adversarial_ml(target: &str) {

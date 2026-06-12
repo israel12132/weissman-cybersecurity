@@ -150,9 +150,7 @@ impl AgentRegistry {
 
     /// Process-wide registry shared by HTTP handlers and async job executor.
     pub fn global() -> Arc<Self> {
-        GLOBAL_REGISTRY
-            .get_or_init(|| Self::new())
-            .clone()
+        GLOBAL_REGISTRY.get_or_init(|| Self::new()).clone()
     }
 
     /// Wire Redis pub-sub (call once at HTTP startup when `REDIS_URL` is set).
@@ -165,8 +163,7 @@ impl AgentRegistry {
     }
 
     fn remote_is_live(presence: &RemotePresence) -> bool {
-        presence.status != "offline"
-            && presence.updated_at.elapsed() < REMOTE_PRESENCE_STALE_AFTER
+        presence.status != "offline" && presence.updated_at.elapsed() < REMOTE_PRESENCE_STALE_AFTER
     }
 
     pub async fn apply_remote_event(
@@ -272,10 +269,7 @@ impl AgentRegistry {
         let session = NEXT_LOCAL_SESSION.fetch_add(1, Ordering::Relaxed);
         {
             let mut g = self.inner.write().await;
-            g.insert(
-                agent_uuid.to_string(),
-                LocalSession { tx, session },
-            );
+            g.insert(agent_uuid.to_string(), LocalSession { tx, session });
         }
         {
             let mut remote = self.remote.write().await;
@@ -329,11 +323,7 @@ impl AgentRegistry {
         }
     }
 
-    pub async fn send(
-        &self,
-        agent_uuid: &str,
-        msg: ServerToAgent,
-    ) -> Result<(), String> {
+    pub async fn send(&self, agent_uuid: &str, msg: ServerToAgent) -> Result<(), String> {
         let g = self.inner.read().await;
         let Some(entry) = g.get(agent_uuid) else {
             return Err("agent not connected".into());
@@ -480,18 +470,18 @@ pub async fn bridge_nssi_fleet(
     let mod_targets = targets.len().max(1);
     for (i, _) in agents.iter().enumerate() {
         let engine = NSSI_BRIDGE_ENGINES[i % NSSI_BRIDGE_ENGINES.len()];
-        let target = targets
-            .get(i % mod_targets)
-            .map(|s| s.as_str());
+        let target = targets.get(i % mod_targets).map(|s| s.as_str());
         let params = json!({
             "nssi_bridge": true,
             "priority": "high",
             "fleet_slot": i + 1,
             "fleet_size": agents.len(),
         });
-        if enqueue_and_dispatch_fleet(pool, registry, tenant_id, client_id, engine, target, &params)
-            .await
-            .is_ok()
+        if enqueue_and_dispatch_fleet(
+            pool, registry, tenant_id, client_id, engine, target, &params,
+        )
+        .await
+        .is_ok()
         {
             bridged += 1;
         }

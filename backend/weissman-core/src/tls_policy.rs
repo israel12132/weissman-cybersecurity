@@ -41,7 +41,9 @@ pub fn is_production_environment() -> bool {
     ] {
         if std::env::var(var)
             .ok()
-            .map(|v| v.trim().eq_ignore_ascii_case("production") || v.trim().eq_ignore_ascii_case("prod"))
+            .map(|v| {
+                v.trim().eq_ignore_ascii_case("production") || v.trim().eq_ignore_ascii_case("prod")
+            })
             .unwrap_or(false)
         {
             return true;

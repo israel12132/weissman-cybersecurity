@@ -15,22 +15,20 @@ use crate::models::semantic::{SemanticConfig, StateEdge, StateNode};
 
 /// Core DTOs and error shapes for OpenAPI composition.
 #[derive(OpenApi)]
-#[openapi(
-    components(schemas(
-        ErrorBody,
-        ErrorCode,
-        Severity,
-        RoeMode,
-        EngineId,
-        ClientConfigSnapshot,
-        SemanticConfig,
-        StateNode,
-        StateEdge,
-        TenantId,
-        ClientId,
-        RunId,
-        FindingId,
-        JobId,
-    ))
-)]
+#[openapi(components(schemas(
+    ErrorBody,
+    ErrorCode,
+    Severity,
+    RoeMode,
+    EngineId,
+    ClientConfigSnapshot,
+    SemanticConfig,
+    StateNode,
+    StateEdge,
+    TenantId,
+    ClientId,
+    RunId,
+    FindingId,
+    JobId,
+)))]
 pub struct WeissmanCoreApi;

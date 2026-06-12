@@ -3,8 +3,8 @@
 //! SBOM match → emergency `run_cycle_async` across all tenants.
 
 use crate::identity_classifier;
-use crate::regex_util::never_matches;
 use crate::orchestrator;
+use crate::regex_util::never_matches;
 use crate::threat_intel_engine::{self, ThreatFeedItem};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -94,17 +94,21 @@ pub async fn fetch_github_advisories(
         reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))
             .map_err(|e| GitHubAdvisoryFetchError::HttpClient(e.to_string()))?,
     );
-    let bytes = crate::outbound_http::get_bytes_with_retry(&client, &url, headers, 4, Some("github"))
-        .await
-        .map_err(|e| GitHubAdvisoryFetchError::HttpSend(e.to_string()))?;
+    let bytes =
+        crate::outbound_http::get_bytes_with_retry(&client, &url, headers, 4, Some("github"))
+            .await
+            .map_err(|e| GitHubAdvisoryFetchError::HttpSend(e.to_string()))?;
     let _ = crate::intel_http_cache::github_advisories_cache()
         .insert(cache_key, std::sync::Arc::new(bytes.clone()))
         .await;
-    let arr: Value = serde_json::from_slice(&bytes).map_err(|e| GitHubAdvisoryFetchError::Json(e.to_string()))?;
+    let arr: Value = serde_json::from_slice(&bytes)
+        .map_err(|e| GitHubAdvisoryFetchError::Json(e.to_string()))?;
     parse_github_advisory_array(&arr)
 }
 
-fn parse_github_advisory_array(arr: &Value) -> Result<Vec<ThreatFeedItem>, GitHubAdvisoryFetchError> {
+fn parse_github_advisory_array(
+    arr: &Value,
+) -> Result<Vec<ThreatFeedItem>, GitHubAdvisoryFetchError> {
     let Some(items) = arr.as_array() else {
         return Err(GitHubAdvisoryFetchError::NotArray);
     };
@@ -179,7 +183,9 @@ pub async fn fetch_osv_cve_summary(cve_id: &str) -> Option<String> {
         .and_then(|x| x.as_str())
         .map(|s| s.chars().take(2000).collect::<String>());
     if let Some(ref s) = summary {
-        let _ = cache.insert(id.to_string(), std::sync::Arc::new(s.clone())).await;
+        let _ = cache
+            .insert(id.to_string(), std::sync::Arc::new(s.clone()))
+            .await;
     }
     summary
 }
@@ -305,12 +311,9 @@ fn trigger_emergency_global_scan(
         };
         let _permit = permit;
         let tel = telemetry.clone();
-        let _ = crate::panic_shield::catch_unwind_future(
-            "emergency_global_cycle",
-            async move {
-                orchestrator::run_cycle_async(app_pool, intel_pool, auth_pool, Some(tel)).await;
-            },
-        )
+        let _ = crate::panic_shield::catch_unwind_future("emergency_global_cycle", async move {
+            orchestrator::run_cycle_async(app_pool, intel_pool, auth_pool, Some(tel)).await;
+        })
         .await;
     });
 }
@@ -361,20 +364,17 @@ pub async fn run_ingest_cycle(
         }
 
         let sig = identity_classifier::threat_chatter_to_exploit_signature_llm(
-            &chatter,
-            llm_base,
-            llm_model,
-            None,
+            &chatter, llm_base, llm_model, None,
         )
         .await
-                .unwrap_or_else(|| {
-                    json!({
-                        "packages": [],
-                        "cve_id": Value::Null,
-                        "severity_guess": item.severity.to_lowercase(),
-                        "safe_probe": Value::Null,
-                    })
-                });
+        .unwrap_or_else(|| {
+            json!({
+                "packages": [],
+                "cve_id": Value::Null,
+                "severity_guess": item.severity.to_lowercase(),
+                "safe_probe": Value::Null,
+            })
+        });
 
         let pkgs = packages_from_signature(&sig);
         let critical = severity_is_critical(&item, &sig);

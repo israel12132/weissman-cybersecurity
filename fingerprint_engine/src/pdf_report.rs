@@ -109,7 +109,8 @@ fn remediation_priority_score_for_row(desc: &str, severity: &str, poc_exploit: &
         }
         let verified = v.get("verified").and_then(|x| x.as_bool()).unwrap_or(false);
         let ent = v.get("entropy_score").and_then(|x| x.as_f64());
-        let stack = v.get("stack_correlation_score")
+        let stack = v
+            .get("stack_correlation_score")
             .and_then(|x| x.as_f64())
             .unwrap_or(0.0);
         let sev = v
@@ -1007,8 +1008,14 @@ pub fn build_compliance_framework_pdf(
     b.set_fill_rgb(0.06, 0.09, 0.14);
     b.text(22, "WEISSMAN — COMPLIANCE AUDIT REPORT");
     b.set_fill_rgb(0.55, 0.62, 0.72);
-    b.text(11, &format!("Organization: {}", truncate_ascii(org_label, 80)));
-    b.text(11, &format!("Framework: {}", truncate_ascii(framework_label, 80)));
+    b.text(
+        11,
+        &format!("Organization: {}", truncate_ascii(org_label, 80)),
+    );
+    b.text(
+        11,
+        &format!("Framework: {}", truncate_ascii(framework_label, 80)),
+    );
     b.text(10, &format!("Generated (Israel): {}", date));
     b.y -= 8.0;
 

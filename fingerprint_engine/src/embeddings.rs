@@ -45,8 +45,8 @@ struct EmbedDatum {
 #[derive(Debug, Clone)]
 pub struct EmbeddingsConfig {
     pub base_url: String,
-    pub api_key:  Option<String>,
-    pub model:    String,
+    pub api_key: Option<String>,
+    pub model: String,
 }
 
 impl EmbeddingsConfig {
@@ -68,7 +68,11 @@ impl EmbeddingsConfig {
         if !base_url.starts_with("http") {
             return None;
         }
-        Some(Self { base_url, api_key, model })
+        Some(Self {
+            base_url,
+            api_key,
+            model,
+        })
     }
 }
 
@@ -123,10 +127,17 @@ pub async fn embed_batch(
             .iter()
             .map(|t| {
                 // Hard cap so we never ship a 1MB blob (vLLM rejects, OpenAI bills).
-                if t.len() <= MAX_TEXT_CHARS { *t } else { &t[..MAX_TEXT_CHARS] }
+                if t.len() <= MAX_TEXT_CHARS {
+                    *t
+                } else {
+                    &t[..MAX_TEXT_CHARS]
+                }
             })
             .collect();
-        let body = OpenAiEmbedRequest { model: &cfg.model, input: inputs };
+        let body = OpenAiEmbedRequest {
+            model: &cfg.model,
+            input: inputs,
+        };
 
         let mut req = client.post(&url).json(&body);
         if let Some(key) = &cfg.api_key {
@@ -148,7 +159,9 @@ pub async fn embed_batch(
         let parsed: OpenAiEmbedResponse = resp.json().await.map_err(|e| e.to_string())?;
         for d in parsed.data {
             let abs_idx = chunk_start * MAX_BATCH + d.index;
-            if abs_idx >= out.len() { continue; }
+            if abs_idx >= out.len() {
+                continue;
+            }
             out[abs_idx] = fit_vec(d.embedding);
         }
     }

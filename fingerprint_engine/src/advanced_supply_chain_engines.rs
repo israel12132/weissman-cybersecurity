@@ -16,7 +16,13 @@ macro_rules! cli_wrapper {
     };
 }
 
-async fn registry_probe(t: &str, engine_id: &str, title: &str, registry_url: &str, mitre: &str) -> EngineResult {
+async fn registry_probe(
+    t: &str,
+    engine_id: &str,
+    title: &str,
+    registry_url: &str,
+    mitre: &str,
+) -> EngineResult {
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -30,7 +36,11 @@ async fn registry_probe(t: &str, engine_id: &str, title: &str, registry_url: &st
                 title,
                 "info",
                 mitre,
-                &format!("Public registry record found at {} (HTTP 200, {} B).", p.final_url, p.body.len()),
+                &format!(
+                    "Public registry record found at {} (HTTP 200, {} B).",
+                    p.final_url,
+                    p.body.len()
+                ),
                 t,
             ));
         }
@@ -38,17 +48,34 @@ async fn registry_probe(t: &str, engine_id: &str, title: &str, registry_url: &st
     if findings.is_empty() {
         empty_ok(engine_id, t)
     } else {
-        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("{}: {}", engine_id, findings.len()),
+        )
     }
 }
 
 pub async fn run_npm_package_attack_result(t: &str) -> EngineResult {
-    registry_probe(t, "npm_package_attack", "npm registry record exists", "https://registry.npmjs.org/{}", "T1195.001").await
+    registry_probe(
+        t,
+        "npm_package_attack",
+        "npm registry record exists",
+        "https://registry.npmjs.org/{}",
+        "T1195.001",
+    )
+    .await
 }
 cli_wrapper!(run_npm_package_attack, run_npm_package_attack_result);
 
 pub async fn run_pypi_supply_chain_result(t: &str) -> EngineResult {
-    registry_probe(t, "pypi_supply_chain", "PyPI registry record exists", "https://pypi.org/pypi/{}/json", "T1195.001").await
+    registry_probe(
+        t,
+        "pypi_supply_chain",
+        "PyPI registry record exists",
+        "https://pypi.org/pypi/{}/json",
+        "T1195.001",
+    )
+    .await
 }
 cli_wrapper!(run_pypi_supply_chain, run_pypi_supply_chain_result);
 
@@ -59,7 +86,11 @@ pub async fn run_github_actions_attack_result(t: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    for path in [".github/workflows/", ".gitlab-ci.yml", ".github/dependabot.yml"] {
+    for path in [
+        ".github/workflows/",
+        ".gitlab-ci.yml",
+        ".github/dependabot.yml",
+    ] {
         let url = format!("{}/{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && (p.body.contains("on:") || p.body.contains("stages:")) {
@@ -74,18 +105,38 @@ pub async fn run_github_actions_attack_result(t: &str) -> EngineResult {
             }
         }
     }
-    if findings.is_empty() { empty_ok("github_actions_attack", t) }
-    else { EngineResult::ok(findings.clone(), format!("github_actions_attack: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("github_actions_attack", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("github_actions_attack: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_github_actions_attack, run_github_actions_attack_result);
 
 pub async fn run_docker_image_poison_result(t: &str) -> EngineResult {
-    registry_probe(t, "docker_image_poison", "Docker Hub image exists", "https://hub.docker.com/v2/repositories/{}/", "T1195.002").await
+    registry_probe(
+        t,
+        "docker_image_poison",
+        "Docker Hub image exists",
+        "https://hub.docker.com/v2/repositories/{}/",
+        "T1195.002",
+    )
+    .await
 }
 cli_wrapper!(run_docker_image_poison, run_docker_image_poison_result);
 
 pub async fn run_maven_supply_chain_result(t: &str) -> EngineResult {
-    registry_probe(t, "maven_supply_chain", "Maven Central artifact exists", "https://search.maven.org/solrsearch/select?q={}&rows=5&wt=json", "T1195.001").await
+    registry_probe(
+        t,
+        "maven_supply_chain",
+        "Maven Central artifact exists",
+        "https://search.maven.org/solrsearch/select?q={}&rows=5&wt=json",
+        "T1195.001",
+    )
+    .await
 }
 cli_wrapper!(run_maven_supply_chain, run_maven_supply_chain_result);
 
@@ -133,7 +184,10 @@ pub async fn run_compiler_backdoor_result(t: &str) -> EngineResult {
             t,
         ));
     }
-    EngineResult::ok(findings.clone(), format!("compiler_backdoor: {}", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("compiler_backdoor: {}", findings.len()),
+    )
 }
 cli_wrapper!(run_compiler_backdoor, run_compiler_backdoor_result);
 
@@ -150,12 +204,18 @@ cli_wrapper!(run_cdn_poisoning_engine, run_cdn_poisoning_engine_result);
 pub async fn run_software_signing_attack_result(t: &str) -> EngineResult {
     crate::sbom_analyzer_engine::run_sbom_analyzer_result(t).await
 }
-cli_wrapper!(run_software_signing_attack, run_software_signing_attack_result);
+cli_wrapper!(
+    run_software_signing_attack,
+    run_software_signing_attack_result
+);
 
 pub async fn run_build_system_compromise_result(t: &str) -> EngineResult {
     crate::cicd_pipeline_engine::run_cicd_pipeline_result(t).await
 }
-cli_wrapper!(run_build_system_compromise, run_build_system_compromise_result);
+cli_wrapper!(
+    run_build_system_compromise,
+    run_build_system_compromise_result
+);
 
 pub async fn run_dependency_confusion_result(t: &str) -> EngineResult {
     crate::supply_chain_engine::run_supply_chain_result(t, None).await
@@ -168,23 +228,41 @@ pub async fn run_update_hijacking_result(t: &str) -> EngineResult {
     }
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/update.xml", "/autoupdate.json", "/latest.yml", "/RELEASES"] {
+    for path in [
+        "/update.xml",
+        "/autoupdate.json",
+        "/latest.yml",
+        "/RELEASES",
+    ] {
         let url = format!("{}{}", normalize_url(t).trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && (p.body.contains("version") || p.body.contains("download") || p.body.contains("signature")) {
+            if p.status == 200
+                && (p.body.contains("version")
+                    || p.body.contains("download")
+                    || p.body.contains("signature"))
+            {
                 findings.push(finding(
                     "update_hijacking",
                     "Public auto-update manifest",
                     "medium",
                     "T1195.002",
-                    &format!("Manifest at {} is publicly reachable. Verify signature pinning + TLS.", p.final_url),
+                    &format!(
+                        "Manifest at {} is publicly reachable. Verify signature pinning + TLS.",
+                        p.final_url
+                    ),
                     t,
                 ));
             }
         }
     }
-    if findings.is_empty() { empty_ok("update_hijacking", t) }
-    else { EngineResult::ok(findings.clone(), format!("update_hijacking: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("update_hijacking", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("update_hijacking: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_update_hijacking, run_update_hijacking_result);
 
@@ -196,7 +274,10 @@ cli_wrapper!(run_sbom_forgery_engine, run_sbom_forgery_engine_result);
 pub async fn run_third_party_api_attack_result(t: &str) -> EngineResult {
     crate::supply_chain_engine::run_supply_chain_result(t, None).await
 }
-cli_wrapper!(run_third_party_api_attack, run_third_party_api_attack_result);
+cli_wrapper!(
+    run_third_party_api_attack,
+    run_third_party_api_attack_result
+);
 
 pub async fn run_iac_supply_chain_result(t: &str) -> EngineResult {
     crate::iac_misconfig_engine::run_iac_misconfig_result(t).await

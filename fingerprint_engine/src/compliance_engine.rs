@@ -264,15 +264,17 @@ pub fn compute_control_statuses(
 
     let mut out: Vec<ControlStatusRow> = violated
         .into_iter()
-        .map(|((control_id, control_title), is_violated)| ControlStatusRow {
-            control_id,
-            control_title,
-            status: if is_violated {
-                "non-compliant".into()
-            } else {
-                "compliant".into()
+        .map(
+            |((control_id, control_title), is_violated)| ControlStatusRow {
+                control_id,
+                control_title,
+                status: if is_violated {
+                    "non-compliant".into()
+                } else {
+                    "compliant".into()
+                },
             },
-        })
+        )
         .collect();
     out.sort_by(|a, b| a.control_id.cmp(&b.control_id));
     out

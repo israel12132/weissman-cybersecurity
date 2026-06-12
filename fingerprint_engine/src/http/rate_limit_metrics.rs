@@ -186,7 +186,11 @@ fn push_window_i64(
     (count, reset_in)
 }
 
-fn window_count_i64(map: &DashMap<i64, Mutex<VecDeque<Instant>>>, key: i64, window: Duration) -> (usize, u64) {
+fn window_count_i64(
+    map: &DashMap<i64, Mutex<VecDeque<Instant>>>,
+    key: i64,
+    window: Duration,
+) -> (usize, u64) {
     let now = Instant::now();
     let cutoff = now.checked_sub(window).unwrap_or(now);
     let Some(cell) = map.get(&key) else {
@@ -208,7 +212,11 @@ fn window_count_i64(map: &DashMap<i64, Mutex<VecDeque<Instant>>>, key: i64, wind
     (count, reset_in)
 }
 
-fn window_count(map: &DashMap<String, Mutex<VecDeque<Instant>>>, key: &str, window: Duration) -> (usize, u64) {
+fn window_count(
+    map: &DashMap<String, Mutex<VecDeque<Instant>>>,
+    key: &str,
+    window: Duration,
+) -> (usize, u64) {
     let now = Instant::now();
     let cutoff = now.checked_sub(window).unwrap_or(now);
     let Some(cell) = map.get(key) else {
@@ -317,7 +325,8 @@ pub fn status_for(tenant_id: i64, client_ip: &str) -> Value {
     let (login_cur, login_reset) =
         window_count(&store().login_windows, client_ip, Duration::from_secs(60));
     let api_max = api_limit_per_sec();
-    let (api_cur, api_reset) = window_count(&store().api_windows, client_ip, Duration::from_secs(1));
+    let (api_cur, api_reset) =
+        window_count(&store().api_windows, client_ip, Duration::from_secs(1));
 
     json!({
         "scans": limit_block(scan_cur, scan_max, scan_reset),

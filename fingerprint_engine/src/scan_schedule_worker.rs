@@ -32,7 +32,11 @@ pub fn compute_next_run_at(schedule_type: &str, from: DateTime<Utc>) -> DateTime
     }
 }
 
-async fn run_due_schedule(app_pool: &PgPool, tenant_id: i64, schedule_id: i64) -> Result<(), String> {
+async fn run_due_schedule(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    schedule_id: i64,
+) -> Result<(), String> {
     let mut tx = crate::db::begin_tenant_tx(app_pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -51,7 +55,9 @@ async fn run_due_schedule(app_pool: &PgPool, tenant_id: i64, schedule_id: i64) -
         let _ = tx.rollback().await;
         return Ok(());
     }
-    let client_id: i64 = row.try_get("client_id").map_err(|_| "no client_id".to_string())?;
+    let client_id: i64 = row
+        .try_get("client_id")
+        .map_err(|_| "no client_id".to_string())?;
     let schedule_type: String = row
         .try_get("schedule_type")
         .unwrap_or_else(|_| "daily".into());
@@ -64,11 +70,12 @@ async fn run_due_schedule(app_pool: &PgPool, tenant_id: i64, schedule_id: i64) -
         let _ = tx.rollback().await;
         return Ok(());
     }
-    let domains_raw: Option<String> = sqlx::query_scalar("SELECT domains FROM clients WHERE id = $1")
-        .bind(client_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+    let domains_raw: Option<String> =
+        sqlx::query_scalar("SELECT domains FROM clients WHERE id = $1")
+            .bind(client_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
     let domains: Vec<String> = domains_raw
         .as_deref()
         .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())

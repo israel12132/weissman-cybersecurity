@@ -5,8 +5,8 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_probes::{
-    empty_ok, finding, finding_with_probe_depth, has_header, header_value,
-    http_get, http_client, http_post_json, normalize_url, HttpProbe,
+    empty_ok, finding, finding_with_probe_depth, has_header, header_value, http_client, http_get,
+    http_post_json, normalize_url, HttpProbe,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -19,7 +19,15 @@ fn web_finding(
     description: &str,
     target: &str,
 ) -> Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, WEB_PROBE_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        WEB_PROBE_DEPTH,
+    )
 }
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -43,7 +51,13 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
     let intro = serde_json::json!({"query":"{__schema{types{name fields{name}}}}"});
     let mutation_intro = serde_json::json!({"query":"{__schema{mutationType{name}}}"});
     let batch = serde_json::json!([{"query":"{__typename}"},{"query":"{__typename}"}]);
-    for path in ["/graphql", "/api/graphql", "/v1/graphql", "/query", "/api/v1/graphql"] {
+    for path in [
+        "/graphql",
+        "/api/graphql",
+        "/v1/graphql",
+        "/query",
+        "/api/v1/graphql",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &intro).await {
             if p.status < 500 && p.body.contains("__schema") && p.body.contains("types") {
@@ -95,7 +109,10 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
         empty_ok("graphql_deep_attack", target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("graphql_deep_attack: {} live finding(s)", n))
+        EngineResult::ok(
+            findings,
+            format!("graphql_deep_attack: {} live finding(s)", n),
+        )
     }
 }
 cli_wrapper!(run_graphql_deep_attack, run_graphql_deep_attack_result);
@@ -146,7 +163,10 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
         EngineResult::ok(findings, format!("grpc_reflection_attack: {} signal(s)", n))
     }
 }
-cli_wrapper!(run_grpc_reflection_attack, run_grpc_reflection_attack_result);
+cli_wrapper!(
+    run_grpc_reflection_attack,
+    run_grpc_reflection_attack_result
+);
 
 // ── cors_misconfiguration ─────────────────────────────────────────────────────
 pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
@@ -183,7 +203,10 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("cors_misconfiguration", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("cors_misconfiguration: {} finding(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("cors_misconfiguration: {} finding(s)", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_cors_misconfiguration, run_cors_misconfiguration_result);
@@ -204,7 +227,10 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
                 "HTTP/3 advertised via Alt-Svc",
                 "info",
                 "T1190",
-                &format!("Alt-Svc on {} = '{}'. HTTP/3 surface present.", p.final_url, via),
+                &format!(
+                    "Alt-Svc on {} = '{}'. HTTP/3 surface present.",
+                    p.final_url, via
+                ),
                 target,
             ));
         }
@@ -214,7 +240,10 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
                 "HTTP/2 advertised via Alt-Svc",
                 "info",
                 "T1190",
-                &format!("Alt-Svc on {} = '{}'. H2 surface present (test for h2c smuggling).", p.final_url, via),
+                &format!(
+                    "Alt-Svc on {} = '{}'. H2 surface present (test for h2c smuggling).",
+                    p.final_url, via
+                ),
                 target,
             ));
         }
@@ -222,7 +251,10 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("http2_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("http2_attack: {} finding(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("http2_attack: {} finding(s)", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_http2_attack, run_http2_attack_result);
@@ -272,7 +304,10 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("swagger_abuse", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("swagger_abuse: {} doc(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("swagger_abuse: {} doc(s)", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_swagger_abuse, run_swagger_abuse_result);
@@ -295,9 +330,7 @@ pub async fn run_soap_injection_result(target: &str) -> EngineResult {
     for path in paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200
-                && (p.body.contains("<wsdl:") || p.body.contains("<definitions"))
-            {
+            if p.status == 200 && (p.body.contains("<wsdl:") || p.body.contains("<definitions")) {
                 findings.push(finding(
                     "soap_injection",
                     "Public SOAP/WSDL surface",
@@ -315,7 +348,10 @@ pub async fn run_soap_injection_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("soap_injection", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("soap_injection: {} WSDL(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("soap_injection: {} WSDL(s)", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_soap_injection, run_soap_injection_result);
@@ -328,7 +364,11 @@ pub async fn run_odata_injection_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/odata/$metadata", "/api/odata/$metadata", "/odata/v4/$metadata"] {
+    for path in [
+        "/odata/$metadata",
+        "/api/odata/$metadata",
+        "/odata/v4/$metadata",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && (p.body.contains("<edmx:") || p.body.contains("EntityType")) {
@@ -349,7 +389,10 @@ pub async fn run_odata_injection_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("odata_injection", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("odata_injection: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("odata_injection: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_odata_injection, run_odata_injection_result);
@@ -381,7 +424,10 @@ pub async fn run_css_injection_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("css_injection", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("css_injection: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("css_injection: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_css_injection, run_css_injection_result);
@@ -425,10 +471,16 @@ pub async fn run_template_injection_adv_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("template_injection_adv", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("template_injection_adv: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("template_injection_adv: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_template_injection_adv, run_template_injection_adv_result);
+cli_wrapper!(
+    run_template_injection_adv,
+    run_template_injection_adv_result
+);
 
 // ── http_parameter_pollution ──────────────────────────────────────────────────
 pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
@@ -440,10 +492,11 @@ pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
     let single = format!("{}/?a=1", base.trim_end_matches('/'));
     let polluted = format!("{}/?a=1&a=2&a=3", base.trim_end_matches('/'));
     let mut findings: Vec<Value> = Vec::new();
-    if let (Some(p1), Some(p2)) = (http_get(&client, &single).await, http_get(&client, &polluted).await) {
-        if p1.status != p2.status
-            || (p1.body.len() as i64 - p2.body.len() as i64).abs() > 64
-        {
+    if let (Some(p1), Some(p2)) = (
+        http_get(&client, &single).await,
+        http_get(&client, &polluted).await,
+    ) {
+        if p1.status != p2.status || (p1.body.len() as i64 - p2.body.len() as i64).abs() > 64 {
             findings.push(finding(
                 "http_parameter_pollution",
                 "Differential response to duplicated query params",
@@ -460,10 +513,16 @@ pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("http_parameter_pollution", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("http_parameter_pollution: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("http_parameter_pollution: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_http_parameter_pollution, run_http_parameter_pollution_result);
+cli_wrapper!(
+    run_http_parameter_pollution,
+    run_http_parameter_pollution_result
+);
 
 // ── api_mass_assignment ───────────────────────────────────────────────────────
 pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
@@ -473,7 +532,13 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/api/users", "/api/v1/users", "/api/account", "/users", "/account"] {
+    for path in [
+        "/api/users",
+        "/api/v1/users",
+        "/api/account",
+        "/users",
+        "/account",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         let payload = serde_json::json!({"is_admin": true, "role": "admin"});
         if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
@@ -495,7 +560,10 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("api_mass_assignment", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("api_mass_assignment: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("api_mass_assignment: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_api_mass_assignment, run_api_mass_assignment_result);
@@ -532,7 +600,10 @@ pub async fn run_web_cache_poison_adv_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("web_cache_poison_adv", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("web_cache_poison_adv: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("web_cache_poison_adv: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_web_cache_poison_adv, run_web_cache_poison_adv_result);
@@ -555,7 +626,10 @@ pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
                 "No X-Frame-Options or frame-ancestors CSP",
                 "medium",
                 "T1185",
-                &format!("{} can be iframed (no XFO, no frame-ancestors).", p.final_url),
+                &format!(
+                    "{} can be iframed (no XFO, no frame-ancestors).",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -563,7 +637,10 @@ pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("clickjacking_engine", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("clickjacking_engine: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("clickjacking_engine: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_clickjacking_engine, run_clickjacking_engine_result);
@@ -609,7 +686,10 @@ pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("subdomain_takeover", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("subdomain_takeover: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("subdomain_takeover: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_subdomain_takeover, run_subdomain_takeover_result);
@@ -627,23 +707,18 @@ pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
 
     // (payload, canary substring that proves arbitrary file read)
     let payloads: &[(&str, &str)] = &[
-        ("/etc/passwd",                                  "root:x:0:0"),
-        ("../../../../etc/passwd",                       "root:x:0:0"),
-        ("..%2f..%2f..%2fetc%2fpasswd",                  "root:x:0:0"),
-        ("..%252f..%252f..%252fetc%252fpasswd",          "root:x:0:0"),
-        ("C:%5CWindows%5Cwin.ini",                       "[fonts]"),
-        ("file:///etc/passwd",                           "root:x:0:0"),
+        ("/etc/passwd", "root:x:0:0"),
+        ("../../../../etc/passwd", "root:x:0:0"),
+        ("..%2f..%2f..%2fetc%2fpasswd", "root:x:0:0"),
+        ("..%252f..%252f..%252fetc%252fpasswd", "root:x:0:0"),
+        ("C:%5CWindows%5Cwin.ini", "[fonts]"),
+        ("file:///etc/passwd", "root:x:0:0"),
     ];
     let params = ["file", "page", "path", "include", "doc", "f", "template"];
 
     for q in params {
         for (payload, canary) in payloads {
-            let url = format!(
-                "{}/?{}={}",
-                base.trim_end_matches('/'),
-                q,
-                payload
-            );
+            let url = format!("{}/?{}={}", base.trim_end_matches('/'), q, payload);
             if let Some(p) = http_get(&client, &url).await {
                 // Avoid false positives when the server echoes the payload itself rather than the
                 // file contents. The canary string ('root:x:0:0' / '[fonts]') is the real proof.
@@ -671,7 +746,10 @@ pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("file_inclusion_rfi", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("file_inclusion_rfi: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("file_inclusion_rfi: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_file_inclusion_rfi, run_file_inclusion_rfi_result);
@@ -687,7 +765,9 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
     if let Some(p) = http_get(&client, &url).await {
         let server = header_value(&p.headers, "server").unwrap_or("");
         let powered = header_value(&p.headers, "x-powered-by").unwrap_or("");
-        if server.to_ascii_lowercase().contains("iis") || powered.to_ascii_lowercase().contains("asp.net") {
+        if server.to_ascii_lowercase().contains("iis")
+            || powered.to_ascii_lowercase().contains("asp.net")
+        {
             findings.push(finding(
                 "deserialization_net",
                 ".NET / IIS surface detected",
@@ -701,7 +781,10 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("deserialization_net", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("deserialization_net: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("deserialization_net: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_deserialization_net, run_deserialization_net_result);
@@ -724,7 +807,10 @@ pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
                     "NoSQL-style operator accepted by login endpoint",
                     "high",
                     "T1190",
-                    &format!("POST {} with {{$ne}} returned HTTP {} — bypass candidate.", p.final_url, p.status),
+                    &format!(
+                        "POST {} with {{$ne}} returned HTTP {} — bypass candidate.",
+                        p.final_url, p.status
+                    ),
                     target,
                 ));
             }
@@ -733,7 +819,10 @@ pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("nosql_deep_injection", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("nosql_deep_injection: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("nosql_deep_injection: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_nosql_deep_injection, run_nosql_deep_injection_result);
@@ -775,7 +864,10 @@ pub async fn run_api_rate_limit_bypass_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("api_rate_limit_bypass", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("api_rate_limit_bypass: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("api_rate_limit_bypass: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_api_rate_limit_bypass, run_api_rate_limit_bypass_result);
@@ -795,7 +887,12 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let sub_query = serde_json::json!({"query":"subscription { __typename }"});
-    for path in ["/graphql", "/api/graphql", "/subscriptions", "/api/subscriptions"] {
+    for path in [
+        "/graphql",
+        "/api/graphql",
+        "/subscriptions",
+        "/api/subscriptions",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &sub_query).await {
             let body_low = p.body.to_ascii_lowercase();
@@ -834,10 +931,16 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
     if findings.is_empty() {
         empty_ok("graphql_subscription_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("graphql_subscription_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("graphql_subscription_attack: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_graphql_subscription_attack, run_graphql_subscription_attack_result);
+cli_wrapper!(
+    run_graphql_subscription_attack,
+    run_graphql_subscription_attack_result
+);
 
 // ── webrtc_attack ─────────────────────────────────────────────────────────────
 pub async fn run_webrtc_attack_result(target: &str) -> EngineResult {
@@ -865,7 +968,10 @@ pub async fn run_webrtc_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("webrtc_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("webrtc_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("webrtc_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_webrtc_attack, run_webrtc_attack_result);
@@ -893,7 +999,10 @@ pub async fn run_web3_dapp_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("web3_dapp_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("web3_dapp_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("web3_dapp_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_web3_dapp_attack, run_web3_dapp_attack_result);
@@ -908,7 +1017,8 @@ pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let server = header_value(&p.headers, "server").unwrap_or("");
-        let vendor = header_value(&p.headers, "x-amz-apigw-id").or_else(|| header_value(&p.headers, "x-azure-ref"));
+        let vendor = header_value(&p.headers, "x-amz-apigw-id")
+            .or_else(|| header_value(&p.headers, "x-azure-ref"));
         if server.to_ascii_lowercase().contains("kong")
             || server.to_ascii_lowercase().contains("apigee")
             || vendor.is_some()
@@ -926,7 +1036,10 @@ pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("api_gateway_bypass", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("api_gateway_bypass: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("api_gateway_bypass: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_api_gateway_bypass, run_api_gateway_bypass_result);
@@ -955,10 +1068,16 @@ pub async fn run_browser_extension_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("browser_extension_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("browser_extension_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("browser_extension_attack: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_browser_extension_attack, run_browser_extension_attack_result);
+cli_wrapper!(
+    run_browser_extension_attack,
+    run_browser_extension_attack_result
+);
 
 #[inline]
 fn _shut_up_unused(p: &HttpProbe) -> bool {

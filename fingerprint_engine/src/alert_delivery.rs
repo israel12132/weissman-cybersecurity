@@ -213,8 +213,12 @@ fn send_smtp_sync(subject: String, body: String) -> Result<(), String> {
     let from = std::env::var("WEISSMAN_SMTP_FROM").map_err(|_| "missing from".to_string())?;
     let to = std::env::var("WEISSMAN_SMTP_TO").map_err(|_| "missing to".to_string())?;
 
-    let from_m: Mailbox = from.parse().map_err(|e: lettre::address::AddressError| e.to_string())?;
-    let to_m: Mailbox = to.parse().map_err(|e: lettre::address::AddressError| e.to_string())?;
+    let from_m: Mailbox = from
+        .parse()
+        .map_err(|e: lettre::address::AddressError| e.to_string())?;
+    let to_m: Mailbox = to
+        .parse()
+        .map_err(|e: lettre::address::AddressError| e.to_string())?;
     let email = Message::builder()
         .from(from_m)
         .to(to_m)

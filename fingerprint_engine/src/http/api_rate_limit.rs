@@ -1,5 +1,7 @@
 //! Per-IP rate limits for authenticated API traffic (after JWT auth).
 
+use super::client_ip::extract_client_ip;
+use super::rate_limit_metrics;
 use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
@@ -11,8 +13,6 @@ use governor::{Quota, RateLimiter};
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::sync::{Arc, OnceLock};
-use super::client_ip::extract_client_ip;
-use super::rate_limit_metrics;
 
 fn per_sec() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::api_limit_per_sec()).unwrap_or(NonZeroU32::MIN)

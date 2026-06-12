@@ -39,9 +39,7 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     if let Ok(secret) = std::env::var("WEISSMAN_JWT_SECRET") {
         let t = secret.trim();
         if t.len() < 32 {
-            return Err(
-                "WEISSMAN_JWT_SECRET must be at least 32 characters in production".into(),
-            );
+            return Err("WEISSMAN_JWT_SECRET must be at least 32 characters in production".into());
         }
         let lower = t.to_ascii_lowercase();
         if WEAK_JWT_SECRETS
@@ -106,7 +104,8 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         let metrics_token = std::env::var("WEISSMAN_METRICS_TOKEN").unwrap_or_default();
         if metrics_token.trim().len() < 32 {
             return Err(
-                "WEISSMAN_METRICS_TOKEN must be set to a strong (>=32 chars) value in production".into(),
+                "WEISSMAN_METRICS_TOKEN must be set to a strong (>=32 chars) value in production"
+                    .into(),
             );
         }
 

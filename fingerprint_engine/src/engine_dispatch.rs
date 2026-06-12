@@ -134,10 +134,7 @@ pub async fn run_agent_required_engine(
         "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
         "agent_required": true,
     });
-    EngineResult::ok(
-        vec![f],
-        format!("{}: requires endpoint agent", engine_id),
-    )
+    EngineResult::ok(vec![f], format!("{}: requires endpoint agent", engine_id))
 }
 
 /// Run a production engine (or alias). Returns empty ok for unknown catalog-only IDs.
@@ -767,7 +764,12 @@ mod tests {
     #[tokio::test]
     async fn catalog_only_engine_returns_empty_ok() {
         let ctx = EngineRunContext::default();
-        let r = run_engine("totally_unknown_catalog_engine", "https://example.com", &ctx).await;
+        let r = run_engine(
+            "totally_unknown_catalog_engine",
+            "https://example.com",
+            &ctx,
+        )
+        .await;
         assert!(r.success, "expected ok status: {}", r.message);
         assert!(r.findings.is_empty());
         assert!(
@@ -841,8 +843,5 @@ async fn dispatch_to_agent(
         "live_dispatched": live_dispatched,
         "remediation": "View streaming findings under Dashboard → Findings, filtered by source = agent.",
     });
-    EngineResult::ok(
-        vec![f],
-        format!("{}: task {} dispatched", engine, task),
-    )
+    EngineResult::ok(vec![f], format!("{}: task {} dispatched", engine, task))
 }

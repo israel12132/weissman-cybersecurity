@@ -473,9 +473,13 @@ pub async fn run_zero_day_radar(
                 total: num_threats,
             });
         }
-        let probe =
-            synthesize_probe(llm_base.as_str(), &config.llm_model, &item.description, llm_tenant_id)
-                .await;
+        let probe = synthesize_probe(
+            llm_base.as_str(),
+            &config.llm_model,
+            &item.description,
+            llm_tenant_id,
+        )
+        .await;
         if let Some(ref tx) = event_tx {
             let _ = tx.send(RadarStreamEvent::Synthesis {
                 item: item.clone(),

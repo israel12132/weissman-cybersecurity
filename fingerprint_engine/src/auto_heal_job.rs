@@ -43,12 +43,7 @@ async fn insert_heal_request_row(
     }
 }
 
-async fn finalize_spec(
-    pool: &PgPool,
-    tenant_id: i64,
-    spec_id: Uuid,
-    status: &str,
-) {
+async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &str) {
     if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
         let res = sqlx::query(
             r#"UPDATE auto_heal_job_specs SET status = $3, git_token = '', updated_at = now()

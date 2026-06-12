@@ -32,12 +32,19 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
     let mut indicators: Vec<String> = Vec::new();
 
     // 1. Probe a non-existent path — honeypots often return 200 for everything
-    let fake_path = format!("{}/this-path-definitely-does-not-exist-{}", base.trim_end_matches('/'), "xz7q9k");
+    let fake_path = format!(
+        "{}/this-path-definitely-does-not-exist-{}",
+        base.trim_end_matches('/'),
+        "xz7q9k"
+    );
     if let Ok(resp) = client.get(&fake_path).send().await {
         let status = resp.status().as_u16();
         if status == 200 {
             honeypot_score += 30;
-            indicators.push(format!("Returns HTTP 200 for non-existent path ({})", fake_path));
+            indicators.push(format!(
+                "Returns HTTP 200 for non-existent path ({})",
+                fake_path
+            ));
         }
     }
 
@@ -51,10 +58,17 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
     }
     if times_ms.len() >= 3 {
         let avg: u128 = times_ms.iter().sum::<u128>() / times_ms.len() as u128;
-        let max_dev = times_ms.iter().map(|&t| (t as i128 - avg as i128).unsigned_abs()).max().unwrap_or(0);
+        let max_dev = times_ms
+            .iter()
+            .map(|&t| (t as i128 - avg as i128).unsigned_abs())
+            .max()
+            .unwrap_or(0);
         if avg < 5 && max_dev < 2 {
             honeypot_score += 20;
-            indicators.push(format!("Suspiciously uniform sub-5ms responses (avg {}ms, max deviation {}ms)", avg, max_dev));
+            indicators.push(format!(
+                "Suspiciously uniform sub-5ms responses (avg {}ms, max deviation {}ms)",
+                avg, max_dev
+            ));
         }
     }
 
@@ -73,11 +87,21 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
             .to_lowercase();
 
         // Known honeypot server strings
-        let honeypot_servers = ["glastopf", "honeypot", "thinkst", "opencanary", "cowrie", "dionaea"];
+        let honeypot_servers = [
+            "glastopf",
+            "honeypot",
+            "thinkst",
+            "opencanary",
+            "cowrie",
+            "dionaea",
+        ];
         for hs in &honeypot_servers {
             if server.contains(hs) || powered_by.contains(hs) {
                 honeypot_score += 50;
-                indicators.push(format!("Honeypot server signature detected: Server={} X-Powered-By={}", server, powered_by));
+                indicators.push(format!(
+                    "Honeypot server signature detected: Server={} X-Powered-By={}",
+                    server, powered_by
+                ));
             }
         }
 
@@ -91,7 +115,10 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
         // Check body for honeypot content
         if let Ok(body) = resp.text().await {
             let body_lower = body.to_lowercase();
-            if body_lower.contains("honeypot") || body_lower.contains("canary token") || body_lower.contains("thinkst") {
+            if body_lower.contains("honeypot")
+                || body_lower.contains("canary token")
+                || body_lower.contains("thinkst")
+            {
                 honeypot_score += 40;
                 indicators.push("Response body contains honeypot/canary keywords".to_string());
             }
@@ -164,7 +191,10 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
 
     EngineResult::ok(
         findings.clone(),
-        format!("DeceptionHoneypot: score={}/100 for {}", honeypot_score, base),
+        format!(
+            "DeceptionHoneypot: score={}/100 for {}",
+            honeypot_score, base
+        ),
     )
 }
 

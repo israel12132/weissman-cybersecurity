@@ -72,15 +72,15 @@ pub async fn run_edr_evasion_result(target: &str) -> EngineResult {
         }
     }
 
-    let malicious_uas = ["sqlmap/1.0", "Nikto/2.1.6", "Mozilla/5.0 (compatible; Googlebot/2.1)"];
+    let malicious_uas = [
+        "sqlmap/1.0",
+        "Nikto/2.1.6",
+        "Mozilla/5.0 (compatible; Googlebot/2.1)",
+    ];
     let mut unblocked = 0usize;
     for ua in &malicious_uas {
-        if let Some(p) = crate::engine_probes::http_get_with_headers(
-            &client,
-            &base,
-            &[("User-Agent", ua)],
-        )
-        .await
+        if let Some(p) =
+            crate::engine_probes::http_get_with_headers(&client, &base, &[("User-Agent", ua)]).await
         {
             if p.status >= 200 && p.status < 400 {
                 unblocked += 1;

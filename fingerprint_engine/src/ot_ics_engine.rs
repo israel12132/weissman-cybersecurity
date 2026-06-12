@@ -133,7 +133,9 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
         _ => return None,
     };
     let _ = stream.set_nodelay(true);
-    let pdu: [u8; 12] = [0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01];
+    let pdu: [u8; 12] = [
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01,
+    ];
     match tokio::time::timeout(IO_TIMEOUT, stream.write_all(&pdu)).await {
         Ok(Ok(())) => {}
         _ => return None,
@@ -177,8 +179,8 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
 pub async fn probe_bacnet_read_property(host: &str) -> Option<OtFingerprint> {
     use tokio::net::UdpSocket;
     let payload: [u8; 17] = [
-        0x81, 0x0a, 0x00, 0x16, 0x01, 0x04, 0x00, 0x05, 0x01, 0x01, 0x0c, 0x0c, 0x02, 0x3f,
-        0xff, 0x19, 0x4c,
+        0x81, 0x0a, 0x00, 0x16, 0x01, 0x04, 0x00, 0x05, 0x01, 0x01, 0x0c, 0x0c, 0x02, 0x3f, 0xff,
+        0x19, 0x4c,
     ];
     let local = match tokio::time::timeout(CONNECT_TIMEOUT, UdpSocket::bind("0.0.0.0:0")).await {
         Ok(Ok(s)) => s,
@@ -393,10 +395,7 @@ async fn probe_enip(host: &str) -> Option<OtFingerprint> {
         meta.insert("product_name".into(), json!(pname));
         meta.insert("firmware_major".into(), json!(maj));
         meta.insert("firmware_minor".into(), json!(min));
-        meta.insert(
-            "firmware_revision".into(),
-            json!(format!("{maj}.{min}")),
-        );
+        meta.insert("firmware_revision".into(), json!(format!("{maj}.{min}")));
         let hint = if pname.is_empty() {
             format!("EtherNet/IP (vendor {vid})")
         } else {
@@ -545,10 +544,7 @@ async fn probe_s7(host: &str) -> Option<OtFingerprint> {
     meta.insert("tpkt_length_field".into(), json!(tpkt_len));
     meta.insert("probe".into(), json!("cotp_connection_request"));
     if let Some(pt) = pdu_type {
-        meta.insert(
-            "cotp_pdu_type".into(),
-            json!(format!("0x{pt:02x}")),
-        );
+        meta.insert("cotp_pdu_type".into(), json!(format!("0x{pt:02x}")));
     }
 
     if let Some(params) = s7_cotp_params_slice(slice) {

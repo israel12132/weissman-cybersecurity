@@ -64,10 +64,7 @@ async fn allow_ceo_role_assignment(
 }
 
 /// Check if the caller is superadmin or CEO (uses live DB role, not JWT alone).
-async fn require_admin_access(
-    pool: &PgPool,
-    auth: &AuthContext,
-) -> Result<AuthContext, Response> {
+async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthContext, Response> {
     let auth = match crate::auth_refresh::revalidate_auth_context(pool, auth).await {
         Ok(Some(a)) => a,
         Ok(None) => {
@@ -86,7 +83,10 @@ async fn require_admin_access(
                 .into_response());
         }
     };
-    if auth.is_superadmin || auth.role.to_lowercase() == "ceo" || auth.role.to_lowercase() == "admin" {
+    if auth.is_superadmin
+        || auth.role.to_lowercase() == "ceo"
+        || auth.role.to_lowercase() == "admin"
+    {
         Ok(auth)
     } else {
         Err((
@@ -146,7 +146,9 @@ pub async fn api_admin_users_list(
                 .map(|r| UserInfo {
                     id: r.try_get::<i64, _>("id").unwrap_or(0),
                     email: r.try_get::<String, _>("email").unwrap_or_default(),
-                    role: r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".to_string()),
+                    role: r
+                        .try_get::<String, _>("role")
+                        .unwrap_or_else(|_| "viewer".to_string()),
                     is_superadmin: r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
                     is_active: r.try_get::<bool, _>("is_active").unwrap_or(true),
                     created_at: r
@@ -332,15 +334,14 @@ pub async fn api_admin_users_update(
         }
     };
 
-    let exists: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-    )
-    .bind(user_id)
-    .bind(auth.tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
+    let exists: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1")
+            .bind(user_id)
+            .bind(auth.tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten();
 
     if exists.is_none() {
         let _ = tx.rollback().await;
@@ -352,15 +353,19 @@ pub async fn api_admin_users_update(
     }
 
     // Validate role if provided
-    let valid_role = body.role.as_ref().map(|r| {
-        let role = r.trim().to_lowercase();
-        let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
-        if valid_roles.contains(&role.as_str()) {
-            Some(role)
-        } else {
-            None
-        }
-    }).flatten();
+    let valid_role = body
+        .role
+        .as_ref()
+        .map(|r| {
+            let role = r.trim().to_lowercase();
+            let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
+            if valid_roles.contains(&role.as_str()) {
+                Some(role)
+            } else {
+                None
+            }
+        })
+        .flatten();
 
     if let Some(ref role) = valid_role {
         if role == crate::rbac::roles::CEO {
@@ -430,7 +435,9 @@ pub async fn api_admin_users_update(
         } else {
             return (
                 StatusCode::FORBIDDEN,
-                Json(json!({"ok": false, "detail": "Only superadmin can modify superadmin status"})),
+                Json(
+                    json!({"ok": false, "detail": "Only superadmin can modify superadmin status"}),
+                ),
             )
                 .into_response();
         }

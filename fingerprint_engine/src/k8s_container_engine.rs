@@ -199,7 +199,10 @@ pub async fn run_k8s_container_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("K8s/Container: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("K8s/Container: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_k8s_container(target: &str) {

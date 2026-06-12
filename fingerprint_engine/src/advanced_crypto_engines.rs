@@ -3,8 +3,7 @@
 //! otherwise probe HTTP/TLS surface for the relevant indicators.
 
 use crate::engine_probes::{
-    empty_ok, finding, finding_with_probe_depth, header_value, http_client, http_get,
-    normalize_url,
+    empty_ok, finding, finding_with_probe_depth, header_value, http_client, http_get, normalize_url,
 };
 
 const CRYPTO_PROBE_DEPTH: &str = "crypto_auth_surface";
@@ -17,7 +16,15 @@ fn crypto_finding(
     description: &str,
     target: &str,
 ) -> serde_json::Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, CRYPTO_PROBE_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        CRYPTO_PROBE_DEPTH,
+    )
 }
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -43,9 +50,9 @@ pub async fn run_padding_oracle_attack_result(t: &str) -> EngineResult {
 
     // Three probes: empty, garbage-but-valid-base64, padding-invalid
     let probes = [
-        ("empty",       ""),
-        ("valid_b64",   "QUJDREVGR0g="),       // ABCDEFGH
-        ("bad_pad",     "QUJDREVGR0g"),         // missing '='
+        ("empty", ""),
+        ("valid_b64", "QUJDREVGR0g="), // ABCDEFGH
+        ("bad_pad", "QUJDREVGR0g"),    // missing '='
     ];
     let mut results: Vec<(String, u16, usize)> = Vec::new();
     for (label, payload) in probes {
@@ -75,7 +82,10 @@ pub async fn run_padding_oracle_attack_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("padding_oracle_attack", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("padding_oracle_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("padding_oracle_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_padding_oracle_attack, run_padding_oracle_attack_result);
@@ -105,7 +115,10 @@ pub async fn run_hash_extension_attack_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("hash_extension_attack", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("hash_extension_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("hash_extension_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_hash_extension_attack, run_hash_extension_attack_result);
@@ -137,7 +150,10 @@ pub async fn run_mfa_bypass_engine_result(t: &str) -> EngineResult {
                     "Login endpoint may accept empty mfa_token",
                     "high",
                     "T1556",
-                    &format!("POST {} returned access_token with empty mfa_token.", p.final_url),
+                    &format!(
+                        "POST {} returned access_token with empty mfa_token.",
+                        p.final_url
+                    ),
                     t,
                 ));
             }
@@ -146,7 +162,10 @@ pub async fn run_mfa_bypass_engine_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("mfa_bypass_engine", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("mfa_bypass_engine: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("mfa_bypass_engine: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_mfa_bypass_engine, run_mfa_bypass_engine_result);
@@ -175,7 +194,10 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
                 "No HSTS on protected resource",
                 "low",
                 "T1078",
-                &format!("Response from {} lacks Strict-Transport-Security — TLS downgrade possible.", p.final_url),
+                &format!(
+                    "Response from {} lacks Strict-Transport-Security — TLS downgrade possible.",
+                    p.final_url
+                ),
                 t,
             ));
         }
@@ -183,7 +205,10 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("zero_trust_bypass", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("zero_trust_bypass: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("zero_trust_bypass: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_zero_trust_bypass, run_zero_trust_bypass_result);
@@ -203,7 +228,11 @@ pub async fn run_session_fixation_adv_result(t: &str) -> EngineResult {
     if let Some(p) = http_get(&client, &url).await {
         let cookie = header_value(&p.headers, "set-cookie").unwrap_or("");
         let lower = cookie.to_lowercase();
-        if !cookie.is_empty() && (!lower.contains("httponly") || !lower.contains("secure") || !lower.contains("samesite")) {
+        if !cookie.is_empty()
+            && (!lower.contains("httponly")
+                || !lower.contains("secure")
+                || !lower.contains("samesite"))
+        {
             findings.push(finding(
                 "session_fixation_adv",
                 "Session cookie missing HttpOnly/Secure/SameSite",
@@ -217,7 +246,10 @@ pub async fn run_session_fixation_adv_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("session_fixation_adv", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("session_fixation_adv: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("session_fixation_adv: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_session_fixation_adv, run_session_fixation_adv_result);
@@ -245,4 +277,7 @@ cli_wrapper!(run_quantum_key_attack, run_quantum_key_attack_result);
 pub async fn run_password_spray_advanced_result(t: &str) -> EngineResult {
     crate::password_spray_engine::run_password_spray_result(t).await
 }
-cli_wrapper!(run_password_spray_advanced, run_password_spray_advanced_result);
+cli_wrapper!(
+    run_password_spray_advanced,
+    run_password_spray_advanced_result
+);

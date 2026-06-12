@@ -30,7 +30,15 @@ fn net_finding(
     description: &str,
     target: &str,
 ) -> Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, NETWORK_PROBE_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        NETWORK_PROBE_DEPTH,
+    )
 }
 
 pub async fn run_arp_spoofing_engine_result(t: &str) -> EngineResult {
@@ -75,7 +83,10 @@ pub async fn run_dns_cache_poisoning_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
 
     let has_spf = txt.iter().any(|r| r.contains("v=spf1"));
-    let has_dmarc = dns_txt(&format!("_dmarc.{}", host)).await.iter().any(|r| r.contains("DMARC1"));
+    let has_dmarc = dns_txt(&format!("_dmarc.{}", host))
+        .await
+        .iter()
+        .any(|r| r.contains("DMARC1"));
     if !mx.is_empty() && (!has_spf || !has_dmarc) {
         findings.push(net_finding(
             "dns_cache_poisoning",
@@ -109,7 +120,10 @@ pub async fn run_dns_cache_poisoning_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("dns_cache_poisoning", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("dns_cache_poisoning: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("dns_cache_poisoning: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_dns_cache_poisoning, run_dns_cache_poisoning_result);
@@ -124,12 +138,8 @@ pub async fn run_dns_rebinding_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
 
     let baseline = http_get_with_headers(&client, &url, &[]).await;
-    let foreign = http_get_with_headers(
-        &client,
-        &url,
-        &[("Host", "rebind.attacker.example")],
-    )
-    .await;
+    let foreign =
+        http_get_with_headers(&client, &url, &[("Host", "rebind.attacker.example")]).await;
     if let (Some(base), Some(forg)) = (baseline, foreign) {
         if host_header_rebinding_signal(base.status, forg.status, forg.body.len()) {
             findings.push(finding(
@@ -188,8 +198,8 @@ pub async fn run_can_bus_surface_result(t: &str) -> EngineResult {
         let mut detail = format!("TCP {}:{} accepts connections.", host, port);
         if port == 13400 {
             let probe: [u8; 17] = [
-                0x02, 0xFD, 0x00, 0x05, 0x00, 0x00, 0x00, 0x07, 0x0E, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
+                0x02, 0xFD, 0x00, 0x05, 0x00, 0x00, 0x00, 0x07, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00,
             ];
             if let Some(resp) = tcp_probe_response(&host, port, &probe).await {
                 if resp.len() >= 4 && resp[0] == 0x02 && resp[1] == 0xFD {
@@ -257,12 +267,16 @@ pub async fn run_snmp_exploitation_result(t: &str) -> EngineResult {
     let host = extract_host(t);
     let mut findings: Vec<Value> = Vec::new();
     const SNMP_GET: &[u8] = &[
-        0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0,
-        0x19, 0x02, 0x04, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30,
-        0x0c, 0x30, 0x0a, 0x06, 0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
+        0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0, 0x19,
+        0x02, 0x04, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x0c, 0x30,
+        0x0a, 0x06, 0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
     ];
     if let Some(resp) = udp_probe_response(&host, 161, SNMP_GET).await {
-        if resp.first() == Some(&0x30) && resp.windows(6).any(|w| w == [0x2b, 0x06, 0x01, 0x02, 0x01, 0x01]) {
+        if resp.first() == Some(&0x30)
+            && resp
+                .windows(6)
+                .any(|w| w == [0x2b, 0x06, 0x01, 0x02, 0x01, 0x01])
+        {
             findings.push(net_finding(
                 "snmp_exploitation",
                 "SNMP agent answered public community GET",
@@ -323,7 +337,9 @@ pub async fn run_ldap_injection_engine_result(t: &str) -> EngineResult {
     }
     let host = extract_host(t);
     let mut findings: Vec<Value> = Vec::new();
-    const LDAP_BIND: &[u8] = &[0x30, 0x0c, 0x02, 0x01, 0x01, 0x60, 0x07, 0x02, 0x01, 0x03, 0x04, 0x00, 0x80, 0x00];
+    const LDAP_BIND: &[u8] = &[
+        0x30, 0x0c, 0x02, 0x01, 0x01, 0x60, 0x07, 0x02, 0x01, 0x03, 0x04, 0x00, 0x80, 0x00,
+    ];
     for (port, label) in [(389u16, "LDAP"), (3268, "Global Catalog LDAP")] {
         if let Some(resp) = tcp_probe_response(&host, port, LDAP_BIND).await {
             if resp.first() == Some(&0x30) && resp.len() >= 7 {
@@ -414,7 +430,10 @@ pub async fn run_bluetooth_attack_engine_result(t: &str) -> EngineResult {
         "BLE/Classic Bluetooth traffic isn't visible over IP; deploy the BT sensor agent on a Linux/BlueZ host.",
     )
 }
-cli_wrapper!(run_bluetooth_attack_engine, run_bluetooth_attack_engine_result);
+cli_wrapper!(
+    run_bluetooth_attack_engine,
+    run_bluetooth_attack_engine_result
+);
 
 pub async fn run_ospf_bgp_hijack_result(t: &str) -> EngineResult {
     crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(t).await
@@ -461,7 +480,10 @@ pub async fn run_mpls_vpn_attack_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("mpls_vpn_attack", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("mpls_vpn_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("mpls_vpn_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_mpls_vpn_attack, run_mpls_vpn_attack_result);
@@ -497,8 +519,7 @@ pub async fn run_network_covert_channel_result(t: &str) -> EngineResult {
             .iter()
             .filter(|(k, v)| {
                 let lk = k.to_lowercase();
-                (lk.starts_with("x-") || lk.starts_with("server-timing"))
-                    && v.len() > 80
+                (lk.starts_with("x-") || lk.starts_with("server-timing")) && v.len() > 80
             })
             .collect();
         if !suspicious.is_empty() {
@@ -514,9 +535,13 @@ pub async fn run_network_covert_channel_result(t: &str) -> EngineResult {
                 t,
             );
             if let Some(obj) = f.as_object_mut() {
-                obj.insert("headers".into(), serde_json::json!(
-                    suspicious.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>()
-                ));
+                obj.insert(
+                    "headers".into(),
+                    serde_json::json!(suspicious
+                        .iter()
+                        .map(|(k, _)| k.clone())
+                        .collect::<Vec<_>>()),
+                );
             }
             findings.push(f);
         }
@@ -524,10 +549,16 @@ pub async fn run_network_covert_channel_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("network_covert_channel", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("network_covert_channel: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("network_covert_channel: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_network_covert_channel, run_network_covert_channel_result);
+cli_wrapper!(
+    run_network_covert_channel,
+    run_network_covert_channel_result
+);
 
 pub async fn run_wpa3_attack_engine_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
@@ -556,14 +587,23 @@ pub async fn run_tor_exit_attack_result(t: &str) -> EngineResult {
                     "Resolved IP is a Tor exit node",
                     "high",
                     "T1090.003",
-                    &format!("{} resolves to {} which is on the published Tor exit list.", host, ip),
+                    &format!(
+                        "{} resolves to {} which is on the published Tor exit list.",
+                        host, ip
+                    ),
                     t,
                 ));
             }
         }
     }
-    if findings.is_empty() { empty_ok("tor_exit_attack", t) }
-    else { EngineResult::ok(findings.clone(), format!("tor_exit_attack: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("tor_exit_attack", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("tor_exit_attack: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_tor_exit_attack, run_tor_exit_attack_result);
 
@@ -582,7 +622,10 @@ pub async fn run_network_baseline_anomaly_result(t: &str) -> EngineResult {
     // Canonical hardened ports per OWASP ASVS L1 — anything else is anomalous on an internet-
     // facing host.
     let canonical: std::collections::HashSet<u16> =
-        [80, 443, 22, 25, 53, 110, 143, 465, 587, 993, 995].iter().copied().collect();
+        [80, 443, 22, 25, 53, 110, 143, 465, 587, 993, 995]
+            .iter()
+            .copied()
+            .collect();
     let anomalies: Vec<Value> = asm
         .findings
         .iter()
@@ -610,10 +653,16 @@ pub async fn run_network_baseline_anomaly_result(t: &str) -> EngineResult {
         empty_ok("network_baseline_anomaly", t)
     } else {
         let n = anomalies.len();
-        EngineResult::ok(anomalies, format!("network_baseline_anomaly: {} anomaly", n))
+        EngineResult::ok(
+            anomalies,
+            format!("network_baseline_anomaly: {} anomaly", n),
+        )
     }
 }
-cli_wrapper!(run_network_baseline_anomaly, run_network_baseline_anomaly_result);
+cli_wrapper!(
+    run_network_baseline_anomaly,
+    run_network_baseline_anomaly_result
+);
 
 pub async fn run_packet_injection_engine_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
@@ -623,7 +672,10 @@ pub async fn run_packet_injection_engine_result(t: &str) -> EngineResult {
         "Forged frames are observed via IDS feeds (Suricata/Zeek) or a local pcap on the affected segment.",
     )
 }
-cli_wrapper!(run_packet_injection_engine, run_packet_injection_engine_result);
+cli_wrapper!(
+    run_packet_injection_engine,
+    run_packet_injection_engine_result
+);
 
 pub async fn run_network_tap_advanced_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(

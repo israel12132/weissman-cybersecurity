@@ -45,66 +45,144 @@ struct TableSpec {
 static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
     use std::collections::HashMap;
     let mut m: HashMap<&'static str, TableSpec> = HashMap::new();
-    m.insert("vulnerabilities", TableSpec {
-        table: "vulnerabilities",
-        columns: &[
-            "id", "finding_id", "title", "severity", "source", "status",
-            "client_id", "discovered_at", "cluster_id", "epss_score",
-            "epss_percentile", "kev_listed", "kev_known_ransomware",
-            "kev_due_date", "seen_count", "signature_hash",
-        ],
-        order_by: &["discovered_at", "epss_score", "seen_count", "id"],
-        joins: &[],
-    });
-    m.insert("weissman_finding_clusters", TableSpec {
-        table: "weissman_finding_clusters",
-        columns: &[
-            "id", "client_id", "target", "cwe", "vuln_signature", "title",
-            "member_count", "max_severity", "max_cvss", "max_epss",
-            "kev_listed", "status", "first_seen_at", "last_seen_at",
-        ],
-        order_by: &["last_seen_at", "max_cvss", "max_epss", "member_count"],
-        joins: &[],
-    });
-    m.insert("clients", TableSpec {
-        table: "clients",
-        columns: &["id", "name", "default_asset_value_usd", "risk_loss_discount"],
-        order_by: &["id", "name"],
-        joins: &[],
-    });
-    m.insert("risk_graph_nodes", TableSpec {
-        table: "risk_graph_nodes",
-        columns: &[
-            "id", "client_id", "node_type", "label", "graph_key", "risk_score",
-            "is_choke_point", "internet_exposed", "crown_jewel", "asset_value",
-            "business_value_usd",
-        ],
-        order_by: &["risk_score", "business_value_usd", "id"],
-        joins: &[],
-    });
-    m.insert("agent_anomalies", TableSpec {
-        table: "agent_anomalies",
-        columns: &[
-            "id", "agent_id", "client_id", "metric_name", "observed",
-            "baseline_mean", "baseline_stddev", "z_score", "severity",
-            "detail", "detected_at",
-        ],
-        order_by: &["detected_at", "z_score"],
-        joins: &[],
-    });
-    m.insert("attack_path_snapshots", TableSpec {
-        table: "attack_path_snapshots",
-        columns: &[
-            "id", "client_id", "computed_at", "entry_count", "jewel_count",
-            "path_count", "max_risk",
-        ],
-        order_by: &["computed_at", "max_risk"],
-        joins: &[],
-    });
+    m.insert(
+        "vulnerabilities",
+        TableSpec {
+            table: "vulnerabilities",
+            columns: &[
+                "id",
+                "finding_id",
+                "title",
+                "severity",
+                "source",
+                "status",
+                "client_id",
+                "discovered_at",
+                "cluster_id",
+                "epss_score",
+                "epss_percentile",
+                "kev_listed",
+                "kev_known_ransomware",
+                "kev_due_date",
+                "seen_count",
+                "signature_hash",
+            ],
+            order_by: &["discovered_at", "epss_score", "seen_count", "id"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "weissman_finding_clusters",
+        TableSpec {
+            table: "weissman_finding_clusters",
+            columns: &[
+                "id",
+                "client_id",
+                "target",
+                "cwe",
+                "vuln_signature",
+                "title",
+                "member_count",
+                "max_severity",
+                "max_cvss",
+                "max_epss",
+                "kev_listed",
+                "status",
+                "first_seen_at",
+                "last_seen_at",
+            ],
+            order_by: &["last_seen_at", "max_cvss", "max_epss", "member_count"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "clients",
+        TableSpec {
+            table: "clients",
+            columns: &[
+                "id",
+                "name",
+                "default_asset_value_usd",
+                "risk_loss_discount",
+            ],
+            order_by: &["id", "name"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "risk_graph_nodes",
+        TableSpec {
+            table: "risk_graph_nodes",
+            columns: &[
+                "id",
+                "client_id",
+                "node_type",
+                "label",
+                "graph_key",
+                "risk_score",
+                "is_choke_point",
+                "internet_exposed",
+                "crown_jewel",
+                "asset_value",
+                "business_value_usd",
+            ],
+            order_by: &["risk_score", "business_value_usd", "id"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "agent_anomalies",
+        TableSpec {
+            table: "agent_anomalies",
+            columns: &[
+                "id",
+                "agent_id",
+                "client_id",
+                "metric_name",
+                "observed",
+                "baseline_mean",
+                "baseline_stddev",
+                "z_score",
+                "severity",
+                "detail",
+                "detected_at",
+            ],
+            order_by: &["detected_at", "z_score"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "attack_path_snapshots",
+        TableSpec {
+            table: "attack_path_snapshots",
+            columns: &[
+                "id",
+                "client_id",
+                "computed_at",
+                "entry_count",
+                "jewel_count",
+                "path_count",
+                "max_risk",
+            ],
+            order_by: &["computed_at", "max_risk"],
+            joins: &[],
+        },
+    );
     m
 });
 
-const ALLOWED_OPS: &[&str] = &["=", "!=", "<", "<=", ">", ">=", "in", "like", "is_null", "is_not_null"];
+const ALLOWED_OPS: &[&str] = &[
+    "=",
+    "!=",
+    "<",
+    "<=",
+    ">",
+    ">=",
+    "in",
+    "like",
+    "is_null",
+    "is_not_null",
+];
 const MAX_LIMIT: i64 = 200;
 
 // ─── Plan structures ─────────────────────────────────────────────────────────
@@ -153,7 +231,10 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         let mut out = Vec::with_capacity(plan.select.len());
         for c in &plan.select {
             if !spec.columns.contains(&c.as_str()) {
-                return Err(format!("column '{}' not allowed on table '{}'", c, spec.table));
+                return Err(format!(
+                    "column '{}' not allowed on table '{}'",
+                    c, spec.table
+                ));
             }
             out.push(c.as_str());
         }
@@ -206,7 +287,10 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
             }
             "in" => {
                 // value must be array.
-                let arr = f.value.as_array().ok_or_else(|| "IN value must be array".to_string())?;
+                let arr = f
+                    .value
+                    .as_array()
+                    .ok_or_else(|| "IN value must be array".to_string())?;
                 if arr.is_empty() {
                     return Err("IN value array is empty".to_string());
                 }
@@ -218,9 +302,16 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
                 where_parts.push(format!("{} IN ({})", f.column, placeholders.join(", ")));
             }
             "like" => {
-                let s = f.value.as_str().ok_or_else(|| "LIKE value must be string".to_string())?;
+                let s = f
+                    .value
+                    .as_str()
+                    .ok_or_else(|| "LIKE value must be string".to_string())?;
                 // Wrap in % unless the user already supplied them.
-                let pattern = if s.contains('%') { s.to_string() } else { format!("%{}%", s) };
+                let pattern = if s.contains('%') {
+                    s.to_string()
+                } else {
+                    format!("%{}%", s)
+                };
                 params.push(Value::String(pattern));
                 where_parts.push(format!("{} ILIKE ${}", f.column, params.len()));
             }
@@ -233,7 +324,11 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
     }
 
     let order_sql = match order {
-        Some(c) => format!(" ORDER BY {} {}", c, if plan.order_desc { "DESC" } else { "ASC" }),
+        Some(c) => format!(
+            " ORDER BY {} {}",
+            c,
+            if plan.order_desc { "DESC" } else { "ASC" }
+        ),
         None => String::new(),
     };
     let sql = format!(
@@ -397,12 +492,16 @@ fn bind_json<'a>(
     v: &'a Value,
 ) -> sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments> {
     match v {
-        Value::Null    => q.bind(Option::<String>::None),
+        Value::Null => q.bind(Option::<String>::None),
         Value::Bool(b) => q.bind(*b),
         Value::Number(n) => {
-            if let Some(i) = n.as_i64() { q.bind(i) }
-            else if let Some(f) = n.as_f64() { q.bind(f) }
-            else { q.bind(n.to_string()) }
+            if let Some(i) = n.as_i64() {
+                q.bind(i)
+            } else if let Some(f) = n.as_f64() {
+                q.bind(f)
+            } else {
+                q.bind(n.to_string())
+            }
         }
         Value::String(s) => q.bind(s.clone()),
         other => q.bind(other.to_string()),
@@ -478,8 +577,8 @@ async fn llm_to_plan(question: &str) -> Result<Value, String> {
     let base = std::env::var("WEISSMAN_LLM_BASE_URL")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))
         .unwrap_or_else(|_| "https://api.openai.com".to_string());
-    let model = std::env::var("WEISSMAN_NL_QUERY_MODEL")
-        .unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let model =
+        std::env::var("WEISSMAN_NL_QUERY_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
     let api_key = std::env::var("OPENAI_API_KEY")
         .or_else(|_| std::env::var("WEISSMAN_LLM_API_KEY"))
         .ok()
@@ -538,7 +637,9 @@ mod tests {
         let c = compile_plan(&plan, 1).unwrap();
         // Tenant scope ALWAYS first param.
         assert_eq!(c.params[0], Value::from(1));
-        assert!(c.sql.starts_with("SELECT id, title, severity FROM vulnerabilities WHERE tenant_id = $1"));
+        assert!(c
+            .sql
+            .starts_with("SELECT id, title, severity FROM vulnerabilities WHERE tenant_id = $1"));
         assert!(c.sql.contains("severity IN ($2, $3)"));
         assert!(c.sql.contains("ORDER BY discovered_at DESC"));
         assert!(c.sql.ends_with("LIMIT 50"));

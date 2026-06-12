@@ -91,7 +91,12 @@ pub async fn login_rate_limit_middleware(
     let ip = extract_client_ip(request.headers(), peer);
     let (limiter, limit, burst, label) = match kind {
         UnauthPostKind::Login => (login_limiter(), login_per_minute(), login_burst(), "Login"),
-        UnauthPostKind::Enroll => (enroll_limiter(), enroll_per_minute(), enroll_burst(), "Agent enroll"),
+        UnauthPostKind::Enroll => (
+            enroll_limiter(),
+            enroll_per_minute(),
+            enroll_burst(),
+            "Agent enroll",
+        ),
     };
 
     if super::rate_limit_redis::is_enabled() {

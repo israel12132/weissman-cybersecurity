@@ -108,7 +108,9 @@ fn prune_old_backups(dir: &Path) -> Result<(), String> {
     let retention = retention_days();
     let max_files = max_backup_files();
     let cutoff = SystemTime::now()
-        .checked_sub(std::time::Duration::from_secs(retention.saturating_mul(86_400)))
+        .checked_sub(std::time::Duration::from_secs(
+            retention.saturating_mul(86_400),
+        ))
         .unwrap_or(SystemTime::UNIX_EPOCH);
     let mut entries: Vec<(PathBuf, SystemTime)> = Vec::new();
     let read = fs::read_dir(dir).map_err(|e| e.to_string())?;

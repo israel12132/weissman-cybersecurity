@@ -17,10 +17,7 @@ pub fn finding_title_and_severity(obj: &Map<String, Value>) -> (String, String) 
         .or_else(|| {
             if obj.get("type").and_then(Value::as_str) == Some("supply_chain") {
                 let pkg = obj.get("package").and_then(Value::as_str).unwrap_or("?");
-                let eco = obj
-                    .get("ecosystem")
-                    .and_then(Value::as_str)
-                    .unwrap_or("?");
+                let eco = obj.get("ecosystem").and_then(Value::as_str).unwrap_or("?");
                 let vc = obj.get("vuln_count").and_then(Value::as_u64).unwrap_or(0);
                 let ids = obj
                     .get("osv_ids")
@@ -45,22 +42,17 @@ pub fn finding_title_and_severity(obj: &Map<String, Value>) -> (String, String) 
             }
         })
         .or_else(|| {
-            obj.get("url")
-                .and_then(Value::as_str)
-                .map(|u| {
-                    let m = obj
-                        .get("method")
-                        .and_then(Value::as_str)
-                        .unwrap_or("");
-                    let p = obj.get("path").and_then(Value::as_str).unwrap_or("");
-                    if !m.is_empty() && !p.is_empty() {
-                        format!("{m} {p} → {u}")
-                    } else if !p.is_empty() {
-                        format!("{p} ({u})")
-                    } else {
-                        u.to_string()
-                    }
-                })
+            obj.get("url").and_then(Value::as_str).map(|u| {
+                let m = obj.get("method").and_then(Value::as_str).unwrap_or("");
+                let p = obj.get("path").and_then(Value::as_str).unwrap_or("");
+                if !m.is_empty() && !p.is_empty() {
+                    format!("{m} {p} → {u}")
+                } else if !p.is_empty() {
+                    format!("{p} ({u})")
+                } else {
+                    u.to_string()
+                }
+            })
         })
         .or_else(|| obj.get("value").and_then(Value::as_str).map(String::from))
         .or_else(|| obj.get("path").and_then(Value::as_str).map(String::from))

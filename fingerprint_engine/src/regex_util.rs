@@ -12,7 +12,9 @@ fn compile_never_matches() -> Regex {
     for p in NEVER_PATTERNS {
         match Regex::new(p) {
             Ok(r) => return r,
-            Err(e) => tracing::error!(target: "security_audit", "regex_util: pattern {p:?} rejected: {e}"),
+            Err(e) => {
+                tracing::error!(target: "security_audit", "regex_util: pattern {p:?} rejected: {e}")
+            }
         }
     }
     tracing::error!(target: "security_audit", "regex_util: all never-match patterns rejected");

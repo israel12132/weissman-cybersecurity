@@ -91,7 +91,11 @@ fn normalize_cve(raw: &str) -> String {
 /// Download the full KEV feed and upsert every row. Returns the number of rows.
 pub async fn refresh_kev_catalog(pool: &PgPool) -> Result<usize, String> {
     let client = http_client();
-    let resp = client.get(KEV_URL).send().await.map_err(|e| e.to_string())?;
+    let resp = client
+        .get(KEV_URL)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Err(format!("HTTP {}", resp.status()));
     }
@@ -106,7 +110,10 @@ pub async fn refresh_kev_catalog(pool: &PgPool) -> Result<usize, String> {
         if cve.is_empty() {
             continue;
         }
-        let kr = row.known_ransomware_use.trim().eq_ignore_ascii_case("Known");
+        let kr = row
+            .known_ransomware_use
+            .trim()
+            .eq_ignore_ascii_case("Known");
         sqlx::query(
             r#"INSERT INTO kev_intel (
                    cve, vendor_project, product, vulnerability_name,
@@ -207,8 +214,12 @@ pub fn bootstrap_kev_catalog(pool: Arc<PgPool>) {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
         match refresh_kev_catalog(&pool).await {
-            Ok(n) => tracing::info!(target: "intel_kev", rows = n, "KEV bootstrap refresh complete"),
-            Err(e) => tracing::warn!(target: "intel_kev", error = %e, "KEV bootstrap refresh failed"),
+            Ok(n) => {
+                tracing::info!(target: "intel_kev", rows = n, "KEV bootstrap refresh complete")
+            }
+            Err(e) => {
+                tracing::warn!(target: "intel_kev", error = %e, "KEV bootstrap refresh failed")
+            }
         }
     });
 }

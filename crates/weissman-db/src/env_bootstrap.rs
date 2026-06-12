@@ -100,6 +100,8 @@ mod tests {
 
     #[test]
     fn accepts_postgres_user() {
-        assert!(validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok());
+        assert!(
+            validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
+        );
     }
 }

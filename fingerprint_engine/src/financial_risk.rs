@@ -52,11 +52,7 @@ pub struct TopContributor {
 /// Apply per-client tag → value rules to risk_graph_nodes. Idempotent. Returns
 /// number of nodes updated. Should be called at onboarding and any time rules
 /// or tags change.
-pub async fn apply_tag_rules(
-    pool: &PgPool,
-    tenant_id: i64,
-    client_id: i64,
-) -> Result<u64, String> {
+pub async fn apply_tag_rules(pool: &PgPool, tenant_id: i64, client_id: i64) -> Result<u64, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -152,12 +148,16 @@ pub async fn compute_and_store(
         let kev: bool = r.try_get("kev").unwrap_or(false);
 
         total_value += value;
-        if crown { crown_value += value; }
+        if crown {
+            crown_value += value;
+        }
 
         let sle = single_loss_expectancy(value, cvss);
         let ale = annual_loss_expectancy(sle, epss, kev, discount);
 
-        if sle > sle_worst { sle_worst = sle; }
+        if sle > sle_worst {
+            sle_worst = sle;
+        }
         ale_total = ale_total.saturating_add(ale);
 
         contributors.push(TopContributor {
@@ -238,9 +238,13 @@ pub async fn latest_snapshot(
     let _ = tx.commit().await;
     let Some(r) = row else { return Ok(None) };
     let top: Vec<TopContributor> = serde_json::from_value(
-        r.try_get::<Value, _>("top_contributors").unwrap_or(json!([])),
-    ).unwrap_or_default();
-    let computed_at: chrono::DateTime<chrono::Utc> = r.try_get("computed_at").unwrap_or_else(|_| chrono::Utc::now());
+        r.try_get::<Value, _>("top_contributors")
+            .unwrap_or(json!([])),
+    )
+    .unwrap_or_default();
+    let computed_at: chrono::DateTime<chrono::Utc> = r
+        .try_get("computed_at")
+        .unwrap_or_else(|_| chrono::Utc::now());
     Ok(Some(ClientFinancialRisk {
         client_id,
         total_asset_value_usd: r.try_get("total_asset_value_usd").unwrap_or(0),

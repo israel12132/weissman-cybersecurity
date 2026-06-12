@@ -16,16 +16,12 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
-use weissman_core::models::engine::{is_production_engine_id};
+use weissman_core::models::engine::is_production_engine_id;
 
 /// Extra engine ids accepted by the scan API beyond `PRODUCTION_ENGINE_IDS` (DAG / Engine Room).
 /// All entries here are legacy/alias IDs that aren't in the production set but are still wired.
-pub const EXTRA_SCAN_ENGINE_IDS: &[&str] = &[
-    "ollama_fuzz",
-    "zero_day_radar",
-    "poe_synthesis",
-    "pipeline",
-];
+pub const EXTRA_SCAN_ENGINE_IDS: &[&str] =
+    &["ollama_fuzz", "zero_day_radar", "poe_synthesis", "pipeline"];
 
 #[must_use]
 pub fn is_allowed_scan_engine(engine: &str) -> bool {
@@ -55,8 +51,12 @@ pub enum EntitlementTier {
 #[derive(Debug, Clone)]
 pub enum RouteError {
     BadRequest(String),
-    PaymentRequired { detail: String },
-    Forbidden { detail: String },
+    PaymentRequired {
+        detail: String,
+    },
+    Forbidden {
+        detail: String,
+    },
     /// 429: AI-heavy daily quota exceeded. `reset_at_unix` is the next UTC midnight.
     QuotaExceeded {
         detail: String,
@@ -64,7 +64,9 @@ pub enum RouteError {
         limit: u64,
         used: u64,
     },
-    Internal { detail: String },
+    Internal {
+        detail: String,
+    },
 }
 
 impl RouteError {
@@ -283,7 +285,10 @@ pub async fn check_tenant_entitlement(
                 if used_u >= quota_limit {
                     // Compute next UTC midnight as reset point.
                     let now = Utc::now();
-                    let tomorrow = now.date_naive().succ_opt().unwrap_or_else(|| now.date_naive());
+                    let tomorrow = now
+                        .date_naive()
+                        .succ_opt()
+                        .unwrap_or_else(|| now.date_naive());
                     let reset_at = tomorrow
                         .and_hms_opt(0, 0, 0)
                         .map(|dt| dt.and_utc().timestamp())
@@ -352,7 +357,13 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
         .unwrap_or("")
         .to_string();
     let reserved = [
-        "target", "client_id", "ai_endpoint", "repo_url", "base_payload", "engine", "timeout",
+        "target",
+        "client_id",
+        "ai_endpoint",
+        "repo_url",
+        "base_payload",
+        "engine",
+        "timeout",
     ];
     let mut extras = std::collections::HashMap::new();
     if let Some(obj) = body.as_object() {

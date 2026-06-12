@@ -41,14 +41,7 @@ fn normalize_severity(raw: Option<&str>) -> String {
 /// Best-effort human title from the engine's finding payload.
 fn extract_title(f: &Value, engine: &str) -> String {
     let candidates = [
-        "title",
-        "name",
-        "summary",
-        "rule",
-        "finding",
-        "issue",
-        "asset",
-        "type",
+        "title", "name", "summary", "rule", "finding", "issue", "asset", "type",
     ];
     for key in candidates {
         if let Some(s) = f.get(key).and_then(Value::as_str) {
@@ -66,7 +59,14 @@ fn extract_title(f: &Value, engine: &str) -> String {
 
 /// Find a usable description / detail string.
 fn extract_description(f: &Value) -> String {
-    for key in ["description", "details", "detail", "evidence", "message", "summary"] {
+    for key in [
+        "description",
+        "details",
+        "detail",
+        "evidence",
+        "message",
+        "summary",
+    ] {
         if let Some(s) = f.get(key).and_then(Value::as_str) {
             let t = s.trim();
             if !t.is_empty() {
@@ -100,7 +100,14 @@ fn severity_to_score(sev: &str) -> f64 {
 }
 
 fn extract_target(f: &Value, fallback: &str) -> String {
-    for key in ["target", "url", "affected_url", "target_url", "asset_url", "host"] {
+    for key in [
+        "target",
+        "url",
+        "affected_url",
+        "target_url",
+        "asset_url",
+        "host",
+    ] {
         if let Some(s) = f.get(key).and_then(Value::as_str) {
             let t = s.trim();
             if !t.is_empty() {
@@ -228,7 +235,11 @@ fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
     hasher.update(b"|");
     hasher.update(normalized_title.as_bytes());
     let digest = hasher.finalize();
-    let short: String = digest.iter().take(12).map(|b| format!("{:02x}", b)).collect();
+    let short: String = digest
+        .iter()
+        .take(12)
+        .map(|b| format!("{:02x}", b))
+        .collect();
     format!("{}-{}", engine, short)
 }
 
@@ -298,7 +309,13 @@ pub async fn persist_engine_findings(
         );
         let references = extract_array(
             f,
-            &["references", "reference", "refs", "links", "external_references"],
+            &[
+                "references",
+                "reference",
+                "refs",
+                "links",
+                "external_references",
+            ],
         );
         let compliance = extract_array(
             f,
@@ -338,7 +355,9 @@ pub async fn persist_engine_findings(
             "raw": f.clone(),
         });
         if !cve.is_empty() {
-            if let Some(s) = intel_epss::enrich_with_epss(pool, &mut raw_data_enriched, Some(&cve)).await {
+            if let Some(s) =
+                intel_epss::enrich_with_epss(pool, &mut raw_data_enriched, Some(&cve)).await
+            {
                 epss_score = Some(s.score);
             }
             if let Some(k) = intel_kev::is_kev_listed(pool, &cve).await {
@@ -376,8 +395,7 @@ pub async fn persist_engine_findings(
         // before insert. We still persist (audit trail) but the inbox stays clean.
         // We have to commit the existing tx to call is_suppressed (which opens its
         // own short-lived tx); cheap because we restart immediately below.
-        let suppressed =
-            fp_feedback::is_suppressed(pool, tenant_id, engine, &signature_hash).await;
+        let suppressed = fp_feedback::is_suppressed(pool, tenant_id, engine, &signature_hash).await;
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
 
         // Re-open the tx if it was committed during the suppression check. We
@@ -474,7 +492,12 @@ pub async fn persist_engine_findings(
         // ── Pentest reinforcement memory (fire-and-forget) ───────────────────
         let payload = extract_string(
             f,
-            &["payload", "probe_payload", "injected_payload", "fuzz_payload"],
+            &[
+                "payload",
+                "probe_payload",
+                "injected_payload",
+                "fuzz_payload",
+            ],
         );
         if !payload.is_empty() && effective_status != "FALSE_POSITIVE" {
             let host = target_url
@@ -510,7 +533,13 @@ pub async fn persist_engine_findings(
                 .and_then(Value::as_str)
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
-                .or_else(|| if poc.is_empty() { None } else { Some(poc.clone()) });
+                .or_else(|| {
+                    if poc.is_empty() {
+                        None
+                    } else {
+                        Some(poc.clone())
+                    }
+                });
             let evidence = title.chars().take(240).collect::<String>();
             let pool_mem = (*pool).clone();
             let eng = engine.to_string();
@@ -555,7 +584,11 @@ pub async fn persist_engine_findings(
             epss: epss_score,
             kev: kev_listed,
             kev_known_ransomware,
-            cve: if cve.is_empty() { None } else { Some(cve.clone()) },
+            cve: if cve.is_empty() {
+                None
+            } else {
+                Some(cve.clone())
+            },
             signature_hash: Some(signature_hash.clone()),
             internet_exposed,
         };

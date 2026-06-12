@@ -218,11 +218,9 @@ pub async fn api_signup(
 
     // Garbage-collect expired rows opportunistically (no separate worker for this
     // low-volume table). Bounded delete — won't lock if there are millions of rows.
-    let _ = sqlx::query(
-        "DELETE FROM pending_signups WHERE expires_at < now() - interval '7 days'",
-    )
-    .execute(state.auth_pool.as_ref())
-    .await;
+    let _ = sqlx::query("DELETE FROM pending_signups WHERE expires_at < now() - interval '7 days'")
+        .execute(state.auth_pool.as_ref())
+        .await;
 
     let res = sqlx::query(
         r#"INSERT INTO pending_signups (
@@ -249,8 +247,8 @@ pub async fn api_signup(
         // Do not leak: return 202 so attackers can't enumerate which emails are taken.
     }
 
-    let public_base = std::env::var("WEISSMAN_PUBLIC_URL")
-        .unwrap_or_else(|_| "http://localhost".to_string());
+    let public_base =
+        std::env::var("WEISSMAN_PUBLIC_URL").unwrap_or_else(|_| "http://localhost".to_string());
     let verify_link = format!(
         "{}/api/auth/verify?token={}",
         public_base.trim_end_matches('/'),
@@ -500,7 +498,9 @@ fn spawn_signup_verification_email(email: String, workspace: String, link: Strin
                  Click this link within 24 hours to activate your workspace ({}):\n\n  {}\n\n\
                  If you didn't request this, you can safely ignore this email.\n\n\
                  — The Weissman team",
-                workspace_display_name(&workspace), workspace, link
+                workspace_display_name(&workspace),
+                workspace,
+                link
             ),
         )
         .await
@@ -512,8 +512,8 @@ fn spawn_signup_verification_email(email: String, workspace: String, link: Strin
 
 fn spawn_signup_welcome_email(email: String, workspace: String, slug: String) {
     tokio::spawn(async move {
-        let public_base = std::env::var("WEISSMAN_PUBLIC_URL")
-            .unwrap_or_else(|_| "http://localhost".to_string());
+        let public_base =
+            std::env::var("WEISSMAN_PUBLIC_URL").unwrap_or_else(|_| "http://localhost".to_string());
         let body = format!(
             "Your Weissman workspace is live, {}!\n\n\
              Workspace name: {}\n\
@@ -525,7 +525,9 @@ fn spawn_signup_welcome_email(email: String, workspace: String, slug: String) {
               3. Hit \"Run\" on any of the 253 engines.\n\n\
              Reply to this email or write to support@weissman.io if you need help.\n\n\
              — The Weissman team",
-            workspace_display_name(&workspace), workspace, slug,
+            workspace_display_name(&workspace),
+            workspace,
+            slug,
             public_base.trim_end_matches('/')
         );
         if let Err(e) = send_signup_email(&email, "Your Weissman workspace is ready", &body).await {

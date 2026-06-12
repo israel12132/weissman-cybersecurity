@@ -103,7 +103,9 @@ fn proxy_rotate_every() -> usize {
         .max(1)
 }
 
-async fn build_client_with_proxy(proxy_url: Option<&str>) -> Result<reqwest::Client, reqwest::Error> {
+async fn build_client_with_proxy(
+    proxy_url: Option<&str>,
+) -> Result<reqwest::Client, reqwest::Error> {
     let mut b = reqwest::Client::builder()
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs());

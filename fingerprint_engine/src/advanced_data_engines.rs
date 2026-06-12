@@ -30,13 +30,24 @@ pub async fn run_dns_exfil_engine_result(t: &str) -> EngineResult {
                 "High-entropy TXT record",
                 "low",
                 "T1048.003",
-                &format!("TXT on {} is {} chars / {} unique — DNS exfil candidate.", host, r.len(), unique_chars),
+                &format!(
+                    "TXT on {} is {} chars / {} unique — DNS exfil candidate.",
+                    host,
+                    r.len(),
+                    unique_chars
+                ),
                 t,
             ));
         }
     }
-    if findings.is_empty() { empty_ok("dns_exfil_engine", t) }
-    else { EngineResult::ok(findings.clone(), format!("dns_exfil_engine: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("dns_exfil_engine", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("dns_exfil_engine: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_dns_exfil_engine, run_dns_exfil_engine_result);
 
@@ -49,20 +60,33 @@ pub async fn run_http_covert_exfil_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         // Excessive custom X- headers can carry covert channels.
-        let x_headers: Vec<_> = p.headers.iter().filter(|(k, _)| k.to_ascii_lowercase().starts_with("x-")).collect();
+        let x_headers: Vec<_> = p
+            .headers
+            .iter()
+            .filter(|(k, _)| k.to_ascii_lowercase().starts_with("x-"))
+            .collect();
         if x_headers.len() > 10 {
             findings.push(finding(
                 "http_covert_exfil",
                 &format!("{} custom X- headers observed", x_headers.len()),
                 "low",
                 "T1071.001",
-                &format!("Server at {} returns many X- headers — review for covert encoding.", p.final_url),
+                &format!(
+                    "Server at {} returns many X- headers — review for covert encoding.",
+                    p.final_url
+                ),
                 t,
             ));
         }
     }
-    if findings.is_empty() { empty_ok("http_covert_exfil", t) }
-    else { EngineResult::ok(findings.clone(), format!("http_covert_exfil: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("http_covert_exfil", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("http_covert_exfil: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_http_covert_exfil, run_http_covert_exfil_result);
 
@@ -74,19 +98,31 @@ pub async fn run_cloud_exfil_engine_result(t: &str) -> EngineResult {
     let url = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if p.body.contains("amazonaws.com") || p.body.contains("storage.googleapis.com") || p.body.contains(".blob.core.windows.net") {
+        if p.body.contains("amazonaws.com")
+            || p.body.contains("storage.googleapis.com")
+            || p.body.contains(".blob.core.windows.net")
+        {
             findings.push(finding(
                 "cloud_exfil_engine",
                 "Cloud-storage URLs in response",
                 "info",
                 "T1567.002",
-                &format!("{} references cloud-storage URLs — verify outbound DLP.", p.final_url),
+                &format!(
+                    "{} references cloud-storage URLs — verify outbound DLP.",
+                    p.final_url
+                ),
                 t,
             ));
         }
     }
-    if findings.is_empty() { empty_ok("cloud_exfil_engine", t) }
-    else { EngineResult::ok(findings.clone(), format!("cloud_exfil_engine: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("cloud_exfil_engine", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("cloud_exfil_engine: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_cloud_exfil_engine, run_cloud_exfil_engine_result);
 
@@ -160,7 +196,10 @@ pub async fn run_encrypted_exfil_result(t: &str) -> EngineResult {
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("encrypted_exfil: {} exfil surface signal(s)", findings.len()),
+            format!(
+                "encrypted_exfil: {} exfil surface signal(s)",
+                findings.len()
+            ),
         )
     }
 }
@@ -244,13 +283,22 @@ pub async fn run_database_exfil_result(t: &str) -> EngineResult {
                 &format!("DB port open: {}", port),
                 "high",
                 "T1213",
-                &format!("TCP {}:{} is reachable — exposed database surface.", host, port),
+                &format!(
+                    "TCP {}:{} is reachable — exposed database surface.",
+                    host, port
+                ),
                 t,
             ));
         }
     }
-    if findings.is_empty() { empty_ok("database_exfil", t) }
-    else { EngineResult::ok(findings.clone(), format!("database_exfil: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("database_exfil", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("database_exfil: {}", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_database_exfil, run_database_exfil_result);
 
@@ -267,13 +315,19 @@ pub async fn run_email_exfil_result(t: &str) -> EngineResult {
                 &format!("Mail port open: {}", port),
                 "info",
                 "T1048.003",
-                &format!("TCP {}:{} reachable — review mail-server hardening.", host, port),
+                &format!(
+                    "TCP {}:{} reachable — review mail-server hardening.",
+                    host, port
+                ),
                 t,
             ));
         }
     }
-    if findings.is_empty() { empty_ok("email_exfil", t) }
-    else { EngineResult::ok(findings.clone(), format!("email_exfil: {}", findings.len())) }
+    if findings.is_empty() {
+        empty_ok("email_exfil", t)
+    } else {
+        EngineResult::ok(findings.clone(), format!("email_exfil: {}", findings.len()))
+    }
 }
 cli_wrapper!(run_email_exfil, run_email_exfil_result);
 
@@ -295,4 +349,7 @@ pub async fn run_storage_covert_channel_result(t: &str) -> EngineResult {
         "Steganographic writes into ADS/slack space / EXIF chunks are FS-level events; the agent watches inode + xattr changes.",
     )
 }
-cli_wrapper!(run_storage_covert_channel, run_storage_covert_channel_result);
+cli_wrapper!(
+    run_storage_covert_channel,
+    run_storage_covert_channel_result
+);

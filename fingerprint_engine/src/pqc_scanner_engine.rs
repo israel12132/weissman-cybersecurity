@@ -9,7 +9,13 @@ use serde_json::{json, Value};
 
 const PQC_PROBE_DEPTH: &str = "pqc_tls_posture";
 
-fn pqc_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn pqc_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "pqc_scanner",
         title,
@@ -131,7 +137,10 @@ pub async fn run_pqc_scanner_result(target: &str) -> EngineResult {
             findings.push(pqc_finding(
                 "HSTS without preload directive",
                 "low",
-                &format!("HSTS present ('{}') but lacks preload — weaker downgrade resistance.", hsts),
+                &format!(
+                    "HSTS present ('{}') but lacks preload — weaker downgrade resistance.",
+                    hsts
+                ),
                 target,
                 json!({ "hsts": hsts }),
             ));
@@ -178,17 +187,15 @@ pub async fn run_pqc_scanner_result(target: &str) -> EngineResult {
                 if let Some(arr) = certs.as_array() {
                     let rsa_certs = arr
                         .iter()
-                        .filter(|c| {
-                            c.get("name_value")
-                                .and_then(|v| v.as_str())
-                                .is_some()
-                        })
+                        .filter(|c| c.get("name_value").and_then(|v| v.as_str()).is_some())
                         .count();
-                    if rsa_certs > 0 && findings.iter().all(|f| {
-                        f.get("title")
-                            .and_then(|t| t.as_str())
-                            .is_none_or(|t| !t.contains("RSA"))
-                    }) {
+                    if rsa_certs > 0
+                        && findings.iter().all(|f| {
+                            f.get("title")
+                                .and_then(|t| t.as_str())
+                                .is_none_or(|t| !t.contains("RSA"))
+                        })
+                    {
                         findings.push(pqc_finding(
                             &format!("{} CT log entries for {}", arr.len(), domain),
                             "info",
@@ -208,7 +215,10 @@ pub async fn run_pqc_scanner_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("pqc_scanner", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("pqc_scanner: {} live finding(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("pqc_scanner: {} live finding(s)", findings.len()),
+        )
     }
 }
 

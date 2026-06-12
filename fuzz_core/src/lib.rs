@@ -164,11 +164,12 @@ fn looks_like_form_urlencoded(s: &str) -> bool {
         return false;
     }
     let sample: String = s.chars().take(2048).collect();
-    !sample.contains('\n') && sample.split('&').take(5).all(|p| {
-        p.split_once('=')
-            .map(|(k, _)| !k.trim().is_empty())
-            .unwrap_or(false)
-    })
+    !sample.contains('\n')
+        && sample.split('&').take(5).all(|p| {
+            p.split_once('=')
+                .map(|(k, _)| !k.trim().is_empty())
+                .unwrap_or(false)
+        })
 }
 
 fn smart_json_object_mutations(json_str: &str) -> Vec<String> {
@@ -354,8 +355,12 @@ fn smart_form_urlencoded_mutations(form: &str) -> Vec<String> {
     let mut pairs: Vec<(String, String)> = Vec::new();
     for seg in form.split('&') {
         if let Some((k, v)) = seg.split_once('=') {
-            let key = urlencoding::decode(k).unwrap_or_else(|_| k.into()).to_string();
-            let val = urlencoding::decode(v).unwrap_or_else(|_| v.into()).to_string();
+            let key = urlencoding::decode(k)
+                .unwrap_or_else(|_| k.into())
+                .to_string();
+            let val = urlencoding::decode(v)
+                .unwrap_or_else(|_| v.into())
+                .to_string();
             pairs.push((key, val));
         }
     }
@@ -368,10 +373,7 @@ fn smart_form_urlencoded_mutations(form: &str) -> Vec<String> {
         c[i].1 = format!("{}' OR '1'='1", c[i].1);
         out.push(encode_form_pairs(&c));
         let mut c2 = pairs.clone();
-        c2[i].1 = format!(
-            "<svg onload=alert('{}')>",
-            XSS_REFLECTION_TOKEN
-        );
+        c2[i].1 = format!("<svg onload=alert('{}')>", XSS_REFLECTION_TOKEN);
         out.push(encode_form_pairs(&c2));
     }
     out.sort();
@@ -382,13 +384,7 @@ fn smart_form_urlencoded_mutations(form: &str) -> Vec<String> {
 fn encode_form_pairs(pairs: &[(String, String)]) -> String {
     pairs
         .iter()
-        .map(|(k, v)| {
-            format!(
-                "{}={}",
-                urlencoding::encode(k),
-                urlencoding::encode(v)
-            )
-        })
+        .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
         .collect::<Vec<_>>()
         .join("&")
 }
@@ -453,10 +449,7 @@ pub fn build_param_injection_probe_urls(base_url: &str, max_urls: usize) -> Vec<
     }
     let xss_payloads = [
         format!("<svg onload=alert('{}')>", XSS_REFLECTION_TOKEN),
-        format!(
-            "\"><img src=x onerror=alert('{}')>",
-            XSS_REFLECTION_TOKEN
-        ),
+        format!("\"><img src=x onerror=alert('{}')>", XSS_REFLECTION_TOKEN),
         format!("'><script>{}</script>", XSS_REFLECTION_TOKEN),
     ];
     for param in INJECTION_PARAM_NAMES {
@@ -480,11 +473,9 @@ pub fn build_param_injection_probe_urls(base_url: &str, max_urls: usize) -> Vec<
 pub fn looks_like_sqli_response(body: &str) -> bool {
     let b = body.to_lowercase();
     b.contains("sql syntax")
-        || b.contains("mysql")
-            && (b.contains("error in your sql") || b.contains("mysqli"))
+        || b.contains("mysql") && (b.contains("error in your sql") || b.contains("mysqli"))
         || b.contains("postgresql") && b.contains("error")
-        || b.contains("sqlite")
-            && (b.contains("syntax error") || b.contains("sqlite3"))
+        || b.contains("sqlite") && (b.contains("syntax error") || b.contains("sqlite3"))
         || b.contains("ora-")
         || b.contains("microsoft ole db")
         || b.contains("odbc sql server driver")

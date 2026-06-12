@@ -18,8 +18,8 @@
 //!    across protocol stacks → shadow API tier / canary path exposure.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, header_value, http_get_with_headers, http1_client,
-    http2_client, normalize_url, HttpProbe,
+    empty_ok, extract_host, finding, header_value, http1_client, http2_client,
+    http_get_with_headers, normalize_url, HttpProbe,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
@@ -134,7 +134,12 @@ fn probe_protocol_schism(target: &str, pair: &ProbePair, findings: &mut Vec<Valu
                 "The path {} on {} is blocked over HTTP/2 (HTTP {}) but accessible over HTTP/1.1 \
                  (HTTP {}). Attackers can downgrade/upgrade protocol to bypass edge controls. \
                  Evidence: h1_body_sha256={} h2_body_sha256={}",
-                pair.path, target, h2.status, h1.status, &h1_hash[..16], &h2_hash[..16]
+                pair.path,
+                target,
+                h2.status,
+                h1.status,
+                &h1_hash[..16],
+                &h2_hash[..16]
             ),
             target,
         ));
@@ -149,7 +154,11 @@ fn probe_protocol_schism(target: &str, pair: &ProbePair, findings: &mut Vec<Valu
     {
         let e1 = shannon_entropy(&h1.body);
         let e2 = shannon_entropy(&h2.body);
-        let sev = if (e1 - e2).abs() > 2.0 { "high" } else { "medium" };
+        let sev = if (e1 - e2).abs() > 2.0 {
+            "high"
+        } else {
+            "medium"
+        };
         findings.push(finding(
             "liminal_boundary",
             &format!(
@@ -181,29 +190,17 @@ fn body_size_delta_ratio(a: &str, b: &str) -> f64 {
     (la - lb).abs() / la.max(lb)
 }
 
-async fn probe_cache_vary_oracle(
-    target: &str,
-    base: &str,
-    findings: &mut Vec<Value>,
-) {
+async fn probe_cache_vary_oracle(target: &str, base: &str, findings: &mut Vec<Value>) {
     let client = http1_client().await;
     let url = format!("{}/", base.trim_end_matches('/'));
     let baseline = match http_get_with_headers(&client, &url, &[]).await {
         Some(p) => p,
         None => return,
     };
-    let lang_a = http_get_with_headers(
-        &client,
-        &url,
-        &[("Accept-Language", "en-US,en;q=0.9")],
-    )
-    .await;
-    let lang_b = http_get_with_headers(
-        &client,
-        &url,
-        &[("Accept-Language", "zh-CN,zh;q=0.9")],
-    )
-    .await;
+    let lang_a =
+        http_get_with_headers(&client, &url, &[("Accept-Language", "en-US,en;q=0.9")]).await;
+    let lang_b =
+        http_get_with_headers(&client, &url, &[("Accept-Language", "zh-CN,zh;q=0.9")]).await;
     if let (Some(a), Some(b)) = (lang_a, lang_b) {
         let hash_a = body_sha256(&a.body);
         let hash_b = body_sha256(&b.body);
@@ -280,11 +277,7 @@ async fn probe_cache_vary_oracle(
     }
 }
 
-async fn probe_trusted_header_rewrite(
-    target: &str,
-    base: &str,
-    findings: &mut Vec<Value>,
-) {
+async fn probe_trusted_header_rewrite(target: &str, base: &str, findings: &mut Vec<Value>) {
     let client = http1_client().await;
     let sensitive = ["/admin", "/api/admin", "/internal", "/manager", "/console"];
     for path in sensitive {
@@ -311,10 +304,7 @@ async fn probe_trusted_header_rewrite(
                 {
                     findings.push(finding(
                         "liminal_boundary",
-                        &format!(
-                            "Trusted-header rewrite bypass via {} → {}",
-                            header, path
-                        ),
+                        &format!("Trusted-header rewrite bypass via {} → {}", header, path),
                         "critical",
                         "T1190",
                         &format!(
@@ -407,7 +397,10 @@ pub async fn run_liminal_boundary_result(target: &str) -> EngineResult {
         let n = findings.len();
         EngineResult::ok(
             findings,
-            format!("liminal_boundary: {} live boundary fracture(s) on {}", n, host),
+            format!(
+                "liminal_boundary: {} live boundary fracture(s) on {}",
+                n, host
+            ),
         )
     }
 }

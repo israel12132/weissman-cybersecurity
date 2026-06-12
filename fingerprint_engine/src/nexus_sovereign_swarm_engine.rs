@@ -40,7 +40,10 @@ impl SwarmConfig {
         let p = &ctx.job_params;
         let agent_count = p
             .get("agent_count")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .map(|n| n.clamp(64, 10_000) as u32)
             .unwrap_or_else(|| {
                 std::env::var("WEISSMAN_NSS_AGENT_COUNT")
@@ -68,7 +71,10 @@ impl SwarmConfig {
             .unwrap_or(true);
         let convergence_threshold = p
             .get("convergence_threshold")
-            .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_f64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .map(|f| f.clamp(0.5, 0.99) as f32)
             .unwrap_or(0.85);
         let archetypes = p
@@ -131,29 +137,50 @@ fn build_surface(
 ) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut seen = HashSet::new();
-    let push = |out: &mut Vec<(String, String)>, seen: &mut HashSet<String>, base: &str, path: &str| {
-        let path = if path.is_empty() { "/" } else if path.starts_with('/') { path } else { return };
-        let key = format!("{}{}", base, path);
-        if seen.insert(key.clone()) {
-            out.push((base.to_string(), path.to_string()));
-        }
-    };
+    let push =
+        |out: &mut Vec<(String, String)>, seen: &mut HashSet<String>, base: &str, path: &str| {
+            let path = if path.is_empty() {
+                "/"
+            } else if path.starts_with('/') {
+                path
+            } else {
+                return;
+            };
+            let key = format!("{}{}", base, path);
+            if seen.insert(key.clone()) {
+                out.push((base.to_string(), path.to_string()));
+            }
+        };
 
     push(&mut out, &mut seen, base, "/");
     for path in pipeline_context::expanded_path_wordlist().iter().take(120) {
         push(&mut out, &mut seen, base, path);
     }
-    for path in ctx.discovered_paths.iter().chain(extra_paths.iter()).take(400) {
+    for path in ctx
+        .discovered_paths
+        .iter()
+        .chain(extra_paths.iter())
+        .take(400)
+    {
         push(&mut out, &mut seen, base, path);
     }
-    if let Some(arr) = ctx.job_params.get("discovered_paths").and_then(|v| v.as_array()) {
+    if let Some(arr) = ctx
+        .job_params
+        .get("discovered_paths")
+        .and_then(|v| v.as_array())
+    {
         for x in arr {
             if let Some(p) = x.as_str() {
                 push(&mut out, &mut seen, base, p);
             }
         }
     }
-    for sub in ctx.recon_subdomains.iter().chain(extra_bases.iter()).take(80) {
+    for sub in ctx
+        .recon_subdomains
+        .iter()
+        .chain(extra_bases.iter())
+        .take(80)
+    {
         let sub_base = if sub.starts_with("http") {
             sub.clone()
         } else {
@@ -183,7 +210,10 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     let Ok(mut conn) = pool.acquire().await else {
         return (paths, bases);
     };
-    if crate::db::set_tenant_conn(&mut *conn, tenant_id).await.is_err() {
+    if crate::db::set_tenant_conn(&mut *conn, tenant_id)
+        .await
+        .is_err()
+    {
         return (paths, bases);
     }
     if let Ok(Some(domains_json)) = sqlx::query_scalar::<_, String>(
@@ -348,7 +378,10 @@ async fn run_scout_probe(client: &reqwest::Client, task: &AgentTask) -> Option<P
         return None;
     }
 
-    let mut desc = format!("Agent #{} scout probe: HTTP {} at {}", task.agent_id, status, task.url);
+    let mut desc = format!(
+        "Agent #{} scout probe: HTTP {} at {}",
+        task.agent_id, status, task.url
+    );
     if !server.is_empty() {
         desc.push_str(&format!(" | Server: {}", server));
     }
@@ -377,11 +410,21 @@ async fn run_scout_probe(client: &reqwest::Client, task: &AgentTask) -> Option<P
 
 async fn run_exploiter_probe(client: &reqwest::Client, task: &AgentTask) -> Option<ProbeSignal> {
     let sensitive = [
-        "/admin", "/api/v1/users", "/api/users", "/swagger-ui", "/openapi.json",
-        "/.env", "/api/config", "/debug", "/actuator", "/api/admin",
+        "/admin",
+        "/api/v1/users",
+        "/api/users",
+        "/swagger-ui",
+        "/openapi.json",
+        "/.env",
+        "/api/config",
+        "/debug",
+        "/actuator",
+        "/api/admin",
     ];
     let path_lower = task.path.to_lowercase();
-    let is_sensitive = sensitive.iter().any(|p| path_lower.contains(p.trim_start_matches('/')));
+    let is_sensitive = sensitive
+        .iter()
+        .any(|p| path_lower.contains(p.trim_start_matches('/')));
     if !is_sensitive && task.path != "/" {
         return None;
     }
@@ -417,7 +460,10 @@ async fn run_exploiter_probe(client: &reqwest::Client, task: &AgentTask) -> Opti
 }
 
 async fn run_stealth_probe(client: &reqwest::Client, task: &AgentTask) -> Option<ProbeSignal> {
-    if task.path != "/robots.txt" && task.path != "/sitemap.xml" && task.path != "/.well-known/security.txt" {
+    if task.path != "/robots.txt"
+        && task.path != "/sitemap.xml"
+        && task.path != "/.well-known/security.txt"
+    {
         return None;
     }
     let resp = client.get(&task.url).send().await.ok()?;
@@ -551,7 +597,10 @@ async fn count_endpoint_agents(ctx: &EngineRunContext) -> u32 {
     let Ok(mut conn) = pool.acquire().await else {
         return 0;
     };
-    if crate::db::set_tenant_conn(&mut *conn, tenant_id).await.is_err() {
+    if crate::db::set_tenant_conn(&mut *conn, tenant_id)
+        .await
+        .is_err()
+    {
         return 0;
     }
     sqlx::query_scalar::<_, i64>(
@@ -586,7 +635,10 @@ fn compute_swarm_iq(
     endpoint_agents: u32,
     oracle: Option<&Value>,
 ) -> u32 {
-    if let Some(o) = oracle.and_then(|v| v.get("swarm_iq")).and_then(|v| v.as_u64()) {
+    if let Some(o) = oracle
+        .and_then(|v| v.get("swarm_iq"))
+        .and_then(|v| v.as_u64())
+    {
         return o.clamp(0, 100) as u32;
     }
     let coverage = (signals as f32 / agent_count.max(1) as f32).min(1.0);
@@ -631,13 +683,16 @@ pub async fn run_nexus_sovereign_swarm_result(
             ctx.client_id,
             ctx.tenant_id,
         ) {
-            let surface_urls: Vec<String> = surface
-                .iter()
-                .map(|(b, p)| format!("{b}{p}"))
-                .collect();
-            let bridged =
-                crate::endpoint_agents::bridge_nssi_fleet(pool, registry, tenant_id, client_id, &surface_urls)
-                    .await;
+            let surface_urls: Vec<String> =
+                surface.iter().map(|(b, p)| format!("{b}{p}")).collect();
+            let bridged = crate::endpoint_agents::bridge_nssi_fleet(
+                pool,
+                registry,
+                tenant_id,
+                client_id,
+                &surface_urls,
+            )
+            .await;
             endpoint_agents = endpoint_agents.max(bridged);
         }
     }
@@ -674,7 +729,14 @@ pub async fn run_nexus_sovereign_swarm_result(
     let raw_signals = signals.lock().await.clone();
     let emergent = correlate_signals(&raw_signals, config.convergence_threshold);
     let oracle = if config.archetypes.iter().any(|a| a == "oracle") {
-        oracle_synthesis(ctx, &config, raw_signals.len(), agent_count, endpoint_agents).await
+        oracle_synthesis(
+            ctx,
+            &config,
+            raw_signals.len(),
+            agent_count,
+            endpoint_agents,
+        )
+        .await
     } else {
         None
     };

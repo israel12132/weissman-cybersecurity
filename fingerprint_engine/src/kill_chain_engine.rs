@@ -127,7 +127,14 @@ pub async fn run_kill_chain_result(target: &str) -> EngineResult {
             }));
 
             // Check sitemap paths for admin-like patterns
-            let admin_patterns = ["admin", "dashboard", "panel", "manage", "control", "backend"];
+            let admin_patterns = [
+                "admin",
+                "dashboard",
+                "panel",
+                "manage",
+                "control",
+                "backend",
+            ];
             let admin_paths: Vec<&String> = sitemap_paths
                 .iter()
                 .filter(|p| {
@@ -223,7 +230,10 @@ pub async fn run_kill_chain_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("Kill Chain: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Kill Chain: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_kill_chain(target: &str) {

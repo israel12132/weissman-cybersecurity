@@ -70,11 +70,7 @@ pub async fn incr_enroll_ip(client_ip: &str) -> Option<u64> {
 async fn get_count_and_ttl(key: &str) -> Option<(u64, u64)> {
     let rl = shared()?;
     let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
-    let count: u64 = conn
-        .get::<_, Option<u64>>(key)
-        .await
-        .ok()?
-        .unwrap_or(0);
+    let count: u64 = conn.get::<_, Option<u64>>(key).await.ok()?.unwrap_or(0);
     let ttl: i64 = conn.ttl(key).await.ok()?;
     let reset_in = if ttl > 0 { ttl as u64 } else { 0 };
     Some((count, reset_in))
@@ -136,7 +132,10 @@ pub async fn list_violations(tenant_id: i64, limit: usize) -> Vec<serde_json::Va
     let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
         return Vec::new();
     };
-    let rows: Vec<String> = conn.lrange(&key, 0, limit as isize - 1).await.unwrap_or_default();
+    let rows: Vec<String> = conn
+        .lrange(&key, 0, limit as isize - 1)
+        .await
+        .unwrap_or_default();
     rows.into_iter()
         .filter_map(|s| serde_json::from_str(&s).ok())
         .collect()
@@ -152,10 +151,7 @@ pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
         return Vec::new();
     };
     let map: std::collections::HashMap<String, i64> = conn.hgetall(&key).await.unwrap_or_default();
-    let mut out: Vec<(String, u32)> = map
-        .into_iter()
-        .map(|(k, v)| (k, v.max(0) as u32))
-        .collect();
+    let mut out: Vec<(String, u32)> = map.into_iter().map(|(k, v)| (k, v.max(0) as u32)).collect();
     out.sort_by(|a, b| b.1.cmp(&a.1));
     out.truncate(cap);
     out

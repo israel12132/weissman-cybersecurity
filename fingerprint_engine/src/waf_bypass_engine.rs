@@ -13,11 +13,17 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        format!("https://{}", t)
+    }
 }
 
 pub async fn run_waf_bypass_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let client = build_client().await;
     let base = normalize_target(target);
     let mut findings: Vec<serde_json::Value> = Vec::new();
@@ -25,7 +31,9 @@ pub async fn run_waf_bypass_result(target: &str) -> EngineResult {
     // Check for WAF headers
     if let Ok(resp) = client.get(&base).send().await {
         let headers = resp.headers();
-        let waf_present = headers.contains_key("x-sucuri-id") || headers.contains_key("cf-ray") || headers.contains_key("x-fw-protect");
+        let waf_present = headers.contains_key("x-sucuri-id")
+            || headers.contains_key("cf-ray")
+            || headers.contains_key("x-fw-protect");
         if !waf_present {
             findings.push(json!({
                 "type": "waf_bypass",
@@ -58,7 +66,10 @@ pub async fn run_waf_bypass_result(target: &str) -> EngineResult {
             }
         }
     }
-    EngineResult::ok(findings.clone(), format!("WAF Bypass: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("WAF Bypass: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_waf_bypass(target: &str) {

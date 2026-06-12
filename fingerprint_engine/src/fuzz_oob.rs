@@ -102,7 +102,11 @@ fn builtin_verify_url(token: &str) -> Option<String> {
     if oast_base_domain().is_empty() {
         return None;
     }
-    Some(format!("{}/api/oast/status/{}", oast_listener_base_url(), token))
+    Some(format!(
+        "{}/api/oast/status/{}",
+        oast_listener_base_url(),
+        token
+    ))
 }
 
 fn effective_embed_for_token(token: &str) -> Option<String> {

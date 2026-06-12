@@ -69,13 +69,8 @@ pub async fn ingest_sample(
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let upd = recompute_baseline(
-                    &mut tx,
-                    tenant_id,
-                    &p.agent_id,
-                    k,
-                    p.hour_of_week,
-                ).await?;
+                let upd =
+                    recompute_baseline(&mut tx, tenant_id, &p.agent_id, k, p.hour_of_week).await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
                     check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
@@ -86,15 +81,18 @@ pub async fn ingest_sample(
         }
         // Categorical signals — "new port", "new process".
         if let Some(ports) = obj.get("open_ports").and_then(Value::as_array) {
-            let observed: HashSet<i64> = ports
-                .iter()
-                .filter_map(|v| v.as_i64())
-                .collect();
+            let observed: HashSet<i64> = ports.iter().filter_map(|v| v.as_i64()).collect();
             if let Some(a) = check_new_categorical(
-                &mut tx, tenant_id, &p, sample_id,
-                "open_ports", &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+                &mut tx,
+                tenant_id,
+                &p,
+                sample_id,
+                "open_ports",
+                &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
                 "Unfamiliar TCP port listening on host",
-            ).await? {
+            )
+            .await?
+            {
                 summary.anomalies.push(a);
             }
         }
@@ -104,10 +102,16 @@ pub async fn ingest_sample(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
             if let Some(a) = check_new_categorical(
-                &mut tx, tenant_id, &p, sample_id,
-                "top_processes", &observed,
+                &mut tx,
+                tenant_id,
+                &p,
+                sample_id,
+                "top_processes",
+                &observed,
                 "Unfamiliar process observed running on host",
-            ).await? {
+            )
+            .await?
+            {
                 summary.anomalies.push(a);
             }
         }
@@ -197,7 +201,11 @@ async fn recompute_baseline(
     .await
     .map_err(|e| format!("upsert baseline: {e}"))?;
 
-    Ok(BaselineUpdate { n: n as i32, mean, stddev })
+    Ok(BaselineUpdate {
+        n: n as i32,
+        mean,
+        stddev,
+    })
 }
 
 async fn check_anomaly(

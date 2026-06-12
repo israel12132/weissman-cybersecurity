@@ -13,17 +13,28 @@ async fn build_client() -> reqwest::Client {
 
 fn normalize_target(target: &str) -> String {
     let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") { t.to_string() } else { format!("https://{}", t) }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        format!("https://{}", t)
+    }
 }
 
 pub async fn run_antiforensics_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() { return EngineResult::error("target required"); }
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
     let client = build_client().await;
     let base = normalize_target(target);
     let paths = [
-        ("/logs", false), ("/audit-logs", false), ("/api/logs", false),
-        ("/api/audit/clear", true), ("/api/delete-logs", true),
-        ("/health", false), ("/api/healthz", false), ("/status", false),
+        ("/logs", false),
+        ("/audit-logs", false),
+        ("/api/logs", false),
+        ("/api/audit/clear", true),
+        ("/api/delete-logs", true),
+        ("/health", false),
+        ("/api/healthz", false),
+        ("/status", false),
     ];
     let mut findings: Vec<serde_json::Value> = Vec::new();
     for (path, is_delete) in &paths {
@@ -34,9 +45,15 @@ pub async fn run_antiforensics_result(target: &str) -> EngineResult {
             if status == 200 {
                 let empty_array = body.trim() == "[]" || body.trim() == "{}";
                 let (severity, title) = if *is_delete {
-                    ("critical", format!("Log deletion endpoint exposed: {}", path))
+                    (
+                        "critical",
+                        format!("Log deletion endpoint exposed: {}", path),
+                    )
                 } else if empty_array {
-                    ("high", format!("Log suppression suspected (empty response): {}", path))
+                    (
+                        "high",
+                        format!("Log suppression suspected (empty response): {}", path),
+                    )
                 } else {
                     ("medium", format!("Log endpoint exposed: {}", path))
                 };
@@ -50,7 +67,10 @@ pub async fn run_antiforensics_result(target: &str) -> EngineResult {
             }
         }
     }
-    EngineResult::ok(findings.clone(), format!("Anti-Forensics: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Anti-Forensics: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_antiforensics(target: &str) {

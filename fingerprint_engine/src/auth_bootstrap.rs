@@ -54,13 +54,12 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
         }
     };
 
-    if let Err(e) = sqlx::query(
-        "UPDATE users SET password_hash = $1, is_active = true WHERE id = $2",
-    )
-    .bind(&new_hash)
-    .bind(user_id)
-    .execute(app_pool)
-    .await
+    if let Err(e) =
+        sqlx::query("UPDATE users SET password_hash = $1, is_active = true WHERE id = $2")
+            .bind(&new_hash)
+            .bind(user_id)
+            .execute(app_pool)
+            .await
     {
         tracing::warn!(target: "auth_bootstrap", user_id, error = %e, "admin credential sync update failed");
         return;

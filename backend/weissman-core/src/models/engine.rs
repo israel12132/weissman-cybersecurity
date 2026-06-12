@@ -990,21 +990,24 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "active_directory_enum" => "kerberos_attack_suite",
         "email_spoofing" => "business_email_compromise",
         "deepweb_intel" => "dark_web_monitor",
-        "compliance_gap_scan" | "network_topology_map" | "threat_model_automation"
+        "compliance_gap_scan"
+        | "network_topology_map"
+        | "threat_model_automation"
         | "attack_graph_traversal" => "attack_surface_quantify",
-        "social_media_recon" | "github_recon" | "email_harvest" | "geoint"
-        | "employee_profiling" | "data_deanonymization" | "location_pattern_analysis" => {
-            "osint"
-        }
+        "social_media_recon"
+        | "github_recon"
+        | "email_harvest"
+        | "geoint"
+        | "employee_profiling"
+        | "data_deanonymization"
+        | "location_pattern_analysis" => "osint",
         "wayback_recon" | "cert_transparency" => "recon",
         "dns_enum" => "passive_dns_forensics",
         "shodan_mass_scan" => "asm",
         "differential_privacy_exploit" => "model_inversion_attack",
         // Legacy web / appsec aliases.
         "sqli_advanced" | "api_fuzzing" | "xss_advanced" | "csrf_exploit"
-        | "race_condition_web" | "nosql_injection" | "open_redirect" => {
-            "http_feedback_fuzz"
-        }
+        | "race_condition_web" | "nosql_injection" | "open_redirect" => "http_feedback_fuzz",
         "graphql_injection" | "graphql_batching" => "graphql_attack",
         "container_escape" | "container_k8s_escape" | "gke_rbac_exploit" => "k8s_container",
         "web_cache_poison" | "web_cache_deception" => "cache_poisoning",
@@ -1037,7 +1040,9 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "adversarial_image" => "adversarial_examples",
         "llm_privacy_leak" => "llm_memory_extraction",
         "agentic_ai_escape" => "autonomous_ai_escape",
-        "agentic_framework_attack" | "llm_function_call_hijack" | "multi_agent_subversion"
+        "agentic_framework_attack"
+        | "llm_function_call_hijack"
+        | "multi_agent_subversion"
         | "mcp_server_exploit" => "llm_agent_hijack",
         "llm_system_prompt_leak" => "prompt_injection_chain",
         "llm_guardrail_bypass" => "llm_jailbreak",
@@ -1056,12 +1061,17 @@ pub fn resolve_engine_id(id: &str) -> &str {
         }
         "azure_ad_attack" => "azure_attack",
         "terraform_state_steal" => "terraform_state_attack",
-        "cloud_cost_dos" | "sdn_controller_exploit" | "nfv_mano_attack"
+        "cloud_cost_dos"
+        | "sdn_controller_exploit"
+        | "nfv_mano_attack"
         | "sase_security_bypass" => "cloud_network_attack",
         "ecr_image_poison" => "ecr_registry_attack",
         // Legacy OT / embedded aliases.
-        "firmware_exploit" | "firmware_emulation" | "medical_device_exploit"
-        | "implantable_device_hack" | "jtag_swd_exploitation" => "iot_firmware",
+        "firmware_exploit"
+        | "firmware_emulation"
+        | "medical_device_exploit"
+        | "implantable_device_hack"
+        | "jtag_swd_exploitation" => "iot_firmware",
         "satellite_attack" => "satellite_comm_attack",
         "automotive_can_bus" | "can_fd_attack" => "can_bus_surface",
         "hardware_implant" => "iot_firmware",
@@ -1069,17 +1079,16 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "lora_attack" => "lorawan_attack",
         // Legacy stealth / evasion aliases.
         "data_exfiltration" => "http_covert_exfil",
-        "physical_security" | "evil_maid_engine" | "badusb_hid_attack" => {
-            "physical_social_eng"
-        }
+        "physical_security" | "evil_maid_engine" | "badusb_hid_attack" => "physical_social_eng",
         "malware_persistence" => "persistence_mechanism",
         "process_injection" => "process_hollowing",
         "side_channel" => "timing_sidechannel",
         "waf_ids_bypass" => "waf_bypass",
-        "siem_evasion" | "wasm_reverse" | "timestomping" | "log_wiping" => {
-            "antiforensics"
-        }
-        "deception_evasion" | "syscall_evasion" | "amsi_bypass" | "detection_gap_exploiter"
+        "siem_evasion" | "wasm_reverse" | "timestomping" | "log_wiping" => "antiforensics",
+        "deception_evasion"
+        | "syscall_evasion"
+        | "amsi_bypass"
+        | "detection_gap_exploiter"
         | "opsec_intelligence_engine" => "edr_evasion",
         "graphene_os_bypass" => "mdm_bypass_engine",
         "rootkit_implant" => "bootkit_uefi",
@@ -1090,10 +1099,10 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "continuous_auth_evasion" | "behavioral_biometric_attack" => "mfa_bypass_engine",
         "microsegmentation_bypass" => "zero_trust_bypass",
         // Legacy crypto / identity aliases.
-        "biometric_spoofing" | "totp_bruteforce" | "webauthn_fido2_bypass" => {
-            "mfa_bypass_engine"
-        }
-        "quantum_attack" | "harvest_now_decrypt_later" | "pqc_implementation_attack"
+        "biometric_spoofing" | "totp_bruteforce" | "webauthn_fido2_bypass" => "mfa_bypass_engine",
+        "quantum_attack"
+        | "harvest_now_decrypt_later"
+        | "pqc_implementation_attack"
         | "lattice_crypto_attack" => "quantum_key_attack",
         "active_directory_cs" | "pki_cert_forge" | "hsm_attack" | "hardware_wallet_attack" => {
             "pki_hierarchy_attack"
@@ -1188,8 +1197,7 @@ pub fn production_engine_ids() -> &'static [&'static str] {
 
 #[must_use]
 pub fn is_known_engine_id(s: &str) -> bool {
-    is_production_engine_id(s)
-        || FULL_ENGINE_REGISTRY_ORDER.iter().any(|&k| k == s.trim())
+    is_production_engine_id(s) || FULL_ENGINE_REGISTRY_ORDER.iter().any(|&k| k == s.trim())
 }
 
 #[must_use]

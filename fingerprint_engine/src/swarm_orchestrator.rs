@@ -102,8 +102,7 @@ async fn emit_swarm(
     })
     .to_string();
     let _ = broadcast.send(msg);
-    if let Err(e) =
-        persist_swarm_event(pool, tenant_id, client_id, agent, event, detail, ts).await
+    if let Err(e) = persist_swarm_event(pool, tenant_id, client_id, agent, event, detail, ts).await
     {
         tracing::error!(
             target: "swarm_orchestrator",
@@ -464,11 +463,7 @@ pub fn spawn_swarm_run(
             exploit_rx, stealth_tx, verdict_rx, b3, p,
         ));
 
-        if recon_tx
-            .send_async((tenant_id, client_id))
-            .await
-            .is_err()
-        {
+        if recon_tx.send_async((tenant_id, client_id)).await.is_err() {
             emit_swarm(
                 pool.as_ref(),
                 tenant_id,

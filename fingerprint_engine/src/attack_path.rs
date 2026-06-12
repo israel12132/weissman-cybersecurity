@@ -24,7 +24,7 @@ use sqlx::{PgPool, Row};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 const DEFAULT_TOP_K: usize = 25;
-const MAX_PATH_HOPS: usize = 12;       // anything longer is hypothetical
+const MAX_PATH_HOPS: usize = 12; // anything longer is hypothetical
 const CHOKE_POINT_THRESHOLD: f64 = 0.5; // node appears in ≥50% of top paths
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,9 +63,9 @@ pub struct AttackPath {
     pub entry: i64,
     pub jewel: i64,
     pub hops: usize,
-    pub cost: f64,                // sum of edge weights (lower = easier)
-    pub risk: f64,                // 0..10 derived from path cost + asset value
-    pub kev_hops: usize,          // number of hops with at least one KEV finding
+    pub cost: f64,       // sum of edge weights (lower = easier)
+    pub risk: f64,       // 0..10 derived from path cost + asset value
+    pub kev_hops: usize, // number of hops with at least one KEV finding
     pub steps: Vec<PathStep>,
 }
 
@@ -167,7 +167,11 @@ pub async fn compute_and_store(
             continue;
         }
         adjacency.entry(from).or_default().push((to, etype.clone()));
-        edges.push(GraphEdge { from, to, edge_type: etype });
+        edges.push(GraphEdge {
+            from,
+            to,
+            edge_type: etype,
+        });
     }
 
     let entries: Vec<&GraphNode> = nodes.values().filter(|n| n.internet_exposed).collect();
@@ -182,19 +186,18 @@ pub async fn compute_and_store(
         for entry in &entries {
             // Dijkstra from this entry → any crown jewel.
             for jewel_id in &jewels {
-                if let Some(p) = dijkstra_path(
-                    entry.id,
-                    *jewel_id,
-                    &nodes,
-                    &adjacency,
-                ) {
+                if let Some(p) = dijkstra_path(entry.id, *jewel_id, &nodes, &adjacency) {
                     paths.push(p);
                 }
             }
         }
     }
 
-    paths.sort_by(|a, b| a.cost.partial_cmp(&b.cost).unwrap_or(std::cmp::Ordering::Equal));
+    paths.sort_by(|a, b| {
+        a.cost
+            .partial_cmp(&b.cost)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     paths.truncate(top_k);
 
     // ── Choke points: nodes appearing in ≥ N/2 of the top paths ─────────────
@@ -233,11 +236,7 @@ pub async fn compute_and_store(
     };
 
     // ── Persist the snapshot so the cockpit can read instantly ──────────────
-    let max_risk = snapshot
-        .paths
-        .iter()
-        .map(|p| p.risk)
-        .fold(0_f64, f64::max);
+    let max_risk = snapshot.paths.iter().map(|p| p.risk).fold(0_f64, f64::max);
     let paths_json: Value = serde_json::to_value(&snapshot.paths).unwrap_or(json!([]));
     let chokes_json: Value = serde_json::to_value(&snapshot.choke_points).unwrap_or(json!([]));
     let _ = sqlx::query(
@@ -285,15 +284,15 @@ pub async fn latest_snapshot(
     .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
     let Some(r) = row else { return Ok(None) };
-    let paths: Vec<AttackPath> = serde_json::from_value(
-        r.try_get::<Value, _>("paths_json").unwrap_or(json!([])),
-    )
-    .unwrap_or_default();
-    let choke: Vec<ChokePoint> = serde_json::from_value(
-        r.try_get::<Value, _>("choke_points").unwrap_or(json!([])),
-    )
-    .unwrap_or_default();
-    let computed_at: chrono::DateTime<chrono::Utc> = r.try_get("computed_at").unwrap_or_else(|_| chrono::Utc::now());
+    let paths: Vec<AttackPath> =
+        serde_json::from_value(r.try_get::<Value, _>("paths_json").unwrap_or(json!([])))
+            .unwrap_or_default();
+    let choke: Vec<ChokePoint> =
+        serde_json::from_value(r.try_get::<Value, _>("choke_points").unwrap_or(json!([])))
+            .unwrap_or_default();
+    let computed_at: chrono::DateTime<chrono::Utc> = r
+        .try_get("computed_at")
+        .unwrap_or_else(|_| chrono::Utc::now());
     Ok(Some(AttackPathSnapshot {
         entry_count: r.try_get::<i32, _>("entry_count").unwrap_or(0) as usize,
         jewel_count: r.try_get::<i32, _>("jewel_count").unwrap_or(0) as usize,
@@ -312,13 +311,18 @@ struct HeapEntry {
     path: Vec<PathStep>,
 }
 impl PartialEq for HeapEntry {
-    fn eq(&self, other: &Self) -> bool { self.cost == other.cost }
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost
+    }
 }
 impl Eq for HeapEntry {}
 impl Ord for HeapEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // Reverse so BinaryHeap acts as a *min*-heap on cost.
-        other.cost.partial_cmp(&self.cost).unwrap_or(std::cmp::Ordering::Equal)
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(std::cmp::Ordering::Equal)
     }
 }
 impl PartialOrd for HeapEntry {
@@ -332,7 +336,7 @@ fn node_pivot_weight(n: &GraphNode) -> f64 {
     //   - high CVSS, high EPSS, KEV → low cost (easy attacker pivot)
     //   - clean node → high cost
     let mut score: f64 = 0.5 + (n.max_finding_cvss as f64 / 10.0); // 0.5..1.5
-    score *= 1.0 + (n.max_finding_epss as f64) * 1.5;              // up to ~3.75
+    score *= 1.0 + (n.max_finding_epss as f64) * 1.5; // up to ~3.75
     if n.kev_present {
         score *= 2.0;
     }
@@ -370,7 +374,12 @@ fn dijkstra_path(
             let risk = (likelihood * 10.0 * jewel_value.clamp(0.5, 3.0)).min(10.0);
             let kev_hops = path
                 .iter()
-                .filter(|s| nodes.get(&s.node_id).map(|n| n.kev_present).unwrap_or(false))
+                .filter(|s| {
+                    nodes
+                        .get(&s.node_id)
+                        .map(|n| n.kev_present)
+                        .unwrap_or(false)
+                })
                 .count();
             return Some(AttackPath {
                 entry,
@@ -391,13 +400,17 @@ fn dijkstra_path(
             }
         }
         visited.insert(node, cost);
-        let Some(neighbours) = adjacency.get(&node) else { continue };
+        let Some(neighbours) = adjacency.get(&node) else {
+            continue;
+        };
         for (next, etype) in neighbours {
             // Don't revisit a node already in this path (avoid cycles).
             if path.iter().any(|s| s.node_id == *next) {
                 continue;
             }
-            let Some(next_node) = nodes.get(next) else { continue };
+            let Some(next_node) = nodes.get(next) else {
+                continue;
+            };
             let edge_cost = node_pivot_weight(next_node);
             let mut new_path = path.clone();
             new_path.push(PathStep {
@@ -407,7 +420,11 @@ fn dijkstra_path(
                 node_type: next_node.node_type.clone(),
                 edge_type: etype.clone(),
             });
-            heap.push(HeapEntry { cost: cost + edge_cost, node: *next, path: new_path });
+            heap.push(HeapEntry {
+                cost: cost + edge_cost,
+                node: *next,
+                path: new_path,
+            });
         }
     }
     None

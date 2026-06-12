@@ -58,7 +58,7 @@ pub struct PlaybookEvent {
     pub cluster_id: Option<i64>,
     pub title: String,
     pub severity: String,
-    pub source: String,            // engine id
+    pub source: String, // engine id
     pub target: String,
     pub status: String,
     pub cvss: Option<f32>,
@@ -109,7 +109,7 @@ pub struct Playbook {
 #[derive(Debug, Clone, Serialize)]
 pub struct ActionResult {
     pub kind: String,
-    pub status: String,    // "ok" | "skipped" | "failed"
+    pub status: String, // "ok" | "skipped" | "failed"
     pub detail: String,
     pub started_at: String,
     pub finished_at: String,
@@ -119,7 +119,7 @@ pub struct ActionResult {
 pub struct PlaybookRunResult {
     pub playbook_id: i64,
     pub playbook_name: String,
-    pub status: String,    // success | partial | failed | dry_run | skipped_dedup
+    pub status: String, // success | partial | failed | dry_run | skipped_dedup
     pub actions: Vec<ActionResult>,
 }
 
@@ -161,7 +161,11 @@ impl PlaybookTrigger {
         if !self.cve_prefixes.is_empty() {
             let Some(cve) = &e.cve else { return false };
             let cve_u = cve.to_ascii_uppercase();
-            if !self.cve_prefixes.iter().any(|p| cve_u.starts_with(&p.to_ascii_uppercase())) {
+            if !self
+                .cve_prefixes
+                .iter()
+                .any(|p| cve_u.starts_with(&p.to_ascii_uppercase()))
+            {
                 return false;
             }
         }
@@ -226,8 +230,16 @@ pub async fn dispatch_event(
         // Safety default: when a playbook omits `cooldown_seconds`, fall back to 1h so
         // destructive/notify actions (isolate_host, page_oncall, webhook, open_pr) do NOT
         // re-fire on every rescan of the same finding. Authors can opt out explicitly with 0.
-        if !dry_run && in_cooldown(pool, pb.id, event.tenant_id, &dedup,
-                                   pb.trigger.cooldown_seconds.unwrap_or(3600)).await {
+        if !dry_run
+            && in_cooldown(
+                pool,
+                pb.id,
+                event.tenant_id,
+                &dedup,
+                pb.trigger.cooldown_seconds.unwrap_or(3600),
+            )
+            .await
+        {
             results.push(PlaybookRunResult {
                 playbook_id: pb.id,
                 playbook_name: pb.name.clone(),
@@ -264,7 +276,10 @@ pub async fn dispatch_event(
 }
 
 fn dedup_key(pb: &Playbook, ev: &PlaybookEvent) -> String {
-    let sig = ev.signature_hash.clone().unwrap_or_else(|| ev.title.clone());
+    let sig = ev
+        .signature_hash
+        .clone()
+        .unwrap_or_else(|| ev.title.clone());
     let mut h = Sha256::new();
     h.update(pb.id.to_le_bytes());
     h.update(b"|");
@@ -315,7 +330,10 @@ async fn run_actions(
     for a in &pb.actions {
         let started = chrono::Utc::now();
         let (status, detail) = if dry_run {
-            ("ok".to_string(), format!("dry_run: would execute {}", a.kind))
+            (
+                "ok".to_string(),
+                format!("dry_run: would execute {}", a.kind),
+            )
         } else {
             execute_action(pool, ev, a).await
         };
@@ -330,17 +348,15 @@ async fn run_actions(
     out
 }
 
-async fn execute_action(
-    pool: &PgPool,
-    ev: &PlaybookEvent,
-    a: &PlaybookAction,
-) -> (String, String) {
+async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -> (String, String) {
     let kind = a.kind.trim().to_ascii_lowercase();
     let params = render_params(&a.params, ev);
     match kind.as_str() {
         // 1) Workflow control — set finding status.
         "set_status" => {
-            let new_status = params.get("status").and_then(Value::as_str)
+            let new_status = params
+                .get("status")
+                .and_then(Value::as_str)
                 .unwrap_or("ACKNOWLEDGED")
                 .to_ascii_uppercase();
             let Some(fid) = ev.finding_id else {
@@ -378,7 +394,9 @@ async fn execute_action(
             if url.is_empty() {
                 return ("skipped".into(), "no webhook url configured".into());
             }
-            let template = params.get("template").and_then(Value::as_str)
+            let template = params
+                .get("template")
+                .and_then(Value::as_str)
                 .unwrap_or("{{severity}}: {{title}} on {{target}} (engine={{source}})");
             let text = render_template(template, ev);
             let body = json!({
@@ -410,11 +428,22 @@ async fn execute_action(
 
         // 3) PagerDuty / OpsGenie — generic HTTP webhook with severity routing.
         "page_oncall" => {
-            let team = params.get("team").and_then(Value::as_str).unwrap_or("sec-oncall");
-            let sev  = params.get("severity").and_then(Value::as_str).unwrap_or(&ev.severity);
-            let url = std::env::var("WEISSMAN_PAGER_WEBHOOK_URL").ok().unwrap_or_default();
+            let team = params
+                .get("team")
+                .and_then(Value::as_str)
+                .unwrap_or("sec-oncall");
+            let sev = params
+                .get("severity")
+                .and_then(Value::as_str)
+                .unwrap_or(&ev.severity);
+            let url = std::env::var("WEISSMAN_PAGER_WEBHOOK_URL")
+                .ok()
+                .unwrap_or_default();
             if url.is_empty() {
-                return ("skipped".into(), "WEISSMAN_PAGER_WEBHOOK_URL not set".into());
+                return (
+                    "skipped".into(),
+                    "WEISSMAN_PAGER_WEBHOOK_URL not set".into(),
+                );
             }
             let body = json!({
                 "team":     team,
@@ -443,7 +472,9 @@ async fn execute_action(
             let Some(cid) = ev.client_id else {
                 return ("skipped".into(), "no client_id on event".into());
             };
-            let title = params.get("title").and_then(Value::as_str)
+            let title = params
+                .get("title")
+                .and_then(Value::as_str)
                 .map(|s| render_template(s, ev))
                 .unwrap_or_else(|| format!("Auto-remediation: {}", ev.title));
             let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
@@ -465,7 +496,10 @@ async fn execute_action(
                 Ok(_) => ("ok".into(), format!("auto_heal queued for finding {fid}")),
                 Err(e) => {
                     // The table may not exist on a tiny install; degrade gracefully.
-                    ("skipped".into(), format!("auto_heal_job_specs unavailable: {e}"))
+                    (
+                        "skipped".into(),
+                        format!("auto_heal_job_specs unavailable: {e}"),
+                    )
                 }
             }
         }
@@ -474,23 +508,36 @@ async fn execute_action(
         //    deployments wire this to the EDR / cloud-API integration. Recording
         //    the intent in audit_logs is enough to drive a downstream worker.
         "isolate_host" => {
-            let target = params.get("target").and_then(Value::as_str)
+            let target = params
+                .get("target")
+                .and_then(Value::as_str)
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| ev.target.clone());
-            let duration = params.get("duration_seconds")
-                .and_then(Value::as_i64).unwrap_or(900);
+            let duration = params
+                .get("duration_seconds")
+                .and_then(Value::as_i64)
+                .unwrap_or(900);
             let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
                 return ("failed".into(), "tenant tx".into());
             };
             let _ = crate::audit_log::insert_audit(
-                &mut tx, ev.tenant_id, None, "soar_playbook",
+                &mut tx,
+                ev.tenant_id,
+                None,
+                "soar_playbook",
                 "containment_requested",
-                &format!("isolate_host target={} duration={}s playbook_event={}",
-                         target, duration, ev.kind),
+                &format!(
+                    "isolate_host target={} duration={}s playbook_event={}",
+                    target, duration, ev.kind
+                ),
                 "0.0.0.0",
-            ).await;
+            )
+            .await;
             let _ = tx.commit().await;
-            ("ok".into(), format!("containment requested for {target} ({duration}s)"))
+            (
+                "ok".into(),
+                format!("containment requested for {target} ({duration}s)"),
+            )
         }
 
         // 6) HTTP raw — escape hatch for anything not above.
@@ -527,7 +574,9 @@ async fn record_run(
     let failed = actions.iter().filter(|a| a.status == "failed").count() as i32;
     let event_json = serde_json::to_value(ev).unwrap_or(json!({}));
     let actions_json = serde_json::to_value(actions).unwrap_or(json!([]));
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else { return };
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
+        return;
+    };
     let _ = sqlx::query(
         r#"INSERT INTO weissman_playbook_runs
             (tenant_id, playbook_id, triggered_at, trigger_kind, trigger_event,
@@ -611,12 +660,18 @@ mod tests {
     fn ev_kev_critical() -> PlaybookEvent {
         PlaybookEvent {
             kind: "finding_persisted".into(),
-            tenant_id: 1, client_id: Some(1),
-            finding_id: Some(42), cluster_id: Some(7),
-            title: "Log4Shell".into(), severity: "critical".into(),
-            source: "asm".into(), target: "https://acme.com/admin".into(),
+            tenant_id: 1,
+            client_id: Some(1),
+            finding_id: Some(42),
+            cluster_id: Some(7),
+            title: "Log4Shell".into(),
+            severity: "critical".into(),
+            source: "asm".into(),
+            target: "https://acme.com/admin".into(),
             status: "OPEN".into(),
-            cvss: Some(10.0), epss: Some(0.94), kev: true,
+            cvss: Some(10.0),
+            epss: Some(0.94),
+            kev: true,
             kev_known_ransomware: true,
             cve: Some("CVE-2021-44228".into()),
             signature_hash: Some("abc".into()),
@@ -649,8 +704,10 @@ mod tests {
 
     #[test]
     fn template_renders_placeholders() {
-        let s = render_template("{{severity}}: {{title}} on {{target}} ({{cvss}})",
-            &ev_kev_critical());
+        let s = render_template(
+            "{{severity}}: {{title}} on {{target}} ({{cvss}})",
+            &ev_kev_critical(),
+        );
         assert!(s.contains("critical"));
         assert!(s.contains("Log4Shell"));
         assert!(s.contains("acme.com"));
@@ -661,7 +718,10 @@ mod tests {
     fn dedup_key_is_stable() {
         let ev = ev_kev_critical();
         let pb = Playbook {
-            id: 9, tenant_id: 1, name: "x".into(), description: "".into(),
+            id: 9,
+            tenant_id: 1,
+            name: "x".into(),
+            description: "".into(),
             enabled: true,
             trigger: PlaybookTrigger::default(),
             actions: vec![],

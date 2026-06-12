@@ -10,7 +10,13 @@ use std::time::Duration;
 
 const SSTI_PROBE_DEPTH: &str = "ssti_template_surface";
 
-fn ssti_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn ssti_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "ssti",
         title,
@@ -44,7 +50,14 @@ const PROBE_PARAMS: &[&str] = &[
 ];
 
 const PROBE_PATHS: &[&str] = &[
-    "/", "/search", "/index", "/home", "/api/render", "/template", "/render", "/preview",
+    "/",
+    "/search",
+    "/index",
+    "/home",
+    "/api/render",
+    "/template",
+    "/render",
+    "/preview",
     "/api/preview",
 ];
 
@@ -52,7 +65,11 @@ fn ssti_confirmed(body: &str, payload: &str, expected: &str) -> bool {
     body.contains(expected) && !body.contains(payload)
 }
 
-async fn http_post_form(client: &reqwest::Client, url: &str, form: &str) -> Option<crate::engine_probes::HttpProbe> {
+async fn http_post_form(
+    client: &reqwest::Client,
+    url: &str,
+    form: &str,
+) -> Option<crate::engine_probes::HttpProbe> {
     let resp = client
         .post(url)
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -97,7 +114,9 @@ pub async fn run_ssti_result(target: &str) -> EngineResult {
                 let encoded = urlencoding::encode(payload);
                 let probe_url = format!("{}?{}={}", url_base, param, encoded);
                 if let Some(p) = http_get(&client, &probe_url).await {
-                    if (p.status == 200 || p.status == 201) && ssti_confirmed(&p.body, payload, expected) {
+                    if (p.status == 200 || p.status == 201)
+                        && ssti_confirmed(&p.body, payload, expected)
+                    {
                         findings.push(ssti_finding(
                             &format!("SSTI confirmed ({})", engine_type),
                             "critical",

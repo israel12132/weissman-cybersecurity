@@ -69,7 +69,10 @@ pub async fn run_ipv6_attack_result(target: &str) -> EngineResult {
             ),
             "value": domain
         }));
-        return EngineResult::ok(findings.clone(), format!("IPv6Attack: {} findings", findings.len()));
+        return EngineResult::ok(
+            findings.clone(),
+            format!("IPv6Attack: {} findings", findings.len()),
+        );
     }
 
     findings.push(json!({
@@ -88,7 +91,11 @@ pub async fn run_ipv6_attack_result(target: &str) -> EngineResult {
 
     // Check for link-local or loopback addresses (misconfiguration)
     for addr in &ipv6_addrs {
-        if addr.starts_with("fe80") || addr.starts_with("::1") || addr.starts_with("fc") || addr.starts_with("fd") {
+        if addr.starts_with("fe80")
+            || addr.starts_with("::1")
+            || addr.starts_with("fc")
+            || addr.starts_with("fd")
+        {
             findings.push(json!({
                 "type": "ipv6_attack",
                 "title": format!("Private/link-local IPv6 address exposed in DNS: {}", addr),

@@ -8,7 +8,13 @@ use std::time::Duration;
 
 const XXE_PROBE_DEPTH: &str = "xxe_xml_surface";
 
-fn xxe_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn xxe_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "xxe",
         title,
@@ -28,7 +34,11 @@ fn xxe_finding(title: &str, severity: &str, description: &str, target: &str, ext
     f
 }
 
-async fn http_post_xml(client: &reqwest::Client, url: &str, body: &str) -> Option<crate::engine_probes::HttpProbe> {
+async fn http_post_xml(
+    client: &reqwest::Client,
+    url: &str,
+    body: &str,
+) -> Option<crate::engine_probes::HttpProbe> {
     let resp = client
         .post(url)
         .header("Content-Type", "application/xml")
@@ -114,8 +124,7 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
         }
 
         if let Some(xxe) = http_post_xml(&client, &url, XXE_WININI).await {
-            if WININI_CANARIES.iter().any(|c| xxe.body.contains(c))
-                && !xxe.body.contains("win.ini")
+            if WININI_CANARIES.iter().any(|c| xxe.body.contains(c)) && !xxe.body.contains("win.ini")
             {
                 findings.push(xxe_finding(
                     "XXE: Windows win.ini content in response",

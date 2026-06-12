@@ -9,7 +9,13 @@ use serde_json::{json, Value};
 
 const SSRF_PROBE_DEPTH: &str = "ssrf_fetch_surface";
 
-fn ssrf_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn ssrf_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "ssrf_advanced",
         title,
@@ -61,8 +67,22 @@ pub async fn run_ssrf_advanced_result(target: &str) -> EngineResult {
     let baseline_status = baseline.as_ref().map(|p| p.status).unwrap_or(0);
 
     let ssrf_params = [
-        "url", "webhook", "redirect", "callback", "fetch", "endpoint", "uri", "target", "src",
-        "source", "dest", "destination", "load", "link", "path", "proxy",
+        "url",
+        "webhook",
+        "redirect",
+        "callback",
+        "fetch",
+        "endpoint",
+        "uri",
+        "target",
+        "src",
+        "source",
+        "dest",
+        "destination",
+        "load",
+        "link",
+        "path",
+        "proxy",
     ];
 
     'outer: for param in &ssrf_params {
@@ -111,7 +131,15 @@ pub async fn run_ssrf_advanced_result(target: &str) -> EngineResult {
     }
 
     let redirect_params = [
-        "url", "next", "return", "returnUrl", "return_url", "redirect", "redir", "goto", "forward",
+        "url",
+        "next",
+        "return",
+        "returnUrl",
+        "return_url",
+        "redirect",
+        "redir",
+        "goto",
+        "forward",
     ];
     let redirect_target = "https://example.com/ssrf-open-redirect-test";
     for param in &redirect_params {

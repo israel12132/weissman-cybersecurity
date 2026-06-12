@@ -29,10 +29,7 @@ impl EdgeHeartbeatBatcher {
     }
 }
 
-async fn upsert_heartbeat(
-    pool: &sqlx::PgPool,
-    p: &PendingHeartbeat,
-) -> Result<(), sqlx::Error> {
+async fn upsert_heartbeat(pool: &sqlx::PgPool, p: &PendingHeartbeat) -> Result<(), sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, p.tenant_id).await?;
     let region = p.region_code.trim();
     let pop = p.pop_label.trim();
@@ -82,8 +79,7 @@ async fn flush_batch(
         );
         merged.insert(key, h);
     }
-    let tenants: std::collections::HashSet<i64> =
-        merged.values().map(|p| p.tenant_id).collect();
+    let tenants: std::collections::HashSet<i64> = merged.values().map(|p| p.tenant_id).collect();
     for (_, p) in merged {
         if let Err(e) = upsert_heartbeat(pool, &p).await {
             tracing::warn!(
@@ -103,7 +99,10 @@ async fn flush_batch(
     }
 }
 
-pub fn spawn(pool: Arc<sqlx::PgPool>, telemetry: Option<Arc<tokio::sync::broadcast::Sender<String>>>) -> EdgeHeartbeatBatcher {
+pub fn spawn(
+    pool: Arc<sqlx::PgPool>,
+    telemetry: Option<Arc<tokio::sync::broadcast::Sender<String>>>,
+) -> EdgeHeartbeatBatcher {
     let (tx, mut rx) = mpsc::unbounded_channel::<PendingHeartbeat>();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));

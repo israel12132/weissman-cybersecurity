@@ -9,7 +9,13 @@ use serde_json::{json, Value};
 
 const GRAPHQL_PROBE_DEPTH: &str = "graphql_introspection_surface";
 
-fn graphql_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn graphql_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "graphql_attack",
         title,

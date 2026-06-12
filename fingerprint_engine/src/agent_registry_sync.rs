@@ -118,10 +118,7 @@ async fn run_subscriber(
         .get_async_pubsub()
         .await
         .map_err(|e| e.to_string())?;
-    pubsub
-        .subscribe(CHANNEL)
-        .await
-        .map_err(|e| e.to_string())?;
+    pubsub.subscribe(CHANNEL).await.map_err(|e| e.to_string())?;
     tracing::info!(
         target: "agent_registry_sync",
         replica_id = %sync.replica_id,

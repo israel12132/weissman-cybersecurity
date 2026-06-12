@@ -2,10 +2,10 @@
 //! DNS CNAME resolution, dangling DNS (subdomain takeover), exposed S3/Azure storage.
 //! Produces nodes and edges for the Attack Surface Graph. No mock data.
 
-use serde::{Deserialize, Serialize};
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
+use serde::{Deserialize, Serialize};
 
 const CLOUD_HUNTER_PROBE_DEPTH: &str = "cloud_dns_surface";
 

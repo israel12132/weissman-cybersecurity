@@ -129,15 +129,14 @@ pub async fn oidc_begin(
         )
     })?;
     let http_client = oidc_http_client();
-    let metadata =
-        CoreProviderMetadata::discover_async(issuer_url, &http_client)
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({"ok": false, "detail": format!("OIDC discovery failed: {}", e)})),
-                )
-            })?;
+    let metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"ok": false, "detail": format!("OIDC discovery failed: {}", e)})),
+            )
+        })?;
     let base = public_base_url().trim_end_matches('/').to_string();
     let redirect_full = format!("{}{}", base, redirect_path);
     let redirect_url = RedirectUrl::new(redirect_full).map_err(|_| {
@@ -251,15 +250,14 @@ pub async fn oidc_callback(
         )
     })?;
     let http_client = oidc_http_client();
-    let metadata =
-        CoreProviderMetadata::discover_async(issuer_url, &http_client)
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({"ok": false, "detail": format!("{}", e)})),
-                )
-            })?;
+    let metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"ok": false, "detail": format!("{}", e)})),
+            )
+        })?;
     let base = public_base_url().trim_end_matches('/').to_string();
     let redirect_full = format!("{}{}", base, redirect_path);
     let redirect_url = RedirectUrl::new(redirect_full).map_err(|_| {

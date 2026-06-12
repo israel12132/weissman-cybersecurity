@@ -88,7 +88,12 @@ pub async fn tcp_banner(host: &str, port: u16) -> Option<String> {
     };
     let mut stream = socket;
     let mut buf = vec![0u8; 256];
-    match timeout(Duration::from_millis(TCP_BANNER_READ_MS), stream.read(&mut buf)).await {
+    match timeout(
+        Duration::from_millis(TCP_BANNER_READ_MS),
+        stream.read(&mut buf),
+    )
+    .await
+    {
         Ok(Ok(n)) if n > 0 => Some(String::from_utf8_lossy(&buf[..n]).to_string()),
         _ => Some(String::new()),
     }
@@ -125,7 +130,12 @@ pub async fn tcp_probe_response(host: &str, port: u16, payload: &[u8]) -> Option
     }
     let _ = stream.flush().await;
     let mut buf = vec![0u8; 1024];
-    match timeout(Duration::from_millis(TCP_BANNER_READ_MS), stream.read(&mut buf)).await {
+    match timeout(
+        Duration::from_millis(TCP_BANNER_READ_MS),
+        stream.read(&mut buf),
+    )
+    .await
+    {
         Ok(Ok(n)) if n > 0 => Some(buf[..n].to_vec()),
         _ => None,
     }
@@ -330,14 +340,12 @@ pub struct TlsCertDetails {
 
 /// Fetch the peer TLS certificate issuer/subject for HTTPS on port 443.
 pub async fn tls_cert_summary(host: &str) -> Option<TlsCertSummary> {
-    tls_cert_details(host)
-        .await
-        .map(|d| TlsCertSummary {
-            issuer: d.issuer,
-            subject: d.subject,
-            self_signed: d.self_signed,
-            expired: d.expired,
-        })
+    tls_cert_details(host).await.map(|d| TlsCertSummary {
+        issuer: d.issuer,
+        subject: d.subject,
+        self_signed: d.self_signed,
+        expired: d.expired,
+    })
 }
 
 /// Fetch extended TLS certificate metadata for HTTPS on port 443.
@@ -430,7 +438,12 @@ pub async fn udp_probe_response(host: &str, port: u16, payload: &[u8]) -> Option
     local.connect(&remote).await.ok()?;
     local.send(payload).await.ok()?;
     let mut buf = vec![0u8; 1024];
-    match timeout(Duration::from_millis(TCP_BANNER_READ_MS), local.recv(&mut buf)).await {
+    match timeout(
+        Duration::from_millis(TCP_BANNER_READ_MS),
+        local.recv(&mut buf),
+    )
+    .await
+    {
         Ok(Ok(n)) if n > 0 => Some(buf[..n].to_vec()),
         _ => None,
     }
@@ -580,7 +593,10 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("liminal_boundary") {
         return "Unify WAF/auth rules across HTTP/1.1 and HTTP/2 (ALPN) paths; add correct Vary headers for every cache-key dimension (Cookie, Accept-Language); strip or validate X-Original-URL / X-Rewrite-URL at the edge; disable trusted-header routing unless explicitly required.";
     }
-    if engine_id.contains("xss") || engine_id.contains("css_injection") || engine_id.contains("template_injection") {
+    if engine_id.contains("xss")
+        || engine_id.contains("css_injection")
+        || engine_id.contains("template_injection")
+    {
         return "Adopt a strict Content-Security-Policy: `default-src 'self'; script-src 'self' 'nonce-...'; object-src 'none';`. HTML-escape all dynamic content.";
     }
     if engine_id.contains("clickjacking") {
@@ -592,7 +608,11 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("s3") || engine_id.contains("cloud_data_exfil") {
         return "Block public ACLs at the AWS account level (`BlockPublicAccess`), set bucket policy to private, and enable S3 Object Ownership = BucketOwnerEnforced.";
     }
-    if engine_id.contains("scada") || engine_id.contains("modbus") || engine_id.contains("plc") || engine_id.contains("opcua") {
+    if engine_id.contains("scada")
+        || engine_id.contains("modbus")
+        || engine_id.contains("plc")
+        || engine_id.contains("opcua")
+    {
         return "OT protocols (Modbus, DNP3, OPC-UA, IEC 61850) must never be reachable from the internet. Isolate inside the OT VLAN, place a Purdue-Level 3.5 firewall, and require VPN + MFA for engineering access.";
     }
     if engine_id.contains("mfa") {
@@ -601,7 +621,11 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     if engine_id.contains("password") {
         return "Disable password reuse, enforce zxcvbn ≥ 3 strength, require MFA, monitor for credential-stuffing patterns and rotate any leaked secrets.";
     }
-    if engine_id.contains("supply_chain") || engine_id.contains("npm_package") || engine_id.contains("pypi") || engine_id.contains("docker_image_poison") {
+    if engine_id.contains("supply_chain")
+        || engine_id.contains("npm_package")
+        || engine_id.contains("pypi")
+        || engine_id.contains("docker_image_poison")
+    {
         return "Lock dependencies (lockfiles + hash verification), enable Sigstore / cosign signature verification, and scan via OSV / pip-audit / npm audit on every build.";
     }
     if engine_id.contains("pki") || engine_id.contains("tls") {
@@ -630,10 +654,18 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
     if engine_id.contains("tls") || engine_id.contains("crypto") || engine_id.contains("pqc") {
         tags.extend_from_slice(&["ISO27001:A.10", "SOC2:CC6.7", "PCI:4.1"]);
     }
-    if engine_id.contains("scada") || engine_id.contains("ot") || engine_id.contains("modbus") || engine_id.contains("plc") {
+    if engine_id.contains("scada")
+        || engine_id.contains("ot")
+        || engine_id.contains("modbus")
+        || engine_id.contains("plc")
+    {
         tags.extend_from_slice(&["NIS2:Art.21(2)(h)", "IEC62443"]);
     }
-    if engine_id.contains("cloud") || engine_id.contains("aws") || engine_id.contains("azure") || engine_id.contains("gcp") {
+    if engine_id.contains("cloud")
+        || engine_id.contains("aws")
+        || engine_id.contains("azure")
+        || engine_id.contains("gcp")
+    {
         tags.extend_from_slice(&["SOC2:CC6.6", "CSA-CCM:DCS-04"]);
     }
     if engine_id.contains("supply_chain") || engine_id.contains("sbom") {

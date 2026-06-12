@@ -200,10 +200,7 @@ fn build_report_markdown(
             "### Context-aware risk analysis\n\n{}\n\n_Validate in staging; LLM severity and narrative are advisory pending human review._",
             t.dynamic_impact
         );
-        let rem = format!(
-            "\n---\n\n## Remediation\n\n{}\n\n---\n\n",
-            t.remediation
-        );
+        let rem = format!("\n---\n\n## Remediation\n\n{}\n\n---\n\n", t.remediation);
         (desc, impact, rem)
     } else {
         let desc = format!(

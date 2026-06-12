@@ -10,12 +10,7 @@ use serde_json::Value;
 
 const AWS_PROBE_DEPTH: &str = "aws_remote_surface";
 
-fn aws_finding(
-    title: &str,
-    severity: &str,
-    description: &str,
-    target: &str,
-) -> Value {
+fn aws_finding(title: &str, severity: &str, description: &str, target: &str) -> Value {
     finding_with_probe_depth(
         "aws_attack",
         title,

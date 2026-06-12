@@ -83,10 +83,7 @@ fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
         .map(|ci| ci.0.ip())
 }
 
-pub async fn edge_multi_rate_limit_middleware(
-    request: Request<Body>,
-    next: Next,
-) -> Response {
+pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next) -> Response {
     let method = request.method().clone();
     let path = request.uri().path().to_string();
     let Some(ip) = client_ip(&request) else {
@@ -98,7 +95,10 @@ pub async fn edge_multi_rate_limit_middleware(
     let limited = match (method.as_str(), path.as_str()) {
         ("POST", "/api/login") => {
             if limiter_login().check_key(&key).is_err() {
-                fingerprint_engine::http::rate_limit_metrics::record_login_denied(&ip_str, "/api/login");
+                fingerprint_engine::http::rate_limit_metrics::record_login_denied(
+                    &ip_str,
+                    "/api/login",
+                );
                 true
             } else {
                 fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);

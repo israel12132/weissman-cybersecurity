@@ -91,11 +91,12 @@ pub async fn handle_aws_canary_eventbridge(
     let n_keys = keys.len();
     let mut triggered = 0u32;
     for ak in keys {
-        let rows = sqlx::query("SELECT id, tenant_id, client_id FROM lookup_deception_by_canary($1)")
-            .bind(&ak)
-            .fetch_all(app_pool)
-            .await
-            .unwrap_or_default();
+        let rows =
+            sqlx::query("SELECT id, tenant_id, client_id FROM lookup_deception_by_canary($1)")
+                .bind(&ak)
+                .fetch_all(app_pool)
+                .await
+                .unwrap_or_default();
         for r in rows {
             let aid: i64 = r.try_get("id").unwrap_or(0);
             let tid: i64 = r.try_get("tenant_id").unwrap_or(0);

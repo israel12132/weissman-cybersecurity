@@ -107,7 +107,9 @@ pub async fn run_llm_redteam_result(target: &str) -> EngineResult {
                     let status = resp.status().as_u16();
                     let body = resp.text().await.unwrap_or_default().to_lowercase();
 
-                    let leaked = LEAK_INDICATORS.iter().any(|indicator| body.contains(indicator));
+                    let leaked = LEAK_INDICATORS
+                        .iter()
+                        .any(|indicator| body.contains(indicator));
 
                     if leaked {
                         findings.push(json!({
@@ -137,7 +139,10 @@ pub async fn run_llm_redteam_result(target: &str) -> EngineResult {
         }
     }
 
-    EngineResult::ok(findings.clone(), format!("LLM Red-Team: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("LLM Red-Team: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_llm_redteam(target: &str) {

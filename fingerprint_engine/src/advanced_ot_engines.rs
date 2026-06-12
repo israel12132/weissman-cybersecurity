@@ -2,9 +2,13 @@
 //! Passive surface checks delegate to `ot_ics_engine`; bus-level / physical attacks
 //! require an enrolled endpoint agent (no HTTP stand-ins).
 
-use crate::engine_probes::{agent_required_ok, empty_ok, extract_host, finding, tcp_open, tcp_probe_response};
+use crate::engine_probes::{
+    agent_required_ok, empty_ok, extract_host, finding, tcp_open, tcp_probe_response,
+};
 use crate::engine_result::{print_result, EngineResult};
-use crate::ot_ics_engine::{probe_bacnet_read_property, probe_modbus_function_code, probe_opcua_discovery, OtFingerprint};
+use crate::ot_ics_engine::{
+    probe_bacnet_read_property, probe_modbus_function_code, probe_opcua_discovery, OtFingerprint,
+};
 use serde_json::Value;
 
 macro_rules! cli_wrapper {
@@ -25,7 +29,10 @@ fn ot_fingerprint_finding(fp: &OtFingerprint, engine_id: &str, target: &str) -> 
     };
     finding(
         engine_id,
-        &format!("{} on {}:{} ({})", fp.protocol, fp.host, fp.port, fp.vendor_hint),
+        &format!(
+            "{} on {}:{} ({})",
+            fp.protocol, fp.host, fp.port, fp.vendor_hint
+        ),
         severity,
         "T0843",
         &format!(
@@ -67,7 +74,10 @@ pub async fn run_modbus_attack_result(target: &str) -> EngineResult {
                 "Port 502/tcp open (Modbus candidate)",
                 "medium",
                 "T0843",
-                &format!("TCP {}:502 accepts connections but no FC03/readProperty confirmation.", host),
+                &format!(
+                    "TCP {}:502 accepts connections but no FC03/readProperty confirmation.",
+                    host
+                ),
                 target,
             )],
             "modbus_attack: port open, protocol unconfirmed".to_string(),
@@ -110,7 +120,10 @@ pub async fn run_opcua_attack_result(t: &str) -> EngineResult {
                 "Port 4840/tcp open (OPC-UA candidate)",
                 "medium",
                 "T0843",
-                &format!("TCP {}:4840 accepts connections but HEL/ACK discovery was not confirmed.", host),
+                &format!(
+                    "TCP {}:4840 accepts connections but HEL/ACK discovery was not confirmed.",
+                    host
+                ),
                 t,
             )],
             "opcua_attack: port open, discovery unconfirmed".to_string(),
@@ -277,17 +290,44 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_dnp3_attack, run_dnp3_attack_result);
 
 pub async fn run_mqtt_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "mqtt_attack", "MQTT broker port", "medium", "T0809", &[1883, 8883], "MQTT plaintext/TLS broker.").await
+    port_probe_finding(
+        t,
+        "mqtt_attack",
+        "MQTT broker port",
+        "medium",
+        "T0809",
+        &[1883, 8883],
+        "MQTT plaintext/TLS broker.",
+    )
+    .await
 }
 cli_wrapper!(run_mqtt_attack, run_mqtt_attack_result);
 
 pub async fn run_coap_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "coap_attack", "CoAP IoT protocol port", "low", "T0809", &[5683, 5684], "CoAP UDP service.").await
+    port_probe_finding(
+        t,
+        "coap_attack",
+        "CoAP IoT protocol port",
+        "low",
+        "T0809",
+        &[5683, 5684],
+        "CoAP UDP service.",
+    )
+    .await
 }
 cli_wrapper!(run_coap_attack, run_coap_attack_result);
 
 pub async fn run_zigbee_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "zigbee_attack", "Zigbee gateway port", "low", "T0809", &[9999, 17754], "Zigbee2MQTT / Hue bridge.").await
+    port_probe_finding(
+        t,
+        "zigbee_attack",
+        "Zigbee gateway port",
+        "low",
+        "T0809",
+        &[9999, 17754],
+        "Zigbee2MQTT / Hue bridge.",
+    )
+    .await
 }
 cli_wrapper!(run_zigbee_attack, run_zigbee_attack_result);
 
@@ -299,8 +339,8 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if tcp_open(&host, 102).await {
         let probe: [u8; 22] = [
-            0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0,
-            0x01, 0x0A, 0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
+            0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0, 0x01, 0x0A,
+            0xC1, 0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
         ];
         let resp = tcp_probe_response(&host, 102, &probe).await;
         let confirmed = resp
@@ -332,42 +372,105 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("iec61850_attack", t)
     } else {
-        EngineResult::ok(findings.clone(), format!("iec61850_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("iec61850_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_iec61850_attack, run_iec61850_attack_result);
 
 pub async fn run_plc_logic_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "plc_logic_attack", "PLC engineering port", "high", "T0843", &[44818, 102, 502, 9600], "Common PLC engineering/runtime ports.").await
+    port_probe_finding(
+        t,
+        "plc_logic_attack",
+        "PLC engineering port",
+        "high",
+        "T0843",
+        &[44818, 102, 502, 9600],
+        "Common PLC engineering/runtime ports.",
+    )
+    .await
 }
 cli_wrapper!(run_plc_logic_attack, run_plc_logic_attack_result);
 
 pub async fn run_hmi_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "hmi_attack", "HMI / SCADA web UI", "high", "T0822", &[80, 443, 8080, 8443], "Web-based HMI surfaces.").await
+    port_probe_finding(
+        t,
+        "hmi_attack",
+        "HMI / SCADA web UI",
+        "high",
+        "T0822",
+        &[80, 443, 8080, 8443],
+        "Web-based HMI surfaces.",
+    )
+    .await
 }
 cli_wrapper!(run_hmi_attack, run_hmi_attack_result);
 
 pub async fn run_satellite_comm_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "satellite_comm_attack", "Satellite gateway management", "medium", "T0883", &[443, 8443, 8000], "VSAT gateway HTTP admin candidates.").await
+    port_probe_finding(
+        t,
+        "satellite_comm_attack",
+        "Satellite gateway management",
+        "medium",
+        "T0883",
+        &[443, 8443, 8000],
+        "VSAT gateway HTTP admin candidates.",
+    )
+    .await
 }
 cli_wrapper!(run_satellite_comm_attack, run_satellite_comm_attack_result);
 
 pub async fn run_firmware_emulation_attack_result(t: &str) -> EngineResult {
     crate::iot_firmware_engine::run_iot_firmware_result(t).await
 }
-cli_wrapper!(run_firmware_emulation_attack, run_firmware_emulation_attack_result);
+cli_wrapper!(
+    run_firmware_emulation_attack,
+    run_firmware_emulation_attack_result
+);
 
 pub async fn run_profinet_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "profinet_attack", "PROFINET realtime port", "high", "T0843", &[34962, 34963, 34964], "PROFINET-IO endpoints.").await
+    port_probe_finding(
+        t,
+        "profinet_attack",
+        "PROFINET realtime port",
+        "high",
+        "T0843",
+        &[34962, 34963, 34964],
+        "PROFINET-IO endpoints.",
+    )
+    .await
 }
 cli_wrapper!(run_profinet_attack, run_profinet_attack_result);
 
 pub async fn run_rfid_nfc_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "rfid_nfc_attack", "RFID/NFC gateway", "low", "T0809", &[8080, 80], "RFID middleware HTTP admin candidates.").await
+    port_probe_finding(
+        t,
+        "rfid_nfc_attack",
+        "RFID/NFC gateway",
+        "low",
+        "T0809",
+        &[8080, 80],
+        "RFID middleware HTTP admin candidates.",
+    )
+    .await
 }
 cli_wrapper!(run_rfid_nfc_attack, run_rfid_nfc_attack_result);
 
 pub async fn run_industrial_protocol_fuzz_result(t: &str) -> EngineResult {
-    port_probe_finding(t, "industrial_protocol_fuzz", "Industrial protocol surface", "high", "T0843", &[502, 102, 20000, 4840, 44818], "Common ICS ports to fuzz under controlled conditions.").await
+    port_probe_finding(
+        t,
+        "industrial_protocol_fuzz",
+        "Industrial protocol surface",
+        "high",
+        "T0843",
+        &[502, 102, 20000, 4840, 44818],
+        "Common ICS ports to fuzz under controlled conditions.",
+    )
+    .await
 }
-cli_wrapper!(run_industrial_protocol_fuzz, run_industrial_protocol_fuzz_result);
+cli_wrapper!(
+    run_industrial_protocol_fuzz,
+    run_industrial_protocol_fuzz_result
+);

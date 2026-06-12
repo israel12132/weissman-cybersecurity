@@ -103,8 +103,7 @@ fn severity_from_cve_json(cve: &Value) -> Option<String> {
 }
 
 fn description_en(cve: &Value) -> String {
-    cve
-        .pointer("/descriptions")
+    cve.pointer("/descriptions")
         .and_then(|d| d.as_array())
         .map(|arr| {
             arr.iter()
@@ -165,14 +164,14 @@ pub async fn fetch_keyword_cves(
         HeaderName::from_bytes(b"apiKey"),
         HeaderValue::from_str(&api_key),
     ) else {
-        return Err(NvdFetchError::HttpClient("invalid NVD apiKey header".into()));
+        return Err(NvdFetchError::HttpClient(
+            "invalid NVD apiKey header".into(),
+        ));
     };
     headers.insert(name, val);
 
     let bytes = get_bytes_with_retry(&client, &url, headers, 4, Some("nvd")).await?;
-    let _ = cache
-        .insert(cache_key, Arc::new(bytes.clone()))
-        .await;
+    let _ = cache.insert(cache_key, Arc::new(bytes.clone())).await;
     parse_nvd_response_bytes(&bytes)
 }
 

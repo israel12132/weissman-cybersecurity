@@ -2,8 +2,8 @@
 //! and SaaS APIs reachable from the target. No simulated findings.
 
 use crate::engine_probes::{
-    dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value, http_client,
-    http_get, normalize_url,
+    dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -65,7 +65,10 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
                         "Cloud metadata reflected via SSRF param",
                         "critical",
                         "T1552.005",
-                        &format!("?{}={} on {} returned cloud-metadata content.", q, meta, p.final_url),
+                        &format!(
+                            "?{}={} on {} returned cloud-metadata content.",
+                            q, meta, p.final_url
+                        ),
                         target,
                     ));
                 }
@@ -120,7 +123,10 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
                     "S3 bucket exists (AccessDenied)",
                     "info",
                     "T1530",
-                    &format!("{} returned HTTP 403 AccessDenied — bucket name resolves.", url),
+                    &format!(
+                        "{} returned HTTP 403 AccessDenied — bucket name resolves.",
+                        url
+                    ),
                     target,
                 ));
             }
@@ -129,7 +135,10 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("s3_bucket_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("s3_bucket_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("s3_bucket_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_s3_bucket_attack, run_s3_bucket_attack_result);
@@ -151,7 +160,10 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
                 "AWS Lambda / API Gateway detected",
                 "info",
                 "T1610",
-                &format!("Response from {} carries AWS x-amzn-* headers — exposed Lambda runtime.", p.final_url),
+                &format!(
+                    "Response from {} carries AWS x-amzn-* headers — exposed Lambda runtime.",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -159,7 +171,10 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("lambda_escape", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("lambda_escape: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("lambda_escape: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_lambda_escape, run_lambda_escape_result);
@@ -178,7 +193,13 @@ pub async fn run_kubernetes_rbac_escape_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/api/v1/namespaces", "/healthz", "/api", "/apis", "/openapi/v2"] {
+    for path in [
+        "/api/v1/namespaces",
+        "/healthz",
+        "/api",
+        "/apis",
+        "/openapi/v2",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             let k8s_api = p.status == 200
@@ -204,10 +225,16 @@ pub async fn run_kubernetes_rbac_escape_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("kubernetes_rbac_escape", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("kubernetes_rbac_escape: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("kubernetes_rbac_escape: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_kubernetes_rbac_escape, run_kubernetes_rbac_escape_result);
+cli_wrapper!(
+    run_kubernetes_rbac_escape,
+    run_kubernetes_rbac_escape_result
+);
 
 // ── azure_devops_attack ───────────────────────────────────────────────────────
 pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
@@ -238,7 +265,10 @@ pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("azure_devops_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("azure_devops_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("azure_devops_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_azure_devops_attack, run_azure_devops_attack_result);
@@ -257,7 +287,11 @@ pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/terraform.tfstate", "/.terraform/terraform.tfstate", "/state/terraform.tfstate"] {
+    for path in [
+        "/terraform.tfstate",
+        "/.terraform/terraform.tfstate",
+        "/state/terraform.tfstate",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && p.body.contains("\"terraform_version\"") {
@@ -266,7 +300,10 @@ pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
                     "Public terraform.tfstate file",
                     "critical",
                     "T1552",
-                    &format!("State file accessible at {} (HTTP 200) — secrets and resource IDs leaked.", p.final_url),
+                    &format!(
+                        "State file accessible at {} (HTTP 200) — secrets and resource IDs leaked.",
+                        p.final_url
+                    ),
                     target,
                 ));
             }
@@ -275,10 +312,16 @@ pub async fn run_terraform_state_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("terraform_state_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("terraform_state_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("terraform_state_attack: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_terraform_state_attack, run_terraform_state_attack_result);
+cli_wrapper!(
+    run_terraform_state_attack,
+    run_terraform_state_attack_result
+);
 
 // ── cloudformation_injection ──────────────────────────────────────────────────
 pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
@@ -288,16 +331,25 @@ pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/cloudformation.json", "/cfn-template.yaml", "/templates/main.yml"] {
+    for path in [
+        "/cloudformation.json",
+        "/cfn-template.yaml",
+        "/templates/main.yml",
+    ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && (p.body.contains("AWSTemplateFormatVersion") || p.body.contains("Resources:")) {
+            if p.status == 200
+                && (p.body.contains("AWSTemplateFormatVersion") || p.body.contains("Resources:"))
+            {
                 findings.push(cloud_finding(
                     "cloudformation_injection",
                     "Public CloudFormation template",
                     "high",
                     "T1195",
-                    &format!("CF template accessible at {} — review parameters and policies.", p.final_url),
+                    &format!(
+                        "CF template accessible at {} — review parameters and policies.",
+                        p.final_url
+                    ),
                     target,
                 ));
             }
@@ -306,10 +358,16 @@ pub async fn run_cloudformation_injection_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("cloudformation_injection", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("cloudformation_injection: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("cloudformation_injection: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_cloudformation_injection, run_cloudformation_injection_result);
+cli_wrapper!(
+    run_cloudformation_injection,
+    run_cloudformation_injection_result
+);
 
 // ── service_mesh_attack ───────────────────────────────────────────────────────
 pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
@@ -328,7 +386,10 @@ pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
                 "Istio/Envoy header observed",
                 "info",
                 "T1190",
-                &format!("Mesh proxy in path on {} — check mTLS enforcement and AuthorizationPolicies.", p.final_url),
+                &format!(
+                    "Mesh proxy in path on {} — check mTLS enforcement and AuthorizationPolicies.",
+                    p.final_url
+                ),
                 target,
             ));
         }
@@ -336,7 +397,10 @@ pub async fn run_service_mesh_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("service_mesh_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("service_mesh_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("service_mesh_attack: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_service_mesh_attack, run_service_mesh_attack_result);
@@ -372,7 +436,10 @@ pub async fn run_cloud_audit_evasion_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("cloud_audit_evasion", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("cloud_audit_evasion: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("cloud_audit_evasion: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_cloud_audit_evasion, run_cloud_audit_evasion_result);
@@ -425,7 +492,10 @@ pub async fn run_multi_cloud_pivot_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("multi_cloud_pivot", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("multi_cloud_pivot: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("multi_cloud_pivot: {}", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_multi_cloud_pivot, run_multi_cloud_pivot_result);
@@ -434,7 +504,10 @@ cli_wrapper!(run_multi_cloud_pivot, run_multi_cloud_pivot_result);
 pub async fn run_cloud_worm_propagation_result(target: &str) -> EngineResult {
     crate::serverless_attack_engine::run_serverless_attack_result(target).await
 }
-cli_wrapper!(run_cloud_worm_propagation, run_cloud_worm_propagation_result);
+cli_wrapper!(
+    run_cloud_worm_propagation,
+    run_cloud_worm_propagation_result
+);
 
 // ── serverless_injection ──────────────────────────────────────────────────────
 pub async fn run_serverless_injection_result(target: &str) -> EngineResult {
@@ -489,7 +562,10 @@ pub async fn run_secrets_manager_attack_result(target: &str) -> EngineResult {
                     &format!("Possible secret file: {}", path),
                     "critical",
                     "T1552.001",
-                    &format!("{} returned HTTP 200 — contents look like secrets/config.", p.final_url),
+                    &format!(
+                        "{} returned HTTP 200 — contents look like secrets/config.",
+                        p.final_url
+                    ),
                     target,
                 ));
             }
@@ -498,13 +574,22 @@ pub async fn run_secrets_manager_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("secrets_manager_attack", target)
     } else {
-        EngineResult::ok(findings.clone(), format!("secrets_manager_attack: {}", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("secrets_manager_attack: {}", findings.len()),
+        )
     }
 }
-cli_wrapper!(run_secrets_manager_attack, run_secrets_manager_attack_result);
+cli_wrapper!(
+    run_secrets_manager_attack,
+    run_secrets_manager_attack_result
+);
 
 // ── cloud_privilege_persistence ───────────────────────────────────────────────
 pub async fn run_cloud_privilege_persistence_result(target: &str) -> EngineResult {
     run_cloud_iam_escalation_result(target).await
 }
-cli_wrapper!(run_cloud_privilege_persistence, run_cloud_privilege_persistence_result);
+cli_wrapper!(
+    run_cloud_privilege_persistence,
+    run_cloud_privilege_persistence_result
+);

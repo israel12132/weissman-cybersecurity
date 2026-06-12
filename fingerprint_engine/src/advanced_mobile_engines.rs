@@ -1,8 +1,7 @@
 //! Advanced Mobile engines — public app-store, deep-link, and mobile-backend API probes.
 
 use crate::engine_probes::{
-    empty_ok, finding_with_probe_depth, header_value, http_client, http_get,
-    normalize_url,
+    empty_ok, finding_with_probe_depth, header_value, http_client, http_get, normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -49,7 +48,10 @@ const MOBILE_API_PATHS: &[(&str, &str)] = &[
 ];
 
 const MOBILE_ASSET_PATHS: &[(&str, &str)] = &[
-    ("/.well-known/apple-app-site-association", "Apple Universal Links (AASA)"),
+    (
+        "/.well-known/apple-app-site-association",
+        "Apple Universal Links (AASA)",
+    ),
     ("/.well-known/assetlinks.json", "Android App Links"),
     ("/manifest.json", "Web/PWA manifest"),
     ("/index.bundle", "React Native bundle"),
@@ -138,7 +140,10 @@ async fn probe_mobile_api_surface(
     if findings.is_empty() {
         empty_ok(engine_id, t)
     } else {
-        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("{}: {}", engine_id, findings.len()),
+        )
     }
 }
 
@@ -164,13 +169,19 @@ async fn store_probe(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
     }
     let itunes_url = format!("https://itunes.apple.com/lookup?bundleId={}", q);
     if let Some(p) = http_get(&client, &itunes_url).await {
-        if p.status == 200 && p.body.contains("\"resultCount\"") && !p.body.contains("\"resultCount\":0") {
+        if p.status == 200
+            && p.body.contains("\"resultCount\"")
+            && !p.body.contains("\"resultCount\":0")
+        {
             findings.push(mobile_finding(
                 engine_id,
                 "App Store listing found",
                 "info",
                 mitre,
-                &format!("iTunes lookup returned a published app for bundle id {}.", q),
+                &format!(
+                    "iTunes lookup returned a published app for bundle id {}.",
+                    q
+                ),
                 t,
             ));
         }
@@ -178,14 +189,20 @@ async fn store_probe(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok(engine_id, t)
     } else {
-        EngineResult::ok(findings.clone(), format!("{}: {}", engine_id, findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("{}: {}", engine_id, findings.len()),
+        )
     }
 }
 
 pub async fn run_android_malware_engine_result(t: &str) -> EngineResult {
     store_probe(t, "android_malware_engine", "T1444").await
 }
-cli_wrapper!(run_android_malware_engine, run_android_malware_engine_result);
+cli_wrapper!(
+    run_android_malware_engine,
+    run_android_malware_engine_result
+);
 
 pub async fn run_ios_exploit_engine_result(t: &str) -> EngineResult {
     store_probe(t, "ios_exploit_engine", "T1444").await
@@ -290,7 +307,10 @@ pub async fn run_mobile_banking_trojan_result(t: &str) -> EngineResult {
         t,
         "mobile_banking_trojan",
         "T1444",
-        &[("/api/v1/banking", "Mobile banking API"), ("/api/v1/payments", "Mobile payments API")],
+        &[
+            ("/api/v1/banking", "Mobile banking API"),
+            ("/api/v1/payments", "Mobile payments API"),
+        ],
     )
     .await
 }
@@ -319,21 +339,9 @@ pub async fn run_mdm_bypass_engine_result(t: &str) -> EngineResult {
             "Microsoft Intune / Windows MDM",
             &["EnrollmentServer", "DiscoveryService"],
         ),
-        (
-            "/v1/server/health",
-            "Jamf Pro",
-            &["Jamf", "health"],
-        ),
-        (
-            "/api/users/auth",
-            "Jamf Pro auth",
-            &["Jamf", "auth"],
-        ),
-        (
-            "/MDM/Configuration",
-            "MobileIron",
-            &["MobileIron", "MDM"],
-        ),
+        ("/v1/server/health", "Jamf Pro", &["Jamf", "health"]),
+        ("/api/users/auth", "Jamf Pro auth", &["Jamf", "auth"]),
+        ("/MDM/Configuration", "MobileIron", &["MobileIron", "MDM"]),
         (
             "/.well-known/airwatch-mdm",
             "AirWatch / Workspace ONE",
@@ -390,7 +398,10 @@ pub async fn run_bluetooth_mobile_attack_result(t: &str) -> EngineResult {
         "BlueBorne / KNOB attacks exploit local BT stack; deploy the iOS/Android mobile agent.",
     )
 }
-cli_wrapper!(run_bluetooth_mobile_attack, run_bluetooth_mobile_attack_result);
+cli_wrapper!(
+    run_bluetooth_mobile_attack,
+    run_bluetooth_mobile_attack_result
+);
 
 pub async fn run_nfc_relay_attack_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
@@ -418,7 +429,9 @@ pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200
-                && (p.body.contains("__d(") || p.body.contains("react-native") || p.body.len() > 4096)
+                && (p.body.contains("__d(")
+                    || p.body.contains("react-native")
+                    || p.body.len() > 4096)
             {
                 findings.push(mobile_finding(
                     "react_native_attack",
@@ -437,7 +450,8 @@ pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
     }
     if findings.is_empty() {
         if let Some(p) = http_get(&client, &base).await {
-            if p.body.contains("react-native") || p.body.contains("__REACT_DEVTOOLS_GLOBAL_HOOK__") {
+            if p.body.contains("react-native") || p.body.contains("__REACT_DEVTOOLS_GLOBAL_HOOK__")
+            {
                 findings.push(mobile_finding(
                     "react_native_attack",
                     "React Native fingerprint in HTML",

@@ -4,7 +4,9 @@ use serde_json::json;
 
 fn extract_host(target: &str) -> String {
     let t = target.trim();
-    let t = t.trim_start_matches("http://").trim_start_matches("https://");
+    let t = t
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
     let t = t.split('/').next().unwrap_or(t);
     let t = t.split(':').next().unwrap_or(t);
     t.to_string()
@@ -20,7 +22,13 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
     let fingerprints = crate::ot_ics_engine::scan_hosts_passive(&hosts).await;
     let mut findings: Vec<serde_json::Value> = Vec::new();
     for fp in &fingerprints {
-        let severity = if fp.confidence > 0.8 { "critical" } else if fp.confidence > 0.5 { "high" } else { "medium" };
+        let severity = if fp.confidence > 0.8 {
+            "critical"
+        } else if fp.confidence > 0.5 {
+            "high"
+        } else {
+            "medium"
+        };
         findings.push(json!({
             "type": "scada_ics",
             "title": format!("OT/ICS device detected: {} on {}:{}", fp.protocol, fp.host, fp.port),
@@ -29,7 +37,10 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
             "description": format!("Vendor: {}, confidence: {:.2}, protocol: {}", fp.vendor_hint, fp.confidence, fp.protocol)
         }));
     }
-    EngineResult::ok(findings.clone(), format!("SCADA/ICS: {} findings", findings.len()))
+    EngineResult::ok(
+        findings.clone(),
+        format!("SCADA/ICS: {} findings", findings.len()),
+    )
 }
 
 pub async fn run_scada_ics(target: &str) {

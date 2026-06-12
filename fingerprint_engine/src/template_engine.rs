@@ -130,7 +130,11 @@ pub fn builtin_template_yaml(id: &str) -> Option<&'static str> {
 
 fn builtin_templates() -> Vec<TemplateDoc> {
     let mut out = Vec::new();
-    for id in ["http_baseline", "reflected_xss_token", "multi_step_state_demo"] {
+    for id in [
+        "http_baseline",
+        "reflected_xss_token",
+        "multi_step_state_demo",
+    ] {
         if let Some(yaml) = builtin_template_yaml(id) {
             if let Ok(t) = serde_yaml::from_str::<TemplateDoc>(yaml) {
                 out.push(t);
@@ -205,16 +209,28 @@ fn eval_matcher(
     match matcher {
         TemplateMatcher::Status { statuses } => {
             let ok = statuses.iter().any(|s| *s == status);
-            (ok, json!({"type":"status","status":status,"expected":statuses,"ok":ok}))
+            (
+                ok,
+                json!({"type":"status","status":status,"expected":statuses,"ok":ok}),
+            )
         }
         TemplateMatcher::BodyContains { .. } => {
             let ok = body.contains(rendered_contains);
-            (ok, json!({"type":"body_contains","contains":rendered_contains,"ok":ok}))
+            (
+                ok,
+                json!({"type":"body_contains","contains":rendered_contains,"ok":ok}),
+            )
         }
         TemplateMatcher::HeaderContains { header, .. } => {
-            let hv = headers.get(&header.to_lowercase()).cloned().unwrap_or_default();
+            let hv = headers
+                .get(&header.to_lowercase())
+                .cloned()
+                .unwrap_or_default();
             let ok = hv.contains(rendered_contains);
-            (ok, json!({"type":"header_contains","header":header,"contains":rendered_contains,"observed":hv,"ok":ok}))
+            (
+                ok,
+                json!({"type":"header_contains","header":header,"contains":rendered_contains,"observed":hv,"ok":ok}),
+            )
         }
         TemplateMatcher::Regex { .. } => {
             let re = regex::Regex::new(rendered_regex)
@@ -224,7 +240,10 @@ fn eval_matcher(
         }
         TemplateMatcher::DurationGtMs { ms } => {
             let ok = duration_ms >= *ms;
-            (ok, json!({"type":"duration_gt_ms","duration_ms":duration_ms,"threshold_ms":ms,"ok":ok}))
+            (
+                ok,
+                json!({"type":"duration_gt_ms","duration_ms":duration_ms,"threshold_ms":ms,"ok":ok}),
+            )
         }
     }
 }
@@ -247,7 +266,10 @@ fn extract_into_state(
 ) -> Option<(String, String)> {
     match extractor {
         TemplateExtractor::Header { name, header } => {
-            let v = headers.get(&header.to_lowercase()).cloned().unwrap_or_default();
+            let v = headers
+                .get(&header.to_lowercase())
+                .cloned()
+                .unwrap_or_default();
             out.insert(name.to_string(), v.clone());
             Some((name.to_string(), v))
         }
@@ -263,7 +285,10 @@ fn extract_into_state(
     }
 }
 
-async fn fetch_limited_text(resp: reqwest::Response, max_bytes: usize) -> (u16, BTreeMap<String, String>, String) {
+async fn fetch_limited_text(
+    resp: reqwest::Response,
+    max_bytes: usize,
+) -> (u16, BTreeMap<String, String>, String) {
     let status = resp.status().as_u16();
     let headers = headers_to_map(resp.headers());
     let bytes = resp.bytes().await.unwrap_or_default();
@@ -357,7 +382,9 @@ pub async fn run_template(
                     }),
                     response: json!({"error": e.to_string()}),
                     extracted: BTreeMap::new(),
-                    matcher_results: vec![json!({"type":"network_error","error":e.to_string(),"ok":false})],
+                    matcher_results: vec![
+                        json!({"type":"network_error","error":e.to_string(),"ok":false}),
+                    ],
                     matched: false,
                     duration_ms,
                     state_after: state.clone(),
@@ -384,8 +411,12 @@ pub async fn run_template(
         let mut matcher_bools = Vec::new();
         for m in &step.matchers {
             let rendered_contains = match m {
-                TemplateMatcher::BodyContains { contains } => render_string(contains, &base, &vars, &state),
-                TemplateMatcher::HeaderContains { contains, .. } => render_string(contains, &base, &vars, &state),
+                TemplateMatcher::BodyContains { contains } => {
+                    render_string(contains, &base, &vars, &state)
+                }
+                TemplateMatcher::HeaderContains { contains, .. } => {
+                    render_string(contains, &base, &vars, &state)
+                }
                 _ => "".to_string(),
             };
             let rendered_regex = match m {

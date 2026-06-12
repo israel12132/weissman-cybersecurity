@@ -5,8 +5,8 @@
 //! We don't deploy payloads — these engines are detection-only.
 
 use crate::engine_probes::{
-    dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, has_header,
-    header_value, http_client, http_get, normalize_url, tls_cert_summary,
+    dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, has_header, header_value,
+    http_client, http_get, normalize_url, tls_cert_summary,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -29,7 +29,15 @@ fn ttp_finding(
     description: &str,
     target: &str,
 ) -> Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, TTP_PROBE_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        TTP_PROBE_DEPTH,
+    )
 }
 
 async fn scan_http_security_surface(
@@ -246,27 +254,62 @@ pub async fn run_apt28_techniques_result(t: &str) -> EngineResult {
 cli_wrapper!(run_apt28_techniques, run_apt28_techniques_result);
 
 pub async fn run_apt29_techniques_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "apt29_techniques", "APT29 (Cozy Bear)", "T1190", &["sunburst", "teardrop"]).await
+    ttp_indicator_scan(
+        t,
+        "apt29_techniques",
+        "APT29 (Cozy Bear)",
+        "T1190",
+        &["sunburst", "teardrop"],
+    )
+    .await
 }
 cli_wrapper!(run_apt29_techniques, run_apt29_techniques_result);
 
 pub async fn run_apt41_techniques_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "apt41_techniques", "APT41 (Winnti)", "T1190", &["x-acidpour", "x-deadeye"]).await
+    ttp_indicator_scan(
+        t,
+        "apt41_techniques",
+        "APT41 (Winnti)",
+        "T1190",
+        &["x-acidpour", "x-deadeye"],
+    )
+    .await
 }
 cli_wrapper!(run_apt41_techniques, run_apt41_techniques_result);
 
 pub async fn run_lazarus_group_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "lazarus_group_ttps", "Lazarus", "T1190", &["x-applejeus", "x-3cx"]).await
+    ttp_indicator_scan(
+        t,
+        "lazarus_group_ttps",
+        "Lazarus",
+        "T1190",
+        &["x-applejeus", "x-3cx"],
+    )
+    .await
 }
 cli_wrapper!(run_lazarus_group_ttps, run_lazarus_group_ttps_result);
 
 pub async fn run_volt_typhoon_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "volt_typhoon_ttps", "Volt Typhoon", "T1078", &["fortiguard", "fortinet"]).await
+    ttp_indicator_scan(
+        t,
+        "volt_typhoon_ttps",
+        "Volt Typhoon",
+        "T1078",
+        &["fortiguard", "fortinet"],
+    )
+    .await
 }
 cli_wrapper!(run_volt_typhoon_ttps, run_volt_typhoon_ttps_result);
 
 pub async fn run_scattered_spider_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "scattered_spider_ttps", "Scattered Spider", "T1566.004", &["okta", "duo"]).await
+    ttp_indicator_scan(
+        t,
+        "scattered_spider_ttps",
+        "Scattered Spider",
+        "T1566.004",
+        &["okta", "duo"],
+    )
+    .await
 }
 cli_wrapper!(run_scattered_spider_ttps, run_scattered_spider_ttps_result);
 
@@ -276,12 +319,26 @@ pub async fn run_salt_typhoon_ttps_result(t: &str) -> EngineResult {
 cli_wrapper!(run_salt_typhoon_ttps, run_salt_typhoon_ttps_result);
 
 pub async fn run_fin7_techniques_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "fin7_techniques", "FIN7", "T1566", &["badusb", "carbanak"]).await
+    ttp_indicator_scan(
+        t,
+        "fin7_techniques",
+        "FIN7",
+        "T1566",
+        &["badusb", "carbanak"],
+    )
+    .await
 }
 cli_wrapper!(run_fin7_techniques, run_fin7_techniques_result);
 
 pub async fn run_conti_ransomware_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "conti_ransomware_ttps", "Conti", "T1486", &["readme.conti", ".conti"]).await
+    ttp_indicator_scan(
+        t,
+        "conti_ransomware_ttps",
+        "Conti",
+        "T1486",
+        &["readme.conti", ".conti"],
+    )
+    .await
 }
 cli_wrapper!(run_conti_ransomware_ttps, run_conti_ransomware_ttps_result);
 
@@ -296,54 +353,123 @@ pub async fn run_cl0p_techniques_result(t: &str) -> EngineResult {
 cli_wrapper!(run_cl0p_techniques, run_cl0p_techniques_result);
 
 pub async fn run_blackcat_alphv_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "blackcat_alphv_ttps", "BlackCat/ALPHV", "T1486", &["alphv", "blackcat"]).await
+    ttp_indicator_scan(
+        t,
+        "blackcat_alphv_ttps",
+        "BlackCat/ALPHV",
+        "T1486",
+        &["alphv", "blackcat"],
+    )
+    .await
 }
 cli_wrapper!(run_blackcat_alphv_ttps, run_blackcat_alphv_ttps_result);
 
 pub async fn run_midnight_blizzard_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "midnight_blizzard_ttps", "Midnight Blizzard", "T1078", &["midnight", "nobelium"]).await
+    ttp_indicator_scan(
+        t,
+        "midnight_blizzard_ttps",
+        "Midnight Blizzard",
+        "T1078",
+        &["midnight", "nobelium"],
+    )
+    .await
 }
-cli_wrapper!(run_midnight_blizzard_ttps, run_midnight_blizzard_ttps_result);
+cli_wrapper!(
+    run_midnight_blizzard_ttps,
+    run_midnight_blizzard_ttps_result
+);
 
 pub async fn run_earth_longzhi_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "earth_longzhi_ttps", "Earth Longzhi", "T1078", &["earth_longzhi"]).await
+    ttp_indicator_scan(
+        t,
+        "earth_longzhi_ttps",
+        "Earth Longzhi",
+        "T1078",
+        &["earth_longzhi"],
+    )
+    .await
 }
 cli_wrapper!(run_earth_longzhi_ttps, run_earth_longzhi_ttps_result);
 
 pub async fn run_equation_group_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "equation_group_ttps", "Equation Group", "T1190", &["doublepulsar", "eternalblue"]).await
+    ttp_indicator_scan(
+        t,
+        "equation_group_ttps",
+        "Equation Group",
+        "T1190",
+        &["doublepulsar", "eternalblue"],
+    )
+    .await
 }
 cli_wrapper!(run_equation_group_ttps, run_equation_group_ttps_result);
 
 pub async fn run_sandworm_techniques_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "sandworm_techniques", "Sandworm", "T1190", &["industroyer", "blackenergy"]).await
+    ttp_indicator_scan(
+        t,
+        "sandworm_techniques",
+        "Sandworm",
+        "T1190",
+        &["industroyer", "blackenergy"],
+    )
+    .await
 }
 cli_wrapper!(run_sandworm_techniques, run_sandworm_techniques_result);
 
 pub async fn run_carbon_spider_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "carbon_spider_ttps", "Carbon Spider", "T1566", &["carbanak_v"]).await
+    ttp_indicator_scan(
+        t,
+        "carbon_spider_ttps",
+        "Carbon Spider",
+        "T1566",
+        &["carbanak_v"],
+    )
+    .await
 }
 cli_wrapper!(run_carbon_spider_ttps, run_carbon_spider_ttps_result);
 
 pub async fn run_wizard_spider_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "wizard_spider_ttps", "Wizard Spider", "T1486", &["trickbot", "ryuk", "conti"]).await
+    ttp_indicator_scan(
+        t,
+        "wizard_spider_ttps",
+        "Wizard Spider",
+        "T1486",
+        &["trickbot", "ryuk", "conti"],
+    )
+    .await
 }
 cli_wrapper!(run_wizard_spider_ttps, run_wizard_spider_ttps_result);
 
 pub async fn run_unc2452_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "unc2452_ttps", "UNC2452 (SolarWinds)", "T1078", &["solarwinds", "orion"]).await
+    ttp_indicator_scan(
+        t,
+        "unc2452_ttps",
+        "UNC2452 (SolarWinds)",
+        "T1078",
+        &["solarwinds", "orion"],
+    )
+    .await
 }
 cli_wrapper!(run_unc2452_ttps, run_unc2452_ttps_result);
 
 pub async fn run_unc3944_ttps_result(t: &str) -> EngineResult {
-    ttp_indicator_scan(t, "unc3944_ttps", "UNC3944 (Scattered Spider)", "T1566.004", &["mgm", "caesars"]).await
+    ttp_indicator_scan(
+        t,
+        "unc3944_ttps",
+        "UNC3944 (Scattered Spider)",
+        "T1566.004",
+        &["mgm", "caesars"],
+    )
+    .await
 }
 cli_wrapper!(run_unc3944_ttps, run_unc3944_ttps_result);
 
 pub async fn run_quantum_sovereign_nexus_result(t: &str) -> EngineResult {
     crate::pqc_scanner_engine::run_pqc_scanner_result(t).await
 }
-cli_wrapper!(run_quantum_sovereign_nexus, run_quantum_sovereign_nexus_result);
+cli_wrapper!(
+    run_quantum_sovereign_nexus,
+    run_quantum_sovereign_nexus_result
+);
 
 #[cfg(test)]
 mod tests {

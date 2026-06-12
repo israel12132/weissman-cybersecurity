@@ -68,7 +68,10 @@ pub async fn run_sbom_analyzer_result(target: &str) -> EngineResult {
             continue;
         }
 
-        let (doc_type, severity) = if path.ends_with("sbom.json") || path.ends_with("bom.json") || path.contains("cyclonedx") {
+        let (doc_type, severity) = if path.ends_with("sbom.json")
+            || path.ends_with("bom.json")
+            || path.contains("cyclonedx")
+        {
             ("CycloneDX SBOM", "high")
         } else if path.ends_with("spdx.json") {
             ("SPDX SBOM", "high")
@@ -106,9 +109,9 @@ pub async fn run_sbom_analyzer_result(target: &str) -> EngineResult {
 
         // Check for known vulnerable packages in the body
         let known_vulnerable: &[(&str, &str, &str)] = &[
-            ("log4j-core", "CVE-2021-44228", "critical"),  // Log4Shell
+            ("log4j-core", "CVE-2021-44228", "critical"), // Log4Shell
             ("log4j", "CVE-2021-44228", "critical"),
-            ("spring-core", "CVE-2022-22965", "critical"),  // Spring4Shell
+            ("spring-core", "CVE-2022-22965", "critical"), // Spring4Shell
             ("struts2", "CVE-2017-5638", "critical"),
             ("lodash", "CVE-2021-23337", "high"),
             ("axios", "CVE-2023-45857", "medium"),

@@ -130,9 +130,7 @@ pub async fn run_findings_intel_backfill(pool: &PgPool) -> Result<(usize, usize)
     let mut cve_updates = 0usize;
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
-        let raw_data: Value = r
-            .try_get::<Value, _>("raw_data")
-            .unwrap_or(Value::Null);
+        let raw_data: Value = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
         let Some(cve) = resolve_cve_for_row(&client, &raw_data).await else {
             continue;
         };
@@ -199,7 +197,10 @@ pub async fn run_findings_intel_backfill(pool: &PgPool) -> Result<(usize, usize)
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok((cve_updates, epss_res.rows_affected() as usize + kev_res.rows_affected() as usize))
+    Ok((
+        cve_updates,
+        epss_res.rows_affected() as usize + kev_res.rows_affected() as usize,
+    ))
 }
 
 pub fn bootstrap_findings_intel_backfill(pool: Arc<PgPool>) {

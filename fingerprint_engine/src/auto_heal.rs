@@ -112,7 +112,9 @@ async fn github_send_with_retry(
             Ok(r) => r,
             Err(e) => {
                 if attempt >= MAX_GITHUB_ATTEMPTS {
-                    return Err(format!("GitHub network error after {attempt} attempts: {e}"));
+                    return Err(format!(
+                        "GitHub network error after {attempt} attempts: {e}"
+                    ));
                 }
                 tokio::time::sleep(backoff_with_jitter(attempt)).await;
                 continue;
@@ -133,8 +135,8 @@ async fn github_send_with_retry(
 
         let transient = github_transient_status(status, &body_lower, &headers);
         if transient && attempt < MAX_GITHUB_ATTEMPTS {
-            let sleep_d = retry_after_from_headers(&headers)
-                .unwrap_or_else(|| backoff_with_jitter(attempt));
+            let sleep_d =
+                retry_after_from_headers(&headers).unwrap_or_else(|| backoff_with_jitter(attempt));
             tokio::time::sleep(sleep_d).await;
             continue;
         }

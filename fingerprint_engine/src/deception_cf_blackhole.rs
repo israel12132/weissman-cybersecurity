@@ -41,9 +41,8 @@ async fn cf_block_asn(token: &str, zone_id: &str, asn: u64) -> Result<(), String
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/access_rules/rules"
-    );
+    let url =
+        format!("https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/access_rules/rules");
     let body = json!({
         "mode": "block",
         "configuration": { "target": "asn", "value": asn.to_string() },
@@ -70,9 +69,8 @@ async fn cf_block_cidr(token: &str, zone_id: &str, cidr: &str) -> Result<(), Str
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(|e| e.to_string())?;
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/access_rules/rules"
-    );
+    let url =
+        format!("https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/access_rules/rules");
     let body = json!({
         "mode": "block",
         "configuration": { "target": "ip_range", "value": cidr },

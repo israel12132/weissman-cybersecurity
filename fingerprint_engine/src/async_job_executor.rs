@@ -89,8 +89,10 @@ async fn enforce_payload_scope_pin_if_present(payload: &Value) -> Result<(), Str
 }
 
 fn payload_client_id(p: &Value) -> Option<i64> {
-    p.get("client_id")
-        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+    p.get("client_id").and_then(|v| {
+        v.as_i64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    })
 }
 
 async fn persist_findings_best_effort(
@@ -105,12 +107,7 @@ async fn persist_findings_best_effort(
         return 0;
     }
     crate::findings_persist::persist_engine_findings(
-        app_pool,
-        tenant_id,
-        client_id,
-        engine,
-        target,
-        findings,
+        app_pool, tenant_id, client_id, engine, target, findings,
     )
     .await
     .unwrap_or_else(|e| {
@@ -135,10 +132,10 @@ async fn persist_findings_grouped_by_client_field(
     use std::collections::HashMap;
     let mut groups: HashMap<i64, Vec<Value>> = HashMap::new();
     for f in findings {
-        let Some(cid) = f
-            .get("client_id")
-            .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
-        else {
+        let Some(cid) = f.get("client_id").and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        }) else {
             continue;
         };
         groups.entry(cid).or_default().push(f.clone());
@@ -149,15 +146,9 @@ async fn persist_findings_grouped_by_client_field(
             .first()
             .and_then(|f| f.get("target_url").and_then(Value::as_str))
             .unwrap_or(default_target);
-        total += persist_findings_best_effort(
-            app_pool,
-            tenant_id,
-            Some(cid),
-            engine,
-            target,
-            &group,
-        )
-        .await;
+        total +=
+            persist_findings_best_effort(app_pool, tenant_id, Some(cid), engine, target, &group)
+                .await;
     }
     total
 }
@@ -170,8 +161,10 @@ fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
     };
     let title: String = v.anomaly_type.chars().take(500).collect();
     let payload_excerpt: String = v.payload.chars().take(4000).collect();
-    let mut description =
-        format!("{}\n\nPayload excerpt:\n{}", v.baseline_vs_anomaly, payload_excerpt);
+    let mut description = format!(
+        "{}\n\nPayload excerpt:\n{}",
+        v.baseline_vs_anomaly, payload_excerpt
+    );
     if let Some(ref tok) = v.oob_token {
         description.push_str(&format!("\n\nOAST correlation token: {tok}"));
     }
@@ -212,9 +205,10 @@ pub async fn execute_job(
                 .get("target")
                 .and_then(Value::as_str)
                 .ok_or_else(|| "payload.target required".to_string())?;
-            let client_id_opt = p
-                .get("client_id")
-                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+            let client_id_opt = p.get("client_id").and_then(|v| {
+                v.as_i64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            });
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -354,93 +348,84 @@ pub async fn execute_job(
             for engine_id in TOP_TIER_ENGINES {
                 let started = std::time::Instant::now();
                 let canonical = weissman_core::models::engine::resolve_engine_id(engine_id);
-                let (probe_status, findings_count, message, raw_status) = if *engine_id == "poe_synthesis" {
-                    if let Some(cfg) = poe_cfg.as_ref() {
+                let (probe_status, findings_count, message, raw_status) =
+                    if *engine_id == "poe_synthesis" {
+                        if let Some(cfg) = poe_cfg.as_ref() {
+                            let run = tokio::time::timeout(
+                                Duration::from_secs(180),
+                                crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+                                    &target,
+                                    cfg,
+                                    None,
+                                    None,
+                                    Some(tid),
+                                    None,
+                                ),
+                            )
+                            .await;
+                            match run {
+                                Ok(result) => {
+                                    let st = result.status.clone();
+                                    let msg = result.message.clone();
+                                    let fc = result.findings.len();
+                                    if st == "ok" {
+                                        ("pass", fc, msg, st)
+                                    } else {
+                                        ("fail", fc, msg, st)
+                                    }
+                                }
+                                Err(_) => (
+                                    "fail",
+                                    0,
+                                    "poe_synthesis timed out (180s)".to_string(),
+                                    "timeout".to_string(),
+                                ),
+                            }
+                        } else {
+                            (
+                                "fail",
+                                0,
+                                "poe_synthesis config unavailable".to_string(),
+                                "error".to_string(),
+                            )
+                        }
+                    } else if !weissman_core::models::engine::is_production_engine_id(engine_id) {
+                        (
+                            "fail",
+                            0,
+                            "catalog-only engine (no production runner)".to_string(),
+                            "catalog_only".to_string(),
+                        )
+                    } else {
+                        let ctx = crate::engine_dispatch::EngineRunContext {
+                            tenant_id: Some(tid),
+                            target_list: vec![target.clone()],
+                            github_token: github_token.clone(),
+                            llm_base_url: llm_base.clone().unwrap_or_default(),
+                            llm_model: llm_model.clone().unwrap_or_default(),
+                            ..Default::default()
+                        };
                         let run = tokio::time::timeout(
                             Duration::from_secs(180),
-                            crate::exploit_synthesis_engine::run_exploit_synthesis_async(
-                                &target,
-                                cfg,
-                                None,
-                                None,
-                                Some(tid),
-                                None,
-                            ),
+                            crate::engine_dispatch::run_engine(engine_id, &target, &ctx),
                         )
                         .await;
                         match run {
                             Ok(result) => {
-                                let st = result.status.clone();
-                                let msg = result.message.clone();
-                                let fc = result.findings.len();
-                                if st == "ok" {
-                                    ("pass", fc, msg, st)
+                                if result.status == "ok" {
+                                    ("pass", result.findings.len(), result.message, result.status)
                                 } else {
-                                    ("fail", fc, msg, st)
+                                    ("fail", result.findings.len(), result.message, result.status)
                                 }
                             }
                             Err(_) => (
                                 "fail",
                                 0,
-                                "poe_synthesis timed out (180s)".to_string(),
+                                "engine timed out (180s)".to_string(),
                                 "timeout".to_string(),
                             ),
                         }
-                    } else {
-                        (
-                            "fail",
-                            0,
-                            "poe_synthesis config unavailable".to_string(),
-                            "error".to_string(),
-                        )
-                    }
-                } else if !weissman_core::models::engine::is_production_engine_id(engine_id) {
-                    (
-                        "fail",
-                        0,
-                        "catalog-only engine (no production runner)".to_string(),
-                        "catalog_only".to_string(),
-                    )
-                } else {
-                    let ctx = crate::engine_dispatch::EngineRunContext {
-                        tenant_id: Some(tid),
-                        target_list: vec![target.clone()],
-                        github_token: github_token.clone(),
-                        llm_base_url: llm_base.clone().unwrap_or_default(),
-                        llm_model: llm_model.clone().unwrap_or_default(),
-                        ..Default::default()
                     };
-                    let run = tokio::time::timeout(
-                        Duration::from_secs(180),
-                        crate::engine_dispatch::run_engine(engine_id, &target, &ctx),
-                    )
-                    .await;
-                    match run {
-                        Ok(result) => {
-                            if result.status == "ok" {
-                                (
-                                    "pass",
-                                    result.findings.len(),
-                                    result.message,
-                                    result.status,
-                                )
-                            } else {
-                                (
-                                    "fail",
-                                    result.findings.len(),
-                                    result.message,
-                                    result.status,
-                                )
-                            }
-                        }
-                        Err(_) => (
-                            "fail",
-                            0,
-                            "engine timed out (180s)".to_string(),
-                            "timeout".to_string(),
-                        ),
-                    }
-                };
 
                 let duration_ms = started.elapsed().as_millis() as u64;
                 if probe_status == "pass" {
@@ -536,10 +521,9 @@ pub async fn execute_job(
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
                     Err(format!("scan cycle failed: {}", e))
                 }
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "scan cycle panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("scan cycle panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -550,22 +534,33 @@ pub async fn execute_job(
         }
         "scan_all_engines" => {
             // Run all engines for a client in proper order
-            let client_id = p.get("client_id").and_then(Value::as_i64)
+            let client_id = p
+                .get("client_id")
+                .and_then(Value::as_i64)
                 .ok_or_else(|| "payload.client_id required".to_string())?;
-            let target = p.get("target").and_then(Value::as_str).unwrap_or("").to_string();
-            let engines: Vec<String> = p.get("engines")
+            let target = p
+                .get("target")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let engines: Vec<String> = p
+                .get("engines")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            
+
             let telemetry = channels.telemetry.clone();
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
-            
+
             let mut results = Vec::new();
             let mut succeeded = 0usize;
             let mut failed = 0usize;
-            
+
             let production_engines: Vec<String> = engines
                 .iter()
                 .filter(|e| weissman_core::models::engine::is_production_engine_id(e))
@@ -573,10 +568,13 @@ pub async fn execute_job(
                 .collect();
             let ordered_engines =
                 weissman_core::models::engine::order_engines_by_registry(&production_engines);
-            
+
             for engine_id in &ordered_engines {
-                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#, job.id, engine_id));
-                
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
+                    job.id, engine_id
+                ));
+
                 let ctx = crate::engine_dispatch::EngineRunContext {
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
@@ -585,24 +583,26 @@ pub async fn execute_job(
                     client_id: Some(client_id),
                     ..Default::default()
                 };
-                let result =
-                    crate::engine_dispatch::run_engine(engine_id, &target, &ctx).await;
-                
+                let result = crate::engine_dispatch::run_engine(engine_id, &target, &ctx).await;
+
                 if result.success {
                     succeeded += 1;
                     let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
                 } else {
                     failed += 1;
-                    let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#, job.id, engine_id, result.summary));
+                    let _ = telemetry.send(format!(
+                        r#"{{"job_id":"{}","message":"Engine {} failed: {}","status":"running"}}"#,
+                        job.id, engine_id, result.summary
+                    ));
                 }
-                
+
                 results.push(json!({
                     "engine": engine_id,
                     "success": result.success,
                     "findings_count": result.findings.len(),
                     "summary": result.summary,
                 }));
-                
+
                 let _ = persist_findings_best_effort(
                     app.as_ref(),
                     tid,
@@ -613,9 +613,9 @@ pub async fn execute_job(
                 )
                 .await;
             }
-            
+
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
-            
+
             Ok(json!({
                 "ok": true,
                 "client_id": client_id,
@@ -627,45 +627,78 @@ pub async fn execute_job(
         }
         "scan_discovered_domains" => {
             // Scan all discovered domains with specified engines
-            let client_id = p.get("client_id").and_then(Value::as_i64)
+            let client_id = p
+                .get("client_id")
+                .and_then(Value::as_i64)
                 .ok_or_else(|| "payload.client_id required".to_string())?;
-            let domains: Vec<String> = p.get("domains")
+            let domains: Vec<String> = p
+                .get("domains")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let engines: Vec<String> = p.get("engines")
+            let engines: Vec<String> = p
+                .get("engines")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_else(|| vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]);
-            
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_else(|| {
+                    vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]
+                });
+
             let telemetry = channels.telemetry.clone();
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning {} domains with {} engines","status":"running"}}"#, job.id, domains.len(), engines.len()));
-            
+
             let mut total_findings = 0usize;
             let mut scanned_domains = 0usize;
-            
+
             for domain in &domains {
-                let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning domain: {}","status":"running"}}"#, job.id, domain));
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Scanning domain: {}","status":"running"}}"#,
+                    job.id, domain
+                ));
                 scanned_domains += 1;
-                
+
                 for engine_id in &engines {
-                    let target = if domain.starts_with("http") { domain.clone() } else { format!("https://{}", domain) };
+                    let target = if domain.starts_with("http") {
+                        domain.clone()
+                    } else {
+                        format!("https://{}", domain)
+                    };
                     let result = match engine_id.as_str() {
                         "osint" => crate::osint_engine::run_osint_result(&target, None).await,
                         "asm" => crate::asm_engine::run_asm_result(&target).await,
-                        "leak_hunter" => crate::leak_hunter_engine::run_leak_hunter_result(&target).await,
+                        "leak_hunter" => {
+                            crate::leak_hunter_engine::run_leak_hunter_result(&target).await
+                        }
                         "recon" => {
                             let subs = crate::recon::enum_subdomains_default(domain).await;
                             crate::engine_result::EngineResult::ok(
-                                subs.iter().map(|d| json!({"type": "recon", "subdomain": d})).collect(),
+                                subs.iter()
+                                    .map(|d| json!({"type": "recon", "subdomain": d}))
+                                    .collect(),
                                 format!("{} subdomains found", subs.len()),
                             )
-                        },
-                        "discovery_engine" => crate::discovery_engine::run_spider_crawl(&[target.clone()], None, &mut std::collections::HashSet::new(), &mut Vec::new()).await,
+                        }
+                        "discovery_engine" => {
+                            crate::discovery_engine::run_spider_crawl(
+                                &[target.clone()],
+                                None,
+                                &mut std::collections::HashSet::new(),
+                                &mut Vec::new(),
+                            )
+                            .await
+                        }
                         _ => continue,
                     };
-                    
+
                     total_findings += result.findings.len();
 
                     let _ = persist_findings_best_effort(
@@ -679,9 +712,9 @@ pub async fn execute_job(
                     .await;
                 }
             }
-            
+
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Domain scan completed: {} domains, {} findings","status":"completed"}}"#, job.id, scanned_domains, total_findings));
-            
+
             Ok(json!({
                 "ok": true,
                 "client_id": client_id,
@@ -693,16 +726,14 @@ pub async fn execute_job(
         "ascension_wave" => {
             let app = app_pool.clone();
             let tele = channels.telemetry.clone();
-            let fut = async move {
-                crate::general::run_ascension_wave(app, tid, Some(&tele)).await
-            };
+            let fut =
+                async move { crate::general::run_ascension_wave(app, tid, Some(&tele)).await };
             match crate::panic_shield::catch_unwind_future("ascension_wave_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(v)) => Ok(v),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "ascension wave panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("ascension wave panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -733,10 +764,9 @@ pub async fn execute_job(
             match crate::panic_shield::catch_unwind_future("general_mission_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(v)) => Ok(v),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "general mission panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("general mission panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -848,10 +878,9 @@ pub async fn execute_job(
             match crate::panic_shield::catch_unwind_future("council_debate_job", fut).await {
                 crate::panic_shield::CatchOutcome::Completed(Ok(res)) => Ok(res),
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => Err(e),
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => Err(format!(
-                    "council debate panicked: {}",
-                    message
-                )),
+                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
+                    Err(format!("council debate panicked: {}", message))
+                }
                 crate::panic_shield::CatchOutcome::CircuitOpen {
                     cooldown_remaining_secs,
                 } => Err(format!(
@@ -887,22 +916,27 @@ pub async fn execute_job(
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let merged_paths: Option<Vec<String>> = match (cognitive_dictionary.is_empty(), discovered_paths) {
-                (true, None) => None,
-                (true, Some(paths)) => Some(paths),
-                (false, None) => Some(cognitive_dictionary),
-                (false, Some(mut paths)) => {
-                    let mut m = cognitive_dictionary;
-                    for x in paths.drain(..) {
-                        if !m.contains(&x) {
-                            m.push(x);
+            let merged_paths: Option<Vec<String>> =
+                match (cognitive_dictionary.is_empty(), discovered_paths) {
+                    (true, None) => None,
+                    (true, Some(paths)) => Some(paths),
+                    (false, None) => Some(cognitive_dictionary),
+                    (false, Some(mut paths)) => {
+                        let mut m = cognitive_dictionary;
+                        for x in paths.drain(..) {
+                            if !m.contains(&x) {
+                                m.push(x);
+                            }
                         }
+                        Some(m)
                     }
-                    Some(m)
-                }
-            };
-            let shadow_preflight = p.get("shadow_preflight").and_then(|v| v.as_bool()) == Some(true);
-            let autonomous_pivot = p.get("autonomous_credential_pivot").and_then(|v| v.as_bool()) == Some(true);
+                };
+            let shadow_preflight =
+                p.get("shadow_preflight").and_then(|v| v.as_bool()) == Some(true);
+            let autonomous_pivot = p
+                .get("autonomous_credential_pivot")
+                .and_then(|v| v.as_bool())
+                == Some(true);
             let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -984,7 +1018,11 @@ pub async fn execute_job(
             }
             if let Some(cid) = client_id {
                 if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                    let log = fuzzy.reasoning_log.chars().take(120_000).collect::<String>();
+                    let log = fuzzy
+                        .reasoning_log
+                        .chars()
+                        .take(120_000)
+                        .collect::<String>();
                     let _ = sqlx::query(
                         "INSERT INTO semantic_fuzz_log (tenant_id, client_id, run_id, log_text) VALUES ($1, $2, NULL, $3)",
                     )
@@ -1112,9 +1150,13 @@ pub async fn execute_job(
             let cfg = crate::council::CouncilConfig::load(app_pool.as_ref(), tid)
                 .await
                 .map_err(|e| e.to_string())?;
-            let fb: Vec<crate::eternal_fuzz::SimFeedbackStep> =
-                serde_json::from_value(eternal.get("simulation_feedback").cloned().unwrap_or(json!([])))
-                    .unwrap_or_default();
+            let fb: Vec<crate::eternal_fuzz::SimFeedbackStep> = serde_json::from_value(
+                eternal
+                    .get("simulation_feedback")
+                    .cloned()
+                    .unwrap_or(json!([])),
+            )
+            .unwrap_or_default();
             let war_room = crate::ceo::war_room::WarRoomContext {
                 pool: app_pool.clone(),
                 tenant_id: tid,
@@ -1197,8 +1239,7 @@ pub async fn execute_job(
                 }
             });
             let result =
-                crate::timing_engine::run_timing_attack(&target, None, &cfg, Some(tx_stream))
-                    .await;
+                crate::timing_engine::run_timing_attack(&target, None, &cfg, Some(tx_stream)).await;
             let persisted = persist_findings_best_effort(
                 app_pool.as_ref(),
                 tid,
@@ -1702,10 +1743,7 @@ pub async fn execute_job(
                 .and_then(Value::as_str)
                 .ok_or_else(|| "target required".to_string())?
                 .to_string();
-            let base_payload = p
-                .get("base_payload")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let base_payload = p.get("base_payload").and_then(Value::as_str).unwrap_or("");
             let client_id = p
                 .get("client_id")
                 .and_then(Value::as_i64)
