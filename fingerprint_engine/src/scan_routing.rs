@@ -16,7 +16,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
-use weissman_core::models::engine::{is_known_engine_id, is_production_engine_id};
+use weissman_core::models::engine::{is_production_engine_id};
 
 /// Extra engine ids accepted by the scan API beyond `PRODUCTION_ENGINE_IDS` (DAG / Engine Room).
 /// All entries here are legacy/alias IDs that aren't in the production set but are still wired.
@@ -30,9 +30,8 @@ pub const EXTRA_SCAN_ENGINE_IDS: &[&str] = &[
 #[must_use]
 pub fn is_allowed_scan_engine(engine: &str) -> bool {
     let e = engine.trim();
-    is_production_engine_id(e)
-        || is_known_engine_id(e)
-        || EXTRA_SCAN_ENGINE_IDS.iter().any(|&k| k == e)
+    // Production + explicit legacy aliases only — catalog-only engines cannot be enqueued via HTTP.
+    is_production_engine_id(e) || EXTRA_SCAN_ENGINE_IDS.iter().any(|&k| k == e)
 }
 
 // --- Declarative requirements ------------------------------------------------

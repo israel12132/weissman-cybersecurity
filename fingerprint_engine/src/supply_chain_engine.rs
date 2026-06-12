@@ -327,6 +327,8 @@ pub async fn run_supply_chain_result(
                         "version": version,
                         "vuln_count": osv.vuln_count,
                         "osv_ids": osv.ids,
+                        "cves": osv.cves,
+                        "cve": osv.cves.first().cloned().unwrap_or_default(),
                         "osv_summaries": osv.summaries,
                         "typosquat_risk": typosquat_risk,
                         "typosquat_similar_to": typosquat,
@@ -384,6 +386,8 @@ pub async fn run_supply_chain_result(
                             "version": version,
                             "vuln_count": osv.vuln_count,
                             "osv_ids": osv.ids,
+                            "cves": osv.cves,
+                            "cve": osv.cves.first().cloned().unwrap_or_default(),
                             "osv_summaries": osv.summaries,
                             "typosquat_risk": typosquat_risk,
                             "typosquat_similar_to": typosquat,
@@ -411,6 +415,7 @@ pub async fn run_supply_chain(target: &str) {
 struct OsvQueryResult {
     vuln_count: u32,
     ids: Vec<String>,
+    cves: Vec<String>,
     summaries: Vec<String>,
 }
 
@@ -439,6 +444,16 @@ async fn check_osv(
                 for v in vulns.iter().take(24) {
                     if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
                         out.ids.push(id.to_string());
+                    }
+                    if let Some(aliases) = v.get("aliases").and_then(|x| x.as_array()) {
+                        for a in aliases {
+                            if let Some(s) = a.as_str() {
+                                let c = s.trim().to_ascii_uppercase();
+                                if c.starts_with("CVE-") && !out.cves.contains(&c) {
+                                    out.cves.push(c);
+                                }
+                            }
+                        }
                     }
                     if let Some(s) = v.get("summary").and_then(|x| x.as_str()) {
                         let t = s.chars().take(280).collect::<String>();

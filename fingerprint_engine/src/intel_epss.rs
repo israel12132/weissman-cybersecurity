@@ -230,6 +230,24 @@ async fn upsert_rows(pool: &PgPool, rows: &[EpssApiRow]) -> Result<(), String> {
     Ok(())
 }
 
+/// One immediate EPSS back-fill at boot so existing findings get scores without
+/// waiting for the 12h cycle.
+pub fn bootstrap_epss_backfill(pool: Arc<PgPool>) {
+    if !matches!(
+        std::env::var("WEISSMAN_INTEL_EPSS_ENABLED").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes") | Err(_)
+    ) {
+        return;
+    }
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(8)).await;
+        match run_one_cycle(&pool).await {
+            Ok(()) => tracing::info!(target: "intel_epss", "EPSS bootstrap cycle complete"),
+            Err(e) => tracing::warn!(target: "intel_epss", error = %e, "EPSS bootstrap cycle failed"),
+        }
+    });
+}
+
 /// Spawn the daily back-fill worker that refreshes EPSS for every CVE present in
 /// the platform's findings. Idempotent: only runs the loop once per process.
 pub fn spawn_epss_backfill_worker(pool: Arc<PgPool>) {
@@ -261,11 +279,11 @@ async fn run_one_cycle(pool: &PgPool) -> Result<(), String> {
     // in the intel cache. Cap at 5000 per cycle so a fresh deployment doesn't burst
     // FIRST.org.
     let rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT DISTINCT v.raw_data->>'cve' AS cve
+        r#"SELECT DISTINCT upper(trim(v.raw_data->>'cve')) AS cve
              FROM vulnerabilities v
              LEFT JOIN epss_intel e
-               ON e.cve = upper(v.raw_data->>'cve')
-            WHERE v.raw_data->>'cve' IS NOT NULL
+               ON e.cve = upper(trim(v.raw_data->>'cve'))
+            WHERE trim(COALESCE(v.raw_data->>'cve', '')) <> ''
               AND (e.refreshed_at IS NULL OR e.refreshed_at < now() - interval '24 hours')
             LIMIT 5000"#,
     )
@@ -287,7 +305,8 @@ async fn run_one_cycle(pool: &PgPool) -> Result<(), String> {
                   epss_percentile = e.percentile,
                   intel_enriched_at = now()
              FROM epss_intel e
-            WHERE e.cve = upper(v.raw_data->>'cve')
+            WHERE e.cve = upper(trim(v.raw_data->>'cve'))
+              AND trim(COALESCE(v.raw_data->>'cve', '')) <> ''
               AND (v.epss_score IS DISTINCT FROM e.score
                 OR v.epss_percentile IS DISTINCT FROM e.percentile)"#,
     )

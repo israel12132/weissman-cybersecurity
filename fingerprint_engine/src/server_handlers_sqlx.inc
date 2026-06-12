@@ -915,6 +915,7 @@ async fn api_findings(
             "poc_commitment_sha256": r.try_get::<String, _>("poc_commitment_sha256").unwrap_or_default(),
             "cvss_score": cvss,
             "risk_score": risk,
+            "priority_score": risk,
             "confidence_multiplier": conf_mult,
             "mitre_attack": mitre,
             "remediation": remediation,
@@ -1126,6 +1127,18 @@ async fn api_top_tier_health_probe_start(
     Extension(auth): Extension<AuthContext>,
     body: axum::extract::Json<TopTierHealthProbeBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let target_raw = body
         .target
         .as_deref()
@@ -1878,7 +1891,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                     return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "session issuance failed"}))).into_response();
                 }
             };
-            eprintln!("[Weissman][API] Login OK: user_id={} tenant_id={}", user_id, tenant_id);
+            tracing::debug!(target: "auth", user_id, tenant_id, "login ok");
             let mut response = (
                 StatusCode::OK,
                 Json(json!({

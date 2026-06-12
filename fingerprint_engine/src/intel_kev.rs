@@ -195,6 +195,24 @@ pub async fn is_kev_listed(pool: &PgPool, cve: &str) -> Option<KevEntry> {
     })
 }
 
+/// One immediate KEV catalog refresh at boot (before the periodic loop).
+/// Ensures `kev_listed` is populated on first login without waiting 6h.
+pub fn bootstrap_kev_catalog(pool: Arc<PgPool>) {
+    if !matches!(
+        std::env::var("WEISSMAN_INTEL_KEV_ENABLED").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes") | Err(_)
+    ) {
+        return;
+    }
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        match refresh_kev_catalog(&pool).await {
+            Ok(n) => tracing::info!(target: "intel_kev", rows = n, "KEV bootstrap refresh complete"),
+            Err(e) => tracing::warn!(target: "intel_kev", error = %e, "KEV bootstrap refresh failed"),
+        }
+    });
+}
+
 /// Long-running background refresh of the KEV mirror.
 pub fn spawn_kev_refresh_worker(pool: Arc<PgPool>) {
     static SPAWNED: std::sync::OnceLock<()> = std::sync::OnceLock::new();

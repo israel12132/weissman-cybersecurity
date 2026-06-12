@@ -12,6 +12,12 @@ async fn api_attack_paths_for_client(
     let recompute = q.get("recompute").map(|v| v == "1" || v == "true").unwrap_or(false);
     let top_k = q.get("top_k").and_then(|s| s.parse::<usize>().ok());
 
+    if recompute {
+        if let Err(r) = crate::rbac::require_operator(&auth) {
+            return r;
+        }
+    }
+
     let snap = if recompute {
         match crate::attack_path::compute_and_store(&state.app_pool, auth.tenant_id, client_id, top_k).await {
             Ok(s) => Some(s),

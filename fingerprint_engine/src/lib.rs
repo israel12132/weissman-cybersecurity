@@ -71,6 +71,8 @@ pub mod findings_correlator;
 pub mod fp_feedback;
 pub mod intel_epss;
 pub mod intel_kev;
+pub mod intel_findings_backfill;
+pub mod auth_bootstrap;
 pub mod embeddings;
 pub mod attack_path;
 pub mod soar_playbook;

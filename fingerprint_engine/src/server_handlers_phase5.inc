@@ -15,6 +15,9 @@ async fn api_swarm_run(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Path(client_id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -280,6 +283,9 @@ async fn api_containment_rules_post(
     Path(client_id): Path<i64>,
     Json(body): Json<ContainmentRuleBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let name = body.name.trim();
     if name.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
@@ -341,6 +347,9 @@ async fn api_containment_rules_patch(
     Path(rule_id): Path<i64>,
     Json(body): Json<ContainmentRulePatchBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -437,6 +446,9 @@ async fn api_containment_rules_delete(
     Extension(auth): Extension<AuthContext>,
     Path(rule_id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -475,6 +487,9 @@ async fn api_containment_execute(
     Path(client_id): Path<i64>,
     Json(body): Json<ContainmentExecuteBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if !body.confirm {
         return (
             StatusCode::BAD_REQUEST,

@@ -236,6 +236,17 @@ fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Opt
             if !sse_accepts_query_access_token(path) {
                 return None;
             }
+            // In production, refuse JWTs in the query string: they leak via access logs,
+            // Referer headers, and browser history. Clients must use a short-lived
+            // `sse_ticket` (or cookie auth) instead.
+            if weissman_core::tls_policy::is_production_environment() {
+                tracing::warn!(
+                    target: "auth_guard",
+                    path = %path,
+                    "Rejected ?access_token= in production (use sse_ticket or cookie auth)"
+                );
+                return None;
+            }
             tracing::warn!(
                 target: "auth_guard",
                 path = %path,
@@ -319,7 +330,7 @@ async fn auth_guard(
     if path.starts_with("/api/") || path.starts_with("/ws/") {
         let extracted = extract_token_from_request(&request, path);
         if let Some((t, source)) = extracted {
-            if let Some(ctx) = verify_token_for_request(&t, path, source) {
+            if let Some(mut ctx) = verify_token_for_request(&t, path, source) {
                 if auth_jwt::is_user_access_context(&ctx) {
                     let Some(ref jti) = ctx.jti else {
                         tracing::debug!(
@@ -369,6 +380,38 @@ async fn auth_guard(
                                 .into_response();
                         }
                     }
+                    // Live RBAC revalidation: demoted/deactivated users lose privileges immediately.
+                    ctx = match crate::auth_refresh::revalidate_auth_context(
+                        state.auth_pool.as_ref(),
+                        &ctx,
+                    )
+                    .await
+                    {
+                        Ok(Some(fresh)) => fresh,
+                        Ok(None) => {
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(json!({
+                                    "detail": "User inactive or removed",
+                                    "ok": false,
+                                    "code": "user_inactive",
+                                })),
+                            )
+                                .into_response();
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                target: "auth_guard",
+                                error = %e,
+                                "RBAC revalidation failed"
+                            );
+                            return (
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                Json(json!({"detail": "Auth service unavailable", "ok": false})),
+                            )
+                                .into_response();
+                        }
+                    };
                 }
                 request.extensions_mut().insert(ctx);
                 return next.run(request).await;
@@ -1324,6 +1367,20 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         auth_pool.clone(),
         Some(state.telemetry_broadcast_tx.clone()),
     );
+    // Enable orchestrator scanning by default (disable with WEISSMAN_SCANNING_ENABLED=0).
+    if !matches!(
+        std::env::var("WEISSMAN_SCANNING_ENABLED").as_deref(),
+        Ok("0") | Ok("false") | Ok("no")
+    ) {
+        crate::orchestrator::set_scanning_active(true);
+        tracing::info!(target: "orchestrator", "Scanning enabled at boot");
+    }
+    let auth_pool_boot = auth_pool.clone();
+    let app_pool_boot = app_pool.clone();
+    tokio::spawn(async move {
+        crate::auth_bootstrap::sync_admin_credentials(app_pool_boot.as_ref()).await;
+        let _ = auth_pool_boot; // keep auth pool warm for future bootstrap hooks
+    });
     tokio::spawn(crate::payload_sync_worker::run_worker_loop(
         app_pool.clone(),
         intel_pool.clone(),
@@ -1352,8 +1409,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
     // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
     // and gated by env vars so dev/offline runs can skip outbound HTTP.
+    crate::intel_kev::bootstrap_kev_catalog(app_pool.clone());
     crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
+    crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
     crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
+    crate::intel_findings_backfill::bootstrap_findings_intel_backfill(app_pool.clone());
     // UEBA — purge old samples once an hour so the table stays bounded.
     crate::ueba_detector::spawn_retention_loop(app_pool.clone());
     crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
@@ -1409,6 +1469,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
     // Canonical dashboard = /command-center/ (React: Globe, Radar, Memory Lab, System Core, etc.).
     // When frontend/dist exists we redirect / and /dashboard there; /command-center is served by static_router (no duplicate route).
     let root_routes = if static_dir.is_some() {
+        Router::new()
+            .route("/", get(redirect_to_command_center))
+            .route("/dashboard", get(redirect_to_command_center))
+    } else if weissman_core::tls_policy::is_production_environment() {
         Router::new()
             .route("/", get(redirect_to_command_center))
             .route("/dashboard", get(redirect_to_command_center))

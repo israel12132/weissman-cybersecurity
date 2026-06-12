@@ -120,6 +120,9 @@ async fn api_deception_deploy_cloud(
     Path(client_id): Path<i64>,
     Json(body): Json<DeceptionDeployCloudBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if body.asset_ids.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": "asset_ids required"}))).into_response();
     }

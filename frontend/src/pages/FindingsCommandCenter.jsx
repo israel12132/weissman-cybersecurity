@@ -18,7 +18,6 @@ import { useToast } from '../components/ui/Toaster'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import FilterPills from '../components/ui/FilterPills'
 import EmptyState from '../components/ui/EmptyState'
-import { SkeletonTable } from '../components/ui/Skeleton'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import SeverityBadge, {
@@ -250,6 +249,54 @@ function buildColumns() {
         size: 130,
         cell: ({ getValue }) => <MitreBadge id={getValue()} />,
         enableSorting: false,
+      },
+    ),
+    columnHelper.accessor(
+      (row) => row.priority_score ?? row.risk_score ?? row.cvss_score ?? null,
+      {
+        id: 'priority',
+        header: 'Priority',
+        size: 90,
+        sortingFn: (a, b) => {
+          const av = parseFloat(a.getValue('priority') ?? NaN)
+          const bv = parseFloat(b.getValue('priority') ?? NaN)
+          if (isNaN(av) && isNaN(bv)) return 0
+          if (isNaN(av)) return 1
+          if (isNaN(bv)) return -1
+          return av - bv
+        },
+        cell: ({ getValue, row }) => {
+          const v = getValue()
+          const kev = isKevListed(row.original)
+          const epss = row.original.epss_score
+          return (
+            <div className="flex flex-col gap-0.5">
+              <ScoreBadge score={v} />
+              {(kev || epss != null) && (
+                <span className="text-[9px] font-mono text-white/40">
+                  {kev ? 'KEV' : ''}{kev && epss != null ? ' · ' : ''}{epss != null ? `EPSS ${(epss * 100).toFixed(0)}%` : ''}
+                </span>
+              )}
+            </div>
+          )
+        },
+      },
+    ),
+    columnHelper.accessor(
+      (row) => row.seen_count ?? 1,
+      {
+        id: 'seen_count',
+        header: 'Seen',
+        size: 70,
+        cell: ({ getValue }) => {
+          const n = getValue()
+          if (!n || n <= 1) return <span className="text-white/25 font-mono text-[11px]">1×</span>
+          return (
+            <span className="text-[11px] font-mono text-amber-300/90" title="Recurrence count from dedup engine">
+              {n}×
+            </span>
+          )
+        },
       },
     ),
     columnHelper.accessor(

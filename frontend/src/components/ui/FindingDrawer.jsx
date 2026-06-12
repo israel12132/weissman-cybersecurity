@@ -129,6 +129,9 @@ export default function FindingDrawer({
   const cve = finding?.cve || finding?.cve_id
   const kev = finding?.kev ?? finding?.is_kev ?? finding?.cisa_kev
   const epss = finding?.epss ?? finding?.epss_score
+  const seenCount = finding?.seen_count ?? 1
+  const clusterId = finding?.cluster_id
+  const priorityScore = finding?.priority_score ?? finding?.risk_score
 
   const handleStatusChange = (e) => {
     const newStatus = e.target.value
@@ -178,6 +181,21 @@ export default function FindingDrawer({
                   <div className="flex flex-wrap items-center gap-2">
                     <SeverityBadge severity={finding.severity} size="md" showDot />
                     <KevEpssBadge kev={kev} epss={epss} compact />
+                    {priorityScore != null && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/60">
+                        Priority {Number(priorityScore).toFixed(1)}
+                      </span>
+                    )}
+                    {seenCount > 1 && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-amber-300/90">
+                        Seen {seenCount}×
+                      </span>
+                    )}
+                    {clusterId != null && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-cyan-300/70">
+                        Cluster #{clusterId}
+                      </span>
+                    )}
                     {headerExtra}
                   </div>
 

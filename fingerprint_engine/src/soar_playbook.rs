@@ -223,8 +223,11 @@ pub async fn dispatch_event(
             continue;
         }
         let dedup = dedup_key(&pb, &event);
+        // Safety default: when a playbook omits `cooldown_seconds`, fall back to 1h so
+        // destructive/notify actions (isolate_host, page_oncall, webhook, open_pr) do NOT
+        // re-fire on every rescan of the same finding. Authors can opt out explicitly with 0.
         if !dry_run && in_cooldown(pool, pb.id, event.tenant_id, &dedup,
-                                   pb.trigger.cooldown_seconds.unwrap_or(0)).await {
+                                   pb.trigger.cooldown_seconds.unwrap_or(3600)).await {
             results.push(PlaybookRunResult {
                 playbook_id: pb.id,
                 playbook_name: pb.name.clone(),

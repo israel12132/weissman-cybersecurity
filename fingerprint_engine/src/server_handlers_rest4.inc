@@ -7,6 +7,18 @@ async fn api_deep_fuzz(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<DeepFuzzBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
@@ -65,6 +77,9 @@ async fn api_general_mission(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<GeneralMissionBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let domain = body.domain.as_deref().unwrap_or("").trim();
     if domain.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "domain required"}))).into_response();
@@ -123,6 +138,9 @@ async fn api_council_debate(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<CouncilDebateBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let brief = body.target_brief.as_deref().unwrap_or("").trim();
     if brief.is_empty() {
         return (
@@ -197,6 +215,9 @@ async fn api_general_ascension(
     Extension(auth): Extension<AuthContext>,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let payload = json!({});
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
@@ -233,6 +254,9 @@ async fn api_general_self_audit(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let ip = crate::http::extract_client_ip(&headers, addr);
     let actor = crate::audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     match crate::strategy_engine::run_self_defense_audit(
@@ -259,6 +283,18 @@ async fn api_timing_scan_run(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<TimingScanRunBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
@@ -308,6 +344,18 @@ async fn api_ai_redteam_run(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<AiRedteamRunBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
@@ -367,6 +415,18 @@ async fn api_threat_intel_run(
     Extension(auth): Extension<AuthContext>,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
         auth.tenant_id,
@@ -402,6 +462,18 @@ async fn api_pipeline_scan_run(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<PipelineScanRunBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let repo = body.repo_url.trim();
     if repo.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "repo_url required"}))).into_response();
@@ -560,6 +632,7 @@ fn poe_spawn_job(
             Some((job_id.clone(), prog_tx)),
             None,
             Some(tenant_id),
+            None, // oast_token: wire from job params/OAST mint when available
         )
         .await;
         let findings_json = serde_json::to_string(&result.findings).unwrap_or_else(|_| "[]".to_string());
@@ -657,6 +730,18 @@ async fn api_poe_scan_run(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<PoEScanRunBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let target = body.target_url.trim().to_string();
     let client_id: i64 = body.client_id.trim().parse().unwrap_or(0);
     if target.is_empty() || client_id == 0 {
@@ -1086,6 +1171,9 @@ async fn api_risk_graph_build(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
@@ -1215,6 +1303,9 @@ async fn api_auto_heal(
     Path(id): Path<i64>,
     Json(body): Json<AutoHealBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     if !crate::security_hardening::destructive_action_authorized(&headers) {
@@ -1538,6 +1629,9 @@ async fn api_deception_generate(
     Path(id): Path<i64>,
     Json(body): Json<DeceptionGenerateBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let tech = body.tech_hint.as_deref().unwrap_or("");
     let use_real_aws = body.real_aws_canary.unwrap_or_else(|| {
         matches!(
@@ -1739,6 +1833,9 @@ async fn api_sovereign_phantom_trap(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<SovereignPhantomBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -1861,6 +1958,9 @@ async fn api_payload_sync_run(
     Extension(auth): Extension<AuthContext>,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
         auth.tenant_id,
@@ -2307,9 +2407,12 @@ struct AstPreviewBody {
 
 /// POST /api/fuzz/ast-preview — return structure-aware mutations without sending traffic.
 async fn api_fuzz_ast_preview(
-    Extension(_auth): Extension<AuthContext>,
+    Extension(auth): Extension<AuthContext>,
     Json(body): Json<AstPreviewBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let base = body.payload.trim().to_string();
     if base.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error":"payload required"}))).into_response();

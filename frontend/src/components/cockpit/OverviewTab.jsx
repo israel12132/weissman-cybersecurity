@@ -20,7 +20,6 @@ import {
   Zap,
   Activity,
   Globe,
-  Smartphone,
   Cloud,
 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
@@ -31,6 +30,17 @@ import SeverityTrendChart from './SeverityTrendChart'
 
 const GLASS_CARD =
   'rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_30px_rgba(0,0,0,0.3)]'
+
+function SparklineOrEmpty({ data, color, emptyLabel }) {
+  if (!Array.isArray(data) || data.length < 2) {
+    return (
+      <p className="text-[10px] text-white/30 font-mono mt-2 uppercase tracking-wider">
+        {emptyLabel}
+      </p>
+    )
+  }
+  return <MiniSparkline data={data} color={color} />
+}
 
 function MiniSparkline({ data, color = '#22d3ee', id: idProp }) {
   const id = useId()
@@ -88,7 +98,6 @@ function RiskGauge({ score }) {
             </feMerge>
           </filter>
         </defs>
-        {/* Outer ring */}
         <circle
           cx="100"
           cy="100"
@@ -97,7 +106,6 @@ function RiskGauge({ score }) {
           stroke="rgba(255,255,255,0.06)"
           strokeWidth="12"
         />
-        {/* Progress arc */}
         <circle
           cx="100"
           cy="100"
@@ -111,9 +119,7 @@ function RiskGauge({ score }) {
           opacity={0.9}
           style={{ filter: `drop-shadow(0 0 12px ${gradeColor})` }}
         />
-        {/* Inner glow ring */}
         <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-        {/* Center grade */}
         <text
           x="100"
           y="108"
@@ -142,16 +148,21 @@ export default function OverviewTab() {
     active_scans: 0,
   })
   const [findings, setFindings] = useState([])
+  const [incidentCount, setIncidentCount] = useState(0)
+  const [trendSpark, setTrendSpark] = useState([])
+  const [resolvedSpark, setResolvedSpark] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    const load = async () => {
-      setLoading(true)
+    const load = async (isBackground = false) => {
+      if (!isBackground) setLoading(true)
       try {
-        const [statsRes, findingsRes] = await Promise.all([
+        const [statsRes, findingsRes, kpisRes, incidentsRes] = await Promise.all([
           apiFetch('/api/dashboard/stats'),
           selectedClientId ? apiFetch(`/api/clients/${selectedClientId}/findings`) : null,
+          apiFetch('/api/dashboard/exec-kpis'),
+          apiFetch('/api/soc/incidents'),
         ])
         if (cancelled) return
         if (statsRes.ok) {
@@ -170,13 +181,40 @@ export default function OverviewTab() {
         } else {
           setFindings([])
         }
+        if (kpisRes.ok) {
+          const k = await kpisRes.json()
+          const discovered = k?.trend?.discovered
+          const resolved = k?.trend?.resolved
+          if (Array.isArray(discovered) && discovered.length > 1) {
+            setTrendSpark(discovered.map((v) => ({ v: Number(v) || 0 })))
+          } else {
+            setTrendSpark([])
+          }
+          if (Array.isArray(resolved) && resolved.length > 1) {
+            setResolvedSpark(resolved.map((v) => ({ v: Number(v) || 0 })))
+          } else {
+            setResolvedSpark([])
+          }
+        }
+        if (incidentsRes.ok) {
+          const inc = await incidentsRes.json()
+          const list = Array.isArray(inc?.incidents) ? inc.incidents : []
+          setIncidentCount(list.filter((i) => (i.status || '').toLowerCase() !== 'closed').length)
+        } else {
+          setIncidentCount(0)
+        }
       } catch (_) {
-        if (!cancelled) setFindings([])
+        if (!cancelled) {
+          setFindings([])
+          setIncidentCount(0)
+        }
       }
-      if (!cancelled) setLoading(false)
+      if (!cancelled && !isBackground) setLoading(false)
     }
     load()
-    return () => { cancelled = true }
+    // Live SOC view: silently refresh every 30s to match the "auto-refresh 30s" badge.
+    const refreshIv = setInterval(() => load(true), 30000)
+    return () => { cancelled = true; clearInterval(refreshIv) }
   }, [selectedClientId])
 
   const critical = findings.filter((f) => (f.severity || '').toLowerCase().includes('critical')).length
@@ -201,16 +239,6 @@ export default function OverviewTab() {
     { name: t('components.cockpitTabs.overview.severity.medium'), count: medium, color: '#22d3ee' },
   ].filter((d) => d.count > 0)
 
-  const sparkData = [
-    { v: 12 },
-    { v: 8 },
-    { v: 14 },
-    { v: 6 },
-    { v: 18 },
-    { v: 10 },
-    { v: stats.total_vulnerabilities || 5 },
-  ]
-
   const attackSurfaceTargets = stats.attack_surface_targets ?? 0
   const attackSurfacePaths = stats.attack_surface_paths ?? 0
   const attackSurfaceData = [
@@ -227,22 +255,7 @@ export default function OverviewTab() {
       color: '#a855f7',
     },
   ].filter((d) => d.value > 0)
-  const attackSurfaceDataWithDefaults = attackSurfaceData.length
-    ? attackSurfaceData
-    : [
-        {
-          labelKey: 'targets',
-          label: t('components.cockpitTabs.overview.attack_surface.targets'),
-          value: 0,
-          color: '#22d3ee',
-        },
-        {
-          labelKey: 'paths',
-          label: t('components.cockpitTabs.overview.attack_surface.paths'),
-          value: 0,
-          color: '#a855f7',
-        },
-      ]
+  const attackSurfaceMax = Math.max(attackSurfaceTargets, attackSurfacePaths, 1)
 
   if (!selectedClientId) {
     return (
@@ -315,9 +328,13 @@ export default function OverviewTab() {
             <AlertTriangle className="w-4 h-4 text-amber-400/80" />
           </div>
           <p className="text-2xl font-bold text-white mt-1 tabular-nums">
-            {loading ? '—' : findings.length}
+            {loading ? '—' : incidentCount}
           </p>
-          <MiniSparkline data={sparkData.map((_, i) => ({ v: sparkData[i]?.v ?? 0 }))} color="#fbbf24" />
+          <SparklineOrEmpty
+            data={trendSpark}
+            color="#fbbf24"
+            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
+          />
         </div>
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
@@ -329,7 +346,11 @@ export default function OverviewTab() {
           <p className="text-2xl font-bold text-[#22d3ee] mt-1 tabular-nums">
             {loading ? '—' : stats.total_vulnerabilities}
           </p>
-          <MiniSparkline data={sparkData} color="#22d3ee" />
+          <SparklineOrEmpty
+            data={trendSpark}
+            color="#22d3ee"
+            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
+          />
         </div>
         <div className={GLASS_CARD}>
           <div className="flex items-center justify-between">
@@ -341,9 +362,10 @@ export default function OverviewTab() {
           <p className="text-2xl font-bold text-[#a855f7] mt-1 tabular-nums">
             {loading ? '—' : zeroDayCount}
           </p>
-          <MiniSparkline
-            data={[ { v: 0 }, { v: zeroDayCount }, { v: zeroDayCount } ]}
+          <SparklineOrEmpty
+            data={zeroDayCount > 0 ? [{ v: zeroDayCount }, { v: zeroDayCount }] : []}
             color="#a855f7"
+            emptyLabel={t('components.cockpitTabs.overview.no_zero_day', { defaultValue: 'No zero-day signals' })}
           />
         </div>
         <div className={GLASS_CARD}>
@@ -358,9 +380,10 @@ export default function OverviewTab() {
           }}>
             {loading ? '—' : `${score}%`}
           </p>
-          <MiniSparkline
-            data={[ { v: 30 }, { v: 50 }, { v: 45 }, { v: score }, { v: score } ]}
+          <SparklineOrEmpty
+            data={resolvedSpark}
             color={score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444'}
+            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
           />
         </div>
       </div>
@@ -413,22 +436,26 @@ export default function OverviewTab() {
           {t('components.cockpitTabs.overview.attack_surface_growth')}
         </h3>
         <div className="space-y-5">
-          {attackSurfaceDataWithDefaults.map(({ labelKey, label, value, color }) => (
+          {attackSurfaceData.length === 0 && !loading && (
+            <p className="text-sm text-white/30 text-center py-4">
+              {t('components.cockpitTabs.overview.no_attack_surface', { defaultValue: 'No attack surface metrics from last scan yet.' })}
+            </p>
+          )}
+          {attackSurfaceData.map(({ labelKey, label, value, color }) => (
             <div key={labelKey}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-white/80 flex items-center gap-2">
-                  {labelKey === 'web' && <Globe className="w-4 h-4 text-[#22d3ee]/80" />}
-                  {labelKey === 'mobile' && <Smartphone className="w-4 h-4 text-[#a855f7]/80" />}
-                  {labelKey === 'cloud' && <Cloud className="w-4 h-4 text-[#4ade80]/80" />}
+                  {labelKey.includes('target') && <Globe className="w-4 h-4 text-[#22d3ee]/80" />}
+                  {labelKey.includes('path') && <Cloud className="w-4 h-4 text-[#a855f7]/80" />}
                   {label}
                 </span>
-                <span className="text-xs font-mono text-white/50 tabular-nums">{value}%</span>
+                <span className="text-xs font-mono text-white/50 tabular-nums">{value}</span>
               </div>
               <div className="h-3 rounded-full bg-white/5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
-                    width: `${value}%`,
+                    width: `${Math.round((value / attackSurfaceMax) * 100)}%`,
                     background: `linear-gradient(90deg, ${color}, ${color}99)`,
                     boxShadow: `0 0 20px ${color}40`,
                   }}

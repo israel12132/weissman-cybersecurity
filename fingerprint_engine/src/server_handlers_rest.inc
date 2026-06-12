@@ -346,8 +346,17 @@ async fn api_clients_scan_run_all(
     headers: HeaderMap,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
     }
 
     // Resolve the client's authorized domains.
@@ -1078,6 +1087,9 @@ async fn api_scan_start(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
@@ -1095,6 +1107,9 @@ async fn api_scan_stop(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
@@ -1119,20 +1134,15 @@ async fn api_scan_run_all(
     headers: HeaderMap,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if let Err(detail) =
-        crate::billing::enforce_scan_start(state.auth_pool.as_ref(), auth.tenant_id).await
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
             Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
-    }
-    if let Err(e) = crate::billing::record_scan_started(state.auth_pool.as_ref(), auth.tenant_id).await
-    {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string()})),
         )
             .into_response();
     }
@@ -1181,8 +1191,17 @@ async fn api_scan(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<Value>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
     }
     let engine = body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
     let target = body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
@@ -1505,8 +1524,11 @@ async fn api_scan_all_engines(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<ScanAllEnginesRequest>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if let Err(detail) =
-        crate::billing::enforce_scan_start(state.auth_pool.as_ref(), auth.tenant_id).await
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
@@ -1642,8 +1664,11 @@ async fn api_scan_discovered_domains(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     body: axum::extract::Json<ScanDomainsRequest>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if let Err(detail) =
-        crate::billing::enforce_scan_start(state.auth_pool.as_ref(), auth.tenant_id).await
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,

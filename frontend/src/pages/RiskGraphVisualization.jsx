@@ -132,6 +132,8 @@ export default function RiskGraphVisualization() {
   const { t } = useTranslation();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
+  const [attackPaths, setAttackPaths] = useState(null);
+  const [pathsLoading, setPathsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
   const [filter, setFilter] = useState('all');
@@ -169,14 +171,38 @@ export default function RiskGraphVisualization() {
   const fetchGraphData = async (cid) => {
     try {
       setLoading(true);
-      const data = await api.get(withClientId('/api/risk/graph', cid));
-      setGraphData(data);
+      setPathsLoading(true);
+      const [graphRes, pathsRes] = await Promise.all([
+        api.get(withClientId('/api/risk/graph', cid)),
+        api.get(`/api/attack-paths/${cid}`).catch(() => null),
+      ]);
+      setGraphData(graphRes);
       setSelectedNode(null);
+      if (pathsRes?.snapshot) {
+        setAttackPaths(pathsRes.snapshot);
+      } else {
+        setAttackPaths(null);
+      }
     } catch (error) {
       console.error('Failed to fetch graph data:', error);
       setGraphData({ nodes: [], edges: [] });
+      setAttackPaths(null);
     } finally {
       setLoading(false);
+      setPathsLoading(false);
+    }
+  };
+
+  const recomputeAttackPaths = async () => {
+    if (clientId == null) return;
+    setPathsLoading(true);
+    try {
+      const res = await api.get(`/api/attack-paths/${clientId}?recompute=1`);
+      setAttackPaths(res?.snapshot ?? null);
+    } catch (e) {
+      console.error('Attack path recompute failed:', e);
+    } finally {
+      setPathsLoading(false);
     }
   };
 
@@ -366,6 +392,60 @@ export default function RiskGraphVisualization() {
               {t('pages.riskGraphVisualization.reset_view')}
             </button>
           </div>
+        </div>
+
+        {/* Dijkstra attack paths — internet_exposed → crown_jewel (EPSS/CVSS weighted) */}
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              {t('pages.riskGraphVisualization.attack_paths_heading', { defaultValue: 'Probable Attack Paths' })}
+            </h3>
+            <button
+              type="button"
+              onClick={recomputeAttackPaths}
+              disabled={pathsLoading || clientId == null}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
+            >
+              {pathsLoading ? t('pages.riskGraphVisualization.loading') : t('pages.riskGraphVisualization.recompute_paths', { defaultValue: 'Recompute paths' })}
+            </button>
+          </div>
+          {pathsLoading && !attackPaths ? (
+            <p className="text-sm text-gray-500">{t('pages.riskGraphVisualization.loading')}</p>
+          ) : !attackPaths?.paths?.length ? (
+            <p className="text-sm text-gray-500">
+              {t('pages.riskGraphVisualization.no_attack_paths', {
+                defaultValue: 'No attack-path snapshot yet. Mark nodes as internet-exposed / crown-jewel, then recompute.',
+              })}
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {attackPaths.paths.slice(0, 8).map((path, idx) => (
+                <div key={idx} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                    <span>Path #{idx + 1} · {path.hops} hops</span>
+                    <span className="text-red-300 font-mono">risk {path.risk?.toFixed?.(1) ?? path.risk}</span>
+                  </div>
+                  <p className="text-[11px] font-mono text-white/70 line-clamp-2">
+                    {(path.steps || []).map((s) => s.label || s.graph_key).filter(Boolean).join(' → ')}
+                  </p>
+                </div>
+              ))}
+              {attackPaths.choke_points?.length > 0 && (
+                <div className="pt-2 border-t border-white/10">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-400/80 mb-2">
+                    {t('pages.riskGraphVisualization.choke_points', { defaultValue: 'Choke points (patch these first)' })}
+                  </p>
+                  {attackPaths.choke_points.slice(0, 5).map((cp) => (
+                    <div key={cp.node_id} className="text-[11px] text-white/60 flex justify-between gap-2 py-0.5">
+                      <span className="truncate">{cp.label || cp.graph_key}</span>
+                      <span className="text-amber-300 shrink-0">{cp.coverage_pct}% paths</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-[1fr_320px] gap-4">

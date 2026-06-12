@@ -38,6 +38,18 @@ async fn api_llm_fuzz_run(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Path(client_id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -161,6 +173,9 @@ async fn api_decrypt_sealed_poc(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let ip = extract_client_ip(&headers, peer);
     let Some(key) = crate::exploit_crypto::master_key_bytes() else {
         return (

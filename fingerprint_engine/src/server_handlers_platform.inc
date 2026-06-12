@@ -88,6 +88,9 @@ async fn api_onboarding_launch_scan(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
     Json(body): Json<OnboardingLaunchScanBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     if body.client_id <= 0 {
         return (
             StatusCode::BAD_REQUEST,
@@ -1493,7 +1496,7 @@ async fn api_soc_social_engineering_campaigns_post(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<SocialCampaignCreate>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let name = body.name.trim();
@@ -1935,7 +1938,7 @@ async fn api_scan_schedules_create(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<ScanScheduleUpsertBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let name = body.name.trim();
@@ -2027,7 +2030,7 @@ async fn api_scan_schedules_update(
     Path(schedule_id): Path<i64>,
     Json(body): Json<ScanScheduleUpsertBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let name = body.name.trim();
@@ -2133,7 +2136,7 @@ async fn api_scan_schedules_patch(
     Path(schedule_id): Path<i64>,
     Json(body): Json<ScanSchedulePatchBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -2249,7 +2252,7 @@ async fn api_scan_schedules_delete(
     Extension(auth): Extension<AuthContext>,
     Path(schedule_id): Path<i64>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -2284,8 +2287,17 @@ async fn api_scan_schedules_run(
     Path(schedule_id): Path<i64>,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_analyst(&auth) {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();

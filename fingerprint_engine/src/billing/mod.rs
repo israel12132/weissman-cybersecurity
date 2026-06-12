@@ -140,6 +140,15 @@ pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), Str
     Ok(())
 }
 
+/// Enforce subscription + monthly quota and increment the usage counter.
+/// No-op when [`billing_strict_enabled`] is false.
+pub async fn gate_scan_enqueue(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
+    enforce_scan_start(pool, tenant_id).await?;
+    record_scan_started(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
     let period = period_ym_now();
     sqlx::query(

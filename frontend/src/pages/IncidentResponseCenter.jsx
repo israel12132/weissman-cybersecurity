@@ -26,49 +26,49 @@ const PLAYBOOKS = {
   ransomware: {
     labelKey: 'pages.incidentResponseCenter.playbooks.ransomware.label',
     steps: [
-      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_1', mitre: 'T1486', done: true },
-      { id: 2, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_2', mitre: 'T1055', done: true },
-      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_3', mitre: 'T1071', done: true },
-      { id: 4, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_4', mitre: 'T1021.002', done: false },
-      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_5', mitre: 'T1485', done: false },
-      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_6', mitre: null, done: false },
-      { id: 7, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_7', mitre: null, done: false },
-      { id: 8, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_8', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_1', mitre: 'T1486' },
+      { id: 2, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_2', mitre: 'T1055' },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_3', mitre: 'T1071' },
+      { id: 4, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_4', mitre: 'T1021.002' },
+      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_5', mitre: 'T1485' },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_6', mitre: null },
+      { id: 7, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_7', mitre: null },
+      { id: 8, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.ransomware.step_8', mitre: null },
     ],
   },
   credential_stuffing: {
     labelKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.label',
     steps: [
-      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_1', mitre: 'T1110', done: true },
-      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_2', mitre: 'T1110.004', done: true },
-      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_3', mitre: null, done: true },
-      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_4', mitre: null, done: true },
-      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_5', mitre: null, done: false },
-      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_6', mitre: null, done: false },
-      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_7', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_1', mitre: 'T1110' },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_2', mitre: 'T1110.004' },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_3', mitre: null },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_4', mitre: null },
+      { id: 5, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_5', mitre: null },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_6', mitre: null },
+      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.credential_stuffing.step_7', mitre: null },
     ],
   },
   supply_chain: {
     labelKey: 'pages.incidentResponseCenter.playbooks.supply_chain.label',
     steps: [
-      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_1', mitre: 'T1195.001', done: true },
-      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_2', mitre: null, done: true },
-      { id: 3, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_3', mitre: null, done: true },
-      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_4', mitre: 'T1552', done: false },
-      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_5', mitre: null, done: false },
-      { id: 6, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_6', mitre: null, done: false },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_1', mitre: 'T1195.001' },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_2', mitre: null },
+      { id: 3, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_3', mitre: null },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_4', mitre: 'T1552' },
+      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_5', mitre: null },
+      { id: 6, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.supply_chain.step_6', mitre: null },
     ],
   },
   zero_day: {
     labelKey: 'pages.incidentResponseCenter.playbooks.zero_day.label',
     steps: [
-      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_1', mitre: 'T1190', done: true },
-      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_2', mitre: null, done: true },
-      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_3', mitre: null, done: true },
-      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_4', mitre: null, done: true },
-      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_5', mitre: null, done: true },
-      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_6', mitre: null, done: true },
-      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_7', mitre: null, done: true },
+      { id: 1, phaseKey: 'detection', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_1', mitre: 'T1190' },
+      { id: 2, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_2', mitre: null },
+      { id: 3, phaseKey: 'containment', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_3', mitre: null },
+      { id: 4, phaseKey: 'eradication', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_4', mitre: null },
+      { id: 5, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_5', mitre: null },
+      { id: 6, phaseKey: 'recovery', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_6', mitre: null },
+      { id: 7, phaseKey: 'lessons_learned', actionKey: 'pages.incidentResponseCenter.playbooks.zero_day.step_7', mitre: null },
     ],
   },
 }
@@ -404,6 +404,14 @@ export default function IncidentResponseCenter() {
         </div>
       )}
 
+      {loading && (
+        <div className="rounded-xl border border-white/10 bg-black/30 px-6 py-12 text-center">
+          <p className="text-sm text-white/50 font-mono animate-pulse">
+            {t('pages.incidentResponseCenter.loading', { defaultValue: 'Loading incidents from /api/soc/incidents…' })}
+          </p>
+        </div>
+      )}
+
       {!loading && !error && incidents.length === 0 && (
         <EmptyState
           icon="shield"
@@ -509,7 +517,13 @@ export default function IncidentResponseCenter() {
               </div>
 
               {tab === 'timeline' ? (
-                <Timeline events={selected.timeline} />
+                selected.timeline.length > 0 ? (
+                  <Timeline events={selected.timeline} />
+                ) : (
+                  <p className="text-xs text-white/35 font-mono">
+                    {t('pages.incidentResponseCenter.no_timeline', { defaultValue: 'No audit events linked to this incident yet.' })}
+                  </p>
+                )
               ) : (
                 <PlaybookSteps
                   playbookId={selected.playbook}
