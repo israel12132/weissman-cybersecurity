@@ -264,6 +264,11 @@ pub async fn execute_job(
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(900)
                     .clamp(120, 7200);
+                let job_oast_token = p
+                    .get("oast_interaction_token")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
                 match tokio::time::timeout(
                     Duration::from_secs(wall_secs),
                     crate::exploit_synthesis_engine::run_exploit_synthesis_async(
@@ -272,6 +277,7 @@ pub async fn execute_job(
                         None,
                         None,
                         Some(tid),
+                        job_oast_token,
                     ),
                 )
                 .await
@@ -358,6 +364,7 @@ pub async fn execute_job(
                                 None,
                                 None,
                                 Some(tid),
+                                None,
                             ),
                         )
                         .await;
@@ -1503,6 +1510,11 @@ pub async fn execute_job(
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(900)
                 .clamp(120, 7200);
+            let job_oast_token = p
+                .get("oast_interaction_token")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
             let res = match tokio::time::timeout(
                 Duration::from_secs(wall_secs),
                 crate::exploit_synthesis_engine::run_exploit_synthesis_async(
@@ -1511,6 +1523,7 @@ pub async fn execute_job(
                     None,
                     None,
                     Some(tid),
+                    job_oast_token,
                 ),
             )
             .await

@@ -1,34 +1,43 @@
 # Prometheus Alert Rules for Weissman Cybersecurity
+# Metric names match the Rust fingerprint_engine observability module:
+#   http_requests_total, http_request_duration_seconds (Histogram)
+# Python-era names (weissman_requests_total, etc.) were incorrect and are replaced below.
 
 groups:
   - name: application_alerts
     interval: 30s
     rules:
-      # High error rate
+      # High HTTP error rate (5xx)
       - alert: HighErrorRate
-        expr: rate(weissman_errors_total[5m]) > 10
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) /
+          sum(rate(http_requests_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
           category: application
         annotations:
-          summary: "High error rate detected"
-          description: "Error rate is {{ $value }} errors/sec (threshold: 10/sec)"
+          summary: "High HTTP 5xx error rate"
+          description: "5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%) over the last 5 minutes"
 
-      # Rate limit violations spike
-      - alert: RateLimitViolationsSpike
-        expr: rate(weissman_rate_limit_violations_total[1m]) > 100
-        for: 2m
+      # High request latency P99
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[10m])) by (le, endpoint))
+          > 5
+        for: 10m
         labels:
           severity: warning
-          category: security
+          category: performance
         annotations:
-          summary: "Rate limit violations spike"
-          description: "{{ $value }} violations/min (threshold: 100/min)"
+          summary: "High P99 request latency"
+          description: "P99 latency for {{ $labels.endpoint }} is {{ $value }}s (threshold: 5s)"
 
-      # Scan duration P99 high
+      # Scan duration P99 high (uses the scan-specific histogram if emitted)
       - alert: SlowScans
-        expr: histogram_quantile(0.99, rate(weissman_scan_duration_seconds_bucket[10m])) > 300
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{endpoint=~".*/scan.*"}[10m])) by (le))
+          > 300
         for: 10m
         labels:
           severity: warning
@@ -37,112 +46,46 @@ groups:
           summary: "Scan P99 latency is high"
           description: "P99 scan duration is {{ $value }}s (threshold: 300s)"
 
-      # Low cache hit rate
-      - alert: LowCacheHitRate
-        expr: |
-          sum(rate(weissman_cache_operations_total{operation="hit"}[5m])) /
-          sum(rate(weissman_cache_operations_total[5m])) < 0.6
-        for: 15m
-        labels:
-          severity: warning
-          category: performance
-        annotations:
-          summary: "Cache hit rate is low"
-          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 60%)"
-
-      # Too many active scans
-      - alert: TooManyActiveScans
-        expr: weissman_active_scans > 50
+      # Database pool saturation
+      - alert: DBPoolSaturated
+        expr: weissman_db_pool_size > 0 and weissman_db_pool_idle == 0
         for: 5m
         labels:
           severity: warning
           category: capacity
         annotations:
-          summary: "Too many concurrent scans"
-          description: "{{ $value }} active scans (threshold: 50)"
+          summary: "Database connection pool exhausted"
+          description: "All {{ $value }} DB pool connections are in use; new queries will queue"
 
-  - name: infrastructure_alerts
-    interval: 30s
-    rules:
-      # Redis down
-      - alert: RedisDown
-        expr: up{job="redis"} == 0
-        for: 1m
+      # Backend process down (health check)
+      - alert: BackendDown
+        expr: up{job="weissman-backend"} == 0
+        for: 2m
         labels:
           severity: critical
-          category: infrastructure
+          category: availability
         annotations:
-          summary: "Redis is down"
-          description: "Redis server is unreachable"
+          summary: "Weissman backend is down"
+          description: "The backend target {{ $labels.instance }} has been unreachable for 2 minutes"
 
-      # PostgreSQL down
-      - alert: PostgresDown
-        expr: up{job="postgres"} == 0
-        for: 1m
+      # Worker process down
+      - alert: WorkerDown
+        expr: up{job="weissman-worker"} == 0
+        for: 5m
         labels:
           severity: critical
-          category: infrastructure
+          category: availability
         annotations:
-          summary: "PostgreSQL is down"
-          description: "PostgreSQL server is unreachable"
+          summary: "Weissman worker is down"
+          description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes; scan jobs may be stalled"
 
-      # High memory usage
-      - alert: HighMemoryUsage
-        expr: |
-          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) /
-          node_memory_MemTotal_bytes > 0.9
+      # Prometheus self-monitoring
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
         for: 5m
         labels:
           severity: warning
-          category: infrastructure
+          category: monitoring
         annotations:
-          summary: "High memory usage"
-          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 90%)"
-
-      # High CPU usage
-      - alert: HighCPUUsage
-        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 5m
-        labels:
-          severity: warning
-          category: infrastructure
-        annotations:
-          summary: "High CPU usage"
-          description: "CPU usage is {{ $value }}% (threshold: 80%)"
-
-      # Disk space low
-      - alert: DiskSpaceLow
-        expr: |
-          (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
-        for: 5m
-        labels:
-          severity: warning
-          category: infrastructure
-        annotations:
-          summary: "Low disk space"
-          description: "Only {{ $value | humanizePercentage }} disk space remaining"
-
-  - name: security_alerts
-    interval: 30s
-    rules:
-      # Multiple authentication failures
-      - alert: MultipleAuthFailures
-        expr: rate(weissman_errors_total{error_type="InvalidCredentialsError"}[5m]) > 5
-        for: 5m
-        labels:
-          severity: high
-          category: security
-        annotations:
-          summary: "Multiple authentication failures"
-          description: "{{ $value }} auth failures/sec (possible brute force attack)"
-
-      # Unusual scan activity
-      - alert: UnusualScanActivity
-        expr: rate(weissman_requests_total{endpoint="api_scan"}[10m]) > 20
-        for: 10m
-        labels:
-          severity: medium
-          category: security
-        annotations:
-          summary: "Unusual scan activity detected"
-          description: "{{ $value }} scans/min (threshold: 20/min)"
+          summary: "Prometheus config reload failed"
+          description: "Prometheus failed to reload its configuration"

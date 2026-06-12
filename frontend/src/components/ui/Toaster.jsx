@@ -99,10 +99,10 @@ export function useToast() {
   if (!ctx) {
     return {
       toast: {
-        success: (m) => console.log('[toast.success]', m),
-        error: (m) => console.warn('[toast.error]', m),
-        warning: (m) => console.warn('[toast.warn]', m),
-        info: (m) => console.log('[toast.info]', m),
+        success: () => {},
+        error: () => {},
+        warning: () => {},
+        info: () => {},
         dismiss: () => {},
       },
     }

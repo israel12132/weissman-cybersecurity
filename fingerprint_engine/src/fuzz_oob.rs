@@ -169,6 +169,13 @@ fn looks_form(s: &str) -> bool {
 
 /// Poll verification endpoint once (uses rotating egress + optional Bearer).
 pub async fn verify_oob_token_seen(pool: &FuzzHttpPool, token: &str) -> bool {
+    let client = pool.client_for_probe();
+    verify_oob_token_seen_with_client(&client, token).await
+}
+
+/// Same as [`verify_oob_token_seen`] but accepts any `reqwest::Client` directly.
+/// Used by engines that already hold an HTTP client but have no `FuzzHttpPool`.
+pub async fn verify_oob_token_seen_with_client(client: &reqwest::Client, token: &str) -> bool {
     let Some(url) = effective_verify_url(token) else {
         return false;
     };
@@ -176,7 +183,6 @@ pub async fn verify_oob_token_seen(pool: &FuzzHttpPool, token: &str) -> bool {
     if marker.is_empty() {
         return false;
     }
-    let client = pool.client_for_probe();
     let mut req = client
         .get(&url)
         .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))

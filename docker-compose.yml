@@ -17,25 +17,45 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-weissman}
     volumes:
       - weissman_pg:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No host port mapping: Postgres is reachable only on the internal compose network
+    # (backend/worker connect via postgres:5432; migrations run in-container at boot via
+    # WEISSMAN_MIGRATE_URL). Debug locally with `docker compose exec postgres psql -U postgres`.
+    expose:
+      - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d weissman"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-weissman}"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          memory: 512M
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port mapping: Redis is reachable only on the internal compose network
+    # (backend/worker connect via redis://redis:6379). Debug locally with
+    # `docker compose exec redis redis-cli`. Never expose 6379 to the host/Internet.
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 64M
 
   backend:
     build:
@@ -73,6 +93,13 @@ services:
       retries: 30
       start_period: 60s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          memory: 512M
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
@@ -94,13 +121,20 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # Fallback check: verify pgrep exists, otherwise check /proc directly
-      test: ["CMD-SHELL", "pgrep -x weissman-worker || test -d /proc/1 && cat /proc/1/comm | grep -q weissman-worker"]
+      # Check the process is alive by verifying /proc/1/comm matches the binary name.
+      test: ["CMD-SHELL", "cat /proc/1/comm | grep -q weissman-worker"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+        reservations:
+          memory: 512M
 
   gateway:
     build:
@@ -118,6 +152,78 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  # ─── Observability stack ────────────────────────────────────────────────────
+  # Optional but strongly recommended for production. Start with:
+  #   docker compose --profile monitoring up -d
+  # Prometheus scrapes /metrics from the backend service (port 9090 internal).
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: [monitoring]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts:/etc/prometheus/alerts:ro
+      - weissman_prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    expose:
+      - "9090"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-weissman-grafana-dev}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - weissman_grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    profiles: [monitoring]
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    expose:
+      - "9093"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
 
 volumes:
   weissman_pg:
+  weissman_prometheus:
+  weissman_grafana:

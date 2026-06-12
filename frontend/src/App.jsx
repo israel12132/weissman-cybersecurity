@@ -11,8 +11,9 @@ import AssetHexGrid from './components/AssetHexGrid'
 import CyberRadar from './components/CyberRadar'
 import GlobalThreatTicker from './components/GlobalThreatTicker'
 import CommandBar from './components/CommandBar'
-import { apiFetch, apiUrl } from './lib/apiBase'
+import { apiUrl } from './lib/apiBase'
 import { useWeissmanSocket } from './hooks/useWeissmanSocket'
+import { useAuth } from './context/AuthContext'
 
 const HIGHLIGHT_DURATION_MS = 4000
 const ARC_MAX_AGE_MS = 4000
@@ -31,6 +32,7 @@ function resolveTargetToLatLon(globeData, targetName) {
 
 export default function App() {
   const { t } = useTranslation()
+  const { logout } = useAuth()
   // Use the robust WebSocket hook
   const {
     events: tickerEvents,
@@ -46,7 +48,6 @@ export default function App() {
   const [realtimePulses, setRealtimePulses] = useState([])
   const [highlightedEventId, setHighlightedEventId] = useState(null)
   const [commandBarError, setCommandBarError] = useState('')
-  const initialTickerFetchedRef = useRef(false)
   const arcTimeoutsRef = useRef([])
   const [now, setNow] = useState(() => new Date())
   const globeDataRef = useRef(null)
@@ -108,22 +109,8 @@ export default function App() {
     }
   }, [])
 
-  // One-time initial ticker load: add ids to events for highlight/arc mapping
-  useEffect(() => {
-    if (initialTickerFetchedRef.current) return
-    initialTickerFetchedRef.current = true
-    const load = async () => {
-      try {
-        const r = await apiFetch('/api/command-center/ticker?page=1&per_page=500')
-        if (r.ok) {
-          const d = await r.json()
-          // Initial events don't trigger arcs, just populate the ticker
-          // The hook handles live events
-        }
-      } catch (_) {}
-    }
-    load()
-  }, [])
+  // The WebSocket hook handles initial ticker hydration via the server's
+  // on-connect burst; no separate REST fetch is needed here.
 
   useEffect(() => {
     if (connectionStatus !== 'online') return
@@ -138,8 +125,8 @@ export default function App() {
 
       <header className="soc-header">
         <nav className="flex gap-4 text-sm font-mono flex-wrap items-center">
-          <a href="/" className="nav-link">{t('components.intelMap.dashboard')}</a>
-          <a href="/clients" className="nav-link">{t('components.intelMap.clients')}</a>
+          <Link to="/" className="nav-link">{t('components.intelMap.dashboard')}</Link>
+          <Link to="/clients" className="nav-link">{t('components.intelMap.clients')}</Link>
           <Link to="/engines" className="nav-link nav-link-active">{t('components.intelMap.engine_matrix')}</Link>
           <Link to="/threat-intel" className="nav-link" style={{ color: 'rgba(139,92,246,0.85)' }}>{t('components.intelMap.threat_intel')}</Link>
           <Link to="/threat-emulation" className="nav-link">{t('components.intelMap.apt_emulation')}</Link>
@@ -164,7 +151,7 @@ export default function App() {
           <Link to="/system-core" className="nav-link">{t('components.intelMap.system_core')}</Link>
           <span className="text-white/10">|</span>
           <a href={apiUrl('/api/export/findings')} className="nav-link" download>{t('components.intelMap.export_csv')}</a>
-          <a href="/logout" className="nav-link nav-link-danger">{t('components.intelMap.logout')}</a>
+          <button type="button" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</button>
         </nav>
       </header>
 

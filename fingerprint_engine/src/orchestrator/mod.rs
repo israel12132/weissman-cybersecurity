@@ -2123,6 +2123,7 @@ async fn run_cycle_for_tenant(
                 None,
                 poe_ctx_final.as_deref(),
                 Some(tenant_id),
+                None,
             )
             .await;
             tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -2342,6 +2343,33 @@ async fn run_cycle_for_tenant(
         &audit_root_hash[..audit_root_hash.len().min(16)]
     );
     tx.commit().await?;
+
+    // Recompute attack-path snapshots from the freshly updated risk graph (fire-and-forget).
+    let pool_paths = app_pool.clone();
+    for (db_client_id, _, _, _, _) in &clients {
+        let pool = pool_paths.clone();
+        let cid = *db_client_id;
+        tokio::spawn(async move {
+            match crate::attack_path::compute_and_store(&pool, tenant_id, cid, Some(25)).await {
+                Ok(snap) => tracing::info!(
+                    target: "attack_path",
+                    tenant_id,
+                    client_id = cid,
+                    paths = snap.paths.len(),
+                    choke_points = snap.choke_points.len(),
+                    "attack-path snapshot updated after orchestrator cycle"
+                ),
+                Err(e) => tracing::warn!(
+                    target: "attack_path",
+                    tenant_id,
+                    client_id = cid,
+                    error = %e,
+                    "attack-path recompute failed"
+                ),
+            }
+        });
+    }
+
     Ok(())
 }
 

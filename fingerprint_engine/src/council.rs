@@ -868,7 +868,7 @@ async fn fetch_supreme_memory_context(
             lines.join("\n")
         );
     }
-    let query_vec = query_embed.unwrap();
+    let query_vec = query_embed.expect("query_embed is_none() checked and returns early above");
     let mut scored: Vec<(f32, String)> = Vec::new();
     for row in rows {
         let excerpt: String = row.try_get("brief_excerpt").unwrap_or_default();

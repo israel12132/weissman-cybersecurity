@@ -38,6 +38,11 @@ export function setRateLimitToastCallback(callback) {
   rateLimitToastCallback = callback
 }
 
+/** Return the currently registered 429 toast callback (used by utils/apiFetch to share state). */
+export function getRateLimitToastCallback() {
+  return rateLimitToastCallback
+}
+
 function parseRetryAfter(retryAfterHeader) {
   if (!retryAfterHeader) return 60
   const seconds = parseInt(retryAfterHeader, 10)

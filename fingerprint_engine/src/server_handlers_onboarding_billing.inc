@@ -114,6 +114,9 @@ async fn api_billing_checkout_session(
     Extension(auth): Extension<AuthContext>,
     Json(body): Json<BillingCheckoutBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     if !paddle_api_configured() {
         return billing_unavailable(
             "Paddle Billing is not configured on this deployment. Set PADDLE_API_KEY to enable checkout.",
@@ -158,6 +161,9 @@ async fn api_billing_sync_paddle(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     if !paddle_api_configured() {
         return billing_unavailable(
             "Paddle Billing is not configured on this deployment. Set PADDLE_API_KEY to sync subscriptions.",
@@ -187,12 +193,16 @@ async fn api_paddle_webhook(
     body: Bytes,
 ) -> Response {
     if !paddle_webhook_secret_configured() {
+        tracing::warn!(
+            target: "paddle_webhook",
+            "PADDLE_WEBHOOK_SECRET not configured — rejecting webhook delivery to avoid silently missing billing events in production"
+        );
         return (
-            StatusCode::OK,
+            StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
-                "ok": true,
-                "ignored": true,
-                "detail": "Paddle webhook secret not configured; event ignored."
+                "ok": false,
+                "code": "webhook_secret_not_configured",
+                "detail": "Paddle webhook secret not configured. Set PADDLE_WEBHOOK_SECRET to enable webhook processing."
             })),
         )
             .into_response();

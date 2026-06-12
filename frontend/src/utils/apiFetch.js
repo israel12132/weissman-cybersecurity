@@ -1,14 +1,12 @@
 /**
  * JSON-oriented API client built on lib/apiBase (apiUrl, auth, token refresh).
+ * 429 toast handling shares the same callback registered by RateLimitProvider
+ * via lib/apiBase so both API clients show the same global rate-limit toast.
  */
 
-import { apiFetch as baseApiFetch } from '../lib/apiBase'
+import { apiFetch as baseApiFetch, setRateLimitToastCallback, getRateLimitToastCallback } from '../lib/apiBase'
 
-let rateLimitToastCallback = null
-
-export function setRateLimitToastCallback(callback) {
-  rateLimitToastCallback = callback
-}
+export { setRateLimitToastCallback }
 
 function parseRetryAfter(retryAfterHeader) {
   if (!retryAfterHeader) return 60
@@ -71,8 +69,9 @@ export async function apiFetch(url, options = {}) {
     if (response.status === 429) {
       const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
       const errorMessage = await readErrorMessage(response)
-      if (rateLimitToastCallback) {
-        rateLimitToastCallback({ retryAfter, message: errorMessage })
+      const toastFn = getRateLimitToastCallback()
+      if (toastFn) {
+        toastFn({ retryAfter, message: errorMessage })
       }
       const error = new Error(errorMessage)
       error.status = 429

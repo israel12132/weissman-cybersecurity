@@ -1,4 +1,5 @@
 # Prometheus configuration for Weissman Cybersecurity
+# Production scrape targets match docker-compose.yml service names.
 
 global:
   scrape_interval: 15s
@@ -19,24 +20,24 @@ rule_files:
 
 # Scrape configurations
 scrape_configs:
-  # Weissman application metrics
-  - job_name: 'weissman-app'
+  # Weissman backend application metrics (Rust metrics endpoint)
+  - job_name: 'weissman-backend'
     static_configs:
-      - targets: ['app:9090']
+      - targets: ['backend:9090']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
-  # Redis metrics
+  # Redis metrics via redis_exporter sidecar (add redis-exporter service to compose if needed)
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis-test:6379']
+      - targets: ['redis-exporter:9121']
 
-  # PostgreSQL metrics
+  # PostgreSQL metrics via postgres_exporter sidecar (add pg-exporter service to compose if needed)
   - job_name: 'postgres'
     static_configs:
-      - targets: ['postgres-test:5432']
+      - targets: ['pg-exporter:9187']
 
-  # Node exporter (system metrics)
+  # Node exporter (system metrics — install on the host or as a Docker sidecar)
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']

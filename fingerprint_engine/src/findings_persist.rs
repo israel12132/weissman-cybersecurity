@@ -199,7 +199,7 @@ fn extract_array(f: &Value, keys: &[&str]) -> Value {
 /// banner text, host headers, response_ms, …) and only hash the *signature* — the
 /// minimal set of fields that uniquely identifies the vulnerability class on this asset.
 fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    let cve = extract_string(finding, &["cve", "cve_id", "cveId"]);
+    let cve = extract_cve_from_finding(finding);
     let cwe = extract_string(finding, &["cwe", "cwe_id"]);
     let mitre = extract_string(finding, &["mitre_attack", "mitre", "attack_id"]);
     let signature = extract_string(
@@ -245,7 +245,7 @@ pub async fn persist_engine_findings(
     if findings.is_empty() || client_id.is_none() {
         return Ok(0);
     }
-    let client_id = client_id.unwrap();
+    let client_id = client_id.expect("client_id.is_none() checked above");
 
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -284,7 +284,7 @@ pub async fn persist_engine_findings(
             &["mitre_attack", "mitre", "attack_id", "mitre_attack_id"],
         );
         let cwe = extract_string(f, &["cwe", "cwe_id"]);
-        let cve = extract_string(f, &["cve", "cve_id", "cveId"]);
+        let cve = extract_cve_from_finding(f);
         let remediation = extract_string(
             f,
             &[
@@ -603,4 +603,8 @@ fn derive_vuln_signature_for_persist(finding: &Value, fallback_title: &str) -> S
         .take(80)
         .collect::<String>()
         .to_ascii_lowercase()
+}
+
+fn extract_cve_from_finding(finding: &Value) -> String {
+    crate::intel_findings_backfill::extract_cve_from_value(finding).unwrap_or_default()
 }
