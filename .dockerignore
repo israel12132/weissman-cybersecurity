@@ -4,3 +4,11 @@ node_modules/
 **/node_modules/
 .git/
 *.log
+
+# Secrets / local env — never copy into the Docker build context
+.env
+.env.*
+*.env
+.envrc
+.envrc.private
+config.yaml

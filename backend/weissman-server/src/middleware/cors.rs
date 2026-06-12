@@ -39,7 +39,15 @@ pub fn apply(router: Router) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(allow_origin)
         .allow_credentials(true)
-        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::HEAD,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers([
             AUTHORIZATION,
             CONTENT_TYPE,

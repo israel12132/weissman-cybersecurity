@@ -187,11 +187,19 @@ pub async fn claim_next_with_role(
     }))
 }
 
-pub async fn heartbeat(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<(), sqlx::Error> {
+    // Extend `locked_until` alongside `heartbeat_at`: the reclaim sweep fails any running
+    // job whose `locked_until < now()`, so a long job (> lock window) that is still beating
+    // must keep pushing the lock forward or it gets falsely marked failed mid-flight.
     sqlx::query(
-        "UPDATE weissman_async_jobs SET heartbeat_at = now(), updated_at = now() WHERE id = $1 AND status = 'running'",
+        "UPDATE weissman_async_jobs
+            SET heartbeat_at = now(),
+                locked_until = now() + ($2::bigint * interval '1 second'),
+                updated_at = now()
+          WHERE id = $1 AND status = 'running'",
     )
     .bind(job_id)
+    .bind(lock_secs)
     .execute(pool)
     .await?;
     Ok(())
