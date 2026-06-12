@@ -5,6 +5,52 @@ import { ExternalLink, X } from 'lucide-react'
 import SeverityBadge, { getSeverityMeta } from './SeverityBadge'
 import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
+import SupplyChainGraph from './SupplyChainGraph'
+
+const REACH_META = {
+  client_runtime: { color: '#fb7185', key: 'client_runtime' },
+  direct: { color: '#fbbf24', key: 'direct' },
+  transitive: { color: '#38bdf8', key: 'transitive' },
+  declared: { color: '#94a3b8', key: 'declared' },
+}
+
+function ReachabilityBadge({ tier, t }) {
+  if (!tier) return null
+  const m = REACH_META[tier] ?? REACH_META.declared
+  return (
+    <span
+      className="text-[10px] font-mono px-2 py-0.5 rounded border"
+      style={{ color: m.color, borderColor: `${m.color}55`, background: `${m.color}12` }}
+    >
+      {t(`components.findingDrawer.supplyChain.${m.key}`)}
+    </span>
+  )
+}
+
+function DependencyPathChain({ path }) {
+  if (!Array.isArray(path) || path.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {path.map((node, i) => {
+        const isLast = i === path.length - 1
+        const isFirst = i === 0
+        const cls = isLast
+          ? 'border-rose-500/40 text-rose-200 bg-rose-500/10'
+          : isFirst
+            ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
+            : 'border-white/15 text-white/70'
+        return (
+          <React.Fragment key={`${node}-${i}`}>
+            <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ltr-only ${cls}`}>
+              {node}
+            </span>
+            {!isLast && <span className="text-white/30 text-xs">→</span>}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
 
 function Section({ title, children, className = '' }) {
   return (
@@ -143,6 +189,23 @@ export default function FindingDrawer({
 
   const meta = getSeverityMeta(finding?.severity)
   const compliance = Array.isArray(finding?.compliance) ? finding.compliance : []
+
+  // Supply-chain fields live at top level (job result) or under `raw` (findings API).
+  const scGet = (k) => finding?.[k] ?? finding?.raw?.[k]
+  const scPackage = scGet('package')
+  const scReach = scGet('reachability')
+  const scPath = scGet('dependency_path')
+  const scComponents = scGet('components')
+  const scEdges = scGet('dependency_edges')
+  const scOsvIds = scGet('osv_ids')
+  const scOsvSummaries = scGet('osv_summaries')
+  const scVectors = scGet('cvss_vectors')
+  const isSupplyChain =
+    scGet('type') === 'supply_chain' ||
+    Boolean(scPackage) ||
+    Boolean(scReach) ||
+    (Array.isArray(scComponents) && scComponents.length > 0) ||
+    (Array.isArray(scPath) && scPath.length > 0)
 
   return (
     <AnimatePresence>
@@ -397,6 +460,126 @@ export default function FindingDrawer({
                       )
                     })}
                   </ul>
+                </Section>
+              )}
+
+              {isSupplyChain && (
+                <Section title={t('components.findingDrawer.supplyChain.title')}>
+                  <div className="space-y-4">
+                    {(scReach || scGet('is_direct_dependency') === true) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ReachabilityBadge tier={scReach} t={t} />
+                        {scGet('is_direct_dependency') === true && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-amber-300/90">
+                            {t('components.findingDrawer.supplyChain.directDependency')}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {(scPackage || scGet('ecosystem') || scGet('version') || scGet('evidence_kind')) && (
+                      <dl>
+                        <MetaRow
+                          label={t('components.findingDrawer.supplyChain.package')}
+                          value={scPackage}
+                          copyable
+                        />
+                        <MetaRow
+                          label={t('components.findingDrawer.supplyChain.ecosystem')}
+                          value={scGet('ecosystem')}
+                        />
+                        <MetaRow
+                          label={t('components.findingDrawer.supplyChain.version')}
+                          value={scGet('version')}
+                          copyable
+                        />
+                        <MetaRow
+                          label={t('components.findingDrawer.supplyChain.evidenceSource')}
+                          value={scGet('evidence_kind')}
+                        />
+                        <MetaRow
+                          label={t('components.findingDrawer.affectedUrl')}
+                          value={scGet('evidence_url')}
+                          copyable
+                        />
+                      </dl>
+                    )}
+
+                    {Array.isArray(scPath) && scPath.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                          {t('components.findingDrawer.supplyChain.dependencyPath')}
+                        </p>
+                        <DependencyPathChain path={scPath} />
+                      </div>
+                    )}
+
+                    {Array.isArray(scOsvIds) && scOsvIds.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                          {t('components.findingDrawer.supplyChain.advisories')}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {scOsvIds.slice(0, 40).map((id) => {
+                            const isCve = /^CVE-/i.test(String(id))
+                            const href = isCve
+                              ? `https://nvd.nist.gov/vuln/detail/${id}`
+                              : `https://osv.dev/vulnerability/${id}`
+                            return (
+                              <a
+                                key={String(id)}
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/25 text-cyan-200/85 hover:bg-cyan-500/10 ltr-only"
+                              >
+                                {String(id)}
+                              </a>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {Array.isArray(scOsvSummaries) && scOsvSummaries.length > 0 && (
+                      <ul className="space-y-1">
+                        {scOsvSummaries.slice(0, 12).map((s, i) => (
+                          <li key={i} className="text-[12px] text-white/65 leading-snug">
+                            • {String(s)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {Array.isArray(scVectors) && scVectors.length > 0 && (
+                      <dl>
+                        {scVectors.slice(0, 6).map((v, i) => (
+                          <MetaRow
+                            key={i}
+                            label={t('components.findingDrawer.supplyChain.cvssVector')}
+                            value={String(v)}
+                            copyable
+                          />
+                        ))}
+                      </dl>
+                    )}
+
+                    {(Array.isArray(scComponents) || Array.isArray(scEdges)) && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                          {t('components.findingDrawer.supplyChain.dependencyGraph')}
+                        </p>
+                        <SupplyChainGraph
+                          components={Array.isArray(scComponents) ? scComponents : []}
+                          edges={Array.isArray(scEdges) ? scEdges : []}
+                          direct={scGet('direct_dependencies') || []}
+                          summary={scGet('dependency_graph') || null}
+                          byReach={scGet('by_reachability') || null}
+                          t={t}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </Section>
               )}
 

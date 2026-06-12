@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
+import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 
@@ -33,7 +34,14 @@ function FindingCard({ finding, t }) {
         <span className={`text-[10px] font-mono uppercase tracking-widest ${cls.text}`}>
           {finding.severity ?? 'info'}
         </span>
-        <span className="text-[10px] font-mono text-white/30">{finding.engine ?? ''}</span>
+        <div className="flex items-center gap-1.5">
+          {finding.reachability && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/15 text-white/50">
+              {finding.reachability}
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-white/30">{finding.engine ?? ''}</span>
+        </div>
       </div>
       <p className="text-sm font-medium text-white/90">{finding.title ?? finding.type ?? t('pages.supplyChainHub.finding_fallback')}</p>
       {finding.target && (
@@ -111,6 +119,27 @@ function EngineRunPanel({ engineId, clientId, showToast, t }) {
           {findings.slice(0, 5).map((f, i) => <FindingCard key={i} finding={f} t={t} />)}
         </div>
       )}
+      {(() => {
+        const inv = findings.find(
+          (f) => Array.isArray(f.dependency_edges) || Array.isArray(f.components),
+        )
+        if (!inv) return null
+        return (
+          <div className="pt-3 border-t border-white/5 space-y-2">
+            <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+              {t('components.findingDrawer.supplyChain.dependencyGraph')}
+            </p>
+            <SupplyChainGraph
+              components={inv.components || []}
+              edges={inv.dependency_edges || []}
+              direct={inv.direct_dependencies || []}
+              summary={inv.dependency_graph || null}
+              byReach={inv.by_reachability || null}
+              t={t}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -98,21 +98,50 @@ pub fn infer_poc_exploit(obj: &Map<String, Value>, client_target: &str) -> Strin
     }
     if obj.get("type").and_then(Value::as_str) == Some("supply_chain") {
         let pkg = obj.get("package").and_then(Value::as_str).unwrap_or("");
-        let eco = obj
+        let eco_label = obj
             .get("ecosystem")
             .and_then(Value::as_str)
             .unwrap_or("npm");
-        let prefix = client_target_search_prefix(client_target);
-        let npm_q = urlencoding::encode(&prefix);
-        let osv_json = serde_json::json!({ "package": { "name": pkg, "ecosystem": eco } });
+        // Map the UI ecosystem label to the exact OSV ecosystem identifier.
+        let osv_eco = match eco_label {
+            "pypi" => "PyPI",
+            "cargo" => "crates.io",
+            "go" => "Go",
+            "maven" => "Maven",
+            "rubygems" => "RubyGems",
+            "composer" => "Packagist",
+            _ => "npm",
+        };
+        let version = obj.get("version").and_then(Value::as_str).unwrap_or("");
+        // Version-anchored OSV query: OSV performs the affected-range match, so a
+        // result proves *this exact version* is affected (no name-only guessing).
+        let osv_json = if version.is_empty() {
+            serde_json::json!({ "package": { "name": pkg, "ecosystem": osv_eco } })
+        } else {
+            serde_json::json!({ "version": version, "package": { "name": pkg, "ecosystem": osv_eco } })
+        };
         let osv_esc = serde_json::to_string(&osv_json)
             .unwrap_or_default()
             .replace('\'', "'\\''");
+        // Prefer the on-target evidence URL (manifest/SBOM/bundle) that proves presence.
+        let evidence = obj
+            .get("evidence_url")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !evidence.is_empty() {
+            let ev = evidence.replace('\'', "'\\''");
+            return format!(
+                "# 1) Evidence the component is present on the target:\n\
+                 curl -sS '{}'\n\
+                 # 2) Confirm the advisory applies to the observed version (OSV range-matches):\n\
+                 curl -sS -X POST 'https://api.osv.dev/v1/query' -H 'Content-Type: application/json' -d '{}'",
+                ev, osv_esc
+            );
+        }
         return format!(
-            "# Live queries that produced this finding (re-run to verify)\n\
-             curl -sS 'https://registry.npmjs.org/-/v1/search?text={}&size=50'\n\
+            "# Confirm the advisory applies to the observed version (OSV range-matches):\n\
              curl -sS -X POST 'https://api.osv.dev/v1/query' -H 'Content-Type: application/json' -d '{}'",
-            npm_q, osv_esc
+            osv_esc
         );
     }
     String::new()
