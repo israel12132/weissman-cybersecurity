@@ -16,8 +16,17 @@
 //!   * [`confidence_multiplier`] — called from `findings_persist` and the read API
 
 use sqlx::{PgPool, Postgres, Transaction};
+use std::collections::HashMap;
 
 const AUTO_SUPPRESS_FP_THRESHOLD: i32 = 3;
+
+#[inline]
+fn multiplier_from_counts(tp: i32, fp: i32) -> f64 {
+    if tp == 0 && fp == 0 {
+        return 1.0;
+    }
+    ((f64::from(tp) + 1.0) / (f64::from(tp) + f64::from(fp) + 1.0)).clamp(0.1, 1.0)
+}
 
 /// Record a false-positive vote for a (tenant, engine, signature_hash) combo.
 /// Returns `true` if this vote pushed us over the suppression threshold (i.e. a
@@ -221,8 +230,56 @@ pub async fn confidence_multiplier_tx(
     m.clamp(0.1, 1.0)
 }
 
+/// Batch-load confidence multipliers for many `(engine, signature_hash)` pairs in
+/// a **single** query. Replaces the per-row `confidence_multiplier` call in the
+/// findings read path (which opened one tenant transaction + query per row — an
+/// N+1 that cost up to `limit` extra round-trips). Missing pairs default to 1.0.
+pub async fn confidence_multipliers_batch(
+    pool: &PgPool,
+    tenant_id: i64,
+    pairs: &[(String, String)],
+) -> HashMap<(String, String), f64> {
+    let mut out: HashMap<(String, String), f64> = HashMap::new();
+    if pairs.is_empty() {
+        return out;
+    }
+    let engines: Vec<String> = pairs.iter().map(|(e, _)| e.clone()).collect();
+    let sigs: Vec<String> = pairs.iter().map(|(_, s)| s.clone()).collect();
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return out;
+    };
+    let rows: Vec<(String, String, i32, i32)> = sqlx::query_as(
+        r#"SELECT engine, signature_hash, tp_count, fp_count
+             FROM engine_confidence_adjustments
+            WHERE tenant_id = $1
+              AND engine = ANY($2)
+              AND signature_hash = ANY($3)"#,
+    )
+    .bind(tenant_id)
+    .bind(&engines)
+    .bind(&sigs)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    for (engine, sig, tp, fp) in rows {
+        out.insert((engine, sig), multiplier_from_counts(tp, fp));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
+    use super::multiplier_from_counts;
+
+    #[test]
+    fn multiplier_from_counts_matches_formula() {
+        assert!((multiplier_from_counts(0, 0) - 1.0).abs() < 1e-6);
+        assert!(multiplier_from_counts(0, 3) < 0.5);
+        assert!(multiplier_from_counts(0, 100) >= 0.1); // clamped floor
+        assert!(multiplier_from_counts(4, 1) > 0.5);
+    }
+
     #[test]
     fn multiplier_neutral_with_no_history() {
         // Pure math test — can't hit DB without a fixture, so we re-derive.

@@ -1343,18 +1343,32 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     let app_pool = state.app_pool.clone();
     let intel_pool = state.intel_pool.clone();
     let auth_pool = state.auth_pool.clone();
+    // Leader election: only ONE replica runs the singleton workers (scan cycles,
+    // backups, cron, intel refresh). Holds a Postgres session advisory lock for its
+    // lifetime; followers skip those loops so multi-replica deploys don't duplicate work.
+    let is_leader = crate::leader_election::acquire_singleton_leadership_blocking();
+    if is_leader {
+        tracing::info!(target: "leader", "this replica holds singleton-worker leadership");
+    } else {
+        tracing::info!(target: "leader", "another replica is leader — skipping scan/backup/cron/intel loops");
+    }
     crate::endpoint_agents::spawn_pending_task_pusher(
         app_pool.clone(),
         state.endpoint_agents.clone(),
     );
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
+    // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
+    // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
+    crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());
     crate::observability::register_llm_tenant_metering(app_pool.clone());
     crate::observability::spawn_pool_metrics_loop(
         app_pool.clone(),
         auth_pool.clone(),
         intel_pool.clone(),
     );
-    crate::db_backup::spawn_database_backup_scheduler(auth_pool.clone(), app_pool.clone());
+    if is_leader {
+        crate::db_backup::spawn_database_backup_scheduler(auth_pool.clone(), app_pool.clone());
+    }
     crate::server_db::init_db(std::path::Path::new("."));
     crate::orchestrator::spawn_orchestrator(
         app_pool.clone(),
@@ -1363,12 +1377,15 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         Some(state.telemetry_broadcast_tx.clone()),
     );
     // Enable orchestrator scanning by default (disable with WEISSMAN_SCANNING_ENABLED=0).
-    if !matches!(
-        std::env::var("WEISSMAN_SCANNING_ENABLED").as_deref(),
-        Ok("0") | Ok("false") | Ok("no")
-    ) {
+    // Leader-only: followers spawn the orchestrator but never run scan cycles.
+    if is_leader
+        && !matches!(
+            std::env::var("WEISSMAN_SCANNING_ENABLED").as_deref(),
+            Ok("0") | Ok("false") | Ok("no")
+        )
+    {
         crate::orchestrator::set_scanning_active(true);
-        tracing::info!(target: "orchestrator", "Scanning enabled at boot");
+        tracing::info!(target: "orchestrator", "Scanning enabled at boot (leader)");
     }
     let auth_pool_boot = auth_pool.clone();
     let app_pool_boot = app_pool.clone();
@@ -1376,6 +1393,8 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         crate::auth_bootstrap::sync_admin_credentials(app_pool_boot.as_ref()).await;
         let _ = auth_pool_boot; // keep auth pool warm for future bootstrap hooks
     });
+    // ── Singleton workers — leader replica only ────────────────────────────────
+    if is_leader {
     tokio::spawn(crate::payload_sync_worker::run_worker_loop(
         app_pool.clone(),
         intel_pool.clone(),
@@ -1422,11 +1441,12 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         state.take_sovereign_swarm_rx(),
         state.sovereign_swarm_tx.clone(),
     );
+    } // ── end singleton-leader workers ──────────────────────────────────────────
     if let Some(secs) = std::env::var("WEISSMAN_GENERAL_SELF_AUDIT_INTERVAL_SECS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
     {
-        if secs > 0 {
+        if secs > 0 && is_leader {
             if let Some(tid) = std::env::var("WEISSMAN_GENERAL_SELF_AUDIT_TENANT_ID")
                 .ok()
                 .and_then(|s| s.parse::<i64>().ok())
@@ -1487,6 +1507,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             patch(api_findings_update_status),
         )
         .route("/api/intel/status", get(api_intel_status))
+        .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
         .route(
             "/api/intel/suppressions/:id",
@@ -2074,6 +2095,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
+        .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
         .layer(middleware::from_fn_with_state(state.clone(), auth_guard))
         .layer(middleware::from_fn(crate::http::api_rate_limit_middleware))
         .layer(middleware::from_fn(
@@ -2139,9 +2161,36 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown_signal())
     .await
     {
         eprintln!("[Weissman] FATAL: server exited: {}", e);
         std::process::exit(1);
     }
+    eprintln!("[Weissman] Graceful shutdown complete — in-flight requests drained.");
+}
+
+/// Resolves on SIGINT (Ctrl-C) or SIGTERM (container/systemd stop) so Axum drains
+/// in-flight requests before the process exits — deploys/redeploys no longer cut
+/// active scans, SSE streams, or agent dispatches mid-flight.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
+    }
+    eprintln!("[Weissman] Shutdown signal received — draining connections…");
 }

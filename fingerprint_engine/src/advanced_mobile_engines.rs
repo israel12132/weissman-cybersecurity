@@ -1,7 +1,8 @@
 //! Advanced Mobile engines — public app-store, deep-link, and mobile-backend API probes.
 
 use crate::engine_probes::{
-    empty_ok, finding_with_probe_depth, header_value, http_client, http_get, normalize_url,
+    detect_secrets, empty_ok, finding_with_probe_depth, header_value, http_client, http_get,
+    normalize_url,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -61,6 +62,48 @@ const MOBILE_ASSET_PATHS: &[(&str, &str)] = &[
     ("/api/v1/app/config", "Mobile app config v1"),
 ];
 
+/// Flag over-broad Universal-Link (AASA) / App-Link (assetlinks) wildcard paths that let
+/// any URL on the domain open the mobile app — enabling deep-link / OAuth-redirect hijacking.
+fn deep_link_overbroad_finding(engine_id: &str, body: &str, url: &str, t: &str) -> Option<Value> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    let mut overbroad = false;
+    if let Some(details) = v.pointer("/applinks/details").and_then(Value::as_array) {
+        for d in details {
+            if let Some(paths) = d.get("paths").and_then(Value::as_array) {
+                if paths
+                    .iter()
+                    .any(|p| p.as_str().is_some_and(|s| s == "*" || s == "/*" || s == "/"))
+                {
+                    overbroad = true;
+                }
+            }
+            if let Some(comps) = d.get("components").and_then(Value::as_array) {
+                if comps.iter().any(|c| {
+                    c.get("/")
+                        .and_then(Value::as_str)
+                        .is_some_and(|s| s == "*" || s == "/*")
+                }) {
+                    overbroad = true;
+                }
+            }
+        }
+    }
+    if !overbroad {
+        return None;
+    }
+    Some(mobile_finding(
+        engine_id,
+        "Over-broad Universal/App-Link pattern (deep-link hijack risk)",
+        "medium",
+        "T1416",
+        &format!(
+            "{} declares a wildcard deep-link path ('*' / '/*') — every URL on this domain opens the mobile app, enabling deep-link / OAuth-redirect interception (token theft). Scope paths to the exact authenticated routes only.",
+            url
+        ),
+        t,
+    ))
+}
+
 async fn probe_mobile_api_surface(
     t: &str,
     engine_id: &str,
@@ -111,27 +154,48 @@ async fn probe_mobile_api_surface(
     for (path, label) in MOBILE_ASSET_PATHS {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && p.body.len() > 32 {
-                let relevant = path.contains("apple-app-site-association")
-                    || path.contains("assetlinks")
-                    || path.contains("bundle")
-                    || path.contains("cordova")
-                    || path.contains("flutter")
-                    || p.body.contains("\"applinks\"")
-                    || p.body.contains("\"apps\"")
-                    || p.body.contains("ReactNative");
-                if relevant {
-                    findings.push(mobile_finding(
-                        engine_id,
-                        &format!("{} published", label),
-                        "info",
-                        mitre,
-                        &format!(
-                            "{} is publicly readable — review for hardcoded secrets and over-broad deep links.",
-                            p.final_url
-                        ),
-                        t,
-                    ));
+            if p.status != 200 || p.body.len() <= 32 {
+                continue;
+            }
+            let relevant = path.contains("apple-app-site-association")
+                || path.contains("assetlinks")
+                || path.contains("bundle")
+                || path.contains("cordova")
+                || path.contains("flutter")
+                || p.body.contains("\"applinks\"")
+                || p.body.contains("\"apps\"")
+                || p.body.contains("ReactNative");
+            if !relevant {
+                continue;
+            }
+            findings.push(mobile_finding(
+                engine_id,
+                &format!("{} published", label),
+                "info",
+                mitre,
+                &format!("{} is publicly readable.", p.final_url),
+                t,
+            ));
+            // Real check: hardcoded secrets embedded in the publicly-downloadable asset.
+            let secrets = detect_secrets(&p.body);
+            if !secrets.is_empty() {
+                findings.push(mobile_finding(
+                    engine_id,
+                    &format!("Hardcoded secret in mobile asset: {}", label),
+                    "critical",
+                    "T1552.001",
+                    &format!(
+                        "{} embeds credential material ({}). Mobile bundles/configs are trivially downloaded and decompiled — rotate these secrets immediately and move them server-side.",
+                        p.final_url,
+                        secrets.join(", ")
+                    ),
+                    t,
+                ));
+            }
+            // Real check: over-broad deep-link patterns (Universal/App-Link hijacking).
+            if path.contains("apple-app-site-association") || path.contains("assetlinks") {
+                if let Some(f) = deep_link_overbroad_finding(engine_id, &p.body, &p.final_url, t) {
+                    findings.push(f);
                 }
             }
         }
@@ -444,6 +508,22 @@ pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
                     ),
                     t,
                 ));
+                // Real check: extract hardcoded secrets straight from the shipped bundle.
+                let secrets = detect_secrets(&p.body);
+                if !secrets.is_empty() {
+                    findings.push(mobile_finding(
+                        "react_native_attack",
+                        "Hardcoded secret in React Native bundle",
+                        "critical",
+                        "T1552.001",
+                        &format!(
+                            "{} embeds credential material ({}) directly in the JS bundle — extractable by anyone who downloads the app. Rotate immediately and move secrets behind the backend.",
+                            p.final_url,
+                            secrets.join(", ")
+                        ),
+                        t,
+                    ));
+                }
                 break;
             }
         }

@@ -6,9 +6,12 @@
 //! and bounded timeouts so an engine cannot hang the worker pool.
 
 use crate::engine_result::EngineResult;
+use futures::stream::{self, StreamExt};
+use regex::Regex;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::net::ToSocketAddrs;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -680,13 +683,279 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
     tags
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared real-probe primitives (batch foundation): retry/backoff, bounded-
+// concurrency path + port scanning, product/version fingerprinting, and token
+// matching. Every helper is live network I/O — no simulated data. These exist so
+// every `advanced_*` engine can do genuine, evidence-bearing probing instead of a
+// single GET + substring check, and so a transient network failure is retried
+// rather than silently collapsing into "0 findings".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Default bounded concurrency for fan-out path/port probing.
+pub const DEFAULT_PROBE_CONCURRENCY: usize = 12;
+
+/// `http_get` with bounded retry + linear backoff. A `None` from `http_get`
+/// means the request itself failed (DNS / connect / timeout / TLS), so we retry;
+/// a real HTTP response (even 4xx/5xx) is returned immediately on the first try.
+pub async fn http_get_retry(client: &Client, url: &str, attempts: u8) -> Option<HttpProbe> {
+    let tries = attempts.max(1);
+    for i in 0..tries {
+        if let Some(p) = http_get(client, url).await {
+            return Some(p);
+        }
+        if i + 1 < tries {
+            tokio::time::sleep(Duration::from_millis(180 * u64::from(i + 1))).await;
+        }
+    }
+    None
+}
+
+/// Join a base URL and a path into an absolute URL. If `path` is already
+/// absolute (`http://` / `https://`) it is returned unchanged.
+#[must_use]
+pub fn join_url(base: &str, path: &str) -> String {
+    let p = path.trim();
+    if p.starts_with("http://") || p.starts_with("https://") {
+        return p.to_string();
+    }
+    let b = base.trim_end_matches('/');
+    if p.is_empty() || p == "/" {
+        b.to_string()
+    } else {
+        format!("{}/{}", b, p.trim_start_matches('/'))
+    }
+}
+
+/// Probe many paths under `base` concurrently (bounded). Returns the live
+/// [`HttpProbe`] for every request that produced a response. Failed requests are
+/// dropped (already retried at the call site if desired).
+pub async fn probe_paths_concurrent(
+    client: &Client,
+    base: &str,
+    paths: &[&str],
+    concurrency: usize,
+) -> Vec<HttpProbe> {
+    let urls: Vec<String> = paths.iter().map(|p| join_url(base, p)).collect();
+    stream::iter(urls)
+        .map(|u| {
+            let c = client.clone();
+            async move { http_get(&c, &u).await }
+        })
+        .buffer_unordered(concurrency.max(1))
+        .filter_map(|x| async move { x })
+        .collect()
+        .await
+}
+
+/// TCP-connect scan of `ports` on `host`, bounded concurrency. Returns the
+/// subset of ports that accepted a connection within the timeout.
+pub async fn tcp_scan(host: &str, ports: &[u16], concurrency: usize) -> Vec<u16> {
+    let host = host.to_string();
+    let mut open: Vec<u16> = stream::iter(ports.iter().copied())
+        .map(|port| {
+            let h = host.clone();
+            async move {
+                if tcp_open(&h, port).await {
+                    Some(port)
+                } else {
+                    None
+                }
+            }
+        })
+        .buffer_unordered(concurrency.max(1))
+        .filter_map(|x| async move { x })
+        .collect()
+        .await;
+    open.sort_unstable();
+    open
+}
+
+/// Lower-cased, newline-joined view of a probe's headers (for token matching).
+#[must_use]
+pub fn headers_blob_lower(probe: &HttpProbe) -> String {
+    probe
+        .headers
+        .iter()
+        .map(|(k, v)| format!("{}: {}", k, v))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_ascii_lowercase()
+}
+
+/// Return the first `tokens` entry that appears (case-insensitive) in the
+/// probe's body or headers. Used to *confirm a product/technology* from a real
+/// response before emitting a finding (turns path-spray into evidence-based
+/// detection).
+#[must_use]
+pub fn probe_matched_token(probe: &HttpProbe, tokens: &[&str]) -> Option<String> {
+    let body = probe.body.to_ascii_lowercase();
+    let headers = headers_blob_lower(probe);
+    tokens
+        .iter()
+        .find(|t| {
+            let n = t.to_ascii_lowercase();
+            !n.is_empty() && (body.contains(&n) || headers.contains(&n))
+        })
+        .map(|t| (*t).to_string())
+}
+
+/// True when an HTTP status indicates the path *exists / is gated* (worth
+/// reporting as exposed surface) rather than a hard 404/410.
+#[must_use]
+pub fn status_indicates_presence(status: u16) -> bool {
+    matches!(status, 200 | 201 | 204 | 301 | 302 | 307 | 308 | 401 | 403 | 405 | 500)
+}
+
+/// A product/version observation parsed from a real HTTP response.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StackFingerprint {
+    pub server: Option<String>,
+    pub powered_by: Option<String>,
+    pub via: Option<String>,
+    pub generator: Option<String>,
+    /// `(product, version)` pairs parsed from `Server` / `X-Powered-By` tokens.
+    pub products: Vec<(String, String)>,
+}
+
+/// Extract a server/framework fingerprint from a real response. Parses
+/// `Server`, `X-Powered-By`, `Via`, and an HTML `<meta name="generator">` tag,
+/// then splits `product/version` tokens (e.g. `nginx/1.18.0`, `PHP/7.4.3`).
+#[must_use]
+pub fn fingerprint_stack(probe: &HttpProbe) -> StackFingerprint {
+    let mut fp = StackFingerprint {
+        server: header_value(&probe.headers, "server").map(str::to_string),
+        powered_by: header_value(&probe.headers, "x-powered-by").map(str::to_string),
+        via: header_value(&probe.headers, "via").map(str::to_string),
+        ..StackFingerprint::default()
+    };
+    if let Some(idx) = probe.body.to_ascii_lowercase().find("name=\"generator\"") {
+        let tail = &probe.body[idx..];
+        if let Some(cstart) = tail.to_ascii_lowercase().find("content=\"") {
+            let rest = &tail[cstart + "content=\"".len()..];
+            if let Some(end) = rest.find('"') {
+                fp.generator = Some(rest[..end].trim().to_string());
+            }
+        }
+    }
+    for raw in [fp.server.clone(), fp.powered_by.clone(), fp.via.clone()]
+        .into_iter()
+        .flatten()
+    {
+        for token in raw.split([' ', ',', ';']) {
+            if let Some((prod, ver)) = token.split_once('/') {
+                let prod = prod.trim();
+                let ver = ver.trim();
+                if !prod.is_empty() && ver.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                    fp.products
+                        .push((prod.to_string(), ver.to_string()));
+                }
+            }
+        }
+    }
+    fp
+}
+
+/// High-precision secret detector shared across cloud / leak / supply-chain engines.
+/// Returns the list of secret *types* whose pattern matched the text (deduped).
+/// Pattern-based (not `contains("=")`), so it does not fire on ordinary HTML.
+pub fn detect_secrets(text: &str) -> Vec<&'static str> {
+    static PATTERNS: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
+    let patterns = PATTERNS.get_or_init(|| {
+        let raw: &[(&str, &str)] = &[
+            ("AWS Access Key ID", r"AKIA[0-9A-Z]{16}"),
+            ("AWS Secret Access Key", r#"(?i)aws_secret_access_key\s*[=:]\s*['"]?[A-Za-z0-9/+]{40}"#),
+            ("Google API Key", r"AIza[0-9A-Za-z_\-]{35}"),
+            ("Google OAuth Token", r"ya29\.[0-9A-Za-z_\-]{20,}"),
+            ("Slack Token", r"xox[baprs]-[0-9A-Za-z\-]{10,}"),
+            ("GitHub Token", r"gh[pousr]_[0-9A-Za-z]{36,}"),
+            ("GitLab Token", r"glpat-[0-9A-Za-z_\-]{20,}"),
+            ("Stripe Live Key", r"sk_live_[0-9A-Za-z]{24,}"),
+            ("Twilio Key", r"SK[0-9a-fA-F]{32}"),
+            ("Private Key Block", r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"),
+            ("JSON Web Token", r"eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"),
+            ("DB Connection URI with credentials", r"(?i)(postgres|postgresql|mysql|mongodb)(\+srv)?://[^:\s/]+:[^@\s]+@"),
+            (
+                "Credential assignment",
+                r#"(?i)(api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token|password|passwd)\s*[=:]\s*['"][^'"\s]{8,}['"]"#,
+            ),
+        ];
+        raw.iter()
+            .filter_map(|(name, pat)| Regex::new(pat).ok().map(|re| (*name, re)))
+            .collect()
+    });
+    let mut out: Vec<&'static str> = patterns
+        .iter()
+        .filter(|(_, re)| re.is_match(text))
+        .map(|(name, _)| *name)
+        .collect();
+    out.dedup();
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::host_header_rebinding_signal;
+    use super::*;
+
+    #[test]
+    fn detect_secrets_finds_real_keys_not_html() {
+        assert!(detect_secrets("<html>a = b; total == 3</html>").is_empty());
+        assert!(detect_secrets("AKIAIOSFODNN7EXAMPLE").contains(&"AWS Access Key ID"));
+        assert!(detect_secrets("-----BEGIN RSA PRIVATE KEY-----").contains(&"Private Key Block"));
+        assert!(
+            detect_secrets("DATABASE_URL=postgres://u:p4ss@db:5432/x")
+                .contains(&"DB Connection URI with credentials")
+        );
+    }
 
     #[test]
     fn host_header_rebinding_signal_detects_foreign_host_success() {
         assert!(host_header_rebinding_signal(404, 200, 64));
         assert!(!host_header_rebinding_signal(200, 200, 64));
+    }
+
+    #[test]
+    fn join_url_handles_absolute_and_relative() {
+        assert_eq!(join_url("https://x.test/", "/owa/"), "https://x.test/owa/");
+        assert_eq!(join_url("https://x.test", "remote/login"), "https://x.test/remote/login");
+        assert_eq!(join_url("https://x.test/", "https://y.test/a"), "https://y.test/a");
+        assert_eq!(join_url("https://x.test/", "/"), "https://x.test");
+    }
+
+    #[test]
+    fn status_presence_excludes_hard_404() {
+        assert!(status_indicates_presence(401));
+        assert!(status_indicates_presence(200));
+        assert!(!status_indicates_presence(404));
+        assert!(!status_indicates_presence(410));
+    }
+
+    #[test]
+    fn probe_matched_token_matches_header_and_body() {
+        let probe = HttpProbe {
+            status: 200,
+            headers: vec![("Server".to_string(), "Microsoft-IIS/10.0".to_string())],
+            body: "<html>Outlook Web App</html>".to_string(),
+            final_url: "https://x.test/owa/".to_string(),
+        };
+        assert_eq!(probe_matched_token(&probe, &["nginx", "iis"]).as_deref(), Some("iis"));
+        assert_eq!(probe_matched_token(&probe, &["outlook"]).as_deref(), Some("outlook"));
+        assert!(probe_matched_token(&probe, &["citrix"]).is_none());
+    }
+
+    #[test]
+    fn fingerprint_stack_parses_products() {
+        let probe = HttpProbe {
+            status: 200,
+            headers: vec![
+                ("Server".to_string(), "nginx/1.18.0".to_string()),
+                ("X-Powered-By".to_string(), "PHP/7.4.3".to_string()),
+            ],
+            body: String::new(),
+            final_url: "https://x.test/".to_string(),
+        };
+        let fp = fingerprint_stack(&probe);
+        assert!(fp.products.contains(&("nginx".to_string(), "1.18.0".to_string())));
+        assert!(fp.products.contains(&("PHP".to_string(), "7.4.3".to_string())));
     }
 }

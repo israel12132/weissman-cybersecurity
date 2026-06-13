@@ -311,7 +311,7 @@ async fn api_findings_update_status(
     // can record the right (tenant, engine, signature) tuple. We also need them to
     // cascade the status change down into the finding cluster (if any).
     let pre = sqlx::query(
-        "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target
+        "SELECT source, signature_hash, cluster_id, raw_data->>'target' AS target, finding_id, client_id
            FROM vulnerabilities
           WHERE id = $1 AND tenant_id = $2",
     )
@@ -322,12 +322,14 @@ async fn api_findings_update_status(
     .ok()
     .flatten();
 
-    let (engine, sig_hash, cluster_id, target_url) = match pre {
+    let (engine, sig_hash, cluster_id, target_url, finding_id, client_id) = match pre {
         Some(r) => (
             r.try_get::<String, _>("source").unwrap_or_default(),
             r.try_get::<Option<String>, _>("signature_hash").ok().flatten().unwrap_or_default(),
             r.try_get::<Option<i64>, _>("cluster_id").ok().flatten(),
             r.try_get::<Option<String>, _>("target").ok().flatten().unwrap_or_default(),
+            r.try_get::<String, _>("finding_id").unwrap_or_default(),
+            r.try_get::<Option<i64>, _>("client_id").ok().flatten(),
         ),
         None => {
             let _ = tx.rollback().await;
@@ -397,6 +399,32 @@ async fn api_findings_update_status(
     }
 
     let _ = tx.commit().await;
+
+    // Closed-loop remediation verification: when an analyst marks a finding FIXED,
+    // re-run the same engine against the same target to prove the vector is actually
+    // closed (→ VERIFIED_FIXED) or detect a regression (→ REOPENED).
+    if new_status == "FIXED"
+        && !target_url.is_empty()
+        && weissman_core::models::engine::is_production_engine_id(&engine)
+    {
+        let body = json!({
+            "engine": engine.clone(),
+            "target": target_url,
+            "finding_id": finding_id,
+            "client_id": client_id,
+        });
+        if let Err(e) = weissman_db::job_queue::enqueue(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+            "remediation_verify",
+            body,
+            None,
+        )
+        .await
+        {
+            tracing::warn!(target: "remediation_verify", error = %e, "enqueue verify job failed");
+        }
+    }
 
     match affected {
         Ok(r) if r.rows_affected() > 0 => {

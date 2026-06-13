@@ -59,7 +59,7 @@ async fn api_auth_mfa_verify(
     let secret: String = row.try_get("mfa_secret").unwrap_or_default();
     let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
     let email: String = row.try_get("email").unwrap_or_default();
-    if let Some(retry_after) = crate::http::check_lockout(ctx.tenant_id, &email) {
+    if let Some(retry_after) = crate::http::check_lockout(ctx.tenant_id, &email).await {
         return crate::http::locked_response(retry_after);
     }
     if !enabled || secret.is_empty() {
@@ -70,7 +70,7 @@ async fn api_auth_mfa_verify(
             .into_response();
     }
     if !crate::auth_mfa::verify_code(&secret, code) {
-        crate::http::record_failure(ctx.tenant_id, &email);
+        crate::http::record_failure(ctx.tenant_id, &email).await;
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok": false, "detail": "Invalid verification code"})),
@@ -133,7 +133,7 @@ async fn api_auth_mfa_verify(
         })),
     )
         .into_response();
-    crate::http::clear_failures(ctx.tenant_id, &email);
+    crate::http::clear_failures(ctx.tenant_id, &email).await;
     append_set_cookie(response.headers_mut(), &access_cookie);
     append_set_cookie(response.headers_mut(), &refresh_cookie);
     response

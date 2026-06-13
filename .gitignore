@@ -38,9 +38,14 @@ config.yaml
 # Runtime data files
 existing_ids.txt
 
-# Compiled binaries in repo root
-weissman
-weissman-*
+# Compiled binaries in repo root (anchored to root so they do NOT ignore the
+# `crates/weissman-*` / `backend/weissman-*` source directories).
+/weissman
+/weissman-*
+
+# Compiled endpoint-agent binaries (build artifacts ~5MB each; the source lives
+# in crates/weissman-agent/ and IS tracked).
+bin/agents/*/weissman-agent
 
 # Build output
 fingerprint_engine/target/

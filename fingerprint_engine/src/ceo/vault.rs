@@ -1,9 +1,103 @@
 //! CEO CRUD for `genesis_vaccine_vault` / `genesis_suspended_graphs` + remediation match (Rust, same queries as Python module).
 
+use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
+use std::sync::OnceLock;
+
+// ── Secret-at-rest encryption (AES-256-GCM) ────────────────────────────────────
+// Tenant secrets stored in the vault are encrypted at rest. The key is a dedicated
+// `WEISSMAN_VAULT_KEY` (64 hex) or, failing that, derived from the managed
+// `WEISSMAN_JWT_SECRET` (always present in production). Decryption is transparent
+// on authorized read; legacy plaintext rows pass through unchanged (back-compat).
+
+const VAULT_PREFIX: &str = "wzv1:";
+
+fn vault_key() -> Option<[u8; 32]> {
+    static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
+    *KEY.get_or_init(|| {
+        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
+            let t = raw.trim();
+            if !t.is_empty() {
+                match hex::decode(t) {
+                    Ok(b) if b.len() == 32 => {
+                        let mut k = [0u8; 32];
+                        k.copy_from_slice(&b);
+                        return Some(k);
+                    }
+                    _ => eprintln!(
+                        "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
+                    ),
+                }
+            }
+        }
+        let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
+        if js.trim().len() < 16 {
+            eprintln!(
+                "[Weissman][vault] no WEISSMAN_VAULT_KEY and weak/absent JWT secret — vault secrets stored UNENCRYPTED"
+            );
+            return None;
+        }
+        let mut h = Sha256::new();
+        h.update(b"weissman-vault-key-v1|");
+        h.update(js.as_bytes());
+        let d = h.finalize();
+        let mut k = [0u8; 32];
+        k.copy_from_slice(&d);
+        Some(k)
+    })
+}
+
+fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ct = cipher.encrypt(&nonce, plaintext.as_bytes()).ok()?;
+    let mut blob = nonce.as_slice().to_vec();
+    blob.extend_from_slice(&ct);
+    Some(format!(
+        "{}{}",
+        VAULT_PREFIX,
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &blob)
+    ))
+}
+
+fn decrypt_with_key(key: &[u8; 32], stored: &str) -> Option<String> {
+    let rest = stored.strip_prefix(VAULT_PREFIX)?;
+    let blob =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, rest).ok()?;
+    if blob.len() < 12 + 16 {
+        return None;
+    }
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Nonce::from_slice(&blob[..12]);
+    let pt = cipher.decrypt(nonce, &blob[12..]).ok()?;
+    String::from_utf8(pt).ok()
+}
+
+/// Encrypt a tenant secret for storage. Falls back to plaintext only when no key
+/// is available (dev without JWT secret); production always has a key.
+pub fn encrypt_secret(plaintext: &str) -> String {
+    match vault_key() {
+        Some(k) => encrypt_with_key(&k, plaintext).unwrap_or_else(|| plaintext.to_string()),
+        None => plaintext.to_string(),
+    }
+}
+
+/// Transparently decrypt a stored secret. Non-`wzv1:` values (legacy plaintext or
+/// genuine vaccine detection signatures) are returned unchanged.
+pub fn decrypt_secret(stored: &str) -> String {
+    if !stored.starts_with(VAULT_PREFIX) {
+        return stored.to_string();
+    }
+    match vault_key() {
+        Some(k) => decrypt_with_key(&k, stored).unwrap_or_else(|| stored.to_string()),
+        None => stored.to_string(),
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct VaultRowOut {
@@ -49,7 +143,7 @@ fn row_to_vault(r: &PgRow) -> Result<VaultRowOut, sqlx::Error> {
         component_ref: r.try_get("component_ref")?,
         attack_chain_json: r.try_get("attack_chain_json")?,
         remediation_patch: r.try_get("remediation_patch")?,
-        detection_signature: r.try_get("detection_signature")?,
+        detection_signature: decrypt_secret(&r.try_get::<String, _>("detection_signature")?),
         severity: r.try_get("severity")?,
         preemptive_validated: r.try_get("preemptive_validated")?,
         simulation_feedback: r.try_get("simulation_feedback")?,
@@ -166,7 +260,7 @@ pub fn secret_body_to_vault_insert(body: &VaultSecretBody) -> VaultInsertBody {
             "expires_at": body.expires_at,
         }),
         remediation_patch: body.description.trim().to_string(),
-        detection_signature: body.value.clone(),
+        detection_signature: encrypt_secret(&body.value),
         severity: body.r#type.trim().to_lowercase(),
         preemptive_validated: false,
         simulation_feedback: json!({}),
@@ -382,4 +476,27 @@ pub async fn post_resume_suspended_job(
     weissman_db::job_queue::enqueue(pool, tenant_id, "genesis_eternal_fuzz", body, trace)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vault_secret_encrypts_and_round_trips() {
+        let key = [7u8; 32];
+        let secret = "AKIAIOSFODNN7EXAMPLE/secretvalue";
+        let enc = encrypt_with_key(&key, secret).expect("encrypt");
+        assert!(enc.starts_with(VAULT_PREFIX), "ciphertext must be tagged");
+        assert!(!enc.contains(secret), "plaintext must not appear in ciphertext");
+        assert_eq!(decrypt_with_key(&key, &enc).as_deref(), Some(secret));
+    }
+
+    #[test]
+    fn vault_wrong_key_fails_and_legacy_passes_through() {
+        let enc = encrypt_with_key(&[7u8; 32], "topsecret").expect("encrypt");
+        assert!(decrypt_with_key(&[8u8; 32], &enc).is_none(), "wrong key must fail");
+        // Legacy plaintext (no wzv1: prefix) returns unchanged.
+        assert_eq!(decrypt_secret("legacy-plaintext-signature"), "legacy-plaintext-signature");
+    }
 }

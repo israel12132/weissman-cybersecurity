@@ -196,6 +196,48 @@ pub async fn execute_job(
     let p = &job.payload;
     enforce_payload_scope_pin_if_present(p).await?;
     match job.kind.as_str() {
+        "remediation_verify" => {
+            // Closed-loop: re-run the engine against the target and confirm the
+            // original finding is gone (VERIFIED_FIXED) or still present (REOPENED).
+            let engine = p
+                .get("engine")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "payload.engine required".to_string())?;
+            let target = p
+                .get("target")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "payload.target required".to_string())?;
+            let finding_id = p
+                .get("finding_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "payload.finding_id required".to_string())?;
+            let client_id_opt = p.get("client_id").and_then(|v| {
+                v.as_i64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            });
+            if !weissman_core::models::engine::is_production_engine_id(engine) {
+                return Err(format!("engine '{}' is catalog-only or unknown", engine));
+            }
+            let ctx = crate::remediation_verify::verify_context(app_pool.clone(), tid, client_id_opt);
+            let outcome = crate::remediation_verify::run_verification(
+                app_pool.as_ref(),
+                tid,
+                client_id_opt,
+                engine,
+                target,
+                finding_id,
+                &ctx,
+            )
+            .await?;
+            Ok(serde_json::json!({
+                "ok": true,
+                "kind": "remediation_verify",
+                "finding_id": finding_id,
+                "closed": outcome.closed,
+                "result_status": outcome.status,
+                "rescan_findings": outcome.rescan_finding_count,
+            }))
+        }
         "command_center_engine" => {
             let engine = p
                 .get("engine")
@@ -1497,13 +1539,16 @@ pub async fn execute_job(
             }))
             .unwrap_or_default();
             let _ = channels.swarm.send(payload_str);
-            // Detached: do not await — worker must dequeue the next job immediately.
-            let _ = crate::swarm_orchestrator::spawn_swarm_run(
+            // Detached: spawn_swarm_run already tokio::spawns the work internally and
+            // returns a JoinHandle. Drop the handle explicitly to detach the task so the
+            // worker dequeues the next job immediately (an ambiguous `let _ = <future>`
+            // could silently drop an un-awaited future — this makes the intent explicit).
+            drop(crate::swarm_orchestrator::spawn_swarm_run(
                 app_pool.clone(),
                 tid,
                 client_id,
                 channels.swarm.clone(),
-            );
+            ));
             Ok(json!({
                 "ok": true,
                 "message": "swarm run started (non-blocking); see /ws/swarm for live runs",

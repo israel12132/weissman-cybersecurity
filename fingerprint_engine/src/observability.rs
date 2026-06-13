@@ -37,22 +37,77 @@ pub fn install_sovereign_panic_hook() {
     }));
 }
 
+/// Build an OpenTelemetry OTLP tracing layer when `WEISSMAN_OTLP_ENDPOINT` is set
+/// (e.g. `http://otel-collector:4318/v1/traces`). Exports spans over OTLP/HTTP using
+/// the existing reqwest stack. Returns `None` when unset or on exporter build failure,
+/// so default behaviour (fmt logs only) is unchanged.
+fn build_otel_layer(
+) -> Option<Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>> {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_otlp::WithExportConfig;
+    use tracing_subscriber::Layer;
+
+    let endpoint = std::env::var("WEISSMAN_OTLP_ENDPOINT")
+        .ok()
+        .filter(|s| !s.trim().is_empty())?;
+
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
+        .with_endpoint(endpoint)
+        .build()
+        .map_err(|e| eprintln!("[Weissman][otel] exporter build failed: {e}"))
+        .ok()?;
+
+    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
+        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_resource(opentelemetry_sdk::Resource::new(vec![
+            opentelemetry::KeyValue::new("service.name", "weissman"),
+        ]))
+        .build();
+    let tracer = provider.tracer("weissman");
+    opentelemetry::global::set_tracer_provider(provider);
+
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    eprintln!("[Weissman][otel] OTLP span export enabled");
+    Some(
+        tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_filter(filter)
+            .boxed(),
+    )
+}
+
 /// Production JSON logs when `WEISSMAN_LOG_FORMAT=json` (plain text otherwise).
+/// When `WEISSMAN_OTLP_ENDPOINT` is set, also exports OpenTelemetry spans via OTLP/HTTP.
 pub fn init_tracing_from_env() {
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::Layer;
+
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     let json_logs = std::env::var("WEISSMAN_LOG_FORMAT")
         .map(|s| s.eq_ignore_ascii_case("json"))
         .unwrap_or(false);
-    let _ = if json_logs {
-        tracing_subscriber::fmt()
-            .json()
-            .flatten_event(true)
-            .with_env_filter(filter)
-            .try_init()
+
+    let mut layers: Vec<
+        Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>,
+    > = Vec::new();
+    if json_logs {
+        layers.push(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .flatten_event(true)
+                .with_filter(filter)
+                .boxed(),
+        );
     } else {
-        tracing_subscriber::fmt().with_env_filter(filter).try_init()
-    };
+        layers.push(tracing_subscriber::fmt::layer().with_filter(filter).boxed());
+    }
+    if let Some(otel) = build_otel_layer() {
+        layers.push(otel);
+    }
+    let _ = tracing_subscriber::registry().with(layers).try_init();
 }
 
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).

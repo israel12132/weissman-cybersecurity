@@ -5,7 +5,9 @@
 //! response (with `application/json` body) on denial. Superadmins always pass.
 
 use crate::auth_jwt::AuthContext;
-use axum::http::StatusCode;
+use axum::extract::Request;
+use axum::http::{Method, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
@@ -105,6 +107,79 @@ pub fn require_agent(auth: &AuthContext) -> Result<(), Response> {
     Err(forbidden(auth, "agent JWT required"))
 }
 
+/// Self-service mutation paths any authenticated user (incl. `viewer`) may call.
+const SELF_SERVICE_PREFIXES: &[&str] = &[
+    "/api/logout",
+    "/api/auth/logout",
+    "/api/auth/refresh",
+    "/api/auth/me",
+    "/api/auth/mfa",
+    "/api/auth/change-password",
+    "/api/auth/password",
+    "/api/account",
+    "/api/me",
+    "/api/ask",
+    "/api/telemetry",
+    "/api/preferences",
+];
+
+fn path_in(prefixes: &[&str], path: &str) -> bool {
+    prefixes
+        .iter()
+        .any(|p| path == *p || path.starts_with(&format!("{p}/")))
+}
+
+/// Minimum role required to perform a **mutating** request on `path`.
+/// `None` ⇒ any authenticated user (self-service). This is a coarse, central
+/// safety net layered *above* the per-handler `require_operator/admin` checks —
+/// it guarantees no mutating endpoint is reachable by a read-only `viewer`.
+#[must_use]
+pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
+    if path_in(SELF_SERVICE_PREFIXES, path) {
+        return None;
+    }
+    if path.starts_with("/api/ceo") {
+        return Some(roles::CEO);
+    }
+    if path.starts_with("/api/admin") {
+        return Some(roles::ADMIN);
+    }
+    if path.starts_with("/api/clients") {
+        return Some(if *method == Method::DELETE {
+            roles::ADMIN
+        } else {
+            roles::OPERATOR
+        });
+    }
+    // Baseline: every other write requires at least analyst (blocks read-only viewers).
+    Some(roles::ANALYST)
+}
+
+/// Central RBAC middleware. Runs after `auth_guard` (so `AuthContext` is present
+/// for authenticated requests). Reads pass through (gated by auth + tenant RLS);
+/// mutations are checked against [`required_min_role`]. Unauthenticated allowlisted
+/// paths (login/signup/etc.) have no `AuthContext` and are not RBAC-gated here.
+pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
+    let method = req.method().clone();
+    if matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return next.run(req).await;
+    }
+    let Some(auth) = req.extensions().get::<AuthContext>().cloned() else {
+        return next.run(req).await;
+    };
+    // Agent JWTs use a separate role space; their routes enforce `require_agent`.
+    if auth.role.eq_ignore_ascii_case("agent") {
+        return next.run(req).await;
+    }
+    let path = req.uri().path().to_string();
+    if let Some(min_role) = required_min_role(&method, &path) {
+        if let Err(resp) = require_role(&auth, min_role) {
+            return resp;
+        }
+    }
+    next.run(req).await
+}
+
 fn forbidden(auth: &AuthContext, detail: &str) -> Response {
     tracing::warn!(
         target: "rbac",
@@ -165,6 +240,32 @@ mod tests {
         assert!(require_agent(&ctx("agent", false)).is_ok());
         assert!(require_agent(&ctx("admin", false)).is_err());
         assert!(require_agent(&ctx("agent", true)).is_ok());
+    }
+
+    #[test]
+    fn mutation_matrix_roles() {
+        // Self-service is open to any authenticated user.
+        assert_eq!(required_min_role(&Method::POST, "/api/auth/refresh"), None);
+        assert_eq!(required_min_role(&Method::POST, "/api/ask"), None);
+        assert_eq!(required_min_role(&Method::POST, "/api/logout"), None);
+        // Privileged prefixes.
+        assert_eq!(required_min_role(&Method::POST, "/api/ceo/x"), Some(roles::CEO));
+        assert_eq!(required_min_role(&Method::POST, "/api/admin/users"), Some(roles::ADMIN));
+        // Client create/update = operator+, delete = admin+ (matches README RBAC).
+        assert_eq!(required_min_role(&Method::POST, "/api/clients"), Some(roles::OPERATOR));
+        assert_eq!(required_min_role(&Method::DELETE, "/api/clients/5"), Some(roles::ADMIN));
+        // Everything else that mutates requires at least analyst (viewer blocked).
+        assert_eq!(
+            required_min_role(&Method::PATCH, "/api/findings/1/status"),
+            Some(roles::ANALYST)
+        );
+    }
+
+    #[test]
+    fn viewer_blocked_from_generic_write_but_analyst_allowed() {
+        let min = required_min_role(&Method::POST, "/api/playbooks").unwrap();
+        assert!(require_role(&ctx("viewer", false), min).is_err());
+        assert!(require_role(&ctx("analyst", false), min).is_ok());
     }
 
     #[test]

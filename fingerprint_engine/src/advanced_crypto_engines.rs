@@ -90,6 +90,35 @@ pub async fn run_padding_oracle_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_padding_oracle_attack, run_padding_oracle_attack_result);
 
+/// Find a signed-token parameter whose value is a raw Merkle–Damgård digest
+/// (32=MD5, 40=SHA-1, 64=SHA-256 hex). Such `hash(secret‖data)` MACs are the
+/// classic length-extension forgery target (unlike HMAC). Returns `(param, hash)`.
+fn find_hex_mac_param(text: &str) -> Option<(&'static str, &'static str)> {
+    for name in ["signature=", "sig=", "hmac=", "mac=", "hash="] {
+        let mut start = 0usize;
+        while let Some(pos) = text[start..].find(name) {
+            let after = start + pos + name.len();
+            let hexlen = text[after..]
+                .chars()
+                .take(65)
+                .take_while(char::is_ascii_hexdigit)
+                .count();
+            let algo = match hexlen {
+                32 => Some("MD5"),
+                40 => Some("SHA-1"),
+                64 => Some("SHA-256"),
+                _ => None,
+            };
+            if let Some(algo) = algo {
+                let label = name.trim_end_matches('=');
+                return Some((label, algo));
+            }
+            start = after;
+        }
+    }
+    None
+}
+
 pub async fn run_hash_extension_attack_result(t: &str) -> EngineResult {
     if t.trim().is_empty() {
         return EngineResult::error("target required");
@@ -98,16 +127,19 @@ pub async fn run_hash_extension_attack_result(t: &str) -> EngineResult {
     let url = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        let mac_q = ["mac", "signature", "sig", "hash", "token"]
-            .iter()
-            .any(|q| p.body.contains(&format!("{}=", q)));
-        if mac_q {
-            findings.push(finding(
+        // Search the live body (links/forms) AND Set-Cookie for a raw hex MAC token.
+        let cookie = header_value(&p.headers, "set-cookie").unwrap_or_default();
+        let haystack = format!("{}\n{}", p.body, cookie);
+        if let Some((param, algo)) = find_hex_mac_param(&haystack) {
+            findings.push(crypto_finding(
                 "hash_extension_attack",
-                "Response references MAC/signature param",
-                "info",
+                &format!("Signed token uses raw {} MAC ('{}=') — length-extension risk", algo, param),
+                "medium",
                 "T1556",
-                &format!("Body of {} references 'mac/sig/hash' query params — review for length-extension on weak HMAC.", p.final_url),
+                &format!(
+                    "{} exposes a '{}' parameter whose value is a raw {} digest ({} hex). If the server computes it as {}(secret ‖ data) instead of HMAC, an attacker can length-extend the message and forge a valid MAC without the secret. Switch to HMAC-SHA-256 and verify with constant-time comparison.",
+                    p.final_url, param, algo, algo, algo
+                ),
                 t,
             ));
         }
@@ -115,10 +147,8 @@ pub async fn run_hash_extension_attack_result(t: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("hash_extension_attack", t)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("hash_extension_attack: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("hash_extension_attack: {} finding(s)", n))
     }
 }
 cli_wrapper!(run_hash_extension_attack, run_hash_extension_attack_result);

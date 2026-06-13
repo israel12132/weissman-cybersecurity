@@ -83,22 +83,38 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
     // Reads from disk via [`migrations_dir`] (runtime `WEISSMAN_MIGRATIONS_DIR` or compile-time
     // crate path). Phase 2 embeds SQL at compile time via `sqlx::migrate!`.
     let migrations_dir = migrations_dir();
-    match no_tx_migrations::apply_no_tx_migrations(&pool, &migrations_dir).await {
-        Ok(n) if n > 0 => tracing::info!(
-            target: "weissman_db",
-            applied = n,
-            "applied no-transaction migrations"
-        ),
-        Ok(_) => {}
+    let deferred = match no_tx_migrations::apply_no_tx_migrations(&pool, &migrations_dir).await {
+        Ok(d) => {
+            if !d.is_empty() {
+                tracing::info!(
+                    target: "weissman_db",
+                    deferred = d.len(),
+                    "no-tx migrations deferred until their dependencies are created by regular migrations"
+                );
+            }
+            d
+        }
         Err(e) => {
             tracing::error!(target: "weissman_db", error = %e, "no-tx migration failed");
             // Surface as a generic MigrateError so the caller's error path is unchanged.
             return Err(sqlx::migrate::MigrateError::Source(Box::new(e)));
         }
-    }
+    };
 
-    // Phase 2 — standard transactional migrations.
-    sqlx::migrate!("./migrations").run(&pool).await
+    // Phase 2 — standard transactional migrations (these create the tables that
+    // any deferred no-tx index builds depend on).
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    // Phase 3 — finalize no-tx migrations deferred in phase 1 now that phase 2 has
+    // created their dependencies (e.g. CREATE INDEX CONCURRENTLY on a table that a
+    // regular migration just created). No-op on already-migrated databases.
+    if !deferred.is_empty() {
+        if let Err(e) = no_tx_migrations::apply_deferred_no_tx_migrations(&pool, deferred).await {
+            tracing::error!(target: "weissman_db", error = %e, "deferred no-tx migration failed");
+            return Err(sqlx::migrate::MigrateError::Source(Box::new(e)));
+        }
+    }
+    Ok(())
 }
 
 /// App pool: `WEISSMAN_APP_POOL_MAX` (default 48), `WEISSMAN_APP_POOL_MIN` (default 2).

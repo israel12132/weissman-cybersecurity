@@ -141,12 +141,12 @@ services:
       context: .
       dockerfile: deploy/frontend.Dockerfile
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost/command-center/"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/command-center/"]
       interval: 10s
       timeout: 5s
       retries: 3

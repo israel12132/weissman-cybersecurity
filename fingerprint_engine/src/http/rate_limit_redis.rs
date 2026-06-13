@@ -157,6 +157,69 @@ pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
     out
 }
 
+// ── Distributed login lockout (keyed by tenant + normalized email) ─────────────
+const LOCKOUT_MAX_FAILURES: u64 = 10;
+const LOCKOUT_SECS: u64 = 15 * 60;
+
+fn lockout_fail_key(tenant_id: i64, email: &str) -> String {
+    format!(
+        "weissman:lockout:fail:{tenant_id}:{}",
+        email.trim().to_lowercase()
+    )
+}
+fn lockout_until_key(tenant_id: i64, email: &str) -> String {
+    format!(
+        "weissman:lockout:until:{tenant_id}:{}",
+        email.trim().to_lowercase()
+    )
+}
+
+/// Returns `Some(retry_after_secs)` when the account is locked. `None` means not
+/// locked (or Redis unavailable — the caller treats that as not locked / falls back).
+pub async fn lockout_check(tenant_id: i64, email: &str) -> Option<u64> {
+    let rl = shared()?;
+    let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
+    let ttl: i64 = conn.ttl(lockout_until_key(tenant_id, email)).await.ok()?;
+    if ttl > 0 {
+        Some(ttl as u64)
+    } else {
+        None
+    }
+}
+
+/// Record a failed attempt; locks the account for `LOCKOUT_SECS` once the failure
+/// counter reaches the threshold. The counter auto-expires after the lock window.
+pub async fn lockout_record_failure(tenant_id: i64, email: &str) {
+    let Some(rl) = shared() else {
+        return;
+    };
+    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+        return;
+    };
+    let fk = lockout_fail_key(tenant_id, email);
+    let count: u64 = conn.incr(&fk, 1u64).await.unwrap_or(0);
+    if count == 1 {
+        let _: Result<(), _> = conn.expire(&fk, LOCKOUT_SECS as i64).await;
+    }
+    if count >= LOCKOUT_MAX_FAILURES {
+        let _: Result<(), _> = conn
+            .set_ex(lockout_until_key(tenant_id, email), 1i64, LOCKOUT_SECS)
+            .await;
+    }
+}
+
+/// Clear the failure counter + lock on successful authentication.
+pub async fn lockout_clear(tenant_id: i64, email: &str) {
+    let Some(rl) = shared() else {
+        return;
+    };
+    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+        return;
+    };
+    let _: Result<(), _> = conn.del(lockout_fail_key(tenant_id, email)).await;
+    let _: Result<(), _> = conn.del(lockout_until_key(tenant_id, email)).await;
+}
+
 #[must_use]
 pub fn is_enabled() -> bool {
     shared().is_some()

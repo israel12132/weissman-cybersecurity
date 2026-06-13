@@ -831,6 +831,27 @@ async fn api_findings(
     .unwrap_or(0);
     let _ = tx.commit().await;
 
+    // Batch-load FP/TP confidence multipliers in ONE query (fixes the N+1 where
+    // every row opened its own tenant transaction + query).
+    let conf_pairs: Vec<(String, String)> = rows
+        .iter()
+        .filter_map(|r| {
+            let eng = r.try_get::<String, _>("source").ok()?;
+            let sig = r
+                .try_get::<Option<String>, _>("signature_hash")
+                .ok()
+                .flatten()?;
+            if eng.is_empty() || sig.is_empty() {
+                None
+            } else {
+                Some((eng, sig))
+            }
+        })
+        .collect();
+    let conf_map =
+        crate::fp_feedback::confidence_multipliers_batch(&state.app_pool, auth.tenant_id, &conf_pairs)
+            .await;
+
     let mut out = Vec::new();
     for r in rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
@@ -886,22 +907,38 @@ async fn api_findings(
         if kev_ransom {
             risk *= 1.15;
         }
-        // confidence multiplier (FP/TP) — capped at base*1.0.
-        let conf_mult = if let (Some(eng), Some(sig)) =
-            (Some(r.try_get::<String, _>("source").unwrap_or_default()),
-             signature_hash.clone())
-        {
-            if !sig.is_empty() {
-                crate::fp_feedback::confidence_multiplier(&state.app_pool, auth.tenant_id, &eng, &sig).await
-            } else { 1.0 }
-        } else { 1.0 };
+        // confidence multiplier (FP/TP) — looked up from the batch-loaded map (no per-row query).
+        let conf_mult = match signature_hash.as_deref() {
+            Some(sig) if !sig.is_empty() => {
+                let eng = r.try_get::<String, _>("source").unwrap_or_default();
+                *conf_map.get(&(eng, sig.to_string())).unwrap_or(&1.0)
+            }
+            _ => 1.0,
+        };
         risk *= conf_mult;
         let risk = (risk.min(10.0) * 10.0).round() / 10.0;
+
+        // Tamper-evident attestation: re-derive the digest from the stored fields and
+        // verify it against the stored receipt. attestation_valid=false means the row
+        // was altered out-of-band since it was recorded (or predates attestation).
+        let fid = r.try_get::<String, _>("finding_id").unwrap_or_default();
+        let att_title = r.try_get::<String, _>("title").unwrap_or_default();
+        let att_sev = r.try_get::<String, _>("severity").unwrap_or_default();
+        let att_receipt = raw_data
+            .get("attestation")
+            .and_then(|a| a.get("receipt"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let attested = !att_receipt.is_empty();
+        let attestation_valid = attested
+            && crate::finding_attestation::verify_finding(
+                &fid, &att_title, &att_sev, &target, "", att_receipt,
+            );
 
         out.push(json!({
             "id": format!("VLN-{}", raw_id),
             "raw_id": raw_id,
-            "finding_id": r.try_get::<String, _>("finding_id").unwrap_or_default(),
+            "finding_id": fid,
             "title": r.try_get::<String, _>("title").unwrap_or_else(|_| "Finding".to_string()),
             "source": r.try_get::<String, _>("source").unwrap_or_else(|_| "NVD".to_string()),
             "severity": r.try_get::<String, _>("severity").unwrap_or_else(|_| "MEDIUM".to_string()),
@@ -917,6 +954,8 @@ async fn api_findings(
             "risk_score": risk,
             "priority_score": risk,
             "confidence_multiplier": conf_mult,
+            "attested": attested,
+            "attestation_valid": attestation_valid,
             "mitre_attack": mitre,
             "remediation": remediation,
             "target": target,
@@ -1710,7 +1749,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             }
         },
     };
-    if let Some(retry_after) = crate::http::check_lockout(tenant_key, email) {
+    if let Some(retry_after) = crate::http::check_lockout(tenant_key, email).await {
         return crate::http::locked_response(retry_after);
     }
     if let Err(e) = weissman_db::auth_access::record_auth_access(
@@ -1783,12 +1822,12 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
         ),
         None => {
-            crate::http::record_failure(tenant_key, email);
+            crate::http::record_failure(tenant_key, email).await;
             return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
         }
     };
     if hash.is_empty() {
-        crate::http::record_failure(tenant_key, email);
+        crate::http::record_failure(tenant_key, email).await;
         return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
     }
     let mut password_ok = matches!(bcrypt::verify(password, &hash), Ok(true));
@@ -1904,12 +1943,12 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 })),
             )
                 .into_response();
-            crate::http::clear_failures(tenant_id, email);
+            crate::http::clear_failures(tenant_id, email).await;
             append_set_cookie(response.headers_mut(), &access_cookie);
             append_set_cookie(response.headers_mut(), &refresh_cookie);
             response
         } else {
-            crate::http::record_failure(tenant_key, email);
+            crate::http::record_failure(tenant_key, email).await;
             (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response()
         }
 }

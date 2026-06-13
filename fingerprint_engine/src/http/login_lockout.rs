@@ -34,9 +34,9 @@ fn key(tenant_id: i64, email: &str) -> String {
     format!("{}:{}", tenant_id, email.trim().to_lowercase())
 }
 
-/// Returns seconds until retry when locked, or `None` if login may proceed.
-#[must_use]
-pub fn check_lockout(tenant_id: i64, email: &str) -> Option<u64> {
+// ── In-memory fallback (single replica / no REDIS_URL) ─────────────────────────
+
+fn check_lockout_mem(tenant_id: i64, email: &str) -> Option<u64> {
     let k = key(tenant_id, email);
     let cell = store().get(&k)?;
     let mut entry = cell.lock().expect("login lockout lock");
@@ -56,7 +56,7 @@ pub fn check_lockout(tenant_id: i64, email: &str) -> Option<u64> {
     None
 }
 
-pub fn record_failure(tenant_id: i64, email: &str) {
+fn record_failure_mem(tenant_id: i64, email: &str) {
     let k = key(tenant_id, email);
     let cell = store().entry(k).or_default();
     let mut entry = cell.lock().expect("login lockout lock");
@@ -66,8 +66,35 @@ pub fn record_failure(tenant_id: i64, email: &str) {
     }
 }
 
-pub fn clear_failures(tenant_id: i64, email: &str) {
+fn clear_failures_mem(tenant_id: i64, email: &str) {
     store().remove(&key(tenant_id, email));
+}
+
+// ── Public API: distributed via Redis when REDIS_URL is set, else in-memory ────
+
+/// Returns seconds until retry when locked, or `None` if login may proceed.
+/// Distributed across replicas via Redis when `REDIS_URL` is configured.
+pub async fn check_lockout(tenant_id: i64, email: &str) -> Option<u64> {
+    if crate::http::rate_limit_redis::is_enabled() {
+        return crate::http::rate_limit_redis::lockout_check(tenant_id, email).await;
+    }
+    check_lockout_mem(tenant_id, email)
+}
+
+pub async fn record_failure(tenant_id: i64, email: &str) {
+    if crate::http::rate_limit_redis::is_enabled() {
+        crate::http::rate_limit_redis::lockout_record_failure(tenant_id, email).await;
+        return;
+    }
+    record_failure_mem(tenant_id, email);
+}
+
+pub async fn clear_failures(tenant_id: i64, email: &str) {
+    if crate::http::rate_limit_redis::is_enabled() {
+        crate::http::rate_limit_redis::lockout_clear(tenant_id, email).await;
+        return;
+    }
+    clear_failures_mem(tenant_id, email);
 }
 
 /// 429 response with `Retry-After` for a locked account.
@@ -96,18 +123,26 @@ pub fn locked_response(retry_after_secs: u64) -> Response {
 mod tests {
     use super::*;
 
-    #[test]
-    fn locks_after_max_failures() {
+    #[tokio::test]
+    async fn locks_after_max_failures() {
         let tenant = 99_001_i64;
         let email = "lockout-test@example.com";
-        clear_failures(tenant, email);
+        // In-memory path is exercised directly (no REDIS_URL in unit tests).
+        clear_failures_mem(tenant, email);
         for _ in 0..MAX_FAILURES {
-            record_failure(tenant, email);
+            record_failure_mem(tenant, email);
         }
-        let retry = check_lockout(tenant, email);
+        let retry = check_lockout_mem(tenant, email);
         assert!(retry.is_some());
         assert!(retry.unwrap() > 0);
-        clear_failures(tenant, email);
-        assert!(check_lockout(tenant, email).is_none());
+        clear_failures_mem(tenant, email);
+        assert!(check_lockout_mem(tenant, email).is_none());
+        // Public async API routes to the same in-memory store when Redis is off.
+        record_failure(tenant, email).await;
+        assert!(
+            check_lockout(tenant, email).await.is_none(),
+            "1 failure must not lock"
+        );
+        clear_failures(tenant, email).await;
     }
 }

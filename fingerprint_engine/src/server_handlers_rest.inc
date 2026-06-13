@@ -289,7 +289,24 @@ async fn api_system_backup(
     }
 }
 
-async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+async fn api_clients_list(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    // Bounded pagination (default 1000, hard cap 5000) so a tenant with a very
+    // large client list can't return an unbounded response. Bare-array contract
+    // preserved for backward compatibility; pass ?limit=&offset= to page.
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(1000)
+        .clamp(1, 5000);
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -308,8 +325,10 @@ async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): E
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
             COALESCE(gcp_project_id,'') AS gcp_project_id
-           FROM clients ORDER BY id"#,
+           FROM clients ORDER BY id LIMIT $1 OFFSET $2"#,
     )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&mut *tx)
         .await
         .unwrap_or_default();
@@ -332,6 +351,13 @@ async fn api_clients_list(State(state): State<Arc<AppState>>, Extension(auth): E
         })
         .collect();
     (StatusCode::OK, Json(Value::Array(out))).into_response()
+}
+
+/// GET /api/attack-coverage — live MITRE ATT&CK coverage matrix (Detection-as-Code).
+/// Read-only platform metadata (gated by auth_guard): which adversary techniques the
+/// engine fleet detects, grouped by tactic, with the contributing engines + rollups.
+async fn api_attack_coverage(Extension(_auth): Extension<AuthContext>) -> Response {
+    (StatusCode::OK, Json(crate::attack_coverage::coverage_json())).into_response()
 }
 
 /// POST /api/clients/:id/scan/run-all — queue the curated baseline engine bundle against the

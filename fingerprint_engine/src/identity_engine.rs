@@ -676,18 +676,78 @@ pub async fn run_autonomous_privilege_escalation(
     (harvested, findings)
 }
 
-/// Session/OAuth tests: state param manipulation, redirect bypass (dynamic; no hardcoded URLs).
+/// Session/OAuth weakness analysis over the harvested credentials. Each token is
+/// inspected for forgeable / non-expiring / weak-entropy session properties — all
+/// computed from the token material itself (no extra network round-trip).
 pub fn run_session_oauth_tests(
-    _base_url: &str,
-    _contexts: &[AuthContext],
+    base_url: &str,
+    contexts: &[AuthContext],
 ) -> Vec<serde_json::Value> {
     let mut findings = Vec::new();
-    findings.push(serde_json::json!({
-        "title": "Session/OAuth test placeholder: configure state param and redirect URLs per target",
-        "severity": "info",
-        "source": "identity_session_oauth",
-        "message": "Use Identity Matrix to add tokens; state fixation and redirect tests run when endpoints are discovered.",
-    }));
+    let now = chrono::Utc::now().timestamp();
+    for ctx in contexts {
+        let token = ctx.token_value.trim();
+        if token.is_empty() {
+            continue;
+        }
+        if let Some((header, payload)) = jwt_decode_raw(token) {
+            let alg = header
+                .get("alg")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if alg == "none" || alg.is_empty() {
+                findings.push(serde_json::json!({
+                    "title": "Session token uses 'alg: none' — forgeable JWT",
+                    "severity": "critical",
+                    "source": "identity_session_oauth",
+                    "mitre_attack": "T1606.001",
+                    "url": base_url,
+                    "message": format!("Harvested {} token ({}) accepts unsigned JWTs (alg=none) — an attacker can mint arbitrary (incl. admin) sessions without the signing key.", ctx.role_name, ctx.token_type),
+                }));
+            } else if alg.starts_with("hs") {
+                findings.push(serde_json::json!({
+                    "title": "Session JWT signed with symmetric HMAC (HS*)",
+                    "severity": "low",
+                    "source": "identity_session_oauth",
+                    "mitre_attack": "T1606.001",
+                    "url": base_url,
+                    "message": format!("{} token uses {} — a single leaked secret forges every session. Prefer asymmetric RS/ES signing and rotate keys.", ctx.role_name, alg.to_uppercase()),
+                }));
+            }
+            match payload.get("exp").and_then(Value::as_i64) {
+                None => findings.push(serde_json::json!({
+                    "title": "Session JWT has no expiry (exp) claim",
+                    "severity": "medium",
+                    "source": "identity_session_oauth",
+                    "mitre_attack": "T1539",
+                    "url": base_url,
+                    "message": format!("{} token never expires — a stolen session stays valid indefinitely (fixation/replay). Add a short exp + refresh rotation.", ctx.role_name),
+                })),
+                Some(e) if e - now > 30 * 24 * 3600 => findings.push(serde_json::json!({
+                    "title": "Session JWT is extremely long-lived (> 30 days)",
+                    "severity": "low",
+                    "source": "identity_session_oauth",
+                    "mitre_attack": "T1539",
+                    "url": base_url,
+                    "message": format!("{} token expires in ~{} days — long-lived bearer tokens widen the theft window.", ctx.role_name, (e - now) / (24 * 3600)),
+                })),
+                _ => {}
+            }
+        } else {
+            let printable = token.chars().filter(|c| !c.is_whitespace()).count();
+            if printable < 16 {
+                findings.push(serde_json::json!({
+                    "title": "Short / low-entropy opaque session token",
+                    "severity": "medium",
+                    "source": "identity_session_oauth",
+                    "mitre_attack": "T1539",
+                    "url": base_url,
+                    "message": format!("{} {} token is only {} characters — short session identifiers are brute-forceable. Use ≥128 bits of entropy.", ctx.role_name, ctx.token_type, printable),
+                }));
+            }
+        }
+    }
     findings
 }
 
@@ -701,5 +761,32 @@ mod tests {
         let (h, p) = jwt_decode_raw(t).expect("test JWT must decode");
         assert_eq!(h.get("alg").and_then(Value::as_str), Some("HS256"));
         assert_eq!(p.get("role").and_then(Value::as_str), Some("user"));
+    }
+
+    #[test]
+    fn session_tests_flag_real_weaknesses_and_no_placeholder() {
+        // Empty input → zero findings (the old placeholder is gone).
+        assert!(run_session_oauth_tests("https://x.test", &[]).is_empty());
+
+        // alg:none JWT with no exp → critical (forgeable) + medium (no expiry).
+        let none_jwt = AuthContext {
+            role_name: "Admin".into(),
+            privilege_order: 9,
+            token_type: "jwt".into(),
+            token_value: "eyJhbGciOiJub25lIn0.e30.".into(),
+        };
+        let f = run_session_oauth_tests("https://x.test", std::slice::from_ref(&none_jwt));
+        assert!(f.iter().any(|v| v["severity"] == "critical"));
+        assert!(f.iter().any(|v| v["severity"] == "medium"));
+
+        // Short opaque session token → medium (brute-forceable).
+        let opaque = AuthContext {
+            role_name: "User".into(),
+            privilege_order: 1,
+            token_type: "session".into(),
+            token_value: "abc123".into(),
+        };
+        let f2 = run_session_oauth_tests("https://x.test", std::slice::from_ref(&opaque));
+        assert!(f2.iter().any(|v| v["severity"] == "medium"));
     }
 }

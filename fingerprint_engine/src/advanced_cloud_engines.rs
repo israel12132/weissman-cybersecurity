@@ -2,8 +2,8 @@
 //! and SaaS APIs reachable from the target. No simulated findings.
 
 use crate::engine_probes::{
-    dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value, http_client, http_get,
-    normalize_url,
+    detect_secrets, dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value,
+    http_client, http_get, normalize_url, probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -99,33 +99,54 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    let label = host.split('.').next().unwrap_or(&host).to_string();
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let bucket_guesses = [
-        format!("https://{}.s3.amazonaws.com/", host.replace('.', "-")),
-        format!("https://{}.s3.amazonaws.com/", host),
-        format!("https://s3.amazonaws.com/{}/", host),
+    // Multi-cloud public object-storage enumeration (AWS S3 / Azure Blob / GCP Storage).
+    let candidates: Vec<(&str, String)> = vec![
+        ("AWS S3", format!("https://{}.s3.amazonaws.com/", host.replace('.', "-"))),
+        ("AWS S3", format!("https://{}.s3.amazonaws.com/", host)),
+        ("AWS S3", format!("https://s3.amazonaws.com/{}/", host)),
+        ("AWS S3", format!("https://{}.s3.amazonaws.com/", label)),
+        (
+            "Azure Blob",
+            format!("https://{}.blob.core.windows.net/?comp=list", label.replace('-', "")),
+        ),
+        ("GCP Storage", format!("https://storage.googleapis.com/{}/", host)),
+        ("GCP Storage", format!("https://storage.googleapis.com/{}/", label)),
     ];
-    for url in bucket_guesses.iter() {
+    for (provider, url) in &candidates {
         if let Some(p) = http_get(&client, url).await {
-            if p.status == 200 && p.body.contains("<ListBucketResult") {
+            let public_list = p.status == 200
+                && (p.body.contains("<ListBucketResult")
+                    || p.body.contains("<EnumerationResults")
+                    || p.body.contains("<Contents>")
+                    || p.body.contains("<Blob>"));
+            let exists_denied = (p.status == 403 || p.status == 401)
+                && (p.body.contains("AccessDenied")
+                    || p.body.contains("AuthenticationFailed")
+                    || p.body.contains("InvalidSecurity"));
+            if public_list {
                 findings.push(cloud_finding(
                     "s3_bucket_attack",
-                    "Public S3 bucket listing",
+                    &format!("Public {} object listing", provider),
                     "high",
                     "T1530",
-                    &format!("Bucket listing readable at {} (HTTP 200).", url),
+                    &format!(
+                        "{} object listing readable at {} (HTTP {}) — unauthenticated data exposure.",
+                        provider, url, p.status
+                    ),
                     target,
                 ));
-            } else if p.status == 403 && p.body.contains("AccessDenied") {
+            } else if exists_denied {
                 findings.push(cloud_finding(
                     "s3_bucket_attack",
-                    "S3 bucket exists (AccessDenied)",
+                    &format!("{} bucket/container exists (access denied)", provider),
                     "info",
                     "T1530",
                     &format!(
-                        "{} returned HTTP 403 AccessDenied — bucket name resolves.",
-                        url
+                        "{} returned HTTP {} — the name resolves; review ACL / policy.",
+                        url, p.status
                     ),
                     target,
                 ));
@@ -135,10 +156,8 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("s3_bucket_attack", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("s3_bucket_attack: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("s3_bucket_attack: {} storage finding(s)", n))
     }
 }
 cli_wrapper!(run_s3_bucket_attack, run_s3_bucket_attack_result);
@@ -540,44 +559,53 @@ pub async fn run_secrets_manager_attack_result(target: &str) -> EngineResult {
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let mut findings: Vec<Value> = Vec::new();
-    for path in [
+    let paths = [
         "/.env",
+        "/.env.local",
+        "/.env.production",
         "/config.env",
         "/secrets.json",
         "/credentials.json",
         "/.aws/credentials",
         "/.aws/config",
         "/.git/config",
-    ] {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200
-                && (p.body.contains("=")
-                    || p.body.contains("AWS_ACCESS_KEY")
-                    || p.body.contains("aws_access_key"))
-            {
-                findings.push(cloud_finding(
-                    "secrets_manager_attack",
-                    &format!("Possible secret file: {}", path),
-                    "critical",
-                    "T1552.001",
-                    &format!(
-                        "{} returned HTTP 200 — contents look like secrets/config.",
-                        p.final_url
-                    ),
-                    target,
-                ));
-            }
+        "/application.properties",
+        "/appsettings.json",
+        "/config.php",
+        "/wp-config.php",
+        "/docker-compose.yml",
+        "/.npmrc",
+        "/config/database.yml",
+        "/.docker/config.json",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    let mut findings: Vec<Value> = Vec::new();
+    for p in &probes {
+        if p.status != 200 {
+            continue;
+        }
+        // Precision: only fire when a real secret *pattern* matches (not "body contains =").
+        let secrets = detect_secrets(&p.body);
+        if !secrets.is_empty() {
+            findings.push(cloud_finding(
+                "secrets_manager_attack",
+                &format!("Exposed credential material at {}", p.final_url),
+                "critical",
+                "T1552.001",
+                &format!(
+                    "{} (HTTP 200) exposes secret material — detected: {}. Remove the file from the web root, rotate every affected secret immediately, and add deny rules / .gitignore entries.",
+                    p.final_url,
+                    secrets.join(", ")
+                ),
+                target,
+            ));
         }
     }
     if findings.is_empty() {
         empty_ok("secrets_manager_attack", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("secrets_manager_attack: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("secrets_manager_attack: {} leak(s)", n))
     }
 }
 cli_wrapper!(

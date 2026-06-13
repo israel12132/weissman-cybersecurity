@@ -205,7 +205,7 @@ fn extract_array(f: &Value, keys: &[&str]) -> Value {
 /// We intentionally exclude every volatile field (timestamps, request IDs, HTTP bodies,
 /// banner text, host headers, response_ms, …) and only hash the *signature* — the
 /// minimal set of fields that uniquely identifies the vulnerability class on this asset.
-fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
+pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
     let cve = extract_cve_from_finding(finding);
     let cwe = extract_string(finding, &["cwe", "cwe_id"]);
     let mitre = extract_string(finding, &["mitre_attack", "mitre", "attack_id"]);
@@ -382,6 +382,25 @@ pub async fn persist_engine_findings(
         }
 
         let finding_id = build_finding_id(engine, &target_url, f);
+
+        // ── Tamper-evident attestation ──────────────────────────────────────
+        // Sign the finding's immutable identity (id|title|severity|target) at
+        // persist time. On read the server re-derives the digest and verifies it
+        // against this receipt, so any out-of-band DB tampering is detectable.
+        if let Some((att_digest, att_receipt)) =
+            crate::finding_attestation::attest_finding(&finding_id, &title, &severity, &target_url, "")
+        {
+            if let Value::Object(obj) = &mut raw_data_enriched {
+                obj.insert(
+                    "attestation".to_string(),
+                    json!({
+                        "alg": crate::finding_attestation::ATTEST_ALG,
+                        "digest": att_digest,
+                        "receipt": att_receipt,
+                    }),
+                );
+            }
+        }
 
         // ── False-positive feedback / auto-suppression check ────────────────
         // The signature_hash is the same triple used by the correlator so
@@ -640,4 +659,71 @@ fn derive_vuln_signature_for_persist(finding: &Value, fallback_title: &str) -> S
 
 fn extract_cve_from_finding(finding: &Value) -> String {
     crate::intel_findings_backfill::extract_cve_from_value(finding).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn severity_normalization() {
+        assert_eq!(normalize_severity(Some("CRITICAL")), "critical");
+        assert_eq!(normalize_severity(Some(" High ")), "high");
+        assert_eq!(normalize_severity(Some("warn")), "medium");
+        assert_eq!(normalize_severity(Some("severe")), "high");
+        assert_eq!(normalize_severity(Some("informational")), "info");
+        assert_eq!(normalize_severity(Some("")), "info");
+        assert_eq!(normalize_severity(None), "info");
+        assert_eq!(normalize_severity(Some("nonsense")), "info");
+    }
+
+    #[test]
+    fn cvss_extraction_clamps_and_guards() {
+        assert_eq!(extract_cvss(&json!({"cvss": 7.5})), 7.5);
+        assert_eq!(extract_cvss(&json!({"cvss_score": 15.0})), 10.0); // clamped
+        assert_eq!(extract_cvss(&json!({"score": -3.0})), 0.0); // negative ignored
+        assert_eq!(extract_cvss(&json!({"unrelated": 1})), 0.0);
+        assert_eq!(severity_to_score("critical"), 9.5);
+        assert_eq!(severity_to_score("info"), 1.0);
+    }
+
+    #[test]
+    fn finding_id_is_stable_across_volatile_fields() {
+        // Same vulnerability re-detected: only volatile fields differ (timestamps,
+        // response time, evidence body) and the target case differs. The stable
+        // finding_id MUST be identical so re-scans dedup instead of creating new rows.
+        let first = json!({
+            "title": "SQL Injection in /login",
+            "signature": "sqli",
+            "cve": "CVE-2021-1234",
+            "response_ms": 12,
+            "evidence": "body snapshot A",
+            "discovered_at": "2026-01-01T00:00:00Z"
+        });
+        let rescan = json!({
+            "title": "SQL Injection in /login",
+            "signature": "sqli",
+            "cve": "CVE-2021-1234",
+            "response_ms": 987,
+            "evidence": "body snapshot Z (totally different)",
+            "discovered_at": "2026-06-13T00:00:00Z"
+        });
+        let id1 = build_finding_id("sqli_engine", "https://Example.com/login", &first);
+        let id2 = build_finding_id("sqli_engine", "https://example.com/login", &rescan);
+        assert_eq!(id1, id2, "finding_id must be stable across volatile fields + target case");
+        assert!(id1.starts_with("sqli_engine-"));
+    }
+
+    #[test]
+    fn finding_id_changes_with_signature() {
+        let a = json!({"title": "Issue", "signature": "sqli", "cve": "CVE-2021-1234"});
+        let b = json!({"title": "Issue", "signature": "xss", "cve": "CVE-2021-1234"});
+        let target = "https://example.com/login";
+        assert_ne!(
+            build_finding_id("eng", target, &a),
+            build_finding_id("eng", target, &b),
+            "different vulnerability signature must yield a different finding_id"
+        );
+    }
 }

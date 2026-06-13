@@ -6,7 +6,7 @@
 
 use crate::engine_probes::{
     empty_ok, finding, finding_with_probe_depth, has_header, header_value, http_client, http_get,
-    http_post_json, normalize_url, HttpProbe,
+    http_post_json, join_url, normalize_url, HttpProbe,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -754,7 +754,38 @@ pub async fn run_file_inclusion_rfi_result(target: &str) -> EngineResult {
 }
 cli_wrapper!(run_file_inclusion_rfi, run_file_inclusion_rfi_result);
 
-// ── deserialization_net ───────────────────────────────────────────────────────
+// ── deserialization_net (multi-platform insecure-deserialization detector) ──────
+/// POST a raw body with a chosen Content-Type and return `(status, body)`.
+/// Used to send the bare Java serialization stream header (no gadget) and observe
+/// whether the endpoint feeds it into `ObjectInputStream.readObject()`.
+async fn post_raw(
+    client: &reqwest::Client,
+    url: &str,
+    body: Vec<u8>,
+    content_type: &str,
+) -> Option<(u16, String)> {
+    let resp = client
+        .post(url)
+        .header("Content-Type", content_type)
+        .body(body)
+        .send()
+        .await
+        .ok()?;
+    let status = resp.status().as_u16();
+    let text = resp.text().await.unwrap_or_default();
+    let text = if text.len() > 65_536 { text[..65_536].to_string() } else { text };
+    Some((status, text))
+}
+
+/// True when a response body carries a Java deserialization error signature.
+fn java_deser_error(body_lower: &str) -> bool {
+    body_lower.contains("invalidclassexception")
+        || body_lower.contains("streamcorruptedexception")
+        || body_lower.contains("optionaldataexception")
+        || body_lower.contains("java.io.objectinputstream")
+        || (body_lower.contains("readobject") && body_lower.contains("java.io"))
+}
+
 pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -762,29 +793,102 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
+
+    // 1. Passive: parse the live page for serialization sinks (real evidence).
     if let Some(p) = http_get(&client, &url).await {
-        let server = header_value(&p.headers, "server").unwrap_or("");
-        let powered = header_value(&p.headers, "x-powered-by").unwrap_or("");
-        if server.to_ascii_lowercase().contains("iis")
-            || powered.to_ascii_lowercase().contains("asp.net")
-        {
-            findings.push(finding(
+        let low = p.body.to_ascii_lowercase();
+        let cookies = p
+            .headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("set-cookie"))
+            .map(|(_, v)| v.clone())
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        if low.contains("__viewstate") {
+            let encrypted = low.contains("__viewstateencrypted");
+            findings.push(web_finding(
                 "deserialization_net",
-                ".NET / IIS surface detected",
-                "info",
-                "T1059",
-                &format!("Server='{}' / X-Powered-By='{}' on {} — review ViewState MAC and BinaryFormatter usage.", server, powered, p.final_url),
+                "ASP.NET ViewState present (deserialization sink)",
+                if encrypted { "medium" } else { "high" },
+                "T1190",
+                &format!(
+                    "{} returns a __VIEWSTATE field{}. With a leaked machineKey or disabled MAC, ViewState is a remote deserialization → RCE sink (CVE-2020-0688 class). Enforce ViewState MAC + encryption and rotate the machineKey.",
+                    p.final_url,
+                    if encrypted { " (encrypted)" } else { " and no __VIEWSTATEENCRYPTED marker" }
+                ),
+                target,
+            ));
+        }
+        if low.contains("javax.faces.viewstate") || low.contains("jakarta.faces.viewstate") {
+            findings.push(web_finding(
+                "deserialization_net",
+                "JSF ViewState present (Mojarra/MyFaces Java deserialization)",
+                "high",
+                "T1190",
+                &format!(
+                    "{} exposes a JSF ViewState field. Client-side, unencrypted JSF state is a Java deserialization RCE vector (CVE-2017-1000486 class). Set STATE_SAVING_METHOD=server and encrypt client state.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
+        if p.body.contains("rO0AB") || cookies.contains("rO0AB") {
+            findings.push(web_finding(
+                "deserialization_net",
+                "Java serialized object reflected (base64 magic rO0AB)",
+                "high",
+                "T1190",
+                &format!(
+                    "{} reflects a base64 Java serialized stream (rO0AB → AC ED 00 05) in its body/cookies. If attacker-controlled serialized data is deserialized, this is a ysoserial gadget-chain RCE surface — switch to signed/encrypted tokens.",
+                    p.final_url
+                ),
                 target,
             ));
         }
     }
+
+    // 2. Active (safe): send ONLY the 4-byte Java serialization stream header — no
+    //    gadget, no payload — and detect a deserialization error signature, which
+    //    proves the endpoint calls ObjectInputStream.readObject() on request bodies.
+    let java_stream_header = vec![0xACu8, 0xED, 0x00, 0x05];
+    for path in [
+        "",
+        "/invoker/JMXInvokerServlet",
+        "/invoker/EJBInvokerServlet",
+        "/remoting/RemoteService",
+    ] {
+        let u = if path.is_empty() { url.clone() } else { join_url(&url, path) };
+        if let Some((status, text)) = post_raw(
+            &client,
+            &u,
+            java_stream_header.clone(),
+            "application/x-java-serialized-object",
+        )
+        .await
+        {
+            if java_deser_error(&text.to_ascii_lowercase()) {
+                findings.push(web_finding(
+                    "deserialization_net",
+                    "Endpoint deserializes Java input (error-signature confirmed)",
+                    "critical",
+                    "T1190",
+                    &format!(
+                        "{} returned HTTP {} with a Java deserialization error signature when sent a bare serialization stream header (no gadget). The endpoint feeds request bodies into ObjectInputStream.readObject() — a remote-code-execution deserialization sink. Reject java-serialized content-types and adopt look-ahead deserialization (e.g. ValidatingObjectInputStream / allow-list).",
+                        u, status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("deserialization_net", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("deserialization_net: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("deserialization_net: {} finding(s)", n))
     }
 }
 cli_wrapper!(run_deserialization_net, run_deserialization_net_result);
