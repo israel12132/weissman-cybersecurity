@@ -21,6 +21,23 @@ updates:
       - "dependencies"
       - "rust"
     open-pull-requests-limit: 10
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Frontend dependencies (npm)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "frontend"
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -31,3 +48,28 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Container base images — root Dockerfiles
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+
+  # Container base images — production deploy Dockerfiles
+  - package-ecosystem: "docker"
+    directory: "/deploy"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5

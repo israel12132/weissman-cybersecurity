@@ -50,7 +50,10 @@ function extractDispatchIds(text) {
 
 function extractAliasRunnerIds(text) {
   const start = text.indexOf('match engine_id.trim() {')
-  const end = text.indexOf('\n        _ => run_alias_probe(', start)
+  // Match the top-level wildcard arm at 8-space indent, tolerant of both the inline
+  // form (`_ => run_alias_probe(`) and the block form (`_ => {`) — the arm body was
+  // refactored to a block, which previously broke this marker and the whole gate.
+  const end = text.indexOf('\n        _ =>', start)
   if (start === -1 || end === -1) throw new Error('Could not locate alias_engine_runner match')
   const chunk = text.slice(start, end)
   const ids = []

@@ -4,7 +4,10 @@ import { useTranslation } from 'react-i18next'
 const NS = 'components.intelWidgets.securityScoreGauge'
 
 function GaugeSvg({ score }) {
-  const safeScore = Math.min(100, Math.max(0, Number(score) ?? 0))
+  // Number(score) yields NaN (not null) for bad input, so `?? 0` never fired and the
+  // gauge rendered NaN. Guard on finiteness to truly default to 0.
+  const numericScore = Number(score)
+  const safeScore = Math.min(100, Math.max(0, Number.isFinite(numericScore) ? numericScore : 0))
   const r = 44
   const stroke = 8
   const circumference = 2 * Math.PI * r

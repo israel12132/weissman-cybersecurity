@@ -16,6 +16,15 @@ export function TelemetryProvider({ children }) {
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
   const eventSeqRef = useRef(0)
+  // Fan-out registry so additional consumers (e.g. WarRoomContext) can react to every
+  // raw telemetry event WITHOUT opening a second EventSource to the same endpoint.
+  const listenersRef = useRef(new Set())
+
+  const subscribe = useCallback((fn) => {
+    if (typeof fn !== 'function') return () => {}
+    listenersRef.current.add(fn)
+    return () => listenersRef.current.delete(fn)
+  }, [])
 
   const pushActivity = useCallback((entry) => {
     eventSeqRef.current += 1
@@ -66,6 +75,14 @@ export function TelemetryProvider({ children }) {
         retryDelay = 2000 // reset backoff on successful message
         try {
           const data = JSON.parse(e.data || '{}')
+          // Fan the raw event out to any registered consumers first.
+          listenersRef.current.forEach((fn) => {
+            try {
+              fn(data)
+            } catch (_) {
+              /* a misbehaving listener must not break the telemetry stream */
+            }
+          })
           const severity = data.severity || 'info'
           const message = data.message || 'Unknown event'
           const engine = data.engine || ''
@@ -122,6 +139,7 @@ export function TelemetryProvider({ children }) {
     toasts, addToast, removeToast,
     progressByEngine, addProgress,
     activity, clearActivity, connected,
+    subscribe,
   }
   return (
     <TelemetryContext.Provider value={value}>

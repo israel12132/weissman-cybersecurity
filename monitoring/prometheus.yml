@@ -20,27 +20,32 @@ rule_files:
 
 # Scrape configurations
 scrape_configs:
-  # Weissman backend application metrics (Rust metrics endpoint)
+  # Weissman backend application metrics (Rust metrics endpoint).
+  # IMPORTANT: weissman-server exposes Prometheus metrics at `/api/metrics` on the
+  # same HTTP port as the API (8000 in docker-compose), NOT on :9090 or `/metrics`.
+  # See fingerprint_engine/src/observability.rs and http/serve.rs ("/api/metrics").
   - job_name: 'weissman-backend'
     static_configs:
-      - targets: ['backend:9090']
-    metrics_path: '/metrics'
+      - targets: ['backend:8000']
+    metrics_path: '/api/metrics'
     scrape_interval: 10s
+    # In production the endpoint requires a bearer token (WEISSMAN_METRICS_TOKEN).
+    # Drop the token into a file mounted at the path below and uncomment:
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/metrics_token
 
-  # Redis metrics via redis_exporter sidecar (add redis-exporter service to compose if needed)
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis-exporter:9121']
-
-  # PostgreSQL metrics via postgres_exporter sidecar (add pg-exporter service to compose if needed)
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['pg-exporter:9187']
-
-  # Node exporter (system metrics — install on the host or as a Docker sidecar)
-  - job_name: 'node'
-    static_configs:
-      - targets: ['node-exporter:9100']
+  # Optional sidecars — only enable these jobs once the matching exporter services
+  # exist in your compose/k8s stack, otherwise they will show as "down" targets.
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['pg-exporter:9187']
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'

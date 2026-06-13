@@ -22,9 +22,9 @@ pub fn finding_still_present(
     target: &str,
     rescan_findings: &[Value],
 ) -> bool {
-    rescan_findings
-        .iter()
-        .any(|f| crate::findings_persist::build_finding_id(engine, target, f) == original_finding_id)
+    rescan_findings.iter().any(|f| {
+        crate::findings_persist::build_finding_id(engine, target, f) == original_finding_id
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -68,29 +68,37 @@ pub async fn run_verification(
         "result_status": status,
     });
 
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
-        let _ = sqlx::query(
-            r#"UPDATE vulnerabilities
-                  SET status = $1,
-                      raw_data = jsonb_set(
-                          COALESCE(raw_data, '{}'::jsonb),
-                          '{remediation_verification}',
-                          $2::jsonb,
-                          true
-                      )
-                WHERE tenant_id = $3
-                  AND finding_id = $4
-                  AND ($5::bigint IS NULL OR client_id = $5)"#,
-        )
-        .bind(status)
-        .bind(verification.to_string())
-        .bind(tenant_id)
-        .bind(original_finding_id)
-        .bind(client_id)
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
-    }
+    // Persist the verdict. A DB failure here must NOT be swallowed: returning Ok
+    // would falsely report "VERIFIED_FIXED" to the analyst while the row still says
+    // the finding is open. Propagate the error so the worker marks the job failed
+    // (and retries) instead of silently losing the verification outcome.
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("remediation verify: open tenant tx failed: {e}"))?;
+    sqlx::query(
+        r#"UPDATE vulnerabilities
+              SET status = $1,
+                  raw_data = jsonb_set(
+                      COALESCE(raw_data, '{}'::jsonb),
+                      '{remediation_verification}',
+                      $2::jsonb,
+                      true
+                  )
+            WHERE tenant_id = $3
+              AND finding_id = $4
+              AND ($5::bigint IS NULL OR client_id = $5)"#,
+    )
+    .bind(status)
+    .bind(verification.to_string())
+    .bind(tenant_id)
+    .bind(original_finding_id)
+    .bind(client_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("remediation verify: persist verdict failed: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("remediation verify: commit failed: {e}"))?;
     Ok(outcome)
 }
 
@@ -122,11 +130,21 @@ mod tests {
         let original = crate::findings_persist::build_finding_id(engine, target, &f);
 
         // Same signature reappears on re-scan → still present → NOT closed.
-        assert!(finding_still_present(&original, engine, target, std::slice::from_ref(&f)));
+        assert!(finding_still_present(
+            &original,
+            engine,
+            target,
+            std::slice::from_ref(&f)
+        ));
 
         // Re-scan returns a different finding → original is gone → closed.
         let other = json!({"title": "Other", "signature": "different"});
-        assert!(!finding_still_present(&original, engine, target, std::slice::from_ref(&other)));
+        assert!(!finding_still_present(
+            &original,
+            engine,
+            target,
+            std::slice::from_ref(&other)
+        ));
 
         // Empty re-scan → closed.
         assert!(!finding_still_present(&original, engine, target, &[]));

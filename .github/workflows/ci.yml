@@ -76,6 +76,15 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit (known CVEs in Rust deps)
+        # Each ignore below is a transitive advisory with NO fixed upgrade available;
+        # resolving means replacing the upstream crate (tracked as future work). Any
+        # NEW advisory still fails the build. Review this list on every dep bump.
+        #   RUSTSEC-2023-0071  rsa (Marvin timing attack) — via openidconnect (OIDC
+        #                      SSO). No fixed rsa release exists; used for RS256 JWT
+        #                      signature *verification*, not RSA decryption.
+        #   RUSTSEC-2026-0098/0099/0104  time 0.2.x — via genpdf→lopdf/printpdf (PDF
+        #                      reports). genpdf 0.2.0 is the latest/unmaintained;
+        #                      fixing requires migrating off genpdf.
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
@@ -127,7 +136,7 @@ jobs:
         run: npm audit --audit-level=critical
 
   frontend-build:
-    name: Frontend — build
+    name: Frontend — lint, test, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,6 +150,14 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+        working-directory: frontend
+
+      - name: Lint (ESLint — fails on errors; warnings are backlog)
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Unit tests (Vitest)
+        run: npm run test
         working-directory: frontend
 
       - name: Build frontend
@@ -214,6 +231,20 @@ jobs:
 
       - name: Build Docker production images
         run: docker compose build backend worker gateway
+
+      - name: Scan built backend image (Trivy, CRITICAL)
+        # The fs scan in the security-scan job covers source/deps; this scans the
+        # actual runtime image (base OS packages baked into weissman-backend:stable).
+        # ignore-unfixed keeps it actionable — only CRITICALs with an available fix
+        # fail the build (then bump the base image; Dependabot 'docker' helps here).
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: weissman-backend:stable
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
 
       - name: Validate docker-compose.test.yml
         run: docker compose -f docker-compose.test.yml config > /dev/null
@@ -291,3 +322,29 @@ jobs:
           cat /tmp/weissman-server.log || true
           echo '--- weissman-worker.log ---'
           cat /tmp/weissman-worker.log || true
+
+  semgrep:
+    name: Semgrep SAST (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # Report-only: `semgrep scan` exits 0 on findings (only --error blocks), so this
+      # never breaks the build today. Findings print to the CI log. Once the baseline
+      # is clean, add `--error` to turn this into a hard gate. Complements CodeQL
+      # (codeql.yml) which covers JS/TS + Python via the Security tab.
+      - name: Run Semgrep (security-audit, secrets, owasp-top-ten)
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --metrics off || true

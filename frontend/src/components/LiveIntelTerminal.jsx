@@ -70,7 +70,10 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
     <div className={`tactical-terminal flex flex-col h-full min-h-0 ${matrixStyle ? 'matrix-style' : ''}`}>
       <div className="terminal-header shrink-0">
         <span className="text-cyber-cyan font-semibold tracking-wider">{t(`${NS}.title`)}</span>
-        <span className="text-slate-500 text-xs font-mono">// {isOnline ? t(`${NS}.feedActive`) : t(`${NS}.reconnecting`)}</span>
+        <span className="text-slate-500 text-xs font-mono">
+          {'// '}
+          {isOnline ? t(`${NS}.feedActive`) : t(`${NS}.reconnecting`)}
+        </span>
       </div>
       <div ref={containerRef} className="terminal-log flex-1 min-h-0 overflow-hidden">
         {parsed.length === 0 ? (

@@ -87,17 +87,13 @@ export default function EngineRoomTab() {
   const { engines: productionRegistry, productionCount, catalogCount, loading: productionLoading } =
     useProductionEngines()
 
-  if (clientConfig == null || clientConfig === undefined) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[280px]">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
-          <p className="text-sm text-white/70">Connecting to Submarine...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const enabledList = Array.isArray(clientConfig.enabled_engines) ? clientConfig.enabled_engines : defaultEngines
+  // All hooks must run unconditionally and in a stable order on every render, so they
+  // are declared BEFORE any early return below (React Rules of Hooks — calling a hook
+  // after a conditional `return` desyncs the hook list and crashes the component).
+  // enabledList is null-safe because clientConfig may still be loading here.
+  const enabledList = Array.isArray(clientConfig?.enabled_engines)
+    ? clientConfig.enabled_engines
+    : defaultEngines
   const enabledSet = new Set(enabledList)
 
   const handleEngineToggle = useCallback(
@@ -135,6 +131,27 @@ export default function EngineRoomTab() {
     [clientConfig?.enabled_engines, patchConfig, selectedClientId, refuseCommand],
   )
 
+  const filteredRegistry = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return productionRegistry.filter((e) => {
+      if (onlyEnabled && !enabledSet.has(e.id)) return false
+      if (!q) return true
+      const hay = `${e.id} ${e.label || ''} ${e.description || ''} ${e.mitre || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [productionRegistry, search, onlyEnabled, enabledSet])
+
+  // ── Early returns (after all hooks) ──────────────────────────────────────
+  if (clientConfig == null || clientConfig === undefined) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[280px]">
+        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
+          <p className="text-sm text-white/70">Connecting to Submarine...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!selectedClient) {
     return (
       <div className="p-8">
@@ -155,16 +172,6 @@ export default function EngineRoomTab() {
       </div>
     )
   }
-
-  const filteredRegistry = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return productionRegistry.filter((e) => {
-      if (onlyEnabled && !enabledSet.has(e.id)) return false
-      if (!q) return true
-      const hay = `${e.id} ${e.label || ''} ${e.description || ''} ${e.mitre || ''}`.toLowerCase()
-      return hay.includes(q)
-    })
-  }, [productionRegistry, search, onlyEnabled, enabledSet])
 
   const enginesByGroup = (groupId) =>
     filteredRegistry.filter((e) => e.group === groupId)

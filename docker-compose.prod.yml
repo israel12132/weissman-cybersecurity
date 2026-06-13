@@ -1,0 +1,69 @@
+# Production overlay for docker-compose.yml.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The base docker-compose.yml is intentionally dev-friendly: it ships weak default
+# secrets and does NOT set WEISSMAN_ENV, so the production guards never fire. This
+# overlay fixes both problems:
+#
+#   1. Sets WEISSMAN_ENV=production, which activates every check in
+#      fingerprint_engine/src/security_startup.rs (rejects weak JWT/DB secrets,
+#      demands a strong metrics token + secure cookies, requires Redis, ...). The
+#      app fails CLOSED at boot on any misconfiguration.
+#   2. Uses `${VAR:?message}` for every secret, so `docker compose` itself refuses to
+#      start with a clear error if a secret is unset — no silent fallback to a dev
+#      default.
+#
+# Provide these via a .env file beside this compose file or the shell environment:
+#   WEISSMAN_JWT_SECRET (>=32 chars)   WEISSMAN_ADMIN_PASSWORD
+#   WEISSMAN_METRICS_TOKEN (>=32 chars) WEISSMAN_PUBLIC_BASE_URL (https://...)
+#   POSTGRES_PASSWORD  DB_APP_PASSWORD  DB_AUTH_PASSWORD  REDIS_PASSWORD
+#   GRAFANA_ADMIN_PASSWORD (only if the `monitoring` profile is enabled)
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD for production}
+
+  redis:
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set a strong REDIS_PASSWORD for production}
+    command:
+      ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--save", "60", "1"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    environment:
+      WEISSMAN_ENV: production
+      WEISSMAN_COOKIE_SECURE: "1"
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:?set DB_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:?set DB_AUTH_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+      WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:?set WEISSMAN_PUBLIC_BASE_URL to your https origin}
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?set a strong 32+ char WEISSMAN_JWT_SECRET}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:?set a strong WEISSMAN_ADMIN_PASSWORD}
+      WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:?set a 32+ char WEISSMAN_METRICS_TOKEN}
+
+  worker:
+    environment:
+      WEISSMAN_ENV: production
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:?set DB_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:?set DB_AUTH_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?set a strong 32+ char WEISSMAN_JWT_SECRET}
+
+  # Pin monitoring images (base uses floating :latest) for reproducible production.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set a strong GRAFANA_ADMIN_PASSWORD}
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0

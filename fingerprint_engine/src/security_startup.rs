@@ -109,6 +109,21 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
             );
         }
 
+        // Without Redis, login lockout + per-tenant/IP rate limits fall back to
+        // per-replica in-memory state. In a multi-replica deployment that lets a
+        // brute-force attacker spread attempts across replicas to dodge the limits,
+        // and the telemetry bus can't fan out cross-replica. Require Redis in
+        // production unless the operator explicitly acknowledges single-replica.
+        let redis_unset = std::env::var("REDIS_URL")
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        if redis_unset && !env_truthy("WEISSMAN_ALLOW_SINGLE_NODE") {
+            return Err(
+                "REDIS_URL is not set in production: distributed login lockout, rate limiting, and the telemetry bus would degrade to per-replica in-memory state. Configure REDIS_URL, or set WEISSMAN_ALLOW_SINGLE_NODE=1 to acknowledge a single-replica deployment."
+                    .into(),
+            );
+        }
+
         if env_truthy("WEISSMAN_SELF_SERVE_SIGNUP")
             && !env_truthy("WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION")
         {
@@ -132,4 +147,35 @@ fn env_truthy(name: &str) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_truthy_recognizes_affirmatives_and_rejects_others() {
+        // Uniquely-named var so parallel tests can't race on it.
+        let key = "WEISSMAN_TEST_ENV_TRUTHY_SS";
+        for v in ["1", "true", "TRUE", " yes ", "On"] {
+            std::env::set_var(key, v);
+            assert!(env_truthy(key), "expected truthy for {v:?}");
+        }
+        for v in ["0", "false", "no", "off", ""] {
+            std::env::set_var(key, v);
+            assert!(!env_truthy(key), "expected falsy for {v:?}");
+        }
+        std::env::remove_var(key);
+        assert!(!env_truthy(key), "unset must be falsy");
+    }
+
+    #[test]
+    fn non_production_env_skips_all_guards() {
+        // The guard is a no-op outside production regardless of weak secrets, so
+        // dev/CI default boot is never blocked by these checks.
+        if !is_production_environment() {
+            assert!(enforce_production_security_policy().is_ok());
+            assert!(enforce_worker_production_security_policy().is_ok());
+        }
+    }
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
-import { apiEventSourceUrl } from '../lib/apiBase'
+import { useTelemetry } from './TelemetryContext'
 
 const WarRoomContext = createContext(null)
 
@@ -65,57 +65,56 @@ export function WarRoomProvider({ children }) {
     setMapZoomComplete(done)
   }, [])
 
+  // Consume the SINGLE telemetry EventSource owned by TelemetryProvider (which already
+  // handles reconnect with exponential backoff) instead of opening a duplicate
+  // connection to /api/telemetry/stream. WarRoomProvider is always mounted inside
+  // TelemetryProvider (see Cockpit.jsx), so `subscribe` is available.
+  const { subscribe } = useTelemetry()
+
   useEffect(() => {
-    const url = apiEventSourceUrl('/api/telemetry/stream')
-    const es = new EventSource(url, { withCredentials: true })
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data || '{}')
-        setLastTelemetry(data)
-        const ev = data.event || 'progress'
-        if (ev === 'new_target') {
-          setLastNewTarget({ client_id: data.client_id, host: data.host })
-          setDiscoveredTargets((prev) => {
-            const next = [...prev, { host: data.host, client_id: data.client_id }]
-            return next.slice(-24)
-          })
-        } else if (ev === 'finding_created') {
-          const poc = data.poc_exploit
-          const sealed =
-            Boolean(data.poc_sealed) ||
-            (typeof poc === 'string' && poc.includes('[SEALED'))
-          setLastFinding({
-            client_id: data.client_id,
-            finding_id: data.finding_id,
-            title: data.title,
-            severity: data.severity,
-            description: data.description,
-            poc_exploit: poc,
-            poc_sealed: sealed,
-          })
-        } else if (ev === 'harvested_token') {
-          setLastHarvestedToken({
-            client_id: data.client_id,
-            role_name: data.role_name,
-            context_id: data.context_id,
-          })
-        } else if (ev === 'progress' && data.engine) {
-          const now = Date.now()
-          setEngineActivityCount((prev) => {
-            const key = data.client_id ? `${data.client_id}_${data.engine}` : `_${data.engine}`
-            const last = activityTsRef.current[key] || 0
-            if (now - last < 500) return prev
-            activityTsRef.current[key] = now
-            const next = { ...prev }
-            next[key] = (next[key] || 0) + 1
-            return next
-          })
-        }
-      } catch (_) {}
-    }
-    es.onerror = () => { if (es.readyState === EventSource.CLOSED) return; es.close() }
-    return () => { es.close() }
-  }, [])
+    if (typeof subscribe !== 'function') return undefined
+    return subscribe((data) => {
+      setLastTelemetry(data)
+      const ev = data.event || 'progress'
+      if (ev === 'new_target') {
+        setLastNewTarget({ client_id: data.client_id, host: data.host })
+        setDiscoveredTargets((prev) => {
+          const next = [...prev, { host: data.host, client_id: data.client_id }]
+          return next.slice(-24)
+        })
+      } else if (ev === 'finding_created') {
+        const poc = data.poc_exploit
+        const sealed =
+          Boolean(data.poc_sealed) || (typeof poc === 'string' && poc.includes('[SEALED'))
+        setLastFinding({
+          client_id: data.client_id,
+          finding_id: data.finding_id,
+          title: data.title,
+          severity: data.severity,
+          description: data.description,
+          poc_exploit: poc,
+          poc_sealed: sealed,
+        })
+      } else if (ev === 'harvested_token') {
+        setLastHarvestedToken({
+          client_id: data.client_id,
+          role_name: data.role_name,
+          context_id: data.context_id,
+        })
+      } else if (ev === 'progress' && data.engine) {
+        const now = Date.now()
+        setEngineActivityCount((prev) => {
+          const key = data.client_id ? `${data.client_id}_${data.engine}` : `_${data.engine}`
+          const last = activityTsRef.current[key] || 0
+          if (now - last < 500) return prev
+          activityTsRef.current[key] = now
+          const next = { ...prev }
+          next[key] = (next[key] || 0) + 1
+          return next
+        })
+      }
+    })
+  }, [subscribe])
 
   useEffect(() => {
     const t = setInterval(() => {

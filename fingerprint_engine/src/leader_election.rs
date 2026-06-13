@@ -10,6 +10,16 @@
 //!
 //! No DB configured (single-node dev) ⇒ we assume leadership so behaviour is
 //! identical to the pre-leader-election world.
+//!
+//! **Fail direction matters.** When a DB *is* configured but we cannot *prove*
+//! leadership (connect error, lock query error, helper-thread failure, timeout) the
+//! fallback is environment-dependent:
+//!   - **Production** (`WEISSMAN_ENV=production`, etc.): fail **CLOSED** → follower.
+//!     If every replica failed open here, they would each run the duplication-harmful
+//!     singleton workers simultaneously (double backups, double intel refresh, double
+//!     retention purges, overlapping orchestrator scan cycles).
+//!   - **Dev / single-node**: fail **OPEN** → leader, so a flaky local DB never
+//!     silently disables the orchestrator on the only node.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
@@ -22,7 +32,11 @@ static IS_LEADER: AtomicBool = AtomicBool::new(false);
 static DECIDED: OnceLock<bool> = OnceLock::new();
 
 fn singleton_db_url() -> Option<String> {
-    for k in ["DATABASE_URL", "WEISSMAN_DATABASE_URL", "WEISSMAN_MIGRATE_URL"] {
+    for k in [
+        "DATABASE_URL",
+        "WEISSMAN_DATABASE_URL",
+        "WEISSMAN_MIGRATE_URL",
+    ] {
         if let Ok(v) = std::env::var(k) {
             if !v.trim().is_empty() {
                 return Some(v);
@@ -52,10 +66,21 @@ pub fn acquire_singleton_leadership_blocking() -> bool {
     decided
 }
 
+/// Leadership decision to use when a DB is configured but leadership cannot be
+/// *proven*. Fail **closed** (follower) in production to avoid duplicate singleton
+/// workers across replicas; fail **open** (leader) in dev so a single node keeps
+/// working when the local DB is flaky.
+#[inline]
+#[must_use]
+fn leadership_fallback(is_production: bool) -> bool {
+    !is_production
+}
+
 fn decide() -> bool {
     let Some(url) = singleton_db_url() else {
         return true; // single-node dev: behave as leader
     };
+    let fallback = leadership_fallback(weissman_core::tls_policy::is_production_environment());
     let (tx, rx) = std::sync::mpsc::channel::<bool>();
     let spawned = std::thread::Builder::new()
         .name("weissman-leader".to_string())
@@ -66,7 +91,7 @@ fn decide() -> bool {
             {
                 Ok(r) => r,
                 Err(_) => {
-                    let _ = tx.send(true);
+                    let _ = tx.send(fallback);
                     return;
                 }
             };
@@ -75,8 +100,12 @@ fn decide() -> bool {
                 let mut conn = match sqlx::postgres::PgConnection::connect(&url).await {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("[Weissman][leader] DB connect failed ({e}); assuming leader");
-                        let _ = tx.send(true);
+                        eprintln!(
+                            "[Weissman][leader] DB connect failed ({e}); leader={fallback} \
+                             (fail-{} )",
+                            if fallback { "open/dev" } else { "closed/prod" }
+                        );
+                        let _ = tx.send(fallback);
                         return;
                     }
                 };
@@ -84,7 +113,7 @@ fn decide() -> bool {
                     .bind(LEADER_LOCK_KEY)
                     .fetch_one(&mut conn)
                     .await
-                    .unwrap_or(false);
+                    .unwrap_or(fallback);
                 let _ = tx.send(got);
                 if got {
                     IS_LEADER.store(true, Ordering::Relaxed);
@@ -104,10 +133,12 @@ fn decide() -> bool {
             });
         });
     if spawned.is_err() {
-        return true; // can't spawn the helper thread → don't deadlock boot
+        // Can't spawn the helper thread → don't deadlock boot; use the env-aware
+        // fallback (follower in prod, leader in dev).
+        return fallback;
     }
     // Bounded wait so boot never hangs on a slow/unreachable DB.
-    rx.recv_timeout(Duration::from_secs(10)).unwrap_or(true)
+    rx.recv_timeout(Duration::from_secs(10)).unwrap_or(fallback)
 }
 
 #[cfg(test)]
@@ -127,5 +158,19 @@ mod tests {
         // contract: an empty url list yields None.
         // (singleton_db_url reads env; this asserts the function is callable.)
         let _ = singleton_db_url();
+    }
+
+    #[test]
+    fn fallback_fails_closed_in_production() {
+        // Production: any inability to prove leadership ⇒ follower (false), so two
+        // replicas never both run singleton workers.
+        assert!(!leadership_fallback(true));
+    }
+
+    #[test]
+    fn fallback_fails_open_in_dev() {
+        // Dev / single-node: a flaky DB must not silently disable the orchestrator
+        // on the only node ⇒ leader (true).
+        assert!(leadership_fallback(false));
     }
 }

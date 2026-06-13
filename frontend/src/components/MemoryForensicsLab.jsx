@@ -16,7 +16,10 @@ const ENTROPY_WARN = 7
 /** Semi-circle Entropy Gauge (0–8). 0–4 blue, 4–6.9 yellow, 7–8 crimson. */
 function EntropyGauge({ value, isLeak }) {
   const { t } = useTranslation()
-  const v = Math.min(ENTROPY_MAX, Math.max(0, Number(value) ?? 0))
+  // Number(value) yields NaN (not null) for bad input, so `?? 0` never fired. Guard
+  // on finiteness so the entropy gauge truly defaults to 0 instead of rendering NaN.
+  const numericValue = Number(value)
+  const v = Math.min(ENTROPY_MAX, Math.max(0, Number.isFinite(numericValue) ? numericValue : 0))
   const rotation = -90 + (v / ENTROPY_MAX) * 180
   const zone = v >= ENTROPY_WARN ? 'critical' : v >= ENTROPY_SAFE ? 'warning' : 'safe'
   const colors = {

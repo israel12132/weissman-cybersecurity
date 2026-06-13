@@ -19,10 +19,47 @@
 
 use futures::StreamExt;
 use redis::AsyncCommands;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tokio::sync::broadcast;
+
+/// Max recently-injected message hashes retained for echo suppression.
+const INJECTED_CAP: usize = 8192;
+
+/// Fixed-capacity set with FIFO eviction: O(1) membership for the most recent
+/// `INJECTED_CAP` hashes. Unlike a periodic full `clear()`, evicting only the oldest
+/// entry keeps the dedup window continuous — there is never a moment where a just-
+/// injected message is forgotten and re-published into an echo loop.
+struct BoundedHashSet {
+    set: HashSet<u64>,
+    order: VecDeque<u64>,
+}
+
+impl BoundedHashSet {
+    fn new() -> Self {
+        Self {
+            set: HashSet::with_capacity(INJECTED_CAP + 1),
+            order: VecDeque::with_capacity(INJECTED_CAP + 1),
+        }
+    }
+
+    fn insert(&mut self, h: u64) {
+        if !self.set.insert(h) {
+            return; // already present — don't duplicate in the eviction queue
+        }
+        self.order.push_back(h);
+        if self.order.len() > INJECTED_CAP {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+    }
+
+    fn contains(&self, h: u64) -> bool {
+        self.set.contains(&h)
+    }
+}
 
 fn instance_id() -> &'static str {
     static ID: OnceLock<String> = OnceLock::new();
@@ -34,9 +71,9 @@ fn instance_id() -> &'static str {
     })
 }
 
-fn injected_set() -> &'static Mutex<HashSet<u64>> {
-    static S: OnceLock<Mutex<HashSet<u64>>> = OnceLock::new();
-    S.get_or_init(|| Mutex::new(HashSet::new()))
+fn injected_set() -> &'static Mutex<BoundedHashSet> {
+    static S: OnceLock<Mutex<BoundedHashSet>> = OnceLock::new();
+    S.get_or_init(|| Mutex::new(BoundedHashSet::new()))
 }
 
 fn hash_msg(s: &str) -> u64 {
@@ -48,15 +85,15 @@ fn hash_msg(s: &str) -> u64 {
 
 fn mark_injected(h: u64) {
     if let Ok(mut set) = injected_set().lock() {
-        if set.len() > 8192 {
-            set.clear();
-        }
         set.insert(h);
     }
 }
 
 fn was_injected(h: u64) -> bool {
-    injected_set().lock().map(|s| s.contains(&h)).unwrap_or(false)
+    injected_set()
+        .lock()
+        .map(|s| s.contains(h))
+        .unwrap_or(false)
 }
 
 fn redis_url() -> Option<String> {
@@ -151,6 +188,46 @@ mod tests {
         assert!(!was_injected(h.wrapping_add(1)));
         mark_injected(h);
         assert!(was_injected(h));
+    }
+
+    #[test]
+    fn bounded_set_evicts_oldest_first_without_full_wipe() {
+        let mut s = BoundedHashSet::new();
+        // Fill exactly to capacity with a disjoint hash space (offset by a constant
+        // so these never collide with the roundtrip test's hashes).
+        let base: u64 = 1_000_000;
+        for i in 0..INJECTED_CAP as u64 {
+            s.insert(base + i);
+        }
+        assert!(s.contains(base)); // oldest still present at capacity
+        assert!(s.contains(base + INJECTED_CAP as u64 - 1)); // newest present
+
+        // One more insert evicts ONLY the oldest, not the whole set (no clear()).
+        s.insert(base + INJECTED_CAP as u64);
+        assert!(!s.contains(base), "oldest must be evicted");
+        assert!(
+            s.contains(base + 1),
+            "second-oldest must survive (no full wipe)"
+        );
+        assert!(
+            s.contains(base + INJECTED_CAP as u64),
+            "newest must be present"
+        );
+        assert_eq!(s.set.len(), INJECTED_CAP);
+        assert_eq!(s.order.len(), INJECTED_CAP);
+    }
+
+    #[test]
+    fn bounded_set_ignores_duplicate_inserts() {
+        let mut s = BoundedHashSet::new();
+        s.insert(42);
+        s.insert(42);
+        assert_eq!(
+            s.order.len(),
+            1,
+            "duplicate must not grow the eviction queue"
+        );
+        assert!(s.contains(42));
     }
 
     #[test]

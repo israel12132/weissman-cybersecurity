@@ -43,6 +43,28 @@ def run_migrations_online() -> None:
         with context.begin_transaction():
             context.run_migrations()
 
+def _legacy_alembic_allowed() -> bool:
+    return os.environ.get("WEISSMAN_ALLOW_LEGACY_ALEMBIC", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+# DEPRECATED PATH GUARD. The live schema is owned by the Rust sqlx migrations in
+# fingerprint_engine/migrations/ (mirrored to crates/weissman-db/migrations/). These
+# Alembic revisions describe the OLD Python SQLAlchemy schema and will DIVERGE/CORRUPT
+# a sqlx-managed database. env.py reads the same DATABASE_URL as production, so a stray
+# `alembic upgrade head` could hit the live DB — refuse unless explicitly acknowledged.
+if not _legacy_alembic_allowed():
+    raise SystemExit(
+        "Refusing to run DEPRECATED Alembic migrations.\n"
+        "Schema is managed by the Rust sqlx migrations in fingerprint_engine/migrations/.\n"
+        "Set WEISSMAN_ALLOW_LEGACY_ALEMBIC=1 only if you truly need the legacy Python "
+        "schema. See alembic/README.md."
+    )
+
 if context.is_offline_mode():
     run_migrations_offline()
 else:
