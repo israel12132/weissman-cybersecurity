@@ -286,13 +286,12 @@ Dispatch מתבצע best-effort לאחר commit DB כדי לא לעכב transact
 
 ## 16) קבצי מקור מומלצים להמשך בדיקת איש הסייבר
 
-1. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/README.md`
-2. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/docs/architecture.md`
-3. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/docs/operations.md`
-4. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/docs/SOC_ENGINES_ARCHITECTURE.md`
-5. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/SECURITY_AND_COMPLIANCE.md`
-6. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/SLA_AND_STATUS.md`
-7. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/GETTING_STARTED.md`
-8. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/ONBOARDING_RUNBOOK.md`
-9. `/home/runner/work/weissman-cybersecurity/weissman-cybersecurity/israel12132/weissman-cybersecurity/Cargo.toml`
-
+1. `./README.md`
+2. `./docs/architecture.md`
+3. `./docs/operations.md`
+4. `./docs/SOC_ENGINES_ARCHITECTURE.md`
+5. `./SECURITY_AND_COMPLIANCE.md`
+6. `./SLA_AND_STATUS.md`
+7. `./GETTING_STARTED.md`
+8. `./ONBOARDING_RUNBOOK.md`
+9. `./Cargo.toml`
