@@ -112,18 +112,21 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                 let blocked = matches!(status, 403 | 406 | 429 | 503);
                 let found = matches!(status, 200 | 301 | 302 | 401);
 
+                // Evidence-only: a 404/410/5xx-without-block means the attack surface is absent —
+                // emit nothing instead of a low-signal "path not found" row.
+                if !found && !blocked {
+                    continue;
+                }
                 let (severity, detection_result) = if blocked {
                     (
                         "info",
                         "BLOCKED — security control detected APT-style request",
                     )
-                } else if found {
+                } else {
                     (
                         "high",
                         "NOT BLOCKED — APT-style request reached target without detection",
                     )
-                } else {
-                    ("low", "Path not found — attack surface not present")
                 };
 
                 findings.push(json!({
@@ -145,16 +148,9 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
                     "path_exists": found
                 }));
             }
-            Err(e) => {
-                findings.push(json!({
-                    "type": "threat_emulation",
-                    "title": format!("[{}] {} — Connection failed", scenario.group, scenario.technique),
-                    "severity": "info",
-                    "mitre_attack": scenario.mitre,
-                    "description": format!("APT emulation request to {} failed: {}", url, e),
-                    "value": url,
-                    "apt_group": scenario.group
-                }));
+            Err(_) => {
+                // Transport failure is not a detection signal — skip (no finding).
+                continue;
             }
         }
     }
@@ -167,21 +163,25 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
         })
         .count();
 
-    findings.push(json!({
-        "type": "threat_emulation",
-        "title": format!("Threat Emulation Summary: {}/{} APT scenarios NOT detected", unblocked, APT_SCENARIOS.len()),
-        "severity": if unblocked > 3 { "critical" } else if unblocked > 0 { "high" } else { "info" },
-        "mitre_attack": "T1595",
-        "description": format!(
-            "{} out of {} APT TTP emulation scenarios reached the target without triggering a block. \
-            Review WAF, EDR, and SIEM rules for the undetected techniques. \
-            Groups emulated: Lazarus, APT28, APT29, APT41, Sandworm, Kimsuky, Equation Group.",
-            unblocked, APT_SCENARIOS.len()
-        ),
-        "value": base,
-        "total_scenarios": APT_SCENARIOS.len(),
-        "undetected_count": unblocked
-    }));
+    // Summary only when at least one APT-relevant surface actually existed; otherwise the scan is
+    // honestly empty (no present attack surface, no summary noise).
+    if !findings.is_empty() {
+        findings.push(json!({
+            "type": "threat_emulation",
+            "title": format!("Threat Emulation Summary: {}/{} APT scenarios NOT detected", unblocked, APT_SCENARIOS.len()),
+            "severity": if unblocked > 3 { "critical" } else if unblocked > 0 { "high" } else { "info" },
+            "mitre_attack": "T1595",
+            "description": format!(
+                "{} out of {} APT TTP emulation scenarios reached the target without triggering a block. \
+                Review WAF, EDR, and SIEM rules for the undetected techniques. \
+                Groups emulated: Lazarus, APT28, APT29, APT41, Sandworm, Kimsuky, Equation Group.",
+                unblocked, APT_SCENARIOS.len()
+            ),
+            "value": base,
+            "total_scenarios": APT_SCENARIOS.len(),
+            "undetected_count": unblocked
+        }));
+    }
 
     EngineResult::ok(
         findings.clone(),

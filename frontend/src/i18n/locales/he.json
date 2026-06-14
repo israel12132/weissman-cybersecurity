@@ -141,6 +141,7 @@
     "client_new": "New Client",
     "client_detail": "Client Details",
     "threat_hunting": "ציד איומים",
+    "threat_analysis": "ניתוח איומים מאוחד",
     "dark_web": "Dark Web Monitor",
     "intel_map": "Global Intel Map",
     "incident_response": "תגובה לאירועים",

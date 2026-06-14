@@ -140,7 +140,10 @@ mod tests {
         if std::env::var("WEISSMAN_ATTESTATION_KEY").is_err()
             && std::env::var("WEISSMAN_JWT_SECRET").is_err()
         {
-            std::env::set_var("WEISSMAN_JWT_SECRET", "test-attestation-secret-key-1234567890");
+            std::env::set_var(
+                "WEISSMAN_JWT_SECRET",
+                "test-attestation-secret-key-1234567890",
+            );
         }
         f()
     }
@@ -162,11 +165,23 @@ mod tests {
                     .expect("attest with key");
             assert!(verify(&digest, &receipt), "valid receipt must verify");
             assert!(verify_finding(
-                "eng-abc", "SQLi", "high", "https://x", "2026-01-01", &receipt
+                "eng-abc",
+                "SQLi",
+                "high",
+                "https://x",
+                "2026-01-01",
+                &receipt
             ));
             // Tamper: severity flipped in the DB → digest changes → receipt fails.
             assert!(
-                !verify_finding("eng-abc", "SQLi", "low", "https://x", "2026-01-01", &receipt),
+                !verify_finding(
+                    "eng-abc",
+                    "SQLi",
+                    "low",
+                    "https://x",
+                    "2026-01-01",
+                    &receipt
+                ),
                 "tampered finding must fail attestation"
             );
             // Garbage receipt fails.

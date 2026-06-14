@@ -23,21 +23,96 @@ struct DeviceSig {
 }
 
 const DEVICE_SIGS: &[DeviceSig] = &[
-    DeviceSig { vendor: "Allegro RomPager", tokens: &["rompager", "allegro-software"], cve: "Misfortune Cookie CVE-2014-9222", severity: "high" },
-    DeviceSig { vendor: "GoAhead embedded web server", tokens: &["goahead"], cve: "CVE-2017-8225 / CVE-2021-42342 RCE", severity: "high" },
-    DeviceSig { vendor: "Boa web server (EOL)", tokens: &["server: boa", "boa/0."], cve: "Boa EOL chain (CVE-2017-9097)", severity: "high" },
-    DeviceSig { vendor: "Hikvision device", tokens: &["hikvision", "app-webs", "dvrdvs"], cve: "CVE-2021-36260 unauthenticated RCE", severity: "critical" },
-    DeviceSig { vendor: "Dahua device", tokens: &["dahua", "mvweb"], cve: "CVE-2021-33044 auth bypass", severity: "critical" },
-    DeviceSig { vendor: "MikroTik RouterOS", tokens: &["routeros", "mikrotik"], cve: "CVE-2018-14847 Winbox path traversal", severity: "high" },
-    DeviceSig { vendor: "D-Link HNAP", tokens: &["hnap", "d-link", "dlink"], cve: "HNAP command injection (CVE-2015-2051 family)", severity: "high" },
-    DeviceSig { vendor: "Netgear router", tokens: &["netgear"], cve: "CVE-2016-6277 / CVE-2017-5521", severity: "high" },
-    DeviceSig { vendor: "Zyxel device", tokens: &["zyxel"], cve: "CVE-2020-29583 hardcoded credentials", severity: "high" },
-    DeviceSig { vendor: "DrayTek Vigor", tokens: &["draytek", "vigor"], cve: "CVE-2020-8515 unauthenticated RCE", severity: "high" },
-    DeviceSig { vendor: "TP-Link device", tokens: &["tp-link", "tplink"], cve: "TP-Link router CVE family (CVE-2020-9374)", severity: "medium" },
-    DeviceSig { vendor: "Ubiquiti airOS", tokens: &["airos", "ubnt", "ubiquiti"], cve: "airOS arbitrary file upload", severity: "medium" },
-    DeviceSig { vendor: "AVTECH DVR", tokens: &["avtech"], cve: "AVTECH unauthenticated RCE", severity: "high" },
-    DeviceSig { vendor: "mini_httpd (embedded)", tokens: &["mini_httpd"], cve: "EOL embedded HTTP server", severity: "low" },
-    DeviceSig { vendor: "lighttpd (embedded)", tokens: &["lighttpd"], cve: "verify version against known CVEs", severity: "low" },
+    DeviceSig {
+        vendor: "Allegro RomPager",
+        tokens: &["rompager", "allegro-software"],
+        cve: "Misfortune Cookie CVE-2014-9222",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "GoAhead embedded web server",
+        tokens: &["goahead"],
+        cve: "CVE-2017-8225 / CVE-2021-42342 RCE",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "Boa web server (EOL)",
+        tokens: &["server: boa", "boa/0."],
+        cve: "Boa EOL chain (CVE-2017-9097)",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "Hikvision device",
+        tokens: &["hikvision", "app-webs", "dvrdvs"],
+        cve: "CVE-2021-36260 unauthenticated RCE",
+        severity: "critical",
+    },
+    DeviceSig {
+        vendor: "Dahua device",
+        tokens: &["dahua", "mvweb"],
+        cve: "CVE-2021-33044 auth bypass",
+        severity: "critical",
+    },
+    DeviceSig {
+        vendor: "MikroTik RouterOS",
+        tokens: &["routeros", "mikrotik"],
+        cve: "CVE-2018-14847 Winbox path traversal",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "D-Link HNAP",
+        tokens: &["hnap", "d-link", "dlink"],
+        cve: "HNAP command injection (CVE-2015-2051 family)",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "Netgear router",
+        tokens: &["netgear"],
+        cve: "CVE-2016-6277 / CVE-2017-5521",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "Zyxel device",
+        tokens: &["zyxel"],
+        cve: "CVE-2020-29583 hardcoded credentials",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "DrayTek Vigor",
+        tokens: &["draytek", "vigor"],
+        cve: "CVE-2020-8515 unauthenticated RCE",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "TP-Link device",
+        tokens: &["tp-link", "tplink"],
+        cve: "TP-Link router CVE family (CVE-2020-9374)",
+        severity: "medium",
+    },
+    DeviceSig {
+        vendor: "Ubiquiti airOS",
+        tokens: &["airos", "ubnt", "ubiquiti"],
+        cve: "airOS arbitrary file upload",
+        severity: "medium",
+    },
+    DeviceSig {
+        vendor: "AVTECH DVR",
+        tokens: &["avtech"],
+        cve: "AVTECH unauthenticated RCE",
+        severity: "high",
+    },
+    DeviceSig {
+        vendor: "mini_httpd (embedded)",
+        tokens: &["mini_httpd"],
+        cve: "EOL embedded HTTP server",
+        severity: "low",
+    },
+    DeviceSig {
+        vendor: "lighttpd (embedded)",
+        tokens: &["lighttpd"],
+        cve: "verify version against known CVEs",
+        severity: "low",
+    },
 ];
 
 /// Embedded-device management paths (probed concurrently).
@@ -101,7 +176,8 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
     let mut matched_vendors: Vec<&'static str> = Vec::new();
 
     // 1. Probe device management paths and fingerprint the embedded vendor.
-    let probes = probe_paths_concurrent(&client, &url, DEVICE_PATHS, DEFAULT_PROBE_CONCURRENCY).await;
+    let probes =
+        probe_paths_concurrent(&client, &url, DEVICE_PATHS, DEFAULT_PROBE_CONCURRENCY).await;
     for p in &probes {
         if !status_indicates_presence(p.status) {
             continue;
@@ -111,7 +187,11 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
             if matched_vendors.contains(&sig.vendor) {
                 continue;
             }
-            if let Some(tok) = sig.tokens.iter().find(|t| haystack.contains(&t.to_ascii_lowercase())) {
+            if let Some(tok) = sig
+                .tokens
+                .iter()
+                .find(|t| haystack.contains(&t.to_ascii_lowercase()))
+            {
                 matched_vendors.push(sig.vendor);
                 findings.push(iot_finding(
                     &format!("Embedded device identified: {}", sig.vendor),
@@ -174,11 +254,17 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         return EngineResult::ok(
             vec![],
-            format!("iot_firmware: no embedded-device surface observed on {}", host),
+            format!(
+                "iot_firmware: no embedded-device surface observed on {}",
+                host
+            ),
         );
     }
     let n = findings.len();
-    EngineResult::ok(findings, format!("iot_firmware: {} embedded-device finding(s)", n))
+    EngineResult::ok(
+        findings,
+        format!("iot_firmware: {} embedded-device finding(s)", n),
+    )
 }
 
 pub async fn run_iot_firmware(target: &str) {

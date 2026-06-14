@@ -70,10 +70,10 @@ fn deep_link_overbroad_finding(engine_id: &str, body: &str, url: &str, t: &str) 
     if let Some(details) = v.pointer("/applinks/details").and_then(Value::as_array) {
         for d in details {
             if let Some(paths) = d.get("paths").and_then(Value::as_array) {
-                if paths
-                    .iter()
-                    .any(|p| p.as_str().is_some_and(|s| s == "*" || s == "/*" || s == "/"))
-                {
+                if paths.iter().any(|p| {
+                    p.as_str()
+                        .is_some_and(|s| s == "*" || s == "/*" || s == "/")
+                }) {
                     overbroad = true;
                 }
             }

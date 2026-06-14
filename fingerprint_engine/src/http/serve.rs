@@ -1395,52 +1395,55 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     });
     // ── Singleton workers — leader replica only ────────────────────────────────
     if is_leader {
-    tokio::spawn(crate::payload_sync_worker::run_worker_loop(
-        app_pool.clone(),
-        intel_pool.clone(),
-        auth_pool.clone(),
-    ));
-    crate::redteam_background_worker::spawn_cron_worker(
-        app_pool.clone(),
-        auth_pool.clone(),
-        state.telemetry_broadcast_tx.clone(),
-    );
-    crate::scan_schedule_worker::spawn_scan_schedule_worker(app_pool.clone(), auth_pool.clone());
-    crate::alert_evaluator_worker::spawn_alert_evaluator_worker(
-        app_pool.clone(),
-        auth_pool.clone(),
-    );
-    crate::threat_intel_ingestor::spawn_ingest_worker(
-        app_pool.clone(),
-        intel_pool.clone(),
-        auth_pool.clone(),
-        state.telemetry_broadcast_tx.clone(),
-    );
-    crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
-    crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
-    // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
-    // and gated by env vars so dev/offline runs can skip outbound HTTP.
-    crate::intel_kev::bootstrap_kev_catalog(app_pool.clone());
-    crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
-    crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
-    crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
-    crate::intel_findings_backfill::bootstrap_findings_intel_backfill(app_pool.clone());
-    // UEBA — purge old samples once an hour so the table stays bounded.
-    crate::ueba_detector::spawn_retention_loop(app_pool.clone());
-    crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
-        app_pool.clone(),
-        state.telemetry_broadcast_tx.clone(),
-    );
-    crate::predictive_analyzer::spawn_security_events_llm_loop(
-        app_pool.clone(),
-        state.telemetry_broadcast_tx.clone(),
-    );
-    crate::sovereign_c2::spawn_sovereign_stack(
-        app_pool.clone(),
-        state.telemetry_broadcast_tx.clone(),
-        state.take_sovereign_swarm_rx(),
-        state.sovereign_swarm_tx.clone(),
-    );
+        tokio::spawn(crate::payload_sync_worker::run_worker_loop(
+            app_pool.clone(),
+            intel_pool.clone(),
+            auth_pool.clone(),
+        ));
+        crate::redteam_background_worker::spawn_cron_worker(
+            app_pool.clone(),
+            auth_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        crate::scan_schedule_worker::spawn_scan_schedule_worker(
+            app_pool.clone(),
+            auth_pool.clone(),
+        );
+        crate::alert_evaluator_worker::spawn_alert_evaluator_worker(
+            app_pool.clone(),
+            auth_pool.clone(),
+        );
+        crate::threat_intel_ingestor::spawn_ingest_worker(
+            app_pool.clone(),
+            intel_pool.clone(),
+            auth_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
+        crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
+        // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
+        // and gated by env vars so dev/offline runs can skip outbound HTTP.
+        crate::intel_kev::bootstrap_kev_catalog(app_pool.clone());
+        crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
+        crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
+        crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
+        crate::intel_findings_backfill::bootstrap_findings_intel_backfill(app_pool.clone());
+        // UEBA — purge old samples once an hour so the table stays bounded.
+        crate::ueba_detector::spawn_retention_loop(app_pool.clone());
+        crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        crate::predictive_analyzer::spawn_security_events_llm_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        crate::sovereign_c2::spawn_sovereign_stack(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+            state.take_sovereign_swarm_rx(),
+            state.sovereign_swarm_tx.clone(),
+        );
     } // ── end singleton-leader workers ──────────────────────────────────────────
     if let Some(secs) = std::env::var("WEISSMAN_GENERAL_SELF_AUDIT_INTERVAL_SECS")
         .ok()
@@ -1518,6 +1521,11 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
         )
+        // Unified threat analysis: attack-chain plan + multi-stage correlation over live findings.
+        .route(
+            "/api/threat-analysis/:client_id",
+            get(api_threat_analysis_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
@@ -1552,6 +1560,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
+        .route("/api/engines/accounting", get(api_engines_accounting))
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/docs", get(crate::api_docs::api_docs_swagger))
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))

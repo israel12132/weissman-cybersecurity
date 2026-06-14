@@ -78,9 +78,12 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
             "twin_profile": serde_json::Value::Object(twin_profile.clone())
         }));
 
-        // Phase 2: Risk scenarios from live profile (advisory only — not stored as confirmed vulns)
-        if content_type.contains("html") || content_type.contains("json") {
-            findings.push(json!({
+        // Phase 2: Risk scenarios from live profile — speculative "suggested test" advisories that
+        // are NOT observed vulnerabilities. Gated off by default so results stay evidence-only;
+        // set WEISSMAN_ADVISORY_FINDINGS=1 to surface the coaching scenarios.
+        if crate::engine_probes::advisory_findings_enabled() {
+            if content_type.contains("html") || content_type.contains("json") {
+                findings.push(json!({
                 "type": "digital_twin",
                 "category": "risk_scenario",
                 "title": format!("Advisory: SQLi test path for {}", base),
@@ -94,10 +97,10 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
                 "value": base,
                 "scenario": "sqli",
             }));
-        }
+            }
 
-        if !has_csp {
-            findings.push(json!({
+            if !has_csp {
+                findings.push(json!({
                 "type": "digital_twin",
                 "category": "risk_scenario",
                 "title": format!("Advisory: XSS risk (no CSP) on {}", base),
@@ -110,33 +113,33 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
                 "value": base,
                 "scenario": "xss",
             }));
-        }
+            }
 
-        if !has_hsts {
-            findings.push(json!({
-                "type": "digital_twin",
-                "category": "risk_scenario",
-                "title": format!("Advisory: MITM/ssl-strip risk (no HSTS) on {}", base),
-                "severity": "info",
-                "mitre_attack": "T1557",
-                "description": format!(
-                    "HSTS not enforced on {}. Validate transport with pki_tls engine.",
-                    base
-                ),
-                "value": base,
-                "scenario": "sslstrip",
-            }));
-        }
-
-        // Simulate CORS-based attack
-        if has_cors {
-            let origin_val = headers
-                .get("access-control-allow-origin")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string();
-            if origin_val == "*" {
+            if !has_hsts {
                 findings.push(json!({
+                    "type": "digital_twin",
+                    "category": "risk_scenario",
+                    "title": format!("Advisory: MITM/ssl-strip risk (no HSTS) on {}", base),
+                    "severity": "info",
+                    "mitre_attack": "T1557",
+                    "description": format!(
+                        "HSTS not enforced on {}. Validate transport with pki_tls engine.",
+                        base
+                    ),
+                    "value": base,
+                    "scenario": "sslstrip",
+                }));
+            }
+
+            // Simulate CORS-based attack
+            if has_cors {
+                let origin_val = headers
+                    .get("access-control-allow-origin")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string();
+                if origin_val == "*" {
+                    findings.push(json!({
                     "type": "digital_twin",
                     "category": "risk_scenario",
                     "title": format!("Advisory: permissive CORS on {}", base),
@@ -150,8 +153,9 @@ pub async fn run_digital_twin_result(target: &str) -> EngineResult {
                     "scenario": "cors",
                     "cors_policy": origin_val
                 }));
+                }
             }
-        }
+        } // end advisory_findings_enabled gate
     }
 
     EngineResult::ok(

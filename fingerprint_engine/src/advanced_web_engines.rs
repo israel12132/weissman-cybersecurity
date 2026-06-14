@@ -773,7 +773,11 @@ async fn post_raw(
         .ok()?;
     let status = resp.status().as_u16();
     let text = resp.text().await.unwrap_or_default();
-    let text = if text.len() > 65_536 { text[..65_536].to_string() } else { text };
+    let text = if text.len() > 65_536 {
+        text[..65_536].to_string()
+    } else {
+        text
+    };
     Some((status, text))
 }
 
@@ -858,7 +862,11 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
         "/invoker/EJBInvokerServlet",
         "/remoting/RemoteService",
     ] {
-        let u = if path.is_empty() { url.clone() } else { join_url(&url, path) };
+        let u = if path.is_empty() {
+            url.clone()
+        } else {
+            join_url(&url, path)
+        };
         if let Some((status, text)) = post_raw(
             &client,
             &u,

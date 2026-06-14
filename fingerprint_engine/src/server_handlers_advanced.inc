@@ -86,6 +86,106 @@ async fn api_risk_node_flags_patch(
     }
 }
 
+// ─── Unified threat analysis (planner + correlation + NDR + ITDR over live findings) ───
+async fn api_threat_analysis_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(500)
+        .clamp(1, 2000);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT COALESCE(raw_data, '{}'::jsonb)                       AS rd,
+                  COALESCE(title, '')                                   AS title,
+                  COALESCE(severity, '')                                AS severity,
+                  COALESCE(EXTRACT(EPOCH FROM discovered_at)::bigint, 0) AS ts
+             FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2
+            ORDER BY discovered_at ASC
+            LIMIT $3"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
+
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": format!("query: {e}")})),
+            )
+                .into_response()
+        }
+    };
+
+    let mut findings: Vec<Value> = Vec::with_capacity(rows.len());
+    for r in &rows {
+        let mut v: Value = r.try_get("rd").unwrap_or_else(|_| json!({}));
+        if !v.is_object() {
+            v = json!({});
+        }
+        if let Some(obj) = v.as_object_mut() {
+            obj.entry("title")
+                .or_insert_with(|| json!(r.try_get::<String, _>("title").unwrap_or_default()));
+            obj.entry("severity")
+                .or_insert_with(|| json!(r.try_get::<String, _>("severity").unwrap_or_default()));
+            obj.insert("ts".to_string(), json!(r.try_get::<i64, _>("ts").unwrap_or(0)));
+        }
+        findings.push(v);
+    }
+
+    let report = crate::threat_analysis::analyze(&findings, &[], &[]);
+
+    // Optional: persist detected multi-stage correlation incidents (operator-gated, idempotent).
+    let mut persisted_incidents = 0usize;
+    if q.get("persist").map(|v| v == "1" || v == "true").unwrap_or(false) {
+        if let Err(r) = crate::rbac::require_operator(&auth) {
+            return r;
+        }
+        let events = crate::correlation_rules::events_from_findings(&findings, |i, f| {
+            f.get("ts")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1000 + (i as i64) * 60)
+        });
+        let hits = crate::correlation_rules::evaluate_all(
+            &crate::correlation_rules::default_rules(),
+            &events,
+        );
+        persisted_incidents = crate::correlation_rules::persist_incidents(
+            &state.app_pool,
+            auth.tenant_id,
+            Some(client_id),
+            &hits,
+        )
+        .await
+        .unwrap_or(0);
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "client_id": client_id,
+            "findings_analyzed": findings.len(),
+            "persisted_incidents": persisted_incidents,
+            "analysis": report,
+        })),
+    )
+        .into_response()
+}
+
 // ─── Playbook endpoints ────────────────────────────────────────────────────
 
 async fn api_playbooks_list(

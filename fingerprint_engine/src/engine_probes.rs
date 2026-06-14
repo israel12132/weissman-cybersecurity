@@ -488,6 +488,16 @@ pub fn host_header_rebinding_signal(
         && (baseline_status >= 400 || foreign_status != baseline_status)
 }
 
+/// Whether speculative *advisory* findings (suggested-test / risk-scenario rows that are not backed
+/// by an observed vulnerability signal) should be emitted. Off by default so a scan surfaces only
+/// evidence-backed findings; operators who want the speculative coaching set
+/// `WEISSMAN_ADVISORY_FINDINGS=1`.
+pub fn advisory_findings_enabled() -> bool {
+    std::env::var("WEISSMAN_ADVISORY_FINDINGS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"))
+        .unwrap_or(false)
+}
+
 /// Convenience: build a result with optional empty findings (no simulated content).
 pub fn empty_ok(engine_id: &str, target: &str) -> EngineResult {
     EngineResult::ok(
@@ -804,7 +814,10 @@ pub fn probe_matched_token(probe: &HttpProbe, tokens: &[&str]) -> Option<String>
 /// reporting as exposed surface) rather than a hard 404/410.
 #[must_use]
 pub fn status_indicates_presence(status: u16) -> bool {
-    matches!(status, 200 | 201 | 204 | 301 | 302 | 307 | 308 | 401 | 403 | 405 | 500)
+    matches!(
+        status,
+        200 | 201 | 204 | 301 | 302 | 307 | 308 | 401 | 403 | 405 | 500
+    )
 }
 
 /// A product/version observation parsed from a real HTTP response.
@@ -847,8 +860,7 @@ pub fn fingerprint_stack(probe: &HttpProbe) -> StackFingerprint {
                 let prod = prod.trim();
                 let ver = ver.trim();
                 if !prod.is_empty() && ver.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-                    fp.products
-                        .push((prod.to_string(), ver.to_string()));
+                    fp.products.push((prod.to_string(), ver.to_string()));
                 }
             }
         }
@@ -902,10 +914,8 @@ mod tests {
         assert!(detect_secrets("<html>a = b; total == 3</html>").is_empty());
         assert!(detect_secrets("AKIAIOSFODNN7EXAMPLE").contains(&"AWS Access Key ID"));
         assert!(detect_secrets("-----BEGIN RSA PRIVATE KEY-----").contains(&"Private Key Block"));
-        assert!(
-            detect_secrets("DATABASE_URL=postgres://u:p4ss@db:5432/x")
-                .contains(&"DB Connection URI with credentials")
-        );
+        assert!(detect_secrets("DATABASE_URL=postgres://u:p4ss@db:5432/x")
+            .contains(&"DB Connection URI with credentials"));
     }
 
     #[test]
@@ -917,8 +927,14 @@ mod tests {
     #[test]
     fn join_url_handles_absolute_and_relative() {
         assert_eq!(join_url("https://x.test/", "/owa/"), "https://x.test/owa/");
-        assert_eq!(join_url("https://x.test", "remote/login"), "https://x.test/remote/login");
-        assert_eq!(join_url("https://x.test/", "https://y.test/a"), "https://y.test/a");
+        assert_eq!(
+            join_url("https://x.test", "remote/login"),
+            "https://x.test/remote/login"
+        );
+        assert_eq!(
+            join_url("https://x.test/", "https://y.test/a"),
+            "https://y.test/a"
+        );
         assert_eq!(join_url("https://x.test/", "/"), "https://x.test");
     }
 
@@ -938,8 +954,14 @@ mod tests {
             body: "<html>Outlook Web App</html>".to_string(),
             final_url: "https://x.test/owa/".to_string(),
         };
-        assert_eq!(probe_matched_token(&probe, &["nginx", "iis"]).as_deref(), Some("iis"));
-        assert_eq!(probe_matched_token(&probe, &["outlook"]).as_deref(), Some("outlook"));
+        assert_eq!(
+            probe_matched_token(&probe, &["nginx", "iis"]).as_deref(),
+            Some("iis")
+        );
+        assert_eq!(
+            probe_matched_token(&probe, &["outlook"]).as_deref(),
+            Some("outlook")
+        );
         assert!(probe_matched_token(&probe, &["citrix"]).is_none());
     }
 
@@ -955,7 +977,11 @@ mod tests {
             final_url: "https://x.test/".to_string(),
         };
         let fp = fingerprint_stack(&probe);
-        assert!(fp.products.contains(&("nginx".to_string(), "1.18.0".to_string())));
-        assert!(fp.products.contains(&("PHP".to_string(), "7.4.3".to_string())));
+        assert!(fp
+            .products
+            .contains(&("nginx".to_string(), "1.18.0".to_string())));
+        assert!(fp
+            .products
+            .contains(&("PHP".to_string(), "7.4.3".to_string())));
     }
 }

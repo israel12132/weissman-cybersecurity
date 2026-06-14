@@ -143,6 +143,7 @@
     "client_new": "New Client",
     "client_detail": "Client Details",
     "threat_hunting": "Threat Hunting",
+    "threat_analysis": "Threat Analysis",
     "dark_web": "Dark Web Monitor",
     "intel_map": "Global Intel Map",
     "incident_response": "Incident Response",

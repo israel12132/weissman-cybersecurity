@@ -1018,6 +1018,11 @@ async fn api_engines_production() -> Response {
     }))).into_response()
 }
 
+/// Honest engine accounting: advertised IDs vs distinct probe implementations vs aliases.
+async fn api_engines_accounting() -> Response {
+    (StatusCode::OK, Json(crate::engine_accounting::to_json())).into_response()
+}
+
 const TOP_TIER_ENGINES: &[&str] = &[
     "kill_chain",
     "oast_oob",

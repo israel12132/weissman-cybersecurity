@@ -67,8 +67,7 @@ fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
 
 fn decrypt_with_key(key: &[u8; 32], stored: &str) -> Option<String> {
     let rest = stored.strip_prefix(VAULT_PREFIX)?;
-    let blob =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, rest).ok()?;
+    let blob = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, rest).ok()?;
     if blob.len() < 12 + 16 {
         return None;
     }
@@ -488,15 +487,24 @@ mod tests {
         let secret = "AKIAIOSFODNN7EXAMPLE/secretvalue";
         let enc = encrypt_with_key(&key, secret).expect("encrypt");
         assert!(enc.starts_with(VAULT_PREFIX), "ciphertext must be tagged");
-        assert!(!enc.contains(secret), "plaintext must not appear in ciphertext");
+        assert!(
+            !enc.contains(secret),
+            "plaintext must not appear in ciphertext"
+        );
         assert_eq!(decrypt_with_key(&key, &enc).as_deref(), Some(secret));
     }
 
     #[test]
     fn vault_wrong_key_fails_and_legacy_passes_through() {
         let enc = encrypt_with_key(&[7u8; 32], "topsecret").expect("encrypt");
-        assert!(decrypt_with_key(&[8u8; 32], &enc).is_none(), "wrong key must fail");
+        assert!(
+            decrypt_with_key(&[8u8; 32], &enc).is_none(),
+            "wrong key must fail"
+        );
         // Legacy plaintext (no wzv1: prefix) returns unchanged.
-        assert_eq!(decrypt_secret("legacy-plaintext-signature"), "legacy-plaintext-signature");
+        assert_eq!(
+            decrypt_secret("legacy-plaintext-signature"),
+            "legacy-plaintext-signature"
+        );
     }
 }

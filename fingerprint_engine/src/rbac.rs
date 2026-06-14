@@ -249,11 +249,23 @@ mod tests {
         assert_eq!(required_min_role(&Method::POST, "/api/ask"), None);
         assert_eq!(required_min_role(&Method::POST, "/api/logout"), None);
         // Privileged prefixes.
-        assert_eq!(required_min_role(&Method::POST, "/api/ceo/x"), Some(roles::CEO));
-        assert_eq!(required_min_role(&Method::POST, "/api/admin/users"), Some(roles::ADMIN));
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/ceo/x"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/admin/users"),
+            Some(roles::ADMIN)
+        );
         // Client create/update = operator+, delete = admin+ (matches README RBAC).
-        assert_eq!(required_min_role(&Method::POST, "/api/clients"), Some(roles::OPERATOR));
-        assert_eq!(required_min_role(&Method::DELETE, "/api/clients/5"), Some(roles::ADMIN));
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/clients"),
+            Some(roles::OPERATOR)
+        );
+        assert_eq!(
+            required_min_role(&Method::DELETE, "/api/clients/5"),
+            Some(roles::ADMIN)
+        );
         // Everything else that mutates requires at least analyst (viewer blocked).
         assert_eq!(
             required_min_role(&Method::PATCH, "/api/findings/1/status"),

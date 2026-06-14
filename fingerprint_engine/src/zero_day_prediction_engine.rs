@@ -303,17 +303,8 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
         }
     }
 
-    if findings.is_empty() {
-        findings.push(json!({
-            "type": "zero_day_prediction",
-            "title": format!("No high-risk components detected on {}", base),
-            "severity": "info",
-            "mitre_attack": "T1212",
-            "description": "Zero-day prediction scan found no known high-risk components in the fingerprinted technology stack.",
-            "value": base
-        }));
-    }
-
+    // No "nothing found" placeholder finding: an empty result is the honest signal that no
+    // high-risk components were fingerprinted (the message still reports the scan ran).
     EngineResult::ok(
         findings.clone(),
         format!(

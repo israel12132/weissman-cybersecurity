@@ -218,7 +218,8 @@ pub async fn execute_job(
             if !weissman_core::models::engine::is_production_engine_id(engine) {
                 return Err(format!("engine '{}' is catalog-only or unknown", engine));
             }
-            let ctx = crate::remediation_verify::verify_context(app_pool.clone(), tid, client_id_opt);
+            let ctx =
+                crate::remediation_verify::verify_context(app_pool.clone(), tid, client_id_opt);
             let outcome = crate::remediation_verify::run_verification(
                 app_pool.as_ref(),
                 tid,

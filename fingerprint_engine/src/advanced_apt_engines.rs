@@ -12,10 +12,10 @@
 //! No simulated findings; no payloads are delivered to the target.
 
 use crate::engine_probes::{
-    dns_mx, dns_txt, empty_ok, extract_host, fingerprint_stack, finding_with_probe_depth,
+    dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
     has_header, header_value, http_client, http_get_retry, normalize_url, probe_matched_token,
-    probe_paths_concurrent, status_indicates_presence, tcp_scan, tls_cert_summary,
-    HttpProbe, DEFAULT_PROBE_CONCURRENCY,
+    probe_paths_concurrent, status_indicates_presence, tcp_scan, tls_cert_summary, HttpProbe,
+    DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
@@ -111,7 +111,12 @@ static FORTINET_SSLVPN: EdgeSurface = EdgeSurface {
     name: "Fortinet FortiGate SSL-VPN",
     mitre: "T1190",
     cve: "CVE-2024-21762 + CVE-2018-13379 path traversal — CISA KEV",
-    paths: &["/remote/login", "/remote/fgt_lang", "/sslvpn/", "/remote/info"],
+    paths: &[
+        "/remote/login",
+        "/remote/fgt_lang",
+        "/sslvpn/",
+        "/remote/info",
+    ],
     ports: &[],
     tokens: &["fortinet", "fortigate", "sslvpn", "fgt_lang"],
     severity: "high",
@@ -135,7 +140,11 @@ static CISCO_IOSXE: EdgeSurface = EdgeSurface {
     name: "Cisco IOS XE Web UI",
     mitre: "T1190",
     cve: "CVE-2023-20198 implant chain — CISA KEV",
-    paths: &["/webui/", "/webui/logoutconfirm.html?logon_hash=1", "/%2577ebui/"],
+    paths: &[
+        "/webui/",
+        "/webui/logoutconfirm.html?logon_hash=1",
+        "/%2577ebui/",
+    ],
     ports: &[],
     tokens: &["cisco", "ios xe", "webui", "ios-xe"],
     severity: "high",
@@ -155,7 +164,12 @@ static MOVEIT_TRANSFER: EdgeSurface = EdgeSurface {
     name: "Progress MOVEit Transfer",
     mitre: "T1190",
     cve: "CVE-2023-34362 SQLi→RCE (Cl0p mass-exfil) — CISA KEV",
-    paths: &["/human.aspx", "/moveitisapi/moveitisapi.dll", "/guestaccess.aspx", "/api/v1/token"],
+    paths: &[
+        "/human.aspx",
+        "/moveitisapi/moveitisapi.dll",
+        "/guestaccess.aspx",
+        "/api/v1/token",
+    ],
     ports: &[],
     tokens: &["moveit", "ipswitch", "human.aspx", "moveitisapi"],
     severity: "critical",
@@ -257,7 +271,10 @@ fn surface_http_finding(
     );
     actor_finding(
         profile,
-        &format!("{}: exposed initial-access surface — {}", profile.actor, surface.name),
+        &format!(
+            "{}: exposed initial-access surface — {}",
+            profile.actor, surface.name
+        ),
         surface.severity,
         surface.mitre,
         &desc,
@@ -280,7 +297,10 @@ fn surface_port_finding(
     );
     actor_finding(
         profile,
-        &format!("{}: exposed service — {} ({}/tcp)", profile.actor, surface.name, port),
+        &format!(
+            "{}: exposed service — {} ({}/tcp)",
+            profile.actor, surface.name, port
+        ),
         surface.severity,
         surface.mitre,
         &desc,
@@ -398,8 +418,8 @@ async fn scan_email_auth_surface(profile: &ActorProfile, target: &str, host: &st
     }
     let txt = dns_txt(host).await;
     let has_spf = txt.iter().any(|t| t.contains("v=spf1"));
-    let has_dmarc =
-        txt.iter().any(|t| t.contains("DMARC1")) || !dns_txt(&format!("_dmarc.{host}")).await.is_empty();
+    let has_dmarc = txt.iter().any(|t| t.contains("DMARC1"))
+        || !dns_txt(&format!("_dmarc.{host}")).await.is_empty();
     if !has_spf {
         findings.push(actor_finding(
             profile,
@@ -474,7 +494,8 @@ async fn actor_exposure_scan(target: &str, profile: &ActorProfile) -> EngineResu
     for surface in &profile.surfaces {
         if !surface.paths.is_empty() {
             let probes =
-                probe_paths_concurrent(&client, &url, surface.paths, DEFAULT_PROBE_CONCURRENCY).await;
+                probe_paths_concurrent(&client, &url, surface.paths, DEFAULT_PROBE_CONCURRENCY)
+                    .await;
             if let Some((p, tok)) = probes.iter().find_map(|p| {
                 if status_indicates_presence(p.status) {
                     probe_matched_token(p, surface.tokens).map(|t| (p, t))
@@ -505,7 +526,10 @@ async fn actor_exposure_scan(target: &str, profile: &ActorProfile) -> EngineResu
     let n = findings.len();
     EngineResult::ok(
         findings,
-        format!("{}: {} surface/exposure finding(s) for {}", profile.engine_id, n, profile.actor),
+        format!(
+            "{}: {} surface/exposure finding(s) for {}",
+            profile.engine_id, n, profile.actor
+        ),
     )
 }
 
@@ -549,7 +573,12 @@ pub async fn run_apt29_techniques_result(t: &str) -> EngineResult {
             "apt29_techniques",
             "APT29 (Cozy Bear / SVR)",
             "T1190",
-            vec![&EXCHANGE_OWA, &PULSE_IVANTI, &CITRIX_NETSCALER, &SOLARWINDS_ORION],
+            vec![
+                &EXCHANGE_OWA,
+                &PULSE_IVANTI,
+                &CITRIX_NETSCALER,
+                &SOLARWINDS_ORION,
+            ],
             &["sunburst", "teardrop", "wellmess"],
         ),
     )
@@ -594,7 +623,12 @@ pub async fn run_volt_typhoon_ttps_result(t: &str) -> EngineResult {
             "volt_typhoon_ttps",
             "Volt Typhoon (China)",
             "T1190",
-            vec![&FORTINET_SSLVPN, &CISCO_IOSXE, &PULSE_IVANTI, &ZOHO_MANAGEENGINE],
+            vec![
+                &FORTINET_SSLVPN,
+                &CISCO_IOSXE,
+                &PULSE_IVANTI,
+                &ZOHO_MANAGEENGINE,
+            ],
             &["fortiguard", "fortinet"],
         ),
     )
@@ -720,7 +754,10 @@ pub async fn run_midnight_blizzard_ttps_result(t: &str) -> EngineResult {
     )
     .await
 }
-cli_wrapper!(run_midnight_blizzard_ttps, run_midnight_blizzard_ttps_result);
+cli_wrapper!(
+    run_midnight_blizzard_ttps,
+    run_midnight_blizzard_ttps_result
+);
 
 pub async fn run_earth_longzhi_ttps_result(t: &str) -> EngineResult {
     actor_exposure_scan(
@@ -830,7 +867,10 @@ cli_wrapper!(run_unc3944_ttps, run_unc3944_ttps_result);
 pub async fn run_quantum_sovereign_nexus_result(t: &str) -> EngineResult {
     crate::pqc_scanner_engine::run_pqc_scanner_result(t).await
 }
-cli_wrapper!(run_quantum_sovereign_nexus, run_quantum_sovereign_nexus_result);
+cli_wrapper!(
+    run_quantum_sovereign_nexus,
+    run_quantum_sovereign_nexus_result
+);
 
 #[cfg(test)]
 mod tests {
@@ -852,7 +892,13 @@ mod tests {
 
     #[test]
     fn actor_finding_carries_actor_and_cve() {
-        let p = profile("cl0p_techniques", "Cl0p", "T1190", vec![&MOVEIT_TRANSFER], &[]);
+        let p = profile(
+            "cl0p_techniques",
+            "Cl0p",
+            "T1190",
+            vec![&MOVEIT_TRANSFER],
+            &[],
+        );
         let f = surface_http_finding(
             &p,
             &MOVEIT_TRANSFER,
@@ -868,7 +914,10 @@ mod tests {
         assert_eq!(f["threat_actor"], "Cl0p");
         assert_eq!(f["severity"], "critical");
         assert_eq!(f["probe_depth"], PROBE_DEPTH);
-        assert!(f["exploited_cve"].as_str().unwrap().contains("CVE-2023-34362"));
+        assert!(f["exploited_cve"]
+            .as_str()
+            .unwrap()
+            .contains("CVE-2023-34362"));
     }
 
     #[tokio::test]

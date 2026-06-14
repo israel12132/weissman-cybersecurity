@@ -104,16 +104,28 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     // Multi-cloud public object-storage enumeration (AWS S3 / Azure Blob / GCP Storage).
     let candidates: Vec<(&str, String)> = vec![
-        ("AWS S3", format!("https://{}.s3.amazonaws.com/", host.replace('.', "-"))),
+        (
+            "AWS S3",
+            format!("https://{}.s3.amazonaws.com/", host.replace('.', "-")),
+        ),
         ("AWS S3", format!("https://{}.s3.amazonaws.com/", host)),
         ("AWS S3", format!("https://s3.amazonaws.com/{}/", host)),
         ("AWS S3", format!("https://{}.s3.amazonaws.com/", label)),
         (
             "Azure Blob",
-            format!("https://{}.blob.core.windows.net/?comp=list", label.replace('-', "")),
+            format!(
+                "https://{}.blob.core.windows.net/?comp=list",
+                label.replace('-', "")
+            ),
         ),
-        ("GCP Storage", format!("https://storage.googleapis.com/{}/", host)),
-        ("GCP Storage", format!("https://storage.googleapis.com/{}/", label)),
+        (
+            "GCP Storage",
+            format!("https://storage.googleapis.com/{}/", host),
+        ),
+        (
+            "GCP Storage",
+            format!("https://storage.googleapis.com/{}/", label),
+        ),
     ];
     for (provider, url) in &candidates {
         if let Some(p) = http_get(&client, url).await {
@@ -157,7 +169,10 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
         empty_ok("s3_bucket_attack", target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("s3_bucket_attack: {} storage finding(s)", n))
+        EngineResult::ok(
+            findings,
+            format!("s3_bucket_attack: {} storage finding(s)", n),
+        )
     }
 }
 cli_wrapper!(run_s3_bucket_attack, run_s3_bucket_attack_result);

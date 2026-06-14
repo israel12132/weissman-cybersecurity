@@ -48,7 +48,13 @@ const KERBEROS_HTTP_PATHS: &[&str] = &[
     "/wsman",
 ];
 
-fn kerb_finding(title: &str, severity: &str, mitre: &str, description: &str, target: &str) -> Value {
+fn kerb_finding(
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+) -> Value {
     json!({
         "type": "kerberoasting",
         "title": title,
@@ -176,8 +182,13 @@ pub async fn run_kerberoasting_result(target: &str) -> EngineResult {
 
     // 5. HTTP SPNEGO / NTLM negotiation surface.
     let client = http_client().await;
-    let probes =
-        probe_paths_concurrent(&client, &url, KERBEROS_HTTP_PATHS, DEFAULT_PROBE_CONCURRENCY).await;
+    let probes = probe_paths_concurrent(
+        &client,
+        &url,
+        KERBEROS_HTTP_PATHS,
+        DEFAULT_PROBE_CONCURRENCY,
+    )
+    .await;
     for p in &probes {
         let www = header_value(&p.headers, "www-authenticate")
             .unwrap_or_default()
@@ -215,11 +226,17 @@ pub async fn run_kerberoasting_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         return EngineResult::ok(
             vec![],
-            format!("kerberoasting: no external AD/Kerberos surface observed on {}", host),
+            format!(
+                "kerberoasting: no external AD/Kerberos surface observed on {}",
+                host
+            ),
         );
     }
     let n = findings.len();
-    EngineResult::ok(findings, format!("kerberoasting: {} AD-surface finding(s)", n))
+    EngineResult::ok(
+        findings,
+        format!("kerberoasting: {} AD-surface finding(s)", n),
+    )
 }
 
 fn is_adfs_exchange_url(url: &str) -> bool {

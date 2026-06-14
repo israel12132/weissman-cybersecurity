@@ -70,7 +70,15 @@ fn llm_hardening_finding(
     description: &str,
     target: &str,
 ) -> Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, LLM_PROBE_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        LLM_PROBE_DEPTH,
+    )
 }
 
 fn llm_behavior_finding(
@@ -81,7 +89,15 @@ fn llm_behavior_finding(
     description: &str,
     target: &str,
 ) -> Value {
-    finding_with_probe_depth(engine_id, title, severity, mitre, description, target, LLM_BEHAVIOR_DEPTH)
+    finding_with_probe_depth(
+        engine_id,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        LLM_BEHAVIOR_DEPTH,
+    )
 }
 
 fn collect_result(engine_id: &str, target: &str, findings: Vec<Value>) -> EngineResult {
@@ -272,7 +288,8 @@ async fn probe_llm_hardening(
             }
         }
 
-        if let Some(no_auth) = http_post_json_with_headers(&client, &url, &chat_payload, &[]).await {
+        if let Some(no_auth) = http_post_json_with_headers(&client, &url, &chat_payload, &[]).await
+        {
             if let Some(with_key) = http_post_json_with_headers(
                 &client,
                 &url,
@@ -345,7 +362,12 @@ fn ai_finding(
 }
 
 /// LLM01 — instruction-override / jailbreak susceptibility (benign canary).
-async fn probe_instruction_override(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_instruction_override(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     let Some((url, _)) = discover_responsive_endpoint(client, base).await else {
         return findings;
@@ -373,7 +395,12 @@ async fn probe_instruction_override(client: &Client, base: &str, engine_id: &str
 }
 
 /// LLM06 — system-prompt / sensitive-instruction disclosure.
-async fn probe_system_prompt_leak(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_system_prompt_leak(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     let Some((url, _)) = discover_responsive_endpoint(client, base).await else {
         return findings;
@@ -407,7 +434,12 @@ async fn probe_system_prompt_leak(client: &Client, base: &str, engine_id: &str, 
 }
 
 /// LLM07 — insecure plugin/tool design: exposed plugin manifest / tool schema.
-async fn probe_plugin_manifest(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_plugin_manifest(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     for path in [
         "/.well-known/ai-plugin.json",
@@ -448,7 +480,12 @@ async fn probe_plugin_manifest(client: &Client, base: &str, engine_id: &str, tar
 }
 
 /// Model theft / backdoor analysis — exposed model artifacts.
-async fn probe_model_artifacts(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_model_artifacts(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     for path in [
         "/config.json",
@@ -492,7 +529,12 @@ async fn probe_model_artifacts(client: &Client, base: &str, engine_id: &str, tar
 }
 
 /// LLM04 / LLM10 — unbounded resource consumption (oversized generation request accepted).
-async fn probe_unbounded_generation(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_unbounded_generation(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     let Some((url, _)) = discover_responsive_endpoint(client, base).await else {
         return findings;
@@ -518,7 +560,12 @@ async fn probe_unbounded_generation(client: &Client, base: &str, engine_id: &str
 }
 
 /// LLM03 — training-data / feedback poisoning surface.
-async fn probe_training_feedback(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_training_feedback(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     for (path, label) in [
         ("/feedback", "feedback ingestion"),
@@ -549,7 +596,12 @@ async fn probe_training_feedback(client: &Client, base: &str, engine_id: &str, t
 }
 
 /// Multimodal / generative endpoint surface.
-async fn probe_multimodal(client: &Client, base: &str, engine_id: &str, target: &str) -> Vec<Value> {
+async fn probe_multimodal(
+    client: &Client,
+    base: &str,
+    engine_id: &str,
+    target: &str,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     for (path, kind) in [
         ("/v1/images/generations", "image generation"),
@@ -609,7 +661,10 @@ pub async fn run_prompt_injection_chain_result(target: &str) -> EngineResult {
     f.extend(probe_llm_hardening(target, "prompt_injection_chain", "T1059.008", &[]).await);
     collect_result("prompt_injection_chain", target, f)
 }
-cli_wrapper!(run_prompt_injection_chain, run_prompt_injection_chain_result);
+cli_wrapper!(
+    run_prompt_injection_chain,
+    run_prompt_injection_chain_result
+);
 
 pub async fn run_model_inversion_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
@@ -620,7 +675,10 @@ pub async fn run_model_inversion_attack_result(target: &str) -> EngineResult {
     let f = probe_system_prompt_leak(&client, &base, "model_inversion_attack", target).await;
     collect_result("model_inversion_attack", target, f)
 }
-cli_wrapper!(run_model_inversion_attack, run_model_inversion_attack_result);
+cli_wrapper!(
+    run_model_inversion_attack,
+    run_model_inversion_attack_result
+);
 
 pub async fn run_ai_supply_chain_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
@@ -648,7 +706,10 @@ pub async fn run_ai_supply_chain_attack_result(target: &str) -> EngineResult {
     findings.extend(probe_model_artifacts(&client, &base, "ai_supply_chain_attack", target).await);
     collect_result("ai_supply_chain_attack", target, findings)
 }
-cli_wrapper!(run_ai_supply_chain_attack, run_ai_supply_chain_attack_result);
+cli_wrapper!(
+    run_ai_supply_chain_attack,
+    run_ai_supply_chain_attack_result
+);
 
 pub async fn run_llm_agent_hijack_result(t: &str) -> EngineResult {
     if t.trim().is_empty() {
@@ -782,7 +843,10 @@ pub async fn run_neural_backdoor_detect_result(t: &str) -> EngineResult {
     let f = probe_model_artifacts(&client, &base, "neural_backdoor_detect", t).await;
     collect_result("neural_backdoor_detect", t, f)
 }
-cli_wrapper!(run_neural_backdoor_detect, run_neural_backdoor_detect_result);
+cli_wrapper!(
+    run_neural_backdoor_detect,
+    run_neural_backdoor_detect_result
+);
 
 pub async fn run_ai_watermark_bypass_result(t: &str) -> EngineResult {
     if t.trim().is_empty() {
@@ -804,7 +868,10 @@ pub async fn run_federated_learning_attack_result(t: &str) -> EngineResult {
     let f = probe_training_feedback(&client, &base, "federated_learning_attack", t).await;
     collect_result("federated_learning_attack", t, f)
 }
-cli_wrapper!(run_federated_learning_attack, run_federated_learning_attack_result);
+cli_wrapper!(
+    run_federated_learning_attack,
+    run_federated_learning_attack_result
+);
 
 pub async fn run_llm_red_team_advanced_result(t: &str) -> EngineResult {
     crate::ai_redteam_engine::run_ai_redteam_attack(

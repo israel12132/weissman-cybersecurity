@@ -56,3 +56,30 @@ fn rls_leak_check_job_queue_documented() {
         "job queue migration should document RLS posture (cross-tenant dequeue)"
     );
 }
+
+#[test]
+fn correlation_incidents_migration_has_forced_rls() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260614120000_correlation_incidents.sql");
+    assert!(p.is_file(), "correlation incidents migration missing: {}", p.display());
+    let text = std::fs::read_to_string(&p).unwrap_or_default();
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS weissman_correlation_incidents"));
+    assert!(text.contains("FORCE ROW LEVEL SECURITY"), "must force RLS");
+    assert!(
+        text.contains("current_setting('app.current_tenant_id'"),
+        "must scope by tenant GUC"
+    );
+    assert!(text.contains("TO weissman_app"), "must grant to app role");
+}
+
+#[test]
+fn correlation_incidents_migration_in_sync_both_dirs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260614120000_correlation_incidents.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260614120000_correlation_incidents.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "migration present");
+    assert_eq!(a, b, "migration must be identical in both dirs (sync check)");
+}

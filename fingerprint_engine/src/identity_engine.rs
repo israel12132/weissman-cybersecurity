@@ -679,10 +679,7 @@ pub async fn run_autonomous_privilege_escalation(
 /// Session/OAuth weakness analysis over the harvested credentials. Each token is
 /// inspected for forgeable / non-expiring / weak-entropy session properties — all
 /// computed from the token material itself (no extra network round-trip).
-pub fn run_session_oauth_tests(
-    base_url: &str,
-    contexts: &[AuthContext],
-) -> Vec<serde_json::Value> {
+pub fn run_session_oauth_tests(base_url: &str, contexts: &[AuthContext]) -> Vec<serde_json::Value> {
     let mut findings = Vec::new();
     let now = chrono::Utc::now().timestamp();
     for ctx in contexts {

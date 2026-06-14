@@ -387,9 +387,13 @@ pub async fn persist_engine_findings(
         // Sign the finding's immutable identity (id|title|severity|target) at
         // persist time. On read the server re-derives the digest and verifies it
         // against this receipt, so any out-of-band DB tampering is detectable.
-        if let Some((att_digest, att_receipt)) =
-            crate::finding_attestation::attest_finding(&finding_id, &title, &severity, &target_url, "")
-        {
+        if let Some((att_digest, att_receipt)) = crate::finding_attestation::attest_finding(
+            &finding_id,
+            &title,
+            &severity,
+            &target_url,
+            "",
+        ) {
             if let Value::Object(obj) = &mut raw_data_enriched {
                 obj.insert(
                     "attestation".to_string(),
@@ -711,7 +715,10 @@ mod tests {
         });
         let id1 = build_finding_id("sqli_engine", "https://Example.com/login", &first);
         let id2 = build_finding_id("sqli_engine", "https://example.com/login", &rescan);
-        assert_eq!(id1, id2, "finding_id must be stable across volatile fields + target case");
+        assert_eq!(
+            id1, id2,
+            "finding_id must be stable across volatile fields + target case"
+        );
         assert!(id1.starts_with("sqli_engine-"));
     }
 
