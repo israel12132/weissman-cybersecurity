@@ -40,7 +40,7 @@ quick-xml = "0.31"
 flate2 = "1"
 bcrypt = "0.16"
 chrono = "0.4"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 totp-rs = { version = "5", default-features = false, features = ["gen_secret", "otpauth"] }
 chrono-tz = "0.10"
 # Module 1: Immutable Audit Trail & RFC 3161-style PDF signing

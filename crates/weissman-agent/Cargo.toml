@@ -42,7 +42,7 @@ uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
 
 # JWT verification (only used to sanity-check the enrollment token client-side).
-jsonwebtoken = { version = "9", default-features = false }
+jsonwebtoken = { version = "10", default-features = false }
 
 # HTTP fetch for enrollment (request a session token).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json"] }
