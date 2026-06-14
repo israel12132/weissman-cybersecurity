@@ -150,7 +150,7 @@ native-tls = "0.2"
 opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["http-proto", "reqwest-client"] }
-tracing-opentelemetry = "0.28"
+tracing-opentelemetry = "0.33"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # System libhwloc via pkg-config (install libhwloc-dev). Vendored build needs autoconf/automake.
