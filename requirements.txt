@@ -66,4 +66,4 @@ cryptography>=41.0.0  # Field-level encryption
 playwright>=1.60.0
 
 # --- SIEM Integration ---
-elasticsearch>=8.11.0
+elasticsearch>=9.4.1
