@@ -2,7 +2,7 @@
 # Install alongside requirements.txt: pip install -r requirements.txt -r requirements-dev.txt
 
 # Vulnerability scanning
-pip-audit>=2.7.3
+pip-audit>=2.10.1
 
 # Linting
 ruff>=0.4.0
