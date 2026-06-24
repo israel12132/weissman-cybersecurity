@@ -1058,6 +1058,10 @@ struct ClientBody {
     aws_cross_account_role_arn: Option<String>,
     aws_external_id: Option<String>,
     gcp_project_id: Option<String>,
+    /// Engagement modules (baseline_asm, cloud_aws, endpoint_agent, …) stored in client_configs.
+    engagement_modules: Option<Vec<String>>,
+    /// Nested onboarding payload merged into client_configs.onboarding.
+    onboarding: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -1572,6 +1576,8 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/engines/accounting", get(api_engines_accounting))
         .route("/api/engines/capabilities", get(api_engines_capabilities))
+        .route("/api/engines/requirements", get(api_engines_requirements))
+        .route("/api/onboarding/tenant-status", get(api_onboarding_tenant_status))
         .route(
             "/api/engines/nexus_sovereign_swarm/schema",
             get(api_nssi_config_schema),
@@ -1709,6 +1715,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/clients/:id/config",
             get(api_client_config_get).patch(api_client_config_patch),
         )
+        .route("/api/clients/:id/readiness", get(api_clients_readiness))
         .route(
             "/api/clients/:id/engagements",
             get(api_client_engagements_list).post(api_client_engagements_create),

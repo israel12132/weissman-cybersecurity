@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "== Weissman company delivery prep =="
+node scripts/generate_engine_requirements.mjs
 node scripts/generate_platform_encyclopedia.mjs
 ./scripts/staging-qa.sh
 node scripts/verify_engine_wiring.mjs >/dev/null

@@ -1,0 +1,6123 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-24T23:33:00.381Z",
+  "production_engine_count": 546,
+  "requirements": {
+    "msa_acknowledged": {
+      "id": "msa_acknowledged",
+      "scope": "client",
+      "field": "onboarding.msa_acknowledged",
+      "type": "boolean",
+      "required": true,
+      "label_en": "Written authorization (MSA/SOW) acknowledged",
+      "label_he": "אישור הרשאה כתובה (MSA/SOW)",
+      "hint_en": "Only onboard clients with explicit written authorization for security testing.",
+      "hint_he": "קליטה רק עם הרשאה כתובה מפורשת לבדיקות אבטחה."
+    },
+    "emergency_contact": {
+      "id": "emergency_contact",
+      "scope": "client",
+      "field": "onboarding.emergency_contact_phone",
+      "type": "string",
+      "required": true,
+      "label_en": "Emergency stop contact (phone)",
+      "label_he": "איש קשר חירום לעצירת סריקה (טלפון)",
+      "hint_en": "24/7 number to halt scans immediately if needed.",
+      "hint_he": "מספר זמין לעצירת סריקות מיידית."
+    },
+    "scope_domains": {
+      "id": "scope_domains",
+      "scope": "client",
+      "field": "domains",
+      "type": "string_list",
+      "required": true,
+      "label_en": "Authorized domains",
+      "label_he": "דומיינים מורשים",
+      "hint_en": "Only assets in scope will be scanned.",
+      "hint_he": "רק נכסים בהיקף ייסרקו."
+    },
+    "scope_ips": {
+      "id": "scope_ips",
+      "scope": "client",
+      "field": "ip_ranges",
+      "type": "string_list",
+      "required": false,
+      "label_en": "Authorized IP ranges (CIDR)",
+      "label_he": "טווחי IP מורשים (CIDR)",
+      "hint_en": "Required for IP/OT/network segment engines.",
+      "hint_he": "נדרש למנועי IP/OT/רשת."
+    },
+    "scope_exclusions": {
+      "id": "scope_exclusions",
+      "scope": "client",
+      "field": "onboarding.exclusions",
+      "type": "string_list",
+      "required": false,
+      "label_en": "Exclusions (never scan)",
+      "label_he": "חריגים (לעולם לא לסרוק)",
+      "hint_en": "Payment gateways, prod DBs, third-party SaaS, etc.",
+      "hint_he": "שערי תשלום, DB production, SaaS צד-ג׳."
+    },
+    "contact_email": {
+      "id": "contact_email",
+      "scope": "client",
+      "field": "contact_email",
+      "type": "email",
+      "required": true,
+      "label_en": "Primary security contact email",
+      "label_he": "אימייל איש קשר אבטחה"
+    },
+    "aws_cross_account": {
+      "id": "aws_cross_account",
+      "scope": "client",
+      "fields": [
+        "aws_cross_account_role_arn",
+        "aws_external_id"
+      ],
+      "type": "cloud_aws",
+      "required": true,
+      "label_en": "AWS cross-account role ARN + external ID",
+      "label_he": "AWS cross-account role ARN + external ID",
+      "hint_en": "AssumeRole for agentless AWS posture engines.",
+      "hint_he": "AssumeRole למנועי AWS agentless."
+    },
+    "gcp_project": {
+      "id": "gcp_project",
+      "scope": "client",
+      "field": "gcp_project_id",
+      "type": "string",
+      "required": true,
+      "label_en": "GCP project ID",
+      "label_he": "מזהה פרויקט GCP"
+    },
+    "azure_subscription": {
+      "id": "azure_subscription",
+      "scope": "client",
+      "fields": [
+        "onboarding.azure_subscription_id",
+        "onboarding.azure_tenant_id"
+      ],
+      "type": "cloud_azure",
+      "required": true,
+      "label_en": "Azure subscription + tenant ID",
+      "label_he": "Azure subscription + tenant ID"
+    },
+    "ad_domain": {
+      "id": "ad_domain",
+      "scope": "client",
+      "field": "onboarding.ad_domain",
+      "type": "string",
+      "required": true,
+      "label_en": "Active Directory domain (FQDN)",
+      "label_he": "דומיין Active Directory (FQDN)",
+      "hint_en": "For Kerberos, LDAP, password spray, identity engines.",
+      "hint_he": "למנועי Kerberos, LDAP, identity."
+    },
+    "iac_repos": {
+      "id": "iac_repos",
+      "scope": "client",
+      "field": "onboarding.repo_urls",
+      "type": "url_list",
+      "required": true,
+      "label_en": "IaC / pipeline repository URLs",
+      "label_he": "כתובות repo ל-IaC / pipeline",
+      "hint_en": "Git URLs for Terraform, Helm, K8s manifests, CI configs.",
+      "hint_he": "Git ל-Terraform, Helm, K8s, CI."
+    },
+    "endpoint_agent": {
+      "id": "endpoint_agent",
+      "scope": "client",
+      "field": "onboarding.agent_platforms",
+      "type": "platform_list",
+      "required": true,
+      "label_en": "Endpoint agent target platforms",
+      "label_he": "פלטפורמות ל-Agent endpoint",
+      "hint_en": "Install Weissman agent on each platform in scope after create.",
+      "hint_he": "התקנת Agent Weissman על כל פלטפורמה בהיקף."
+    },
+    "industrial_ot": {
+      "id": "industrial_ot",
+      "scope": "client",
+      "fields": [
+        "client_configs.industrial_ot_enabled",
+        "ip_ranges"
+      ],
+      "type": "boolean",
+      "required": true,
+      "label_en": "Industrial OT/ICS enabled + IP ranges",
+      "label_he": "OT/ICS מופעל + טווחי IP",
+      "hint_en": "Enable OT engines and provide OT network CIDRs.",
+      "hint_he": "הפעלת מנועי OT ו-CIDR של רשת OT."
+    },
+    "llm_secops_endpoints": {
+      "id": "llm_secops_endpoints",
+      "scope": "client",
+      "field": "onboarding.llm_secops.endpoints",
+      "type": "url_list",
+      "required": false,
+      "label_en": "Client LLM/chat API endpoints (optional)",
+      "label_he": "נקודות קצה LLM/chat של הלקוח (אופציונלי)",
+      "hint_en": "For llm_secops fuzz against customer RAG/chat APIs.",
+      "hint_he": "ל-fuzz על RAG/chat APIs של הלקוח."
+    },
+    "tenant_llm": {
+      "id": "tenant_llm",
+      "scope": "tenant",
+      "config_key": "llm_base_url",
+      "env": "WEISSMAN_LLM_BASE_URL",
+      "type": "tenant_config",
+      "required": true,
+      "label_en": "Platform LLM endpoint (tenant)",
+      "label_he": "LLM של הפלטפורמה (tenant)",
+      "hint_en": "Required for AI red team, Council, semantic fuzz.",
+      "hint_he": "נדרש ל-AI red team, Council, semantic fuzz."
+    },
+    "tenant_oast": {
+      "id": "tenant_oast",
+      "scope": "tenant",
+      "env": "WEISSMAN_OAST_LISTENER_URL",
+      "type": "tenant_env",
+      "required": true,
+      "label_en": "OAST callback listener (tenant)",
+      "label_he": "OAST callback listener (tenant)",
+      "hint_en": "Out-of-band verification for blind SSRF/XSS/OAST engines.",
+      "hint_he": "אימות OOB ל-SSRF/XSS blind."
+    },
+    "tenant_ai_entitlement": {
+      "id": "tenant_ai_entitlement",
+      "scope": "tenant",
+      "config_key": "ai_heavy_entitled",
+      "type": "tenant_config",
+      "required": true,
+      "label_en": "AI-heavy entitlement enabled",
+      "label_he": "Entitlement למנועי AI-heavy"
+    }
+  },
+  "modules": {
+    "baseline_asm": {
+      "id": "baseline_asm",
+      "label_en": "Baseline ASM & Web (remote probes)",
+      "label_he": "ASM + Web בסיס (remote probes)",
+      "requirements": [
+        "msa_acknowledged",
+        "emergency_contact",
+        "contact_email",
+        "scope_domains",
+        "scope_exclusions"
+      ],
+      "engine_count": 407
+    },
+    "cloud_aws": {
+      "id": "cloud_aws",
+      "label_en": "AWS cloud posture",
+      "label_he": "AWS cloud posture",
+      "requirements": [
+        "aws_cross_account",
+        "scope_domains"
+      ],
+      "engine_count": 8
+    },
+    "cloud_gcp": {
+      "id": "cloud_gcp",
+      "label_en": "GCP cloud posture",
+      "label_he": "GCP cloud posture",
+      "requirements": [
+        "gcp_project",
+        "scope_domains"
+      ],
+      "engine_count": 3
+    },
+    "cloud_azure": {
+      "id": "cloud_azure",
+      "label_en": "Azure / Entra posture",
+      "label_he": "Azure / Entra posture",
+      "requirements": [
+        "azure_subscription",
+        "scope_domains"
+      ],
+      "engine_count": 3
+    },
+    "identity_ad": {
+      "id": "identity_ad",
+      "label_en": "Identity & AD (Kerberos, SAML, OAuth)",
+      "label_he": "Identity & AD",
+      "requirements": [
+        "ad_domain",
+        "scope_domains"
+      ],
+      "engine_count": 49
+    },
+    "endpoint_agent": {
+      "id": "endpoint_agent",
+      "label_en": "Endpoint agent detections",
+      "label_he": "Endpoint agent detections",
+      "requirements": [
+        "endpoint_agent",
+        "scope_domains"
+      ],
+      "engine_count": 45
+    },
+    "iac_supply_chain": {
+      "id": "iac_supply_chain",
+      "label_en": "IaC, CI/CD & supply chain",
+      "label_he": "IaC, CI/CD & supply chain",
+      "requirements": [
+        "iac_repos",
+        "scope_domains"
+      ],
+      "engine_count": 37
+    },
+    "industrial_ot": {
+      "id": "industrial_ot",
+      "label_en": "Industrial OT / ICS",
+      "label_he": "Industrial OT / ICS",
+      "requirements": [
+        "industrial_ot",
+        "scope_ips"
+      ],
+      "engine_count": 32
+    },
+    "ai_redteam": {
+      "id": "ai_redteam",
+      "label_en": "AI / LLM red team",
+      "label_he": "AI / LLM red team",
+      "requirements": [
+        "tenant_llm",
+        "tenant_ai_entitlement",
+        "llm_secops_endpoints"
+      ],
+      "engine_count": 48
+    },
+    "oast_blind": {
+      "id": "oast_blind",
+      "label_en": "Blind / OOB verification",
+      "label_he": "Blind / OOB verification",
+      "requirements": [
+        "tenant_oast"
+      ],
+      "engine_count": 1
+    }
+  },
+  "engines": {
+    "osint": {
+      "id": "osint",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "asm": {
+      "id": "asm",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Attack Surface Management",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "leak_hunter": {
+      "id": "leak_hunter",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Leak Hunter",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "discovery_engine": {
+      "id": "discovery_engine",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Discovery Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "recon": {
+      "id": "recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Deep Recon",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "supply_chain": {
+      "id": "supply_chain",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Supply Chain",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "bola_idor": {
+      "id": "bola_idor",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "BOLA / IDOR",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "graphql_attack": {
+      "id": "graphql_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "GraphQL & API Security",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "jwt_attack": {
+      "id": "jwt_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "JWT Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "oauth_oidc": {
+      "id": "oauth_oidc",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "OAuth / OIDC / SSO Security",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "http_smuggling": {
+      "id": "http_smuggling",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "HTTP Request Smuggling",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "prototype_pollution": {
+      "id": "prototype_pollution",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Prototype Pollution",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ssrf_advanced": {
+      "id": "ssrf_advanced",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "SSRF Advanced",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "xxe": {
+      "id": "xxe",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "XXE",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ssti": {
+      "id": "ssti",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "SSTI",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "file_upload": {
+      "id": "file_upload",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "File Upload Security",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "websocket_attack": {
+      "id": "websocket_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "WebSocket Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cache_poisoning": {
+      "id": "cache_poisoning",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web Cache Poisoning & Deception",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "llm_path_fuzz": {
+      "id": "llm_path_fuzz",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Path Fuzz",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "semantic_ai_fuzz": {
+      "id": "semantic_ai_fuzz",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Semantic AI Fuzz",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm",
+        "tenant_oast"
+      ]
+    },
+    "ai_adversarial_redteam": {
+      "id": "ai_adversarial_redteam",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Adversarial Red Team",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_redteam": {
+      "id": "llm_redteam",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Red Team",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "adversarial_ml": {
+      "id": "adversarial_ml",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Adversarial ML",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "autonomous_pentest": {
+      "id": "autonomous_pentest",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Autonomous Pentest",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "nexus_sovereign_swarm": {
+      "id": "nexus_sovereign_swarm",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Nexus Sovereign Swarm Intelligence",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "http_feedback_fuzz": {
+      "id": "http_feedback_fuzz",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "http_feedback_fuzz",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "aws_attack": {
+      "id": "aws_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "AWS Attack",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_posture": {
+      "id": "cloud_posture",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Posture Management (CSPM)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "azure_attack": {
+      "id": "azure_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Azure Attack",
+      "requirements": [
+        "azure_subscription",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "gcp_attack": {
+      "id": "gcp_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "GCP Attack",
+      "requirements": [
+        "contact_email",
+        "gcp_project",
+        "scope_domains"
+      ]
+    },
+    "k8s_container": {
+      "id": "k8s_container",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "K8s Container",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "iac_misconfig": {
+      "id": "iac_misconfig",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "IaC Security",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "serverless_attack": {
+      "id": "serverless_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Serverless Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "scada_ics": {
+      "id": "scada_ics",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "SCADA / ICS",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "iot_firmware": {
+      "id": "iot_firmware",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "IoT Firmware",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ble_rf": {
+      "id": "ble_rf",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Wireless & RF IoT Posture",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "edr_evasion": {
+      "id": "edr_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Detection Evasion Surface",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "waf_bypass": {
+      "id": "waf_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "WAF Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "timing_sidechannel": {
+      "id": "timing_sidechannel",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Timing Side-Channel",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "antiforensics": {
+      "id": "antiforensics",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Anti-Forensics",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "stealth_engine": {
+      "id": "stealth_engine",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Stealth Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pki_tls": {
+      "id": "pki_tls",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "PKI / TLS",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pqc_scanner": {
+      "id": "pqc_scanner",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "PQC Scanner",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "password_spray": {
+      "id": "password_spray",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Password Spray & Stuffing Posture",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "kerberoasting": {
+      "id": "kerberoasting",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Kerberoasting & AD External Posture",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "saml_attack": {
+      "id": "saml_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "SAML Attack & SSO Federation",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "crypto_engine": {
+      "id": "crypto_engine",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Crypto Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "email_dns_posture": {
+      "id": "email_dns_posture",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Email & Domain Trust Posture",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "bgp_dns_hijacking": {
+      "id": "bgp_dns_hijacking",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DNS & Domain Posture",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ipv6_attack": {
+      "id": "ipv6_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "IPv6 Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "mtls_grpc": {
+      "id": "mtls_grpc",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Transport Security (TLS/mTLS/gRPC)",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "smb_netbios": {
+      "id": "smb_netbios",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SMB / NetBIOS",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "cicd_pipeline": {
+      "id": "cicd_pipeline",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "CI/CD Pipeline Security",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "container_registry": {
+      "id": "container_registry",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Container Registry",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "sbom_analyzer": {
+      "id": "sbom_analyzer",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "SBOM Analyzer",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "typosquatting_monitor": {
+      "id": "typosquatting_monitor",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Typosquatting Monitor",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "kill_chain": {
+      "id": "kill_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Kill Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "oast_oob": {
+      "id": "oast_oob",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "OAST / OOB",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deception_honeypot": {
+      "id": "deception_honeypot",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Deception Honeypot",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "digital_twin": {
+      "id": "digital_twin",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Digital Twin",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "zero_day_prediction": {
+      "id": "zero_day_prediction",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Zero-Day Prediction",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "threat_emulation": {
+      "id": "threat_emulation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT Threat Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "poe_synthesis": {
+      "id": "poe_synthesis",
+      "group": "apt",
+      "kind": "special",
+      "label": "PoE Synthesis",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "microsecond_timing": {
+      "id": "microsecond_timing",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "microsecond_timing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "llm_jailbreak": {
+      "id": "llm_jailbreak",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Jailbreak / Prompt Extraction",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "prompt_injection_chain": {
+      "id": "prompt_injection_chain",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Prompt Injection Chain Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "model_inversion_attack": {
+      "id": "model_inversion_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "ML Model Inversion Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "ai_supply_chain_attack": {
+      "id": "ai_supply_chain_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Model Supply Chain Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_agent_hijack": {
+      "id": "llm_agent_hijack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Agent Hijacking",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "rag_poisoning_engine": {
+      "id": "rag_poisoning_engine",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "RAG System Poisoning",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "adversarial_examples": {
+      "id": "adversarial_examples",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Adversarial Example Generator",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "data_poisoning_engine": {
+      "id": "data_poisoning_engine",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Training Data Poisoning Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "deepfake_synthesis": {
+      "id": "deepfake_synthesis",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Deepfake Synthesis Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_dos_attack": {
+      "id": "llm_dos_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Denial of Service",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "multimodal_ai_attack": {
+      "id": "multimodal_ai_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Multimodal AI Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "ai_bias_exploit": {
+      "id": "ai_bias_exploit",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Bias / Fairness Exploitation",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "gpt_plugin_attack": {
+      "id": "gpt_plugin_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "GPT Plugin / Action Exploiter",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "autonomous_ai_escape": {
+      "id": "autonomous_ai_escape",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Autonomous AI Agent Sandbox Escape",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_memory_extraction": {
+      "id": "llm_memory_extraction",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Memory Extraction",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "neural_backdoor_detect": {
+      "id": "neural_backdoor_detect",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Neural Network Backdoor Detector",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "ai_watermark_bypass": {
+      "id": "ai_watermark_bypass",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Watermark / Fingerprint Removal",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "federated_learning_attack": {
+      "id": "federated_learning_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Federated Learning Poisoning",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_red_team_advanced": {
+      "id": "llm_red_team_advanced",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Advanced LLM Red Teaming",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "model_stealing_engine": {
+      "id": "model_stealing_engine",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "ML Model Stealing Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "apt28_techniques": {
+      "id": "apt28_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT28 (Fancy Bear) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "apt29_techniques": {
+      "id": "apt29_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT29 (Cozy Bear) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "apt41_techniques": {
+      "id": "apt41_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT41 (Winnti/Double Dragon) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lazarus_group_ttps": {
+      "id": "lazarus_group_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Lazarus Group (DPRK) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "volt_typhoon_ttps": {
+      "id": "volt_typhoon_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Volt Typhoon (VANGUARD PANDA) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "scattered_spider_ttps": {
+      "id": "scattered_spider_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Scattered Spider Social TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "salt_typhoon_ttps": {
+      "id": "salt_typhoon_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Salt Typhoon Telecom TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "fin7_techniques": {
+      "id": "fin7_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "FIN7 Financial Crime TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "conti_ransomware_ttps": {
+      "id": "conti_ransomware_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Conti Ransomware Group TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lockbit_techniques": {
+      "id": "lockbit_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "LockBit Ransomware TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cl0p_techniques": {
+      "id": "cl0p_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Cl0p Ransomware TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "blackcat_alphv_ttps": {
+      "id": "blackcat_alphv_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "BlackCat/ALPHV Ransomware TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "midnight_blizzard_ttps": {
+      "id": "midnight_blizzard_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Midnight Blizzard (APT29 Advanced) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "earth_longzhi_ttps": {
+      "id": "earth_longzhi_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Earth Longzhi APT TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "equation_group_ttps": {
+      "id": "equation_group_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Equation Group (NSA-linked) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sandworm_techniques": {
+      "id": "sandworm_techniques",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Sandworm (Voodoo Bear) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "carbon_spider_ttps": {
+      "id": "carbon_spider_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Carbon Spider (Evil Corp) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "wizard_spider_ttps": {
+      "id": "wizard_spider_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Wizard Spider (TrickBot/Conti) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "unc2452_ttps": {
+      "id": "unc2452_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "UNC2452 (SolarWinds) TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "unc3944_ttps": {
+      "id": "unc3944_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "UNC3944/Octo Tempest TTPs",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "quantum_sovereign_nexus": {
+      "id": "quantum_sovereign_nexus",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "QUANTUM SOVEREIGN NEXUS - World's First AI-Quantum Hybrid Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lambda_escape": {
+      "id": "lambda_escape",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Lambda / Serverless Escape",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "terraform_state_attack": {
+      "id": "terraform_state_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Terraform State File Exploiter",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "cloudformation_injection": {
+      "id": "cloudformation_injection",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "CloudFormation / ARM Template Injection",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "service_mesh_attack": {
+      "id": "service_mesh_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Service Mesh Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_audit_evasion": {
+      "id": "cloud_audit_evasion",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Audit Log Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ecr_registry_attack": {
+      "id": "ecr_registry_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Container Registry Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "multi_cloud_pivot": {
+      "id": "multi_cloud_pivot",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Multi-Cloud Pivot",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_worm_propagation": {
+      "id": "cloud_worm_propagation",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Worm Propagation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "serverless_injection": {
+      "id": "serverless_injection",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Serverless Function Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_data_exfil": {
+      "id": "cloud_data_exfil",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Storage Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_network_attack": {
+      "id": "cloud_network_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Network Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_privilege_persistence": {
+      "id": "cloud_privilege_persistence",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Persistence Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "padding_oracle_attack": {
+      "id": "padding_oracle_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Padding Oracle Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "hash_extension_attack": {
+      "id": "hash_extension_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Hash Length Extension Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ecdsa_nonce_bias": {
+      "id": "ecdsa_nonce_bias",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "ECDSA Nonce Bias Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "rsa_timing_attack": {
+      "id": "rsa_timing_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "RSA Timing Side-Channel",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mfa_bypass_engine": {
+      "id": "mfa_bypass_engine",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "MFA Bypass Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "credential_stuffing": {
+      "id": "credential_stuffing",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Credential Stuffing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "kerberos_attack_suite": {
+      "id": "kerberos_attack_suite",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Kerberos Attack Suite",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "zero_trust_bypass": {
+      "id": "zero_trust_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Zero Trust Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pki_hierarchy_attack": {
+      "id": "pki_hierarchy_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "PKI Hierarchy Attack Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "session_fixation_adv": {
+      "id": "session_fixation_adv",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Advanced Session Fixation",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "password_hash_crack": {
+      "id": "password_hash_crack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Password Hash Cracking Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "quantum_key_attack": {
+      "id": "quantum_key_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Quantum Computing Key Attack Simulator",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "password_spray_advanced": {
+      "id": "password_spray_advanced",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Advanced Password Spray Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dns_exfil_engine": {
+      "id": "dns_exfil_engine",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "DNS Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "http_covert_exfil": {
+      "id": "http_covert_exfil",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "HTTP Covert Channel Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_exfil_engine": {
+      "id": "cloud_exfil_engine",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "Cloud Storage Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "encrypted_exfil": {
+      "id": "encrypted_exfil",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "Encrypted Covert Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "acoustic_exfil": {
+      "id": "acoustic_exfil",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Acoustic Side-Channel Exfiltration",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "em_exfil_engine": {
+      "id": "em_exfil_engine",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Electromagnetic Emanation Exfiltration",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "optical_exfil": {
+      "id": "optical_exfil",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Optical Covert Channel Exfiltration",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "cache_timing_exfil": {
+      "id": "cache_timing_exfil",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "CPU Cache Side-Channel Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "keyboard_acoustic": {
+      "id": "keyboard_acoustic",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Keyboard Acoustic Eavesdropping",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "screen_capture_exfil": {
+      "id": "screen_capture_exfil",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Screen Capture Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "clipboard_hijack": {
+      "id": "clipboard_hijack",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Clipboard Hijacking Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "database_exfil": {
+      "id": "database_exfil",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "Database Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "email_exfil": {
+      "id": "email_exfil",
+      "group": "data",
+      "kind": "real_probe",
+      "label": "Email-Based Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "insider_exfil": {
+      "id": "insider_exfil",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Insider Threat Exfiltration Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "storage_covert_channel": {
+      "id": "storage_covert_channel",
+      "group": "data",
+      "kind": "agent_required",
+      "label": "Storage Covert Channel Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "bootkit_uefi": {
+      "id": "bootkit_uefi",
+      "group": "malware",
+      "kind": "agent_required",
+      "label": "UEFI/Bootkit Implant Detector",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "fileless_malware_engine": {
+      "id": "fileless_malware_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Fileless Malware Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "polymorphic_engine": {
+      "id": "polymorphic_engine",
+      "group": "malware",
+      "kind": "agent_required",
+      "label": "Polymorphic Code Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "botnet_c2_engine": {
+      "id": "botnet_c2_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Botnet C2 Infrastructure Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "keylogger_engine": {
+      "id": "keylogger_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Keylogger Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "spyware_stalkerware": {
+      "id": "spyware_stalkerware",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Spyware/Stalkerware Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "worm_propagation": {
+      "id": "worm_propagation",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Network Worm Propagation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "rce_exploit_engine": {
+      "id": "rce_exploit_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Remote Code Execution Exploit Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "persistence_mechanism": {
+      "id": "persistence_mechanism",
+      "group": "malware",
+      "kind": "agent_required",
+      "label": "Persistence Mechanism Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "lateral_movement_engine": {
+      "id": "lateral_movement_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Lateral Movement Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "data_staging_engine": {
+      "id": "data_staging_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Data Staging Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "exploit_kit_engine": {
+      "id": "exploit_kit_engine",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Exploit Kit Simulation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "trojan_dropper": {
+      "id": "trojan_dropper",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Trojan Dropper Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "macro_malware": {
+      "id": "macro_malware",
+      "group": "malware",
+      "kind": "real_probe",
+      "label": "Office Macro Malware Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "android_malware_engine": {
+      "id": "android_malware_engine",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Android Malware Analysis Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ios_exploit_engine": {
+      "id": "ios_exploit_engine",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "iOS Exploitation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mobile_mitm": {
+      "id": "mobile_mitm",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Mobile MITM Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ssl_pinning_bypass": {
+      "id": "ssl_pinning_bypass",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "SSL Pinning Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "android_intent_attack": {
+      "id": "android_intent_attack",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Android Intent Hijacking Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ios_url_scheme_attack": {
+      "id": "ios_url_scheme_attack",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "iOS URL Scheme Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mobile_overlay_attack": {
+      "id": "mobile_overlay_attack",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Mobile Overlay Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sim_swap_engine": {
+      "id": "sim_swap_engine",
+      "group": "mobile",
+      "kind": "agent_required",
+      "label": "SIM Swap Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "mobile_banking_trojan": {
+      "id": "mobile_banking_trojan",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Mobile Banking Trojan Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "app_store_attack": {
+      "id": "app_store_attack",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "App Store Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mdm_bypass_engine": {
+      "id": "mdm_bypass_engine",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "MDM/EMM Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "bluetooth_mobile_attack": {
+      "id": "bluetooth_mobile_attack",
+      "group": "mobile",
+      "kind": "agent_required",
+      "label": "Mobile Bluetooth Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "nfc_relay_attack": {
+      "id": "nfc_relay_attack",
+      "group": "mobile",
+      "kind": "agent_required",
+      "label": "NFC Relay Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "mobile_spyware_engine": {
+      "id": "mobile_spyware_engine",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "Mobile Spyware Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "react_native_attack": {
+      "id": "react_native_attack",
+      "group": "mobile",
+      "kind": "real_probe",
+      "label": "React Native / Flutter App Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "arp_spoofing_engine": {
+      "id": "arp_spoofing_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "ARP Spoofing / Cache Poisoning",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "vlan_hopping_attack": {
+      "id": "vlan_hopping_attack",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "VLAN Hopping Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "dhcp_attack_engine": {
+      "id": "dhcp_attack_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "DHCP Starvation & Rogue Server",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "dns_cache_poisoning": {
+      "id": "dns_cache_poisoning",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DNS Cache Poisoning Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "dns_rebinding": {
+      "id": "dns_rebinding",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DNS Rebinding",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "can_bus_surface": {
+      "id": "can_bus_surface",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "can_bus_surface",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ntp_amplification": {
+      "id": "ntp_amplification",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "NTP / UDP Amplification DDoS",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "snmp_exploitation": {
+      "id": "snmp_exploitation",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SNMP Community Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rdp_attack_engine": {
+      "id": "rdp_attack_engine",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "RDP Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ldap_injection_engine": {
+      "id": "ldap_injection_engine",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "LDAP Injection Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "voip_sip_attack": {
+      "id": "voip_sip_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "VoIP / SIP Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ss7_attack_simulation": {
+      "id": "ss7_attack_simulation",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SS7 Telecom Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "wifi_attack_engine": {
+      "id": "wifi_attack_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "WiFi Attack Suite",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "bluetooth_attack_engine": {
+      "id": "bluetooth_attack_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "Bluetooth Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "ospf_bgp_hijack": {
+      "id": "ospf_bgp_hijack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "OSPF/BGP Route Hijacking",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "mpls_vpn_attack": {
+      "id": "mpls_vpn_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "MPLS/VPN Network Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "lte_5g_attack": {
+      "id": "lte_5g_attack",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "LTE/5G Network Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "network_covert_channel": {
+      "id": "network_covert_channel",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Network Covert Channel Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "wpa3_attack_engine": {
+      "id": "wpa3_attack_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "WPA3/WiFi 6E Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "tor_exit_attack": {
+      "id": "tor_exit_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Tor Exit Node Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "protocol_downgrade": {
+      "id": "protocol_downgrade",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Protocol Downgrade Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "network_baseline_anomaly": {
+      "id": "network_baseline_anomaly",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Network Baseline Anomaly Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "packet_injection_engine": {
+      "id": "packet_injection_engine",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "Packet Injection Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "network_tap_advanced": {
+      "id": "network_tap_advanced",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "Advanced Network TAP/SPAN Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "multicast_attack": {
+      "id": "multicast_attack",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "Multicast Protocol Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "nat_traversal_attack": {
+      "id": "nat_traversal_attack",
+      "group": "network",
+      "kind": "agent_required",
+      "label": "NAT Traversal Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "dnp3_attack": {
+      "id": "dnp3_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "DNP3 Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "bacnet_attack": {
+      "id": "bacnet_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "BACnet Building Automation Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "zigbee_attack": {
+      "id": "zigbee_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Zigbee Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "iec61850_attack": {
+      "id": "iec61850_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "IEC 61850 GOOSE / SV Spoofing",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "satellite_comm_attack": {
+      "id": "satellite_comm_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Satellite Communication Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rfid_nfc_attack": {
+      "id": "rfid_nfc_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "RFID/NFC Cloning Engine",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "threat_intel_fusion": {
+      "id": "threat_intel_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Threat Intelligence Fusion Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "attack_surface_quantify": {
+      "id": "attack_surface_quantify",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Attack Surface Quantification",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "external_exposure_supreme": {
+      "id": "external_exposure_supreme",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "External Exposure Supreme",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "adversarial_simulation": {
+      "id": "adversarial_simulation",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Full Adversarial Simulation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dark_web_monitor": {
+      "id": "dark_web_monitor",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dark Web Brand Monitor",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "passive_dns_forensics": {
+      "id": "passive_dns_forensics",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Passive DNS Forensics Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "spear_phishing_engine": {
+      "id": "spear_phishing_engine",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Spear Phishing Campaign Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "vishing_engine": {
+      "id": "vishing_engine",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Vishing Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "smishing_engine": {
+      "id": "smishing_engine",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "SMS Phishing (Smishing) Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "qr_phishing": {
+      "id": "qr_phishing",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "QR Code Phishing (Quishing) Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deepfake_voice_engine": {
+      "id": "deepfake_voice_engine",
+      "group": "social",
+      "kind": "agent_required",
+      "label": "Deepfake Voice Social Engineering",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "business_email_compromise": {
+      "id": "business_email_compromise",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "BEC (Business Email Compromise)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "watering_hole_attack": {
+      "id": "watering_hole_attack",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Watering Hole Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pretexting_engine": {
+      "id": "pretexting_engine",
+      "group": "social",
+      "kind": "agent_required",
+      "label": "Pretexting Scenario Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "insider_threat_engine": {
+      "id": "insider_threat_engine",
+      "group": "social",
+      "kind": "agent_required",
+      "label": "Insider Threat Simulation Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "brand_impersonation": {
+      "id": "brand_impersonation",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Brand Impersonation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "fake_update_engine": {
+      "id": "fake_update_engine",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Fake Update Social Engineering",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "linkedin_phishing": {
+      "id": "linkedin_phishing",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "LinkedIn Social Engineering Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "callback_phishing": {
+      "id": "callback_phishing",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Callback Phishing Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "physical_social_eng": {
+      "id": "physical_social_eng",
+      "group": "social",
+      "kind": "agent_required",
+      "label": "Physical Social Engineering Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "typosquatting_phishing": {
+      "id": "typosquatting_phishing",
+      "group": "social",
+      "kind": "real_probe",
+      "label": "Typosquatting Phishing Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "process_hollowing": {
+      "id": "process_hollowing",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Process Hollowing / Ghosting",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "living_off_land": {
+      "id": "living_off_land",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "LOLBins / LOLBAS Abuse",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "heap_exploitation": {
+      "id": "heap_exploitation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Heap Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "github_actions_attack": {
+      "id": "github_actions_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "GitHub Actions Supply Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "compiler_backdoor": {
+      "id": "compiler_backdoor",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Compiler-Level Backdoor Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "open_source_backdoor": {
+      "id": "open_source_backdoor",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Open-Source Project Backdoor",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cdn_poisoning_engine": {
+      "id": "cdn_poisoning_engine",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "CDN Cache Poisoning Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "software_signing_attack": {
+      "id": "software_signing_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Software Signing Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "build_system_compromise": {
+      "id": "build_system_compromise",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Build System Compromise Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dependency_confusion": {
+      "id": "dependency_confusion",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Dependency Confusion Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "update_hijacking": {
+      "id": "update_hijacking",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Software Update Hijacking Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sbom_forgery_engine": {
+      "id": "sbom_forgery_engine",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "SBOM Forgery & Analysis Engine",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "third_party_api_attack": {
+      "id": "third_party_api_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Third-Party API Supply Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "iac_supply_chain": {
+      "id": "iac_supply_chain",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "IaC Supply Chain Attack",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "cors_misconfiguration": {
+      "id": "cors_misconfiguration",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "CORS Misconfiguration Exploit",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "swagger_abuse": {
+      "id": "swagger_abuse",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Swagger/OpenAPI Exploiter",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "soap_injection": {
+      "id": "soap_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "SOAP/XML Injection Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "odata_injection": {
+      "id": "odata_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "OData Query Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "css_injection": {
+      "id": "css_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "CSS Injection / Data Theft",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "template_injection_adv": {
+      "id": "template_injection_adv",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Advanced Template Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "http_parameter_pollution": {
+      "id": "http_parameter_pollution",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "HTTP Parameter Pollution Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_mass_assignment": {
+      "id": "api_mass_assignment",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "API Mass Assignment Scanner",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "clickjacking_engine": {
+      "id": "clickjacking_engine",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Clickjacking / UI Redress Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "subdomain_takeover": {
+      "id": "subdomain_takeover",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Subdomain Takeover Scanner",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "file_inclusion_rfi": {
+      "id": "file_inclusion_rfi",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Remote File Inclusion Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deserialization_net": {
+      "id": "deserialization_net",
+      "group": "web",
+      "kind": "real_probe",
+      "label": ".NET Deserialization Exploiter",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_rate_limit_bypass": {
+      "id": "api_rate_limit_bypass",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "API Rate Limit Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "graphql_subscription_attack": {
+      "id": "graphql_subscription_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "GraphQL Subscription DoS",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "webrtc_attack": {
+      "id": "webrtc_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "WebRTC Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "browser_extension_attack": {
+      "id": "browser_extension_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Malicious Browser Extension",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web3_dapp_attack": {
+      "id": "web3_dapp_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web3 / DApp Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_gateway_bypass": {
+      "id": "api_gateway_bypass",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "API Gateway Security Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "liminal_boundary": {
+      "id": "liminal_boundary",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Liminal Boundary",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "anti_debug_evasion": {
+      "id": "anti_debug_evasion",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Anti-Debug & Anti-Analysis Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "av_bypass_engine": {
+      "id": "av_bypass_engine",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "AV/EDR Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "azure_devops_attack": {
+      "id": "azure_devops_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Azure DevOps Pipeline Attack",
+      "requirements": [
+        "azure_subscription",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "blockchain_trace": {
+      "id": "blockchain_trace",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Blockchain Transaction Tracer",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_iam_escalation": {
+      "id": "cloud_iam_escalation",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud IAM Privilege Escalation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_metadata_ssrf": {
+      "id": "cloud_metadata_ssrf",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Metadata SSRF Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "coap_attack": {
+      "id": "coap_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "CoAP Protocol Exploitation",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "com_hijacking": {
+      "id": "com_hijacking",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "COM Object Hijacking",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "darkweb_intel": {
+      "id": "darkweb_intel",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dark Web Intelligence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dll_hijacking_engine": {
+      "id": "dll_hijacking_engine",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "DLL Hijacking Attack Engine",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "dns_tunneling_c2": {
+      "id": "dns_tunneling_c2",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "DNS Tunneling C2 Channel",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "docker_image_poison": {
+      "id": "docker_image_poison",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Docker Image Poisoning Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "eks_attack": {
+      "id": "eks_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "EKS/AKS/GKE Managed K8s Attack",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "financial_osint": {
+      "id": "financial_osint",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Financial OSINT Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "firmware_emulation_attack": {
+      "id": "firmware_emulation_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "IoT Firmware Emulation Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "gcp_privilege_attack": {
+      "id": "gcp_privilege_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "GCP Privilege Escalation Engine",
+      "requirements": [
+        "contact_email",
+        "gcp_project",
+        "scope_domains"
+      ]
+    },
+    "github_secret_scan": {
+      "id": "github_secret_scan",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "GitHub Secret Scanner",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "graphql_deep_attack": {
+      "id": "graphql_deep_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "GraphQL Deep Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "grpc_reflection_attack": {
+      "id": "grpc_reflection_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "gRPC Reflection Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "hmi_attack": {
+      "id": "hmi_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "HMI/SCADA UI Attack Engine",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "http2_attack": {
+      "id": "http2_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "HTTP/2 & HTTP/3 Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "https_c2_masquerade": {
+      "id": "https_c2_masquerade",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "HTTPS C2 Domain Fronting",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "icmp_covert": {
+      "id": "icmp_covert",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "ICMP Covert Channel",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "idor_advanced": {
+      "id": "idor_advanced",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Advanced IDOR / BOLA Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "industrial_protocol_fuzz": {
+      "id": "industrial_protocol_fuzz",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Industrial Protocol Fuzzer",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "iot_shodan_scan": {
+      "id": "iot_shodan_scan",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "IoT/ICS Shodan Deep Scan",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ipv6_advanced_attack": {
+      "id": "ipv6_advanced_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "IPv6 Advanced Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "jit_spray": {
+      "id": "jit_spray",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "JIT Spray Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "job_posting_osint": {
+      "id": "job_posting_osint",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Job Posting Tech Stack OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "jwt_advanced_attack": {
+      "id": "jwt_advanced_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "JWT Advanced Attack Suite",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "kubernetes_rbac_escape": {
+      "id": "kubernetes_rbac_escape",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Kubernetes RBAC Escape",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "log_tampering_engine": {
+      "id": "log_tampering_engine",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Log Tampering & Destruction",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "maven_supply_chain": {
+      "id": "maven_supply_chain",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Maven/Gradle Supply Chain Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "memory_forensics_evasion": {
+      "id": "memory_forensics_evasion",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Memory Forensics Evasion",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "metadata_harvest": {
+      "id": "metadata_harvest",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Document Metadata Harvester",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "modbus_attack": {
+      "id": "modbus_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Modbus Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "mqtt_attack": {
+      "id": "mqtt_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "MQTT Broker Attack Engine",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "network_traffic_masking": {
+      "id": "network_traffic_masking",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Network Traffic Masking Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "nosql_deep_injection": {
+      "id": "nosql_deep_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "NoSQL Deep Injection Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "npm_package_attack": {
+      "id": "npm_package_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "NPM Package Hijacking Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "oauth_advanced_attack": {
+      "id": "oauth_advanced_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "OAuth 2.0 Advanced Attack Suite",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ollama_fuzz": {
+      "id": "ollama_fuzz",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "ollama_fuzz",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "opcua_attack": {
+      "id": "opcua_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OPC-UA Industrial Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "parent_pid_spoof": {
+      "id": "parent_pid_spoof",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Parent PID Spoofing Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "patent_recon": {
+      "id": "patent_recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Patent & IP Intelligence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "plc_logic_attack": {
+      "id": "plc_logic_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "PLC Ladder Logic Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "profinet_attack": {
+      "id": "profinet_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "PROFINET Industrial Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "pypi_supply_chain": {
+      "id": "pypi_supply_chain",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "PyPI Supply Chain Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ransomware_emulation": {
+      "id": "ransomware_emulation",
+      "group": "apt",
+      "kind": "agent_required",
+      "label": "Ransomware Emulation",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "rootkit_simulation": {
+      "id": "rootkit_simulation",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Kernel Rootkit Simulation",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "rop_chain_engine": {
+      "id": "rop_chain_engine",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "ROP Chain Construction Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "s3_bucket_attack": {
+      "id": "s3_bucket_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "S3 Bucket Misconfiguration Attack",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "saml_advanced_attack": {
+      "id": "saml_advanced_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "SAML Advanced Attack Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sandbox_evasion": {
+      "id": "sandbox_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Sandbox Evasion Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "satellite_recon": {
+      "id": "satellite_recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Satellite Imagery OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "secrets_manager_attack": {
+      "id": "secrets_manager_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Secrets Manager Attack",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "steganography_c2": {
+      "id": "steganography_c2",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Steganography C2 Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "telecom_osint": {
+      "id": "telecom_osint",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Telecom Infrastructure OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "timing_evasion_engine": {
+      "id": "timing_evasion_engine",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Timing-Based Evasion Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_cache_poison_adv": {
+      "id": "web_cache_poison_adv",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Advanced Web Cache Poisoning",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "rce_chain": {
+      "id": "rce_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "RCE Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "active_directory": {
+      "id": "active_directory",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Active Directory Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "c2_emulation": {
+      "id": "c2_emulation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "C2 Framework Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lateral_movement": {
+      "id": "lateral_movement",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Lateral Movement",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "data_exfiltration": {
+      "id": "data_exfiltration",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Data Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "memory_corruption": {
+      "id": "memory_corruption",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Memory Corruption",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "browser_exploitation": {
+      "id": "browser_exploitation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Browser Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deepfake_genai": {
+      "id": "deepfake_genai",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Deepfake / GenAI Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "container_escape": {
+      "id": "container_escape",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Container Escape",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "wireless_attack": {
+      "id": "wireless_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Wireless Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "mobile_attack": {
+      "id": "mobile_attack",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Mobile Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_ransomware": {
+      "id": "cloud_ransomware",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Ransomware",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "firmware_exploit": {
+      "id": "firmware_exploit",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Firmware Exploit",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "physical_security": {
+      "id": "physical_security",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Physical Security Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "vuln_chaining": {
+      "id": "vuln_chaining",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Vuln Chain Synthesis",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sqli_advanced": {
+      "id": "sqli_advanced",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Advanced SQLi",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "log4shell_scan": {
+      "id": "log4shell_scan",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Log4Shell / Log4J",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "kernel_exploit": {
+      "id": "kernel_exploit",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Kernel Exploit",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "spear_phishing": {
+      "id": "spear_phishing",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Spear Phishing / BEC",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "vlan_bypass": {
+      "id": "vlan_bypass",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "VLAN Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "malware_persistence": {
+      "id": "malware_persistence",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Malware Persistence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "insider_threat": {
+      "id": "insider_threat",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Insider Threat Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "post_exploitation": {
+      "id": "post_exploitation",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Post-Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_lateral": {
+      "id": "cloud_lateral",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Lateral Movement",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "process_injection": {
+      "id": "process_injection",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Process Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_fuzzing": {
+      "id": "api_fuzzing",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Intelligent API Fuzzing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "smb_relay": {
+      "id": "smb_relay",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SMB / NTLM Relay",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "graphql_injection": {
+      "id": "graphql_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "GraphQL Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "container_k8s_escape": {
+      "id": "container_k8s_escape",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Container / K8s Escape",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_cache_poison": {
+      "id": "web_cache_poison",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web Cache Poisoning",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "xxe_injection": {
+      "id": "xxe_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "XXE / XML Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ldap_injection": {
+      "id": "ldap_injection",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "LDAP / AD Injection",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "side_channel": {
+      "id": "side_channel",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Side-Channel Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ssrf_chain": {
+      "id": "ssrf_chain",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "SSRF Chain Pivot",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "jwt_attacks": {
+      "id": "jwt_attacks",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "JWT / Token Attacks",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "bgp_hijacking": {
+      "id": "bgp_hijacking",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "BGP Route Hijacking",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rce_deserialization": {
+      "id": "rce_deserialization",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Deserialization RCE",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "active_directory_enum": {
+      "id": "active_directory_enum",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Active Directory Enum",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ransomware_sim": {
+      "id": "ransomware_sim",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Ransomware Simulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "waf_ids_bypass": {
+      "id": "waf_ids_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "WAF / IDS Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "siem_evasion": {
+      "id": "siem_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "SIEM Log Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mobile_pentest": {
+      "id": "mobile_pentest",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Mobile App Pentest",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cors_exploit": {
+      "id": "cors_exploit",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "CORS Misconfiguration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "js_prototype_pollution": {
+      "id": "js_prototype_pollution",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Prototype Pollution",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ipsec_vpn_audit": {
+      "id": "ipsec_vpn_audit",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "IPSec / VPN Audit",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "5g_security": {
+      "id": "5g_security",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "5G / Cellular Security",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "firmware_emulation": {
+      "id": "firmware_emulation",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Firmware Emulation",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "cloud_storage_audit": {
+      "id": "cloud_storage_audit",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Storage Audit",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "devsecops_scan": {
+      "id": "devsecops_scan",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "CI/CD Pipeline Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "wasm_reverse": {
+      "id": "wasm_reverse",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "WebAssembly Reverse Engineering",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "bluetooth_attack": {
+      "id": "bluetooth_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Bluetooth / BLE Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "oauth_abuse": {
+      "id": "oauth_abuse",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "OAuth / OIDC Abuse",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "clickjacking": {
+      "id": "clickjacking",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Clickjacking / UI Redress",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "email_spoofing": {
+      "id": "email_spoofing",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Email Spoofing / DMARC Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "satellite_attack": {
+      "id": "satellite_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Satellite / Space Security",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ai_poisoning": {
+      "id": "ai_poisoning",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Training Data Poisoning",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "smart_contract_audit": {
+      "id": "smart_contract_audit",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Smart Contract / Blockchain Exploit",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "automotive_can_bus": {
+      "id": "automotive_can_bus",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Automotive / CAN Bus Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "zero_click_exploit": {
+      "id": "zero_click_exploit",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Zero-Click Exploit Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "biometric_spoofing": {
+      "id": "biometric_spoofing",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Biometric Bypass",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "quantum_attack": {
+      "id": "quantum_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Quantum Threat Emulation",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "devsecops_secrets": {
+      "id": "devsecops_secrets",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Secrets & Key Exposure",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "threat_hunting_apt": {
+      "id": "threat_hunting_apt",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Threat Hunting Automation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_identity_attack": {
+      "id": "cloud_identity_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Identity & IAM Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ci_cd_poisoning": {
+      "id": "ci_cd_poisoning",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Poisoned Pipeline Execution",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_gateway_attack": {
+      "id": "api_gateway_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "API Gateway / Microservice Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deception_evasion": {
+      "id": "deception_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Anti-Deception Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "rag_poisoning": {
+      "id": "rag_poisoning",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "RAG / Vector DB Poisoning",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "graphene_os_bypass": {
+      "id": "graphene_os_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Mobile OS Hardening Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "obfuscated_c2": {
+      "id": "obfuscated_c2",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Obfuscated / Domain-Fronted C2",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "hardware_implant": {
+      "id": "hardware_implant",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Hardware Implant / Supply Chain",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "serverless_cold_start": {
+      "id": "serverless_cold_start",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Serverless Cold-Start Race",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "active_directory_cs": {
+      "id": "active_directory_cs",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "AD Certificate Services Abuse",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "data_pipeline_attack": {
+      "id": "data_pipeline_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Data Pipeline / ETL Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "exfil_ai_inference": {
+      "id": "exfil_ai_inference",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Model Inversion / Exfiltration",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "cloud_waf_bypass": {
+      "id": "cloud_waf_bypass",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud WAF / Shield Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "telco_ss7_attack": {
+      "id": "telco_ss7_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Telecom / SS7 Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "deepweb_intel": {
+      "id": "deepweb_intel",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dark / Deep Web Intelligence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "network_tap_implant": {
+      "id": "network_tap_implant",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Network TAP / SPAN Implant",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "gitops_attack": {
+      "id": "gitops_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "GitOps / IaC Drift Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "compliance_gap_scan": {
+      "id": "compliance_gap_scan",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Compliance Gap Scanner",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dns_enum": {
+      "id": "dns_enum",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "DNS Zone Enumeration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "social_media_recon": {
+      "id": "social_media_recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Social Media OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "shodan_mass_scan": {
+      "id": "shodan_mass_scan",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Shodan / Censys Mass Scan",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cert_transparency": {
+      "id": "cert_transparency",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Certificate Transparency Mining",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "email_harvest": {
+      "id": "email_harvest",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Email Address Harvester",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "github_recon": {
+      "id": "github_recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "GitHub / GitLab OSINT",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "geoint": {
+      "id": "geoint",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Geospatial Intelligence (GEOINT)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "network_topology_map": {
+      "id": "network_topology_map",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Passive Network Topology Mapper",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "employee_profiling": {
+      "id": "employee_profiling",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Employee Profiling Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "wayback_recon": {
+      "id": "wayback_recon",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Historical Asset Recon",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "xss_advanced": {
+      "id": "xss_advanced",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Advanced XSS Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "csrf_exploit": {
+      "id": "csrf_exploit",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "CSRF Token Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "path_traversal": {
+      "id": "path_traversal",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Path Traversal / LFI / RFI",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "business_logic_flaw": {
+      "id": "business_logic_flaw",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Business Logic Vulnerability",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "race_condition_web": {
+      "id": "race_condition_web",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web Race Condition (TOCTOU)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "oauth_pkce_attack": {
+      "id": "oauth_pkce_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "OAuth 2.0 / PKCE Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mass_assignment": {
+      "id": "mass_assignment",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Mass Assignment / HPP",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_cache_deception": {
+      "id": "web_cache_deception",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web Cache Deception",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_versioning_attack": {
+      "id": "api_versioning_attack",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Shadow / Deprecated API Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "nosql_injection": {
+      "id": "nosql_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "NoSQL Injection Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "deserialization_java": {
+      "id": "deserialization_java",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Java Deserialization Gadget Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "open_redirect": {
+      "id": "open_redirect",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Open Redirect Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "host_header_injection": {
+      "id": "host_header_injection",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Host Header Injection",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "graphql_batching": {
+      "id": "graphql_batching",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "GraphQL Batching / DoS",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ai_model_backdoor": {
+      "id": "ai_model_backdoor",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Model Backdoor / Trojan",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_context_overflow": {
+      "id": "llm_context_overflow",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Context Window Overflow",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "ai_supply_chain": {
+      "id": "ai_supply_chain",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI/ML Supply Chain Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "adversarial_image": {
+      "id": "adversarial_image",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Adversarial Image Attack",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_dos": {
+      "id": "llm_dos",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Resource Exhaustion",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_privacy_leak": {
+      "id": "llm_privacy_leak",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Training Data Extraction",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "agentic_ai_escape": {
+      "id": "agentic_ai_escape",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Agentic AI Sandbox Escape",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_system_prompt_leak": {
+      "id": "llm_system_prompt_leak",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "System Prompt Extraction",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "s3_bucket_enum": {
+      "id": "s3_bucket_enum",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Storage Bucket Takeover",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "imds_ssrf": {
+      "id": "imds_ssrf",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud IMDS SSRF",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lambda_layer_inject": {
+      "id": "lambda_layer_inject",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Lambda / Cloud Function Layer Inject",
+      "requirements": [
+        "aws_cross_account",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_trail_disable": {
+      "id": "cloud_trail_disable",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Audit Log Tampering",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cross_account_pivot": {
+      "id": "cross_account_pivot",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cross-Account Role Pivot",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "gke_rbac_exploit": {
+      "id": "gke_rbac_exploit",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Kubernetes RBAC Exploit",
+      "requirements": [
+        "contact_email",
+        "gcp_project",
+        "scope_domains"
+      ]
+    },
+    "azure_ad_attack": {
+      "id": "azure_ad_attack",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Azure AD / Entra ID Attack",
+      "requirements": [
+        "azure_subscription",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "terraform_state_steal": {
+      "id": "terraform_state_steal",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Terraform State Exfiltration",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "cloud_cost_dos": {
+      "id": "cloud_cost_dos",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Cost Amplification DoS",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_logging_blind": {
+      "id": "cloud_logging_blind",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Logging Blind Spot Exploit",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ecr_image_poison": {
+      "id": "ecr_image_poison",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Container Image Poisoning",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "cloud_function_escape": {
+      "id": "cloud_function_escape",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Cloud Function Runtime Escape",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "modbus_exploit": {
+      "id": "modbus_exploit",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Modbus TCP Exploitation",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "plc_logic_bomb": {
+      "id": "plc_logic_bomb",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "PLC Logic Bomb Injection",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "lora_attack": {
+      "id": "lora_attack",
+      "group": "unknown",
+      "kind": "agent_required",
+      "label": "lora_attack",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "lorawan_attack": {
+      "id": "lorawan_attack",
+      "group": "ot",
+      "kind": "agent_required",
+      "label": "LoRaWAN IoT Network Attack",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "hmi_exploit": {
+      "id": "hmi_exploit",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "HMI / SCADA Interface Exploit",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "can_fd_attack": {
+      "id": "can_fd_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "CAN / CAN FD Bus Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ics_historian_attack": {
+      "id": "ics_historian_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "ICS Historian Database Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rootkit_implant": {
+      "id": "rootkit_implant",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Kernel / User Rootkit Implant",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "timestomping": {
+      "id": "timestomping",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Timestomping & Metadata Falsification",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "log_wiping": {
+      "id": "log_wiping",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Forensic Log Wiping",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "dll_hijacking": {
+      "id": "dll_hijacking",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "DLL Hijacking / Side-Loading",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "fileless_malware": {
+      "id": "fileless_malware",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Fileless Malware Execution",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "syscall_evasion": {
+      "id": "syscall_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Direct Syscall / NTAPI Evasion",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "amsi_bypass": {
+      "id": "amsi_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "AMSI / EDR Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "polymorphic_payload": {
+      "id": "polymorphic_payload",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Polymorphic / Metamorphic Payload",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "password_crack": {
+      "id": "password_crack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "GPU Hash Cracking Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "tls_downgrade": {
+      "id": "tls_downgrade",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "TLS / SSL Downgrade Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "totp_bruteforce": {
+      "id": "totp_bruteforce",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "TOTP / MFA Brute Force",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ntlm_relay": {
+      "id": "ntlm_relay",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "NTLM Relay / Pass-the-Hash",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "golden_ticket": {
+      "id": "golden_ticket",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Kerberos Golden / Silver Ticket",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "hsm_attack": {
+      "id": "hsm_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "HSM Side-Channel / Fault Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pki_cert_forge": {
+      "id": "pki_cert_forge",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "PKI Certificate Forgery",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "key_derivation_flaw": {
+      "id": "key_derivation_flaw",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Weak Key Derivation Exploit",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "arp_spoofing": {
+      "id": "arp_spoofing",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "ARP Spoofing / LAN MITM",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "icmp_covert_channel": {
+      "id": "icmp_covert_channel",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "ICMP / DNS Covert Channel",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "snmp_attack": {
+      "id": "snmp_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SNMP Community String Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ospf_bgp_manipulation": {
+      "id": "ospf_bgp_manipulation",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "OSPF / BGP Route Manipulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rdp_exploit": {
+      "id": "rdp_exploit",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "RDP Exploitation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "dns_tunneling": {
+      "id": "dns_tunneling",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DNS Tunneling C2",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "dhcp_starvation": {
+      "id": "dhcp_starvation",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "DHCP Starvation / Rogue Server",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "wifi_attack": {
+      "id": "wifi_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "Wi-Fi / 802.11 Attack Suite",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "npm_typosquatting": {
+      "id": "npm_typosquatting",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "npm / PyPI Typosquatting Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "build_artifact_tamper": {
+      "id": "build_artifact_tamper",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Build Artifact Tampering",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "package_signing_bypass": {
+      "id": "package_signing_bypass",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Package Signing Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "vendored_code_attack": {
+      "id": "vendored_code_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Vendored Code / Git Submodule Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "code_review_bypass": {
+      "id": "code_review_bypass",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Code Review / PR Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "update_mechanism_hijack": {
+      "id": "update_mechanism_hijack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Software Update Mechanism Hijack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "advanced_persistence": {
+      "id": "advanced_persistence",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Advanced Persistence (UEFI / Bootkit)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "apt_lateral_movement": {
+      "id": "apt_lateral_movement",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT Lateral Movement Playbook",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "nation_state_ttps": {
+      "id": "nation_state_ttps",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Nation-State TTP Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "zero_day_chain": {
+      "id": "zero_day_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Zero-Day Exploit Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "apt_c2_infra": {
+      "id": "apt_c2_infra",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "APT-Grade C2 Infrastructure",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "long_haul_exfil": {
+      "id": "long_haul_exfil",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Long-Haul Slow Exfiltration",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "full_breach_sim": {
+      "id": "full_breach_sim",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Full End-to-End Breach Simulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "watering_hole": {
+      "id": "watering_hole",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Watering Hole Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "supply_chain_apt": {
+      "id": "supply_chain_apt",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Supply Chain APT Implant",
+      "requirements": [
+        "contact_email",
+        "iac_repos",
+        "scope_domains"
+      ]
+    },
+    "destructive_wiper": {
+      "id": "destructive_wiper",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Destructive Wiper Emulation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "tpm_firmware_attack": {
+      "id": "tpm_firmware_attack",
+      "group": "crypto",
+      "kind": "agent_required",
+      "label": "TPM Firmware Attack Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "cold_boot_attack": {
+      "id": "cold_boot_attack",
+      "group": "crypto",
+      "kind": "agent_required",
+      "label": "Cold Boot / DRAM Remanence Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "evil_maid_engine": {
+      "id": "evil_maid_engine",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Evil Maid Hardware Implant Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "thunderbolt_dma_attack": {
+      "id": "thunderbolt_dma_attack",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Thunderbolt / PCIe DMA Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "voltage_glitch_attack": {
+      "id": "voltage_glitch_attack",
+      "group": "crypto",
+      "kind": "agent_required",
+      "label": "Voltage / Clock Glitch Fault Injection",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "badusb_hid_attack": {
+      "id": "badusb_hid_attack",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "BadUSB / HID Injection Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "hardware_wallet_attack": {
+      "id": "hardware_wallet_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Crypto Hardware Wallet Security Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "jtag_swd_exploitation": {
+      "id": "jtag_swd_exploitation",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "JTAG/SWD Debug Interface Exploiter",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "medical_device_exploit": {
+      "id": "medical_device_exploit",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Medical IoT Device Exploit Engine",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "implantable_device_hack": {
+      "id": "implantable_device_hack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Implantable Medical Device Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "hospital_hl7_attack": {
+      "id": "hospital_hl7_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "HL7 / DICOM Healthcare Protocol Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "agentic_framework_attack": {
+      "id": "agentic_framework_attack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Agentic Framework Exploitation",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_function_call_hijack": {
+      "id": "llm_function_call_hijack",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Function Calling Hijack Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "multi_agent_subversion": {
+      "id": "multi_agent_subversion",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Multi-Agent AI Subversion Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "llm_guardrail_bypass": {
+      "id": "llm_guardrail_bypass",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "LLM Safety Guardrail Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "mcp_server_exploit": {
+      "id": "mcp_server_exploit",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "Model Context Protocol (MCP) Exploit",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "synthetic_identity_fraud": {
+      "id": "synthetic_identity_fraud",
+      "group": "ai",
+      "kind": "real_probe",
+      "label": "AI Synthetic Identity Fraud Engine",
+      "requirements": [
+        "contact_email",
+        "llm_secops_endpoints",
+        "scope_domains",
+        "tenant_ai_entitlement",
+        "tenant_llm"
+      ]
+    },
+    "ai_model_provenance_attack": {
+      "id": "ai_model_provenance_attack",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "AI Model Provenance & Lineage Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sdn_controller_exploit": {
+      "id": "sdn_controller_exploit",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SDN Controller Exploitation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "nfv_mano_attack": {
+      "id": "nfv_mano_attack",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "NFV MANO / VNF Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "network_slice_isolation_bypass": {
+      "id": "network_slice_isolation_bypass",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "5G Network Slice Isolation Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "harvest_now_decrypt_later": {
+      "id": "harvest_now_decrypt_later",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Harvest-Now Decrypt-Later (HNDL) Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "pqc_implementation_attack": {
+      "id": "pqc_implementation_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Post-Quantum Cryptography Implementation Attack",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "lattice_crypto_attack": {
+      "id": "lattice_crypto_attack",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Lattice Cryptography Attack Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "microsegmentation_bypass": {
+      "id": "microsegmentation_bypass",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Zero Trust Microsegmentation Bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "continuous_auth_evasion": {
+      "id": "continuous_auth_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Continuous Authentication Evasion Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sase_security_bypass": {
+      "id": "sase_security_bypass",
+      "group": "network",
+      "kind": "real_probe",
+      "label": "SASE / SSE Security Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "webauthn_fido2_bypass": {
+      "id": "webauthn_fido2_bypass",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "WebAuthn / FIDO2 Bypass Engine",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ai_cloud_escalation_chain": {
+      "id": "ai_cloud_escalation_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "AI Vulnerability → Cloud Escalation Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "social_supply_chain_attack": {
+      "id": "social_supply_chain_attack",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Social Engineering → Supply Chain Compromise Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ot_it_lateral_chain": {
+      "id": "ot_it_lateral_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "OT Network → IT Network Lateral Pivot Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mobile_backend_chain": {
+      "id": "mobile_backend_chain",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Mobile App → Cloud Backend Escalation Chain",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "data_deanonymization": {
+      "id": "data_deanonymization",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Data De-anonymization Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "behavioral_biometric_attack": {
+      "id": "behavioral_biometric_attack",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Behavioral Biometric Bypass Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "location_pattern_analysis": {
+      "id": "location_pattern_analysis",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Location Pattern De-anonymization Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "differential_privacy_exploit": {
+      "id": "differential_privacy_exploit",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Differential Privacy Implementation Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "c2_rotation_engine": {
+      "id": "c2_rotation_engine",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Automated C2 Infrastructure Rotation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "detection_gap_exploiter": {
+      "id": "detection_gap_exploiter",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Security Detection Gap Exploitation Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "opsec_intelligence_engine": {
+      "id": "opsec_intelligence_engine",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Attacker OPSEC & Counter-Intelligence Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "tactic_chain_synthesizer": {
+      "id": "tactic_chain_synthesizer",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "Novel TTP Attack Chain Synthesizer",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "ar_vr_attack_engine": {
+      "id": "ar_vr_attack_engine",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "AR / VR Security Attack Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "edge_computing_exploit": {
+      "id": "edge_computing_exploit",
+      "group": "cloud",
+      "kind": "real_probe",
+      "label": "Edge Computing Node Exploitation",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "blockchain_bridge_exploit": {
+      "id": "blockchain_bridge_exploit",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Blockchain Bridge / Cross-Chain Attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "api_all_vectors_engine": {
+      "id": "api_all_vectors_engine",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Unified API Attack Orchestration Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "threat_model_automation": {
+      "id": "threat_model_automation",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Automated Threat Modeling Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "attack_graph_traversal": {
+      "id": "attack_graph_traversal",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Dynamic Attack Graph Traversal Engine",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "prometheus_hyperion_nexus": {
+      "id": "prometheus_hyperion_nexus",
+      "group": "apt",
+      "kind": "real_probe",
+      "label": "PROMETHEUS HYPERION NEXUS™ — Cross-Domain AI Adversarial Swarm",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sap_erp_attack": {
+      "id": "sap_erp_attack",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "sap_erp_attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "mainframe_zos_attack": {
+      "id": "mainframe_zos_attack",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "mainframe_zos_attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "malvertising_seo_poison": {
+      "id": "malvertising_seo_poison",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "malvertising_seo_poison",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "infostealer_emulation": {
+      "id": "infostealer_emulation",
+      "group": "unknown",
+      "kind": "agent_required",
+      "label": "infostealer_emulation",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "printer_mfp_attack": {
+      "id": "printer_mfp_attack",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "printer_mfp_attack",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "radius_nac_bypass": {
+      "id": "radius_nac_bypass",
+      "group": "unknown",
+      "kind": "real_probe",
+      "label": "radius_nac_bypass",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    }
+  }
+}

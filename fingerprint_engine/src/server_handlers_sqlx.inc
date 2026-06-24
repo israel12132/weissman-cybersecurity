@@ -1029,6 +1029,193 @@ async fn api_engines_capabilities() -> Response {
     (StatusCode::OK, Json(crate::engine_capabilities::to_json())).into_response()
 }
 
+/// Full engine + module onboarding requirements catalog (generated from live source).
+async fn api_engines_requirements() -> Response {
+    (StatusCode::OK, Json(crate::engine_requirements::catalog_json())).into_response()
+}
+
+/// Tenant-level prerequisites (LLM, OAST, AI entitlement) for onboarding wizard.
+async fn api_onboarding_tenant_status(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let facts = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
+    (StatusCode::OK, Json(facts)).into_response()
+}
+
+/// Client readiness vs selected engagement modules (live field checks, no fake scores).
+async fn api_clients_readiness(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let modules: Vec<String> = q
+        .get("modules")
+        .map(|s| {
+            s.split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let row = sqlx::query(
+        r#"SELECT id, name, domains, ip_ranges, contact_email,
+            COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
+            COALESCE(aws_external_id,'') AS aws_external_id,
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(NULLIF(trim(client_configs), ''), $2) AS client_configs
+           FROM clients WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(DEFAULT_CLIENT_CONFIGS_JSON)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    let agents_online: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*)::bigint FROM endpoint_agents
+           WHERE tenant_id = $1 AND client_id = $2
+             AND last_seen_at > now() - interval '15 minutes'"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "client not found"})),
+        )
+            .into_response();
+    };
+
+    let config_str: String = r.try_get("client_configs").unwrap_or_default();
+    let config_val: Value = serde_json::from_str(&config_str).unwrap_or(json!({}));
+
+    let mut client_snapshot = json!({
+        "id": r.try_get::<i64,_>("id").ok(),
+        "name": r.try_get::<String,_>("name").ok(),
+        "domains": r.try_get::<String,_>("domains").ok(),
+        "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
+        "contact_email": r.try_get::<String,_>("contact_email").ok(),
+        "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
+        "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
+        "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+        "client_configs": config_val,
+        "onboarding": config_val.get("onboarding").cloned().unwrap_or(json!({})),
+        "agents_online": agents_online,
+    });
+
+    if let Some(obj) = client_snapshot.as_object_mut() {
+        if let Some(onb) = config_val.get("onboarding") {
+            obj.insert("onboarding".to_string(), onb.clone());
+        }
+        if config_val.get("industrial_ot_enabled").is_some() {
+            if let Some(cc) = obj.get_mut("client_configs") {
+                if let Some(m) = cc.as_object_mut() {
+                    m.insert(
+                        "industrial_ot_enabled".to_string(),
+                        config_val
+                            .get("industrial_ot_enabled")
+                            .cloned()
+                            .unwrap_or(json!(false)),
+                    );
+                }
+            }
+        }
+    }
+
+    let module_ids = if modules.is_empty() {
+        config_val
+            .get("engagement_modules")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    } else {
+        modules
+    };
+
+    let tenant = tenant_onboarding_facts(state.app_pool.as_ref(), auth.tenant_id).await;
+    let report = crate::engine_requirements::readiness_report(&client_snapshot, &tenant, &module_ids);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "client_id": id,
+            "tenant": tenant,
+            "readiness": report,
+        })),
+    )
+        .into_response()
+}
+
+async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
+    let llm_env = std::env::var("WEISSMAN_LLM_BASE_URL")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let oast_env = std::env::var("WEISSMAN_OAST_LISTENER_URL")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+
+    let mut llm_configured = llm_env.is_some();
+    let mut ai_heavy_entitled = true;
+
+    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
+        let llm_db: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        if llm_db.as_ref().is_some_and(|s| !s.trim().is_empty()) {
+            llm_configured = true;
+        }
+
+        let ai_raw: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'ai_heavy_entitled'",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        if let Some(raw) = ai_raw {
+            ai_heavy_entitled = !matches!(
+                raw.trim().to_ascii_lowercase().as_str(),
+                "false" | "0" | "no"
+            );
+        }
+        let _ = tx.commit().await;
+    }
+
+    json!({
+        "llm_configured": llm_configured,
+        "oast_configured": oast_env.is_some(),
+        "ai_heavy_entitled": ai_heavy_entitled,
+    })
+}
+
 /// Full tunable-parameter schema for Nexus Sovereign Swarm (NSSI) — GUI contract.
 async fn api_nssi_config_schema() -> Response {
     (

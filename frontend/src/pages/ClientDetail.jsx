@@ -8,6 +8,7 @@ import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
+import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -196,6 +197,7 @@ export default function ClientDetail() {
       )}
     >
       <div className="max-w-5xl mx-auto space-y-5">
+        <ClientReadinessBanner clientId={client.id} />
         <PremiumPageHeader
           title={client.name}
           subtitle={t('client_detail.subtitle')}

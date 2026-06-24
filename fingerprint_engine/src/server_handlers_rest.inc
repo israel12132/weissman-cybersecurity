@@ -622,6 +622,30 @@ async fn api_clients_create(
         .trim();
     let aws_ext = body.aws_external_id.as_deref().unwrap_or("").trim();
     let gcp = body.gcp_project_id.as_deref().unwrap_or("").trim();
+
+    let mut config: serde_json::Map<String, Value> =
+        serde_json::from_str::<Value>(DEFAULT_CLIENT_CONFIGS_JSON)
+            .ok()
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+    if let Some(modules) = &body.engagement_modules {
+        config.insert(
+            "engagement_modules".to_string(),
+            Value::Array(modules.iter().map(|s| Value::String(s.clone())).collect()),
+        );
+    }
+    if let Some(onb) = &body.onboarding {
+        config.insert("onboarding".to_string(), onb.clone());
+        if onb
+            .get("industrial_ot_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            config.insert("industrial_ot_enabled".to_string(), json!(true));
+        }
+    }
+    let client_configs = serde_json::to_string(&Value::Object(config)).unwrap_or_else(|_| DEFAULT_CLIENT_CONFIGS_JSON.to_string());
+
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -629,8 +653,9 @@ async fn api_clients_create(
         r#"INSERT INTO clients (
             tenant_id, name, domains, tech_stack, ip_ranges,
             contact_email, auto_detect_tech_stack,
-            aws_cross_account_role_arn, aws_external_id, gcp_project_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"#,
+            aws_cross_account_role_arn, aws_external_id, gcp_project_id,
+            client_configs
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id"#,
     )
     .bind(auth.tenant_id)
     .bind(name)
@@ -642,6 +667,7 @@ async fn api_clients_create(
     .bind(aws_arn)
     .bind(aws_ext)
     .bind(gcp)
+    .bind(&client_configs)
     .fetch_one(&mut *tx)
     .await
     {

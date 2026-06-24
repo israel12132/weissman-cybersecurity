@@ -63,6 +63,7 @@ pub mod discovery_engine;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;
+pub mod engine_requirements;
 pub mod engine_dispatch;
 pub mod engine_probes;
 pub mod engine_resilience;

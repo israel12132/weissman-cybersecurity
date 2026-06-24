@@ -49,6 +49,8 @@ async fn api_onboarding_target(
         aws_cross_account_role_arn: None,
         aws_external_id: None,
         gcp_project_id: None,
+        engagement_modules: None,
+        onboarding: None,
     };
     let create_resp = api_clients_create(
         State(state),

@@ -3158,10 +3158,10 @@
 | **מתי** | before any scan. |
 | **איפה** | /api/clients/* |
 | **איך** | Create client → domains → config engines. |
-| **כמה** | 40 endpoints |
+| **כמה** | 41 endpoints |
 | **למי** | Operator+ |
 | **מה יוצא** | client records |
-| **API / חיבורים** | GET /api/clients · GET /api/clients/:id · GET /api/clients/:id/attack-chain · GET /api/clients/:id/attack-surface-graph · POST /api/clients/:id/auto-heal · GET /api/clients/:id/cicd-findings · PATCH /api/clients/:id/cloud-integration · POST /api/clients/:id/cloud-scan/run · GET /api/clients/:id/config · GET /api/clients/:id/containment-rules · POST /api/clients/:id/containment/execute · GET /api/clients/:id/deception · POST /api/clients/:id/deception/deploy-cloud · POST /api/clients/:id/deception/generate · GET /api/clients/:id/discovery/saas-idp · GET /api/clients/:id/engagements · GET /api/clients/:id/evidence · GET /api/clients/:id/export/csv · GET /api/clients/:id/findings · GET /api/clients/:id/heal-requests · GET /api/clients/:id/identity-contexts · DELETE /api/clients/:id/identity-contexts/:ctx_id · GET /api/clients/:id/llm-fuzz/events · POST /api/clients/:id/llm-fuzz/run · GET /api/clients/:id/llm-fuzz/summary · GET /api/clients/:id/ot-ics/fingerprints · GET /api/clients/:id/poe-findings · GET /api/clients/:id/privilege-escalation · GET /api/clients/:id/report/crypto-proof · GET /api/clients/:id/report/pdf · GET /api/clients/:id/risk-graph · GET /api/clients/:id/risk-graph/export · GET /api/clients/:id/runtime-traces · GET /api/clients/:id/sbom/components · GET /api/clients/:id/sbom/export · POST /api/clients/:id/scan/run-all · GET /api/clients/:id/semantic-logic/reasoning · GET /api/clients/:id/semantic-state-machine · POST /api/clients/:id/swarm/run · POST /api/clients/:id/vulnerabilities/:vid/decrypt-poc |
+| **API / חיבורים** | GET /api/clients · GET /api/clients/:id · GET /api/clients/:id/attack-chain · GET /api/clients/:id/attack-surface-graph · POST /api/clients/:id/auto-heal · GET /api/clients/:id/cicd-findings · PATCH /api/clients/:id/cloud-integration · POST /api/clients/:id/cloud-scan/run · GET /api/clients/:id/config · GET /api/clients/:id/containment-rules · POST /api/clients/:id/containment/execute · GET /api/clients/:id/deception · POST /api/clients/:id/deception/deploy-cloud · POST /api/clients/:id/deception/generate · GET /api/clients/:id/discovery/saas-idp · GET /api/clients/:id/engagements · GET /api/clients/:id/evidence · GET /api/clients/:id/export/csv · GET /api/clients/:id/findings · GET /api/clients/:id/heal-requests · GET /api/clients/:id/identity-contexts · DELETE /api/clients/:id/identity-contexts/:ctx_id · GET /api/clients/:id/llm-fuzz/events · POST /api/clients/:id/llm-fuzz/run · GET /api/clients/:id/llm-fuzz/summary · GET /api/clients/:id/ot-ics/fingerprints · GET /api/clients/:id/poe-findings · GET /api/clients/:id/privilege-escalation · GET /api/clients/:id/readiness · GET /api/clients/:id/report/crypto-proof · GET /api/clients/:id/report/pdf · GET /api/clients/:id/risk-graph · GET /api/clients/:id/risk-graph/export · GET /api/clients/:id/runtime-traces · GET /api/clients/:id/sbom/components · GET /api/clients/:id/sbom/export · POST /api/clients/:id/scan/run-all · GET /api/clients/:id/semantic-logic/reasoning · GET /api/clients/:id/semantic-state-machine · POST /api/clients/:id/swarm/run · POST /api/clients/:id/vulnerabilities/:vid/decrypt-poc |
 ---
 
 <a id="page-139"></a>
@@ -3209,10 +3209,10 @@
 | **מתי** | Engine Matrix, profiles. |
 | **איפה** | /api/engines/production · /api/engines/capabilities |
 | **איך** | GET production → dispatch by id. |
-| **כמה** | 11 endpoints |
+| **כמה** | 12 endpoints |
 | **למי** | Red team, SOC |
 | **מה יוצא** | engine metadata + runs |
-| **API / חיבורים** | GET /api/engines/accounting · GET /api/engines/capabilities · GET /api/engines/export/:engine_id · GET /api/engines/history/:engine_id · GET /api/engines/nexus_sovereign_swarm/schema · GET /api/engines/production · GET /api/engines/telemetry · GET /api/engines/top-tier/:engine_id/export · GET /api/engines/top-tier/:engine_id/history · GET /api/engines/top-tier/audit · POST /api/engines/top-tier/health-probe |
+| **API / חיבורים** | GET /api/engines/accounting · GET /api/engines/capabilities · GET /api/engines/export/:engine_id · GET /api/engines/history/:engine_id · GET /api/engines/nexus_sovereign_swarm/schema · GET /api/engines/production · GET /api/engines/requirements · GET /api/engines/telemetry · GET /api/engines/top-tier/:engine_id/export · GET /api/engines/top-tier/:engine_id/history · GET /api/engines/top-tier/audit · POST /api/engines/top-tier/health-probe |
 ---
 
 <a id="page-142"></a>
@@ -3323,12 +3323,12 @@
 
 > **סוג:** api · **מזהה:** `api-index`
 
-| **מה** | רשימת 268 HTTP endpoints רשומים ב-weissman-server. |
+| **מה** | רשימת 271 HTTP endpoints רשומים ב-weissman-server. |
 | **למה** | Due diligence טכני — אין API נסתר. |
 | **מתי** | אינטגרציה, RFP, pen-test scope. |
 | **איפה** | fingerprint_engine/src/http/serve.rs |
 | **איך** | כל endpoint מאחורי auth/RBAC/billing לפי path. |
-| **כמה** | 268 routes |
+| **כמה** | 271 routes |
 | **למי** | Architect, DevOps, Security |
 | **מה יוצא** | OpenAPI-compatible surface |
 | **API / חיבורים** | GET /
@@ -3423,6 +3423,7 @@ GET /api/clients/:id/llm-fuzz/summary
 GET /api/clients/:id/ot-ics/fingerprints
 GET /api/clients/:id/poe-findings
 GET /api/clients/:id/privilege-escalation
+GET /api/clients/:id/readiness
 GET /api/clients/:id/report/crypto-proof
 GET /api/clients/:id/report/pdf
 GET /api/clients/:id/risk-graph
@@ -3470,6 +3471,7 @@ GET /api/engines/export/:engine_id
 GET /api/engines/history/:engine_id
 GET /api/engines/nexus_sovereign_swarm/schema
 GET /api/engines/production
+GET /api/engines/requirements
 GET /api/engines/telemetry
 GET /api/engines/top-tier/:engine_id/export
 GET /api/engines/top-tier/:engine_id/history
@@ -3514,6 +3516,7 @@ GET /api/oast/verify/:token
 POST /api/onboarding/launch-scan
 POST /api/onboarding/register
 POST /api/onboarding/target
+GET /api/onboarding/tenant-status
 GET /api/openapi.json
 GET /api/ot-ics/devices
 GET /api/payload-sync/payloads
@@ -12670,7 +12673,7 @@ GET /ws/timing |
 | עמודים | 681 |
 | לוחות UI | 108 |
 | מנועים | 533 |
-| HTTP API routes | 268 |
+| HTTP API routes | 271 |
 | Surfaces (install, WS, legal) | 10 |
 | Agent-required engines | 43 |
 
