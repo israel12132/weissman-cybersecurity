@@ -7,14 +7,15 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Download,
-  RefreshCw,
   Search,
   Shield,
   User,
 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
+import ShellScanActions from '../components/engine/ShellScanActions'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonTable } from '../components/ui/Skeleton'
 
 const ACTION_PILLS = [
@@ -194,6 +195,14 @@ export default function AuditLog() {
 
   const hasFilters = actionFilter || actor.trim() || dateFrom || dateTo
 
+  const pageKpi = useMemo(() => {
+    const denied = filteredEntries.filter((e) => {
+      const a = (e.action || '').toLowerCase()
+      return a.includes('denied') || a.includes('reject') || a.includes('failed')
+    }).length
+    return { shown: filteredEntries.length, denied }
+  }, [filteredEntries])
+
   return (
     <div
       className="min-h-[100dvh] text-slate-100 p-4 sm:p-6"
@@ -210,27 +219,36 @@ export default function AuditLog() {
               <p className="text-sm text-white/55 mt-1 max-w-2xl">{t('audit.subtitle')}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => exportCsv(filteredEntries)}
-              disabled={filteredEntries.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:border-emerald-400/50 disabled:opacity-35 disabled:cursor-not-allowed transition-all"
-            >
-              <Download className="h-4 w-4" />
-              {t('audit.export_csv')}
-            </button>
-            <button
-              type="button"
-              onClick={load}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-white/10 bg-white/5 text-white/70 hover:text-white hover:border-white/25 transition-all"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {t('common.refresh')}
-            </button>
-          </div>
+          <ShellScanActions
+            onRefresh={load}
+            onExport={() => exportCsv(filteredEntries)}
+            refreshLoading={loading}
+            exportDisabled={filteredEntries.length === 0}
+          />
         </div>
       </header>
+
+      <div className="max-w-7xl mx-auto mb-4 space-y-4">
+        <EvidenceNotice>{t('audit.evidence_notice')}</EvidenceNotice>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <ExecutiveWidget
+            label={t('audit.kpi_shown')}
+            value={loading ? '—' : pageKpi.shown.toLocaleString()}
+            accent="#22d3ee"
+          />
+          <ExecutiveWidget
+            label={t('audit.kpi_denied')}
+            value={loading ? '—' : pageKpi.denied.toLocaleString()}
+            accent="#f87171"
+          />
+          <ExecutiveWidget
+            label={t('audit.kpi_total')}
+            value={loading ? '—' : total.toLocaleString()}
+            accent="#a78bfa"
+            className="col-span-2 lg:col-span-1"
+          />
+        </div>
+      </div>
 
       <section className="max-w-7xl mx-auto rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-4 sm:p-5 mb-4 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">

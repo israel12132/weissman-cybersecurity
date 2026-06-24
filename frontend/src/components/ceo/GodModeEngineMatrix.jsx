@@ -1,5 +1,6 @@
 import React from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import EngineRealityBadge from '../EngineRealityBadge'
 
 function SpinnerTiny() {
   return (
@@ -45,6 +46,9 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
         {engine.label}
       </p>
       <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">{engine.id}</p>
+      <div className="mt-1.5">
+        <EngineRealityBadge engineId={engine.id} size="xs" />
+      </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1 min-w-0">
           <span className="text-[8px] font-mono uppercase tracking-wide text-slate-600">

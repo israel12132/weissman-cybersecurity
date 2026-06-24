@@ -1,84 +1,102 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, Filter } from 'lucide-react';
-import PageShell from './PageShell'
+import {
+  Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search,
+} from 'lucide-react';
+import PageShell from './PageShell';
+import ShellScanActions from '../components/engine/ShellScanActions';
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonWidgetGrid, SkeletonTable } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { apiFetch } from '../lib/apiBase';
 
-/**
- * ComplianceFrameworks - Multi-framework compliance mapping and tracking
- *
- * Frameworks:
- * - CIS Benchmarks
- * - PCI-DSS
- * - NIST CSF
- * - HIPAA
- * - SOC 2
- * - GDPR
- * - ISO 27001
- * - FedRAMP
- *
- * Features:
- * - Control mapping to findings
- * - Compliance scoring per framework
- * - Gap analysis
- * - Evidence collection
- * - Audit report generation
- */
+const FRAMEWORK_ICONS = {
+  iso27001: '🔐',
+  soc2: '📊',
+  nis2: '🇪🇺',
+  gdpr: '🇪🇺',
+  iec62443: '⚙️',
+  pci: '💳',
+  'csa-ccm': '☁️',
+};
+
+const FILTER_KEYS = ['all', 'compliant', 'non-compliant', 'partial'];
+
+function statusLabel(status, t) {
+  switch (status?.toLowerCase()) {
+    case 'compliant':
+      return t('pages.complianceFrameworks.status_compliant');
+    case 'non-compliant':
+      return t('pages.complianceFrameworks.status_non_compliant');
+    case 'partial':
+      return t('pages.complianceFrameworks.status_partial');
+    default:
+      return status || '—';
+  }
+}
+
 export default function ComplianceFrameworks() {
   const { t } = useTranslation();
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // all, compliant, non-compliant, partial
+  const [loadingFrameworks, setLoadingFrameworks] = useState(true);
+  const [loadingControls, setLoadingControls] = useState(false);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
-  const FRAMEWORK_ICONS = {
-    iso27001: '🔐',
-    soc2: '📊',
-    nis2: '🇪🇺',
-    gdpr: '🇪🇺',
-    iec62443: '⚙️',
-    pci: '💳',
-    'csa-ccm': '☁️',
-  };
+  const fetchFrameworks = useCallback(async () => {
+    try {
+      setLoadingFrameworks(true);
+      setError('');
+      const data = await api.get('/api/compliance/frameworks');
+      const list = data.frameworks || [];
+      setFrameworks(list);
+      if (list.length > 0) {
+        setSelectedFramework((prev) => prev ?? list[0]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch frameworks:', err);
+      setError(err?.message || t('pages.complianceFrameworks.load_failed'));
+      setFrameworks([]);
+    } finally {
+      setLoadingFrameworks(false);
+    }
+  }, [t]);
+
+  const fetchControls = useCallback(async (frameworkId) => {
+    if (!frameworkId) return;
+    try {
+      setLoadingControls(true);
+      setError('');
+      const data = await api.get(`/api/compliance/frameworks/${frameworkId}/controls`);
+      setControls(data.controls || []);
+    } catch (err) {
+      console.error('Failed to fetch controls:', err);
+      setControls([]);
+      setError(err?.message || t('pages.complianceFrameworks.controls_load_failed'));
+    } finally {
+      setLoadingControls(false);
+    }
+  }, [t]);
 
   useEffect(() => {
     fetchFrameworks();
-  }, []);
+  }, [fetchFrameworks]);
 
   useEffect(() => {
-    if (selectedFramework) {
+    if (selectedFramework?.id) {
       fetchControls(selectedFramework.id);
     }
-  }, [selectedFramework]);
-
-  const fetchFrameworks = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get('/api/compliance/frameworks');
-      setFrameworks(data.frameworks || []);
-      if (data.frameworks.length > 0) {
-        setSelectedFramework(data.frameworks[0]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch frameworks:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchControls = async (frameworkId) => {
-    try {
-      const data = await api.get(`/api/compliance/frameworks/${frameworkId}/controls`);
-      setControls(data.controls || []);
-    } catch (error) {
-      console.error('Failed to fetch controls:', error);
-    }
-  };
+  }, [selectedFramework, fetchControls]);
 
   const generateReport = async (frameworkId) => {
     try {
+      setExporting(true);
       const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`);
       if (!r.ok) throw new Error(`Report failed (${r.status})`);
       const blob = await r.blob();
@@ -87,8 +105,11 @@ export default function ComplianceFrameworks() {
       link.href = url;
       link.download = `${frameworkId}-compliance-report.pdf`;
       link.click();
-    } catch (error) {
-      console.error('Failed to generate report:', error);
+    } catch (err) {
+      console.error('Failed to generate report:', err);
+      setError(t('pages.complianceFrameworks.export_failed'));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -118,50 +139,95 @@ export default function ComplianceFrameworks() {
     }
   };
 
-  const filteredControls = controls.filter((c) => {
-    if (filter === 'all') return true;
-    return c.status === filter;
-  });
+  const filteredControls = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return controls.filter((c) => {
+      if (filter !== 'all' && c.status !== filter) return false;
+      if (!term) return true;
+      return (
+        String(c.id || '').toLowerCase().includes(term)
+        || String(c.title || '').toLowerCase().includes(term)
+      );
+    });
+  }, [controls, filter, search]);
 
-  const stats = selectedFramework
-    ? {
-        total: controls.length,
-        compliant: controls.filter((c) => c.status === 'compliant').length,
-        nonCompliant: controls.filter((c) => c.status === 'non-compliant').length,
-        partial: controls.filter((c) => c.status === 'partial').length,
-        score: controls.length > 0
-          ? ((controls.filter((c) => c.status === 'compliant').length / controls.length) * 100).toFixed(1)
-          : 0,
-      }
-    : { total: 0, compliant: 0, nonCompliant: 0, partial: 0, score: 0 };
+  const stats = useMemo(() => {
+    if (!selectedFramework || controls.length === 0) {
+      return { total: 0, compliant: 0, nonCompliant: 0, partial: 0, score: 0 };
+    }
+    const compliant = controls.filter((c) => c.status === 'compliant').length;
+    const nonCompliant = controls.filter((c) => c.status === 'non-compliant').length;
+    const partial = controls.filter((c) => c.status === 'partial').length;
+    return {
+      total: controls.length,
+      compliant,
+      nonCompliant,
+      partial,
+      score: ((compliant / controls.length) * 100).toFixed(1),
+    };
+  }, [selectedFramework, controls]);
+
+  const listFindings = useMemo(() => filteredControls.map((c) => ({
+    id: c.id,
+    severity: c.status === 'non-compliant' ? 'high' : c.status === 'partial' ? 'medium' : 'info',
+    title: c.name || c.control_id || c.id,
+    type: selectedFramework?.id || 'control',
+    description: c.description || statusLabel(c.status, t),
+    resource: c.category || '',
+  })), [filteredControls, selectedFramework, t])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-compliance-controls',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
 
   return (
-    <PageShell title={t('pages.complianceFrameworks.title')} subtitle={t('pages.complianceFrameworks.subtitle')} icon={<Shield />}>
+    <PageShell
+      title={t('pages.complianceFrameworks.title')}
+      subtitle={t('pages.complianceFrameworks.subtitle')}
+      icon={<Shield />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchFrameworks}
+          onExport={exportCsv}
+          refreshLoading={loadingFrameworks}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
-        {/* Framework Selector */}
+        {error && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
+
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70">
+          {t('pages.complianceFrameworks.evidence_notice')}
+        </div>
+
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
-          {loading && frameworks.length === 0 ? (
-            <div className="text-sm text-gray-500 px-4 py-3">Loading frameworks...</div>
+          {loadingFrameworks && frameworks.length === 0 ? (
+            <div className="text-sm text-gray-500 px-4 py-3">{t('pages.complianceFrameworks.loading')}</div>
           ) : frameworks.length === 0 ? (
-            <div className="text-sm text-gray-500 px-4 py-3">No compliance frameworks available from the API.</div>
+            <EmptyState
+              title={t('pages.complianceFrameworks.no_frameworks_title')}
+              description={t('pages.complianceFrameworks.no_frameworks')}
+            />
           ) : (
             frameworks.map((fw) => {
               const isSelected = selectedFramework?.id === fw.id;
-              const hasData = Boolean(fw.id && fw.name);
-              const scoreLabel = selectedFramework?.id === fw.id && controls.length > 0
-                ? `${stats.score}% compliant`
+              const scoreLabel = isSelected && controls.length > 0
+                ? t('pages.complianceFrameworks.framework_score', { score: stats.score })
                 : fw.scope;
 
               return (
                 <button
                   key={fw.id}
                   type="button"
-                  disabled={!hasData}
-                  onClick={() => hasData && setSelectedFramework(fw)}
+                  onClick={() => setSelectedFramework(fw)}
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
-                    !hasData
-                      ? 'bg-black/20 text-gray-600 border-white/5 cursor-not-allowed opacity-50'
-                      : isSelected
+                    isSelected
                       ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
                       : 'bg-black/40 text-gray-400 border-white/10 hover:bg-white/5 hover:text-white'
                   }`}
@@ -179,98 +245,132 @@ export default function ComplianceFrameworks() {
           )}
         </div>
 
-        {/* Stats */}
-        {selectedFramework && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">Total Controls</span>
-                <FileText className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-2xl font-bold text-white">{stats.total}</div>
-            </div>
-
-            <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-green-400">Compliant</span>
-                <CheckCircle className="w-4 h-4 text-green-400" />
-              </div>
-              <div className="text-2xl font-bold text-green-400">{stats.compliant}</div>
-            </div>
-
-            <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-red-400">Non-Compliant</span>
-                <XCircle className="w-4 h-4 text-red-400" />
-              </div>
-              <div className="text-2xl font-bold text-red-400">{stats.nonCompliant}</div>
-            </div>
-
-            <div className="bg-yellow-500/10 backdrop-blur-md border border-yellow-500/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-yellow-400">Partial</span>
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-              </div>
-              <div className="text-2xl font-bold text-yellow-400">{stats.partial}</div>
-            </div>
-
-            <div className="bg-cyan-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-cyan-400">Score</span>
-                <Shield className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-2xl font-bold text-cyan-400">{stats.score}%</div>
-            </div>
-          </div>
-        )}
-
-        {/* Controls and Filters */}
         {selectedFramework && (
           <>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
-                {['all', 'compliant', 'non-compliant', 'partial'].map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      filter === f
-                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {f.charAt(0).toUpperCase() + f.slice(1).replace('-', ' ')}
-                  </button>
-                ))}
+            {loadingControls && controls.length === 0 ? (
+              <SkeletonWidgetGrid count={5} />
+            ) : controls.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400">{t('pages.complianceFrameworks.total_controls')}</span>
+                      <FileText className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{stats.total}</div>
+                  </div>
+                  <div className="bg-green-500/10 backdrop-blur-md border border-green-500/30 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-green-400">{t('pages.complianceFrameworks.status_compliant')}</span>
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-green-400">{stats.compliant}</div>
+                  </div>
+                  <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-red-400">{t('pages.complianceFrameworks.status_non_compliant')}</span>
+                      <XCircle className="w-4 h-4 text-red-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-red-400">{stats.nonCompliant}</div>
+                  </div>
+                  <div className="bg-yellow-500/10 backdrop-blur-md border border-yellow-500/30 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-yellow-400">{t('pages.complianceFrameworks.status_partial')}</span>
+                      <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-yellow-400">{stats.partial}</div>
+                  </div>
+                  <div className="bg-cyan-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-cyan-400">{t('pages.complianceFrameworks.score_label')}</span>
+                      <Shield className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-cyan-400">{stats.score}%</div>
+                  </div>
+                </div>
+
+                {stats.total > 0 && (
+                  <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                    <div className="flex h-3 rounded-full overflow-hidden">
+                      <div className="bg-green-500/70" style={{ width: `${(stats.compliant / stats.total) * 100}%` }} />
+                      <div className="bg-yellow-500/70" style={{ width: `${(stats.partial / stats.total) * 100}%` }} />
+                      <div className="bg-red-500/70" style={{ width: `${(stats.nonCompliant / stats.total) * 100}%` }} />
+                    </div>
+                    <div className="flex gap-4 mt-2 text-[10px] font-mono text-white/40">
+                      <span>{t('pages.complianceFrameworks.status_compliant')} {stats.compliant}</span>
+                      <span>{t('pages.complianceFrameworks.status_partial')} {stats.partial}</span>
+                      <span>{t('pages.complianceFrameworks.status_non_compliant')} {stats.nonCompliant}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('pages.complianceFrameworks.search_placeholder')}
+                    className="pl-10 pr-4 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+                  {FILTER_KEYS.map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setFilter(f)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        filter === f
+                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => generateReport(selectedFramework.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
+                disabled={exporting || controls.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-40"
               >
                 <Download className="w-4 h-4" />
-                Generate Report
+                {exporting ? t('pages.complianceFrameworks.exporting') : t('pages.complianceFrameworks.export_report')}
               </button>
             </div>
 
-            {/* Controls List */}
             <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
               <div className="p-4 border-b border-white/10">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <FileText className="w-4 h-4 text-cyan-400" />
-                  {selectedFramework.name} Controls ({filteredControls.length})
+                  {t('pages.complianceFrameworks.controls_heading')} — {selectedFramework.name}
+                  {' '}
+                  ({filteredControls.length})
                 </h3>
               </div>
 
-              {loading ? (
-                <div className="p-8 text-center text-gray-500">
-                  <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-                  Loading controls...
+              {loadingControls ? (
+                <div className="p-6">
+                  <SkeletonTable rows={5} cols={3} />
                 </div>
+              ) : controls.length === 0 ? (
+                <EmptyState
+                  title={t('pages.complianceFrameworks.no_controls_title')}
+                  description={t('pages.complianceFrameworks.no_controls')}
+                />
               ) : filteredControls.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  No controls found for this filter.
-                </div>
+                <EmptyState
+                  title={t('pages.complianceFrameworks.no_filter_results_title')}
+                  description={t('pages.complianceFrameworks.no_filter_results')}
+                />
               ) : (
                 <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
                   {filteredControls.map((control) => (
@@ -278,65 +378,23 @@ export default function ComplianceFrameworks() {
                       key={control.id}
                       className="p-4 hover:bg-white/5 transition-colors"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded">
-                              {control.control_id}
-                            </span>
+                      <div className="flex items-start gap-3">
+                        <span className="text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded shrink-0">
+                          {control.id}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 flex-wrap">
                             <h4 className="text-sm font-semibold text-white">
                               {control.title}
                             </h4>
                             <span
-                              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${getComplianceColor(
-                                control.status
-                              )}`}
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${getComplianceColor(control.status)}`}
                             >
                               {getComplianceIcon(control.status)}
-                              {control.status}
+                              {statusLabel(control.status, t)}
                             </span>
                           </div>
-
-                          <p className="text-xs text-gray-400 mb-3">
-                            {control.description}
-                          </p>
-
-                          {/* Mapped Findings */}
-                          {control.findings && control.findings.length > 0 && (
-                            <div className="mt-2">
-                              <span className="text-xs text-gray-500">
-                                Mapped findings: {control.findings.length}
-                              </span>
-                              <div className="flex gap-2 mt-1">
-                                {control.findings.slice(0, 3).map((finding) => (
-                                  <span
-                                    key={finding.id}
-                                    className="text-xs px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded"
-                                  >
-                                    {finding.title}
-                                  </span>
-                                ))}
-                                {control.findings.length > 3 && (
-                                  <span className="text-xs px-2 py-1 bg-white/5 text-gray-400 rounded">
-                                    +{control.findings.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Evidence */}
-                          {control.evidence && (
-                            <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                              <FileText className="w-3 h-3" />
-                              {control.evidence.count} evidence files attached
-                            </div>
-                          )}
                         </div>
-
-                        <button className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors">
-                          View Details
-                        </button>
                       </div>
                     </div>
                   ))}
@@ -346,20 +404,24 @@ export default function ComplianceFrameworks() {
           </>
         )}
 
-        {/* Gap Analysis */}
         {selectedFramework && stats.nonCompliant > 0 && (
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">Gap Analysis</h3>
+              <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.gap_title')}</h3>
             </div>
             <p className="text-sm text-gray-300 mb-4">
-              {stats.nonCompliant} controls are non-compliant. Addressing these gaps is critical for
-              achieving {selectedFramework.name} certification.
+              {t('pages.complianceFrameworks.gap_body', {
+                count: stats.nonCompliant,
+                framework: selectedFramework.name,
+              })}
             </p>
-            <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
-              View Remediation Plan
-            </button>
+            <Link
+              to="/remediation"
+              className="inline-flex px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
+            >
+              {t('pages.complianceFrameworks.open_remediation')}
+            </Link>
           </div>
         )}
       </div>

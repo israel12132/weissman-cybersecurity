@@ -146,7 +146,10 @@ async fn api_threat_analysis_for_client(
         findings.push(v);
     }
 
-    let report = crate::threat_analysis::analyze(&findings, &[], &[]);
+    // Live NDR / ITDR signals (when ingested) feed the network/identity detectors.
+    let (flows, auth_events) =
+        load_ndr_itdr(&state.app_pool, auth.tenant_id, client_id, limit).await;
+    let report = crate::threat_analysis::analyze(&findings, &flows, &auth_events);
 
     // Optional: persist detected multi-stage correlation incidents (operator-gated, idempotent).
     let mut persisted_incidents = 0usize;
@@ -184,6 +187,214 @@ async fn api_threat_analysis_for_client(
         })),
     )
         .into_response()
+}
+
+/// Load recent ingested NDR flow samples + ITDR auth events for a client (tenant-scoped, RLS).
+async fn load_ndr_itdr(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i64,
+) -> (
+    Vec<crate::ndr_beacon::FlowSample>,
+    Vec<crate::itdr::AuthEvent>,
+) {
+    let mut flows = Vec::new();
+    let mut auth = Vec::new();
+    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
+        return (flows, auth);
+    };
+    let frows = sqlx::query(
+        r#"SELECT ts, dst, bytes_out
+             FROM ndr_flow_samples
+            WHERE tenant_id = $1 AND (client_id = $2 OR client_id IS NULL)
+            ORDER BY ts ASC
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    for r in &frows {
+        let ts: i64 = r.try_get("ts").unwrap_or(0);
+        let dst: String = r.try_get("dst").unwrap_or_default();
+        let b: i64 = r.try_get("bytes_out").unwrap_or(0);
+        flows.push(crate::ndr_beacon::FlowSample::new(ts, &dst, b.max(0) as u64));
+    }
+    let arows = sqlx::query(
+        r#"SELECT ts, username, ip, country, success, mfa_prompted
+             FROM itdr_auth_events
+            WHERE tenant_id = $1 AND (client_id = $2 OR client_id IS NULL)
+            ORDER BY ts ASC
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    for r in &arows {
+        let ts: i64 = r.try_get("ts").unwrap_or(0);
+        let user: String = r.try_get("username").unwrap_or_default();
+        let ip: String = r.try_get("ip").unwrap_or_default();
+        let country: String = r.try_get("country").unwrap_or_default();
+        let success: bool = r.try_get("success").unwrap_or(false);
+        let mfa: bool = r.try_get("mfa_prompted").unwrap_or(false);
+        auth.push(crate::itdr::AuthEvent::new(
+            ts, &user, &ip, &country, success, mfa,
+        ));
+    }
+    let _ = tx.commit().await;
+    (flows, auth)
+}
+
+// ─── NDR / ITDR ingest (live data sources for the network/identity detectors) ───
+
+#[derive(serde::Deserialize)]
+struct NdrFlowIn {
+    ts: i64,
+    dst: String,
+    #[serde(default)]
+    bytes_out: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct NdrFlowsBody {
+    #[serde(default)]
+    client_id: Option<i64>,
+    #[serde(default)]
+    samples: Vec<NdrFlowIn>,
+}
+
+async fn api_ndr_flows_ingest(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<NdrFlowsBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    if body.samples.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "samples required"})),
+        )
+            .into_response();
+    }
+    if body.samples.len() > 5000 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "max 5000 samples per request"})),
+        )
+            .into_response();
+    }
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let mut ingested = 0usize;
+    for s in &body.samples {
+        let dst = s.dst.trim();
+        if dst.is_empty() || dst.len() > 255 {
+            continue;
+        }
+        let res = sqlx::query(
+            r#"INSERT INTO ndr_flow_samples (tenant_id, client_id, ts, dst, bytes_out)
+               VALUES ($1, $2, $3, $4, $5)"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(body.client_id)
+        .bind(s.ts)
+        .bind(dst)
+        .bind(s.bytes_out.max(0))
+        .execute(&mut *tx)
+        .await;
+        if res.is_ok() {
+            ingested += 1;
+        }
+    }
+    let _ = tx.commit().await;
+    (StatusCode::OK, Json(json!({"ok": true, "ingested": ingested}))).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct ItdrAuthIn {
+    ts: i64,
+    #[serde(default)]
+    user: String,
+    #[serde(default)]
+    ip: String,
+    #[serde(default)]
+    country: String,
+    #[serde(default)]
+    success: bool,
+    #[serde(default)]
+    mfa_prompted: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct ItdrAuthBody {
+    #[serde(default)]
+    client_id: Option<i64>,
+    #[serde(default)]
+    events: Vec<ItdrAuthIn>,
+}
+
+async fn api_itdr_auth_ingest(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<ItdrAuthBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    if body.events.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "events required"})),
+        )
+            .into_response();
+    }
+    if body.events.len() > 5000 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "max 5000 events per request"})),
+        )
+            .into_response();
+    }
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let mut ingested = 0usize;
+    for e in &body.events {
+        let user = e.user.trim();
+        let ip = e.ip.trim();
+        if user.is_empty() || ip.is_empty() || user.len() > 320 || ip.len() > 64 {
+            continue;
+        }
+        let res = sqlx::query(
+            r#"INSERT INTO itdr_auth_events
+                 (tenant_id, client_id, ts, username, ip, country, success, mfa_prompted)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(body.client_id)
+        .bind(e.ts)
+        .bind(user)
+        .bind(ip)
+        .bind(e.country.trim())
+        .bind(e.success)
+        .bind(e.mfa_prompted)
+        .execute(&mut *tx)
+        .await;
+        if res.is_ok() {
+            ingested += 1;
+        }
+    }
+    let _ = tx.commit().await;
+    (StatusCode::OK, Json(json!({"ok": true, "ingested": ingested}))).into_response()
 }
 
 // ─── Playbook endpoints ────────────────────────────────────────────────────

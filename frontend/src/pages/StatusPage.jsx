@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  RefreshCw,
   Clock,
   Database,
   Server,
@@ -15,6 +14,9 @@ import {
 } from 'lucide-react'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 
 const STATUS = {
   operational: {
@@ -130,7 +132,7 @@ function ServiceCard({ icon: Icon, name, description, level, detail, detailLink,
   )
 }
 
-function deriveServices(state) {
+function deriveServices(state, t) {
   const ts = state.ts
   const services = []
 
@@ -145,8 +147,8 @@ function deriveServices(state) {
     level: apiLevel,
     detail: state.api
       ? state.api.ok
-        ? `HTTP ${state.api.status} · ${state.api.latency_ms} ms`
-        : state.api.error || `HTTP ${state.api.status || 0}`
+        ? t('status.detail_api_ok', { status: state.api.status, ms: state.api.latency_ms })
+        : state.api.error || t('status.detail_api_fail', { status: state.api.status || 0 })
       : null,
     checkedAt: ts,
   })
@@ -165,11 +167,11 @@ function deriveServices(state) {
     icon: Database,
     level: dbLevel,
     detail: state.health?.postgres_ok === true
-      ? 'PostgreSQL reachable'
+      ? t('status.detail_db_ok')
       : state.health?.postgres_ok === false
-      ? 'PostgreSQL unreachable'
+      ? t('status.detail_db_fail')
       : state.api?.ok
-      ? 'Health payload missing postgres_ok'
+      ? t('status.detail_db_missing')
       : null,
     checkedAt: ts,
   })
@@ -189,10 +191,10 @@ function deriveServices(state) {
     level: scanLevel,
     detail: state.health
       ? state.health.scan_in_progress
-        ? `${state.health.active_tenant_cycles ?? 0} active tenant cycles`
+        ? t('status.detail_scan_active', { count: state.health.active_tenant_cycles ?? 0 })
         : state.health.scanning_enabled
-        ? 'Scanning enabled'
-        : 'Scanning paused'
+        ? t('status.detail_scan_enabled')
+        : t('status.detail_scan_paused')
       : null,
     checkedAt: ts,
   })
@@ -209,8 +211,11 @@ function deriveServices(state) {
     icon: Cpu,
     level: engineLevel,
     detail: state.engines?.ok
-      ? `${state.engines.production_count} production · ${state.engines.catalog_count} catalog`
-      : state.engines?.error || (state.engines?.status ? `HTTP ${state.engines.status}` : null),
+      ? t('status.detail_engines_ok', {
+          production: state.engines.production_count,
+          catalog: state.engines.catalog_count,
+        })
+      : state.engines?.error || (state.engines?.status ? t('status.detail_http', { status: state.engines.status }) : null),
     detailLink: state.engines?.ok ? '/engines?tier=live' : null,
     checkedAt: ts,
   })
@@ -232,13 +237,32 @@ function deriveServices(state) {
     level: agentLevel,
     detail: state.agents?.ok
       ? state.agents.online !== undefined
-        ? `${state.agents.online}/${state.agents.total} online`
+        ? t('status.detail_agents_online', { online: state.agents.online, total: state.agents.total })
         : state.agents.detail
-      : state.agents?.error || (state.agents?.status ? `HTTP ${state.agents.status}` : null),
+      : state.agents?.error || (state.agents?.status ? t('status.detail_http', { status: state.agents.status }) : null),
     checkedAt: ts,
   })
 
   return services
+}
+
+function exportStatusCsv(state, t) {
+  const services = deriveServices({ ...state, loading: false }, t)
+  const header = ['id', 'level', 'detail', 'checked_at']
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    header.join(','),
+    ...services.map((svc) =>
+      [svc.id, svc.level, svc.detail, svc.checkedAt].map(esc).join(','),
+    ),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `weissman-status-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function extractFailedHealthProbes(audit) {
@@ -285,6 +309,7 @@ export default function StatusPage() {
   })
   const [incidents, setIncidents] = useState([])
   const [failedProbes, setFailedProbes] = useState([])
+  const [serviceSearch, setServiceSearch] = useState('')
   const prevLevels = useRef({})
 
   const recordIncidents = useCallback((services, ts) => {
@@ -379,7 +404,7 @@ export default function StatusPage() {
     }
 
     setState(result)
-    const services = deriveServices({ ...result, loading: false })
+    const services = deriveServices({ ...result, loading: false }, t)
     recordIncidents(services, ts)
   }, [recordIncidents, t])
 
@@ -389,10 +414,7 @@ export default function StatusPage() {
     return () => clearInterval(interval)
   }, [probe])
 
-  const services = deriveServices(state)
-  const overall = overallLevel(services, state)
-  const overallMeta = STATUS[overall] || STATUS.unknown
-  const OverallIcon = overallMeta.icon
+  const services = deriveServices(state, t)
 
   const serviceMeta = {
     api: { nameKey: 'status.api_auth', descKey: 'status.api_auth_desc' },
@@ -401,6 +423,21 @@ export default function StatusPage() {
     engines: { nameKey: 'status.engine_registry', descKey: 'status.engine_registry_desc' },
     agents: { nameKey: 'status.endpoint_agents', descKey: 'status.endpoint_agents_desc' },
   }
+
+  const filteredServices = useMemo(() => {
+    const q = serviceSearch.trim().toLowerCase()
+    if (!q) return services
+    return services.filter((svc) => {
+      const meta = serviceMeta[svc.id]
+      const name = t(meta?.nameKey || 'status.components').toLowerCase()
+      const desc = t(meta?.descKey || '').toLowerCase()
+      return `${svc.id} ${name} ${desc} ${svc.level} ${svc.detail || ''}`.toLowerCase().includes(q)
+    })
+  }, [services, serviceSearch, t, serviceMeta])
+
+  const overall = overallLevel(services, state)
+  const overallMeta = STATUS[overall] || STATUS.unknown
+  const OverallIcon = overallMeta.icon
 
   const visibleIncidents = incidents.filter((i) => i.level !== 'operational')
   const hasSafeMode = state.health?.global_safe_mode === true
@@ -425,6 +462,7 @@ export default function StatusPage() {
             <LanguageSwitcher />
           </div>
           <p className="text-sm text-white/55 leading-relaxed max-w-2xl">{t('status.subtitle')}</p>
+          <EvidenceNotice className="mt-4">{t('status.evidence_notice')}</EvidenceNotice>
         </header>
 
         <section className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8">
@@ -457,14 +495,11 @@ export default function StatusPage() {
                   {t('status.last_checked')} {fmtChecked(state.ts, i18n.language)}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={probe}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border border-white/10 bg-white/5 text-white/60 hover:text-white hover:border-white/25 transition-colors"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${state.loading ? 'animate-spin' : ''}`} />
-                {t('common.refresh')}
-              </button>
+              <ShellScanActions
+                onRefresh={probe}
+                onExport={() => exportStatusCsv(state, t)}
+                refreshLoading={state.loading}
+              />
             </div>
           </div>
 
@@ -477,11 +512,19 @@ export default function StatusPage() {
         </section>
 
         <section className="mb-8">
+          <WeissmanListToolbar
+            className="mb-4"
+            searchQuery={serviceSearch}
+            onSearchChange={setServiceSearch}
+            searchPlaceholder={t('status.search_components', { defaultValue: 'Search platform components…' })}
+            resultCount={filteredServices.length}
+            totalCount={services.length}
+          />
           <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/40 mb-4">
             {t('status.components')}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {services.map((svc) => {
+            {filteredServices.map((svc) => {
               const meta = serviceMeta[svc.id]
               return (
                 <ServiceCard

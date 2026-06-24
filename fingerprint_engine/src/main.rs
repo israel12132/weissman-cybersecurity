@@ -139,6 +139,10 @@ fn main() {
         fingerprint_engine::aws_attack_engine::run_aws_attack(target).await;
         return;
     }
+    if cmd == "cloud_posture" {
+        fingerprint_engine::cloud_posture_engine::run_cloud_posture(target).await;
+        return;
+    }
     if cmd == "azure_attack" {
         fingerprint_engine::azure_attack_engine::run_azure_attack(target).await;
         return;

@@ -1,25 +1,61 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { RefreshCw, CheckCircle2, XCircle, Layers } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+
+const DEFAULT_TEMPLATE = 'multi_step_state_demo'
 
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()
+  const [templates, setTemplates] = useState([])
+  const [selectedId, setSelectedId] = useState(DEFAULT_TEMPLATE)
   const [targetUrl, setTargetUrl] = useState('')
   const [yaml, setYaml] = useState('')
+  const [loadingYaml, setLoadingYaml] = useState(false)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
+  const canRun = useMemo(
+    () => !!targetUrl.trim() && !!yaml.trim(),
+    [targetUrl, yaml],
+  )
+
   useEffect(() => {
-    apiFetch('/api/template-engine/templates/multi_step_state_demo')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setYaml(String(d?.yaml || '')))
+    apiFetch('/api/template-engine/templates')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        if (!Array.isArray(d)) return
+        setTemplates(d)
+        const preferred = d.find((tpl) => tpl.id === DEFAULT_TEMPLATE)
+        if (preferred) setSelectedId(preferred.id)
+        else if (d[0]?.id) setSelectedId(d[0].id)
+      })
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!selectedId) return
+    setLoadingYaml(true)
+    setError('')
+    apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.feedbackLoopVerification.load_failed'))
+        setYaml(String(d?.yaml || ''))
+      })
+      .catch((e) => setError(e?.message || t('pages.feedbackLoopVerification.load_failed')))
+      .finally(() => setLoadingYaml(false))
+  }, [selectedId, t])
+
   const run = useCallback(async () => {
-    if (!targetUrl.trim() || !yaml.trim()) return
+    if (!canRun) return
     setRunning(true)
     setError('')
     setResult(null)
@@ -30,6 +66,7 @@ export default function FeedbackLoopVerification() {
         body: JSON.stringify({
           target_url: targetUrl.trim(),
           template_yaml: yaml,
+          max_body_bytes: 200000,
         }),
       })
       const d = await r.json().catch(() => ({}))
@@ -40,7 +77,42 @@ export default function FeedbackLoopVerification() {
     } finally {
       setRunning(false)
     }
-  }, [targetUrl, yaml, t])
+  }, [canRun, targetUrl, yaml, t])
+
+  const stepFindings = useMemo(() => {
+    const steps = Array.isArray(result?.steps) ? result.steps : []
+    return steps.map((s, i) => {
+      const ok = s?.ok === true || s?.success === true
+      return {
+        title: s.name || s.step || s.id || `Step ${i + 1}`,
+        type: s.type || 'verification_step',
+        severity: ok ? 'info' : 'high',
+        description: s.message || s.detail || s.error || (ok ? 'Step passed' : 'Step failed'),
+        remediation: s.status_code != null ? `HTTP ${s.status_code}` : '',
+        component: s.matcher || s.extractor || '',
+      }
+    })
+  }, [result])
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(stepFindings, { csvPrefix: 'weissman-feedback-loop' })
+
+  const handleRefresh = useCallback(() => {
+    if (result) run()
+  }, [result, run])
+
+  const stepCount = Array.isArray(result?.steps) ? result.steps.length : 0
+  const passedSteps = Array.isArray(result?.steps)
+    ? result.steps.filter((s) => s?.ok === true || s?.success === true).length
+    : 0
 
   return (
     <PageShell
@@ -48,68 +120,184 @@ export default function FeedbackLoopVerification() {
       badge={t('pages.feedbackLoopVerification.badge')}
       badgeColor="#a78bfa"
       subtitle={t('pages.feedbackLoopVerification.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={running}
+          refreshDisabled={!result}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
+        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
           <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
             {t('pages.feedbackLoopVerification.chain_runner')}
           </h3>
+
           <input
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t('pages.feedbackLoopVerification.target_placeholder')}
             className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-violet-500/40"
           />
-          <button
-            type="button"
-            disabled={!targetUrl.trim() || !yaml.trim() || running}
-            onClick={run}
-            className="w-full px-4 py-2 rounded-xl border border-violet-500/30 text-violet-300/70 text-[12px] font-mono uppercase hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
-            {running ? t('pages.feedbackLoopVerification.running') : t('pages.feedbackLoopVerification.run_chain')}
-          </button>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              disabled={loadingYaml}
+              className="flex-1 min-w-[180px] rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-violet-500/40 disabled:opacity-50"
+            >
+              {templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name || tpl.id}</option>
+              ))}
+              {templates.length === 0 && (
+                <option value={DEFAULT_TEMPLATE}>{DEFAULT_TEMPLATE}</option>
+              )}
+            </select>
+            <button
+              type="button"
+              disabled={!canRun || running || loadingYaml}
+              onClick={run}
+              className="px-4 py-2 rounded-xl border border-violet-500/30 text-violet-300/70 text-[12px] font-mono uppercase hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {running ? t('pages.feedbackLoopVerification.running') : t('pages.feedbackLoopVerification.run_chain')}
+            </button>
+          </div>
+
+          {templates.length === 0 && (
+            <p className="text-[11px] text-amber-300/70 font-mono">
+              {t('pages.feedbackLoopVerification.templates_empty')}
+            </p>
+          )}
+
           {error && (
             <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-200">
               {error}
             </div>
           )}
+
           <div className="rounded-xl border border-white/10 bg-black/50 p-4">
-            <div className="text-[10px] font-mono text-white/30 mb-2">
-              {t('pages.feedbackLoopVerification.template_editable')}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-mono text-white/30">
+                {t('pages.feedbackLoopVerification.template_editable')}
+              </div>
+              {loadingYaml && (
+                <span className="text-[10px] font-mono text-violet-300/60 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  {t('pages.feedbackLoopVerification.loading_template')}
+                </span>
+              )}
             </div>
-            <textarea
-              value={yaml}
-              onChange={(e) => setYaml(e.target.value)}
-              rows={14}
-              className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/70 font-mono focus:outline-none focus:border-violet-500/40"
-            />
+            {loadingYaml && !yaml ? (
+              <div className="space-y-2">
+                <SkeletonBar className="h-3 w-full" />
+                <SkeletonBar className="h-3 w-5/6" />
+                <SkeletonBar className="h-3 w-4/6" />
+              </div>
+            ) : (
+              <textarea
+                value={yaml}
+                onChange={(e) => setYaml(e.target.value)}
+                rows={14}
+                className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/70 font-mono focus:outline-none focus:border-violet-500/40"
+              />
+            )}
           </div>
         </div>
 
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
+        <div className="space-y-4">
           <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
             {t('pages.feedbackLoopVerification.state_evidence')}
           </h3>
+
           {!result ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="text-[11px] font-mono text-white/25">
-                {t('pages.feedbackLoopVerification.result_empty')}
-              </p>
-            </div>
+            <EmptyState
+              icon={<Layers className="w-8 h-8 text-white/20" />}
+              title={t('pages.feedbackLoopVerification.result_empty_title')}
+              description={t('pages.feedbackLoopVerification.result_empty')}
+            />
           ) : (
-            <div className="space-y-3">
-              <div className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex ${
-                result?.verification?.verified ? 'border-green-500/30 text-green-400 bg-green-900/10' : 'border-white/10 text-white/30'
-              }`}>
-                {result?.verification?.verified
-                  ? t('pages.feedbackLoopVerification.verified')
-                  : t('pages.feedbackLoopVerification.not_verified')}
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.steps_total')}</div>
+                  <div className="text-xl font-semibold text-white">{stepCount}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.steps_passed')}</div>
+                  <div className="text-xl font-semibold text-emerald-300">{passedSteps}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.verification')}</div>
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    {result?.verification?.verified ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-green-400" />
+                        <span className="text-[11px] font-mono text-green-400">{t('pages.feedbackLoopVerification.verified')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4 text-white/40" />
+                        <span className="text-[11px] font-mono text-white/40">{t('pages.feedbackLoopVerification.not_verified')}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-              <pre className="rounded-xl border border-white/10 bg-black/50 p-4 text-[11px] text-white/70 font-mono whitespace-pre-wrap break-words">
-                {JSON.stringify(result.steps || [], null, 2)}
-              </pre>
-            </div>
+
+              {result?.verification?.message && (
+                <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white/60 font-mono">
+                  {String(result.verification.message)}
+                </div>
+              )}
+            </>
           )}
+
+          <WeissmanFindingsPanel
+            findings={stepFindings}
+            filteredFindings={filteredFindings}
+            counts={counts}
+            total={total}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            severityFilter={severityFilter}
+            onSeverityChange={setSeverityFilter}
+            pending={running && !stepFindings.length}
+            accent="#a78bfa"
+            title={t('pages.feedbackLoopVerification.state_evidence')}
+            showEmptyReady={!result && !running}
+            emptyReadyTitle={t('pages.feedbackLoopVerification.result_empty_title')}
+            emptyReadyBody={t('pages.feedbackLoopVerification.result_empty')}
+            renderFinding={(f, i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+                <div className="flex items-start gap-2">
+                  <span
+                    className={`text-[9px] font-mono uppercase shrink-0 ${f.severity === 'info' ? 'text-emerald-300' : 'text-orange-300'}`}
+                  >
+                    [{f.severity}]
+                  </span>
+                  <span className="text-[12px] font-mono text-white/90 min-w-0">{f.title}</span>
+                  {f.type && (
+                    <span className="text-[9px] font-mono text-white/35 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                      {f.type}
+                    </span>
+                  )}
+                </div>
+                {f.description && (
+                  <p className="text-[10px] font-mono text-white/45 leading-relaxed">{f.description}</p>
+                )}
+                {(f.remediation || f.component) && (
+                  <div className="flex flex-wrap gap-2 text-[9px] font-mono text-white/30">
+                    {f.remediation && <span>{f.remediation}</span>}
+                    {f.component && <span>{f.component}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+          />
         </div>
       </div>
     </PageShell>

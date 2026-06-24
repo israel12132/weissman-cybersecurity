@@ -8,26 +8,37 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Download } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+const NS = 'pages.threatHuntingWorkbench'
 
 const HUNT_STATUS_META = {
-  active:    { labelKey: 'pages.threatHuntingWorkbench.status_active',    color: '#22d3ee' },
-  completed: { labelKey: 'pages.threatHuntingWorkbench.status_completed', color: '#4ade80' },
-  paused:    { labelKey: 'pages.threatHuntingWorkbench.status_paused',    color: '#f59e0b' },
-  queued:    { labelKey: 'pages.threatHuntingWorkbench.status_queued',    color: '#8b5cf6' },
+  active:    { labelKey: `${NS}.status_active`,    color: '#22d3ee' },
+  completed: { labelKey: `${NS}.status_completed`, color: '#4ade80' },
+  paused:    { labelKey: `${NS}.status_paused`,    color: '#f59e0b' },
+  queued:    { labelKey: `${NS}.status_queued`,    color: '#8b5cf6' },
+}
+
+function severityLabel(severity, t, prefix = 'severity') {
+  const s = String(severity ?? 'medium').toLowerCase()
+  return t(`${NS}.${prefix}_${s}`, { defaultValue: s.toUpperCase() })
 }
 
 function normalizeCampaign(raw, t) {
   return {
     id: raw.id ?? '',
-    title: raw.title ?? t('pages.threatHuntingWorkbench.untitled_hunt'),
+    title: raw.title ?? t(`${NS}.untitled_hunt`),
     hypothesis: raw.hypothesis ?? '',
     status: raw.status ?? 'queued',
-    analyst: raw.analyst ?? t('pages.threatHuntingWorkbench.unassigned'),
+    analyst: raw.analyst ?? t(`${NS}.unassigned`),
     started: raw.started ?? '—',
     mitre: Array.isArray(raw.mitre) ? raw.mitre : [],
     hitsFound: Number(raw.hitsFound) || 0,
@@ -53,7 +64,7 @@ function normalizeIoc(raw, index) {
 function normalizeQuery(raw, index, t) {
   return {
     id: raw.id ?? `q-${index}`,
-    name: raw.name ?? t('pages.threatHuntingWorkbench.untitled_query'),
+    name: raw.name ?? t(`${NS}.untitled_query`),
     datasource: raw.datasource ?? raw.dataSources?.[0] ?? 'Findings',
     language: raw.language ?? 'KQL',
     query: raw.query ?? '',
@@ -64,6 +75,26 @@ function normalizeQuery(raw, index, t) {
 
 const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22d3ee', info: '#6b7280' }
 const IOC_TYPE_ICON = { ip: '🌐', domain: '🔗', hash: '#️⃣', email: '✉️', url: '🔍' }
+
+function exportIocsCsv(iocs, t) {
+  const header = ['type', 'value', 'source', 'severity', 'added', 'tags']
+  const rows = iocs.map((ioc) => [
+    ioc.type,
+    (ioc.value || '').replace(/"/g, '""'),
+    ioc.source,
+    ioc.severity,
+    ioc.added,
+    (ioc.tags || []).join(';'),
+  ])
+  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `threat-hunting-iocs-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -115,7 +146,7 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sc, borderColor: `${sc}40`, background: `${sc}10` }}
             >
-              {campaign.priority}
+              {severityLabel(campaign.priority, t, 'priority')}
             </span>
           </div>
           <p className="text-xs font-semibold text-white/85 leading-snug">{campaign.title}</p>
@@ -124,7 +155,7 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
           <div className="text-xl font-bold font-mono" style={{ color: campaign.hitsFound > 0 ? '#ef4444' : '#4ade80' }}>
             {campaign.hitsFound}
           </div>
-          <div className="text-[9px] font-mono text-white/25">{t('pages.threatHuntingWorkbench.hits')}</div>
+          <div className="text-[9px] font-mono text-white/25">{t(`${NS}.hits`)}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -162,10 +193,10 @@ function CampaignDetail({ campaign, t }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: t('pages.threatHuntingWorkbench.analyst'), value: campaign.analyst },
-          { label: t('pages.threatHuntingWorkbench.started'), value: campaign.started },
-          { label: t('pages.threatHuntingWorkbench.hits_found'), value: campaign.hitsFound > 0 ? `🔴 ${campaign.hitsFound}` : '✅ 0' },
-          { label: t('pages.threatHuntingWorkbench.data_sources'), value: campaign.dataSources.join(', ') },
+          { label: t(`${NS}.analyst`), value: campaign.analyst },
+          { label: t(`${NS}.started`), value: campaign.started },
+          { label: t(`${NS}.hits_found`), value: campaign.hitsFound > 0 ? `🔴 ${campaign.hitsFound}` : '✅ 0' },
+          { label: t(`${NS}.data_sources`), value: campaign.dataSources.join(', ') },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
             <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-0.5">{label}</div>
@@ -174,7 +205,7 @@ function CampaignDetail({ campaign, t }) {
         ))}
       </div>
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/25 mb-2">{t('pages.threatHuntingWorkbench.mitre_techniques')}</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-white/25 mb-2">{t(`${NS}.mitre_techniques`)}</div>
         <div className="flex flex-wrap gap-1.5">
           {campaign.mitre.map((m) => (
             <span
@@ -215,7 +246,7 @@ function QueryCard({ query, t }) {
         </div>
         <div className="text-right shrink-0">
           <div className="text-lg font-bold font-mono" style={{ color: query.hits > 0 ? '#ef4444' : '#4ade80' }}>{query.hits}</div>
-          <div className="text-[9px] font-mono text-white/25">{t('pages.threatHuntingWorkbench.hits')}</div>
+          <div className="text-[9px] font-mono text-white/25">{t(`${NS}.hits`)}</div>
         </div>
       </button>
       <AnimatePresence>
@@ -238,25 +269,36 @@ function QueryCard({ query, t }) {
   )
 }
 
-function IocTable({ iocs, t }) {
+function IocTable({ iocs, t, onExport }) {
   if (!iocs.length) {
     return (
       <EmptyState
         icon="search"
-        title={t('pages.threatHuntingWorkbench.ioc_empty_title')}
-        body={t('pages.threatHuntingWorkbench.ioc_empty_body')}
-        cta={{ label: t('pages.threatHuntingWorkbench.ioc_view_findings'), to: '/findings' }}
+        title={t(`${NS}.ioc_empty_title`)}
+        body={t(`${NS}.ioc_empty_body`)}
+        cta={{ label: t(`${NS}.ioc_view_findings`), to: '/findings' }}
       />
     )
   }
   return (
     <div className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">{t(`${NS}.ioc_heading`)}</span>
+        <button
+          type="button"
+          onClick={onExport}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 text-[10px] font-mono text-cyan-300/80 hover:bg-cyan-500/10"
+        >
+          <Download className="w-3 h-3" />
+          {t(`${NS}.export_csv`)}
+        </button>
+      </div>
       <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-white/8 text-[9px] font-mono uppercase tracking-widest text-white/25">
-        <span>{t('pages.threatHuntingWorkbench.col_type')}</span>
-        <span>{t('pages.threatHuntingWorkbench.col_indicator')}</span>
-        <span>{t('pages.threatHuntingWorkbench.col_source')}</span>
-        <span>{t('pages.threatHuntingWorkbench.col_severity')}</span>
-        <span>{t('pages.threatHuntingWorkbench.col_added')}</span>
+        <span>{t(`${NS}.col_type`)}</span>
+        <span>{t(`${NS}.col_indicator`)}</span>
+        <span>{t(`${NS}.col_source`)}</span>
+        <span>{t(`${NS}.col_severity`)}</span>
+        <span>{t(`${NS}.col_added`)}</span>
       </div>
       {iocs.map((ioc, i) => {
         const sc = SEV_COLOR[ioc.severity] ?? '#6b7280'
@@ -282,7 +324,7 @@ function IocTable({ iocs, t }) {
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest whitespace-nowrap"
               style={{ color: sc, borderColor: `${sc}40`, background: `${sc}10` }}
             >
-              {ioc.severity}
+              {severityLabel(ioc.severity, t)}
             </span>
             <span className="text-[10px] font-mono text-white/25 whitespace-nowrap">{ioc.added}</span>
           </motion.div>
@@ -311,7 +353,7 @@ export default function ThreatHuntingWorkbench() {
         setCampaigns([])
         setIocs([])
         setQueries([])
-        setCampaignsError(t('pages.threatHuntingWorkbench.load_error', { status: r.status }))
+        setCampaignsError(t(`${NS}.load_error`, { status: r.status }))
         return
       }
       const data = await r.json().catch(() => ({}))
@@ -354,98 +396,175 @@ export default function ThreatHuntingWorkbench() {
   }, [campaigns, iocs])
 
   const tabs = [
-    { id: 'campaigns', label: t('pages.threatHuntingWorkbench.tab_campaigns'), count: campaigns.length },
-    { id: 'queries',   label: t('pages.threatHuntingWorkbench.tab_queries'),   count: queries.length },
-    { id: 'iocs',      label: t('pages.threatHuntingWorkbench.tab_iocs'),    count: iocs.length },
+    { id: 'campaigns', label: t(`${NS}.tab_campaigns`), count: campaigns.length },
+    { id: 'queries',   label: t(`${NS}.tab_queries`),   count: queries.length },
+    { id: 'iocs',      label: t(`${NS}.tab_iocs`),    count: iocs.length },
   ]
+
+  const listFindings = useMemo(() => {
+    if (activeTab === 'iocs') {
+      return iocs.map((ioc) => ({
+        id: ioc.id,
+        severity: ioc.severity || 'medium',
+        title: ioc.value || ioc.type,
+        type: ioc.type || 'ioc',
+        description: ioc.source || '',
+      }))
+    }
+    return campaigns.map((c) => ({
+      id: c.id,
+      severity: c.severity || 'medium',
+      title: c.name || c.id,
+      type: c.status || 'campaign',
+      description: String(c.hitsFound ?? 0),
+    }))
+  }, [activeTab, iocs, campaigns])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-threat-hunting',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
+  const visibleCampaigns = useMemo(() => {
+    if (!searchQuery.trim()) return campaigns
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return campaigns.filter((c) => ids.has(c.id))
+  }, [campaigns, filteredFindings, searchQuery])
+
+  const visibleIocs = useMemo(() => {
+    if (!searchQuery.trim()) return iocs
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return iocs.filter((ioc) => ids.has(ioc.id))
+  }, [iocs, filteredFindings, searchQuery])
 
   return (
     <PageShell
-      title={t('pages.threatHuntingWorkbench.title')}
-      subtitle={t('pages.threatHuntingWorkbench.subtitle')}
-      badge={t('pages.threatHuntingWorkbench.badge')}
+      title={t(`${NS}.title`)}
+      subtitle={t(`${NS}.subtitle`)}
+      badge={t(`${NS}.badge`)}
       badgeColor="#8b5cf6"
+      actions={(
+        <ShellScanActions
+          onRefresh={loadHuntData}
+          onExport={() => { if (activeTab === 'iocs') exportIocsCsv(iocs); else exportCsv() }}
+          refreshLoading={campaignsLoading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label={t('pages.threatHuntingWorkbench.metric_active_hunts')} value={metrics.active} sub={t('pages.threatHuntingWorkbench.metric_active_hunts_sub')} color="#22d3ee" icon="🎯" />
-        <MetricCard label={t('pages.threatHuntingWorkbench.metric_total_hits')} value={metrics.totalHits} sub={t('pages.threatHuntingWorkbench.metric_total_hits_sub')} color="#ef4444" icon="🔴" />
-        <MetricCard label={t('pages.threatHuntingWorkbench.metric_iocs_tracked')} value={metrics.totalIOCs} sub={t('pages.threatHuntingWorkbench.metric_iocs_tracked_sub')} color="#8b5cf6" icon="🧲" />
-        <MetricCard label={t('pages.threatHuntingWorkbench.metric_critical_iocs')} value={metrics.critIOCs} sub={t('pages.threatHuntingWorkbench.metric_critical_iocs_sub')} color="#f97316" icon="⚡" />
+      <div className="mb-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
-            className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
-            style={{
-              color: activeTab === tab.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
-              borderColor: activeTab === tab.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
-              background: activeTab === tab.id ? 'rgba(139,92,246,0.1)' : 'transparent',
-            }}
-          >
-            {tab.label}
-            <span className="ml-2 text-[9px] opacity-60">({tab.count})</span>
-          </button>
-        ))}
-      </div>
+      {campaignsLoading ? (
+        <>
+          <SkeletonWidgetGrid count={4} className="mb-8" />
+          <SkeletonCard lines={6} />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <MetricCard label={t(`${NS}.metric_active_hunts`)} value={metrics.active} sub={t(`${NS}.metric_active_hunts_sub`)} color="#22d3ee" icon="🎯" />
+            <MetricCard label={t(`${NS}.metric_total_hits`)} value={metrics.totalHits} sub={t(`${NS}.metric_total_hits_sub`)} color="#ef4444" icon="🔴" />
+            <MetricCard label={t(`${NS}.metric_iocs_tracked`)} value={metrics.totalIOCs} sub={t(`${NS}.metric_iocs_tracked_sub`)} color="#8b5cf6" icon="🧲" />
+            <MetricCard label={t(`${NS}.metric_critical_iocs`)} value={metrics.critIOCs} sub={t(`${NS}.metric_critical_iocs_sub`)} color="#f97316" icon="⚡" />
+          </div>
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'campaigns' && (
-          <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.campaigns_heading')}</h2>
-            {campaignsLoading ? (
-              <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.loading_campaigns')}</p>
-            ) : campaigns.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center">
-                <p className="text-sm text-white/40 font-mono">{t('pages.threatHuntingWorkbench.no_campaigns')}</p>
-                {campaignsError ? (
-                  <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
+          <div className="flex gap-2 mb-6 flex-wrap">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+                className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
+                style={{
+                  color: activeTab === tab.id ? '#8b5cf6' : 'rgba(255,255,255,0.35)',
+                  borderColor: activeTab === tab.id ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
+                  background: activeTab === tab.id ? 'rgba(139,92,246,0.1)' : 'transparent',
+                }}
+              >
+                {tab.label}
+                <span className="ml-2 text-[9px] opacity-60">({tab.count})</span>
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait">
+            {activeTab === 'campaigns' && (
+              <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t(`${NS}.campaigns_heading`)}</h2>
+                {campaigns.length === 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center">
+                    <p className="text-sm text-white/40 font-mono">{t(`${NS}.no_campaigns`)}</p>
+                    {campaignsError ? (
+                      <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
+                    ) : (
+                      <p className="text-[11px] text-white/25 font-mono mt-2">
+                        {t(`${NS}.no_campaigns_hint`)}
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <p className="text-[11px] text-white/25 font-mono mt-2">
-                    {t('pages.threatHuntingWorkbench.no_campaigns_hint')}
-                  </p>
+                  <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+                    <div className="space-y-2">
+                      <WeissmanListToolbar
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
+                        resultCount={visibleCampaigns.length}
+                        totalCount={campaigns.length}
+                      />
+                      {visibleCampaigns.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+                      ) : visibleCampaigns.map((c) => (
+                        <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} t={t} />
+                      ))}
+                    </div>
+                    <AnimatePresence mode="wait">
+                      {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} t={t} />}
+                    </AnimatePresence>
+                  </div>
                 )}
-              </div>
-            ) : (
-              <div className="grid lg:grid-cols-[360px_1fr] gap-6">
-                <div className="space-y-2">
-                  {campaigns.map((c) => (
-                    <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} t={t} />
-                  ))}
-                </div>
-                <AnimatePresence mode="wait">
-                  {selectedCampaignObj && <CampaignDetail key={selectedCampaignObj.id} campaign={selectedCampaignObj} t={t} />}
-                </AnimatePresence>
-              </div>
+              </motion.div>
             )}
-          </motion.div>
-        )}
 
-        {activeTab === 'queries' && (
-          <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.detection_queries_heading')}</h2>
-            {queries.length === 0 ? (
-              <EmptyState
-                icon="search"
-                title={t('pages.threatHuntingWorkbench.no_queries_title')}
-                body={t('pages.threatHuntingWorkbench.no_queries_body')}
-              />
-            ) : (
-              queries.map((q) => (
-                <QueryCard key={q.id} query={q} t={t} />
-              ))
+            {activeTab === 'queries' && (
+              <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t(`${NS}.detection_queries_heading`)}</h2>
+                {queries.length === 0 ? (
+                  <EmptyState
+                    icon="search"
+                    title={t(`${NS}.no_queries_title`)}
+                    body={t(`${NS}.no_queries_body`)}
+                  />
+                ) : (
+                  queries.map((q) => (
+                    <QueryCard key={q.id} query={q} t={t} />
+                  ))
+                )}
+              </motion.div>
             )}
-          </motion.div>
-        )}
 
-        {activeTab === 'iocs' && (
-          <motion.div key="iocs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.threatHuntingWorkbench.ioc_heading')}</h2>
-            <IocTable iocs={iocs} t={t} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {activeTab === 'iocs' && (
+              <motion.div key="iocs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                <WeissmanListToolbar
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  resultCount={visibleIocs.length}
+                  totalCount={iocs.length}
+                />
+                {iocs.length > 0 && visibleIocs.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+                ) : (
+                  <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(iocs, t)} />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
     </PageShell>
   )
 }

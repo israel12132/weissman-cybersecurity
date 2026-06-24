@@ -1,144 +1,266 @@
-//! Prototype Pollution Engine — JSON body probing, query param injection, error reflection check.
+//! Prototype Pollution Engine — differential server-side pollution detection + client gadget hints.
 //! MITRE: T1059 (Command and Scripting Interpreter).
 
+use crate::engine_probes::{
+    empty_ok, finding_with_probe_depth, http_client, http_get, normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Duration;
 
-fn make_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+const PP_PROBE_DEPTH: &str = "prototype_pollution_surface";
+const SENTINEL: &str = "wzPP9137polluted";
+
+fn pp_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
+    let mut f = finding_with_probe_depth(
+        "prototype_pollution",
+        title,
+        severity,
+        "T1059",
+        description,
+        target,
+        PP_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    f
 }
 
-fn base_url(target: &str) -> String {
-    let t = target.trim().trim_end_matches('/');
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
+async fn http_post_json(
+    client: &reqwest::Client,
+    url: &str,
+    body: &Value,
+) -> Option<crate::engine_probes::HttpProbe> {
+    let resp = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .json(body)
+        .timeout(Duration::from_secs(8))
+        .send()
+        .await
+        .ok()?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let body_text = resp.text().await.unwrap_or_default();
+    let body_text = if body_text.len() > 65_536 {
+        body_text[..65_536].to_string()
     } else {
-        format!("https://{}", t)
-    }
+        body_text
+    };
+    Some(crate::engine_probes::HttpProbe {
+        status,
+        headers,
+        body: body_text,
+        final_url,
+    })
 }
+
+fn responses_differ(a: &crate::engine_probes::HttpProbe, b: &crate::engine_probes::HttpProbe) -> bool {
+    if a.status != b.status {
+        return true;
+    }
+    let len_delta = (a.body.len() as i64 - b.body.len() as i64).unsigned_abs();
+    if len_delta > 32 {
+        return true;
+    }
+    // Pretty-print / json-spaces gadget: pollution causes indented JSON.
+    let a_indented = a.body.contains("\n  ") || a.body.contains("\n    ");
+    let b_indented = b.body.contains("\n  ") || b.body.contains("\n    ");
+    a_indented != b_indented
+}
+
+fn sentinel_leaked(body: &str, vector: &str) -> bool {
+    body.contains(SENTINEL) && !body.contains(vector)
+}
+
+const API_PATHS: &[&str] = &[
+    "/api", "/api/v1", "/api/v2", "/graphql", "/data", "/submit", "/merge", "/api/merge", "/",
+];
+
+const CLIENT_GADGET_LIBS: &[(&str, &str)] = &[
+    ("lodash", "lodash.merge / defaultsDeep gadget surface"),
+    ("$.extend(true", "jQuery deep-extend gadget surface"),
+    ("set-value", "set-value deep path gadget surface"),
+    ("dot-prop", "dot-prop setter gadget surface"),
+];
 
 pub async fn run_prototype_pollution_result(target: &str) -> EngineResult {
-    let client = make_client();
-    let base = base_url(target);
-    let mut findings = Vec::new();
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings: Vec<Value> = Vec::new();
 
-    let api_paths = [
-        "/api", "/api/v1", "/api/v2", "/graphql", "/data", "/submit", "/",
-    ];
+    let proto_payload = json!({"__proto__": {SENTINEL: true}});
+    let constructor_payload = json!({"constructor": {"prototype": {SENTINEL: true}}});
+    let spaces_payload = json!({"__proto__": {"json spaces": 10}});
 
-    // Payload 1: __proto__ pollution
-    let proto_payload = json!({"__proto__": {"polluted": "weissman_pp_test"}});
-    // Payload 2: constructor.prototype pollution
-    let constructor_payload =
-        json!({"constructor": {"prototype": {"polluted": "weissman_pp_test"}}});
+    for path in API_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
 
-    for path in &api_paths {
-        let url = format!("{}{}", base, path);
+        let baseline_body = json!({"probe": "wzPPbaseline"});
+        let Some(baseline) = http_post_json(&client, &url, &baseline_body).await else {
+            continue;
+        };
+        if baseline.status == 404 || baseline.status == 405 {
+            continue;
+        }
 
-        // Try __proto__ JSON body
-        if let Ok(resp) = client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .json(&proto_payload)
-            .send()
-            .await
-        {
-            let status = resp.status().as_u16();
-            let body = resp.text().await.unwrap_or_default();
-            if body.contains("weissman_pp_test") || body.contains("polluted") {
-                findings.push(json!({
-                    "type": "prototype_pollution",
-                    "title": "Prototype Pollution: __proto__ Reflected in Response",
-                    "severity": "critical",
-                    "mitre_attack": "T1059",
-                    "description": format!(
-                        "Endpoint {} reflected the __proto__ pollution payload back in the response. Server-side prototype pollution is likely exploitable.",
-                        url
+        for (label, payload) in [
+            ("__proto__", &proto_payload),
+            ("constructor.prototype", &constructor_payload),
+            ("json-spaces", &spaces_payload),
+        ] {
+            let Some(polluted) = http_post_json(&client, &url, payload).await else {
+                continue;
+            };
+            if sentinel_leaked(&polluted.body, SENTINEL) {
+                findings.push(pp_finding(
+                    &format!("Prototype pollution: {} sentinel leaked", label),
+                    "critical",
+                    &format!(
+                        "POST {} with {} pollution leaked sentinel '{}' in the response without echoing the vector. Server-side prototype pollution is confirmed.",
+                        polluted.final_url, label, SENTINEL
                     ),
-                    "value": url
-                }));
-            } else if status == 200 || status == 201 || status == 422 {
-                // Endpoint accepts JSON — mark as candidate even without reflection
-                findings.push(json!({
-                    "type": "prototype_pollution",
-                    "title": "JSON API Endpoint Accepts __proto__ Payload",
-                    "severity": "medium",
-                    "mitre_attack": "T1059",
-                    "description": format!(
-                        "Endpoint {} accepted a JSON body with __proto__ key (HTTP {}). Manual verification of server-side prototype pollution is recommended.",
-                        url, status
+                    target,
+                    json!({ "path": path, "vector": label, "status": polluted.status }),
+                ));
+                break;
+            }
+            if responses_differ(&baseline, &polluted) && !polluted.body.contains("__proto__") {
+                findings.push(pp_finding(
+                    &format!("Prototype pollution differential: {}", label),
+                    "high",
+                    &format!(
+                        "POST {} with {} changed response shape vs baseline (baseline HTTP {} / {} B → polluted HTTP {} / {} B) without echoing the payload key.",
+                        url, label, baseline.status, baseline.body.len(), polluted.status, polluted.body.len()
                     ),
-                    "value": url
-                }));
-                break; // One finding per endpoint type is enough
+                    target,
+                    json!({ "path": path, "vector": label }),
+                ));
             }
         }
 
-        // Try constructor.prototype JSON body
-        if let Ok(resp) = client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .json(&constructor_payload)
-            .send()
-            .await
-        {
-            let body = resp.text().await.unwrap_or_default();
-            if body.contains("weissman_pp_test") || body.contains("polluted") {
-                findings.push(json!({
-                    "type": "prototype_pollution",
-                    "title": "Prototype Pollution: constructor.prototype Reflected",
-                    "severity": "critical",
-                    "mitre_attack": "T1059",
-                    "description": format!(
-                        "Endpoint {} reflected the constructor.prototype pollution payload. Server-side prototype pollution confirmed.",
-                        url
+        // Follow-up GET after pollution attempt — sentinel in a fresh read proves global state.
+        if let Some(follow) = http_get(&client, &url).await {
+            if follow.body.contains(SENTINEL) {
+                findings.push(pp_finding(
+                    "Prototype pollution: sentinel in follow-up GET",
+                    "critical",
+                    &format!(
+                        "After pollution POST, follow-up GET {} returned sentinel '{}' — polluted property persisted into a fresh object.",
+                        follow.final_url, SENTINEL
                     ),
-                    "value": url
-                }));
+                    target,
+                    json!({ "path": path }),
+                ));
             }
         }
     }
 
-    // Query parameter pollution probes
+    // Query-string vectors — only report on reflection without echoing the bracket syntax.
     let qp_urls = [
-        format!("{}/?__proto__[polluted]=weissman_pp_test", base),
-        format!(
-            "{}/?constructor[prototype][polluted]=weissman_pp_test",
-            base
+        (
+            format!("{}/?__proto__[{}]=1", base.trim_end_matches('/'), SENTINEL),
+            "__proto__-qs",
+        ),
+        (
+            format!(
+                "{}/?constructor[prototype][{}]=1",
+                base.trim_end_matches('/'),
+                SENTINEL
+            ),
+            "constructor-qs",
         ),
     ];
-    for url in &qp_urls {
-        if let Ok(resp) = client.get(url).send().await {
-            let body = resp.text().await.unwrap_or_default();
-            if body.contains("weissman_pp_test") || body.contains("polluted") {
-                findings.push(json!({
-                    "type": "prototype_pollution",
-                    "title": "Prototype Pollution via Query Parameter Reflected",
-                    "severity": "high",
-                    "mitre_attack": "T1059",
-                    "description": format!(
-                        "Query parameter prototype pollution payload was reflected in the response from {}.",
-                        url
+    for (url, vector) in &qp_urls {
+        if let Some(p) = http_get(&client, url).await {
+            if sentinel_leaked(&p.body, SENTINEL) {
+                findings.push(pp_finding(
+                    "Prototype pollution via query parameter",
+                    "high",
+                    &format!(
+                        "Query-string {} vector leaked sentinel on {} without echoing the parameter name.",
+                        vector, p.final_url
                     ),
-                    "value": url
-                }));
+                    target,
+                    json!({ "vector": vector }),
+                ));
             }
         }
     }
 
-    let message = if findings.is_empty() {
-        "No prototype pollution indicators detected".to_string()
+    // Client-side gadget hints from served JS (info only — requires manual chain).
+    if let Some(page) = http_get(&client, &base).await {
+        for (needle, desc) in CLIENT_GADGET_LIBS {
+            if page.body.contains(needle) {
+                findings.push(pp_finding(
+                    &format!("Client-side PP gadget library: {}", needle),
+                    "info",
+                    &format!(
+                        "Page at {} serves JS referencing '{}'. {}",
+                        page.final_url, needle, desc
+                    ),
+                    target,
+                    json!({ "library": needle }),
+                ));
+            }
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("prototype_pollution", target)
     } else {
-        format!("{} prototype pollution issue(s) found", findings.len())
-    };
-    EngineResult::ok(findings, message)
+        let n = findings.len();
+        EngineResult::ok(findings, format!("prototype_pollution: {} live finding(s)", n))
+    }
 }
 
 pub async fn run_prototype_pollution(target: &str) {
     print_result(run_prototype_pollution_result(target).await);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sentinel_leaked_detects_without_vector_echo() {
+        assert!(sentinel_leaked("value wzPP9137polluted ok", "wzPP9137polluted"));
+        assert!(!sentinel_leaked("__proto__ wzPP9137polluted", "__proto__"));
+    }
+
+    #[test]
+    fn responses_differ_on_status() {
+        let a = crate::engine_probes::HttpProbe {
+            status: 200,
+            headers: vec![],
+            body: "ok".to_string(),
+            final_url: "http://x".to_string(),
+        };
+        let b = crate::engine_probes::HttpProbe {
+            status: 500,
+            headers: vec![],
+            body: "ok".to_string(),
+            final_url: "http://x".to_string(),
+        };
+        assert!(responses_differ(&a, &b));
+    }
 }

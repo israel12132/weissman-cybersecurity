@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { Trash2 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { formatApiErrorFromBody } from '../lib/apiError'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 
 const SAMPLE_KEYS = ['sample_q1', 'sample_q2', 'sample_q3', 'sample_q4', 'sample_q5']
 
@@ -11,6 +16,35 @@ function fmtCell(v) {
   if (typeof v === 'boolean') return v ? '✓' : '✗'
   if (typeof v === 'number') return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(3)
   return String(v)
+}
+
+function exportTranscriptCsv(history) {
+  const header = ['timestamp', 'question', 'status', 'plan', 'sql', 'row_count', 'elapsed_ms', 'error']
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    header.join(','),
+    ...history
+      .filter((turn) => !turn.pending)
+      .map((turn) =>
+        [
+          turn.t ? new Date(turn.t).toISOString() : '',
+          turn.q,
+          turn.error ? 'error' : turn.ok ? 'ok' : 'unknown',
+          turn.plan,
+          turn.sql,
+          turn.row_count,
+          turn.elapsed_ms,
+          turn.error,
+        ].map(esc).join(','),
+      ),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `weissman-ask-transcript-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function StatusBadge({ ok, error, t }) {
@@ -46,6 +80,40 @@ export default function AskWeissman() {
     () => SAMPLE_KEYS.map((key) => t(`ask_weissman.${key}`)),
     [t],
   )
+
+  const completedTurns = useMemo(
+    () => history.filter((turn) => !turn.pending),
+    [history],
+  )
+
+  const transcriptFindings = useMemo(() => completedTurns.map((turn, i) => ({
+    id: i,
+    severity: turn.error ? 'high' : turn.ok ? 'info' : 'medium',
+    title: turn.q,
+    type: 'ask_turn',
+    description: turn.plan || turn.error || '',
+    resource: turn.sql || '',
+  })), [completedTurns])
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filteredFindings,
+    exportCsv: exportTranscriptWorkbench,
+  } = useFindingsWorkbench(transcriptFindings, {
+    csvPrefix: 'weissman-ask-transcript',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleHistory = useMemo(() => {
+    if (!searchQuery.trim()) return history
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return history.filter((turn, i) => {
+      if (turn.pending) return true
+      const idx = completedTurns.indexOf(turn)
+      return idx >= 0 && ids.has(idx)
+    })
+  }, [history, completedTurns, filteredFindings, searchQuery])
 
   const ask = useCallback(async (q) => {
     const text = (q ?? question).trim()
@@ -89,6 +157,18 @@ export default function AskWeissman() {
     }
   }, [question, t])
 
+  const clearHistory = useCallback(() => {
+    setHistory([])
+    setQuestion('')
+  }, [])
+
+  const refreshSession = useCallback(() => {
+    setQuestion('')
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = 0
+    }
+  }, [])
+
   useEffect(() => {
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
@@ -112,10 +192,39 @@ export default function AskWeissman() {
             {t('ask_weissman.subtitle_full')}
           </p>
         </div>
-        <Link to="/" className="text-[11px] font-mono text-white/45 hover:text-white/80 weissman-flip-x">
-          {t('ask_weissman.back_cockpit')}
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <ShellScanActions
+            onRefresh={refreshSession}
+            onExport={() => exportTranscriptCsv(history)}
+            exportDisabled={completedTurns.length === 0}
+          />
+          <button
+            type="button"
+            onClick={clearHistory}
+            disabled={history.length === 0}
+            className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded border border-white/15 text-white/60 hover:border-rose-500/40 hover:text-rose-200 disabled:opacity-40"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {t('pages.askWeissman.clear_history')}
+          </button>
+          <Link to="/" className="text-[11px] font-mono text-white/45 hover:text-white/80 weissman-flip-x">
+            {t('ask_weissman.back_cockpit')}
+          </Link>
+        </div>
       </header>
+
+      <EvidenceNotice className="mb-3 shrink-0">{t('pages.askWeissman.evidence_notice')}</EvidenceNotice>
+
+      {completedTurns.length > 0 && (
+        <WeissmanListToolbar
+          className="mb-3 shrink-0"
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t('pages.askWeissman.search_placeholder', { defaultValue: 'Search transcript…' })}
+          resultCount={searchQuery.trim() ? filteredFindings.length : completedTurns.length}
+          totalCount={completedTurns.length}
+        />
+      )}
 
       <div className="flex flex-wrap gap-1.5 mb-3 shrink-0" role="group" aria-label={t('ask_weissman.sample_prompts')}>
         {sampleQuestions.map((s) => (
@@ -134,12 +243,16 @@ export default function AskWeissman() {
         ref={transcriptRef}
         className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-4 space-y-4"
       >
-        {history.length === 0 && (
+        {visibleHistory.length === 0 && history.length > 0 ? (
+          <div className="text-center text-[11px] font-mono text-white/35 py-12">
+            {t('weissmanFindings.filtered_title')}
+          </div>
+        ) : visibleHistory.length === 0 ? (
           <div className="text-center text-[11px] font-mono text-white/35 py-12">
             {t('ask_weissman.empty_state')}
           </div>
-        )}
-        {history.map((turn, i) => (
+        ) : null}
+        {visibleHistory.map((turn, i) => (
           <div key={i}>
             <div className="flex items-start gap-2 mb-2">
               <span className="text-[10px] font-mono text-cyan-300 mt-0.5 weissman-flip-x">{t('ask_weissman.you_label')}</span>
@@ -171,6 +284,17 @@ export default function AskWeissman() {
                   <p className="text-[12px] font-mono text-rose-300">{turn.error}</p>
                 ) : (
                   <>
+                    {turn.plan && (
+                      <details className="rounded border border-white/10 bg-black/40" open>
+                        <summary className="cursor-pointer text-[10px] font-mono text-violet-300/80 px-2 py-1 hover:text-violet-200">
+                          {t('pages.askWeissman.plan_label')} ▾
+                        </summary>
+                        <pre className="text-[10px] font-mono text-white/70 p-2 overflow-x-auto whitespace-pre-wrap">
+                          {typeof turn.plan === 'string' ? turn.plan : JSON.stringify(turn.plan, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+
                     {turn.sql && (
                       <details className="rounded border border-white/10 bg-black/40">
                         <summary className="cursor-pointer text-[10px] font-mono text-cyan-300/70 px-2 py-1 hover:text-cyan-200">

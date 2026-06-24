@@ -1023,6 +1023,27 @@ async fn api_engines_accounting() -> Response {
     (StatusCode::OK, Json(crate::engine_accounting::to_json())).into_response()
 }
 
+/// Per-engine reality classification (real_probe / alias / agent_required / special) for the
+/// catalog "indication on each engine" badge.
+async fn api_engines_capabilities() -> Response {
+    (StatusCode::OK, Json(crate::engine_capabilities::to_json())).into_response()
+}
+
+/// Full tunable-parameter schema for Nexus Sovereign Swarm (NSSI) — GUI contract.
+async fn api_nssi_config_schema() -> Response {
+    (
+        StatusCode::OK,
+        Json(crate::nexus_sovereign_swarm_engine::nssi_config_schema()),
+    )
+        .into_response()
+}
+
+/// Live per-engine run telemetry (total runs, self-heal/recovered, failures, last status/latency)
+/// for the Engine Reliability view.
+async fn api_engines_telemetry() -> Response {
+    (StatusCode::OK, Json(crate::engine_telemetry::to_json())).into_response()
+}
+
 const TOP_TIER_ENGINES: &[&str] = &[
     "kill_chain",
     "oast_oob",

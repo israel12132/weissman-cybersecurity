@@ -1,10 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Factory, Cpu, AlertTriangle, Activity, Zap, Shield, CheckCircle } from 'lucide-react';
+import {
+  Factory, Cpu, AlertTriangle, Activity, Zap, Shield, ShieldAlert,
+  ShieldCheck, Network,
+} from 'lucide-react';
 import PageShell from './PageShell';
+import ShellScanActions from '../components/engine/ShellScanActions';
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel';
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
+
+const FINDINGS_ACCENT = '#f97316';
 
 const OT_ENGINES = [
   {
@@ -29,7 +39,12 @@ const OT_ENGINES = [
   },
 ];
 
-const PROTOCOL_DISPLAY = ['Modbus', 'DNP3', 'BACnet', 'S7', 'EtherNet/IP', 'OPC-UA'];
+// Protocol coloring is driven entirely by the backend status (info | warning | critical).
+const PROTOCOL_STATUS_META = {
+  critical: { color: '#f43f5e', Icon: ShieldAlert },
+  warning: { color: '#fbbf24', Icon: ShieldAlert },
+  info: { color: '#38bdf8', Icon: ShieldCheck },
+};
 
 const DEVICE_TYPE_KEYS = {
   SCADA: 'pages.otIcsSecurity.devices_scada',
@@ -39,7 +54,7 @@ const DEVICE_TYPE_KEYS = {
 };
 
 const DEVICE_TYPE_ICONS = { SCADA: Activity, PLC: Cpu, HMI: Factory, RTU: Zap };
-const DEVICE_TYPE_COLORS = { SCADA: 'cyan', PLC: 'purple', HMI: 'blue', RTU: 'orange' };
+const DEVICE_TYPE_COLORS = { SCADA: '#22d3ee', PLC: '#a78bfa', HMI: '#60a5fa', RTU: '#fb923c' };
 
 function StatusBadge({ status, t }) {
   const map = {
@@ -56,7 +71,7 @@ function StatusBadge({ status, t }) {
   );
 }
 
-function OtEngineCard({ engine, clientId, clients, onScanComplete, showToast, t }) {
+function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpdate, showToast, t }) {
   const [status, setStatus] = useState('idle');
   const [findings, setFindings] = useState([]);
   const [lastRun, setLastRun] = useState(null);
@@ -70,6 +85,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, showToast, t 
       setLastRun(new Date().toLocaleTimeString());
       const resolved = await resolveJobFindings(job, engine.id, clientId);
       setFindings(resolved);
+      onFindingsUpdate?.(engine.id, resolved);
       setPendingJobId(null);
       if (terminal === 'completed') onScanComplete?.();
     },
@@ -111,7 +127,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, showToast, t 
       setStatus('error');
       showToast('error', e?.message ?? t('pages.otIcsSecurity.scan_failed'));
     }
-  }, [clientId, clients, engine, onScanComplete, showToast, t]);
+  }, [clientId, clients, engine, showToast, t]);
 
   return (
     <div className="rounded-xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3 hover:border-white/20 transition-all">
@@ -163,14 +179,34 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, showToast, t 
   );
 }
 
-function getSeverityColor(severity) {
-  switch (severity?.toLowerCase()) {
-    case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
-    case 'high': return 'text-orange-400 bg-orange-500/10 border-orange-500/30';
-    case 'medium': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-    case 'low': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
-    default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-  }
+function renderOtFinding(f, i) {
+  const sev = (f.severity || 'info').toLowerCase();
+  const sevColor = {
+    critical: '#ef4444',
+    high: '#f97316',
+    medium: '#f59e0b',
+    low: '#22d3ee',
+    info: '#64748b',
+  }[sev] || '#64748b';
+  return (
+    <div key={f.id ?? f.finding_id ?? i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+      <div className="flex items-start gap-2 flex-wrap">
+        <span
+          className="text-[9px] font-mono uppercase shrink-0 px-1.5 py-0.5 rounded border"
+          style={{ color: sevColor, borderColor: `${sevColor}40` }}
+        >
+          {sev}
+        </span>
+        {f._engine && (
+          <span className="text-[9px] font-mono text-white/35 uppercase">{f._engine}</span>
+        )}
+        <span className="text-[12px] font-mono text-white/90 min-w-0 flex-1">{f.title ?? f.type ?? 'Finding'}</span>
+      </div>
+      {f.description && (
+        <p className="text-[10px] font-mono text-white/45 leading-relaxed">{f.description}</p>
+      )}
+    </div>
+  );
 }
 
 export default function OtIcsSecurity() {
@@ -181,6 +217,10 @@ export default function OtIcsSecurity() {
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [lastJobId, setLastJobId] = useState(null);
+  const [engineFindingsMap, setEngineFindingsMap] = useState({});
   const [toast, setToast] = useState(null);
 
   const fetchOtDevices = useCallback(async () => {
@@ -199,8 +239,67 @@ export default function OtIcsSecurity() {
     }
   }, []);
 
+  const showToast = useCallback((sev, msg) => {
+    const id = Date.now();
+    setToast({ id, sev, msg });
+    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000);
+  }, []);
+
+  const handleFindingsUpdate = useCallback((engineId, findings) => {
+    setEngineFindingsMap((prev) => ({ ...prev, [engineId]: findings }));
+  }, []);
+
+  const aggregatedScanFindings = useMemo(() => {
+    const all = [];
+    const seen = new Set();
+    for (const engine of OT_ENGINES) {
+      for (const f of engineFindingsMap[engine.id] || []) {
+        const key = f.id ?? f.finding_id ?? `${engine.id}-${f.title}-${f.type}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        all.push({ ...f, _engine: engine.id });
+      }
+    }
+    return all;
+  }, [engineFindingsMap]);
+
+  const {
+    filteredFindings: filteredScanFindings,
+    counts: scanCounts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total: scanTotal,
+  } = useFindingsWorkbench(aggregatedScanFindings, {
+    csvPrefix: 'ot-ics-security',
+    haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.description || ''} ${f._engine || ''} ${f.source || ''}`,
+  });
+
+  const handleRefresh = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const r = await apiFetch('/api/engines/history/scada_ics?limit=1');
+      if (r.ok) {
+        const d = await r.json();
+        const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : [];
+        const last = runs[0];
+        if (last) {
+          const historyFindings = Array.isArray(last.findings) ? last.findings : [];
+          setEngineFindingsMap((prev) => ({ ...prev, scada_ics: historyFindings }));
+          setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
+          setLastJobId(last.job_id ?? last.id ?? null);
+        }
+      }
+      await fetchOtDevices();
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [fetchOtDevices]);
+
   useEffect(() => {
-    fetchOtDevices();
+    handleRefresh();
     apiFetch('/api/clients')
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
@@ -208,16 +307,8 @@ export default function OtIcsSecurity() {
         setClients(d);
         if (d.length) setSelectedClientId(String(d[0].id));
       })
-      .catch(() => {});
-  }, [fetchOtDevices]);
-
-  const showToast = useCallback((sev, msg) => {
-    const id = Date.now();
-    setToast({ id, sev, msg });
-    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000);
-  }, []);
-
-  const protocolMap = Object.fromEntries(protocols.map((p) => [p.name, p]));
+      .catch(() => setClients([]));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial history + inventory load once on mount
 
   const deviceTypes = ['SCADA', 'PLC', 'HMI', 'RTU'].map((type) => ({
     type,
@@ -235,8 +326,33 @@ export default function OtIcsSecurity() {
     ? findings.filter((f) => !f.client_id || String(f.client_id) === String(selectedClientId))
     : findings;
 
+  // KPI strip — every value derived from the real /api/ot-ics/devices response.
+  const kpis = useMemo(() => {
+    const sev = (f) => String(f.severity || '').toLowerCase();
+    return {
+      devices: filteredDevices.length,
+      protocols: protocols.length,
+      findings: filteredFindings.length,
+      severe: filteredFindings.filter((f) => sev(f) === 'critical' || sev(f) === 'high').length,
+    };
+  }, [filteredDevices, protocols, filteredFindings]);
+
   return (
-    <PageShell title={t('pages.otIcsSecurity.title')} icon={<Factory />}>
+    <PageShell
+      title={t('pages.otIcsSecurity.title')}
+      subtitle={t('pages.otIcsSecurity.subtitle')}
+      badge={t('pages.otIcsSecurity.badge')}
+      badgeColor="#22d3ee"
+      icon={<Factory />}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={historyLoading || loading}
+          exportDisabled={!filteredScanFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
@@ -253,6 +369,29 @@ export default function OtIcsSecurity() {
           </div>
         )}
 
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { key: 'kpi_devices', value: kpis.devices, color: '#22d3ee', Icon: Cpu },
+            { key: 'kpi_protocols', value: kpis.protocols, color: '#a78bfa', Icon: Network },
+            { key: 'kpi_findings', value: kpis.findings, color: '#fb923c', Icon: AlertTriangle },
+            { key: 'kpi_severe', value: kpis.severe, color: '#f43f5e', Icon: ShieldAlert },
+          ].map(({ key, value, color, Icon }) => (
+            <div key={key} className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">
+                    {t(`pages.otIcsSecurity.${key}`)}
+                  </div>
+                  <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
+                    {loading ? '—' : value}
+                  </div>
+                </div>
+                <Icon className="w-4 h-4 shrink-0" style={{ color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
         {toast && (
           <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
@@ -263,16 +402,22 @@ export default function OtIcsSecurity() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {deviceTypes.map(({ type, count, icon: Icon, color, labelKey }) => (
-            <div key={type} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">{t(labelKey)}</span>
-                <Icon className={`w-4 h-4 text-${color}-400`} />
+        <div>
+          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-cyan-400" />
+            {t('pages.otIcsSecurity.inventory_heading')}
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {deviceTypes.map(({ type, count, icon: Icon, color, labelKey }) => (
+              <div key={type} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400">{t(labelKey)}</span>
+                  <Icon className="w-4 h-4" style={{ color }} />
+                </div>
+                <div className="text-2xl font-bold text-white">{count}</div>
               </div>
-              <div className="text-2xl font-bold text-white">{count}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <div>
@@ -288,6 +433,7 @@ export default function OtIcsSecurity() {
                 clientId={selectedClientId}
                 clients={clients}
                 onScanComplete={fetchOtDevices}
+                onFindingsUpdate={handleFindingsUpdate}
                 showToast={showToast}
                 t={t}
               />
@@ -297,70 +443,52 @@ export default function OtIcsSecurity() {
 
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
+            <Network className="w-4 h-4 text-cyan-400" />
             {t('pages.otIcsSecurity.protocols_heading')}
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {PROTOCOL_DISPLAY.map((protocol) => {
-              const entry = protocolMap[protocol];
-              const count = entry?.count ?? 0;
-              const status = entry?.status ?? (count > 0 ? 'warning' : 'secure');
-              const statusColor = status === 'critical'
-                ? 'text-red-400'
-                : status === 'warning'
-                  ? 'text-yellow-400'
-                  : count > 0
-                    ? 'text-green-400'
-                    : 'text-gray-500';
-              return (
-                <div
-                  key={protocol}
-                  className="p-4 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-lg"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-white">{protocol}</span>
-                    {count > 0 ? (
-                      <CheckCircle className={`w-4 h-4 ${statusColor}`} />
-                    ) : (
-                      <span className="text-[10px] text-gray-500 font-mono">—</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {t('pages.otIcsSecurity.devices_count', { count })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {filteredFindings.length > 0 && (
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-orange-400" />
-                {t('pages.otIcsSecurity.findings_heading', { count: filteredFindings.length })}
-              </h3>
-            </div>
-            <div className="divide-y divide-white/5 max-h-64 overflow-y-auto">
-              {filteredFindings.slice(0, 20).map((f) => (
-                <div key={f.id} className="p-3 hover:bg-white/5 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-medium border ${getSeverityColor(f.severity)}`}>
-                      {(f.severity ?? 'info').toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm text-white truncate">{f.title}</p>
-                      <p className="text-[10px] text-gray-500 font-mono mt-0.5">
-                        {f.source} · {f.status ?? 'open'}
-                      </p>
+          {loading ? (
+            <SkeletonTable rows={2} cols={3} />
+          ) : protocols.length === 0 ? (
+            <EmptyState
+              compact
+              icon="radar"
+              title={t('pages.otIcsSecurity.protocols_empty_title')}
+              body={t('pages.otIcsSecurity.protocols_empty_body')}
+            />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[...protocols]
+                .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
+                .map((p) => {
+                  const meta = PROTOCOL_STATUS_META[p.status] ?? PROTOCOL_STATUS_META.info;
+                  const Icon = meta.Icon;
+                  return (
+                    <div
+                      key={p.name}
+                      className="p-4 rounded-lg border"
+                      style={{ borderColor: `${meta.color}33`, background: `${meta.color}0d` }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-white">{p.name}</span>
+                        <Icon className="w-4 h-4" style={{ color: meta.color }} />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">
+                          {t('pages.otIcsSecurity.devices_count', { count: p.count ?? 0 })}
+                        </span>
+                        <span
+                          className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                          style={{ color: meta.color, borderColor: `${meta.color}40` }}
+                        >
+                          {t(`pages.otIcsSecurity.protocol_status_${p.status}`, p.status)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-white/10">
@@ -371,13 +499,17 @@ export default function OtIcsSecurity() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              {t('pages.otIcsSecurity.loading')}
+            <div className="p-4">
+              <SkeletonTable rows={5} cols={4} />
             </div>
           ) : filteredDevices.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              {t('pages.otIcsSecurity.empty_scan_hint')}
+            <div className="p-4">
+              <EmptyState
+                compact
+                icon="search"
+                title={t('pages.otIcsSecurity.devices_empty_title')}
+                body={t('pages.otIcsSecurity.empty_scan_hint')}
+              />
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -428,6 +560,28 @@ export default function OtIcsSecurity() {
             </div>
           )}
         </div>
+
+        <WeissmanFindingsPanel
+          findings={aggregatedScanFindings}
+          filteredFindings={filteredScanFindings}
+          counts={scanCounts}
+          total={scanTotal}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          severityFilter={severityFilter}
+          onSeverityChange={setSeverityFilter}
+          loading={historyLoading && !aggregatedScanFindings.length}
+          lastUpdated={lastUpdated}
+          jobId={lastJobId}
+          accent={FINDINGS_ACCENT}
+          title={t('pages.otIcsSecurity.scan_findings_title')}
+          emptyTitle={t('pages.otIcsSecurity.scan_findings_empty_title')}
+          emptyBody={t('pages.otIcsSecurity.scan_findings_empty_body')}
+          showEmptyReady
+          emptyReadyTitle={t('pages.otIcsSecurity.scan_findings_ready_title')}
+          emptyReadyBody={t('pages.otIcsSecurity.scan_findings_ready_body')}
+          renderFinding={renderOtFinding}
+        />
 
         <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 backdrop-blur-md border border-orange-500/30 rounded-xl p-6">
           <div className="flex items-start gap-4">

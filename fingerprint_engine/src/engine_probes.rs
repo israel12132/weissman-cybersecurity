@@ -235,6 +235,79 @@ pub async fn http_post_json(client: &Client, url: &str, payload: &Value) -> Opti
     http_post_json_with_headers(client, url, payload, &[]).await
 }
 
+/// POST raw bytes with optional extra headers (gRPC frames, protobuf payloads, etc.).
+pub async fn http_post_bytes_with_headers(
+    client: &Client,
+    url: &str,
+    body: &[u8],
+    extra: &[(&str, &str)],
+) -> Option<HttpProbe> {
+    let mut req = client.post(url).body(body.to_vec());
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let resp = req.send().await.ok()?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let raw = resp.bytes().await.unwrap_or_default();
+    let truncated = if raw.len() > 65_536 {
+        &raw[..65_536]
+    } else {
+        &raw
+    };
+    let body = String::from_utf8_lossy(truncated).into_owned();
+    Some(HttpProbe {
+        status,
+        headers,
+        body,
+        final_url,
+    })
+}
+
+/// Arbitrary HTTP method with optional body and headers.
+pub async fn http_method_with_headers(
+    client: &Client,
+    method: &str,
+    url: &str,
+    body: Option<&[u8]>,
+    extra: &[(&str, &str)],
+) -> Option<HttpProbe> {
+    let m = reqwest::Method::from_bytes(method.as_bytes()).ok()?;
+    let mut req = client.request(m, url);
+    if let Some(b) = body {
+        req = req.body(b.to_vec());
+    }
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let resp = req.send().await.ok()?;
+    let status = resp.status().as_u16();
+    let final_url = resp.url().to_string();
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let raw = resp.bytes().await.unwrap_or_default();
+    let truncated = if raw.len() > 65_536 {
+        &raw[..65_536]
+    } else {
+        &raw
+    };
+    let body = String::from_utf8_lossy(truncated).into_owned();
+    Some(HttpProbe {
+        status,
+        headers,
+        body,
+        final_url,
+    })
+}
+
 pub fn has_header(headers: &[(String, String)], name: &str) -> bool {
     let ln = name.to_ascii_lowercase();
     headers.iter().any(|(k, _)| k.to_ascii_lowercase() == ln)
@@ -470,6 +543,26 @@ pub async fn dns_caa(host: &str) -> Vec<String> {
                 caa.tag,
                 String::from_utf8_lossy(&caa.value)
             ));
+        }
+    }
+    out
+}
+
+/// RFC 6698 TLSA records for DANE (e.g. `_443._tcp.example.com`).
+pub async fn dns_tlsa(name: &str) -> Vec<String> {
+    use hickory_resolver::proto::rr::RecordType;
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(tlsa) = resolver.lookup(name, RecordType::TLSA).await {
+        for record in tlsa.answers() {
+            let hickory_resolver::proto::rr::RData::TLSA(t) = &record.data else {
+                continue;
+            };
+            out.push(t.to_string());
         }
     }
     out

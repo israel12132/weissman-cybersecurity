@@ -78,7 +78,21 @@ const ThreatEmulation = React.lazy(() => import('./pages/ThreatEmulation'))
 const SupplyChainHub = React.lazy(() => import('./pages/SupplyChainHub'))
 const NetworkIntelligence = React.lazy(() => import('./pages/NetworkIntelligence'))
 const CloudControlTower = React.lazy(() => import('./pages/CloudControlTower'))
+const CloudPostureCommandCenter = React.lazy(() => import('./pages/CloudPostureCommandCenter'))
+const IacSecurityCenter = React.lazy(() => import('./pages/IacSecurityCenter'))
+const AttackSurfaceManagement = React.lazy(() => import('./pages/AttackSurfaceManagement'))
+const DnsDomainPosture = React.lazy(() => import('./pages/DnsDomainPosture'))
+const WebCachePosture = React.lazy(() => import('./pages/WebCachePosture'))
+const TransportSecurityCommandCenter = React.lazy(() => import('./pages/TransportSecurityCommandCenter'))
+const HttpSmugglingPosture = React.lazy(() => import('./pages/HttpSmugglingPosture'))
+const PkiTlsCommandCenter = React.lazy(() => import('./pages/PkiTlsCommandCenter'))
+const EmailDnsPosture = React.lazy(() => import('./pages/EmailDnsPosture'))
 const PqcRadar = React.lazy(() => import('./pages/PqcRadar'))
+const EdDetectionSurface = React.lazy(() => import('./pages/EdDetectionSurface'))
+const WafBypassLab = React.lazy(() => import('./pages/WafBypassLab'))
+const WebSocketSecurityCommandCenter = React.lazy(() => import('./pages/WebSocketSecurityCommandCenter'))
+const JwtAttackLab = React.lazy(() => import('./pages/JwtAttackLab'))
+const FileUploadSecurityLab = React.lazy(() => import('./pages/FileUploadSecurityLab'))
 const OastDashboard = React.lazy(() => import('./pages/OastDashboard'))
 const OobVerification = React.lazy(() => import('./pages/OobVerification'))
 const TemplateEngineWorkbench = React.lazy(() => import('./pages/TemplateEngineWorkbench'))
@@ -88,6 +102,9 @@ const CouncilHitlQueue = React.lazy(() => import('./pages/CouncilHitlQueue'))
 const RoeApprovals = React.lazy(() => import('./pages/RoeApprovals'))
 const SsoDashboard = React.lazy(() => import('./pages/SsoDashboard'))
 const NexusSovereignSwarm = React.lazy(() => import('./pages/NexusSovereignSwarm'))
+const GraphqlSecurityCommandCenter = React.lazy(() => import('./pages/GraphqlSecurityCommandCenter'))
+const CicdPipelineSecurityCommandCenter = React.lazy(() => import('./pages/CicdPipelineSecurityCommandCenter'))
+const ServerlessSecurityCommandCenter = React.lazy(() => import('./pages/ServerlessSecurityCommandCenter'))
 const DigitalTwinSimulator = React.lazy(() => import('./pages/DigitalTwinSimulator'))
 const FindingsCommandCenter = React.lazy(() => import('./pages/FindingsCommandCenter'))
 const AdminManagement = React.lazy(() => import('./pages/AdminManagement'))
@@ -98,6 +115,7 @@ const VulnIntelDashboard = React.lazy(() => import('./pages/VulnIntelDashboard.j
 const AgentManagement = React.lazy(() => import('./pages/AgentManagement'))
 const DarkWebMonitor = React.lazy(() => import('./pages/DarkWebMonitor'))
 const ThreatHuntingWorkbench = React.lazy(() => import('./pages/ThreatHuntingWorkbench'))
+const ThreatAnalysisCenter = React.lazy(() => import('./pages/ThreatAnalysisCenter'))
 const EngineClientCatalog = React.lazy(() => import('./pages/EngineClientCatalog'))
 const RateLimitAnalytics = React.lazy(() => import('./pages/RateLimitAnalytics'))
 const MobileSecurity = React.lazy(() => import('./pages/MobileSecurity'))
@@ -106,6 +124,7 @@ const NetworkProtocols = React.lazy(() => import('./pages/NetworkProtocols'))
 const SocialEngineering = React.lazy(() => import('./pages/SocialEngineering'))
 const RemediationHub = React.lazy(() => import('./pages/RemediationHub'))
 const EngineManagementConsole = React.lazy(() => import('./pages/EngineManagementConsole'))
+const EngineReliability = React.lazy(() => import('./pages/EngineReliability'))
 const SystemConfiguration = React.lazy(() => import('./pages/SystemConfiguration'))
 const MetricsDashboard = React.lazy(() => import('./pages/MetricsDashboard'))
 const CeoVault = React.lazy(() => import('./pages/CeoVault'))
@@ -119,6 +138,11 @@ const ScanScheduler = React.lazy(() => import('./pages/ScanScheduler'))
 const ContainmentRulesBuilder = React.lazy(() => import('./pages/ContainmentRulesBuilder'))
 const BaselineAndDrift = React.lazy(() => import('./pages/BaselineAndDrift'))
 const IdentityContextManager = React.lazy(() => import('./pages/IdentityContextManager'))
+const IdentitySecurityCenter = React.lazy(() => import('./pages/IdentitySecurityCenter'))
+const KerberosSecurityCommandCenter = React.lazy(() => import('./pages/KerberosSecurityCommandCenter'))
+const SmbNetbiosCommandCenter = React.lazy(() => import('./pages/SmbNetbiosCommandCenter'))
+const PasswordSprayCommandCenter = React.lazy(() => import('./pages/PasswordSprayCommandCenter'))
+const SamlSecurityCommandCenter = React.lazy(() => import('./pages/SamlSecurityCommandCenter'))
 const KillChainOrchestrator = React.lazy(() => import('./pages/KillChainOrchestrator'))
 const AIAnalysisEngine = React.lazy(() => import('./pages/AIAnalysisEngine'))
 const ExploitResearchLab = React.lazy(() => import('./pages/ExploitResearchLab'))
@@ -202,7 +226,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="supply-chain" element={<SupplyChainHub />} />
             <Route path="network" element={<NetworkIntelligence />} />
             <Route path="cloud" element={<CloudControlTower />} />
+            <Route path="cloud-posture" element={<CloudPostureCommandCenter />} />
+            <Route path="iac-security" element={<IacSecurityCenter />} />
+            <Route path="attack-surface" element={<AttackSurfaceManagement />} />
+            <Route path="dns-posture" element={<DnsDomainPosture />} />
+            <Route path="cache-posture" element={<WebCachePosture />} />
+            <Route path="http-smuggling" element={<HttpSmugglingPosture />} />
+            <Route path="transport-security" element={<TransportSecurityCommandCenter />} />
+            <Route path="tls-posture" element={<PkiTlsCommandCenter />} />
+            <Route path="email-posture" element={<EmailDnsPosture />} />
             <Route path="pqc-radar" element={<PqcRadar />} />
+            <Route path="detection-surface" element={<EdDetectionSurface />} />
+            <Route path="waf-bypass" element={<WafBypassLab />} />
+            <Route path="websocket-security" element={<WebSocketSecurityCommandCenter />} />
+            <Route path="jwt-lab" element={<JwtAttackLab />} />
+            <Route path="file-upload-lab" element={<FileUploadSecurityLab />} />
+            <Route path="identity-security" element={<IdentitySecurityCenter />} />
+            <Route path="kerberos-security" element={<KerberosSecurityCommandCenter />} />
+            <Route path="smb-netbios" element={<SmbNetbiosCommandCenter />} />
+            <Route path="password-spray" element={<PasswordSprayCommandCenter />} />
+            <Route path="saml-security" element={<SamlSecurityCommandCenter />} />
             <Route path="oast" element={<OastDashboard />} />
             <Route path="verification/oob" element={<OobVerification />} />
             <Route path="template-engine" element={<TemplateEngineWorkbench />} />
@@ -214,6 +257,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
+            <Route path="graphql-security" element={<GraphqlSecurityCommandCenter />} />
+            <Route path="cicd-security" element={<CicdPipelineSecurityCommandCenter />} />
+            <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
             <Route path="findings" element={<FindingsCommandCenter />} />
             <Route path="threat-intel" element={<ThreatIntelHub />} />
             <Route path="intel-map" element={<App />} />
@@ -221,7 +267,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="vuln-intel" element={<VulnIntelDashboard />} />
             <Route path="dark-web" element={<DarkWebMonitor />} />
             <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
+            <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
             <Route path="engine-catalog" element={<EngineClientCatalog />} />
+            <Route path="engine-reliability" element={<EngineReliability />} />
             <Route path="admin" element={<AdminManagement />} />
             {/* ── Client Management routes ────────────────────────────────────── */}
             <Route path="clients" element={<Clients />} />

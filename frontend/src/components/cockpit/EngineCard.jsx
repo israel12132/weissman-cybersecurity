@@ -7,6 +7,7 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { apiFetch, apiEventSourceUrl } from '../../lib/apiBase'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
 import { ENGINES_BY_ID } from '../../lib/enginesRegistry'
+import EngineRealityBadge from '../EngineRealityBadge'
 
 const NS = 'components.cockpitWidgets.engineCard'
 const MAX_TERMINAL_LINES = 80
@@ -151,8 +152,9 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
       className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_30px_rgba(0,0,0,0.25)]"
     >
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-sm font-semibold text-white truncate">{label}</span>
+          <EngineRealityBadge engineId={engineId} size="xs" />
           <span
             className={`shrink-0 w-2 h-2 rounded-full transition-all duration-200 ${
               enabled ? 'bg-[#4ade80] shadow-[0_0_6px_rgba(74,222,128,0.6)]' : 'bg-white/20'

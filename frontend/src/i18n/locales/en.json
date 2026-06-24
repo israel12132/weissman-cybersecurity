@@ -144,6 +144,7 @@
     "client_detail": "Client Details",
     "threat_hunting": "Threat Hunting",
     "threat_analysis": "Threat Analysis",
+    "engine_reliability": "Engine Reliability",
     "dark_web": "Dark Web Monitor",
     "intel_map": "Global Intel Map",
     "incident_response": "Incident Response",
@@ -155,9 +156,30 @@
     "roe_approvals": "RoE Approvals",
     "remediation": "Remediation Hub",
     "cloud": "Cloud Control Tower",
+    "iac_security": "IaC Security",
+    "attack_surface": "Attack Surface (EASM)",
+    "dns_posture": "DNS & Domain Posture",
+    "cache_posture": "Web Cache Posture",
+    "http_smuggling": "HTTP Smuggling & Desync",
+    "transport_security": "Transport Security Command Center",
+    "tls_posture": "TLS Posture",
+    "email_posture": "Email & Domain Trust",
+    "identity_security": "Identity & SSO Security",
+    "kerberos_security": "AD & Kerberos Security",
+    "smb_netbios": "SMB / NetBIOS Security",
+    "password_spray": "Password Spray Posture",
+    "saml_security": "SAML & SSO Federation",
+    "graphql_security": "GraphQL & API Security",
+    "serverless_security": "Serverless Security",
+    "cicd_security": "CI/CD Security",
     "supply_chain": "Supply Chain",
     "network": "Network Intelligence",
     "pqc_radar": "PQC Radar",
+    "detection_surface": "Detection Surface",
+    "waf_bypass": "WAF Bypass Lab",
+    "websocket_security": "WebSocket Security",
+    "jwt_lab": "JWT Attack Lab",
+    "file_upload_lab": "File Upload Security Lab",
     "oast": "OAST / OOB",
     "oob_verify": "OOB Verification",
     "digital_twin": "Digital Twin",
@@ -282,6 +304,10 @@
     "pick_playbook": "Pick a playbook on the left, or click + New playbook.",
     "loaded_example": "Loaded example template. Tweak and Save.",
     "json_source": "Trigger & actions (JSON)",
+    "evidence_notice": "Playbooks and run history from GET /api/playbooks — rules fire on live finding events only.",
+    "library_search": "Search library…",
+    "export_json_playbook": "Export JSON",
+    "no_library_match": "No playbooks match your search.",
     "json_invalid": "Invalid JSON",
     "saving": "Saving…",
     "actions_ok": "{{ok}}/{{total}} ok · {{failed}} failed"
@@ -292,6 +318,7 @@
     "clients_heading": "Clients",
     "clients_count": "{{count}} client configured",
     "clients_count_plural": "{{count}} clients configured",
+    "search_placeholder": "Search clients by name, email, or ID…",
     "add_new": "+ Add New Client",
     "add_first": "Add First Client",
     "no_clients_title": "No clients yet",
@@ -333,7 +360,8 @@
     "scan_title": "Queue baseline scan bundle",
     "scan_confirm_full": "Queue the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) for \"{{name}}\"?",
     "track_suffix": "once scans complete.",
-    "compute_title": "Compute the FAIR-aligned blast-radius now"
+    "compute_title": "Compute the FAIR-aligned blast-radius now",
+    "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only."
   },
   "auth": {
     "tenant_slug": "Tenant slug",
@@ -387,6 +415,7 @@
     "checking": "Checking systems…",
     "last_checked": "Last checked",
     "components": "Service components",
+    "search_components": "Search platform components…",
     "operational": "Operational",
     "degraded": "Degraded",
     "outage": "Outage",
@@ -413,7 +442,19 @@
     "active_engines": "{{count}} engines enabled in default tenant",
     "lightweight_notice": "This page is intentionally lightweight: no authentication required. Uptime monitors can poll GET /api/health directly.",
     "failed_probes_heading": "Failed Top-Tier Health Probes",
-    "health_probe_failed": "Health probe failed"
+    "health_probe_failed": "Health probe failed",
+    "evidence_notice": "Live probes: GET /api/health, GET /api/engines/production, GET /api/engines/top-tier/audit, GET /api/agents/status (operator auth optional). Refreshes every 30 seconds.",
+    "detail_api_ok": "HTTP {{status}} · {{ms}} ms",
+    "detail_api_fail": "HTTP {{status}}",
+    "detail_db_ok": "PostgreSQL reachable",
+    "detail_db_fail": "PostgreSQL unreachable",
+    "detail_db_missing": "Health payload missing postgres_ok",
+    "detail_scan_active": "{{count}} active tenant cycles",
+    "detail_scan_enabled": "Scanning enabled",
+    "detail_scan_paused": "Scanning paused",
+    "detail_engines_ok": "{{production}} production · {{catalog}} catalog",
+    "detail_agents_online": "{{online}}/{{total}} online",
+    "detail_http": "HTTP {{status}}"
   },
   "audit": {
     "title": "Audit Log",
@@ -450,7 +491,11 @@
     "last_page": "Last page",
     "empty_title": "No audit entries",
     "empty_body": "No matching audit entries. Try a different filter, or perform an action (login, create client) and refresh.",
-    "load_error": "Failed to load audit log"
+    "load_error": "Failed to load audit log",
+    "evidence_notice": "Append-only audit rows from GET /api/audit-logs — tenant-scoped, no synthetic security events.",
+    "kpi_shown": "Shown (this page)",
+    "kpi_denied": "Denied / failed (page)",
+    "kpi_total": "Total matching"
   },
   "engines": {
     "title": "Engine Grid",
@@ -537,7 +582,12 @@
     "catalog_matrix_link": "Engine Matrix (full view)",
     "catalog_threat_intel_link": "Threat Intel Hub (MITRE map)",
     "catalog_engines_count": "{{count}} engines",
-    "catalog_group_selected": "{{selected}}/{{total}} selected"
+    "catalog_group_selected": "{{selected}}/{{total}} selected",
+    "catalog_lens_notice": "Industry profiles are UX grouping lenses over the engine registry. Production flags: {{production}} live engines · {{capabilities}} capability records from GET /api/engines/capabilities. Telemetry badges show real in-process run stats.",
+    "catalog_remote_detection": "REMOTE",
+    "catalog_production_only": "Production only",
+    "catalog_remote_only": "Remote detection",
+    "evidence_notice": "Production roster from GET /api/engines/production and capability matrix from GET /api/engines/capabilities. Per-engine history via GET /api/engines/history/:engineId. Scans queue through POST /api/command-center/scan and POST /api/scan/all-engines — no fabricated engine telemetry."
   },
   "findings": {
     "title": "Findings",
@@ -564,7 +614,35 @@
     "live_badge": "LIVE",
     "loading_findings": "Loading findings…",
     "verified": "Verified",
-    "potential": "Potential"
+    "potential": "Potential",
+    "evidence_notice": "Every row is a live tenant finding from GET /api/findings. Status updates persist via PATCH /api/findings/:id/status. CSV export uses GET /api/findings/export/csv — no simulated results.",
+    "col_severity": "Severity",
+    "col_engine": "Engine",
+    "col_title": "Title",
+    "col_target": "Target",
+    "col_mitre": "MITRE ATT&CK",
+    "col_priority": "Priority",
+    "col_seen": "Seen",
+    "col_score": "Score (CVSS)",
+    "col_compliance": "Compliance",
+    "col_status": "Status",
+    "col_verified": "Verified",
+    "col_date": "Time / Date",
+    "untitled": "Untitled",
+    "compliance_tags": "{{count}} tags",
+    "status_open": "Open",
+    "status_acknowledged": "Acknowledged",
+    "status_in_progress": "In Progress",
+    "status_fixed": "Fixed",
+    "status_false_positive": "False Positive",
+    "load_error": "Failed to load findings",
+    "network_error": "Network error",
+    "unknown_error": "Unknown error",
+    "toast_status_updated": "Status updated → {{status}}",
+    "toast_status_rejected": "Status update rejected: {{detail}}",
+    "toast_status_failed": "Status update failed: {{detail}}",
+    "toast_export_ok": "Downloaded {{filename}}",
+    "toast_export_failed": "CSV export failed: {{detail}}"
   },
   "vuln_intel": {
     "title": "Vulnerability Intelligence",
@@ -584,7 +662,9 @@
     "failed_title": "Failed to load findings",
     "showing_first": "Showing first 200 of {{count}} findings — refine filter to narrow.",
     "open_evidence": "Open evidence drawer",
-    "live_badge": "LIVE"
+    "live_badge": "LIVE",
+    "evidence_notice": "CVE-correlated rows are loaded live from GET /api/findings — no seeded vulnerability catalog.",
+    "export_csv": "Export CSV"
   },
   "client_detail": {
     "title": "Client Details",
@@ -631,6 +711,7 @@
   "agents": {
     "title": "Endpoint Agents",
     "subtitle": "Generate a single-use enrollment token, copy the install command, and run it on the target endpoint.",
+    "badge": "AGENTS",
     "registered_count": "{{total}} registered",
     "online_count": "{{count}} online",
     "issue_token": "Issue Enrollment Token",
@@ -642,12 +723,47 @@
     "linux_macos": "Linux / macOS",
     "windows_ps": "Windows PowerShell (Admin)",
     "no_agents": "No agents enrolled yet. Generate a token above and run the install command on a target endpoint.",
+    "no_agents_title": "No agents enrolled",
     "version": "Version",
     "last_seen": "Last seen",
     "caps": "{{count}} caps",
     "fleet_dispatch": "Dispatch fleet (30 engines)",
     "fleet_dispatching": "Dispatching fleet…",
-    "select_client_first": "Select a client first"
+    "select_client_first": "Select a client first",
+    "load_failed": "Couldn't load agents (HTTP {{status}})",
+    "refresh": "Refresh",
+    "live_on": "Live poll ON",
+    "live_off": "Live poll OFF",
+    "kpi_registered": "Registered",
+    "kpi_online": "Online",
+    "kpi_offline": "Offline",
+    "kpi_capabilities": "Capabilities",
+    "kpi_clients": "{{count}} clients",
+    "filter_all": "All",
+    "filter_online": "Online",
+    "filter_offline": "Offline",
+    "registered_heading": "Registered Agents",
+    "col_status": "Status",
+    "col_client": "Client",
+    "col_hostname": "Hostname",
+    "col_os": "OS / Arch",
+    "detail_heading": "Agent Detail",
+    "detail_hint": "Select an agent row to inspect capabilities and enrollment metadata.",
+    "agent_id": "Agent ID",
+    "capabilities_heading": "Capabilities",
+    "no_capabilities": "No capabilities reported",
+    "open_baseline": "View baseline & drift →",
+    "status_online": "ONLINE",
+    "status_offline": "OFFLINE",
+    "status_never": "NEVER ENROLLED",
+    "never_seen": "never",
+    "unknown": "unknown",
+    "time_seconds": "{{count}}s ago",
+    "time_minutes": "{{count}}m ago",
+    "time_hours": "{{count}}h ago",
+    "time_days": "{{count}}d ago",
+    "no_filter_title": "No agents match filter",
+    "no_filter_body": "Try a different status filter."
   },
   "system_config": {
     "title": "System Configuration",
@@ -670,6 +786,186 @@
     "application_error": "Application error",
     "reload_page": "Reload page"
   },
+  "graphqlSec": {
+    "title": "GraphQL & API Security Command Center",
+    "subtitle": "Agentless GraphQL attack-surface mapping — introspection, schema reconstruction, DoS & CSRF analysis, graded against OWASP API Top-10",
+    "hero_desc": "Evidence-only remote assessment: every finding is backed by a real HTTP observation. No mutations are ever executed.",
+    "params_badge": "live parameters",
+    "control_column": "API Security Control Column",
+    "sec_target": "Target Binding",
+    "sec_scope": "Probe Scope",
+    "sec_dos_probes": "DoS & Abuse Probes",
+    "sec_transport_probes": "Transport & CSRF Probes",
+    "sec_auth": "Authentication Plane",
+    "sec_bola": "BOLA / IDOR Tuning",
+    "sec_advanced": "Advanced API Probes",
+    "executive_summary": "Executive Summary",
+    "compliance_scorecard": "OWASP API Compliance Scorecard",
+    "remediation_priorities": "Prioritized Remediation",
+    "sec_final": "Final-Round Probes",
+    "export_pdf": "Export PDF",
+    "export_json": "Export JSON",
+    "probe_components": "probe components",
+    "sec_endpoints": "Endpoint Surface",
+    "sec_dos": "DoS Tuning",
+    "sec_recon": "Schema Reconstruction",
+    "sec_transport": "Transport / HTTP",
+    "sec_output": "Output & Posture",
+    "sec_payload": "Live Payload Preview",
+    "add_header": "add header",
+    "hide_json": "hide JSON",
+    "show_json": "show exact request JSON",
+    "running": "Assessing API…",
+    "run": "Run API Security Scan",
+    "dry_run": "Dry-Run Plan (no requests)",
+    "schema_viz": "Live Schema Graph",
+    "exposure_score": "API Exposure Score",
+    "attack_paths": "Attack Paths (Toxic Combinations)",
+    "telemetry": "Scan Telemetry",
+    "awaiting": "Awaiting assessment…",
+    "findings": "Findings"
+  },
+  "cicdSec": {
+    "title": "CI/CD Pipeline Security Command Center",
+    "subtitle": "Agentless DevSecOps at Wiz / Prisma / GitHub Advanced Security depth — multi-platform CI fingerprinting, workflow static analysis, secret leakage & attack-path synthesis",
+    "hero_desc": "Evidence-only: every finding requires a live HTTP/API signal or fetched pipeline artifact. No fabricated results.",
+    "params_badge": "live parameters",
+    "control_column": "DevSecOps Control Column",
+    "sec_target": "Target Binding",
+    "sec_scope": "Probe Scope",
+    "sec_platforms": "CI/CD Platforms",
+    "sec_repo": "Repository Plane",
+    "sec_auth": "Authentication",
+    "sec_paths": "Path Overrides",
+    "sec_compliance": "Compliance Mapping",
+    "sec_transport": "Transport & Limits",
+    "sec_payload": "Live Payload Preview",
+    "hide_json": "hide JSON",
+    "show_json": "show exact request JSON",
+    "running": "Assessing CI/CD…",
+    "run": "Run DevSecOps Scan",
+    "dry_run": "Dry-Run Plan (no requests)",
+    "graph_viz": "Supply Chain Attack Graph",
+    "posture_score": "DevSecOps Exposure Score",
+    "attack_paths": "Attack Paths (Toxic Combinations)",
+    "risk_dimensions": "5-Dimension Risk Model",
+    "compliance_posture": "Compliance Posture",
+    "remediation_playbook": "Remediation Playbook",
+    "telemetry": "Scan Telemetry",
+    "awaiting": "Awaiting assessment…",
+    "findings": "Findings"
+  },
+  "iacSecurity": {
+    "title": "IaC Security Center",
+    "subtitle": "45-framework CNAPP IaC — complete compliance: SOC2/PCI/HIPAA/NIST/ISO/FedRAMP audit packet",
+    "live_params": "live parameters",
+    "hero_desc": "Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.",
+    "control": "Scan Control",
+    "sec_target": "Target Binding",
+    "host_target": "Host (exposure mode)",
+    "sec_mode": "Scan Modes",
+    "sec_static": "Inline IaC",
+    "load_sample": "Load sample",
+    "iac_content": "IaC content",
+    "filename": "Filename",
+    "iac_type": "Type",
+    "sec_repo": "Repository",
+    "sec_frameworks": "Frameworks",
+    "frameworks_hint": "Secrets & exposure findings always included.",
+    "sec_providers": "Cloud Providers",
+    "sec_compliance": "Compliance Packs",
+    "sec_detection": "Detection & Gate",
+    "sec_advanced": "Advanced",
+    "sec_payload": "Live Payload Preview",
+    "hide_json": "hide JSON",
+    "show_json": "show exact request JSON",
+    "scan": "Run IaC Scan",
+    "scanning": "Scanning…",
+    "posture": "Security Posture",
+    "gate": "Gate",
+    "severity_breakdown": "Severity Breakdown",
+    "compliance_posture": "Compliance Posture",
+    "telemetry": "Scan Telemetry",
+    "awaiting": "Awaiting scan…",
+    "findings": "Findings",
+    "running_note": "Analyzing infrastructure code…",
+    "no_findings": "No findings yet — configure a scan and run.",
+    "attack_paths": "Attack Paths (toxic combinations)",
+    "chains_detected": "chains from correlated policies",
+    "export_bundle": "Export remediation bundle",
+    "toxic_alert": "Toxic combination detected",
+    "toxic_hint": "Correlated policies indicate exploitable breach chains — prioritize remediation queue",
+    "framework_coverage": "Framework Policy Coverage",
+    "remediation_queue": "Prioritized Remediation Queue",
+    "policy_catalog": "Policy Catalog",
+    "mitre_rollup": "MITRE ATT&CK Rollup",
+    "export_fixes": "Export fix bundle",
+    "drift_analysis": "Posture drift detection",
+    "policy_waivers": "Policy waivers",
+    "attack_path_mermaid": "Attack path graph",
+    "waivers_applied": "Policy waivers applied",
+    "readiness": "Operational readiness",
+    "cis_scorecard": "CIS compliance scorecard",
+    "drift_findings": "Posture drift",
+    "multi_file": "Multi-file bundle",
+    "export_shell": "Export shell script",
+    "risk_heatmap": "Risk heatmap",
+    "compliance_playbooks": "Compliance playbooks",
+    "terraform_plan": "Terraform plan JSON",
+    "plan_reconcile": "Plan ↔ static reconciliation",
+    "plan_reconcile_hint": "Detects gaps between HCL scan and plan JSON — block blind applies",
+    "soc2_report": "SOC2 Trust Services report",
+    "soc2_audit_ready": "Audit readiness",
+    "pci_report": "PCI-DSS CDE report",
+    "supply_chain": "Supply-chain correlation",
+    "hipaa_report": "HIPAA 164.312 safeguards",
+    "nist_report": "NIST 800-53 families",
+    "iso27001_report": "ISO 27001 Annex A",
+    "fedramp_report": "FedRAMP Moderate",
+    "audit_packet": "Master audit packet",
+    "live_blast": "Live blast radius engine",
+    "live_blast_panel_title": "Sovereign Live Blast Engine",
+    "live_blast_risk": "Live {{live}} / Static {{static}} (+{{elev}})",
+    "live_blast_verification": "Verification",
+    "live_blast_nodes": "Graph nodes",
+    "live_blast_paths": "Proven paths",
+    "live_blast_score": "Blast score",
+    "live_blast_live": "Live confirmed",
+    "live_blast_irsa": "IRSA bridges",
+    "live_blast_iam": "IAM proofs",
+    "live_blast_drift": "Drift",
+    "live_blast_reconcile": "Live reconcile",
+    "live_blast_show_mermaid": "Show live path mermaid",
+    "live_blast_hide_mermaid": "Hide mermaid",
+    "autopilot": "Auto-Pilot remediation",
+    "k8s_rbac_prove": "K8s SubjectAccessReview",
+    "iam_simulate_extended": "IAM simulate S3/RDS/SM/KMS",
+    "export_audit_packet": "Export audit packet",
+    "gate_evidence": "Gate audit evidence",
+    "export_gate_evidence": "Export gate evidence",
+    "refresh_last": "Reload last run",
+    "export_csv": "Export CSV",
+    "last_scan": "Last scan",
+    "findings_search": "Search policy, file, resource…",
+    "no_findings_filtered": "No findings match the current search and severity filters."
+  },
+  "weissmanFindings": {
+    "title": "Findings",
+    "kpi_total": "Total",
+    "search_placeholder": "Search title, type, policy, description…",
+    "filter_all": "all",
+    "refresh": "Refresh",
+    "export_csv": "Export CSV",
+    "scanning": "Live scan in progress…",
+    "job": "Job",
+    "last_updated": "Last sync {{time}}",
+    "empty_title": "No findings yet",
+    "empty_body": "Run a scan against authorized scope — results appear here from live engine output only.",
+    "ready_title": "Ready to scan",
+    "ready_body": "Configure target and parameters, then launch the assessment.",
+    "filtered_title": "No matches",
+    "filtered_body": "No findings match the current search or severity filter."
+  },
   "nexusSwarm": {
     "title": "Nexus Sovereign Swarm Intelligence",
     "subtitle": "Hyper-scale autonomous hive-mind — thousands of AI agents, emergent consensus, breakthrough SIQ scoring",
@@ -684,7 +980,34 @@
     "fleet_broadcast": "Broadcast Fleet Everywhere",
     "fleet_broadcasting": "Broadcasting to fleet…",
     "no_agents": "No endpoint agents enrolled — install agents to bridge the hive to hosts.",
-    "swarm_ws_live": "Live swarm telemetry connected"
+    "swarm_ws_live": "Live swarm telemetry connected",
+    "params_badge": "live parameters",
+    "control_column": "Sovereign Control Column",
+    "reset": "Reset",
+    "bridged": "bridged",
+    "sec_target": "Target Binding",
+    "sec_deployment": "Deployment",
+    "sec_adaptive": "Adaptive Intelligence",
+    "sec_archetypes": "Archetypes",
+    "archetypes_hint": "Empty selection = all archetypes. Correlator + Oracle synthesise from collected signals.",
+    "sec_transport": "Transport / HTTP",
+    "add_header": "add header",
+    "sec_surface": "Surface Mapping",
+    "sec_consensus": "Consensus & Oracle",
+    "sec_bridge": "Bridge & Edge",
+    "sec_output": "Output & Filtering",
+    "sec_payload": "Live Payload Preview",
+    "show_json": "show exact request JSON",
+    "hide_json": "hide JSON",
+    "dry_run": "Dry-Run Plan (no requests)",
+    "wave_replay": "Wave {{n}} only",
+    "tls_panel": "TLS Certificate (live :443)",
+    "body_surface": "Body Surface Markers",
+    "config_schema": "Config Schema",
+    "single_wave": "Single Wave (replay)",
+    "progress_interval": "Progress Emit Interval",
+    "parity_verified": "GUI parity verified",
+    "world_class": "world-class"
   },
   "pages": {
     "jobsDashboard": {
@@ -709,7 +1032,30 @@
       "status_running": "running",
       "status_completed": "completed",
       "status_failed": "failed",
-      "status_cancelled": "cancelled"
+      "status_cancelled": "cancelled",
+      "evidence_notice": "Live async job queue from GET /api/jobs (tenant-scoped). CEO fallback uses /api/ceo/jobs/live when the standard list is unavailable. No simulated job telemetry.",
+      "last_updated": "Last sync {{time}}",
+      "export_csv": "Export CSV",
+      "search_placeholder": "Search job ID, kind, target, engine…",
+      "filter_all": "All",
+      "filter_queued": "Queued",
+      "filter_running": "Running",
+      "filter_completed": "Completed",
+      "filter_failed": "Failed",
+      "filter_cancelled": "Cancelled",
+      "col_target": "Target",
+      "copy_id": "Copy job ID",
+      "detail_title": "Job detail",
+      "detail_empty": "Select a job",
+      "detail_hint": "Click a row to inspect payload, worker, errors, and timestamps from the live queue.",
+      "empty_filtered": "No jobs match the current filters.",
+      "field_client": "Client",
+      "field_engine": "Engine",
+      "field_worker": "Worker",
+      "field_created": "Created",
+      "field_updated": "Updated",
+      "field_heartbeat": "Heartbeat",
+      "field_error": "Last error"
     },
     "billing": {
       "title": "Billing & Usage",
@@ -741,23 +1087,44 @@
       "client_roster": "Client roster",
       "monthly_scans": "Monthly scans",
       "usage_unavailable_title": "Usage counters unavailable",
-      "usage_unavailable_body": "Subscription details loaded, but usage metrics were not returned by the API."
+      "usage_unavailable_body": "Subscription details loaded, but usage metrics were not returned by the API.",
+      "evidence_notice": "Subscription, limits, and usage counters from GET /api/billing/usage. Checkout upgrades via POST /api/billing/checkout-session. All values are tenant-scoped live billing records — nothing simulated.",
+      "status_active": "Active",
+      "status_trialing": "Trialing",
+      "status_past_due": "Past due",
+      "status_paused": "Paused",
+      "status_canceled": "Canceled",
+      "status_cancelled": "Cancelled",
+      "status_unknown": "Unknown"
     },
     "metricsDashboard": {
       "title": "Operational Metrics Dashboard",
+      "subtitle": "Live platform health, findings severity, and job pipeline counters",
       "live_metrics": "Live platform metrics",
       "refreshing": "Refreshing…",
       "load_error": "Unable to load dashboard metrics",
+      "auto_refresh": "Auto-refresh (10s)",
+      "last_updated": "Last sync {{time}}",
+      "evidence_notice": "Operational counters from GET /api/metrics/dashboard. Executive KPI strip (security score, MTTR, agents) from GET /api/dashboard/exec-kpis when available. All values are tenant-scoped — nothing simulated.",
       "postgres": "PostgreSQL",
       "connected": "Connected",
       "unavailable": "Unavailable",
       "active_scans": "Active Scans",
       "jobs_completed_24h": "Jobs Completed (24h)",
       "jobs_failed_24h": "Jobs Failed (24h)",
+      "jobs_running": "Jobs Running",
+      "security_score": "Security Score",
+      "mttr_hours": "Mean Time to Remediate",
+      "agents_online": "Agents Online",
       "findings_by_severity": "Open Findings by Severity",
       "total_count": "{{count}} total",
       "no_open_findings": "No open findings",
+      "no_findings_body": "Run engines against in-scope assets to populate severity metrics.",
+      "go_findings": "Open Findings Command Center",
       "severity_breakdown": "Severity Breakdown",
+      "link_jobs": "Jobs dashboard",
+      "link_findings": "Findings",
+      "link_agents": "Agent fleet",
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
@@ -783,7 +1150,8 @@
       "toggle_failed": "Failed to toggle schedule",
       "scan_started": "Scan started: {{count}} job(s) queued.",
       "scan_started_ok": "Scan started successfully!",
-      "scan_start_failed": "Failed to start scan"
+      "scan_start_failed": "Failed to start scan",
+      "evidence_notice": "Scheduled scan definitions from GET/POST /api/scan-schedules. Cron fires enqueue real POST /api/command-center/scan jobs — empty calendar means no schedules configured yet."
     },
     "systemConfiguration": {
       "title": "System Configuration",
@@ -797,14 +1165,150 @@
       "tab_compliance": "Compliance",
       "loading": "Loading configuration…",
       "unsaved_changes": "Unsaved changes",
+      "unsaved_changes_subtitle": "You have unsaved configuration changes",
+      "unsaved_warning": "Unsaved Changes",
       "save": "Save Configuration",
+      "save_changes": "Save Changes",
+      "save_all": "Save All Changes",
       "saving": "Saving…",
       "saved": "Configuration saved",
-      "unsaved_warning": "Unsaved Changes"
+      "save_error": "Failed to save configuration",
+      "evidence_notice": "Settings load and save via GET/PUT /api/system/config. MFA self-service uses GET /api/auth/mfa/status, POST /api/auth/mfa/setup, POST /api/auth/mfa/enable, and POST /api/auth/mfa/disable — live session only, no simulated policy state.",
+      "common": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "sections": {
+        "general": {
+          "title": "General Settings"
+        },
+        "security": {
+          "title": "Security Policies",
+          "password_policy": "Password Policy",
+          "session_management": "Session Management",
+          "mfa": "Multi-Factor Authentication"
+        },
+        "scanning": {
+          "title": "Scanning Configuration"
+        },
+        "integrations": {
+          "title": "Integration Settings",
+          "webhook": "Webhook URL",
+          "siem": "SIEM Integration",
+          "email": "Email Notifications"
+        },
+        "retention": {
+          "title": "Data Retention Policies"
+        },
+        "performance": {
+          "title": "Performance Tuning"
+        },
+        "compliance": {
+          "title": "Compliance Frameworks"
+        }
+      },
+      "fields": {
+        "general": {
+          "org_name": "Organization Name",
+          "timezone": "Timezone",
+          "language": "Language",
+          "date_format": "Date Format"
+        },
+        "security": {
+          "password_min_length": "Minimum Length",
+          "password_max_age": "Max Age (days)",
+          "password_require_uppercase": "Require uppercase letters",
+          "password_require_numbers": "Require numbers",
+          "password_require_special": "Require special characters",
+          "session_timeout": "Session Timeout (minutes)",
+          "max_concurrent_sessions": "Max Concurrent Sessions",
+          "mfa_required": "Require MFA for all users"
+        },
+        "scanning": {
+          "default_timeout": "Default Scan Timeout (seconds)",
+          "max_concurrency": "Max Concurrency",
+          "auto_retry": "Auto-Retry Failed Scans",
+          "max_retries": "Max Retries"
+        },
+        "retention": {
+          "scan_results": "Scan Results (days)",
+          "audit_logs": "Audit Logs (days)",
+          "findings": "Findings (days)",
+          "metrics": "Metrics (days)"
+        },
+        "performance": {
+          "worker_threads": "Worker Threads",
+          "cache_ttl": "Cache TTL (seconds)",
+          "max_memory": "Max Memory (MB)",
+          "db_pool_size": "Database Pool Size"
+        }
+      },
+      "options": {
+        "timezones": {
+          "utc": "UTC",
+          "eastern": "Eastern Time",
+          "pacific": "Pacific Time",
+          "london": "London",
+          "tokyo": "Tokyo"
+        },
+        "languages": {
+          "en": "English",
+          "he": "Hebrew",
+          "es": "Spanish",
+          "fr": "French"
+        },
+        "dateFormats": {
+          "iso": "YYYY-MM-DD",
+          "us": "MM/DD/YYYY",
+          "eu": "DD/MM/YYYY"
+        },
+        "siem": {
+          "none": "None",
+          "splunk": "Splunk",
+          "qradar": "IBM QRadar",
+          "sentinel": "Microsoft Sentinel"
+        }
+      },
+      "placeholders": {
+        "webhook_url": "https://example.com/webhook",
+        "siem_endpoint": "SIEM endpoint URL",
+        "smtp_server": "smtp.example.com",
+        "smtp_port": "587"
+      },
+      "frameworks": {
+        "cis": "CIS",
+        "pci_dss": "PCI-DSS",
+        "nist": "NIST",
+        "hipaa": "HIPAA",
+        "soc2": "SOC2",
+        "gdpr": "GDPR",
+        "iso27001": "ISO27001"
+      },
+      "mfa": {
+        "loading_status": "Loading MFA status…",
+        "account_label": "Your account:",
+        "status_enabled": "MFA enabled",
+        "status_disabled": "MFA disabled",
+        "provisioning_in_progress": "(provisioning in progress)",
+        "working": "Working…",
+        "setup": "Set up MFA",
+        "reprovision": "Re-provision MFA",
+        "enable": "Enable MFA",
+        "disable": "Disable MFA",
+        "scan_uri_instructions": "Scan this URI in Authy / Google Authenticator, then enter the 6-digit code:",
+        "code_placeholder": "123456",
+        "errors": {
+          "status_fetch_failed": "Failed to load MFA status",
+          "setup_failed": "MFA setup failed",
+          "enable_failed": "Failed to enable MFA",
+          "disable_failed": "Failed to disable MFA"
+        }
+      }
     },
     "darkWebMonitor": {
       "title": "Dark Web Monitor",
-      "subtitle": "Credential leaks, typosquats, and dark-web mentions",
+      "subtitle": "Credential leaks, typosquats, and dark-web mentions from live tenant findings",
+      "badge": "DARK WEB",
       "total_hits": "Total Hits",
       "critical": "Critical",
       "high": "High",
@@ -814,13 +1318,26 @@
       "findings_heading": "Dark-web findings",
       "open_findings": "Open Findings C2 →",
       "loading": "Loading…",
+      "refresh": "Refresh",
+      "export_csv": "Export CSV",
+      "auto_on": "Live refresh ON",
+      "auto_off": "Live refresh OFF",
+      "last_updated": "Last synced {{time}}",
+      "evidence_notice": "Every row is a real finding from GET /api/findings filtered to leak_hunter, darkweb_intel, dark_web_monitor, and typosquatting_monitor — never simulated breach data.",
+      "source_breakdown": "Hits by source engine",
+      "search_placeholder": "Search title, target, or description…",
+      "filter_all": "All",
+      "all_sources": "All sources",
+      "no_filter_title": "No matching findings",
+      "no_filter_body": "Clear search or severity filters to see all dark-web hits.",
+      "showing_first": "Showing first 200 of {{count}} matches",
       "col_severity": "Severity",
       "col_title": "Title",
       "col_source": "Source",
       "col_target": "Target",
       "col_discovered": "Discovered",
       "empty_title": "No dark-web intelligence yet for this tenant.",
-      "empty_step_scan_before": "Add a client and",
+      "empty_body": "Run Leak Hunter or darkweb_intel against an authorized domain. Findings appear here automatically from GET /api/findings.",
       "empty_step_scan_link": "run the baseline scan",
       "empty_step_scan_after": "(Leak Hunter is included in the bundle).",
       "empty_step_keys": "For richer breach feeds, set HIBP_API_KEY / OTX_API_KEY in System Configuration; the engine is wired but degrades gracefully without keys.",
@@ -848,7 +1365,19 @@
       "view_findings": "View findings",
       "status_completed": "completed",
       "status_running": "running",
-      "status_pending": "pending"
+      "status_pending": "pending",
+      "subtitle": "Remediation board ranked by severity-weighted priority — driven entirely by live findings",
+      "badge": "REMEDIATION",
+      "refresh": "Refresh",
+      "crit_high": "Critical / High",
+      "search_placeholder": "Search findings…",
+      "filter_all": "All",
+      "sev_critical": "Critical",
+      "sev_high": "High",
+      "sev_medium": "Medium",
+      "sev_low": "Low",
+      "sev_info": "Info",
+      "evidence_notice": "Open findings and remediation tasks from GET /api/findings with status workflow PATCH /api/findings/:id/status. Playbook auto-remediation triggers from GET /api/playbooks — live ticket state only."
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -866,7 +1395,8 @@
       "empty_body": "Create a rule to get notified when findings match your conditions.",
       "delete_confirm": "Are you sure you want to delete this alert rule?",
       "test_success": "Test successful! {{count}} findings matched this rule.",
-      "test_failed": "Test failed. Check rule conditions."
+      "test_failed": "Test failed. Check rule conditions.",
+      "evidence_notice": "Detection rules from GET/POST /api/alert-rules. Firings correlate to live finding events in your tenant — rules never evaluate against synthetic event feeds."
     },
     "adminManagement": {
       "title": "Admin Management",
@@ -875,6 +1405,7 @@
       "load_failed": "Failed to load users",
       "email_password_required": "Email and password are required",
       "loading": "Loading users…",
+      "search_placeholder": "Search users by email, role, or status…",
       "users_heading": "Users ({{count}})",
       "create_user": "Create User",
       "creating": "Creating…",
@@ -889,7 +1420,8 @@
       "delete_confirm": "Delete user {{email}}?",
       "user_created": "User created successfully",
       "user_updated": "User updated successfully",
-      "user_deleted": "User deleted successfully"
+      "user_deleted": "User deleted successfully",
+      "evidence_notice": "Tenant administration, user roster, and RBAC mutations via authenticated /api/admin/* and /api/users endpoints. Every change is audit-logged to GET /api/audit-logs."
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
@@ -903,14 +1435,43 @@
       "controls_heading": "Controls",
       "score_label": "Compliance Score",
       "export_report": "Export Report",
+      "exporting": "Generating…",
       "no_controls": "No controls found for this framework",
+      "no_controls_title": "No control data",
+      "no_filter_results": "No controls match your search or filter.",
+      "no_filter_results_title": "No matching controls",
+      "no_frameworks": "No compliance frameworks are available from the API.",
+      "no_frameworks_title": "No frameworks",
       "status_compliant": "Compliant",
       "status_non_compliant": "Non-compliant",
-      "status_partial": "Partial"
+      "status_partial": "Partial",
+      "total_controls": "Total Controls",
+      "refresh": "Refresh",
+      "search_placeholder": "Search controls by ID or title…",
+      "load_failed": "Failed to load compliance frameworks",
+      "controls_load_failed": "Failed to load controls for this framework",
+      "export_failed": "Report export failed",
+      "evidence_notice": "Control status is derived live from tenant findings, cloud posture rules, and vulnerability evidence — not simulated scores.",
+      "framework_score": "{{score}}% compliant",
+      "gap_title": "Gap Analysis",
+      "gap_body": "{{count}} controls are non-compliant in {{framework}}. Address these gaps to improve certification readiness.",
+      "open_remediation": "Open Remediation Hub"
     },
     "clientNew": {
       "title": "Add New Client",
       "subtitle": "Onboard a new client organization with authorized scanning scope",
+      "evidence_notice": "Client onboarding via POST /api/clients. Scope domains and IPs are persisted tenant-scoped; engine defaults are applied server-side — no fabricated client profiles.",
+      "section_basic": "Basic Information",
+      "section_scope": "Authorized Scanning Scope",
+      "scope_body": "Define authorized domains and IP ranges. Only in-scope assets are scanned.",
+      "tech_body": "Specify known technologies for better correlation, or enable auto-detection during scans.",
+      "optional": "Optional",
+      "known_tech": "Known Technologies",
+      "name_placeholder": "e.g., Acme Corporation",
+      "email_placeholder": "security@example.com",
+      "domains_placeholder": "example.com\n*.example.com\napi.example.com",
+      "ips_placeholder": "192.168.1.0/24\n10.0.0.0/8",
+      "tech_placeholder": "nginx\nphp 8.1\nwordpress",
       "name_required": "Client name is required",
       "email_required": "Contact email is required",
       "domain_required": "At least one domain must be specified for authorized scope",
@@ -923,11 +1484,13 @@
       "authorized_ips": "Authorized IP Ranges",
       "tech_stack": "Technology Stack",
       "auto_detect": "Auto-detect technologies during scans (Recommended)",
-      "domains_hint": "One domain per line or comma-separated",
-      "ips_hint": "Optional — CIDR ranges or individual IPs",
-      "tech_hint": "Optional — known technologies to prioritize during scans",
+      "domains_hint": "One domain per line or comma-separated. Wildcards (*) supported.",
+      "ips_hint": "CIDR notation supported. One range per line or comma-separated.",
+      "tech_hint": "One technology per line or comma-separated.",
       "create_failed": "Failed to create client: {{detail}}",
-      "create_error": "Error creating client: {{detail}}"
+      "create_error": "Error creating client: {{detail}}",
+      "error_forbidden": "You don't have permission to create clients. {{detail}}",
+      "error_plan_limit": "Plan limit reached: {{detail}}"
     },
     "threatIntelHub": {
       "title": "Threat Intelligence Hub",
@@ -957,7 +1520,53 @@
       "link_apt_emulation": "APT Emulation",
       "link_apt_emulation_desc": "Nation-state TTP simulation",
       "link_domain_discovery": "Domain Discovery",
-      "link_domain_discovery_desc": "Enumerate attack surface"
+      "link_domain_discovery_desc": "Enumerate attack surface",
+      "page_subtitle": "Live CVE intelligence from NVD, correlated against your environment",
+      "refresh": "Refresh",
+      "auto_refresh": "Auto",
+      "auto_refresh_hint": "Auto-refresh every 60 seconds",
+      "last_updated": "Updated {{time}}",
+      "tab_feed": "Live Threat Feed",
+      "tab_coverage": "Detection Coverage",
+      "stat_live_cves": "Live CVEs (7d)",
+      "stat_live_cves_hint": "Published in the last 7 days · NVD",
+      "stat_crit_high_cves": "Critical / High",
+      "stat_crit_high_hint": "Severe CVEs in the live feed",
+      "stat_open_findings": "Open Findings",
+      "stat_open_findings_hint": "Unresolved across your assets",
+      "stat_security_score": "Security Score",
+      "stat_security_score_hint": "Weighted by open severity",
+      "severity_distribution": "Open Findings by Severity",
+      "severity_distribution_hint": "Δ vs 24h ago",
+      "top_cves_env": "Top CVEs in Your Environment",
+      "top_cves_env_hint": "Most detected · real findings",
+      "top_cves_empty": "No CVE-tagged findings yet.",
+      "top_mitre": "Top MITRE ATT&CK Techniques",
+      "top_mitre_hint": "By detection volume",
+      "top_mitre_empty": "No technique hits recorded yet.",
+      "hits": "{{count}} hits",
+      "feed_heading": "NVD Live Feed — Last 7 Days",
+      "feed_count": "{{count}} CVEs",
+      "feed_search_placeholder": "Search CVE ID or description…",
+      "all_severities": "All",
+      "sort_label": "Sort",
+      "sort_newest": "Newest",
+      "sort_severity": "Severity",
+      "published": "Published {{date}}",
+      "view_on_nvd": "View on NVD",
+      "feed_error": "Couldn't load the live threat feed.",
+      "feed_empty_title": "No live CVEs available",
+      "feed_empty_body": "The NVD threat feed returned nothing. Configure NVD_API_KEY on the server to enable the live feed, or check back later if NVD published nothing in the last 7 days.",
+      "retry": "Retry",
+      "coverage_intro": "Detection capability catalog — what this platform can detect. This is platform capability metadata, not live telemetry.",
+      "sev_critical": "Critical",
+      "sev_high": "High",
+      "sev_medium": "Medium",
+      "sev_low": "Low",
+      "sev_info": "Info",
+      "link_findings": "Findings Command Center",
+      "link_findings_desc": "Triage every open finding",
+      "evidence_notice": "CVE feed from GET /api/threat-intel/feed (NVD-sourced). Environment correlation overlays your tenant severity counts from GET /api/dashboard/exec-kpis — not a standalone threat theater."
     },
     "incidentResponseCenter": {
       "title": "Incident Response Center",
@@ -1037,35 +1646,96 @@
           "step_6": "Harden system with minimal attack surface",
           "step_7": "Share IOCs with ISAC / threat intel community"
         }
-      }
+      },
+      "evidence_notice": "Live incident queue from GET /api/soc/incidents. Playbook step toggles persist via PATCH /api/soc/incidents/:id/playbook-steps — no simulated IR telemetry.",
+      "no_timeline": "No audit events linked to this incident yet.",
+      "export_csv": "Export CSV",
+      "duration_hours_minutes": "{{hours}}h {{minutes}}m",
+      "duration_minutes": "{{minutes}}m",
+      "severity_critical": "CRITICAL",
+      "severity_high": "HIGH",
+      "severity_medium": "MEDIUM",
+      "severity_low": "LOW",
+      "severity_info": "INFO"
     },
     "threatEmulation": {
       "title": "APT Threat Emulation",
       "badge": "APT / TOP-TIER",
-      "subtitle": "{{count}} adversary groups",
+      "subtitle": "{{count}} adversary scenarios · one live engine run",
       "target_client": "Target client:",
       "select_placeholder": "— Select —",
       "emulate": "▶ Emulate",
       "blocked": "Blocked",
-      "detected_not_blocked": "Detected (not blocked)",
-      "results_summary": "{{tested}} techniques tested · {{gaps}} detection gaps",
-      "no_data": "No emulation data yet — run to generate report.",
-      "run_all": "▶ Run All APT Groups",
-      "select_client_warning": "Select a client to enable emulation runs.",
+      "detected_not_blocked": "Reached target (not blocked)",
+      "results_summary": "{{tested}} probes with surface · {{gaps}} detection gaps",
+      "no_data": "No matching attack surface for this group in stored findings.",
+      "no_surface": "No surface",
+      "gap_badge": "{{count}} gaps",
+      "run_full": "Run Full APT Emulation",
+      "running": "Running emulation…",
+      "refresh": "Refresh",
+      "load_failed": "Failed to load emulation findings",
+      "run_complete": "Emulation job {{status}} — findings refreshed",
+      "engine_notice": "One POST /api/command-center/scan with engine threat_emulation executes all 7 backend APT scenarios against your authorized target. Cards show per-group results parsed from real findings — empty means that path returned no signal (honest absence, not a pass).",
+      "select_client_warning_title": "Select a client",
+      "select_client_warning": "Select a client with an authorized domain to run APT emulation.",
       "select_client_first": "Select a client first",
       "emulation_failed": "Emulation failed",
       "emulation_queued": "APT emulation queued: job {{jobId}}",
       "missing_target": "Selected client has no primary domain — add a scope URL first.",
       "network_error": "Network error",
+      "kpi_scenarios": "Probes with surface",
+      "kpi_blocked": "Blocked by controls",
+      "kpi_gaps": "Detection gaps",
+      "kpi_coverage": "Group coverage",
+      "kpi_coverage_detail": "{{count}} of {{total}} groups with signal",
+      "history_heading": "Recent emulation jobs",
+      "view_job": "View job",
       "apt_groups": {
-        "lazarus": { "description": "Nation-state group tied to financial theft and destructive ransomware campaigns." },
-        "apt28": { "description": "GRU-linked espionage group targeting NATO, governments, and media organizations." },
-        "apt29": { "description": "SVR-linked group known for SolarWinds supply chain and Microsoft breaches." },
-        "apt41": { "description": "Dual nexus — state-sponsored espionage and financial crime via ransomware." },
-        "sandworm": { "description": "Responsible for NotPetya, Ukraine power grid attacks, and Olympic Destroyer." },
-        "kimsuky": { "description": "Intelligence collection against South Korea, US, and European targets." },
-        "equation": { "description": "Most technically sophisticated threat actor — Stuxnet, Flame, HDD firmware implants." }
-      }
+        "lazarus": {
+          "name": "Lazarus Group",
+          "alias": "APT38 / Hidden Cobra",
+          "nation": "DPRK",
+          "description": "Nation-state group tied to financial theft and destructive ransomware campaigns."
+        },
+        "apt28": {
+          "name": "Fancy Bear",
+          "alias": "APT28 / Sofacy",
+          "nation": "Russia (GRU)",
+          "description": "GRU-linked espionage group targeting NATO, governments, and media organizations."
+        },
+        "apt29": {
+          "name": "Cozy Bear",
+          "alias": "APT29 / Midnight Blizzard",
+          "nation": "Russia (SVR)",
+          "description": "SVR-linked group known for SolarWinds supply chain and Microsoft breaches."
+        },
+        "apt41": {
+          "name": "Double Dragon",
+          "alias": "APT41 / Winnti",
+          "nation": "China (MSS)",
+          "description": "Dual nexus — state-sponsored espionage and financial crime via ransomware."
+        },
+        "sandworm": {
+          "name": "Sandworm",
+          "alias": "Voodoo Bear / Seashell Blizzard",
+          "nation": "Russia (GRU Unit 74455)",
+          "description": "Responsible for NotPetya, Ukraine power grid attacks, and Olympic Destroyer."
+        },
+        "kimsuky": {
+          "name": "Kimsuky",
+          "alias": "Velvet Chollima / Black Banshee",
+          "nation": "DPRK (RGB)",
+          "description": "Intelligence collection against South Korea, US, and European targets."
+        },
+        "equation": {
+          "name": "Equation Group",
+          "alias": "NSA TAO (alleged)",
+          "nation": "USA (alleged)",
+          "description": "Most technically sophisticated threat actor — Stuxnet, Flame, HDD firmware implants."
+        }
+      },
+      "evidence_notice": "APT group cards are MITRE reference taxonomies correlated to your live GET /api/findings and GET /api/engines/history/threat_emulation — coverage % reflects real mapped findings, not scripted kill chains."
     },
     "networkIntelligence": {
       "title": "Network Intelligence",
@@ -1082,7 +1752,101 @@
       "status_running": "RUNNING",
       "status_done": "DONE",
       "status_error": "ERROR",
-      "status_idle": "IDLE"
+      "status_idle": "IDLE",
+      "target_label": "Target host / domain",
+      "target_placeholder": "example.com",
+      "target_required": "A target host is required",
+      "other_engines": "Other Network Engines",
+      "flagship_title": "DNS & BGP Hijack-Resistance",
+      "flagship_desc": "Direct authoritative NS queries, recursive consensus, DNSSEC, RPKI/BGP/IRR, more-specific hijack, RDAP lock, TLS binding, dual-stack & compound detection — fully read-only.",
+      "params": "Parameters",
+      "reset": "reset",
+      "sec_probes": "Probes",
+      "p_consensus": "Multi-resolver consensus",
+      "p_dnssec": "DNSSEC validation",
+      "p_rpki": "RPKI ROA validation",
+      "p_bgp": "BGP origin / MOAS",
+      "p_caa": "CAA issuance control",
+      "p_ns": "NS diversity",
+      "p_takeover": "Subdomain takeover",
+      "p_aaaa": "IPv6 (AAAA) records",
+      "p_tls": "TLS identity binding",
+      "p_bogon": "Bogon / martian IP",
+      "p_ttl": "Low-TTL signal",
+      "p_routing_hist": "BGP routing-history",
+      "p_dane": "DANE / TLSA",
+      "p_ct": "CT inventory (crt.sh)",
+      "p_auth_recursive": "Auth vs recursive DNS",
+      "p_rdap": "RDAP registrar lock",
+      "p_irr": "IRR vs BGP",
+      "p_more_specific": "More-specific hijack",
+      "p_dual_stack": "IPv4/IPv6 origin bind",
+      "p_soa": "SOA integrity",
+      "p_baseline": "Baseline delta",
+      "p_caa_ct": "CAA⟷CT cross-check",
+      "p_hsts": "HSTS",
+      "p_redirect": "HTTP redirect bind",
+      "p_mx": "MX origin bind",
+      "p_glue": "NS glue",
+      "p_visibility": "BGP visibility",
+      "low_ttl_secs": "Low-TTL threshold (s)",
+      "sec_bgp": "BGP / Origin",
+      "expected_asns": "Expected origin ASNs",
+      "expected_asns_hint": "Allow-list, e.g. AS13335, 15169. Any other origin → hijack alert.",
+      "expected_countries": "Expected countries (ISO-2)",
+      "expected_countries_hint": "Enable check_geo — e.g. US, IL",
+      "ripe_base": "RIPEstat base URL",
+      "sec_scope": "Resolvers & Scope",
+      "resolvers": "DoH resolvers",
+      "resolvers_hint": "One per line: Name=https://host/dns-query. Empty = Cloudflare+Google+Quad9.",
+      "subdomains": "Extra subdomains",
+      "subdomains_hint": "Also checked for dangling-CNAME takeover.",
+      "sec_transport": "Transport",
+      "timeout_ms": "Per-probe timeout (ms)",
+      "concurrency": "Concurrency",
+      "intensity": "Intensity",
+      "intensity_light": "light",
+      "intensity_normal": "normal",
+      "intensity_aggressive": "aggressive",
+      "score_label": "RESISTANCE",
+      "scanning": "⟳ Scanning…",
+      "run_scan": "▶ Run Hijack-Resistance Scan",
+      "scan_running": "Querying authoritative NS, resolvers, DNSSEC, RPKI/IRR/BGP, RDAP, TLS & compound hijack planes…",
+      "empty_ready": "Ready — run to measure DNS/BGP hijack resistance.",
+      "findings": "Findings",
+      "roadmap": "Hardening Roadmap",
+      "po_dnssec": "DNSSEC",
+      "po_rpki": "RPKI ROA",
+      "po_auth": "Auth=recursive",
+      "po_rdap": "RDAP lock",
+      "po_irr": "IRR=BGP",
+      "po_consensus": "Resolver consensus",
+      "po_tls": "TLS bind",
+      "po_bogon": "Bogon-free",
+      "po_caa": "CAA",
+      "po_ns": "NS diversity",
+      "po_origin": "BGP origin",
+      "p_geo": "Geo country bind",
+      "p_ad_divergence": "DNSSEC AD divergence",
+      "p_fcrdns": "FCrDNS (PTR confirm)",
+      "p_expected_ips": "Expected A IP allow-list",
+      "p_cname": "CNAME chain audit",
+      "p_spf": "SPF at apex",
+      "p_wildcard": "Wildcard DNS probe",
+      "p_ns_lame": "Lame delegation",
+      "p_cds": "CDS/CDNSKEY automation",
+      "p_orphan_ds": "Orphan DS detection",
+      "p_timing": "Resolver timing anomaly",
+      "expected_a_ips": "Expected A IPs",
+      "expected_a_ips_hint": "Enable check_expected_ips — comma-separated IPv4 allow-list",
+      "timing_factor": "Resolver timing factor (×)",
+      "p_autonomous": "Autonomous discovery (v7)",
+      "p_ct_discovery": "CT-driven host discovery",
+      "p_delegation": "Delegation chain walk",
+      "p_udp_doh": "UDP/53 vs DoH cross-check",
+      "p_dmarc": "DMARC at _dmarc",
+      "p_parent_ns": "Parent/child NS consistency",
+      "evidence_notice": "Network recon, BGP/DNS hijack risk, and lateral-path signals from POST /api/command-center/scan (network / bgp_dns_hijacking engines). Paths require authorized IP/DNS scope."
     },
     "cloudControlTower": {
       "title": "Cloud Control Tower",
@@ -1100,27 +1864,34 @@
       "run_to_populate": "Run the engine to populate findings.",
       "select_client_first": "Select a client first",
       "scan_failed": "Scan failed",
-      "queued": "{{label}}: queued {{jobId}}"
+      "queued": "{{label}}: queued {{jobId}}",
+      "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers."
     },
     "socialEngineering": {
       "title": "Social Engineering Simulator",
+      "subtitle": "Email phishing assessments from live tenant findings and spear_phishing engine runs",
       "active_campaigns": "Active Campaigns",
       "total_campaigns": "Total Campaigns",
       "critical_findings": "Critical Findings",
       "assessments_loaded": "Assessments Loaded",
       "create_heading": "Create Phishing Campaign",
-      "create_subtitle": "Test your team's awareness with simulated phishing emails",
+      "create_subtitle": "Register a campaign record linked to client findings",
       "new_campaign": "New Campaign",
       "assessments_heading": "Phishing Assessments",
       "loading": "Loading campaigns...",
-      "empty": "No social-engineering findings yet. Run a phishing assessment to populate this view.",
-      "templates_heading": "Phishing Templates",
-      "click_preview": "Click to preview",
+      "refresh": "Refresh",
+      "load_failed": "Failed to load social engineering data",
+      "empty_title": "No assessments yet",
+      "empty": "No social-engineering findings yet. Run a spear_phishing assessment or create a campaign to populate this view.",
+      "templates_heading": "Campaign themes",
+      "templates_notice": "Themes are presets for POST /api/soc/social-engineering/campaigns — email phishing only today.",
+      "click_create": "Click to create campaign",
+      "click_preview": "Click to create",
       "untitled": "Untitled",
       "type_fallback": "phishing assessment",
       "create_modal_title": "Create Phishing Campaign",
       "campaign_name_label": "Campaign name",
-      "template_label": "Template",
+      "template_label": "Theme",
       "no_clients": "No clients available",
       "creating": "Creating…",
       "create_campaign": "Create Campaign",
@@ -1128,12 +1899,24 @@
       "select_client": "Select a client",
       "create_failed": "Failed to create campaign",
       "campaign_name_default": "{{template}} Campaign",
+      "data_notice": "Campaign rows are derived from tenant vulnerabilities tagged social_engineering_phishing / phishing — not simulated click rates. Run spear_phishing to generate new findings.",
+      "run_assessment_heading": "Run live spear phishing assessment",
+      "run_assessment_subtitle": "Dispatches production engine {{engine}} via POST /api/command-center/scan",
+      "run_assessment": "Run assessment",
+      "scanning": "Scanning…",
+      "scan_failed": "Assessment scan failed",
+      "missing_target": "Selected client has no authorized target URL",
+      "search_placeholder": "Search campaigns…",
+      "filter_all": "All",
+      "severity_distribution": "Severity distribution",
+      "view_findings": "View findings →",
       "template_password_reset": "Password Reset",
       "template_invoice": "Invoice",
       "template_it_support": "IT Support",
       "template_hr_notice": "HR Notice",
       "template_package_delivery": "Package Delivery",
-      "template_account_verification": "Account Verification"
+      "template_account_verification": "Account Verification",
+      "evidence_notice": "Phishing and pretext campaign artifacts queue via POST /api/command-center/scan (social_engineering) with council/RoE gates. Click and credential-capture events are OAST-verified when configured."
     },
     "engineManagementConsole": {
       "title": "Engine Management Console",
@@ -1162,13 +1945,18 @@
       "timeout_detail": "Timeout: {{seconds}}s",
       "concurrency_detail": "Concurrency: {{count}}",
       "last_run_detail": "Last run: {{time}}",
-      "id_detail": "ID: {{id}}"
+      "id_detail": "ID: {{id}}",
+      "evidence_notice": "Engine roster and tenant enablement from GET /api/ceo/god-mode/snapshot with fallback to GET /api/health. Toggles persist via PUT /api/ceo/tenant/engines; config via PUT /api/system/config.",
+      "export_csv": "Export CSV"
     },
     "strategicEngineProgram": {
       "back_matrix": "Back to Engine Matrix",
       "top_tier_hub": "Top-Tier Hub",
       "title": "Strategic Dedicated Engine Program",
+      "subtitle": "Prioritized rollout roadmap cross-referenced with live production engine flags",
+      "badge": "ROADMAP",
       "prioritized_count": "{{count}} prioritized engines",
+      "prioritized_label": "Program Size",
       "p0_label": "P0 Critical",
       "p0_desc": "Immediate business workflows, executive visibility, and operational SLAs.",
       "p1_label": "P1 Strategic",
@@ -1187,7 +1975,16 @@
       "status_planned_wave_1": "Planned Wave 1",
       "status_planned_wave_2": "Planned Wave 2",
       "status_implemented_top_tier": "Implemented (Top-Tier)",
-      "open_page": "Open Page"
+      "open_page": "Open Page",
+      "roadmap_notice": "Priority and business reasons come from the internal rollout catalog. Production/Catalog badges reflect live GET /api/engines/production — the only live telemetry on this page.",
+      "live_production": "Live in Program",
+      "live_production_desc": "{{total}} production engines platform-wide · {{program}} in this program",
+      "loading_production": "Loading production flags…",
+      "search_placeholder": "Search engines, IDs, or business reasons…",
+      "filter_all": "All",
+      "showing_count": "{{count}} of {{total}} shown",
+      "no_results": "No engines match your search or filter.",
+      "evidence_notice": "Strategic engine roadmap ties to GET /api/engines/capabilities maturity flags and GET /api/engines/top-tier/audit — tracks real delivery status, not marketing checklists."
     },
     "businessEngineProfile": {
       "not_configured": "No dedicated business page configured for engine: {{engineId}}",
@@ -1217,6 +2014,7 @@
       "no_jobs": "No jobs yet.",
       "live_findings": "Live Findings Snapshot",
       "no_findings": "No findings in snapshot.",
+      "search_placeholder": "Search jobs and findings…",
       "finding_fallback": "Finding",
       "effective_payload": "Effective Payload",
       "pdf_business_engine": "Business Engine",
@@ -1225,15 +2023,44 @@
       "pdf_findings_tracked": "Findings tracked",
       "pdf_mission_heading": "Business Mission",
       "pdf_active_job": "Active job",
+      "evidence_notice": "Jobs, findings, and exports from GET /api/engines/history and /api/command-center/scan — live tenant data only.",
+      "kpi_jobs": "Jobs tracked",
+      "kpi_findings": "Findings snapshot",
+      "kpi_completed": "Completed runs",
+      "kpi_failed": "Failed / dead",
       "engines": {
-        "osint": { "title": "OSINT Command Page", "mission": "Operational intelligence and threat lead generation for proactive response." },
-        "asm": { "title": "Attack Surface Management Page", "mission": "Board-level control of external exposure, internet-facing drift, and ownership gaps." },
-        "leak_hunter": { "title": "Leak Hunter Page", "mission": "Credential leak containment and follow-through on identity compromise risk." },
-        "supply_chain": { "title": "Supply Chain Assurance Page", "mission": "Dependencies and vendor risk monitoring with executive escalation signals." },
-        "semantic_ai_fuzz": { "title": "Semantic AI Fuzz Page", "mission": "High-cost AI scan operations with entitlement/quota controls." },
-        "ai_adversarial_redteam": { "title": "AI Adversarial Red Team Page", "mission": "Model risk owners need dedicated adversarial campaign timeline." },
-        "k8s_container": { "title": "Container & K8s Assurance Page", "mission": "Cloud platform teams need container/K8s compliance posture board." },
-        "scada_ics": { "title": "SCADA / ICS Operations Page", "mission": "OT environments require isolated UX and explicit safety context." }
+        "osint": {
+          "title": "OSINT Command Page",
+          "mission": "Operational intelligence and threat lead generation for proactive response."
+        },
+        "asm": {
+          "title": "Attack Surface Management Page",
+          "mission": "Board-level control of external exposure, internet-facing drift, and ownership gaps."
+        },
+        "leak_hunter": {
+          "title": "Leak Hunter Page",
+          "mission": "Credential leak containment and follow-through on identity compromise risk."
+        },
+        "supply_chain": {
+          "title": "Supply Chain Assurance Page",
+          "mission": "Dependencies and vendor risk monitoring with executive escalation signals."
+        },
+        "semantic_ai_fuzz": {
+          "title": "Semantic AI Fuzz Page",
+          "mission": "High-cost AI scan operations with entitlement/quota controls."
+        },
+        "ai_adversarial_redteam": {
+          "title": "AI Adversarial Red Team Page",
+          "mission": "Model risk owners need dedicated adversarial campaign timeline."
+        },
+        "k8s_container": {
+          "title": "Container & K8s Assurance Page",
+          "mission": "Cloud platform teams need container/K8s compliance posture board."
+        },
+        "scada_ics": {
+          "title": "SCADA / ICS Operations Page",
+          "mission": "OT environments require isolated UX and explicit safety context."
+        }
       }
     },
     "threatHuntingWorkbench": {
@@ -1281,7 +2108,18 @@
       "col_added": "Added",
       "untitled_hunt": "Untitled hunt",
       "unassigned": "Unassigned",
-      "untitled_query": "Untitled query"
+      "untitled_query": "Untitled query",
+      "evidence_notice": "Hunt campaigns, IOCs, and detection queries from GET /api/soc/hunts — derived from live finding clusters, not seeded demo data.",
+      "export_csv": "Export CSV",
+      "severity_critical": "CRITICAL",
+      "severity_high": "HIGH",
+      "severity_medium": "MEDIUM",
+      "severity_low": "LOW",
+      "severity_info": "INFO",
+      "priority_critical": "CRITICAL",
+      "priority_high": "HIGH",
+      "priority_medium": "MEDIUM",
+      "priority_low": "LOW"
     },
     "integrationManager": {
       "title": "Integration Manager",
@@ -1300,7 +2138,8 @@
       "no_integrations_hint": "No integrations configured. Click \"Add Integration\" to get started.",
       "add_integration_modal": "Add Integration",
       "adding": "Adding…",
-      "last_test": "Last tested: {{time}}"
+      "last_test": "Last tested: {{time}}",
+      "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI."
     },
     "killChainOrchestrator": {
       "title": "Kill Chain Orchestrator",
@@ -1351,13 +2190,34 @@
       "severity_low": "LOW",
       "severity_info": "INFO",
       "phases": {
-        "reconnaissance": { "label": "Reconnaissance", "description": "Gather intelligence on target systems, networks, employees, and infrastructure before active exploitation." },
-        "weaponization": { "label": "Weaponization", "description": "Develop or acquire tools, exploits, and payloads tailored to target vulnerabilities." },
-        "delivery": { "label": "Delivery", "description": "Transmit weaponized payloads to the target environment via phishing, web exploits, or supply chain compromise." },
-        "exploitation": { "label": "Exploitation", "description": "Trigger code execution or abuse vulnerabilities to establish initial access within the target." },
-        "installation": { "label": "Installation", "description": "Install backdoors, web shells, or persistent agents to maintain access after initial compromise." },
-        "c2": { "label": "Command & Control", "description": "Establish covert communication channels between compromised hosts and attacker-controlled infrastructure." },
-        "exfiltration": { "label": "Exfiltration", "description": "Extract sensitive data from the target environment using covert channels or cloud storage abuse." }
+        "reconnaissance": {
+          "label": "Reconnaissance",
+          "description": "Gather intelligence on target systems, networks, employees, and infrastructure before active exploitation."
+        },
+        "weaponization": {
+          "label": "Weaponization",
+          "description": "Develop or acquire tools, exploits, and payloads tailored to target vulnerabilities."
+        },
+        "delivery": {
+          "label": "Delivery",
+          "description": "Transmit weaponized payloads to the target environment via phishing, web exploits, or supply chain compromise."
+        },
+        "exploitation": {
+          "label": "Exploitation",
+          "description": "Trigger code execution or abuse vulnerabilities to establish initial access within the target."
+        },
+        "installation": {
+          "label": "Installation",
+          "description": "Install backdoors, web shells, or persistent agents to maintain access after initial compromise."
+        },
+        "c2": {
+          "label": "Command & Control",
+          "description": "Establish covert communication channels between compromised hosts and attacker-controlled infrastructure."
+        },
+        "exfiltration": {
+          "label": "Exfiltration",
+          "description": "Extract sensitive data from the target environment using covert channels or cloud storage abuse."
+        }
       }
     },
     "rateLimitAnalytics": {
@@ -1376,24 +2236,91 @@
       "endpoints_heading": "Per-Endpoint Breakdown",
       "loading": "Loading analytics…",
       "no_violations": "No violations in selected range",
-      "no_data": "No data available"
+      "no_data": "No data available",
+      "subtitle": "Live request-budget utilization, throttling events, and per-endpoint pressure",
+      "badge": "GOVERNANCE",
+      "attempts": "{{count}} attempts",
+      "pct_used": "{{pct}}% used",
+      "of_max": "of {{max}}",
+      "source_label": "Source",
+      "source_redis": "Redis (distributed)",
+      "source_in_memory": "In-memory (single node)",
+      "load_error": "Couldn't load rate-limit analytics.",
+      "history_empty_title": "No usage recorded yet",
+      "history_empty_body": "Request activity for the selected range will plot here as traffic flows through the API.",
+      "endpoints_empty_title": "No endpoint pressure yet",
+      "violations_empty_title": "No throttling events",
+      "evidence_notice": "Rate-limit and abuse-pattern metrics from GET /api/metrics/dashboard and request counters on your tenant. Threshold breaches align with live API gateway logs — not random sparklines."
     },
     "aiAnalysisEngine": {
       "title": "AI Analysis Engine",
       "subtitle": "Attack Pattern Recognition · Threat Correlation · Risk Scoring",
       "loading": "Loading AI patterns…",
+      "load_error": "Failed to load intel data",
+      "load_error_detail": "Couldn't load intel data: {{detail}}",
+      "last_updated": "Last sync {{time}}",
+      "export_csv": "Export patterns",
+      "evidence_soc": "Live SOC patterns from GET /api/soc/ai-patterns. Correlations are derived from multi-engine clusters and shared targets in real finding data — no fabricated attack chains.",
+      "evidence_clusters": "SOC endpoint empty — showing correlated finding clusters from GET /api/findings/clusters (members enriched via GET /api/findings).",
+      "evidence_findings": "Cluster API empty — showing individual findings from GET /api/findings until clusters populate.",
       "no_patterns_title": "No attack patterns yet",
-      "no_patterns_body": "Run scans and enable AI-heavy engines to populate pattern recognition.",
+      "no_patterns_body": "Run scans and enable detection engines to populate pattern recognition.",
+      "go_engines": "Launch engines",
       "patterns_heading": "Attack Patterns",
       "clusters_heading": "Finding Clusters",
       "risk_score": "Composite Risk Score",
       "confidence": "Confidence",
+      "kpi_patterns": "Patterns Detected",
+      "kpi_confidence": "Avg Confidence",
+      "kpi_correlations": "Correlations",
+      "kpi_critical": "Critical Patterns",
+      "tab_patterns": "Attack Patterns",
+      "tab_correlations": "Correlations",
+      "search_placeholder": "Search patterns, MITRE, targets…",
+      "filter_all_categories": "All Categories",
+      "filter_all_severity": "All Severity",
+      "severity_critical": "CRITICAL",
+      "severity_high": "HIGH",
+      "severity_medium": "MEDIUM",
+      "severity_low": "LOW",
+      "severity_info": "INFO",
       "category_cloud": "Cloud Attacks",
       "category_supply": "Supply Chain",
       "category_identity": "Identity",
       "category_cloud_native": "Cloud Native",
       "category_web": "Web App",
-      "category_other": "Other"
+      "category_other": "Other",
+      "select_pattern": "Select an attack pattern to view AI analysis details",
+      "affected_systems": "Affected Systems",
+      "mitre_techniques": "MITRE Techniques",
+      "mitre_not_mapped": "Not mapped",
+      "indicators": "Indicators of Compromise",
+      "no_indicators": "No indicators recorded for this cluster.",
+      "max_epss": "Max EPSS",
+      "max_cvss": "Max CVSS",
+      "correlated_signals": "Correlated signals",
+      "remediation": "Remediation Guidance",
+      "no_remediation": "No remediation text on file — triage in Findings Command Center.",
+      "last_seen": "Last seen: {{time}}",
+      "status_label": "Status: {{status}}",
+      "correlations_intro": "Correlations derived from multi-engine clusters and co-located targets in live finding data.",
+      "no_correlations_title": "No correlations yet",
+      "no_correlations_body": "Multi-engine clusters or shared targets will appear here as engines report findings.",
+      "corr_multi_engine_title": "Multi-engine correlation: {{name}}",
+      "corr_multi_engine_body": "{{count}} finding(s) from {{engines}} converge on {{target}}.",
+      "corr_co_located_title": "Co-located exposure on {{target}}",
+      "corr_co_located_body": "{{count}} distinct vulnerability clusters affect {{target}}, indicating compounding attack surface.",
+      "risk_multiplier": "Risk multiplier:",
+      "detected": "Detected",
+      "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only."
+    },
+    "askWeissman": {
+      "evidence_notice": "Natural-language answers compiled via POST /api/ask only — read-only SQL against tenant-scoped data with audit logging. Transcript is session-local until you export it.",
+      "export_transcript": "Export transcript CSV",
+      "clear_history": "Clear history",
+      "refresh_session": "Refresh session",
+      "search_placeholder": "Search transcript questions and answers…",
+      "plan_label": "Query plan"
     },
     "pqcRadar": {
       "title": "Post-Quantum Readiness Radar",
@@ -1416,7 +2343,143 @@
       "empty_ready": "Ready to scan — run to check TLS certificate quantum readiness.",
       "status_final": "final",
       "status_draft": "draft",
-      "status_quantum_vulnerable": "quantum-vulnerable"
+      "status_quantum_vulnerable": "quantum-vulnerable",
+      "subtitle_v2": "Live hybrid PQC key-exchange probing · HNDL risk · NIST FIPS 203/204/205",
+      "readiness_score": "Quantum-Readiness Score",
+      "grade_leader": "Quantum-safe leader",
+      "grade_progress": "Migration in progress",
+      "grade_exposed": "Quantum-exposed",
+      "remediation": "Remediation",
+      "target_label": "Target host (in scope)",
+      "target_required": "A target host is required (must be in the client scope).",
+      "reset": "Reset",
+      "reset_done": "Parameters reset to defaults",
+      "control_panel": "Probe Control Panel",
+      "hide_json": "hide JSON",
+      "show_json": "view request",
+      "section_probes": "Probes",
+      "probe_tls": "TLS 1.3 hybrid KEX probe",
+      "probe_tls_hint": "Raw ClientHello named-group negotiation",
+      "deep_pqc_probe": "Deep PQC-only confirmation",
+      "deep_pqc_probe_hint": "Force HelloRetryRequest to reveal support",
+      "probe_ssh": "SSH KEX enumeration",
+      "probe_ssh_hint": "sntrup761 / mlkem768 detection",
+      "probe_cert": "Certificate crypto inventory",
+      "probe_cert_hint": "Shor-vulnerability classification",
+      "check_hsts": "HSTS / downgrade check",
+      "check_well_known": ".well-known PQC docs",
+      "check_ct_logs": "CT-log cert inventory",
+      "check_ct_logs_hint": "crt.sh — slower",
+      "tls_ports": "TLS ports",
+      "ssh_ports": "SSH ports",
+      "pqc_groups": "PQC groups to test",
+      "all": "all",
+      "none": "none",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "timeout_ms": "Socket timeout",
+      "concurrency": "Concurrency",
+      "section_hndl": "Harvest-Now-Decrypt-Later model",
+      "data_sensitivity": "Data sensitivity",
+      "sens_low": "Low",
+      "sens_medium": "Med",
+      "sens_high": "High",
+      "sens_critical": "Crit",
+      "confidentiality_years": "Confidentiality lifetime",
+      "quantum_threat_year": "Est. CRQC arrival year",
+      "section_thresholds": "Key thresholds & SNI",
+      "min_rsa_bits": "Min RSA bits",
+      "min_ecc_bits": "Min ECC bits",
+      "sni": "SNI override (optional)",
+      "present": "Present",
+      "absent": "Absent",
+      "pqc_kex": "PQC KEX",
+      "default": "Default",
+      "supported": "Supported",
+      "none_cap": "None",
+      "best_group": "Best group",
+      "offered": "Offered",
+      "hndl_risk": "HNDL risk",
+      "scanning_live": "Probing TLS / SSH / certificates live…",
+      "job": "Job",
+      "findings": "Findings",
+      "no_findings": "No live signal observed for this target with the selected probes.",
+      "evidence_notice": "Post-quantum crypto readiness from POST /api/command-center/scan (pqc_scanner). Cipher suites and certificate algorithms are measured on live TLS handshakes to authorized hosts."
+    },
+    "tlsPosture": {
+      "title": "TLS / PKI Posture Command Center",
+      "badge": "TRANSPORT SECURITY",
+      "subtitle": "Live OpenSSL handshakes · SSL-Labs-style grading · full evidence trail",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "target_required": "Enter a target hostname or URL",
+      "target_placeholder": "example.com or https://example.com",
+      "scan_failed": "TLS scan failed",
+      "scan_queued": "TLS scan queued: job {{jobId}}",
+      "scanning": "⟳ Probing TLS live…",
+      "run_scan": "▶ Run TLS Assessment",
+      "control_panel": "Probe Control Panel",
+      "tls_ports": "TLS ports",
+      "sni": "SNI override (optional)",
+      "starttls": "STARTTLS protocol",
+      "intensity": "Scan intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "protocols_filter": "Protocols to test (blank = all)",
+      "timeout_ms": "Handshake timeout (ms)",
+      "cipher_limit": "Cipher walk depth",
+      "port_budget": "Per-port budget (s)",
+      "expiry_warning": "Cert expiry warning (days)",
+      "probe_toggles": "Per-check toggles",
+      "ssl_grade": "SSL Labs Grade",
+      "protocol_matrix": "Protocol Matrix",
+      "findings_count": "Findings",
+      "cipher_inventory": "Cipher Inventory",
+      "findings": "Findings",
+      "empty_ready": "Select a client, configure probes, and run a live TLS assessment."
+    },
+    "edDetection": {
+      "title": "Detection Evasion Surface Command Center",
+      "badge": "DETECTION RESILIENCE",
+      "subtitle": "Live edge WAF/bot matrix · CSP & cookie gaps · RUM telemetry · debug surface · resilience score 0–100",
+      "select_client": "— Select client —",
+      "target_placeholder": "example.com or https://example.com",
+      "scanning": "⟳ Probing detection surface…",
+      "run_scan": "▶ Run Assessment",
+      "control_panel": "Probe Control Panel",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "ua_limit": "UA matrix size",
+      "rate_burst": "Rate burst",
+      "resilience_score": "Detection Resilience",
+      "score_hint": "Higher = harder to evade",
+      "score_explainer": "Composite score from live edge blocking, rate limits, defender telemetry in-page, CSP/cookie hardening, and exposed debug surfaces. Host EDR (AMSI/ETW) requires the endpoint agent.",
+      "findings": "Findings",
+      "empty_ready": "Configure probes and run a live assessment."
+    },
+    "wafBypass": {
+      "title": "WAF Bypass Characterization Lab",
+      "badge": "WAF ORACLE",
+      "subtitle": "Live vendor fingerprint · encoding/header/path/verb transform matrix · JSON smuggling · hardening score 0–100",
+      "select_client": "— Select client —",
+      "target_placeholder": "example.com or https://example.com",
+      "scanning": "⟳ Probing WAF surface…",
+      "run_scan": "▶ Run WAF Assessment",
+      "control_panel": "Probe Control Panel",
+      "technique": "Bypass technique focus",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "extra_payloads_ph": "Extra payloads (comma-separated)",
+      "hardening_score": "WAF Hardening",
+      "score_hint": "Higher = stronger blocking",
+      "score_explainer": "Composite score from block rate, vendor detection, and observed bypass surfaces (encoding, headers, path normalization, verb gaps, JSON inspection). Every finding is from a live harmless probe.",
+      "findings": "Findings",
+      "empty_ready": "Select a client, configure probes, and run a live WAF assessment."
     },
     "supplyChainHub": {
       "title": "Supply Chain Hub",
@@ -1433,12 +2496,28 @@
       "last_run": "Last run: {{time}}",
       "finding_fallback": "Finding",
       "engines": {
-        "supply_chain": { "label": "Supply Chain Scanner", "description": "Vendor dependency compromise detection" },
-        "cicd_pipeline": { "label": "CI/CD Pipeline", "description": "ArgoCD, Jenkins, GitLab CI, Azure DevOps exposure" },
-        "container_registry": { "label": "Container Registry", "description": "DockerHub, ECR, /v2/_catalog exposure scan" },
-        "sbom_analyzer": { "label": "SBOM Analyzer", "description": "CycloneDX/SPDX lockfile CVE exposure scan" },
-        "typosquatting_monitor": { "label": "Typosquatting Monitor", "description": "NPM/PyPI impersonation package detection" }
-      }
+        "supply_chain": {
+          "label": "Supply Chain Scanner",
+          "description": "Vendor dependency compromise detection"
+        },
+        "cicd_pipeline": {
+          "label": "CI/CD Pipeline",
+          "description": "ArgoCD, Jenkins, GitLab CI, Azure DevOps exposure"
+        },
+        "container_registry": {
+          "label": "Container Registry",
+          "description": "DockerHub, ECR, /v2/_catalog exposure scan"
+        },
+        "sbom_analyzer": {
+          "label": "SBOM Analyzer",
+          "description": "CycloneDX/SPDX lockfile CVE exposure scan"
+        },
+        "typosquatting_monitor": {
+          "label": "Typosquatting Monitor",
+          "description": "NPM/PyPI impersonation package detection"
+        }
+      },
+      "evidence_notice": "SBOM, dependency, and typosquat findings from POST /api/command-center/scan (sbom_analyzer / typosquatting_monitor / supply_chain engines). Package rows map to verifiable registry lookups."
     },
     "digitalTwinSimulator": {
       "title": "Digital Twin Simulator",
@@ -1460,55 +2539,127 @@
       "simulating": "⟳ Simulating",
       "simulate": "▶ Simulate",
       "vulnerable_paths": "Vulnerable — {{count}} attack paths found",
-      "not_vulnerable": "Not vulnerable",
+      "not_vulnerable": "No exploitable paths found",
       "running_simulation": "Running simulation…",
       "simulation_signals": "{{count}} simulation signals",
       "simulation_status": "Simulation {{status}}",
       "scenarios": {
-        "xss": { "label": "XSS Injection", "description": "Simulates reflected, stored, and DOM-based cross-site scripting attack paths" },
-        "sqli": { "label": "SQL Injection", "description": "Models union-based, blind, time-based, and OOB SQL injection vectors" },
-        "mitm": { "label": "MITM / TLS Downgrade", "description": "Simulates man-in-the-middle via SSL stripping, weak cipher downgrade, HSTS bypass" },
-        "cors": { "label": "CORS Misconfiguration", "description": "Models cross-origin data exposure via permissive CORS headers and wildcard origins" }
+        "xss": {
+          "label": "XSS Injection",
+          "description": "Simulates reflected, stored, and DOM-based cross-site scripting attack paths"
+        },
+        "sqli": {
+          "label": "SQL Injection",
+          "description": "Models union-based, blind, time-based, and OOB SQL injection vectors"
+        },
+        "mitm": {
+          "label": "MITM / TLS Downgrade",
+          "description": "Simulates man-in-the-middle via SSL stripping, weak cipher downgrade, HSTS bypass"
+        },
+        "cors": {
+          "label": "CORS Misconfiguration",
+          "description": "Models cross-origin data exposure via permissive CORS headers and wildcard origins"
+        }
       },
       "risk_critical": "critical",
       "risk_high": "high",
       "risk_medium": "medium",
-      "risk_low": "low"
+      "risk_low": "low",
+      "status_pending": "Running",
+      "rerun": "Re-run",
+      "not_run_hint": "Run the simulation to model real attack paths.",
+      "pending_status": "Simulation running — result pending",
+      "job_ref": "Job {{jobId}}",
+      "clear_results": "Clear results",
+      "overview_simulated": "Simulated",
+      "overview_vulnerable": "Vulnerable",
+      "overview_clear": "No paths",
+      "overview_running": "Running",
+      "posture_grade": "Attack Surface Posture",
+      "roadmap_heading": "Prioritized remediation",
+      "target_label": "Target URL",
+      "build_full_twin": "▶ Build Full Twin",
+      "full_twin_queued": "Full twin scan queued: {{jobId}}",
+      "show_params": "▸ Parameters",
+      "hide_params": "▾ Parameters",
+      "probe_categories": "Probe categories",
+      "probe_depth_label": "Probe depth",
+      "depth_quick": "Quick (fewer URLs)",
+      "depth_standard": "Standard",
+      "depth_deep": "Deep (more paths/params)",
+      "extra_paths_label": "Extra probe paths",
+      "max_urls_label": "Max probe URLs",
+      "timeout_label": "Timeout (ms)",
+      "check_xss": "XSS reflection probes",
+      "check_sqli": "SQLi error-based probes",
+      "check_mitm": "MITM / transport probes",
+      "check_cors": "CORS misconfiguration probes",
+      "strict_mode": "Strict mode (escalate severities)",
+      "include_http_cleartext": "Probe cleartext HTTP",
+      "canary_only": "Safe canary payloads only",
+      "subscore_transport": "Transport / TLS",
+      "subscore_headers": "Security headers",
+      "subscore_cors": "CORS policy",
+      "subscore_injection": "Injection surface",
+      "exploit_exploitable": "Exploitable paths confirmed",
+      "exploit_partial": "Partially exploitable",
+      "exploit_hardening": "Hardening gaps remain",
+      "exploit_hardened": "No exploitable paths observed",
+      "profile_server": "Server",
+      "profile_stack": "Stack",
+      "profile_cleartext": "Cleartext HTTP",
+      "profile_paths": "Discovered paths",
+      "evidence_notice": "Digital twin scenarios replay authorized finding graphs via POST /api/command-center/scan (digital_twin). Blast-radius math uses GET /api/financial-risk/:clientId when FAIR inputs exist."
     },
     "exploitResearchLab": {
       "title": "Exploit Research Lab",
-      "subtitle": "Advanced Security Research · Multi-Vector Scanning · CVE Intelligence",
+      "subtitle": "PoE synthesis, module scans, CVE intelligence — all from live findings and payload sync",
       "badge": "RESEARCH",
+      "data_notice": "Findings load from GET /api/soc/exploit-lab (sealed PoE rows) with fallback to tenant critical/high findings. Scanner runs dispatch real production engines — no dead links.",
+      "refresh": "Refresh",
       "kpi_modules": "Scanner Modules",
       "kpi_findings": "Total Findings",
       "kpi_critical": "Critical Findings",
       "kpi_cves": "CVEs Tracked",
       "tab_scanners": "Scanner Modules",
       "tab_cves": "CVE Exploit Map",
+      "tab_payloads": "Payload Library",
       "load_error": "Could not load findings: {{error}}",
       "findings_count": "{{count}} findings",
       "loading": "Loading…",
-      "capabilities": "Capabilities",
+      "capabilities": "Reference capabilities (module taxonomy)",
       "findings_heading": "Findings",
       "loading_findings": "Loading findings…",
       "no_findings_module": "No critical or high findings for this module yet.",
-      "run_scan_link": "Run a scan",
-      "view_all_link": "Findings C2",
-      "no_findings_suffix": "or view all in",
+      "no_findings_suffix": "Run the module scanner or PoE synthesis to populate evidence.",
       "finding_fallback": "Finding",
       "cvss": "CVSS:",
       "cvss_label": "CVSS",
       "confidence": "Confidence:",
       "via": "via {{source}}",
       "raw_evidence": "Raw Evidence",
-      "run_scanner": "▶ Run Scanner",
-      "view_all_findings": "📋 View All Findings",
+      "run_scanner": "Run {{engine}}",
+      "scanning": "Scanning…",
+      "scan_failed": "Scan dispatch failed",
+      "select_client": "Select a tenant client first",
+      "missing_target": "Client has no authorized target URL",
+      "engine_not_production": "Engine {{engine}} is catalog-only — cannot dispatch",
+      "poe_heading": "PoE Synthesis",
+      "poe_subtitle": "POST /api/poe-scan/run against authorized client target",
+      "run_poe": "Run PoE scan",
+      "poe_running": "PoE running…",
+      "poe_failed": "PoE scan failed",
+      "payloads_intro": "Live payloads from GET /api/payload-sync/payloads (intel DB)",
+      "payloads_60d": "{{count}} payloads synced (60d)",
+      "no_payloads_title": "No payloads synced",
+      "no_payloads": "Payload intel DB returned no rows. Run payload sync from Integrations or wait for ingest.",
+      "view_all_findings": "View all findings",
       "cve_map_intro": "CVE groups from live critical/high findings — prioritized by CVSS and finding count.",
       "no_cve_findings": "No CVE-tagged critical or high findings yet.",
       "view_findings_link": "View all findings",
       "findings_plural": "{{count}} findings",
       "findings_singular": "{{count}} finding",
-      "exploit_signal": "⚠ Exploit signal in findings",
+      "exploit_signal": "Exploit signal in findings",
       "severity_critical": "CRITICAL",
       "severity_high": "HIGH",
       "severity_medium": "MEDIUM",
@@ -1520,12 +2671,28 @@
       "maturity_theoretical": "Theoretical",
       "load_failed": "Failed to load findings",
       "modules": {
-        "web-app": { "name": "Web Application Scanner", "description": "SQL injection, XSS, SSTI, XXE, path traversal, CSRF, open redirect, and business logic flaws." },
-        "cloud": { "name": "Cloud Infrastructure Scanner", "description": "AWS/Azure/GCP misconfiguration, IAM privilege escalation, S3/Blob exposure, metadata service abuse." },
-        "api": { "name": "API Security Scanner", "description": "REST/GraphQL/gRPC: BOLA/IDOR, mass assignment, auth bypass, rate limit bypass, schema exposure." },
-        "active-directory": { "name": "Active Directory Scanner", "description": "Kerberoasting, AS-REP Roasting, ACL abuse, BloodHound-style path analysis, GPO enumeration." },
-        "container": { "name": "Container & K8s Scanner", "description": "Docker/Kubernetes: privileged containers, RBAC misconfigs, secret exposure, image vulnerability scan." }
-      }
+        "web-app": {
+          "name": "Web Application Scanner",
+          "description": "SQL injection, XSS, SSTI, XXE, path traversal, CSRF, open redirect, and business logic flaws."
+        },
+        "cloud": {
+          "name": "Cloud Infrastructure Scanner",
+          "description": "AWS/Azure/GCP misconfiguration, IAM privilege escalation, S3/Blob exposure, metadata service abuse."
+        },
+        "api": {
+          "name": "API Security Scanner",
+          "description": "REST/GraphQL/gRPC: BOLA/IDOR, mass assignment, auth bypass, rate limit bypass, schema exposure."
+        },
+        "active-directory": {
+          "name": "Active Directory Scanner",
+          "description": "Kerberoasting, AS-REP Roasting, ACL abuse, BloodHound-style path analysis, GPO enumeration."
+        },
+        "container": {
+          "name": "Container & K8s Scanner",
+          "description": "Docker/Kubernetes: privileged containers, RBAC misconfigs, secret exposure, image vulnerability scan."
+        }
+      },
+      "evidence_notice": "Controlled exploit validation runs through POST /api/command-center/scan with strict RoE and council gates. PoC success requires reproducible live target behavior — no canned shell screenshots."
     },
     "otIcsSecurity": {
       "title": "OT / ICS / IoT Security",
@@ -1568,7 +2735,27 @@
       "status_error": "Error",
       "status_idle": "Idle",
       "notice_title": "OT Security Notice",
-      "notice_body": "Industrial Control Systems require special care. All scans are passive by default. Active testing requires explicit authorization and may disrupt operations."
+      "notice_body": "Industrial Control Systems require special care. All scans are passive by default. Active testing requires explicit authorization and may disrupt operations.",
+      "subtitle": "Passive fingerprinting of industrial control systems and IoT — devices, protocols, and findings observed in your scope",
+      "badge": "OT / ICS",
+      "refresh": "Refresh",
+      "kpi_devices": "Devices Observed",
+      "kpi_protocols": "Protocols Observed",
+      "kpi_findings": "Open Findings",
+      "kpi_severe": "Critical / High",
+      "inventory_heading": "Device Inventory by Type",
+      "devices_empty_title": "No OT/ICS devices observed",
+      "protocols_empty_title": "No industrial protocols observed",
+      "protocols_empty_body": "Protocols appear here once a passive OT/ICS scan fingerprints them in your scope. Run an engine scan above to begin.",
+      "protocol_status_info": "Observed",
+      "protocol_status_warning": "Attention",
+      "protocol_status_critical": "Critical",
+      "scan_findings_title": "Engine Scan Findings",
+      "scan_findings_empty_title": "No engine scan findings yet",
+      "scan_findings_empty_body": "Run an OT/ICS engine scan above. Findings aggregate here across SCADA, Modbus, BACnet, and OPC-UA probes.",
+      "scan_findings_ready_title": "Ready to scan",
+      "scan_findings_ready_body": "Select a client and run any OT/ICS engine. Live findings from completed jobs appear here with search, severity filters, and CSV export.",
+      "evidence_notice": "OT/ICS protocol probes via POST /api/command-center/scan (ot_ics) against authorized industrial IP ranges. Empty state means no reachable PLCs/RTUs in scope — not simulated Modbus traffic."
     },
     "networkProtocols": {
       "title": "Network Protocol Analysis",
@@ -1589,7 +2776,14 @@
       "empty_suffix": "or the engine room. Select a client to merge risk-graph network nodes when available.",
       "findings_one": "{{count}} finding from live probes",
       "findings_other": "{{count}} findings from live probes",
-      "view_findings": "View findings"
+      "view_findings": "View findings",
+      "evidence_notice": "Protocol exposure aggregated from GET /api/soc/network-protocols — probe-derived, no fabricated stats.",
+      "search_placeholder": "Search protocols…",
+      "export_csv": "Export CSV",
+      "status_critical": "Critical",
+      "status_warning": "Warning",
+      "status_secure": "Secure",
+      "no_search_results": "No protocols match your search."
     },
     "riskGraphVisualization": {
       "title": "Risk Graph Visualization",
@@ -1624,55 +2818,98 @@
       "asset_fallback": "Asset",
       "legend": "Legend",
       "legend_hint": "Node size represents risk score. Red edges highlight paths through choke-point assets.",
-      "risk_label": "{{severity}} Risk"
+      "risk_label": "{{severity}} Risk",
+      "evidence_notice": "Risk graph from GET /api/risk/graph?client_id=…. Attack-path snapshots from GET /api/attack-paths/:clientId (recompute via ?recompute=1).",
+      "attack_paths_heading": "Probable Attack Paths",
+      "recompute_paths": "Recompute paths",
+      "no_attack_paths": "No attack-path snapshot yet. Mark nodes as internet-exposed / crown-jewel, then recompute.",
+      "choke_points": "Choke points (patch these first)",
+      "export_csv": "Export nodes CSV",
+      "path_label": "Path #{{num}} · {{hops}} hops",
+      "path_risk": "risk {{value}}",
+      "path_coverage": "{{pct}}% paths",
+      "severity_critical": "Critical",
+      "severity_high": "High",
+      "severity_medium": "Medium",
+      "severity_low": "Low"
     },
     "baselineAndDrift": {
       "title": "Baseline & Drift Detection",
-      "baseline_assets": "Baseline Assets",
+      "subtitle": "UEBA baselines and anomaly drift from endpoint agents — agent_metric_baselines + agent_anomalies",
+      "badge": "UEBA",
+      "baseline_assets": "Monitored Agents",
+      "baseline_rows": "Baseline Metrics",
+      "samples": "{{count}} samples",
       "drift_score": "Drift Score",
       "anomalies": "Anomalies",
       "last_update": "Last Update",
       "never": "Never",
+      "refresh": "Refresh",
+      "load_failed": "Failed to load baseline data",
+      "evidence_notice": "Drift scores and anomalies are computed from live agent_metric_baselines and agent_anomalies in your tenant database — not synthetic charts.",
       "drift_over_time": "Drift Over Time",
-      "no_drift_data": "No drift data available",
+      "anomaly_volume": "Anomaly Volume",
+      "no_drift_data": "No drift data for this range",
+      "no_anomaly_volume": "No anomalies recorded in this range",
+      "range_24h": "24h",
+      "range_7d": "7d",
+      "range_30d": "30d",
+      "open_agents": "Deploy agents →",
+      "deploy_agents": "Open Agent Management",
+      "search_placeholder": "Search metric, agent, or detail…",
+      "filter_all": "All",
       "anomalies_heading": "Detected Anomalies ({{count}})",
       "loading_anomalies": "Loading anomalies...",
-      "no_anomalies": "No anomalies detected",
-      "score_label": "Score: {{score}}",
+      "no_anomalies": "No anomalies detected in this time range.",
+      "no_anomalies_title": "No anomalies",
+      "no_filter_anomalies": "No anomalies match your search or severity filter.",
+      "score_label": "Z-score: {{score}}",
+      "agent_label": "Agent",
+      "observed_vs_baseline": "Observed {{observed}} vs baseline {{baseline}}",
       "detected_at": "Detected: {{time}}",
       "no_baseline_title": "No Baseline Established",
       "no_baseline_body": "Endpoint agents auto-learn baselines over 7 days. Deploy agents and wait for UEBA samples to populate this view."
     },
     "sbomBrowser": {
       "title": "SBOM Browser",
+      "subtitle": "Live software bill of materials from ingested client_sbom_components, correlated with tenant vulnerability findings",
       "total_components": "Total Components",
       "direct_transitive": "{{direct}} direct, {{transitive}} transitive",
       "vulnerable": "Vulnerable",
-      "outdated": "Outdated",
-      "licenses": "Licenses",
+      "high_severity": "High Severity",
+      "high_severity_hint": "Components with critical or high matched findings",
+      "high_severity_badge": "High severity",
+      "ecosystems": "Ecosystems",
       "risk_score": "Risk Score",
-      "search_placeholder": "Search by name, version, or license...",
+      "risk_score_hint": "Weighted from matched vulnerability counts",
+      "search_placeholder": "Search by name, version, ecosystem, or source…",
       "filter_all": "All",
       "filter_vulnerable": "Vulnerable",
-      "filter_outdated": "Outdated",
+      "filter_high_severity": "High Severity",
       "filter_direct": "Direct",
       "filter_transitive": "Transitive",
-      "all_licenses": "All Licenses",
+      "all_ecosystems": "All Ecosystems",
       "export_spdx": "Export SPDX",
       "export_cyclonedx": "Export CycloneDX",
       "components_heading": "Components ({{count}})",
       "loading": "Loading SBOM...",
-      "empty": "No components found matching your filters.",
+      "refresh": "Refresh",
+      "empty": "No components match your filters.",
+      "empty_filter_hint": "Try clearing search or filter criteria.",
+      "empty_data_title": "No SBOM components",
+      "empty_data": "No SBOM components are stored for this client yet. Run a supply-chain or SBOM ingest scan to populate this view.",
+      "no_client_title": "Select a client",
+      "no_client": "Choose a tenant client to load live SBOM components from the database.",
+      "load_failed": "Failed to load SBOM components",
+      "export_failed": "SBOM export failed",
       "type_direct": "direct",
       "type_transitive": "transitive",
-      "outdated_badge": "Outdated",
-      "latest_version": "Latest: v{{version}}",
       "known_vulnerabilities": "{{count}} Known Vulnerabilities",
       "more_vulnerabilities": "+{{count}} more vulnerabilities",
-      "dependencies_count": "{{count}} dependencies",
-      "view_details": "View Details",
+      "ingested_at": "Ingested {{date}}",
       "alert_title": "Supply Chain Risk Alert",
-      "alert_body": "{{count}} components have known vulnerabilities. Update these packages to reduce supply chain risk."
+      "alert_body": "{{count}} components have known vulnerabilities. Update these packages to reduce supply chain risk.",
+      "evidence_notice": "SBOM components and vulnerability matches from POST /api/command-center/scan (sbom_analyzer) and GET /api/findings filtered by supply-chain engines. CVE links resolve to NVD records."
     },
     "containmentRulesBuilder": {
       "title": "Containment Rules Builder",
@@ -1705,7 +2942,8 @@
       "action_alert": "Alert Only",
       "auto_trigger": "Auto-trigger on condition match",
       "saving": "Saving...",
-      "save_changes": "Save Changes"
+      "save_changes": "Save Changes",
+      "evidence_notice": "Containment playbooks from GET/POST /api/containment-rules. Actions execute against live agent/session records when triggers match — dry-run shows planned API calls only."
     },
     "templateEngineWorkbench": {
       "title": "Template Engine",
@@ -1725,7 +2963,18 @@
       "verified": "VERIFIED",
       "not_verified": "NOT VERIFIED",
       "verification": "Verification",
-      "steps": "Steps"
+      "steps": "Steps",
+      "evidence_notice": "Templates from GET /api/template-engine/templates. Runs execute live HTTP via POST /api/template-engine/run against your authorized target URL.",
+      "result_status": "Status",
+      "result_matched": "Matched",
+      "result_steps": "Steps",
+      "result_matched_yes": "Matched",
+      "result_matched_no": "No match",
+      "steps_matched": "{{matched}} / {{total}} steps matched",
+      "step_label": "Step {{id}}",
+      "step_matched": "Matched",
+      "step_no_match": "No match",
+      "duration_ms": "{{ms}} ms"
     },
     "ceoVault": {
       "title": "CEO Vault",
@@ -1758,7 +3007,8 @@
       "expiration_optional": "Expiration Date (optional)",
       "cancel": "Cancel",
       "saving": "Saving...",
-      "save_secret": "Save Secret"
+      "save_secret": "Save Secret",
+      "evidence_notice": "Executive evidence vault entries from GET /api/ceo/vault and related /api/ceo/* endpoints. Genesis HPC and vaccine artifacts require CEO RBAC — no placeholder crown-jewel rows."
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -1787,7 +3037,8 @@
       "never": "Never",
       "anomalies_label": "Anomalies",
       "recent_activity": "Recent Activity",
-      "close": "Close"
+      "close": "Close",
+      "evidence_notice": "Identity context and IdP discovery from GET /api/identity-context and client-scoped SaaS/IdP endpoints. Correlation rows map to live SSO/OAuth metadata — not sample Entra tenants."
     },
     "ceoCommandCenter": {
       "title": "CEO command center",
@@ -1795,7 +3046,10 @@
       "war_room": "War room stream",
       "genesis_hpc": "Genesis and HPC",
       "vaccine_vault": "Vaccine vault",
-      "sovereign_lab": "Sovereign lab"
+      "sovereign_lab": "Sovereign lab",
+      "evidence_notice": "Live CEO telemetry from /api/ceo/* endpoints — war-room job stream, Genesis HPC status, vaccine vault entries, and sovereign lab runs. RBAC enforced server-side; no simulated executive data.",
+      "loading": "Loading command center panels…",
+      "search_placeholder": "Filter war-room job ID or executive section…"
     },
     "clientEngagements": {
       "title": "Engagements",
@@ -1887,7 +3141,8 @@
       "load_failed": "Failed to load requests (HTTP {{status}}) {{detail}}",
       "approve_failed": "Approve failed (HTTP {{status}})",
       "reject_failed": "Reject failed (HTTP {{status}})",
-      "network_error": "Network error"
+      "network_error": "Network error",
+      "evidence_notice": "Rules-of-Engagement requests from GET /api/roe and approval mutations via POST /api/roe/:id/approve. No scan executes until RoE is approved for the target scope."
     },
     "councilHitlQueue": {
       "title": "Council HITL Queue",
@@ -1912,7 +3167,26 @@
       "approved_toast": "Approved & fired — job {{jobId}}…",
       "approval_failed": "Approval failed: {{message}}",
       "rejected_toast": "Proposal rejected.",
-      "rejection_failed": "Rejection failed: {{message}}"
+      "rejection_failed": "Rejection failed: {{message}}",
+      "evidence_notice": "Queue items from GET /api/council/hitl/queue. Approvals and rejections via POST /api/council/hitl/{id}/approve and /reject. Safety rails enforced on every fired job — live council records only.",
+      "tab_all": "All",
+      "tab_pending_approval": "Pending",
+      "tab_fired": "Fired",
+      "tab_rejected": "Rejected",
+      "status_PENDING_APPROVAL": "Pending approval",
+      "status_APPROVED": "Approved",
+      "status_FIRED": "Fired",
+      "status_REJECTED": "Rejected",
+      "status_FAILED": "Failed",
+      "sev_critical": "Critical",
+      "sev_high": "High",
+      "sev_medium": "Medium",
+      "sev_low": "Low",
+      "empty_title": "Queue empty",
+      "empty_search": "No items match your search.",
+      "clear_search": "Clear search",
+      "search_placeholder": "Search by ID, target, client, or severity…",
+      "export_csv": "Export CSV"
     },
     "feedbackLoopVerification": {
       "title": "Feedback Loop Verification",
@@ -1923,12 +3197,60 @@
       "running": "⟳ Running…",
       "run_chain": "▶ Run Chain",
       "template_editable": "Template (editable)",
+      "loading_template": "Loading template…",
+      "templates_empty": "No templates returned from /api/template-engine/templates — you can still edit YAML manually.",
+      "load_failed": "Failed to load template",
       "result": "Result",
+      "result_empty_title": "No run yet",
       "result_empty": "Run the chain to see verification and step evidence.",
       "state_evidence": "State & Evidence",
+      "steps_total": "Steps",
+      "steps_passed": "Passed",
+      "verification": "Verification",
       "verified": "✓ VERIFIED",
       "not_verified": "NOT VERIFIED",
-      "run_failed": "Run failed"
+      "run_failed": "Run failed",
+      "evidence_notice": "Closed-loop verification re-runs remediated findings via POST /api/command-center/scan and compares against GET /api/findings history — confirms fixes on live targets."
+    },
+    "mobileSecurity": {
+      "title": "Mobile & App Security",
+      "subtitle": "Mobile findings discovered across your scope — iOS and Android, grouped by app",
+      "badge": "MOBILE",
+      "refresh": "Refresh",
+      "client_label": "Client:",
+      "select_client_first": "Select a client first",
+      "no_client_domain": "Selected client has no primary domain or IP scope",
+      "scan_failed": "Scan failed",
+      "scan_no_job": "Scan did not return a job id",
+      "network_error": "Network error",
+      "stat_total_apps": "Apps",
+      "stat_ios": "iOS",
+      "stat_android": "Android",
+      "stat_findings": "Open Findings",
+      "sev_critical": "Critical",
+      "sev_high": "High",
+      "sev_medium": "Medium",
+      "sev_low": "Low",
+      "sev_info": "Info",
+      "search_placeholder": "Search app name or package…",
+      "filter_all": "All",
+      "filter_ios": "iOS",
+      "filter_android": "Android",
+      "apps_heading": "Discovered Apps",
+      "apps_empty_title": "No mobile apps discovered",
+      "apps_empty_body": "Apps appear here once a mobile scan fingerprints iOS/Android findings in your scope. Pick a client and run a scan to begin.",
+      "platform_ios": "iOS",
+      "platform_android": "Android",
+      "platform_unknown": "Unknown",
+      "package_label": "Package:",
+      "findings_count_badge": "{{count}} findings",
+      "scanning": "Scanning…",
+      "scan_now": "Scan now",
+      "view_findings": "View findings",
+      "recent_findings_heading": "Recent Mobile Findings",
+      "open_findings": "Open Findings →",
+      "findings_empty_title": "No mobile findings yet",
+      "evidence_notice": "Mobile app surface checks via POST /api/command-center/scan (mobile engines). Certificate pinning and deep-link findings require supplied app binaries or reachable mobile API hosts."
     },
     "astFuzzingStudio": {
       "title": "AST Smart Fuzzing",
@@ -1942,7 +3264,21 @@
       "preview_empty": "Generate mutations to preview structure-aware variants.",
       "mutations": "Mutations",
       "count": "Count:",
-      "preview_failed": "Preview failed"
+      "preview_failed": "Preview failed",
+      "input_hint": "Paste a JSON object/array or a form body. Mutations stay structurally valid while probing type-specific edge cases.",
+      "presets_label": "Examples",
+      "preset_json": "JSON object",
+      "preset_array": "JSON array",
+      "preset_form": "Form body",
+      "json_valid": "Valid JSON",
+      "json_invalid": "Raw string",
+      "clear": "Clear",
+      "copy_all": "Copy all",
+      "download": "Download",
+      "search_placeholder": "Filter mutations…",
+      "no_match": "No mutations match your filter.",
+      "showing_count": "{{shown}} of {{total}}",
+      "evidence_notice": "AST-guided fuzz campaigns enqueue through POST /api/command-center/scan with grammar-aware payloads. Crashes and anomalies persist as standard tenant findings."
     },
     "oobVerification": {
       "title": "OOB Verification",
@@ -1957,8 +3293,11 @@
       "polling": "Polling…",
       "poll": "Poll for Callback",
       "status": "Status",
+      "hits_label": "Hits",
+      "token_label": "Token",
       "callback_domain": "Callback domain",
-      "injection_hint": "Injection hint",
+      "callback_url": "Callback URL",
+      "injection_hint": "Injection payload (copy into vulnerable field)",
       "verified": "Verified",
       "not_verified": "Not verified yet",
       "mint_failed": "Mint failed",
@@ -1973,11 +3312,21 @@
       "verification_body": "Poll the token to confirm whether the OAST listener observed DNS/HTTP interactions.",
       "full_dashboard": "Full Dashboard →",
       "mint_begin": "Mint a token to begin.",
+      "mint_empty_title": "No active probe",
       "hit_confirmed": "✓ HIT CONFIRMED",
       "hits_count": "{{count}} hits",
       "poll_btn": "Poll",
       "first_hit": "First hit: {{time}}",
-      "report_note": "In reports, findings that confirm via OOB callbacks are labeled verification_method=oob_oast_callback."
+      "report_note": "In reports, findings that confirm via OOB callbacks are labeled verification_method=oob_oast_callback.",
+      "evidence_notice": "Tokens and hits come from POST /api/oast/probe and GET /api/oast/verify/:token — callback rows from GET /api/oast/callbacks. A confirmed hit means the OAST listener saw a real DNS/HTTP interaction.",
+      "auto_poll_on": "Auto-poll ON (5s)",
+      "auto_poll_off": "Auto-poll OFF",
+      "callbacks_for_token": "Callbacks for this token ({{count}})",
+      "tenant_callbacks_heading": "Recent tenant OAST callbacks",
+      "col_time": "Time",
+      "col_channel": "Channel",
+      "col_source": "Source IP",
+      "col_payload": "Payload"
     },
     "domainDiscovery": {
       "dashboard": "← Dashboard",
@@ -2026,7 +3375,18 @@
       "select_one_domain": "Select at least one domain",
       "discovered_toast": "Discovered {{total}} domains ({{live}} live)",
       "scan_queued": "Scan queued for {{count}} domains (Job: {{jobId}})",
-      "network_error": "Network error"
+      "network_error": "Network error",
+      "evidence_notice": "Domain enumeration via POST /api/discovery/domains. Bulk scan queue via POST /api/scan/discovered-domains. All discovered assets are returned by the backend — nothing pre-seeded.",
+      "search_placeholder": "Search domains, IPs, titles…",
+      "export_csv": "Export CSV",
+      "stage_primary": "Primary Domain",
+      "stage_ct": "Certificate Transparency",
+      "stage_dns": "DNS Enumeration",
+      "stage_reverse_ip": "Reverse IP Lookup",
+      "stage_crawl": "Web Crawl",
+      "stage_whois": "WHOIS Lookup",
+      "stage_email": "Email Records",
+      "stage_pattern": "Pattern Generation"
     },
     "topTierEngineHub": {
       "back_matrix": "← Engine Matrix",
@@ -2054,7 +3414,12 @@
       "probe_label": "probe: {{status}}",
       "findings_duration": "{{count}} findings · {{ms}}ms",
       "open_dedicated": "Open dedicated page",
-      "open_engine_detail": "Open engine detail"
+      "open_engine_detail": "Open engine detail",
+      "evidence_notice": "Audit rows from GET /api/engines/top-tier/audit and health probes via POST /api/engines/top-tier/health-probe.",
+      "search_placeholder": "Search engines by ID, label, or path…",
+      "export_csv": "Export audit CSV",
+      "showing_count": "{{count}} of {{total}} engines",
+      "no_search_results": "No engines match your search."
     },
     "clientSaasIdpDiscovery": {
       "title": "SaaS / IdP Discovery",
@@ -2096,7 +3461,8 @@
     "oastDashboard": {
       "title": "OAST / OOB Dashboard",
       "badge": "APT / OOB",
-      "subtitle": "Out-of-band callback monitoring",
+      "subtitle": "Out-of-band callback monitoring — critical findings require verified OAST hits only",
+      "verification_banner": "Weissman OAST engine reports critical/high severities only when the operator listener confirms a real callback (verification_method=oob_oast_callback). Probes planted without a hit are info-level — zero false-positive criticals.",
       "client": "Client:",
       "select_client": "— Select client —",
       "oob_probes": "OOB Probes",
@@ -2142,9 +3508,22 @@
         },
         "blind_ssrf": {
           "label": "Blind SSRF",
-          "description": "Out-of-band SSRF callback to confirm OOB reach"
+          "description": "Out-of-band SSRF callback across 30+ URL parameters — confirmed only on listener hit"
+        },
+        "xxe_oob": {
+          "label": "Blind XXE",
+          "description": "External entity OOB via XML POST to API surfaces — verified callback correlation"
+        },
+        "cmd_dns": {
+          "label": "Command injection DNS",
+          "description": "DNS exfiltration patterns (nslookup) in command parameters — OAST-confirmed only"
+        },
+        "host_ssrf": {
+          "label": "Host-header SSRF",
+          "description": "Host / X-Forwarded-Host routing misconfig OOB canary"
         }
-      }
+      },
+      "evidence_notice": "OAST tokens from POST /api/oast/probe and callback rows from GET /api/oast/callbacks. A hit means your listener received a real out-of-band interaction."
     },
     "osintEngineProfile": {
       "title": "OSINT Engine",
@@ -2178,7 +3557,14 @@
       "queued": "> OSINT queued: {{jobId}}",
       "connecting": "> Connecting to telemetry stream...",
       "invalid_job_id": "Received invalid job id from server",
-      "network_error": "Network error"
+      "network_error": "Network error",
+      "evidence_notice": "OSINT runs queue via POST /api/command-center/scan; KPIs from GET /api/engines/history/osint.",
+      "kpi_jobs": "Jobs tracked",
+      "kpi_completed": "Completed",
+      "kpi_running": "Running",
+      "kpi_findings": "Findings",
+      "empty_client_title": "Select a client to run OSINT",
+      "empty_client_body": "Choose a client from the run panel to scope reconnaissance against authorized domains."
     },
     "topTierEngineProfile": {
       "unknown_engine": "Unknown Top-Tier engine: {{id}}",
@@ -2232,7 +3618,10 @@
       "col_kind": "Kind",
       "col_status": "Status",
       "col_findings": "Findings",
-      "col_created": "Created"
+      "col_created": "Created",
+      "evidence_notice": "Audit, history, and exports from GET /api/engines/top-tier/* and POST /api/command-center/scan — live engine evidence only.",
+      "empty_jobs_title": "No jobs tracked yet",
+      "empty_jobs_body": "Queue a scan from the run panel to populate job history for this Top-Tier engine."
     },
     "ssoDashboard": {
       "title": "SSO & Identity Providers",
@@ -2284,25 +3673,300 @@
       "test_passed": "✓ Connection test passed — IdP is reachable.",
       "test_failed": "Test failed: {{message}}",
       "providers": {
-        "okta": { "label": "Okta", "description": "Workforce Identity Cloud" },
-        "azure_ad": { "label": "Azure AD", "description": "Microsoft Entra ID" },
-        "google": { "label": "Google Workspace", "description": "Google Cloud Identity" },
-        "ping": { "label": "Ping Identity", "description": "PingFederate / PingOne" },
-        "saml_custom": { "label": "Custom SAML 2.0", "description": "Any SAML 2.0 Identity Provider" },
-        "oidc_custom": { "label": "Custom OIDC", "description": "Any OpenID Connect provider" }
+        "okta": {
+          "label": "Okta",
+          "description": "Workforce Identity Cloud"
+        },
+        "azure_ad": {
+          "label": "Azure AD",
+          "description": "Microsoft Entra ID"
+        },
+        "google": {
+          "label": "Google Workspace",
+          "description": "Google Cloud Identity"
+        },
+        "ping": {
+          "label": "Ping Identity",
+          "description": "PingFederate / PingOne"
+        },
+        "saml_custom": {
+          "label": "Custom SAML 2.0",
+          "description": "Any SAML 2.0 Identity Provider"
+        },
+        "oidc_custom": {
+          "label": "Custom OIDC",
+          "description": "Any OpenID Connect provider"
+        }
       },
       "fields": {
-        "name": { "label": "Connection Name", "placeholder": "e.g. Okta Production" },
-        "okta_domain": { "label": "Okta Domain", "placeholder": "company.okta.com" },
-        "azure_tenant_id": { "label": "Azure Tenant ID", "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-        "issuer_url": { "label": "Issuer / Discovery URL", "placeholder": "https://idp.example.com" },
-        "client_id": { "label": "Client ID", "placeholder": "OAuth 2.0 Client ID" },
-        "client_secret": { "label": "Client Secret", "placeholder": "••••••••", "note": "Leave blank to keep existing" },
-        "saml_idp_sso_url": { "label": "IdP SSO URL / Metadata URL", "placeholder": "https://idp.example.com/metadata.xml" },
-        "saml_idp_cert_pem": { "label": "IdP Certificate (PEM)", "placeholder": "-----BEGIN CERTIFICATE-----\n..." },
-        "sp_entity_id": { "label": "SP Entity ID", "placeholder": "https://app.weissman.io (leave blank for default)" },
-        "email_claim": { "label": "Email Claim", "placeholder": "email" }
+        "name": {
+          "label": "Connection Name",
+          "placeholder": "e.g. Okta Production"
+        },
+        "okta_domain": {
+          "label": "Okta Domain",
+          "placeholder": "company.okta.com"
+        },
+        "azure_tenant_id": {
+          "label": "Azure Tenant ID",
+          "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+        "issuer_url": {
+          "label": "Issuer / Discovery URL",
+          "placeholder": "https://idp.example.com"
+        },
+        "client_id": {
+          "label": "Client ID",
+          "placeholder": "OAuth 2.0 Client ID"
+        },
+        "client_secret": {
+          "label": "Client Secret",
+          "placeholder": "••••••••",
+          "note": "Leave blank to keep existing"
+        },
+        "saml_idp_sso_url": {
+          "label": "IdP SSO URL / Metadata URL",
+          "placeholder": "https://idp.example.com/metadata.xml"
+        },
+        "saml_idp_cert_pem": {
+          "label": "IdP Certificate (PEM)",
+          "placeholder": "-----BEGIN CERTIFICATE-----\n..."
+        },
+        "sp_entity_id": {
+          "label": "SP Entity ID",
+          "placeholder": "https://app.weissman.io (leave blank for default)"
+        },
+        "email_claim": {
+          "label": "Email Claim",
+          "placeholder": "email"
+        }
+      },
+      "evidence_notice": "SSO/OIDC/SAML provider configuration from GET/PUT /api/sso-config. Metadata and redirect URIs are live tenant settings — test logins hit your configured IdP endpoints."
+    },
+    "engineDetail": {
+      "evidence_notice": "Run history from GET /api/engines/history/:engineId. Live scans via POST /api/command-center/scan with engine-specific params. Progress streams on GET /api/telemetry/stream?job_id=… — findings persist to your tenant only."
+    },
+    "clientDetail": {
+      "evidence_notice": "Client record, scope, and engagement data from GET /api/clients/:id and related tenant endpoints. Scan bundles and evidence vault rows are live database records — never seeded demo profiles."
+    },
+    "jwtAttackLab": {
+      "evidence_notice": "JWT/JWKS probes execute via POST /api/command-center/scan (jwt_attack engine). Client scope from GET /api/clients. Every finding reflects authorized live HTTP against your target — no canned token exploits."
+    },
+    "jwtLab": {
+      "title": "JWT Attack Lab",
+      "badge": "IDENTITY / JWT",
+      "subtitle": "alg-confusion · weak-secret cracking · JWKS abuse · auth-bypass differential",
+      "client_label": "Client",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "target_label": "Target host (in scope)",
+      "target_required": "A target host is required (must be in the client scope).",
+      "scan_failed": "Scan failed",
+      "scan_queued": "JWT scan queued: job {{jobId}}",
+      "reset": "Reset",
+      "reset_done": "Parameters reset to defaults",
+      "scanning": "⟳ Attacking…",
+      "run_scan": "▶ Run JWT Assessment",
+      "control_panel": "Attack Control Panel",
+      "hide_json": "hide JSON",
+      "show_json": "view request",
+      "sample_jwt": "Sample JWT (paste to analyze + attack)",
+      "decoded": "Decoded (local)",
+      "section_attacks": "Attacks",
+      "test_alg_none": "alg=none acceptance",
+      "test_alg_none_hint": "none/None/NONE + empty sig",
+      "test_alg_confusion": "RS256→HS256 confusion",
+      "test_alg_confusion_hint": "sign with JWKS public key",
+      "test_weak_hmac": "Weak HMAC secret crack",
+      "test_weak_hmac_hint": "offline wordlist brute-force",
+      "check_jwks": "JWKS hardening review",
+      "check_jwks_hint": "weak RSA / leaked private params",
+      "harvest": "Harvest tokens from responses",
+      "harvest_hint": "headers / cookies / body",
+      "analyze_claims": "Analyze claims & lifetime",
+      "require_exp": "Flag missing exp",
+      "auth_endpoints": "Protected endpoints to test",
+      "harvest_paths": "Paths to harvest tokens from",
+      "jwks_paths": "JWKS / OIDC paths",
+      "jwks_url": "JWKS URL override (optional)",
+      "hmac_wordlist": "Extra HMAC secrets (added to built-in list)",
+      "sensitive_claims": "Privilege claim keys",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "timeout_ms": "HTTP timeout",
+      "concurrency": "Concurrency",
+      "max_lifetime": "Max token lifetime",
+      "min_rsa_bits": "Min RSA bits",
+      "oast_host": "OAST host (jku/x5u)",
+      "kpi_title": "Session KPIs",
+      "kpi_total": "Total",
+      "job": "Job",
+      "last_updated": "Last sync {{time}}",
+      "refresh": "Refresh",
+      "export_csv": "Export CSV",
+      "scanning_live": "Harvesting tokens, forging & testing live…",
+      "findings": "Findings",
+      "search_placeholder": "Search title, type, description…",
+      "filter_all": "all",
+      "no_findings_title": "Clean signal",
+      "no_findings": "No JWT signal observed for this target with the selected attacks.",
+      "empty_filtered_title": "No matches",
+      "empty_filtered": "No findings match the current search or severity filter.",
+      "empty_no_client_title": "Select scope",
+      "empty_no_client": "Select a client and target to begin a JWT assessment.",
+      "empty_ready_title": "Ready to assess",
+      "empty_ready": "Paste a token or let the engine harvest one, then run.",
+      "attack_reference": "Attack reference",
+      "remediation": "Remediation",
+      "attack_ref": {
+        "alg_none": { "id": "alg:none", "desc": "Unsigned token acceptance" },
+        "alg_confusion": { "id": "RS256→HS256", "desc": "Algorithm confusion (public key as HMAC secret)" },
+        "weak_hmac": { "id": "Weak HMAC", "desc": "Brute-forced shared secret → forgery" },
+        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / key substitution" },
+        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "Attacker-hosted key set" },
+        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "Weak RSA / leaked private params" }
       }
+    },
+    "iacSecurityCenter": {
+      "evidence_notice": "IaC misconfiguration analysis runs through POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile, and CI manifests are parsed server-side — policy hits are real static findings, not simulated CIS scores."
+    },
+    "graphqlSecurityCommandCenter": {
+      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only."
+    },
+    "websocketSecurity": {
+      "title": "WebSocket Security Command Center",
+      "badge": "WEISSMAN · REAL-TIME API",
+      "subtitle": "Agentless WebSocket DAST — RFC6455 verified handshake, CSWSH differential, stateful conversational fuzzing, binary protobuf mutation, barrier-sync race execution, cross-protocol Intelligence Bus.",
+      "posture": "WebSocket Posture",
+      "worst": "Worst: {{sev}}",
+      "weak_areas": "Weak areas:",
+      "select_client_first": "Select a client first",
+      "target_required": "Target URL required",
+      "scan_failed": "Scan failed",
+      "queued": "WebSocket scan queued ({{jobId}})",
+      "scanning": "⟳ Scanning…",
+      "run_scan": "▶ Run WebSocket Scan",
+      "params": "Parameters",
+      "client": "Client",
+      "select_client": "— Select client —",
+      "target": "Target URL",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "paths": "WebSocket paths",
+      "foreign_origin": "Foreign Origin",
+      "session_cookie": "Session cookie (CSWSH auth test)",
+      "bearer_token": "Bearer token (optional)",
+      "timeout_ms": "Timeout (ms)",
+      "message_read_ms": "Message read window (ms)",
+      "custom_messages": "Custom WS messages",
+      "advanced": "Weissman Standard (advanced)",
+      "race_connections": "Race parallel connections",
+      "race_sync_us": "Race sync window (µs)",
+      "race_payload": "Race transactional frame",
+      "http_escalation_paths": "HTTP escalation paths",
+      "last_run": "Last completed: {{time}}",
+      "select_client_hint": "Select an in-scope client — Weissman WebSocket assessment requires explicit client authorization.",
+      "empty_hint": "Run a scan to assess CSWSH, live message auth, Weissman Standard DAST and WebSocket posture.",
+      "groups": {
+        "handshake": "Handshake & transport",
+        "cswsh": "CSWSH & Origin",
+        "stacks": "Real-time stacks",
+        "messages": "Post-handshake sessions",
+        "enterprise": "Weissman Standard (DAST)",
+        "intel": "Weissman intelligence"
+      }
+    },
+    "attackSurfaceManagement": {
+      "evidence_notice": "ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface engines). Asset rows derive from live discovery against authorized client scope — no pre-populated attack graphs."
+    },
+    "dnsDomainPosture": {
+      "evidence_notice": "DNS, SPF, DMARC, and subdomain posture from POST /api/command-center/scan (email_dns_posture / dns engines). Records are resolved live against public resolvers for authorized domains.",
+      "coverage_audit": "Probe coverage audit (v8)",
+      "coverage_complete": "Full coverage",
+      "coverage_partial": "Partial",
+      "coverage_enabled": "Enabled",
+      "coverage_executed": "Executed",
+      "coverage_passed": "Passed",
+      "coverage_failed": "Failed"
+    },
+    "webCachePosture": {
+      "evidence_notice": "Web cache poisoning and header-smuggling probes via POST /api/command-center/scan (cache_poisoning). Each hit is a reproducible HTTP response differential on your authorized target."
+    },
+    "httpSmugglingPosture": {
+      "evidence_notice": "HTTP request-smuggling and desync tests via POST /api/command-center/scan (http_smuggling). Desync evidence requires live front/back-end behavior on the authorized host."
+    },
+    "emailDnsPosture": {
+      "evidence_notice": "Email authentication posture (SPF/DKIM/DMARC/BIMI) from POST /api/command-center/scan (email_dns_posture). MX and TXT lookups are live — misconfigurations map to real deliverability risk."
+    },
+    "transportSecurityCommandCenter": {
+      "evidence_notice": "World-class transport-security posture (mtls_grpc): 38+ live probe modules — TLS/crypto matrix, gRPC/mTLS/gRPC-Web, weak-cipher CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, 8-dimension executive scorecard. Every finding from real handshakes and HTTP probes via POST /api/command-center/scan (mtls_grpc). Command Center: /transport-security."
+    },
+    "pkiTlsCommandCenter": {
+      "evidence_notice": "PKI/TLS posture, mTLS, and certificate lifecycle findings from POST /api/command-center/scan (pki_tls). Revocation and chain trust are evaluated against live trust stores."
+    },
+    "cloudPostureCommandCenter": {
+      "evidence_notice": "Multi-cloud misconfiguration rules execute via POST /api/command-center/scan (cloud_posture / aws_attack / azure_attack / gcp_attack). Controls map to live API evidence — not benchmark placeholders."
+    },
+    "edDetectionSurface": {
+      "evidence_notice": "Detection coverage and log-source gaps derived from GET /api/findings and POST /api/command-center/scan correlation — shows where your stack would miss real attacker tradecraft."
+    },
+    "wafBypassLab": {
+      "evidence_notice": "WAF bypass payloads fire through POST /api/command-center/scan (waf_bypass). Successful evasions are confirmed with differential HTTP responses on the authorized target only."
+    },
+    "fileUploadSecurityLab": {
+      "evidence_notice": "File upload filter bypass and polyglot tests via POST /api/command-center/scan (file_upload). Upload paths you configure receive live multipart probes — no simulated shell uploads."
+    },
+    "identitySecurityCenter": {
+      "evidence_notice": "Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack engines). Token and federation misconfigs are validated with live protocol exchanges."
+    },
+    "kerberosSecurityCommandCenter": {
+      "evidence_notice": "Kerberos/AD exposure checks via POST /api/command-center/scan where RoE permits. Results reflect live LDAP/Kerberos responses — empty when no domain controllers are in scope."
+    },
+    "smbNetbiosCommandCenter": {
+      "evidence_notice": "SMB/NetBIOS enumeration via POST /api/command-center/scan (smb_netbios). Share listings and signing gaps require reachable hosts inside authorized IP ranges."
+    },
+    "passwordSprayCommandCenter": {
+      "evidence_notice": "Password-spray simulation queues through POST /api/command-center/scan with strict RoE throttling. Lockout-safe counters come from live auth endpoint responses — never synthetic success rates."
+    },
+    "samlSecurityCommandCenter": {
+      "evidence_notice": "SAML assertion, signature, and replay checks via POST /api/command-center/scan (saml_attack). Metadata and ACS endpoints must be in authorized scope."
+    },
+    "cicdPipelineSecurityCommandCenter": {
+      "evidence_notice": "CI/CD pipeline secret leakage and misconfig scans via POST /api/command-center/scan (cicd_pipeline). Findings tie to real repo/workflow artifacts you supply or discover."
+    },
+    "serverlessSecurityCommandCenter": {
+      "evidence_notice": "Serverless/IaC/API-gateway checks via POST /api/command-center/scan (serverless_attack). Function URLs and IAM bindings are evaluated from live cloud API evidence."
+    },
+    "threatAnalysisCenter": {
+      "evidence_notice": "Attack-pattern clustering and MITRE mapping from GET /api/findings and GET /api/soc/ai-patterns. Every technique row links to live finding evidence in your tenant."
+    },
+    "engineReliability": {
+      "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater."
+    },
+    "nexusSovereignSwarm": {
+      "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations."
+    },
+    "engineClientCatalog": {
+      "evidence_notice": "Scan profile templates launch real engine bundles via POST /api/command-center/scan and POST /api/scan/all-engines. Profile cards are RoE presets — telemetry from GET /api/engines/telemetry."
+    },
+    "agentManagement": {
+      "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps."
+    },
+    "zeroDayRadar": {
+      "evidence_notice": "Zero-day signal correlation from GET /api/threat-intel/feed cross-matched to GET /api/findings for your exposed stack — highlights emergent CVEs against live asset fingerprints."
+    },
+    "cockpit": {
+      "evidence_notice": "Command Center KPIs from GET /api/dashboard/exec-kpis, job pulse from GET /api/jobs, and severity rollups from GET /api/findings — unified live tenant telemetry."
+    },
+    "systemCore": {
+      "evidence_notice": "Platform core health from GET /api/health, worker queue depth from GET /api/jobs, and engine production flags from GET /api/engines/production — operator-grade live diagnostics."
+    },
+    "intelMap": {
+      "evidence_notice": "Geographic intel overlay from GET /api/findings geo tags and GET /api/threat-intel/feed — map pins appear only when findings include resolvable location metadata."
     }
   },
   "components": {
@@ -3029,7 +4693,11 @@
       }
     },
     "onboarding": {
-      "steps": { "client": "Client", "scope": "Scope", "launch": "Launch" },
+      "steps": {
+        "client": "Client",
+        "scope": "Scope",
+        "launch": "Launch"
+      },
       "badge": "First-time setup",
       "title": "Welcome to Weissman Command Center",
       "subtitle": "Add your first client, confirm authorized scope, and launch your inaugural scan.",
@@ -3109,11 +4777,26 @@
       "no_target_error": "Select a client above or enter a target URL.",
       "clients_prefix": "Clients:",
       "engines": {
-        "supply_chain": { "label": "Supply Chain", "short": "SC" },
-        "llm_path_fuzz": { "label": "AI Fuzz (vLLM)", "short": "AI" },
-        "bola_idor": { "label": "BOLA/IDOR", "short": "IDOR" },
-        "osint": { "label": "OSINT / Dark Web", "short": "OSINT" },
-        "asm": { "label": "Attack Surface", "short": "ASM" }
+        "supply_chain": {
+          "label": "Supply Chain",
+          "short": "SC"
+        },
+        "llm_path_fuzz": {
+          "label": "AI Fuzz (vLLM)",
+          "short": "AI"
+        },
+        "bola_idor": {
+          "label": "BOLA/IDOR",
+          "short": "IDOR"
+        },
+        "osint": {
+          "label": "OSINT / Dark Web",
+          "short": "OSINT"
+        },
+        "asm": {
+          "label": "Attack Surface",
+          "short": "ASM"
+        }
       }
     },
     "reportView": {

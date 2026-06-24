@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Lock, Key, Shield, Eye, EyeOff, Plus, Trash2, Edit, Copy, Check } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 /**
  * CeoVault - Secure credential and secret management
@@ -18,6 +23,7 @@ import { api } from '../utils/apiFetch';
  */
 export default function CeoVault() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [secrets, setSecrets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSecret, setShowSecret] = useState({});
@@ -36,6 +42,7 @@ export default function CeoVault() {
       setSecrets(data.secrets || []);
     } catch (error) {
       console.error('Failed to fetch secrets:', error);
+      toast.error(t('pages.ceoVault.load_failed', { defaultValue: 'Failed to load vault secrets' }));
     } finally {
       setLoading(false);
     }
@@ -59,13 +66,22 @@ export default function CeoVault() {
   };
 
   const deleteSecret = async (secretId) => {
-    if (!confirm(t('pages.ceoVault.delete_confirm'))) return;
+    const ok = await confirmDialog({
+      title: t('pages.ceoVault.delete_title', { defaultValue: 'Delete secret?' }),
+      message: t('pages.ceoVault.delete_confirm'),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/api/ceo/vault/secrets/${secretId}`);
       setSecrets((prev) => prev.filter((s) => s.id !== secretId));
+      toast.success(t('pages.ceoVault.delete_success', { defaultValue: 'Secret deleted' }));
     } catch (error) {
       console.error('Failed to delete secret:', error);
+      toast.error(t('pages.ceoVault.delete_failed', { defaultValue: 'Failed to delete secret' }));
     }
   };
 
@@ -93,8 +109,44 @@ export default function CeoVault() {
     }
   };
 
+  const listFindings = useMemo(() => secrets.map((s) => ({
+    id: s.id,
+    severity: s.expires_at && new Date(s.expires_at) < new Date() ? 'high' : 'info',
+    title: s.name || s.id,
+    type: s.type || 'secret',
+    description: s.description || '',
+    resource: s.expires_at || '',
+  })), [secrets])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-ceo-vault',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleSecrets = useMemo(() => {
+    if (!searchQuery.trim()) return secrets
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return secrets.filter((s) => ids.has(s.id))
+  }, [secrets, filteredFindings, searchQuery])
+
   return (
-    <PageShell title={t('pages.ceoVault.title')} icon={<Lock />}>
+    <PageShell
+      title={t('pages.ceoVault.title')}
+      icon={<Lock />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchSecrets}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -163,11 +215,17 @@ export default function CeoVault() {
 
         {/* Secrets List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Lock className="w-4 h-4 text-cyan-400" />
               {t('pages.ceoVault.stored_secrets')}
             </h3>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleSecrets.length}
+              totalCount={secrets.length}
+            />
           </div>
 
           {loading ? (
@@ -179,9 +237,11 @@ export default function CeoVault() {
             <div className="p-8 text-center text-gray-500">
               {t('pages.ceoVault.empty')}
             </div>
+          ) : visibleSecrets.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-white/5">
-              {secrets.map((secret) => (
+              {visibleSecrets.map((secret) => (
                 <div
                   key={secret.id}
                   className="p-4 hover:bg-white/5 transition-colors"

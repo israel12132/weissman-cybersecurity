@@ -43,10 +43,10 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'asm',
-    label: 'ASM',
+    label: 'Attack Surface Management',
     group: 'recon',
     mitre: 'T1595',
-    description: 'Attack Surface Management — enumerate all internet-exposed assets',
+    description: 'External Attack Surface Management (EASM): asset discovery (CT + DNS brute), service/port exposure, TLS & HTTP posture, cloud footprint, subdomain takeover, and a 0–100 attack-surface score with an attack-surface graph',
     requiresTarget: true,
   },
   {
@@ -85,10 +85,10 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'graphql_attack',
-    label: 'GraphQL Attack',
+    label: 'GraphQL & API Security',
     group: 'web',
     mitre: 'T1190',
-    description: 'Introspection abuse, query depth-limit bypass, batching amplification',
+    description: 'Agentless GraphQL attack-surface mapping — 41 evidence-only probes: introspection, Clairvoyance recon, Relay BOLA, pagination abuse, WAF evasion, live data leak, OWASP scorecard + executive PDF export',
     requiresTarget: true,
   },
   {
@@ -101,18 +101,18 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'oauth_oidc',
-    label: 'OAuth / OIDC',
+    label: 'OAuth / OIDC / SSO Security',
     group: 'web',
     mitre: 'T1550.001',
-    description: 'Authorization code flow hijacking, PKCE bypass, open redirect abuse',
+    description: 'Supreme-tier agentless OAuth/OIDC/SSO posture: RFC 8414 discovery, JWKS crypto, live redirect_uri/implicit/PKCE probes, PAR/DPoP/device-code/ROPC/CORS/subdomain takeover, SAML federation bridge, toxic-combination headline, 8-domain scores, remediation roadmap, security graph & agent guidance — RFC 9700 mapped',
     requiresTarget: true,
   },
   {
     id: 'http_smuggling',
-    label: 'HTTP Smuggling',
+    label: 'HTTP Request Smuggling',
     group: 'web',
     mitre: 'T1190',
-    description: 'CL.TE / TE.CL request smuggling, desync attacks, cache poisoning chains',
+    description: 'World-class raw-wire HTTP desync arsenal — CL.TE/TE.CL/0.CL/TE.TE, TE obfuscation oracle, dual-response & timing oracles, HTTP pipeline, h2c upgrade, chunk extensions, client-side desync, H2 schism, attack-path synthesis & 0–100 posture (PortSwigger + BishopFox class, evidence-only)',
     requiresTarget: true,
   },
   {
@@ -121,7 +121,7 @@ export const ENGINES_REGISTRY = [
     group: 'web',
     mitre: 'T1190',
     description:
-      'World-first protocol-stack fracture detection: HTTP/1.1↔HTTP/2 auth bypass, cache Vary oracle, trusted-header rewrite gaps, shadow-API entropy divergence',
+      'World-first protocol-stack fracture detection — HTTP/1.1↔HTTP/2 auth bypass, method schism, cache Vary oracle (Cookie/Language/Encoding), trusted-header rewrite & IP-trust bypass, shadow-API entropy divergence, attack-path synthesis & 0–100 posture grade. Evidence-only, agentless.',
     requiresTarget: true,
   },
   {
@@ -136,8 +136,8 @@ export const ENGINES_REGISTRY = [
     id: 'ssrf_advanced',
     label: 'SSRF Advanced',
     group: 'web',
-    mitre: 'T1190',
-    description: 'Multi-hop SSRF, cloud metadata exfil, DNS rebinding, open redirect chains',
+    mitre: 'T1552.005',
+    description: 'Agentless SSRF: multi-cloud IMDS credential theft (AWS/GCP/Azure/Alibaba/DO/OCI/ECS multi-role), blocklist-bypass (@/#/encoding), file:// local read, POST/JSON+XML+multipart+GraphQL body SSRF, internal SaaS fingerprinting (ES/Jenkins/Grafana/Docker), redirect→metadata chains, time-based blind oracle, OOB/OAST & Wiz-style attack-path synthesis',
     requiresTarget: true,
   },
   {
@@ -158,10 +158,10 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'file_upload',
-    label: 'File Upload',
+    label: 'File Upload Security',
     group: 'web',
     mitre: 'T1190',
-    description: 'Polyglot bypass, extension confusion, MIME-type mismatch, path traversal upload',
+    description: 'Apex-grade agentless upload arsenal: RTLO/NFKC bypass, cloud-native paths, gzip/Expect-continue, overwrite oracle, path entropy + remediation urgency, XLSM/PDF-JS + full Omega/Ultra wave (IDOR, Tus, EICAR, enterprise risk). 23-dimension posture + blast-radius + probe-coverage — benign canaries only',
     requiresTarget: true,
   },
   {
@@ -169,15 +169,15 @@ export const ENGINES_REGISTRY = [
     label: 'WebSocket Attack',
     group: 'web',
     mitre: 'T1071.001',
-    description: 'Origin spoofing, WS injection, race conditions, hijacking via CSRF',
+    description: 'Agentless WebSocket DAST at Weissman Standard tier: RFC6455 crypto-verified handshake, differential CSWSH + authenticated session-riding, stateful conversational fuzzing (persistent session state machine), binary protobuf wire mutation, Tokio barrier-sync race execution, cross-protocol Memory Intelligence Bus with HTTP privilege replay proof, SignalR/Socket.IO/GraphQL-ws/STOMP live sessions, attack-path synthesis & posture scoring — zero simulated findings',
     requiresTarget: true,
   },
   {
     id: 'cache_poisoning',
-    label: 'Cache Poisoning',
+    label: 'Web Cache Poisoning & Deception',
     group: 'web',
     mitre: 'T1557',
-    description: 'Web cache deception, unkeyed header poisoning, CDN edge cache manipulation',
+    description: 'v11 SEALED agentless cache-key posture: 51 probe categories, configurable canary domain, sealed coverage manifest, duplicate-header + If-Modified-Since oracles, competitive parity index, finding dedupe, Brotli/Sec-CH-UA/Viewport/Prefix/Set-Cookie/stale-if-error/trailing-dot/protocol-relative redirect oracles, poison window, top primitives, CWE/OWASP compliance, parallel multi-path, defense controls, risk matrix, CDN playbook, PoC curl on confirmed hits. Cache-buster isolated — zero production poisoning',
     requiresTarget: true,
   },
 
@@ -249,6 +249,14 @@ export const ENGINES_REGISTRY = [
     requiresTarget: false,
   },
   {
+    id: 'cloud_posture',
+    label: 'Cloud Posture Management (CSPM)',
+    group: 'cloud',
+    mitre: 'T1580',
+    description: 'Agentless AWS CNAPP — 37 live API planes (Neptune, MemoryDB, Backup, Organizations, Step Functions, IAM Identity Center, WAFv2, CloudWatch Logs, Redshift, DocumentDB, CloudFront, Route53, EventBridge, DynamoDB, API Gateway, OpenSearch, IAM Access Analyzer, GuardDuty, Config, EKS/ECS/ELB/ECR/ACM, Lambda URLs, SNS/SQS, Secrets, S3 Object Lock), warehouse exposure index, observability posture, cnapp_catalog complete, 2-hop graph attack paths, CNAPP risk register, toxic combinations, compliance CIS/SOC2/ISO/PCI/NIST/GDPR',
+    requiresTarget: false,
+  },
+  {
     id: 'azure_attack',
     label: 'Azure Attack',
     group: 'cloud',
@@ -274,11 +282,12 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'iac_misconfig',
-    label: 'IaC Misconfig',
+    label: 'IaC Security',
     group: 'cloud',
     mitre: 'T1059',
-    description: 'Terraform, CloudFormation, Pulumi misconfiguration and drift detection',
+    description: 'World-class Infrastructure-as-Code analysis: Terraform/Kubernetes/CloudFormation/Dockerfile/Compose/GitHub Actions/ARM misconfigurations + secret detection, mapped to CIS/PCI/HIPAA/NIST/SOC2/ISO/MITRE with code-level remediation. Static (inline), repo and remote-exposure modes.',
     requiresTarget: false,
+    route: '/iac-security',
   },
   {
     id: 'serverless_attack',
@@ -308,28 +317,28 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'ble_rf',
-    label: 'BLE / RF',
+    label: 'Wireless & RF IoT Posture',
     group: 'ot',
     mitre: 'T1011',
-    description: 'Bluetooth LE pairing bypass, RF replay attacks, spectrum analysis',
-    requiresTarget: false,
+    description: 'Agentless wireless/IoT perimeter assessment — IoT cloud hubs (AWS/Azure/GCP/Home Assistant), BLE/GATT APIs, Zigbee/Z-Wave/Matter, MQTT/CoAP/LoRaWAN brokers, WLAN controllers, mDNS & RF bridge ports; Wiz-style toxic-combination attack paths, 0–100 posture grade & agent BLE validation',
+    requiresTarget: true,
   },
 
   // ── GROUP 6: Stealth / Evasion ────────────────────────────────────────────────
   {
     id: 'edr_evasion',
-    label: 'EDR Evasion',
+    label: 'Detection Evasion Surface',
     group: 'stealth',
     mitre: 'T1562.001',
-    description: 'Endpoint detection bypass via process hollowing, AMSI patching, syscall proxying',
-    requiresTarget: false,
+    description: 'World-class remote detection resilience — WAF/bot UA matrix, rate limits, CSP/cookie gaps, RUM telemetry, debug surfaces, source maps, verbose errors, and an honest agent bridge for host EDR (AMSI/ETW/syscall)',
+    requiresTarget: true,
   },
   {
     id: 'waf_bypass',
     label: 'WAF Bypass',
     group: 'stealth',
     mitre: 'T1027',
-    description: 'WAF rule evasion via encoding, chunking, Unicode normalization, payload mutation',
+    description: 'World-class WAF bypass oracle — vendor fingerprint, encoding/header/path/verb transform matrix, JSON smuggling gap, live bypass surfaces, and 0–100 hardening score',
     requiresTarget: true,
   },
   {
@@ -363,7 +372,15 @@ export const ENGINES_REGISTRY = [
     label: 'PKI / TLS',
     group: 'crypto',
     mitre: 'T1557.002',
-    description: 'Certificate transparency abuse, weak cipher enumeration, TLS downgrade',
+    description: 'World-class TLS/PKI posture — live protocol matrix (SSLv3→TLS 1.3), exhaustive cipher enumeration, certificate-chain forensics, OCSP stapling, HSTS, CT logs, DNS CAA, STARTTLS, and an SSL-Labs-style A+→F grade with full evidence trail',
+    requiresTarget: true,
+  },
+  {
+    id: 'email_dns_posture',
+    label: 'Email & Domain Trust Posture',
+    group: 'crypto',
+    mitre: 'T1566',
+    description: 'World-class anti-spoofing & DNS hardening audit — SPF, DKIM, DMARC, BIMI, MTA-STS, TLS-RPT, DNSSEC, DANE, CAA & SMTP TLS, graded A+→F with a spoofability verdict and copy-paste remediation records',
     requiresTarget: true,
   },
   {
@@ -376,26 +393,26 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'password_spray',
-    label: 'Password Spray',
+    label: 'Password Spray & Stuffing Posture',
     group: 'crypto',
     mitre: 'T1110.003',
-    description: 'Low-rate distributed password spraying against SSO, OWA, ADFS, M365',
+    description: 'Supreme-tier agentless credential intelligence: 22 live probe layers — Entra AADSTS, M365 GetUserRealm, subdomain login hunter, SAML/OIDC ROPC/device-code, lockout-curve + decay, timing/breach/browser-WAF oracles, HSTS/cookie/PKCE transport probes, toxic-combination headline, 8-domain scores, remediation roadmap, security graph & agent guidance — evidence-only',
     requiresTarget: true,
   },
   {
     id: 'kerberoasting',
-    label: 'Kerberoasting',
+    label: 'Kerberoasting & AD External Posture',
     group: 'crypto',
     mitre: 'T1558.003',
-    description: 'Service principal name enumeration and TGS ticket offline cracking',
+    description: 'Supreme-tier agentless AD/Kerberos posture: 18 live probe layers — DNS SRV/_msdcs auto-DC discovery, LDAP StartTLS, SMB2 signing parse, Kerberos user-enum oracle, unconstrained/RBCD/tier-0 SPN LDAP, AD CS ESC surface, Entra GetUserRealm, LDAPS TLS cert, toxic-combination headline, 8-domain scores, remediation roadmap & attack graph — evidence-only',
     requiresTarget: true,
   },
   {
     id: 'saml_attack',
-    label: 'SAML Attack',
+    label: 'SAML Attack & SSO Federation',
     group: 'crypto',
     mitre: 'T1550.004',
-    description: 'XML Signature Wrapping, metadata exposure, SHA-1 weak signature detection',
+    description: 'Supreme-tier agentless SAML/WS-Fed posture: metadata X.509 parse, RelayState canary, unsigned assertion detection, XSW preconditions, SLO/WS-Federation exposure, HTTP-Redirect binding, toxic-combination headline, 8-domain scores, Golden SAML attack paths, remediation roadmap, security graph & agent guidance — evidence-only',
     requiresTarget: true,
   },
   {
@@ -410,10 +427,10 @@ export const ENGINES_REGISTRY = [
   // ── GROUP 8: Network / Protocol ───────────────────────────────────────────────
   {
     id: 'bgp_dns_hijacking',
-    label: 'BGP / DNS Hijacking',
+    label: 'DNS & Domain Posture',
     group: 'network',
     mitre: 'T1584.005',
-    description: 'DNS resolver discrepancy (DoH vs DoG), BGP prefix hijack via RIPE API',
+    description: 'Agentless DNS/domain posture: multi-resolver integrity, DNSSEC, SPF/DKIM/DMARC/MTA-STS email-auth, CAA, AXFR zone transfer, NS+CNAME takeover, wildcard, BGP origin & RPKI ROA validity',
     requiresTarget: true,
   },
   {
@@ -426,10 +443,10 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'mtls_grpc',
-    label: 'mTLS / gRPC',
+    label: 'Transport Security (TLS/mTLS/gRPC)',
     group: 'network',
-    mitre: 'T1552',
-    description: 'gRPC reflection abuse, missing client-cert enforcement, mTLS cert validation',
+    mitre: 'T1557',
+    description: 'World-class agentless transport posture — weak-crypto matrix, gRPC/gRPC-Web/Connect-RPC, mTLS, HSTS/CSP, h2c/HTTP/3, DANE/CAA/CT, TRACE/CORS, cert fingerprint matrix, attack paths & 0–100 grade. Command Center: /transport-security',
     requiresTarget: true,
   },
   {
@@ -437,7 +454,7 @@ export const ENGINES_REGISTRY = [
     label: 'SMB / NetBIOS',
     group: 'network',
     mitre: 'T1021.002',
-    description: 'TCP port 445/139/137 exposure, EternalBlue/SMBGhost CVE surface mapping',
+    description: 'Live SMB2/3 negotiation: signing & encryption posture, SMBv1/EternalBlue & SMBGhost, MS17-010 Trans2 oracle, anonymous IPC$/11 DCE/RPC pipes, NTLM/SPNEGO fingerprint, PetitPotam/Zerologon/PrintNightmare correlators, NetBIOS DC role, attack graph, CIS/NIST/PCI/ISO compliance & posture score — Command Center at /smb-netbios',
     requiresTarget: true,
   },
 
@@ -452,10 +469,10 @@ export const ENGINES_REGISTRY = [
   },
   {
     id: 'cicd_pipeline',
-    label: 'CI/CD Pipeline',
+    label: 'CI/CD Pipeline Security',
     group: 'supply_chain',
     mitre: 'T1195.002',
-    description: 'Unauthenticated ArgoCD, Jenkins, GitLab CI, Azure DevOps API exposure',
+    description: 'World-class agentless DevSecOps — 14 CI platforms, GitHub/GitLab/Bitbucket repo plane, GitOps (ArgoCD/Tekton) static analysis, live ArgoCD API parsing, build logs, artifact registry, governance API, 50+ WZ policies, 5-dimension risk & attack graph',
     requiresTarget: true,
   },
   {
@@ -3856,6 +3873,14 @@ export const ENGINES_REGISTRY = [
     group: 'recon',
     mitre: 'T1595',
     description: 'Quantitative attack surface measurement: asset criticality scoring via CVSS/EPSS, exploitability probability modeling, mean time to exploit estimation, attack path graph centrality analysis, kill chain stage coverage assessment, breach probability scoring',
+    requiresTarget: true,
+  },
+  {
+    id: 'external_exposure_supreme',
+    label: 'External Exposure Supreme',
+    group: 'recon',
+    mitre: 'T1595',
+    description: 'Live fusion of ASM + email/DNS posture + cloud posture with toxic-combination attack-path synthesis and unified A+–F external exposure grade — evidence-only, no stubs',
     requiresTarget: true,
   },
   {

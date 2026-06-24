@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EmptyState from '../components/ui/EmptyState'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 async function fileToBase64(file) {
   const buf = await file.arrayBuffer()
@@ -30,6 +36,7 @@ function formatBytes(n) {
 
 export default function ClientEvidenceVault() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -84,11 +91,11 @@ export default function ClientEvidenceVault() {
 
   async function uploadEvidence() {
     if (!file) {
-      alert(t('pages.clientEvidenceVault.select_file'))
+      toast.warning(t('pages.clientEvidenceVault.select_file'))
       return
     }
     if (file.size > 8 * 1024 * 1024) {
-      alert(t('pages.clientEvidenceVault.file_too_large'))
+      toast.warning(t('pages.clientEvidenceVault.file_too_large'))
       return
     }
     setUploading(true)
@@ -128,23 +135,56 @@ export default function ClientEvidenceVault() {
   }
 
   async function deleteEvidence(item) {
-    if (!confirm(t('pages.clientEvidenceVault.delete_confirm', { name: item.filename }))) return
+    const ok = await confirmDialog({
+      title: t('pages.clientEvidenceVault.delete_title', { defaultValue: 'Delete evidence?' }),
+      message: t('pages.clientEvidenceVault.delete_confirm', { name: item.filename }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       const res = await apiFetch(`/api/evidence/${item.id}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert(data?.detail || data?.error || `Delete failed (HTTP ${res.status})`)
+        toast.error(data?.detail || data?.error || `Delete failed (HTTP ${res.status})`)
         return
       }
       await loadAll()
+      toast.success(t('pages.clientEvidenceVault.delete_success', { defaultValue: 'Evidence deleted' }))
     } catch (e) {
-      alert(e?.message || t('pages.clientEvidenceVault.delete_failed'))
+      toast.error(e?.message || t('pages.clientEvidenceVault.delete_failed'))
     }
   }
 
   function downloadEvidence(item) {
     window.open(apiUrl(`/api/evidence/${item.id}/download`), '_blank', 'noopener,noreferrer')
   }
+
+  const listFindings = useMemo(() => evidence.map((item) => ({
+    id: item.id,
+    severity: 'info',
+    title: item.filename || item.title || item.id,
+    type: item.kind || 'evidence',
+    description: item.description || formatBytes(item.size_bytes),
+    resource: item.sha256 || '',
+  })), [evidence])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-client-evidence',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleEvidence = useMemo(() => {
+    if (!searchQuery.trim()) return evidence
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return evidence.filter((item) => ids.has(String(item.id)))
+  }, [evidence, filteredFindings, searchQuery])
 
   if (loading) {
     return (
@@ -163,6 +203,14 @@ export default function ClientEvidenceVault() {
         ? t('pages.clientEvidenceVault.title_with_client', { name: client.name })
         : t('pages.clientEvidenceVault.title')}
       subtitle={t('pages.clientEvidenceVault.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadAll}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -260,6 +308,22 @@ export default function ClientEvidenceVault() {
           {evidence.length === 0 ? (
             <div className="mt-4 text-sm text-slate-400">{t('pages.clientEvidenceVault.empty')}</div>
           ) : (
+            <>
+            <WeissmanListToolbar
+              className="mt-4"
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleEvidence.length}
+              totalCount={evidence.length}
+            />
+            {visibleEvidence.length === 0 ? (
+              <EmptyState
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+                compact
+              />
+            ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
@@ -273,7 +337,7 @@ export default function ClientEvidenceVault() {
                   </tr>
                 </thead>
                 <tbody>
-                  {evidence.map((ev) => (
+                  {visibleEvidence.map((ev) => (
                     <tr key={ev.id} className="border-b border-slate-800/60">
                       <td className="py-2 pr-4 text-white">
                         <div className="font-medium">{ev.filename}</div>
@@ -311,6 +375,8 @@ export default function ClientEvidenceVault() {
                 </tbody>
               </table>
             </div>
+            )}
+            </>
           )}
         </div>
       </div>

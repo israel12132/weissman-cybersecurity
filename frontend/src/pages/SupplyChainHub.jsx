@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import SupplyChainGraph from '../components/ui/SupplyChainGraph'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+
+const ACCENT = '#84cc16'
 
 const SUPPLY_ENGINE_IDS = [
   'supply_chain',
@@ -51,7 +57,7 @@ function FindingCard({ finding, t }) {
   )
 }
 
-function EngineRunPanel({ engineId, clientId, showToast, t }) {
+function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) {
   const [running, setRunning] = useState(false)
   const [findings, setFindings] = useState([])
   const [lastRun, setLastRun] = useState(null)
@@ -59,6 +65,10 @@ function EngineRunPanel({ engineId, clientId, showToast, t }) {
 
   const label = t(`pages.supplyChainHub.engines.${engineId}.label`)
   const description = t(`pages.supplyChainHub.engines.${engineId}.description`)
+
+  useEffect(() => {
+    onFindingsUpdate?.(engineId, findings)
+  }, [engineId, findings, onFindingsUpdate])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
@@ -101,6 +111,11 @@ function EngineRunPanel({ engineId, clientId, showToast, t }) {
         <div>
           <h3 className="text-sm font-semibold text-white">{label}</h3>
           <p className="text-[11px] text-white/40 mt-0.5">{description}</p>
+          {engineId === 'cicd_pipeline' && (
+            <Link to="/cicd-security" className="inline-block mt-2 text-[10px] font-mono text-lime-400/80 hover:text-lime-300 border border-lime-500/25 rounded-lg px-2 py-1 transition-colors">
+              {t('pages.supplyChainHub.open_command_center', 'Open CI/CD Command Center →')}
+            </Link>
+          )}
         </div>
         <button
           type="button"
@@ -149,6 +164,8 @@ export default function SupplyChainHub() {
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [findingsByEngine, setFindingsByEngine] = useState({})
+  const [refreshLoading, setRefreshLoading] = useState(false)
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -163,8 +180,64 @@ export default function SupplyChainHub() {
     setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
   }, [])
 
+  const handleFindingsUpdate = useCallback((engineId, findings) => {
+    setFindingsByEngine((prev) => ({ ...prev, [engineId]: findings }))
+  }, [])
+
+  const aggregatedFindings = useMemo(
+    () => SUPPLY_ENGINE_IDS.flatMap((id) => {
+      const list = findingsByEngine[id] || []
+      return list.map((f) => ({ ...f, engine: f.engine || id }))
+    }),
+    [findingsByEngine],
+  )
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(aggregatedFindings, {
+    csvPrefix: 'supply-chain-hub',
+    haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.target || ''} ${f.engine || ''} ${f.description || ''}`,
+  })
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshLoading(true)
+    try {
+      const r = await apiFetch('/api/engines/history/supply_chain?limit=1')
+      if (!r.ok) return
+      const d = await r.json()
+      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
+      const last = runs[0]
+      const findings = Array.isArray(last?.findings) ? last.findings : []
+      setFindingsByEngine((prev) => ({ ...prev, supply_chain: findings }))
+    } catch {
+      // live-only: no demo fallback
+    } finally {
+      setRefreshLoading(false)
+    }
+  }, [])
+
   return (
-    <PageShell title={t('pages.supplyChainHub.title')} badge={t('pages.supplyChainHub.badge')} badgeColor="#84cc16" subtitle={t('pages.supplyChainHub.subtitle', { count: SUPPLY_ENGINE_IDS.length })}>
+    <PageShell
+      title={t('pages.supplyChainHub.title')}
+      badge={t('pages.supplyChainHub.badge')}
+      badgeColor={ACCENT}
+      subtitle={t('pages.supplyChainHub.subtitle', { count: SUPPLY_ENGINE_IDS.length })}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={refreshLoading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="flex items-center gap-2 mb-6">
         <span className="text-[11px] font-mono text-white/40">{t('pages.supplyChainHub.client_label')}</span>
         <select
@@ -196,9 +269,36 @@ export default function SupplyChainHub() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <EngineRunPanel engineId={engineId} clientId={selectedClientId} showToast={showToast} t={t} />
+            <EngineRunPanel
+              engineId={engineId}
+              clientId={selectedClientId}
+              showToast={showToast}
+              onFindingsUpdate={handleFindingsUpdate}
+              t={t}
+            />
           </motion.div>
         ))}
+      </div>
+
+      <div className="mt-8">
+        <WeissmanFindingsPanel
+          findings={aggregatedFindings}
+          filteredFindings={filteredFindings}
+          counts={counts}
+          total={total}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          severityFilter={severityFilter}
+          onSeverityChange={setSeverityFilter}
+          accent={ACCENT}
+          title={t('pages.supplyChainHub.aggregated_findings', 'Supply Chain Findings')}
+          emptyTitle={t('pages.supplyChainHub.empty_findings_title', 'No supply chain findings yet')}
+          emptyBody={t('pages.supplyChainHub.empty_findings_body', 'Run any engine above to populate live findings.')}
+          showEmptyReady
+          emptyReadyTitle={t('pages.supplyChainHub.ready_title', 'Ready to scan')}
+          emptyReadyBody={t('pages.supplyChainHub.ready_body', 'Select a client and run a supply-chain engine.')}
+          renderFinding={(f, i) => <FindingCard key={i} finding={f} t={t} />}
+        />
       </div>
     </PageShell>
   )

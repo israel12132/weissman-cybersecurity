@@ -10,8 +10,11 @@ import {
   Shield,
 } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import StatCard from '../components/ui/StatCard'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 
@@ -45,10 +48,14 @@ function statusBadgeClass(status) {
   return 'bg-white/5 text-white/55 border-white/15'
 }
 
-function formatPeriodEnd(iso) {
+function localeTag(language) {
+  return language === 'he' ? 'he-IL' : 'en-US'
+}
+
+function formatPeriodEnd(iso, language) {
   if (!iso) return null
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
+    return new Date(iso).toLocaleDateString(localeTag(language), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -58,17 +65,22 @@ function formatPeriodEnd(iso) {
   }
 }
 
-function formatPeriodYm(ym) {
+function formatPeriodYm(ym, language) {
   if (!ym || typeof ym !== 'string') return ym
   const [y, m] = ym.split('-')
   if (!y || !m) return ym
   const d = new Date(Number(y), Number(m) - 1, 1)
   if (Number.isNaN(d.getTime())) return ym
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+  return d.toLocaleDateString(localeTag(language), { year: 'numeric', month: 'long' })
+}
+
+function subscriptionStatusLabel(status, t) {
+  const slug = (status || 'unknown').toLowerCase().replace(/[^a-z0-9_]/g, '_')
+  return t(`pages.billing.status_${slug}`, { defaultValue: status || t('pages.billing.status_unknown') })
 }
 
 export default function Billing() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -144,16 +156,47 @@ export default function Billing() {
   const clientsPct = usagePct(clientsUsed, maxClients)
   const scansPct = usagePct(scansUsed, maxScans)
 
+  const listFindings = useMemo(() => {
+    if (!data) return []
+    const rows = []
+    if (subscription) {
+      rows.push({
+        severity: subscription.status === 'active' ? 'info' : 'medium',
+        title: subscription.plan_slug || 'subscription',
+        type: 'billing',
+        description: subscriptionStatusLabel(subscription.status, t),
+        resource: formatPeriodEnd(subscription.current_period_end, i18n.language) || '',
+      })
+    }
+    if (usage) {
+      rows.push({
+        severity: clientsPct >= 90 ? 'critical' : clientsPct >= 70 ? 'high' : 'info',
+        title: t('pages.billing.clients_label'),
+        type: 'usage',
+        description: `${clientsUsed} / ${maxClients}`,
+      })
+      rows.push({
+        severity: scansPct >= 90 ? 'critical' : scansPct >= 70 ? 'high' : 'info',
+        title: t('pages.billing.scans_label'),
+        type: 'usage',
+        description: `${scansUsed} / ${maxScans}`,
+      })
+    }
+    return rows
+  }, [data, subscription, usage, clientsUsed, maxClients, scansUsed, maxScans, clientsPct, scansPct, t, i18n.language])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-billing',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource || ''}`,
+  })
+
   const headerActions = (
-    <button
-      type="button"
-      onClick={loadUsage}
-      disabled={loading}
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-black/40 text-[11px] font-mono text-white/70 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50"
-    >
-      <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-      {t('common.refresh')}
-    </button>
+    <ShellScanActions
+      onRefresh={loadUsage}
+      onExport={exportCsv}
+      refreshLoading={loading}
+      exportDisabled={!filteredFindings.length}
+    />
   )
 
   return (
@@ -166,6 +209,8 @@ export default function Billing() {
       actions={headerActions}
     >
       <div className="space-y-6">
+        <EvidenceNotice>{t('pages.billing.evidence_notice')}</EvidenceNotice>
+
         {loading && !data && (
           <SkeletonWidgetGrid count={3} className="lg:grid-cols-3" />
         )}
@@ -220,16 +265,16 @@ export default function Billing() {
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full border text-[10px] font-mono uppercase tracking-widest ${statusBadgeClass(subscription.status)}`}
                     >
-                      {subscription.status || 'unknown'}
+                      {subscriptionStatusLabel(subscription.status, t)}
                     </span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-white/45">
                     <span>{t('pages.billing.slug_label', { slug: subscription.plan_slug || '—' })}</span>
                     {subscription.current_period_end && (
-                      <span>{t('pages.billing.renews_label', { date: formatPeriodEnd(subscription.current_period_end) })}</span>
+                      <span>{t('pages.billing.renews_label', { date: formatPeriodEnd(subscription.current_period_end, i18n.language) })}</span>
                     )}
                     {usage?.period && (
-                      <span>{t('pages.billing.usage_period_label', { period: formatPeriodYm(usage.period) })}</span>
+                      <span>{t('pages.billing.usage_period_label', { period: formatPeriodYm(usage.period, i18n.language) })}</span>
                     )}
                   </div>
                 </div>

@@ -203,6 +203,16 @@ pub fn jwt_cryptanalysis(token: &str) -> Vec<serde_json::Value> {
     let role_keys = ["role", "roles", "type", "user_type", "privilege", "admin"];
     for key in role_keys {
         if let Some(v) = payload.get(key) {
+            let already_elevated = v
+                .as_str()
+                .map(|s| {
+                    let sl = s.to_ascii_lowercase();
+                    sl.contains("admin") || sl == "root"
+                })
+                .unwrap_or_else(|| v.as_bool().unwrap_or(false));
+            if already_elevated {
+                continue;
+            }
             let mut flipped = payload.clone();
             if let Some(obj) = flipped.as_object_mut() {
                 let new_val = serde_json::Value::String("admin".to_string());
@@ -267,7 +277,7 @@ fn weak_secrets_from_payload(payload_b64: &str) -> Vec<String> {
         }
     }
     if out.is_empty() {
-        out.push("secret".to_string());
+        return out;
     }
     out
 }
@@ -785,5 +795,34 @@ mod tests {
         };
         let f2 = run_session_oauth_tests("https://x.test", std::slice::from_ref(&opaque));
         assert!(f2.iter().any(|v| v["severity"] == "medium"));
+    }
+
+    #[test]
+    fn weak_secrets_from_payload_skips_hardcoded_fallback() {
+        let payload_b64 = URL_SAFE_NO_PAD.encode(b"{\"sub\":\"123\"}");
+        assert!(weak_secrets_from_payload(&payload_b64).is_empty());
+    }
+
+    #[test]
+    fn weak_secrets_from_payload_uses_issuer_claim() {
+        let payload_b64 = URL_SAFE_NO_PAD.encode(b"{\"iss\":\"myapp\"}");
+        let secrets = weak_secrets_from_payload(&payload_b64);
+        assert!(secrets.contains(&"myapp".to_string()));
+    }
+
+    #[test]
+    fn has_elevated_claims_detects_admin_role() {
+        let v = serde_json::json!({"role": "admin"});
+        assert!(has_elevated_claims(&v));
+        let v2 = serde_json::json!({"role": "user"});
+        assert!(!has_elevated_claims(&v2));
+    }
+
+    #[test]
+    fn extract_jwts_from_text_finds_bearer_tokens() {
+        let text = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig";
+        let tokens = extract_jwts_from_text(text);
+        assert_eq!(tokens.len(), 1);
+        assert!(tokens[0].contains('.'));
     }
 }

@@ -1,154 +1,242 @@
-//! SBOM Analyzer — fetches SBOM documents (CycloneDX/SPDX) and checks for known vulnerable dependencies.
+//! SBOM Analyzer — fetches dependency manifests, parses components, matches known CVE patterns.
+//! MITRE: T1195.001 (Supply Chain Compromise: Dependency).
 
+use crate::engine_probes::{
+    empty_ok, finding_with_probe_depth, http_client, http_get, join_url, normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::time::Duration;
 
-async fn build_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-}
+const SBOM_PROBE_DEPTH: &str = "sbom_dependency_surface";
 
-fn normalize_target(target: &str) -> String {
-    let t = target.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
-        t.to_string()
-    } else {
-        format!("https://{}", t)
+fn sbom_finding(
+    title: &str,
+    severity: &str,
+    description: &str,
+    target: &str,
+    extra: Value,
+) -> Value {
+    let mut f = finding_with_probe_depth(
+        "sbom_analyzer",
+        title,
+        severity,
+        "T1195.001",
+        description,
+        target,
+        SBOM_PROBE_DEPTH,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
     }
+    f
 }
 
-const SBOM_PATHS: &[&str] = &[
-    "/sbom.json",
-    "/sbom.xml",
-    "/bom.json",
-    "/bom.xml",
-    "/.well-known/sbom",
-    "/api/sbom",
-    "/cyclonedx.json",
-    "/spdx.json",
-    "/software-bill-of-materials.json",
-    "/manifest.json",
-    "/package.json",
-    "/package-lock.json",
-    "/yarn.lock",
-    "/requirements.txt",
-    "/Pipfile.lock",
-    "/go.sum",
-    "/Cargo.lock",
-    "/composer.lock",
-    "/Gemfile.lock",
-    "/pom.xml",
-    "/build.gradle",
+const SBOM_PATHS: &[(&str, &str)] = &[
+    ("/sbom.json", "cyclonedx"),
+    ("/bom.json", "cyclonedx"),
+    ("/cyclonedx.json", "cyclonedx"),
+    ("/spdx.json", "spdx"),
+    ("/.well-known/sbom", "sbom"),
+    ("/api/sbom", "sbom"),
+    ("/package-lock.json", "npm-lock"),
+    ("/yarn.lock", "yarn-lock"),
+    ("/requirements.txt", "pip"),
+    ("/Pipfile.lock", "pip-lock"),
+    ("/go.sum", "go-sum"),
+    ("/Cargo.lock", "cargo-lock"),
+    ("/composer.lock", "composer-lock"),
+    ("/Gemfile.lock", "gem-lock"),
+    ("/pom.xml", "maven"),
 ];
+
+/// Known vulnerable (package_substring, version_substring, cve, severity)
+const KNOWN_VULNS: &[(&str, &str, &str, &str)] = &[
+    ("log4j-core", "2.14", "CVE-2021-44228", "critical"),
+    ("log4j", "2.14", "CVE-2021-44228", "critical"),
+    ("spring-core", "5.3.17", "CVE-2022-22965", "critical"),
+    ("struts2-core", "2.3", "CVE-2017-5638", "critical"),
+    ("lodash", "4.17.20", "CVE-2021-23337", "high"),
+    ("axios", "0.21.0", "CVE-2023-45857", "medium"),
+    ("openssl", "1.0.2", "CVE-2022-0778", "high"),
+    ("django", "3.2", "CVE-2023-36053", "medium"),
+    ("pillow", "9.0", "CVE-2023-44271", "medium"),
+];
+
+fn extract_components(body: &str, doc_kind: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if doc_kind == "cyclonedx" || body.contains("\"components\"") {
+        if let Ok(v) = serde_json::from_str::<Value>(body) {
+            if let Some(comps) = v.get("components").and_then(|c| c.as_array()) {
+                for c in comps {
+                    let name = c
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let version = c
+                        .get("version")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !name.is_empty() {
+                        out.push((name, version));
+                    }
+                }
+            }
+        }
+    }
+    if doc_kind == "npm-lock" || body.contains("\"lockfileVersion\"") {
+        if let Ok(v) = serde_json::from_str::<Value>(body) {
+            if let Some(pkgs) = v.get("packages").and_then(|p| p.as_object()) {
+                for (path, meta) in pkgs {
+                    if path.is_empty() || !path.contains("node_modules") {
+                        continue;
+                    }
+                    let name = path.rsplit("node_modules/").next().unwrap_or(path).to_string();
+                    let version = meta
+                        .get("version")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !name.is_empty() && !version.is_empty() {
+                        out.push((name, version));
+                    }
+                }
+            }
+        }
+    }
+    if doc_kind == "pip" {
+        for line in body.lines() {
+            let l = line.trim();
+            if l.is_empty() || l.starts_with('#') {
+                continue;
+            }
+            let (name, ver) = l
+                .split_once("==")
+                .or_else(|| l.split_once(">="))
+                .or_else(|| l.split_once("~="))
+                .map(|(n, v)| (n.trim().to_string(), v.trim().to_string()))
+                .unwrap_or_else(|| (l.to_string(), String::new()));
+            out.push((name, ver));
+        }
+    }
+    out
+}
+
+fn match_known_vulns(components: &[(String, String)]) -> Vec<Value> {
+    let mut hits = Vec::new();
+    for (name, version) in components {
+        let name_lc = name.to_ascii_lowercase();
+        let ver_lc = version.to_ascii_lowercase();
+        for (pkg, vuln_ver, cve, sev) in KNOWN_VULNS {
+            if name_lc.contains(&pkg.to_ascii_lowercase())
+                && (ver_lc.is_empty() || ver_lc.contains(&vuln_ver.to_ascii_lowercase()))
+            {
+                hits.push(json!({
+                    "package": name,
+                    "version": version,
+                    "cve": cve,
+                    "severity": sev
+                }));
+            }
+        }
+    }
+    hits
+}
 
 pub async fn run_sbom_analyzer_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let base = normalize_target(target);
-    let client = build_client().await;
-    let mut findings: Vec<serde_json::Value> = Vec::new();
+    let base = normalize_url(target);
+    let client = http_client().await;
+    let mut findings: Vec<Value> = Vec::new();
 
-    for path in SBOM_PATHS {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let resp = match client.get(&url).send().await {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        let status = resp.status().as_u16();
-        if status != 200 {
+    for (path, doc_kind) in SBOM_PATHS {
+        let url = join_url(&base, path);
+        let Some(probe) = http_get(&client, &url).await else {
             continue;
-        }
-        let body = resp.text().await.unwrap_or_default();
-        if body.len() < 10 {
+        };
+        if probe.status != 200 || probe.body.len() < 12 {
             continue;
         }
 
-        let (doc_type, severity) = if path.ends_with("sbom.json")
-            || path.ends_with("bom.json")
-            || path.contains("cyclonedx")
-        {
-            ("CycloneDX SBOM", "high")
-        } else if path.ends_with("spdx.json") {
-            ("SPDX SBOM", "high")
-        } else if path.ends_with("package-lock.json") || path.ends_with("yarn.lock") {
-            ("NPM dependency lockfile", "medium")
-        } else if path.ends_with("requirements.txt") || path.ends_with("Pipfile.lock") {
-            ("Python dependency file", "medium")
-        } else if path.ends_with("go.sum") {
-            ("Go module checksum", "medium")
-        } else if path.ends_with("Cargo.lock") {
-            ("Rust dependency lockfile", "medium")
-        } else if path.ends_with("pom.xml") || path.ends_with("build.gradle") {
-            ("Java dependency file", "medium")
-        } else if path.ends_with("Gemfile.lock") || path.ends_with("composer.lock") {
-            ("Dependency lockfile", "medium")
-        } else {
-            ("Dependency manifest", "low")
-        };
+        let looks_like_manifest = probe.body.contains('{')
+            || probe.body.contains("lockfileVersion")
+            || probe.body.contains("==")
+            || probe.body.contains("<dependency>")
+            || *doc_kind == "pip";
+        if !looks_like_manifest {
+            continue;
+        }
 
-        findings.push(json!({
-            "type": "sbom_analyzer",
-            "title": format!("{} exposed: {}", doc_type, url),
-            "severity": severity,
-            "mitre_attack": "T1195.001",
-            "description": format!(
-                "{} found at {}. Exposed dependency manifests allow attackers to enumerate all \
-                third-party libraries and identify versions with known CVEs for targeted exploitation. \
-                Cross-reference all dependencies with OSV.dev, NVD, and GitHub Advisory Database.",
-                doc_type, url
+        findings.push(sbom_finding(
+            &format!("Dependency manifest exposed: {}", path.trim_start_matches('/')),
+            "medium",
+            &format!(
+                "Live dependency document at {} (HTTP 200, {} bytes, kind={}). \
+                 Exposed manifests enable precise CVE targeting across the software supply chain.",
+                probe.final_url,
+                probe.body.len(),
+                doc_kind
             ),
-            "value": url,
-            "document_type": doc_type,
-            "body_length": body.len()
-        }));
+            target,
+            json!({ "url": probe.final_url, "document_type": doc_kind, "body_length": probe.body.len() }),
+        ));
 
-        // Check for known vulnerable packages in the body
-        let known_vulnerable: &[(&str, &str, &str)] = &[
-            ("log4j-core", "CVE-2021-44228", "critical"), // Log4Shell
-            ("log4j", "CVE-2021-44228", "critical"),
-            ("spring-core", "CVE-2022-22965", "critical"), // Spring4Shell
-            ("struts2", "CVE-2017-5638", "critical"),
-            ("lodash", "CVE-2021-23337", "high"),
-            ("axios", "CVE-2023-45857", "medium"),
-            ("express", "CVE-2024-29041", "medium"),
-            ("openssl", "CVE-2022-0778", "high"),
-            ("requests", "CVE-2023-32681", "medium"),
-            ("pillow", "CVE-2023-44271", "medium"),
-            ("django", "CVE-2023-36053", "medium"),
-            ("rails", "CVE-2024-26143", "high"),
-        ];
-
-        for (pkg, cve, sev) in known_vulnerable {
-            if body.to_lowercase().contains(&pkg.to_lowercase()) {
-                findings.push(json!({
-                    "type": "sbom_analyzer",
-                    "title": format!("Known vulnerable package '{}' ({}) found in {}", pkg, cve, doc_type),
-                    "severity": sev,
-                    "mitre_attack": "T1195.001",
-                    "description": format!(
-                        "Dependency file at {} references '{}' which is associated with {}. \
-                        Verify the exact version in use and update to a patched release immediately.",
-                        url, pkg, cve
-                    ),
-                    "value": url,
-                    "package": pkg,
-                    "cve": cve
-                }));
-            }
+        let components = extract_components(&probe.body, doc_kind);
+        let vulns = match_known_vulns(&components);
+        for v in vulns {
+            let pkg = v.get("package").and_then(|p| p.as_str()).unwrap_or("?");
+            let cve = v.get("cve").and_then(|c| c.as_str()).unwrap_or("?");
+            let sev = v.get("severity").and_then(|s| s.as_str()).unwrap_or("high");
+            let ver = v.get("version").and_then(|s| s.as_str()).unwrap_or("");
+            findings.push(sbom_finding(
+                &format!("Known vulnerable dependency: {} ({})", pkg, cve),
+                sev,
+                &format!(
+                    "Manifest at {} references '{}' version '{}' associated with {}. \
+                     Verify patch level against OSV/NVD and upgrade immediately.",
+                    probe.final_url, pkg, ver, cve
+                ),
+                target,
+                v.clone(),
+            ));
         }
     }
 
-    EngineResult::ok(
-        findings.clone(),
-        format!("SBOMAnalyzer: {} findings", findings.len()),
-    )
+    if findings.is_empty() {
+        empty_ok("sbom_analyzer", target)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("sbom_analyzer: {} live finding(s)", n))
+    }
 }
 
 pub async fn run_sbom_analyzer(target: &str) {
     print_result(run_sbom_analyzer_result(target).await);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cyclonedx_components_parsed() {
+        let body = r#"{"components":[{"name":"lodash","version":"4.17.20"}]}"#;
+        let c = extract_components(body, "cyclonedx");
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].0, "lodash");
+    }
+
+    #[test]
+    fn vuln_match_finds_log4j() {
+        let hits = match_known_vulns(&[("log4j-core".into(), "2.14.1".into())]);
+        assert!(!hits.is_empty());
+    }
 }

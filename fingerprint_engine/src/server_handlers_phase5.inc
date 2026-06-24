@@ -9,6 +9,68 @@ async fn ws_swarm(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> R
     })
 }
 
+async fn api_swarm_events(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let client_id: i64 = match q.get("client_id").and_then(|s| s.parse().ok()) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "detail": "client_id query param required" })),
+            )
+                .into_response();
+        }
+    };
+    let since_id: i64 = q
+        .get("since_id")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let Ok(mut conn) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "ok": false }))).into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT id, agent, event, detail_json, ts_ms
+           FROM swarm_events
+           WHERE tenant_id = $1 AND client_id = $2 AND id > $3
+           ORDER BY id ASC
+           LIMIT 500"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(client_id)
+    .bind(since_id)
+    .fetch_all(&mut *conn)
+    .await;
+    let _ = conn.commit().await;
+    match rows {
+        Ok(rs) => {
+            let events: Vec<Value> = rs
+                .into_iter()
+                .map(|row| {
+                    json!({
+                        "id": row.get::<i64, _>("id"),
+                        "agent": row.get::<String, _>("agent"),
+                        "event": row.get::<String, _>("event"),
+                        "detail": row.get::<sqlx::types::Json<Value>, _>("detail_json").0,
+                        "ts": row.get::<i64, _>("ts_ms"),
+                    })
+                })
+                .collect();
+            Json(json!({ "events": events, "count": events.len() })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "detail": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_swarm_run(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -68,6 +130,9 @@ async fn api_threat_ingest_run(
     Extension(auth): Extension<AuthContext>,
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };

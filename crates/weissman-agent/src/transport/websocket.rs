@@ -48,9 +48,10 @@ pub async fn run_session(
     };
     out_tx.send(hello).await.ok();
 
-    // Shared counters for heartbeat.
+    // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
     let completed_tasks = Arc::new(AtomicU64::new(0));
+    let max_parallel = Arc::new(AtomicU32::new(4));
     let started_at = Instant::now();
 
     // Heartbeat ticker.
@@ -118,6 +119,7 @@ pub async fn run_session(
                         &out_tx,
                         &running_tasks,
                         &completed_tasks,
+                        &max_parallel,
                         enrollment.agent_id.clone(),
                     )
                     .await;
@@ -151,6 +153,7 @@ async fn handle_text(
     out_tx: &mpsc::Sender<AgentToServer>,
     running: &Arc<AtomicU32>,
     completed: &Arc<AtomicU64>,
+    max_parallel: &Arc<AtomicU32>,
     agent_id: String,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
@@ -162,7 +165,13 @@ async fn handle_text(
         }
     };
     match msg {
-        ServerToAgent::Welcome { .. } => {
+        ServerToAgent::Welcome {
+            scan_concurrency,
+            ..
+        } => {
+            if let Some(n) = scan_concurrency {
+                max_parallel.store(n.max(1), Ordering::Relaxed);
+            }
             info!(target: "agent", "server welcomed agent");
         }
         ServerToAgent::Task {
@@ -171,12 +180,18 @@ async fn handle_text(
             target,
             params,
         } => {
-            running.fetch_add(1, Ordering::SeqCst);
             let out_tx = out_tx.clone();
             let running_c = Arc::clone(running);
             let completed_c = Arc::clone(completed);
+            let max_parallel_c = Arc::clone(max_parallel);
             let agent_id_c = agent_id.clone();
             tokio::spawn(async move {
+                while running_c.load(Ordering::SeqCst)
+                    >= max_parallel_c.load(Ordering::Relaxed).max(1)
+                {
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                }
+                running_c.fetch_add(1, Ordering::SeqCst);
                 run_task(
                     task_id,
                     engine,

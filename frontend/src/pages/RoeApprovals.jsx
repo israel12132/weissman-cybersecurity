@@ -1,7 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import { promptDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 function approvalsHave(req) {
   return Number(!!req.first_approved_by_user_id) + Number(!!req.second_approved_by_user_id)
@@ -9,6 +15,7 @@ function approvalsHave(req) {
 
 export default function RoeApprovals() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [requests, setRequests] = useState([])
@@ -39,23 +46,55 @@ export default function RoeApprovals() {
     load()
   }, [load])
 
+  const listFindings = useMemo(() => requests.map((req) => ({
+    id: req.id,
+    severity: req.status === 'pending' ? 'medium' : 'info',
+    title: `#${req.id} · ${req.client_name || `Client ${req.client_id}`}`,
+    type: req.desired_roe_mode || 'roe_override',
+    description: [req.justification, req.expires_at ? `Expires: ${new Date(req.expires_at).toLocaleString()}` : ''].filter(Boolean).join(' · '),
+    resource: String(req.client_id),
+  })), [requests])
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'roe-approvals',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
   async function approve(req) {
     setActionId(req.id)
     try {
       const r = await apiFetch(`/api/roe/override-requests/${req.id}/approve`, { method: 'POST' })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert(data?.detail || t('pages.roeApprovals.approve_failed', { status: r.status }))
+        toast.error(data?.detail || t('pages.roeApprovals.approve_failed', { status: r.status }))
         return
       }
       await load()
+      toast.success(t('pages.roeApprovals.approve_success', { defaultValue: 'Override request approved' }))
     } finally {
       setActionId(null)
     }
   }
 
   async function reject(req) {
-    const reason = prompt(t('pages.roeApprovals.reject_prompt'), '')
+    const reason = await promptDialog({
+      title: t('pages.roeApprovals.reject_title', { defaultValue: 'Reject override request' }),
+      message: t('pages.roeApprovals.reject_prompt'),
+      label: t('pages.roeApprovals.reject_reason_label', { defaultValue: 'Reason' }),
+      placeholder: t('pages.roeApprovals.reject_reason_placeholder', { defaultValue: 'Why is this being rejected?' }),
+      confirmLabel: t('pages.roeApprovals.reject_action', { defaultValue: 'Reject' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      multiline: true,
+    })
     if (reason === null) return
     setActionId(req.id)
     try {
@@ -66,10 +105,11 @@ export default function RoeApprovals() {
       })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert(data?.detail || t('pages.roeApprovals.reject_failed', { status: r.status }))
+        toast.error(data?.detail || t('pages.roeApprovals.reject_failed', { status: r.status }))
         return
       }
       await load()
+      toast.success(t('pages.roeApprovals.reject_success', { defaultValue: 'Override request rejected' }))
     } finally {
       setActionId(null)
     }
@@ -79,6 +119,14 @@ export default function RoeApprovals() {
     <PageShell
       title={t('pages.roeApprovals.title')}
       subtitle={t('pages.roeApprovals.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={load}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         {error && (
@@ -87,85 +135,70 @@ export default function RoeApprovals() {
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500 font-mono">
-            {t('pages.roeApprovals.pending', { count: requests.length })}
-          </div>
-          <button
-            type="button"
-            onClick={load}
-            className="px-3 py-1.5 text-xs border border-slate-700 text-slate-300 rounded hover:bg-slate-800"
-            disabled={loading}
-          >
-            {t('pages.roeApprovals.refresh')}
-          </button>
+        <div className="text-xs text-slate-500 font-mono">
+          {t('pages.roeApprovals.pending', { count: requests.length })}
         </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-slate-400">
-            <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-4">{t('pages.roeApprovals.loading')}</p>
-          </div>
-        ) : requests.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
-            {t('pages.roeApprovals.empty')}
+        {loading && !requests.length ? (
+          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+            <SkeletonWidgetGrid count={3} />
           </div>
         ) : (
-          <div className="space-y-3">
-            {requests.map((req) => (
-              <div key={req.id} className="p-5 rounded-2xl bg-black/40 border border-white/10">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-mono text-white/30">#{req.id}</span>
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-amber-400/30 text-amber-300 bg-amber-900/10">
-                        {req.status}
-                      </span>
-                      <span className="text-[11px] font-mono text-white/50">
-                        {t('pages.roeApprovals.approvals_count', { count: approvalsHave(req) })}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-white truncate">
-                      {t('pages.roeApprovals.client', {
-                        id: req.client_id,
-                        name: req.client_name ? ` — ${req.client_name}` : '',
-                      })}
-                    </div>
-                    <div className="mt-1 text-[11px] font-mono text-white/35">
-                      {t('pages.roeApprovals.desired', {
-                        mode: req.desired_roe_mode,
-                        expires: req.expires_at ? new Date(req.expires_at).toLocaleString() : '—',
-                      })}
-                    </div>
-                    {req.justification && (
-                      <div className="mt-2 text-[11px] text-white/55 whitespace-pre-wrap">
-                        {req.justification}
+          <WeissmanFindingsPanel
+            findings={listFindings}
+            filteredFindings={filteredFindings}
+            counts={counts}
+            total={total}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            severityFilter={severityFilter}
+            onSeverityChange={setSeverityFilter}
+            loading={loading && !listFindings.length}
+            accent="#a855f7"
+            emptyTitle={t('pages.roeApprovals.empty')}
+            emptyBody={t('pages.roeApprovals.empty')}
+            renderFinding={(f) => {
+              const req = requests.find((r) => r.id === f.id)
+              if (!req) return null
+              return (
+                <div key={req.id} className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-mono text-white/30">#{req.id}</span>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-amber-400/30 text-amber-300 bg-amber-900/10">
+                          {req.status}
+                        </span>
+                        <span className="text-[11px] font-mono text-white/50">
+                          {t('pages.roeApprovals.approvals_count', { count: approvalsHave(req) })}
+                        </span>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => approve(req)}
-                      disabled={actionId === req.id}
-                      className="px-3 py-1.5 text-xs border border-emerald-500/40 text-emerald-200 rounded hover:bg-emerald-900/20 disabled:opacity-50"
-                    >
-                      {t('pages.roeApprovals.approve')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => reject(req)}
-                      disabled={actionId === req.id}
-                      className="px-3 py-1.5 text-xs border border-rose-500/40 text-rose-200 rounded hover:bg-rose-900/20 disabled:opacity-50"
-                    >
-                      {t('pages.roeApprovals.reject')}
-                    </button>
+                      <p className="mt-2 text-sm font-medium text-white">{f.title}</p>
+                      <p className="mt-1 text-[11px] font-mono text-white/35">{f.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => approve(req)}
+                        disabled={actionId === req.id}
+                        className="px-3 py-1.5 text-xs border border-emerald-500/40 text-emerald-200 rounded hover:bg-emerald-900/20 disabled:opacity-50"
+                      >
+                        {t('pages.roeApprovals.approve')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reject(req)}
+                        disabled={actionId === req.id}
+                        className="px-3 py-1.5 text-xs border border-rose-500/40 text-rose-200 rounded hover:bg-rose-900/20 disabled:opacity-50"
+                      >
+                        {t('pages.roeApprovals.reject')}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              )
+            }}
+          />
         )}
       </div>
     </PageShell>

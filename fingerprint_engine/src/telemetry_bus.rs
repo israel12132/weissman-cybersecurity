@@ -178,6 +178,23 @@ pub fn spawn_bridge(channel: &'static str, tx: broadcast::Sender<String>) {
     eprintln!("[Weissman][telemetry_bus] cross-replica bridge active for '{channel}'");
 }
 
+/// Publish one message to a cross-replica bus topic (worker → server SSE/WS).
+/// No-op when `REDIS_URL` is unset. Safe to call from any async task.
+pub async fn publish_bus(channel: &str, msg: &str) {
+    let Some(url) = redis_url() else {
+        return;
+    };
+    let client = match redis::Client::open(url) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
+        let topic = format!("weissman:bus:{channel}");
+        let env = serde_json::json!({ "i": instance_id(), "m": msg }).to_string();
+        let _: Result<(), _> = conn.publish(&topic, env).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

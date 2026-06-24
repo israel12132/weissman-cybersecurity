@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Network, Globe, Shield, Activity, AlertTriangle } from 'lucide-react';
-import PageShell from './PageShell';
+import { Network, Globe, Shield, Activity, AlertTriangle, Search, Download } from 'lucide-react';
+import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { apiFetch } from '../lib/apiBase';
+import EvidenceNotice from '../components/ui/EvidenceNotice';
 
 /**
  * NetworkProtocols — probe-derived protocol exposure from live findings and,
@@ -26,7 +29,7 @@ const NETWORK_SOURCES = new Set([
 const ENGINE_PROTOCOL_NAMES = {
   bgp_dns_hijacking: 'DNS / BGP',
   ipv6_attack: 'IPv6',
-  mtls_grpc: 'mTLS / gRPC',
+  mtls_grpc: 'Transport Security',
   smb_netbios: 'SMB / NetBIOS',
   pki_tls: 'TLS / SSL',
   asm: 'ASM Services',
@@ -160,6 +163,7 @@ export default function NetworkProtocols() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dataSource, setDataSource] = useState('findings');
+  const [protocolSearch, setProtocolSearch] = useState('');
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -197,9 +201,61 @@ export default function NetworkProtocols() {
     secure: protocols.filter((p) => p.status === 'secure').length,
   }), [protocols]);
 
+  const filteredProtocols = useMemo(() => {
+    const q = protocolSearch.trim().toLowerCase();
+    if (!q) return protocols;
+    return protocols.filter((p) => `${p.name} ${p.status}`.toLowerCase().includes(q));
+  }, [protocols, protocolSearch]);
+
+  const statusLabel = useCallback((status) => {
+    if (status === 'critical') return t('pages.networkProtocols.status_critical');
+    if (status === 'warning') return t('pages.networkProtocols.status_warning');
+    if (status === 'secure') return t('pages.networkProtocols.status_secure');
+    return status;
+  }, [t]);
+
+  const exportCsv = useCallback(() => {
+    const header = ['protocol', 'status', 'findings'];
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [
+      header.join(','),
+      ...filteredProtocols.map((p) => [p.name, p.status, p.findings].map(esc).join(',')),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `network-protocols-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredProtocols]);
+
+  const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(
+    filteredProtocols.map((p) => ({
+      severity: p.status === 'critical' ? 'critical' : p.status === 'warning' ? 'medium' : 'info',
+      title: p.name,
+      type: 'protocol',
+      description: String(p.findings ?? ''),
+    })),
+    { csvPrefix: 'network-protocols' },
+  )
+
   return (
-    <PageShell title={t('pages.networkProtocols.title')} icon={<Network />}>
+    <PageShell
+      title={t('pages.networkProtocols.title')}
+      icon={<Network />}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadProtocols}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredProtocols.length}
+        />
+      )}
+    >
       <div className="space-y-6">
+        <EvidenceNotice>{t('pages.networkProtocols.evidence_notice')}</EvidenceNotice>
+
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-[11px] font-mono text-white/40">{t('pages.networkProtocols.client_scope')}</span>
           <select
@@ -216,6 +272,28 @@ export default function NetworkProtocols() {
             {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>
           <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">{t('pages.networkProtocols.open_findings')}</Link>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <input
+              type="search"
+              value={protocolSearch}
+              onChange={(e) => setProtocolSearch(e.target.value)}
+              placeholder={t('pages.networkProtocols.search_placeholder')}
+              className="w-full bg-black/60 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-sm text-white/90 font-mono placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filteredProtocols.length === 0}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-500/30 text-xs font-mono text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t('pages.networkProtocols.export_csv')}
+          </button>
         </div>
 
         {error && (
@@ -277,16 +355,20 @@ export default function NetworkProtocols() {
                 {' '}{t('pages.networkProtocols.empty_suffix')}
               </p>
             </div>
+          ) : filteredProtocols.length === 0 ? (
+            <div className="p-6 text-sm text-white/50 text-center">
+              {t('pages.networkProtocols.no_search_results')}
+            </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {protocols.map((protocol) => (
+              {filteredProtocols.map((protocol) => (
                 <div key={protocol.name} className="p-4 hover:bg-white/5 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h4 className="text-sm font-semibold text-white">{protocol.name}</h4>
                         <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(protocol.status)}`}>
-                          {protocol.status}
+                          {statusLabel(protocol.status)}
                         </span>
                       </div>
                       <div className="text-xs text-gray-400">

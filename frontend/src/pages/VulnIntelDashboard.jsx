@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Download } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { apiFetch } from '../lib/apiBase'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import FilterPills from '../components/ui/FilterPills'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import DataTable from '../components/ui/DataTable'
 import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/SeverityBadge'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 
 const STATUS_COLORS = {
   OPEN: '#ef4444',
@@ -181,7 +185,33 @@ export default function VulnIntelDashboard() {
 
   const kevCount = useMemo(() => findings.filter(isKevListed).length, [findings])
 
+  const exportCsv = useCallback(() => {
+    const header = ['severity', 'cve', 'title', 'source', 'status', 'discovered_at', 'id']
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [
+      header.join(','),
+      ...filtered.map((f) => [
+        f.severity || '',
+        f.cve || f.cve_id || '',
+        f.title || f.summary || '',
+        f.source || f.engine || '',
+        (f.status || 'OPEN').toUpperCase(),
+        f.discovered_at || '',
+        f.id || f.raw_id || f.finding_id || '',
+      ].map(esc).join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `vuln-intel-findings-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [filtered])
+
   const selectedRowId = selected?.raw_id ?? selected?.id
+
+  useFindingsWorkbench(filtered, { csvPrefix: 'vuln-intel-findings' })
 
   return (
     <PageShell
@@ -189,8 +219,18 @@ export default function VulnIntelDashboard() {
       badge="CVE"
       badgeColor="#f97316"
       subtitle={t('vuln_intel.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={() => load()}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filtered.length}
+        />
+      )}
     >
       <div className="space-y-5">
+        <EvidenceNotice>{t('vuln_intel.evidence_notice')}</EvidenceNotice>
+
         <PremiumPageHeader
           title={t('vuln_intel.title')}
           subtitle={t('vuln_intel.subtitle')}
@@ -203,6 +243,15 @@ export default function VulnIntelDashboard() {
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
         >
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40 transition-all"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t('vuln_intel.export_csv')}
+          </button>
           <button
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}

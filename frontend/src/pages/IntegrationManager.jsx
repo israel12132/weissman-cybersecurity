@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plug, Check, AlertTriangle, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 /**
  * IntegrationManager - Third-party integrations hub
@@ -23,6 +28,7 @@ import { api } from '../utils/apiFetch';
  */
 export default function IntegrationManager() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [testingConnection, setTestingConnection] = useState(null);
@@ -43,11 +49,7 @@ export default function IntegrationManager() {
     { id: 'azure', name: 'Azure Defender', category: 'Cloud', icon: '☁️', color: 'blue' },
   ];
 
-  useEffect(() => {
-    fetchIntegrations();
-  }, []);
-
-  const fetchIntegrations = async () => {
+  const fetchIntegrations = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.get('/api/integrations');
@@ -57,7 +59,32 @@ export default function IntegrationManager() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchIntegrations();
+  }, [fetchIntegrations]);
+
+  const integrationFindings = useMemo(() => integrations.map((i) => ({
+    title: i.name,
+    type: i.category || i.type || 'integration',
+    severity: i.status === 'connected' ? 'info' : i.status === 'error' ? 'high' : 'medium',
+    description: i.description || i.endpoint || i.config?.endpoint || 'No description',
+    remediation: i.status ? `Status: ${i.status}` : '',
+    resource: i.id,
+    component: i.last_test ? `Last test: ${i.last_test}` : '',
+  })), [integrations]);
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(integrationFindings, { csvPrefix: 'weissman-integrations' });
 
   const testConnection = async (integrationId) => {
     try {
@@ -80,13 +107,22 @@ export default function IntegrationManager() {
   };
 
   const deleteIntegration = async (integrationId) => {
-    if (!confirm('Are you sure you want to remove this integration?')) return;
+    const ok = await confirmDialog({
+      title: t('pages.integrationManager.delete_title', { defaultValue: 'Remove integration?' }),
+      message: t('pages.integrationManager.delete_confirm', { defaultValue: 'Are you sure you want to remove this integration?' }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/api/integrations/${integrationId}`);
       setIntegrations((prev) => prev.filter((i) => i.id !== integrationId));
+      toast.success(t('pages.integrationManager.delete_success', { defaultValue: 'Integration removed' }));
     } catch (error) {
       console.error('Failed to delete integration:', error);
+      toast.error(t('pages.integrationManager.delete_failed', { defaultValue: 'Failed to remove integration' }));
     }
   };
 
@@ -122,7 +158,19 @@ export default function IntegrationManager() {
   };
 
   return (
-    <PageShell title={t('pages.integrationManager.title')} subtitle={t('pages.integrationManager.subtitle')} icon={<Plug />}>
+    <PageShell
+      title={t('pages.integrationManager.title')}
+      subtitle={t('pages.integrationManager.subtitle')}
+      icon={<Plug />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchIntegrations}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -171,111 +219,109 @@ export default function IntegrationManager() {
         </div>
 
         {/* Active Integrations */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Plug className="w-4 h-4 text-cyan-400" />
-              Active Integrations
-            </h3>
-          </div>
+        <WeissmanFindingsPanel
+          findings={integrationFindings}
+          filteredFindings={filteredFindings}
+          counts={counts}
+          total={total}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          severityFilter={severityFilter}
+          onSeverityChange={setSeverityFilter}
+          loading={loading && !integrationFindings.length}
+          accent="#22d3ee"
+          title="Active Integrations"
+          emptyTitle={t('pages.integrationManager.no_integrations_hint')}
+          emptyBody={t('pages.integrationManager.no_integrations_hint')}
+          renderFinding={(f, i) => {
+            const integration = integrations.find((int) => int.id === f.resource) || integrations[i];
+            if (!integration) return null;
+            return (
+              <div
+                key={integration.id}
+                className="p-4 rounded-lg border border-white/10 bg-black/30 hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="text-3xl shrink-0">{integration.icon || '🔌'}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <h4 className="text-sm font-semibold text-white">{integration.name}</h4>
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
+                          {integration.category}
+                        </span>
+                        <span
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${getStatusColor(
+                            integration.status
+                          )}`}
+                        >
+                          {getStatusIcon(integration.status)}
+                          {integration.status}
+                        </span>
+                      </div>
 
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              Loading integrations...
-            </div>
-          ) : integrations.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              {t('pages.integrationManager.no_integrations_hint')}
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5">
-              {integrations.map((integration) => (
-                <div
-                  key={integration.id}
-                  className="p-4 hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="text-3xl">{integration.icon || '🔌'}</div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">
-                            {integration.name}
-                          </h4>
-                          <span className="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-medium">
-                            {integration.category}
-                          </span>
-                          <span
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${getStatusColor(
-                              integration.status
-                            )}`}
-                          >
-                            {getStatusIcon(integration.status)}
-                            {integration.status}
-                          </span>
-                        </div>
+                      <p className="text-xs text-gray-400 mb-3">
+                        {integration.description || 'No description'}
+                      </p>
 
-                        <p className="text-xs text-gray-400 mb-3">
-                          {integration.description || 'No description'}
-                        </p>
-
-                        <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
-                          {integration.endpoint && (
-                            <span className="flex items-center gap-1">
-                              Endpoint: <span className="font-mono">{integration.endpoint}</span>
-                            </span>
-                          )}
-                          {integration.config?.endpoint && !integration.endpoint && (
-                            <span className="flex items-center gap-1">
-                              Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
-                            </span>
-                          )}
-                          <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">
-                            Manual sync · test connection to verify
+                      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                        {integration.endpoint && (
+                          <span className="flex items-center gap-1">
+                            Endpoint: <span className="font-mono">{integration.endpoint}</span>
                           </span>
-                          {integration.last_test && (
-                            <>
-                              <span>•</span>
-                              <span>Last test: {integration.last_test}</span>
-                            </>
-                          )}
-                        </div>
+                        )}
+                        {integration.config?.endpoint && !integration.endpoint && (
+                          <span className="flex items-center gap-1">
+                            Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">
+                          Manual sync · test connection to verify
+                        </span>
+                        {integration.last_test && (
+                          <>
+                            <span>•</span>
+                            <span>Last test: {integration.last_test}</span>
+                          </>
+                        )}
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => testConnection(integration.id)}
-                        disabled={testingConnection === integration.id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`w-3 h-3 ${
-                            testingConnection === integration.id ? 'animate-spin' : ''
-                          }`}
-                        />
-                        Test
-                      </button>
-                      <button
-                        onClick={() => {}}
-                        className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteIntegration(integration.id)}
-                        className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => testConnection(integration.id)}
+                      disabled={testingConnection === integration.id}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`w-3 h-3 ${
+                          testingConnection === integration.id ? 'animate-spin' : ''
+                        }`}
+                      />
+                      Test
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {}}
+                      className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteIntegration(integration.id)}
+                      className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            );
+          }}
+        />
 
         {/* Available Integrations */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">

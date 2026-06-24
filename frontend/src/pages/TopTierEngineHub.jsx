@@ -1,9 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { Search } from 'lucide-react'
 import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { apiEventSourceUrl, apiFetch } from '../lib/apiBase'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 
 function badgeClass(kind) {
   if (kind === 'command_center_engine') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
@@ -22,23 +26,22 @@ export default function TopTierEngineHub() {
   const [probeRunning, setProbeRunning] = useState(false)
   const [probeSummary, setProbeSummary] = useState('')
   const [probeByEngine, setProbeByEngine] = useState({})
+  const [engineSearch, setEngineSearch] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const r = await apiFetch('/api/engines/top-tier/audit')
-        const d = await r.json().catch(() => null)
-        if (!cancelled && r.ok) setAudit(d)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
+  const reloadAudit = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await apiFetch('/api/engines/top-tier/audit')
+      const d = await r.json().catch(() => null)
+      if (r.ok) setAudit(d)
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    reloadAudit()
+  }, [reloadAudit])
 
   useEffect(() => {
     let cancelled = false
@@ -146,6 +149,44 @@ export default function TopTierEngineHub() {
     setProbeSummary(t('pages.topTierEngineHub.probe_queued', { jobId: d.job_id || 'unknown' }))
   }
 
+  const filteredEngineIds = useMemo(() => {
+    const q = engineSearch.trim().toLowerCase()
+    if (!q) return TOP_TIER_ENGINE_IDS
+    return TOP_TIER_ENGINE_IDS.filter((id) => {
+      const engine = ENGINES_BY_ID[id]
+      const row = auditById[id]
+      const hay = `${id} ${engine?.label || ''} ${engine?.description || ''} ${row?.execution_path || ''} ${row?.canonical_engine || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [engineSearch, auditById])
+
+  function exportAuditCsv() {
+    const rows = Array.isArray(audit?.engines) ? audit.engines : []
+    const header = ['engine_id', 'label', 'execution_path', 'canonical_engine', 'is_production_runnable', 'known_in_catalog']
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [
+      header.join(','),
+      ...rows.map((r) => {
+        const engine = ENGINES_BY_ID[r.engine_id]
+        return [
+          r.engine_id,
+          engine?.label || '',
+          r.execution_path || '',
+          r.canonical_engine || '',
+          r.is_production_runnable ? 'yes' : 'no',
+          r.known_in_catalog ? 'yes' : 'no',
+        ].map(esc).join(',')
+      }),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `top-tier-audit-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function probeBadge(status) {
     if (status === 'pass') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
     if (status === 'fail') return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
@@ -162,18 +203,28 @@ export default function TopTierEngineHub() {
             <span className="text-white/20 text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineHub.title')}</h1>
           </div>
-          <div className="text-[11px] font-mono text-white/50">
+          <div className="flex items-center gap-3">
+            <ShellScanActions
+              onRefresh={reloadAudit}
+              onExport={exportAuditCsv}
+              refreshLoading={loading}
+              exportDisabled={loading || !audit?.engines?.length}
+            />
+            <div className="text-[11px] font-mono text-white/50">
             {loading
               ? t('pages.topTierEngineHub.auditing')
               : t('pages.topTierEngineHub.connected', {
                   connected: audit?.connected_count ?? 0,
                   total: audit?.top_tier_count ?? TOP_TIER_ENGINE_IDS.length,
                 })}
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        <EvidenceNotice>{t('pages.topTierEngineHub.evidence_notice')}</EvidenceNotice>
+
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5">
           <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
           <p className="text-sm text-white/60 leading-relaxed">
@@ -208,8 +259,31 @@ export default function TopTierEngineHub() {
           {probeSummary && <div className="mt-3 text-xs font-mono text-white/65">{probeSummary}</div>}
         </section>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <input
+              type="search"
+              value={engineSearch}
+              onChange={(e) => setEngineSearch(e.target.value)}
+              placeholder={t('pages.topTierEngineHub.search_placeholder')}
+              className="w-full bg-black/60 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-sm text-white/90 font-mono placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+            />
+          </div>
+          <span className="text-[11px] font-mono text-white/40">
+            {t('pages.topTierEngineHub.showing_count', { count: filteredEngineIds.length, total: TOP_TIER_ENGINE_IDS.length })}
+          </span>
+        </div>
+
+        {loading ? (
+          <SkeletonWidgetGrid count={6} />
+        ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {TOP_TIER_ENGINE_IDS.map((id, idx) => {
+          {filteredEngineIds.length === 0 ? (
+            <div className="col-span-full rounded-xl border border-white/10 bg-black/40 p-6 text-sm text-white/50 text-center">
+              {t('pages.topTierEngineHub.no_search_results')}
+            </div>
+          ) : filteredEngineIds.map((id, idx) => {
             const engine = ENGINES_BY_ID[id]
             const row = auditById[id]
             const path = row?.execution_path || 'unknown'
@@ -273,6 +347,7 @@ export default function TopTierEngineHub() {
             )
           })}
         </section>
+        )}
       </main>
     </div>
   )

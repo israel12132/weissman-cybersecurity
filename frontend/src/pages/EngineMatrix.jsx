@@ -10,7 +10,11 @@ import {
 } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -137,6 +141,28 @@ function TierBadge({ tier, t }) {
   )
 }
 
+// Per-engine reality classification badge (source: GET /api/engines/capabilities).
+const REALITY_BADGE = {
+  real_probe: { color: '#34d399', border: 'rgba(52,211,153,0.35)', bg: 'rgba(52,211,153,0.08)', label: 'LIVE PROBE' },
+  alias: { color: '#9ca3af', border: 'rgba(156,163,175,0.30)', bg: 'rgba(156,163,175,0.07)', label: 'ALIAS' },
+  agent_required: { color: '#f59e0b', border: 'rgba(245,158,11,0.35)', bg: 'rgba(245,158,11,0.08)', label: 'AGENT REQUIRED' },
+  special: { color: '#a78bfa', border: 'rgba(167,139,250,0.35)', bg: 'rgba(167,139,250,0.08)', label: 'PoE' },
+}
+
+function RealityBadge({ kind }) {
+  const s = REALITY_BADGE[kind]
+  if (!s) return null
+  return (
+    <span
+      className="text-[8px] font-mono px-1.5 py-0.5 rounded-md border uppercase tracking-[0.14em] font-semibold"
+      style={{ color: s.color, borderColor: s.border, backgroundColor: s.bg }}
+      title={`Engine reality: ${kind}`}
+    >
+      {s.label}
+    </span>
+  )
+}
+
 function EngineMatrixCard({
   engine,
   enabled,
@@ -153,6 +179,7 @@ function EngineMatrixCard({
 }) {
   const navigate = useNavigate()
   const [runBusy, setRunBusy] = useState(false)
+  const { kindById } = useEngineCapabilities()
 
   const handleRun = useCallback(async (e) => {
     e.stopPropagation()
@@ -232,6 +259,7 @@ function EngineMatrixCard({
       <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
         <CategoryBadge groupId={engine.group} />
         <TierBadge tier={tier} t={t} />
+        <RealityBadge kind={kindById[engine.id]} />
       </div>
 
       <p className="text-[11px] text-white/50 leading-relaxed line-clamp-2 min-h-[2.5rem]">
@@ -362,9 +390,13 @@ export default function EngineMatrix() {
     catalogCount,
     loading: productionLoading,
     isProduction,
+    refresh: refreshProduction,
   } = useProductionEngines()
 
   const [activeGroup, setActiveGroup] = useState('all')
+  const [matrixRefreshing, setMatrixRefreshing] = useState(false)
+  const [lastMatrixSync, setLastMatrixSync] = useState(null)
+  const [historyReloadKey, setHistoryReloadKey] = useState(0)
   const [tierFilter, setTierFilter] = useState(() => {
     const tier = searchParams.get('tier')
     return tier && TIER_FILTERS.includes(tier) ? tier : 'all'
@@ -547,6 +579,37 @@ export default function EngineMatrix() {
   )
   const totalRunnable = runnableEnabledSet.size
 
+  const handleMatrixRefresh = useCallback(async () => {
+    setMatrixRefreshing(true)
+    try {
+      await refreshProduction()
+      const r = await apiFetch('/api/clients')
+      if (r.ok) {
+        const d = await r.json()
+        if (Array.isArray(d)) setClients(d)
+      }
+      setEngineStates({})
+      setHistoryReloadKey((k) => k + 1)
+      setLastMatrixSync(new Date())
+    } finally {
+      setMatrixRefreshing(false)
+    }
+  }, [refreshProduction])
+
+  const exportMatrixCsv = useCallback(() => {
+    if (!filteredEngines.length) return
+    const header = ['id', 'label', 'group', 'tier', 'mitre', 'enabled']
+    const rows = filteredEngines.map((e) => [
+      e.id,
+      e.label || '',
+      e.group || '',
+      getEngineTier(e.id, isProduction),
+      e.mitre || '',
+      selectedClientId && enabledSet.has(e.id) ? 'yes' : 'no',
+    ])
+    downloadCsv(rows, header, 'weissman-engine-matrix')
+  }, [filteredEngines, isProduction, selectedClientId, enabledSet])
+
   useEffect(() => {
     if (productionLoading || filteredEngines.length === 0) return undefined
     let cancelled = false
@@ -582,7 +645,7 @@ export default function EngineMatrix() {
 
     loadHistories()
     return () => { cancelled = true }
-  }, [filteredEngines, productionLoading])
+  }, [filteredEngines, productionLoading, historyReloadKey])
 
   const handleRunAllEngines = useCallback(async () => {
     if (selectedClientId == null) {
@@ -698,6 +761,12 @@ export default function EngineMatrix() {
               >
                 {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: totalRunnable })}
               </button>
+              <ShellScanActions
+                onRefresh={handleMatrixRefresh}
+                onExport={exportMatrixCsv}
+                refreshLoading={matrixRefreshing || productionLoading}
+                exportDisabled={!filteredEngines.length}
+              />
             </div>
           </div>
         </div>
@@ -722,6 +791,12 @@ export default function EngineMatrix() {
       </AnimatePresence>
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+        <EvidenceNotice>{t('engines.evidence_notice')}</EvidenceNotice>
+        {lastMatrixSync && (
+          <p className="text-[10px] font-mono text-white/35 -mt-3">
+            {t('weissmanFindings.last_updated', { time: lastMatrixSync.toLocaleString() })}
+          </p>
+        )}
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1 min-w-[220px]">
             <input

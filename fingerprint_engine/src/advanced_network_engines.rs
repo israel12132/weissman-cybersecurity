@@ -41,6 +41,46 @@ fn net_finding(
     )
 }
 
+/// Valid NTP mode-4 (server) response to a client-mode request.
+#[must_use]
+fn ntp_mode4_response(resp: &[u8]) -> bool {
+    resp.len() >= 48 && (resp[0] & 0x07) == 4
+}
+
+/// NTP mode-7 (private/control) response — monlist/amplification surface.
+#[must_use]
+fn ntp_mode7_response(resp: &[u8]) -> bool {
+    resp.len() >= 4 && (resp[0] & 0x07) == 7
+}
+
+/// SNMP GET response for sysDescr.0 with community `public`.
+#[must_use]
+fn snmp_public_sysdescr_response(resp: &[u8]) -> bool {
+    if resp.first() != Some(&0x30) {
+        return false;
+    }
+    let has_sysdescr_oid = resp
+        .windows(6)
+        .any(|w| w == [0x2b, 0x06, 0x01, 0x02, 0x01, 0x01]);
+    if !has_sysdescr_oid {
+        return false;
+    }
+    // Require printable sysDescr payload, not just ASN.1 framing.
+    resp.iter().any(|b| b.is_ascii_graphic() && *b != b' ')
+        && String::from_utf8_lossy(resp).chars().any(|c| c.is_alphabetic())
+}
+
+/// LDAP bind response that indicates the server answered (success or invalid credentials).
+#[must_use]
+fn ldap_bind_response(resp: &[u8]) -> bool {
+    if resp.first() != Some(&0x30) || resp.len() < 7 {
+        return false;
+    }
+    // LDAPMessage → bindResponse (0x61) or resultCode present in typical bind reply.
+    resp.contains(&0x61)
+        || resp.windows(3).any(|w| w == [0x0a, 0x01, 0x00] || w == [0x0a, 0x01, 0x31])
+}
+
 pub async fn run_arp_spoofing_engine_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
         "arp_spoofing_engine",
@@ -237,7 +277,7 @@ pub async fn run_ntp_amplification_result(t: &str) -> EngineResult {
     let mut ntp_req = [0u8; 48];
     ntp_req[0] = 0x1b;
     if let Some(resp) = udp_probe_response(&host, 123, &ntp_req).await {
-        if resp.len() >= 48 && (resp[0] & 0x07) == 4 {
+        if ntp_mode4_response(&resp) {
             findings.push(net_finding(
                 "ntp_amplification",
                 "NTP server responded to client mode probe",
@@ -249,6 +289,24 @@ pub async fn run_ntp_amplification_result(t: &str) -> EngineResult {
                 ),
                 t,
             ));
+        }
+        // Mode 7 monlist probe — amplification only when control queries are enabled.
+        let mut monlist_req = [0u8; 48];
+        monlist_req[0] = 0x17; // mode 7, version 2
+        if let Some(m7) = udp_probe_response(&host, 123, &monlist_req).await {
+            if ntp_mode7_response(&m7) && m7.len() > 48 {
+                findings.push(net_finding(
+                    "ntp_amplification",
+                    "NTP mode-7 control query answered (monlist risk)",
+                    "high",
+                    "T1498.002",
+                    &format!(
+                        "UDP {}:123 returned mode-7 response ({} B) — NTP control queries may enable amplification; disable mode 7 or restrict to management nets.",
+                        host, m7.len()
+                    ),
+                    t,
+                ));
+            }
         }
     }
     if findings.is_empty() {
@@ -272,11 +330,7 @@ pub async fn run_snmp_exploitation_result(t: &str) -> EngineResult {
         0x0a, 0x06, 0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
     ];
     if let Some(resp) = udp_probe_response(&host, 161, SNMP_GET).await {
-        if resp.first() == Some(&0x30)
-            && resp
-                .windows(6)
-                .any(|w| w == [0x2b, 0x06, 0x01, 0x02, 0x01, 0x01])
-        {
+        if snmp_public_sysdescr_response(&resp) {
             findings.push(net_finding(
                 "snmp_exploitation",
                 "SNMP agent answered public community GET",
@@ -342,10 +396,10 @@ pub async fn run_ldap_injection_engine_result(t: &str) -> EngineResult {
     ];
     for (port, label) in [(389u16, "LDAP"), (3268, "Global Catalog LDAP")] {
         if let Some(resp) = tcp_probe_response(&host, port, LDAP_BIND).await {
-            if resp.first() == Some(&0x30) && resp.len() >= 7 {
+            if ldap_bind_response(&resp) {
                 findings.push(net_finding(
                     "ldap_injection_engine",
-                    &format!("{} anonymous bind response on {}/tcp", label, port),
+                    &format!("{} bind response on {}/tcp", label, port),
                     "medium",
                     "T1078",
                     &format!(
@@ -709,11 +763,36 @@ cli_wrapper!(run_nat_traversal_attack, run_nat_traversal_attack_result);
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::engine_probes::host_header_rebinding_signal;
 
     #[test]
     fn rebinding_host_signal_requires_foreign_success() {
         assert!(host_header_rebinding_signal(404, 200, 128));
         assert!(!host_header_rebinding_signal(200, 200, 128));
+    }
+
+    #[test]
+    fn ntp_mode4_and_mode7_parsing() {
+        let mut mode4 = [0u8; 48];
+        mode4[0] = 0x24;
+        assert!(ntp_mode4_response(&mode4));
+        assert!(!ntp_mode4_response(&[0u8; 8]));
+
+        let mut mode7 = [0u8; 64];
+        mode7[0] = 0x17;
+        assert!(ntp_mode7_response(&mode7));
+    }
+
+    #[test]
+    fn snmp_requires_sysdescr_oid_and_printable_payload() {
+        let bare_asn = [0x30, 0x06, 0x02, 0x01, 0x01, 0x04, 0x00];
+        assert!(!snmp_public_sysdescr_response(&bare_asn));
+    }
+
+    #[test]
+    fn ldap_bind_response_requires_bind_reply_marker() {
+        assert!(!ldap_bind_response(&[0x30, 0x03, 0x02, 0x01, 0x01]));
+        assert!(ldap_bind_response(&[0x30, 0x0c, 0x02, 0x01, 0x01, 0x61, 0x07]));
     }
 }

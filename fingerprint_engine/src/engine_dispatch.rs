@@ -27,6 +27,12 @@ pub struct EngineRunContext {
     pub client_id: Option<i64>,
     /// Extra scan parameters forwarded from POST /api/command-center/scan body.
     pub job_params: serde_json::Value,
+    /// Async job id when running under `command_center_engine` — used for live SSE/WS telemetry.
+    pub job_id: Option<String>,
+    /// Live swarm bus (server in-process); worker runs use Redis `publish_bus` instead.
+    pub swarm_broadcast: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
+    /// Cross-protocol Memory Intelligence Bus — WS artifacts shared with HTTP/API engines in the same job.
+    pub intelligence_bus: Option<std::sync::Arc<crate::ws_intelligence_bus::IntelligenceBus>>,
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {
@@ -86,14 +92,19 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "insider_threat_engine",
     "physical_social_eng",
     // OT / physical bus-level (no remote HTTP/crypto stand-in)
-    "modbus_exploit",
-    "plc_logic_bomb",
+    // NOTE: modbus_exploit is NOT here — it now runs a real read-only Modbus/TCP assessment
+    // (device identification + register reads) via advanced_ot_engines::run_modbus_exploit_result.
+    // NOTE: plc_logic_bomb is NOT here — it now runs a real read-only PLC fingerprint
+    // (S7comm / EtherNet-IP / Modbus) via advanced_ot_engines::run_plc_logic_bomb_result.
     "lorawan_attack",
     "lora_attack",
     "voltage_glitch_attack",
     "tpm_firmware_attack",
     "cold_boot_attack",
-    "hospital_hl7_attack",
+    // NOTE: hospital_hl7_attack is NOT here — it now runs a real read-only HL7/MLLP exposure
+    // probe (benign NACK-eliciting message) via advanced_ot_engines::run_hospital_hl7_attack_result.
+    // Next-Gen Arsenal — host-resident collector (commodity infostealer blast-radius).
+    "infostealer_emulation",
 ];
 
 #[must_use]
@@ -120,6 +131,7 @@ pub async fn run_agent_required_engine(
             client_id,
             engine_id,
             target,
+            ctx,
         )
         .await;
     }
@@ -143,11 +155,64 @@ pub async fn run_agent_required_engine(
 /// `advanced_*_engines` (per real probe). Only when the raw ID is not in our
 /// `PRODUCTION_ENGINE_IDS` set do we fall back to `resolve_engine_id` for legacy
 /// aliases (so old `client_configs.enabled_engines` rows keep working).
-pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
-    if is_agent_required_engine(engine_id) {
-        return run_agent_required_engine(engine_id, target, ctx).await;
+/// Merge remote-surface findings with agent dispatch / guidance for hybrid engines.
+pub(crate) fn merge_agent_hybrid(
+    remote: EngineResult,
+    agent: EngineResult,
+    engine_id: &str,
+) -> EngineResult {
+    let mut findings = remote.findings;
+    for f in agent.findings {
+        let dup = findings.iter().any(|existing| {
+            existing.get("title").and_then(|v| v.as_str())
+                == f.get("title").and_then(|v| v.as_str())
+        });
+        if !dup {
+            findings.push(f);
+        }
     }
+    if findings.is_empty() {
+        return EngineResult {
+            status: agent.status,
+            findings: Vec::new(),
+            message: agent.message,
+            success: agent.success,
+            summary: agent.summary,
+            graph_nodes: agent.graph_nodes,
+            graph_edges: agent.graph_edges,
+        };
+    }
+    let has_agent_guidance = findings
+        .iter()
+        .any(|f| f.get("agent_required").and_then(|v| v.as_bool()).unwrap_or(false));
+    let msg = if has_agent_guidance {
+        format!(
+            "{}: {} finding(s) — remote surface probed; endpoint agent recommended for host-resident validation",
+            engine_id,
+            findings.len()
+        )
+    } else {
+        format!(
+            "{}: {} finding(s) (remote surface + agent)",
+            engine_id,
+            findings.len()
+        )
+    };
+    EngineResult::ok(findings, msg)
+}
+
+pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     let raw = engine_id.trim();
+    if target.trim().is_empty() && is_production_engine_id(raw) {
+        return EngineResult::error("target required");
+    }
+
+    // Hybrid: always probe remote attack surface, then dispatch to agent fleet if enrolled.
+    if is_agent_required_engine(raw) {
+        let remote = crate::agent_remote_surface::run_remote_surface_probe(raw, target, ctx).await;
+        let agent = run_agent_required_engine(raw, target, ctx).await;
+        return merge_agent_hybrid(remote, agent, raw);
+    }
     if !is_production_engine_id(raw) {
         return EngineResult::ok(
             vec![],
@@ -212,19 +277,7 @@ async fn dispatch_engine_match(
 
     match canonical {
         "osint" => crate::osint_engine::run_osint_result(target, stealth).await,
-        "asm" => {
-            if let Some(ports) = ctx.asm_ports.as_deref() {
-                crate::asm_engine::run_asm_result_with_ports_and_subdomains(
-                    target,
-                    ports,
-                    Some(ctx.recon_subdomains.clone()),
-                    stealth,
-                )
-                .await
-            } else {
-                crate::asm_engine::run_asm_result(target).await
-            }
-        }
+        "asm" => crate::asm_engine::run_asm_result_ctx(target, ctx, stealth).await,
         "leak_hunter" => {
             let mut r = crate::leak_hunter_engine::run_leak_hunter(&tl, stealth).await;
             if let Some(token) = ctx.github_token.as_deref() {
@@ -269,20 +322,26 @@ async fn dispatch_engine_match(
             )
             .await
         }
-        "graphql_attack" => crate::graphql_attack_engine::run_graphql_attack_result(target).await,
-        "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result(target).await,
-        "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(target).await,
-        "http_smuggling" => crate::http_smuggling_engine::run_http_smuggling_result(target).await,
-        "liminal_boundary" => crate::liminal_boundary_engine::run_liminal_boundary_result(target).await,
+        "graphql_attack" => {
+            crate::graphql_attack_engine::run_graphql_attack_result_ctx(target, ctx).await
+        }
+        "jwt_attack" => crate::jwt_attack_engine::run_jwt_attack_result_ctx(target, ctx).await,
+        "oauth_oidc" => crate::oauth_oidc_engine::run_oauth_oidc_result(target, ctx).await,
+        "http_smuggling" => {
+            crate::http_smuggling_engine::run_http_smuggling_result_ctx(target, ctx).await
+        }
+        "liminal_boundary" => {
+            crate::liminal_boundary_engine::run_liminal_boundary_result_ctx(target, ctx).await
+        }
         "prototype_pollution" => {
             crate::prototype_pollution_engine::run_prototype_pollution_result(target).await
         }
-        "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result(target).await,
+        "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result_ctx(target, ctx).await,
         "xxe" => crate::xxe_engine::run_xxe_result(target).await,
         "ssti" => crate::ssti_engine::run_ssti_result(target).await,
-        "file_upload" => crate::file_upload_engine::run_file_upload_result(target).await,
-        "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result(target).await,
-        "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result(target).await,
+        "file_upload" => crate::file_upload_engine::run_file_upload_result_ctx(target, ctx).await,
+        "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result_ctx(target, ctx).await,
+        "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result_ctx(target, ctx).await,
         "llm_path_fuzz" | "ollama_fuzz" => {
             crate::llm_path_fuzz_engine::run_llm_path_fuzz_result_cli(target, stealth, ctx.tenant_id)
                 .await
@@ -333,46 +392,58 @@ async fn dispatch_engine_match(
         "nexus_sovereign_swarm" => {
             crate::nexus_sovereign_swarm_engine::run_nexus_sovereign_swarm_result(target, ctx).await
         }
-        "aws_attack" => crate::aws_attack_engine::run_aws_attack_result(target).await,
-        "azure_attack" => crate::azure_attack_engine::run_azure_attack_result(target).await,
+        "aws_attack" => crate::aws_attack_engine::run_aws_attack_result_ctx(target, ctx).await,
+        "cloud_posture" => crate::cloud_posture_engine::run_cloud_posture_result_ctx(target, ctx).await,
+        "azure_attack" => crate::azure_attack_engine::run_azure_attack_result_ctx(target, ctx).await,
         "gcp_attack" => crate::gcp_attack_engine::run_gcp_attack_result(target).await,
-        "k8s_container" => crate::k8s_container_engine::run_k8s_container_result(target).await,
-        "iac_misconfig" => crate::iac_misconfig_engine::run_iac_misconfig_result(target).await,
-        "serverless_attack" => crate::serverless_attack_engine::run_serverless_attack_result(target).await,
+        "k8s_container" => crate::k8s_container_engine::run_k8s_container_result(target, ctx).await,
+        "iac_misconfig" => crate::iac_misconfig_engine::run_iac_misconfig_result(target, ctx).await,
+        "serverless_attack" => crate::serverless_attack_engine::run_serverless_attack_result_ctx(target, ctx).await,
         "scada_ics" => crate::scada_ics_engine::run_scada_ics_result(target).await,
         "iot_firmware" => crate::iot_firmware_engine::run_iot_firmware_result(target).await,
-        "ble_rf" => crate::ble_rf_engine::run_ble_rf_result(target).await,
-        "edr_evasion" => crate::edr_evasion_engine::run_edr_evasion_result(target).await,
-        "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result(target).await,
+        "ble_rf" => crate::ble_rf_engine::run_ble_rf_result_ctx(target, ctx).await,
+        "edr_evasion" => crate::edr_evasion_engine::run_edr_evasion_result_ctx(target, ctx).await,
+        "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result_ctx(target, ctx).await,
         "timing_sidechannel" => {
-            crate::timing_sidechannel_engine::run_timing_sidechannel_result(target).await
+            crate::timing_sidechannel_engine::run_timing_sidechannel_result_ctx(target, ctx).await
         }
         "antiforensics" => crate::antiforensics_engine::run_antiforensics_result(target).await,
         "stealth_engine" => crate::stealth_engine::run_stealth_engine_result(target).await,
-        "pki_tls" => crate::pki_tls_engine::run_pki_tls_result(target).await,
-        "pqc_scanner" => crate::pqc_scanner_engine::run_pqc_scanner_result(target).await,
-        "password_spray" => crate::password_spray_engine::run_password_spray_result(target).await,
-        "kerberoasting" => crate::kerberoasting_engine::run_kerberoasting_result(target).await,
-        "saml_attack" => crate::saml_attack_engine::run_saml_attack_result(target).await,
+        "pki_tls" => crate::pki_tls_engine::run_pki_tls_result_ctx(target, ctx).await,
+        "pqc_scanner" => {
+            crate::pqc_scanner_engine::run_pqc_scanner_result_ctx(target, ctx).await
+        }
+        "password_spray" => {
+            crate::password_spray_engine::run_password_spray_result_ctx(target, ctx).await
+        }
+        "kerberoasting" => crate::kerberoasting_engine::run_kerberoasting_result_ctx(target, ctx).await,
+        "saml_attack" => crate::saml_attack_engine::run_saml_attack_result_ctx(target, ctx).await,
         "crypto_engine" => crate::crypto_engine::run_crypto_engine_result(target).await,
-        "bgp_dns_hijacking" => crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result(target).await,
+        "email_dns_posture" => {
+            crate::email_dns_posture_engine::run_email_dns_posture_result(target, ctx).await
+        }
+        "bgp_dns_hijacking" => crate::bgp_dns_hijacking_engine::run_bgp_dns_hijacking_result_ctx(target, ctx).await,
         "ipv6_attack" => crate::ipv6_attack_engine::run_ipv6_attack_result(target).await,
-        "mtls_grpc" => crate::mtls_grpc_engine::run_mtls_grpc_result(target).await,
-        "smb_netbios" => crate::smb_netbios_engine::run_smb_netbios_result(target).await,
-        "cicd_pipeline" => crate::cicd_pipeline_engine::run_cicd_pipeline_result(target).await,
+        "mtls_grpc" => crate::mtls_grpc_engine::run_mtls_grpc_result_ctx(target, ctx).await,
+        "smb_netbios" => crate::smb_netbios_engine::run_smb_netbios_result(target, ctx).await,
+        "cicd_pipeline" => {
+            crate::cicd_pipeline_engine::run_cicd_pipeline_result_ctx(target, ctx).await
+        }
         "container_registry" => {
             crate::container_registry_engine::run_container_registry_result(target).await
         }
         "sbom_analyzer" => crate::sbom_analyzer_engine::run_sbom_analyzer_result(target).await,
         "typosquatting_monitor" => {
-            crate::typosquatting_monitor_engine::run_typosquatting_monitor_result(target).await
+            crate::typosquatting_monitor_engine::run_typosquatting_monitor_result_ctx(target, ctx).await
         }
         "kill_chain" => crate::kill_chain_engine::run_kill_chain_result(target).await,
         "oast_oob" => crate::oast_oob_engine::run_oast_oob_result(target).await,
         "deception_honeypot" => {
             crate::deception_honeypot_engine::run_deception_honeypot_result(target).await
         }
-        "digital_twin" => crate::digital_twin_engine::run_digital_twin_result(target).await,
+        "digital_twin" => {
+            crate::digital_twin_engine::run_digital_twin_result_ctx(target, ctx).await
+        }
         "zero_day_prediction" => {
             crate::zero_day_prediction_engine::run_zero_day_prediction_result(target).await
         }
@@ -607,6 +678,9 @@ async fn dispatch_engine_match(
         // ── Advanced Recon engines ─────────────────────────────────────────────
         "threat_intel_fusion" => crate::advanced_recon_engines::run_threat_intel_fusion_result(target).await,
         "attack_surface_quantify" => crate::advanced_recon_engines::run_attack_surface_quantify_result(target).await,
+        "external_exposure_supreme" => {
+            crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
+        }
         "adversarial_simulation" => crate::advanced_recon_engines::run_adversarial_simulation_result(target).await,
         "dark_web_monitor" => crate::advanced_recon_engines::run_dark_web_monitor_result(target).await,
         "passive_dns_forensics" => crate::advanced_recon_engines::run_passive_dns_forensics_result(target).await,
@@ -748,6 +822,16 @@ async fn dispatch_engine_match(
         // ── Advanced Malware engines (new probes / agent_required) ─────────────
         "ransomware_emulation" => crate::advanced_malware_engines::run_ransomware_emulation_result(target).await,
 
+        // ── Next-Gen Arsenal: enterprise core ──────────────────────────────────
+        "sap_erp_attack" => crate::enterprise_core_engines::run_sap_erp_attack_result(target, ctx).await,
+        "mainframe_zos_attack" => crate::enterprise_core_engines::run_mainframe_zos_attack_result(target, ctx).await,
+
+        // ── Next-Gen Arsenal: initial access / endpoint ────────────────────────
+        "malvertising_seo_poison" => crate::initial_access_engines::run_malvertising_seo_poison_result(target, ctx).await,
+        "infostealer_emulation" => crate::initial_access_engines::run_infostealer_emulation_result(target, ctx).await,
+        "printer_mfp_attack" => crate::initial_access_engines::run_printer_mfp_attack_result(target, ctx).await,
+        "radius_nac_bypass" => crate::initial_access_engines::run_radius_nac_bypass_result(target, ctx).await,
+
         _ => EngineResult::error(
             format!(
                 "Engine '{}' is registered in PRODUCTION_ENGINE_IDS but has no dispatch runner in engine_dispatch",
@@ -801,8 +885,21 @@ async fn dispatch_to_agent(
     client_id: i64,
     engine: &str,
     target: &str,
+    ctx: &EngineRunContext,
 ) -> EngineResult {
-    let params = serde_json::json!({"priority": "high"});
+    let mut params = if ctx.job_params.is_null() {
+        serde_json::json!({})
+    } else {
+        ctx.job_params.clone()
+    };
+    if let Some(obj) = params.as_object_mut() {
+        obj.entry("priority")
+            .or_insert_with(|| serde_json::json!("high"));
+        if let Some(job_id) = &ctx.job_id {
+            obj.entry("scan_job_id")
+                .or_insert_with(|| serde_json::json!(job_id));
+        }
+    }
     let (task, live_dispatched) = match crate::endpoint_agents::enqueue_and_dispatch_fleet(
         pool,
         registry,

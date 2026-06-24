@@ -8,9 +8,17 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Download } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+
+const NS = 'pages.incidentResponseCenter'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -88,22 +96,48 @@ const STATUS_META = {
   resolved:    { labelKey: 'pages.incidentResponseCenter.status_resolved',    color: '#22d3ee' },
 }
 
-// ─── Helper: human-readable duration ─────────────────────────────────────────
+function severityLabel(severity, t) {
+  const s = String(severity ?? 'high').toLowerCase()
+  return t(`${NS}.severity_${s}`, { defaultValue: s.toUpperCase() })
+}
 
-function durationHuman(created, updated) {
+function durationHuman(created, updated, t) {
   const ms = new Date(updated) - new Date(created)
   const h = Math.floor(ms / 3_600_000)
   const m = Math.floor((ms % 3_600_000) / 60_000)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
+  if (h > 0) return t(`${NS}.duration_hours_minutes`, { hours: h, minutes: m })
+  return t(`${NS}.duration_minutes`, { minutes: m })
+}
+
+function exportIncidentsCsv(incidents) {
+  const header = ['id', 'title', 'severity', 'status', 'assignee', 'source', 'created', 'updated']
+  const rows = incidents.map((inc) => [
+    inc.id,
+    (inc.title || '').replace(/"/g, '""'),
+    inc.severity,
+    inc.status,
+    (inc.assignee || '').replace(/"/g, '""'),
+    inc.source,
+    inc.created,
+    inc.updated,
+  ])
+  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `incidents-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function normalizeIncident(raw, t) {
   return {
     id: raw.id ?? '',
-    title: raw.title ?? t('pages.incidentResponseCenter.untitled_incident'),
+    title: raw.title ?? t(`${NS}.untitled_incident`),
     severity: String(raw.severity ?? 'high').toLowerCase(),
     status: String(raw.status ?? 'active').toLowerCase(),
-    assignee: raw.assignee ?? t('pages.incidentResponseCenter.default_assignee'),
+    assignee: raw.assignee ?? t(`${NS}.default_assignee`),
     created: raw.created ?? new Date().toISOString(),
     updated: raw.updated ?? raw.created ?? new Date().toISOString(),
     source: raw.source ?? '—',
@@ -173,14 +207,14 @@ function IncidentRow({ incident, selected, onSelect, t }) {
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sc, borderColor: `${sc}40`, background: `${sc}10` }}
             >
-              {incident.severity}
+              {severityLabel(incident.severity, t)}
             </span>
           </div>
           <p className="text-xs font-semibold text-white/85 leading-snug">{incident.title}</p>
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] font-mono text-white/30">{incident.source}</div>
-          <div className="text-[10px] font-mono text-white/20">{durationHuman(incident.created, incident.updated)}</div>
+          <div className="text-[10px] font-mono text-white/20">{durationHuman(incident.created, incident.updated, t)}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -297,29 +331,26 @@ export default function IncidentResponseCenter() {
   const [error, setError] = useState(null)
   const [stepSaving, setStepSaving] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  const loadIncidents = useCallback(async () => {
     setLoading(true)
     setError(null)
-    apiFetch('/api/soc/incidents')
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Failed to load incidents (${r.status})`)
-        return r.json()
-      })
-      .then((data) => {
-        if (cancelled) return
-        const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
-        setIncidents(list)
-        setSelectedId(list[0]?.id ?? null)
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
+    try {
+      const r = await apiFetch('/api/soc/incidents')
+      if (!r.ok) throw new Error(`Failed to load incidents (${r.status})`)
+      const data = await r.json()
+      const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
+      setIncidents(list)
+      setSelectedId((prev) => prev ?? list[0]?.id ?? null)
+    } catch (e) {
+      setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [t])
+
+  useEffect(() => {
+    loadIncidents()
+  }, [loadIncidents])
 
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
@@ -383,19 +414,66 @@ export default function IncidentResponseCenter() {
     return { active, crit, resolved, avgH }
   }, [incidents])
 
+  const listFindings = useMemo(() => incidents.map((i) => ({
+    id: i.id,
+    severity: i.severity || 'medium',
+    title: i.title || i.id,
+    type: i.status || 'incident',
+    description: i.summary || '',
+    resource: i.assignee || '',
+  })), [incidents])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-incidents',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleIncidents = useMemo(() => {
+    if (!searchQuery.trim()) return incidents
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return incidents.filter((i) => ids.has(i.id))
+  }, [incidents, filteredFindings, searchQuery])
+
   return (
     <PageShell
       title={t('pages.incidentResponseCenter.title')}
       subtitle={t('pages.incidentResponseCenter.subtitle', { count: incidents.length })}
-      badge={t('pages.incidentResponseCenter.badge')}
+      badge={t(`${NS}.badge`)}
       badgeColor="#ef4444"
+      actions={(
+        <ShellScanActions
+          onRefresh={loadIncidents}
+          onExport={() => exportIncidentsCsv(incidents)}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
+      <div className="mb-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+      </div>
+
+      {loading ? (
+        <>
+          <SkeletonWidgetGrid count={4} className="mb-8" />
+          <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+            <SkeletonCard lines={5} />
+            <SkeletonCard lines={8} />
+          </div>
+        </>
+      ) : (
+        <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <MetricCard label={t('pages.incidentResponseCenter.active_incidents')} value={metrics.active} sub={t('pages.incidentResponseCenter.active_sub')} color="#ef4444" icon="🔥" />
-        <MetricCard label={t('pages.incidentResponseCenter.critical_severity')} value={metrics.crit} sub={t('pages.incidentResponseCenter.critical_sub')} color="#f97316" icon="⚠️" />
-        <MetricCard label={t('pages.incidentResponseCenter.avg_mttr')} value={`${metrics.avgH}h`} sub={t('pages.incidentResponseCenter.mttr_sub')} color="#22d3ee" icon="⏱️" />
-        <MetricCard label={t('pages.incidentResponseCenter.resolved_7d')} value={metrics.resolved} sub={t('pages.incidentResponseCenter.resolved_sub')} color="#4ade80" icon="✅" />
+        <MetricCard label={t(`${NS}.active_incidents`)} value={metrics.active} sub={t(`${NS}.active_sub`)} color="#ef4444" icon="🔥" />
+        <MetricCard label={t(`${NS}.critical_severity`)} value={metrics.crit} sub={t(`${NS}.critical_sub`)} color="#f97316" icon="⚠️" />
+        <MetricCard label={t(`${NS}.avg_mttr`)} value={`${metrics.avgH}h`} sub={t(`${NS}.mttr_sub`)} color="#22d3ee" icon="⏱️" />
+        <MetricCard label={t(`${NS}.resolved_7d`)} value={metrics.resolved} sub={t(`${NS}.resolved_sub`)} color="#4ade80" icon="✅" />
       </div>
 
       {error && (
@@ -404,29 +482,39 @@ export default function IncidentResponseCenter() {
         </div>
       )}
 
-      {loading && (
-        <div className="rounded-xl border border-white/10 bg-black/30 px-6 py-12 text-center">
-          <p className="text-sm text-white/50 font-mono animate-pulse">
-            {t('pages.incidentResponseCenter.loading', { defaultValue: 'Loading incidents from /api/soc/incidents…' })}
-          </p>
-        </div>
-      )}
-
-      {!loading && !error && incidents.length === 0 && (
+      {!error && incidents.length === 0 && (
         <EmptyState
           icon="shield"
-          title={t('pages.incidentResponseCenter.empty_title')}
-          body={t('pages.incidentResponseCenter.empty_body')}
-          cta={{ label: t('pages.incidentResponseCenter.view_findings'), to: '/findings' }}
+          title={t(`${NS}.empty_title`)}
+          body={t(`${NS}.empty_body`)}
+          cta={{ label: t(`${NS}.view_findings`), to: '/findings' }}
         />
       )}
 
-      {!loading && !error && incidents.length > 0 && (
+      {!error && incidents.length > 0 && (
       <div className="grid lg:grid-cols-[360px_1fr] gap-6">
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t('pages.incidentResponseCenter.incident_queue')}</h2>
-          {incidents.map((inc) => (
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30">{t(`${NS}.incident_queue`)}</h2>
+            <button
+              type="button"
+              onClick={() => exportIncidentsCsv(incidents)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-cyan-500/30 text-[10px] font-mono text-cyan-300/80 hover:bg-cyan-500/10"
+            >
+              <Download className="w-3 h-3" />
+              {t(`${NS}.export_csv`)}
+            </button>
+          </div>
+          <WeissmanListToolbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            resultCount={visibleIncidents.length}
+            totalCount={incidents.length}
+          />
+          {visibleIncidents.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+          ) : visibleIncidents.map((inc) => (
             <IncidentRow
               key={inc.id}
               incident={inc}
@@ -471,7 +559,7 @@ export default function IncidentResponseCenter() {
                       background: `${SEVERITY_COLOR[selected.severity]}10`,
                     }}
                   >
-                    {selected.severity}
+                    {severityLabel(selected.severity, t)}
                   </span>
                   {selected.mitre && (
                     <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
@@ -488,7 +576,7 @@ export default function IncidentResponseCenter() {
                 {[
                   { label: t('pages.incidentResponseCenter.assignee'), value: selected.assignee },
                   { label: t('pages.incidentResponseCenter.source'), value: selected.source },
-                  { label: t('pages.incidentResponseCenter.duration'), value: durationHuman(selected.created, selected.updated) },
+                  { label: t(`${NS}.duration`), value: durationHuman(selected.created, selected.updated, t) },
                 ].map(({ label, value }) => (
                   <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">{label}</div>
@@ -521,7 +609,7 @@ export default function IncidentResponseCenter() {
                   <Timeline events={selected.timeline} />
                 ) : (
                   <p className="text-xs text-white/35 font-mono">
-                    {t('pages.incidentResponseCenter.no_timeline', { defaultValue: 'No audit events linked to this incident yet.' })}
+                    {t(`${NS}.no_timeline`)}
                   </p>
                 )
               ) : (
@@ -536,6 +624,8 @@ export default function IncidentResponseCenter() {
           )}
         </AnimatePresence>
       </div>
+      )}
+        </>
       )}
     </PageShell>
   )

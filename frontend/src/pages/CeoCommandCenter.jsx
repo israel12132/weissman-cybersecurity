@@ -1,13 +1,30 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'
 import CeoVaccineVault from '../components/ceo/CeoVaccineVault'
 import CeoSovereignLab from '../components/ceo/CeoSovereignLab'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { SkeletonBar } from '../components/ui/Skeleton'
 
 export default function CeoCommandCenter() {
   const { t } = useTranslation()
   const [jobId, setJobId] = useState('')
+  const [booting, setBooting] = useState(true)
+  const [sectionSearch, setSectionSearch] = useState('')
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setBooting(false))
+    return () => window.cancelAnimationFrame(id)
+  }, [])
+
+  const q = sectionSearch.trim().toLowerCase()
+  const showWarRoom = !q || q.includes('war') || q.includes('job') || q.includes('stream') || (jobId && jobId.toLowerCase().includes(q))
+  const showGenesis = !q || q.includes('genesis') || q.includes('hpc')
+  const showVault = !q || q.includes('vaccine') || q.includes('vault')
+  const showLab = !q || q.includes('sovereign') || q.includes('lab')
 
   return (
     <div
@@ -24,38 +41,74 @@ export default function CeoCommandCenter() {
               {t('pages.ceoCommandCenter.subtitle')}
             </p>
           </div>
+          <ShellScanActions
+            onRefresh={() => window.location.reload()}
+            onExport={() => {}}
+            exportDisabled
+          />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-10">
-        <section>
-          <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-red-400/90 mb-3">
-            {t('pages.ceoCommandCenter.war_room')}
-          </h2>
-          <CeoWarRoomStream jobId={jobId} onJobIdChange={setJobId} />
-        </section>
+        <EvidenceNotice>{t('pages.ceoCommandCenter.evidence_notice')}</EvidenceNotice>
 
-        <section>
-          <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400/90 mb-3">
-            {t('pages.ceoCommandCenter.genesis_hpc')}
-          </h2>
-          <CeoGenesisPanel />
-        </section>
+        <WeissmanListToolbar
+          searchQuery={sectionSearch}
+          onSearchChange={setSectionSearch}
+          searchPlaceholder={t('pages.ceoCommandCenter.search_placeholder', { defaultValue: 'Filter war-room job ID or section…' })}
+        />
 
-        <section className="grid gap-10 lg:grid-cols-1">
-          <div>
-            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/90 mb-3">
-              {t('pages.ceoCommandCenter.vaccine_vault')}
-            </h2>
-            <CeoVaccineVault />
+        {booting ? (
+          <div className="space-y-4" aria-busy="true" aria-label={t('pages.ceoCommandCenter.loading')}>
+            <SkeletonBar className="h-32" />
+            <SkeletonBar className="h-48" />
+            <SkeletonBar className="h-40" />
           </div>
-          <div>
-            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-violet-400/90 mb-3">
-              {t('pages.ceoCommandCenter.sovereign_lab')}
-            </h2>
-            <CeoSovereignLab />
-          </div>
-        </section>
+        ) : (
+          <>
+            {showWarRoom && (
+            <section>
+              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-red-400/90 mb-3">
+                {t('pages.ceoCommandCenter.war_room')}
+              </h2>
+              <CeoWarRoomStream jobId={jobId} onJobIdChange={setJobId} />
+            </section>
+            )}
+
+            {showGenesis && (
+            <section>
+              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-emerald-400/90 mb-3">
+                {t('pages.ceoCommandCenter.genesis_hpc')}
+              </h2>
+              <CeoGenesisPanel />
+            </section>
+            )}
+
+            {(showVault || showLab) && (
+            <section className="grid gap-10 lg:grid-cols-1">
+              {showVault && (
+              <div>
+                <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/90 mb-3">
+                  {t('pages.ceoCommandCenter.vaccine_vault')}
+                </h2>
+                <CeoVaccineVault />
+              </div>
+              )}
+              {showLab && (
+              <div>
+                <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-violet-400/90 mb-3">
+                  {t('pages.ceoCommandCenter.sovereign_lab')}
+                </h2>
+                <CeoSovereignLab />
+              </div>
+              )}
+            </section>
+            )}
+            {!showWarRoom && !showGenesis && !showVault && !showLab && q && (
+              <p className="text-sm font-mono text-white/40 text-center py-8">{t('weissmanFindings.filtered_title')}</p>
+            )}
+          </>
+        )}
       </main>
     </div>
   )

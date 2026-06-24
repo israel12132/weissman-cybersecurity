@@ -61,7 +61,11 @@ fn rls_leak_check_job_queue_documented() {
 fn correlation_incidents_migration_has_forced_rls() {
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("migrations/20260614120000_correlation_incidents.sql");
-    assert!(p.is_file(), "correlation incidents migration missing: {}", p.display());
+    assert!(
+        p.is_file(),
+        "correlation incidents migration missing: {}",
+        p.display()
+    );
     let text = std::fs::read_to_string(&p).unwrap_or_default();
     assert!(text.contains("CREATE TABLE IF NOT EXISTS weissman_correlation_incidents"));
     assert!(text.contains("FORCE ROW LEVEL SECURITY"), "must force RLS");
@@ -81,5 +85,50 @@ fn correlation_incidents_migration_in_sync_both_dirs() {
     let a = std::fs::read_to_string(&fe).unwrap_or_default();
     let b = std::fs::read_to_string(&db).unwrap_or_default();
     assert!(!a.is_empty(), "migration present");
-    assert_eq!(a, b, "migration must be identical in both dirs (sync check)");
+    assert_eq!(
+        a, b,
+        "migration must be identical in both dirs (sync check)"
+    );
+}
+
+#[test]
+fn ndr_itdr_ingest_migration_has_forced_rls() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260614130000_ndr_itdr_ingest.sql");
+    assert!(
+        p.is_file(),
+        "ndr/itdr ingest migration missing: {}",
+        p.display()
+    );
+    let text = std::fs::read_to_string(&p).unwrap_or_default();
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS ndr_flow_samples"));
+    assert!(text.contains("CREATE TABLE IF NOT EXISTS itdr_auth_events"));
+    assert_eq!(
+        text.matches("FORCE ROW LEVEL SECURITY").count(),
+        2,
+        "both ingest tables must FORCE RLS"
+    );
+    assert_eq!(
+        text.matches("current_setting('app.current_tenant_id'")
+            .count(),
+        4,
+        "USING + WITH CHECK per table must scope by tenant GUC"
+    );
+    assert!(text.contains("ON ndr_flow_samples TO weissman_app"));
+    assert!(text.contains("ON itdr_auth_events TO weissman_app"));
+}
+
+#[test]
+fn ndr_itdr_ingest_migration_in_sync_both_dirs() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260614130000_ndr_itdr_ingest.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260614130000_ndr_itdr_ingest.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "migration present");
+    assert_eq!(
+        a, b,
+        "migration must be identical in both dirs (sync check)"
+    );
 }

@@ -1,0 +1,806 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
+import { apiFetch } from '../lib/apiBase'
+import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+
+// Agentless CSPM/CNAPP — `cloud_posture` engine (Wiz-style cross-account read-only IAM role).
+// Every control maps 1:1 to CloudScanOptions / ArsenalConfig keys in the scan body.
+const ENGINE = 'cloud_posture'
+const ACCENT = '#f97316'
+
+const SERVICE_TOGGLES = [
+  { key: 'svc_iam', label: 'IAM / CIEM', hint: 'Root MFA, password policy, stale keys, admin attachments, wildcard policies, role trust', service: 'iam' },
+  { key: 'svc_s3', label: 'S3 data security', hint: 'Public ACL/policy, encryption, Block Public Access (bucket + account)', service: 's3' },
+  { key: 'svc_account', label: 'Account S3 guardrails', hint: 'Account-level S3 Block Public Access (CIS 2.1.5)', service: 'account' },
+  { key: 'svc_ec2', label: 'EC2 / VPC', hint: 'Open SGs, IMDSv1, unencrypted EBS, public snapshots, flow logs', service: 'ec2' },
+  { key: 'svc_elb', label: 'Load balancers (ALB/NLB)', hint: 'Internet-facing LBs, cleartext HTTP listeners', service: 'elb' },
+  { key: 'svc_eks', label: 'EKS Kubernetes', hint: 'Public API endpoint, secrets envelope encryption', service: 'eks' },
+  { key: 'svc_ecs', label: 'ECS / Fargate', hint: 'Services with assignPublicIp=ENABLED', service: 'ecs' },
+  { key: 'svc_lambda', label: 'Lambda serverless', hint: 'Public policies, Function URLs (AuthType=NONE), env secrets', service: 'lambda' },
+  { key: 'svc_rds', label: 'RDS databases', hint: 'Public accessibility, encryption, backup retention', service: 'rds' },
+  { key: 'svc_elasticache', label: 'ElastiCache / Redis', hint: 'At-rest encryption on replication groups', service: 'elasticache' },
+  { key: 'svc_kms', label: 'KMS encryption keys', hint: 'Key rotation, public key policies', service: 'kms' },
+  { key: 'svc_secrets', label: 'Secrets Manager', hint: 'Automatic rotation disabled', service: 'secrets' },
+  { key: 'svc_messaging', label: 'SNS / SQS', hint: 'Topic/queue policies with wildcard principals', service: 'messaging' },
+  { key: 'svc_ssm', label: 'SSM parameters', hint: 'String-type parameters that may hold secrets', service: 'ssm' },
+  { key: 'svc_cloudtrail', label: 'CloudTrail audit', hint: 'Trail presence, logging, multi-region, log validation', service: 'cloudtrail' },
+  { key: 'svc_config', label: 'AWS Config', hint: 'Configuration recorder present and actively recording', service: 'config' },
+  { key: 'svc_guardduty', label: 'GuardDuty', hint: 'Runtime threat detection enabled per region', service: 'guardduty' },
+  { key: 'svc_accessanalyzer', label: 'IAM Access Analyzer', hint: 'Live external-access findings (Wiz-class zero-trust plane)', service: 'accessanalyzer' },
+  { key: 'svc_ecr', label: 'ECR container registry', hint: 'Public repository policies — supply-chain exposure', service: 'ecr' },
+  { key: 'svc_acm', label: 'ACM TLS certificates', hint: 'Expired or soon-to-expire certs on public endpoints', service: 'acm' },
+  { key: 'svc_dynamodb', label: 'DynamoDB tables', hint: 'SSE at rest, PITR, public resource policies', service: 'dynamodb' },
+  { key: 'svc_apigateway', label: 'API Gateway (REST + HTTP)', hint: 'Public REST policies, HTTP routes with AuthorizationType=NONE', service: 'apigateway' },
+  { key: 'svc_opensearch', label: 'OpenSearch domains', hint: 'VPC isolation, encryption at rest, HTTPS enforcement, access policies', service: 'opensearch' },
+  { key: 'svc_cloudfront', label: 'CloudFront CDN', hint: 'S3 origin OAC/OAI, HTTP allowed, WAF association', service: 'cloudfront' },
+  { key: 'svc_route53', label: 'Route53 DNS', hint: 'Public zones, DNSSEC signing, query logging', service: 'route53' },
+  { key: 'svc_eventbridge', label: 'EventBridge', hint: 'Public event bus policies, Lambda target graph links', service: 'eventbridge' },
+  { key: 'svc_wafv2', label: 'WAFv2', hint: 'Regional + CloudFront web ACLs — logging, empty rule sets', service: 'wafv2' },
+  { key: 'svc_logs', label: 'CloudWatch Logs', hint: 'Retention policies, wildcard resource policies', service: 'logs' },
+  { key: 'svc_redshift', label: 'Redshift warehouses', hint: 'Public clusters, encryption, audit logging', service: 'redshift' },
+  { key: 'svc_documentdb', label: 'DocumentDB', hint: 'Public Mongo-compatible clusters, encryption, backups', service: 'documentdb' },
+  { key: 'svc_neptune', label: 'Neptune graph DB', hint: 'Public graph clusters, encryption at rest, VPC isolation', service: 'neptune' },
+  { key: 'svc_memorydb', label: 'MemoryDB / Redis', hint: 'TLS in transit, open-access ACL exposure', service: 'memorydb' },
+  { key: 'svc_backup', label: 'AWS Backup', hint: 'Vault CMK encryption, wildcard vault access policies', service: 'backup' },
+  { key: 'svc_organizations', label: 'AWS Organizations', hint: 'SCP FullAWSAccess baseline, wildcard Allow SCPs', service: 'organizations' },
+  { key: 'svc_sfn', label: 'Step Functions', hint: 'State machine CloudWatch logging level', service: 'sfn' },
+  { key: 'svc_sso', label: 'IAM Identity Center', hint: 'SSO instance, permission sets, federation posture', service: 'sso' },
+]
+
+const CHECK_TOGGLES = [
+  { key: 'check_root_account', label: 'Root account checks', defaultVal: true },
+  { key: 'check_password_policy', label: 'Password policy', defaultVal: true },
+  { key: 'check_imds', label: 'IMDSv1 on public instances', defaultVal: true },
+  { key: 'check_flow_logs', label: 'VPC flow logs', defaultVal: true },
+  { key: 'check_ssm_public_params', label: 'SSM String parameters', defaultVal: true },
+  { key: 'check_cloudtrail', label: 'CloudTrail logging', defaultVal: true },
+  { key: 'check_config_recorder', label: 'AWS Config recorder', defaultVal: true },
+  { key: 'check_guardduty', label: 'GuardDuty detectors', defaultVal: true },
+  { key: 'check_access_analyzer', label: 'Access Analyzer external access', defaultVal: true },
+  { key: 'check_account_s3_block', label: 'Account S3 Block Public Access', defaultVal: true },
+  { key: 'check_rds', label: 'RDS posture', defaultVal: true },
+  { key: 'check_lambda', label: 'Lambda public invoke', defaultVal: true },
+  { key: 'check_lambda_urls', label: 'Lambda Function URLs (no auth)', defaultVal: true },
+  { key: 'check_eks', label: 'EKS public API / encryption', defaultVal: true },
+  { key: 'check_elb', label: 'Internet ALB HTTP listeners', defaultVal: true },
+  { key: 'check_ecs', label: 'ECS public task IPs', defaultVal: true },
+  { key: 'check_elasticache', label: 'ElastiCache encryption', defaultVal: true },
+  { key: 'check_secrets_manager', label: 'Secrets rotation', defaultVal: true },
+  { key: 'check_messaging', label: 'SNS/SQS public policies', defaultVal: true },
+  { key: 'check_public_snapshots', label: 'Public EBS snapshots', defaultVal: true },
+  { key: 'check_s3_policy_public', label: 'S3 public bucket policy', defaultVal: true },
+  { key: 'check_iam_wildcards', label: 'IAM wildcard policies', defaultVal: true },
+  { key: 'check_default_sg', label: 'Default VPC security groups', defaultVal: true },
+  { key: 'check_ecr', label: 'ECR public pull policies', defaultVal: true },
+  { key: 'check_acm', label: 'ACM certificate expiry', defaultVal: true },
+  { key: 'check_s3_versioning', label: 'S3 versioning disabled', defaultVal: true },
+  { key: 'check_dynamodb', label: 'DynamoDB SSE / PITR / public policy', defaultVal: true },
+  { key: 'check_apigateway', label: 'API Gateway public exposure', defaultVal: true },
+  { key: 'check_opensearch', label: 'OpenSearch domain exposure', defaultVal: true },
+  { key: 'check_cloudfront', label: 'CloudFront edge posture', defaultVal: true },
+  { key: 'check_route53', label: 'Route53 DNSSEC & query logging', defaultVal: true },
+  { key: 'check_eventbridge', label: 'EventBridge bus policies', defaultVal: true },
+  { key: 'check_wafv2', label: 'WAFv2 logging & rule coverage', defaultVal: true },
+  { key: 'check_cloudwatch_logs', label: 'CloudWatch Logs retention & policies', defaultVal: true },
+  { key: 'check_redshift', label: 'Redshift warehouse exposure', defaultVal: true },
+  { key: 'check_documentdb', label: 'DocumentDB cluster posture', defaultVal: true },
+  { key: 'check_s3_object_lock', label: 'S3 Object Lock (WORM)', defaultVal: true },
+  { key: 'check_neptune', label: 'Neptune graph DB posture', defaultVal: true },
+  { key: 'check_memorydb', label: 'MemoryDB TLS & ACL posture', defaultVal: true },
+  { key: 'check_backup', label: 'AWS Backup vault posture', defaultVal: true },
+  { key: 'check_organizations', label: 'Organizations SCP governance', defaultVal: true },
+  { key: 'check_sfn', label: 'Step Functions logging', defaultVal: true },
+  { key: 'check_sso', label: 'IAM Identity Center (SSO)', defaultVal: true },
+  { key: 'check_graph_paths', label: 'Graph-native attack paths', defaultVal: true },
+  { key: 'include_attack_paths', label: 'Toxic-combination attack paths', defaultVal: true },
+  { key: 'include_security_graph', label: 'Security graph (asset relationships)', defaultVal: true },
+]
+
+const FRAMEWORKS = ['CIS', 'SOC2', 'ISO27001', 'PCI', 'NIST', 'GDPR']
+
+const DOMAINS = [
+  { key: 'identity', label: 'Identity' },
+  { key: 'data', label: 'Data' },
+  { key: 'network', label: 'Network' },
+  { key: 'compute', label: 'Compute' },
+  { key: 'governance', label: 'Governance' },
+]
+
+const DEFAULT_REGIONS = 'us-east-1,us-west-2,eu-west-1,eu-central-1,ap-southeast-1'
+
+const SEV_STYLE = {
+  critical: { text: 'text-rose-300', bd: 'border-rose-500/40', bg: 'bg-rose-500/10', dot: '#fb7185' },
+  high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
+  medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
+  low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
+  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+}
+
+function gradeColor(grade) {
+  return {
+    'A+': '#34d399', A: '#34d399', 'A-': '#34d399',
+    B: '#a3e635', C: '#fbbf24', D: '#fb923c', F: '#fb7185',
+  }[grade] || '#fb7185'
+}
+
+function sevValue(s) {
+  return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0
+}
+
+function isSummary(f) {
+  return f && (f.category === 'summary' || typeof f.posture_score === 'number')
+}
+
+function isAttackPath(f) {
+  return f && (f.attack_path === true || f.category === 'attack_path')
+}
+
+function SubScoreBar({ label, value }) {
+  const v = Math.max(0, Math.min(100, Number(value) || 0))
+  const color = v >= 85 ? '#34d399' : v >= 60 ? '#a3e635' : v >= 40 ? '#fbbf24' : '#fb7185'
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-mono text-white/55">{label}</span>
+        <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${v}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  )
+}
+
+function Scorecard({ summary }) {
+  if (!summary) return null
+  const score = summary.posture_score ?? summary.score ?? 0
+  const grade = summary.grade || '—'
+  const color = gradeColor(grade)
+  const subscores = summary.subscores || {}
+  const counts = summary.severity_counts || {}
+  const compliance = summary.compliance_scores || {}
+  const graph = summary.security_graph || {}
+  const exposure = summary.exposure_metrics || {}
+  const detective = summary.detective_coverage || {}
+  const roadmap = Array.isArray(summary.remediation_roadmap) ? summary.remediation_roadmap : []
+  const riskRegister = Array.isArray(summary.cnapp_risk_register) ? summary.cnapp_risk_register : []
+  const perimeter = summary.data_perimeter || {}
+  const observability = summary.observability_posture || {}
+  const warehouse = summary.warehouse_exposure || {}
+  const catalog = summary.cnapp_catalog || {}
+  const rulesTriggered = summary.rules_triggered ?? 0
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex items-center gap-5">
+          <div className="relative w-28 h-28 shrink-0">
+            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+              <circle cx="50" cy="50" r="42" fill="none" stroke={color} strokeWidth="8"
+                strokeDasharray={`${(score / 100) * 264} 264`} strokeLinecap="round" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
+              <span className="text-[10px] font-mono text-white/40">{score}/100</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-orange-400/80 mb-1">Agentless CSPM</div>
+            <h3 className="text-lg font-bold text-white">Cloud Posture Score</h3>
+            {summary.account_id && (
+              <p className="text-[11px] font-mono text-white/45 mt-1">Account {summary.account_id}</p>
+            )}
+            {rulesTriggered > 0 && (
+              <p className="text-[10px] font-mono text-white/35 mt-1">{rulesTriggered} posture rules triggered</p>
+            )}
+            {catalog.catalog_status === 'complete' && (
+              <p className="text-[10px] font-mono text-emerald-400/70 mt-1">
+                CNAPP catalog complete · {catalog.plane_count ?? 37} planes
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {['critical', 'high', 'medium', 'low'].map((s) => counts[s] > 0 && (
+                <span key={s} className={`text-[10px] font-mono px-2 py-0.5 rounded border ${SEV_STYLE[s]?.bd} ${SEV_STYLE[s]?.bg} ${SEV_STYLE[s]?.text}`}>
+                  {counts[s]} {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {DOMAINS.map((d) => (
+            <SubScoreBar key={d.key} label={d.label} value={subscores[d.key]} />
+          ))}
+        </div>
+      </div>
+
+      {(Object.keys(compliance).length > 0 || graph.node_count > 0 || exposure.blast_radius_index != null) && (
+        <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {exposure.blast_radius_index != null && (
+            <div className="rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-rose-300/70 mb-1">Blast radius index</div>
+              <div className="text-2xl font-bold text-rose-300">{exposure.blast_radius_index}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-1">
+                {exposure.internet_exposed ?? 0} internet · {exposure.privileged_assets ?? 0} privileged · {exposure.total_assets ?? 0} assets
+              </div>
+            </div>
+          )}
+          {typeof detective.score === 'number' && (
+            <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1">Detective coverage</div>
+              <div className="text-2xl font-bold text-cyan-300">{detective.score}%</div>
+              <div className="text-[10px] font-mono text-white/40 mt-1">
+                CloudTrail · GuardDuty · Config · Access Analyzer
+              </div>
+            </div>
+          )}
+          {Object.keys(compliance).length > 0 && (
+            <div className="lg:col-span-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">Compliance frameworks</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Object.entries(compliance).map(([fw, data]) => (
+                  <div key={fw} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+                    <div className="text-[10px] font-mono text-white/40">{fw}</div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-bold" style={{ color: gradeColor(data.grade) }}>{data.grade}</span>
+                      <span className="text-[10px] font-mono text-white/35">{data.score}/100</span>
+                    </div>
+                    {data.failed_controls > 0 && (
+                      <div className="text-[9px] font-mono text-rose-400/70">{data.failed_controls} failed</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {graph.node_count > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">Security graph</div>
+              <div className="flex gap-4 text-sm font-mono text-white/60">
+                <span>{graph.node_count} assets</span>
+                <span>{graph.edge_count} relationships</span>
+                {Array.isArray(graph.nodes) && (
+                  <span className="text-rose-300/80">
+                    {graph.nodes.filter((n) => n.exposure === 'internet').length} internet-exposed
+                  </span>
+                )}
+              </div>
+              {Array.isArray(graph.nodes) && graph.nodes.length > 0 && (
+                <div className="mt-3 max-h-36 overflow-y-auto space-y-1 pr-1">
+                  {graph.nodes
+                    .filter((n) => n.exposure === 'internet' || (n.risk_tags && n.risk_tags.length > 0))
+                    .slice(0, 12)
+                    .map((n) => (
+                      <div key={n.id} className="flex items-center gap-2 text-[10px] font-mono text-white/45">
+                        <span className={n.exposure === 'internet' ? 'text-rose-400' : 'text-white/30'}>●</span>
+                        <span className="truncate flex-1">{n.id}</span>
+                        {n.risk_tags?.slice(0, 2).map((t) => (
+                          <span key={t} className="text-[9px] px-1 rounded bg-white/5 text-white/35">{t}</span>
+                        ))}
+                      </div>
+                    ))}
+                </div>
+              )}
+              <p className="text-[10px] text-white/35 mt-2 leading-relaxed">
+                Wiz-style asset graph linking IAM roles, compute, data stores and network exposure for toxic-combination analysis.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {roadmap.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/80 mb-2">Prioritized remediation roadmap</div>
+          <ol className="space-y-2 list-decimal list-inside">
+            {roadmap.slice(0, 8).map((item, i) => (
+              <li key={i} className="text-[11px] text-white/65 leading-relaxed">
+                <span className={`font-mono uppercase text-[10px] mr-2 ${SEV_STYLE[item.severity]?.text || 'text-white/50'}`}>{item.severity}</span>
+                <span className="text-white/85">{item.title}</span>
+                {item.remediation && <span className="block text-white/45 mt-0.5 ml-5">{item.remediation}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {(riskRegister.length > 0 || perimeter.perimeter_status || warehouse.public_redshift > 0 || observability.waf_no_rules > 0) && (
+        <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {perimeter.perimeter_status && (
+            <div className={`rounded-lg border px-3 py-3 ${
+              perimeter.perimeter_status === 'contained'
+                ? 'border-emerald-500/20 bg-emerald-950/20'
+                : perimeter.perimeter_status === 'breached'
+                  ? 'border-rose-500/30 bg-rose-950/30'
+                  : 'border-amber-500/25 bg-amber-950/20'
+            }`}>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-white/50 mb-1">Data perimeter</div>
+              <div className={`text-lg font-bold ${
+                perimeter.perimeter_status === 'contained' ? 'text-emerald-300' : perimeter.perimeter_status === 'breached' ? 'text-rose-300' : 'text-amber-300'
+              }`}>{perimeter.perimeter_status}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-1">
+                {perimeter.access_analyzer_external ?? 0} Access Analyzer external · {perimeter.high_severity_data_findings ?? 0} high data findings
+              </div>
+            </div>
+          )}
+          {(observability.waf_no_rules > 0 || observability.logs_no_retention > 0 || observability.waf_no_logging > 0) && (
+            <div className="rounded-lg border border-indigo-500/20 bg-indigo-950/20 px-3 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-indigo-300/70 mb-1">Observability posture</div>
+              <div className="text-[10px] font-mono text-white/50 space-y-0.5">
+                {(observability.waf_no_rules ?? 0) > 0 && <div>{observability.waf_no_rules} WAF ACLs with zero rules</div>}
+                {(observability.waf_no_logging ?? 0) > 0 && <div>{observability.waf_no_logging} WAF ACLs without logging</div>}
+                {(observability.logs_no_retention ?? 0) > 0 && <div>{observability.logs_no_retention} log groups without retention</div>}
+                {(observability.logs_public_policy ?? 0) > 0 && <div>{observability.logs_public_policy} public log resource policies</div>}
+              </div>
+            </div>
+          )}
+          {(warehouse.public_redshift > 0 || warehouse.public_documentdb > 0 || warehouse.public_rds > 0 || warehouse.public_neptune > 0 || warehouse.memorydb_open_acl > 0) && (
+            <div className="rounded-lg border border-orange-500/20 bg-orange-950/20 px-3 py-3">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-orange-300/70 mb-1">Warehouse exposure</div>
+              <div className="text-[10px] font-mono text-white/50 space-y-0.5">
+                {(warehouse.public_redshift ?? 0) > 0 && <div>{warehouse.public_redshift} public Redshift</div>}
+                {(warehouse.public_documentdb ?? 0) > 0 && <div>{warehouse.public_documentdb} public DocumentDB</div>}
+                {(warehouse.public_rds ?? 0) > 0 && <div>{warehouse.public_rds} public RDS</div>}
+                {(warehouse.public_neptune ?? 0) > 0 && <div>{warehouse.public_neptune} public Neptune</div>}
+                {(warehouse.memorydb_open_acl ?? 0) > 0 && <div>{warehouse.memorydb_open_acl} MemoryDB open ACL</div>}
+                {(warehouse.unencrypted_warehouses ?? 0) > 0 && <div>{warehouse.unencrypted_warehouses} unencrypted data stores</div>}
+              </div>
+            </div>
+          )}
+          {riskRegister.length > 0 && (
+            <div className="lg:col-span-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-2">CNAPP risk register — top assets</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] font-mono">
+                  <thead>
+                    <tr className="text-white/35 border-b border-white/5">
+                      <th className="text-left py-1 pr-2">Resource</th>
+                      <th className="text-left py-1 pr-2">Type</th>
+                      <th className="text-left py-1 pr-2">Domain</th>
+                      <th className="text-right py-1">Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {riskRegister.slice(0, 10).map((row) => (
+                      <tr key={row.resource_id} className="border-b border-white/5 text-white/60">
+                        <td className="py-1.5 pr-2 truncate max-w-[220px]" title={row.resource_id}>{row.resource_id}</td>
+                        <td className="py-1.5 pr-2">{row.resource_type}</td>
+                        <td className="py-1.5 pr-2">{row.domain}</td>
+                        <td className="py-1.5 text-right">
+                          <span className={SEV_STYLE[row.peak_severity]?.text || 'text-white/50'}>{row.risk_score}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+function FindingCard({ f }) {
+  const [open, setOpen] = useState(false)
+  const sev = (f.severity || 'info').toLowerCase()
+  const st = SEV_STYLE[sev] || SEV_STYLE.info
+  const isPath = isAttackPath(f)
+  const compliance = f.compliance || {}
+  const steps = Array.isArray(f.steps) ? f.steps : []
+
+  return (
+    <div className={`rounded-xl border ${isPath ? 'border-fuchsia-500/40 bg-fuchsia-500/5' : `${st.bd} ${st.bg}`} p-3`}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+        <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: isPath ? '#e879f9' : st.dot }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isPath && <span className="text-[10px] font-mono uppercase text-fuchsia-300">☣ toxic path</span>}
+            <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
+            {f.domain && <span className="text-[10px] font-mono text-white/30">· {f.domain}</span>}
+            {f.rule_id && <span className="text-[10px] font-mono text-white/25">· {f.rule_id}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
+          </div>
+          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          {f.resource_id && (
+            <div className="text-[10px] font-mono text-white/35 mt-0.5 truncate">{f.resource_type}: {f.resource_id}{f.region ? ` · ${f.region}` : ''}</div>
+          )}
+        </div>
+        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            {f.toxic_combination && (
+              <div className="mt-2 text-[10px] font-mono text-fuchsia-300/80">Combo: {f.toxic_combination}</div>
+            )}
+            {steps.length > 0 && (
+              <ol className="mt-2 space-y-1 list-decimal list-inside text-[11px] text-white/55 font-mono">
+                {steps.map((s, i) => <li key={i}>{s}</li>)}
+              </ol>
+            )}
+            {f.remediation && (
+              <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
+                <div className="text-[10px] font-mono uppercase text-emerald-400/70 mb-1">Remediation</div>
+                <p className="text-[11px] text-emerald-100/80 leading-relaxed">{f.remediation}</p>
+              </div>
+            )}
+            {Object.keys(compliance).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {Object.entries(compliance).filter(([, v]) => v).map(([k, v]) => (
+                  <span key={k} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">{k}: {v}</span>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+export default function CloudPostureCommandCenter() {
+  const [clients, setClients] = useState([])
+  const [clientId, setClientId] = useState('')
+  const [roleArn, setRoleArn] = useState('')
+  const [externalId, setExternalId] = useState('')
+  const [sessionName, setSessionName] = useState('weissman-cspm')
+  const [regions, setRegions] = useState(DEFAULT_REGIONS)
+  const [frameworks, setFrameworks] = useState(['CIS', 'SOC2', 'ISO27001', 'PCI', 'NIST', 'GDPR'])
+  const [minSeverity, setMinSeverity] = useState('info')
+  const [intensity, setIntensity] = useState('normal')
+  const [maxResources, setMaxResources] = useState(300)
+  const [accessKeyMaxAge, setAccessKeyMaxAge] = useState(90)
+  const [acmExpiryDays, setAcmExpiryDays] = useState(30)
+  const [services, setServices] = useState(() =>
+    Object.fromEntries(SERVICE_TOGGLES.map((s) => [s.key, true])),
+  )
+  const [toggles, setToggles] = useState(() =>
+    Object.fromEntries(CHECK_TOGGLES.map((t) => [t.key, t.defaultVal])),
+  )
+  const [showParams, setShowParams] = useState(true)
+  const [status, setStatus] = useState('idle')
+  const [lastRun, setLastRun] = useState(null)
+  const [findings, setFindings] = useState([])
+  const [pendingJobId, setPendingJobId] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  const detailFindings = useMemo(
+    () => findings.filter((f) => !isSummary(f) && !isAttackPath(f)),
+    [findings],
+  )
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    refreshFromHistory,
+    historyLoading,
+    lastUpdated,
+    lastJobId,
+    setLastUpdated,
+    setLastJobId,
+  } = useWeissmanEnginePage(ENGINE, detailFindings)
+
+  useEffect(() => {
+    refreshFromHistory().then((run) => {
+      if (run?.findings?.length) {
+        applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
+      }
+    })
+  }, [refreshFromHistory, setLastUpdated, setLastJobId])
+
+  const handleRefresh = useCallback(async () => {
+    const run = await refreshFromHistory()
+    applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
+  }, [refreshFromHistory, setLastUpdated, setLastJobId])
+
+  useEffect(() => {
+    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!clientId) return
+    const c = clients.find((x) => String(x.id) === String(clientId))
+    if (!c) return
+    if (c.aws_cross_account_role_arn) setRoleArn(c.aws_cross_account_role_arn)
+    if (c.aws_external_id) setExternalId(c.aws_external_id)
+  }, [clientId, clients])
+
+  const showToast = useCallback((sev, msg) => {
+    const id = Date.now()
+    setToast({ id, sev, msg })
+    setTimeout(() => setToast((x) => (x?.id === id ? null : x)), 5000)
+  }, [])
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: async (job) => {
+      setStatus(uiJobStatus(job.status))
+      setLastRun(new Date().toLocaleTimeString())
+      const fs = await resolveJobFindings(job, ENGINE, clientId)
+      setFindings(Array.isArray(fs) ? fs : [])
+      setLastUpdated(new Date().toISOString())
+      if (pendingJobId) setLastJobId(pendingJobId)
+      setPendingJobId(null)
+    },
+  })
+
+  const enabledServices = useMemo(
+    () => SERVICE_TOGGLES.filter((s) => services[s.key]).map((s) => s.service),
+    [services],
+  )
+
+  const buildBody = useCallback(() => {
+    const body = {
+      engine: ENGINE,
+      target: roleArn.trim() || 'aws-account',
+      aws_cross_account_role_arn: roleArn.trim(),
+      aws_external_id: externalId.trim(),
+      aws_role_session_name: sessionName.trim() || 'weissman-cspm',
+      regions: regions.trim(),
+      services: enabledServices.join(','),
+      frameworks: frameworks.join(','),
+      min_severity: minSeverity,
+      intensity,
+      max_resources_per_service: Number(maxResources) || 300,
+      access_key_max_age_days: Number(accessKeyMaxAge) || 90,
+      acm_expiry_days: Number(acmExpiryDays) || 30,
+      ...toggles,
+    }
+    if (clientId) body.client_id = Number(clientId)
+    return body
+  }, [roleArn, externalId, sessionName, regions, enabledServices, frameworks, minSeverity, intensity, maxResources, accessKeyMaxAge, acmExpiryDays, toggles, clientId])
+
+  const handleRun = useCallback(async () => {
+    if (!clientId) { showToast('error', 'Select a client first'); return }
+    if (!roleArn.trim()) { showToast('error', 'AWS cross-account role ARN is required'); return }
+    setStatus('running'); setFindings([])
+    try {
+      const r = await apiFetch('/api/command-center/scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
+      const jobId = d.job_id ?? ''
+      showToast('info', `CSPM scan queued (${jobId})`)
+      if (jobId) setPendingJobId(jobId); else setStatus('error')
+    } catch (e) {
+      setStatus('error'); showToast('error', e?.message ?? 'Scan failed')
+    }
+  }, [clientId, roleArn, buildBody, showToast])
+
+  const summary = useMemo(() => findings.find(isSummary), [findings])
+  const attackPaths = useMemo(() => findings.filter(isAttackPath), [findings])
+
+  const statusColor = { idle: '#475569', running: '#f97316', completed: '#4ade80', error: '#ef4444' }[status]
+
+  const toggleFramework = (fw) => {
+    setFrameworks((prev) => (prev.includes(fw) ? prev.filter((x) => x !== fw) : [...prev, fw]))
+  }
+
+  return (
+    <PageShell
+      title="Cloud Posture Management"
+      badge="Agentless CSPM / CNAPP"
+      badgeColor="#f97316"
+      subtitle="World-class agentless CNAPP — 37 AWS planes (Neptune, MemoryDB, Backup, Organizations, Step Functions, IAM Identity Center + full stack), warehouse exposure index, observability posture, CNAPP risk register, cnapp_catalog complete & 2-hop graph paths. Live API only."
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={historyLoading}
+          refreshDisabled={status === 'running'}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
+      {toast && (
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-orange-500/30 text-orange-200'}`}>
+          {toast.msg}
+        </div>
+      )}
+
+      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">Client</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)}
+              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
+              <option value="">— Select client —</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[280px]">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">Cross-account role ARN</label>
+            <input type="text" value={roleArn} onChange={(e) => setRoleArn(e.target.value)}
+              placeholder="arn:aws:iam::123456789012:role/WeissmanReadOnly"
+              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #f97316' : 'none' }} />
+            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+          </div>
+          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+            className="px-5 py-2 rounded-xl font-mono text-sm border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            {status === 'running' ? '⟳ Scanning AWS…' : '▶ Run CSPM Scan'}
+          </button>
+          <button type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+            {showParams ? '▾ Parameters' : '▸ Parameters'}
+          </button>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {showParams && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="mt-5 pt-5 border-t border-white/5 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">External ID</label>
+                    <input type="text" value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="sts external id"
+                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Session name</label>
+                    <input type="text" value={sessionName} onChange={(e) => setSessionName(e.target.value)}
+                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Regions (comma-sep)</label>
+                    <input type="text" value={regions} onChange={(e) => setRegions(e.target.value)}
+                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">AWS services to inventory</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                    {SERVICE_TOGGLES.map((s) => (
+                      <label key={s.key} title={s.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                        <input type="checkbox" checked={!!services[s.key]} onChange={(e) => setServices((p) => ({ ...p, [s.key]: e.target.checked }))} className="accent-orange-500" />
+                        {s.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">Deep checks</div>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {CHECK_TOGGLES.map((tg) => (
+                        <label key={tg.key} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                          <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-orange-500" />
+                          {tg.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">Compliance frameworks</div>
+                      <div className="flex flex-wrap gap-2">
+                        {FRAMEWORKS.map((fw) => (
+                          <button key={fw} type="button" onClick={() => toggleFramework(fw)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${frameworks.includes(fw) ? 'border-orange-500/40 bg-orange-500/10 text-orange-300' : 'border-white/10 text-white/40'}`}>
+                            {fw}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Min severity</label>
+                        <select value={minSeverity} onChange={(e) => setMinSeverity(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono">
+                          {['info', 'low', 'medium', 'high', 'critical'].map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Scan intensity</label>
+                        <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono">
+                          <option value="light">Light</option>
+                          <option value="normal">Normal</option>
+                          <option value="aggressive">Aggressive</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Max resources / service</label>
+                        <input type="number" min="10" max="5000" value={maxResources} onChange={(e) => setMaxResources(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">Access key max age (days)</label>
+                        <input type="number" min="1" max="3650" value={accessKeyMaxAge} onChange={(e) => setAccessKeyMaxAge(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">ACM expiry threshold (days)</label>
+                        <input type="number" min="1" max="365" value={acmExpiryDays} onChange={(e) => setAcmExpiryDays(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/15 p-4">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-2">Wiz-style connector role (read-only)</div>
+                  <p className="text-[11px] text-white/50 leading-relaxed mb-2">
+                    Create a cross-account IAM role in the customer account trusting your Weissman platform principal. Attach AWS managed ReadOnlyAccess plus service-specific read permissions. Use External ID for confused-deputy protection.
+                  </p>
+                  <pre className="text-[10px] font-mono text-white/45 bg-black/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{`{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "AWS": "arn:aws:iam::WEISSMAN_ACCOUNT:root" },
+    "Action": "sts:AssumeRole",
+    "Condition": { "StringEquals": { "sts:ExternalId": "YOUR_EXTERNAL_ID" } }
+  }]
+}`}</pre>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">Last completed: {lastRun}</p>}
+      </div>
+
+      {!clientId && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/80 font-mono mb-6">
+          Select a client and provide a read-only cross-account IAM role ARN (Wiz-style connector) to run agentless CSPM.
+        </div>
+      )}
+
+      <Scorecard summary={summary} />
+
+      {attackPaths.length > 0 && (
+        <div className="rounded-2xl bg-black/30 border border-fuchsia-500/20 p-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">☣</span>
+            <h3 className="text-sm font-bold text-fuchsia-200">Toxic-combination attack paths</h3>
+            <span className="text-[10px] font-mono text-white/30">({attackPaths.length})</span>
+          </div>
+          <div className="space-y-2">
+            {attackPaths.map((f, i) => <FindingCard key={i} f={f} />)}
+          </div>
+        </div>
+      )}
+
+      <WeissmanFindingsPanel
+        findings={detailFindings}
+        filteredFindings={filteredFindings}
+        counts={counts}
+        total={detailFindings.length}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        severityFilter={severityFilter}
+        onSeverityChange={setSeverityFilter}
+        pending={status === 'running' && detailFindings.length === 0}
+        loading={historyLoading && detailFindings.length === 0}
+        lastUpdated={lastUpdated}
+        jobId={pendingJobId || lastJobId}
+        accent={ACCENT}
+        showEmptyReady={status !== 'running' && detailFindings.length === 0}
+        emptyReadyTitle="Run a CSPM scan to inventory IAM, S3, EC2, RDS, Lambda, CloudTrail & SSM with compliance scoring."
+        emptyReadyBody="Run a CSPM scan to inventory IAM, S3, EC2, RDS, Lambda, CloudTrail & SSM with compliance scoring."
+        emptyTitle="No posture findings above threshold — cloud security appears strong."
+        emptyBody="No posture findings above threshold — cloud security appears strong."
+        renderFinding={(f, i) => <FindingCard key={i} f={f} />}
+      />
+    </PageShell>
+  )
+}

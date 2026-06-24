@@ -8,11 +8,14 @@
  * Data: `/api/findings` (chains + phase findings), `/api/engines/production`
  * (mapped engines), `/api/dashboard/exec-kpis` (KPI strip). No fabricated chains.
  */
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
@@ -358,34 +361,33 @@ export default function KillChainOrchestrator() {
   const [activePhase, setActivePhase] = useState(null)
   const [filterSeverity, setFilterSeverity] = useState('all')
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [chainsRes, findingsRes, kpisRes] = await Promise.all([
-          apiFetch('/api/soc/kill-chains'),
-          apiFetch('/api/findings?limit=2000'),
-          apiFetch('/api/dashboard/exec-kpis'),
-        ])
-        const chainsData = chainsRes.ok ? await chainsRes.json() : null
-        const apiChains = normalizeApiChains(chainsData?.chains)
-        if (!findingsRes.ok && !apiChains.length) throw new Error(`Findings HTTP ${findingsRes.status}`)
-        const findingsData = findingsRes.ok ? await findingsRes.json() : null
-        const kpisData = kpisRes.ok ? await kpisRes.json() : null
-        if (cancelled) return
-        setChainsFromApi(apiChains.length ? apiChains : null)
-        setFindings(parseFindingsResponse(findingsData))
-        setExecKpis(kpisData)
-      } catch (e) {
-        if (!cancelled) setError(e.message || t('pages.killChainOrchestrator.load_error', { error: '' }))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
+  const loadKillChainData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [chainsRes, findingsRes, kpisRes] = await Promise.all([
+        apiFetch('/api/soc/kill-chains'),
+        apiFetch('/api/findings?limit=2000'),
+        apiFetch('/api/dashboard/exec-kpis'),
+      ])
+      const chainsData = chainsRes.ok ? await chainsRes.json() : null
+      const apiChains = normalizeApiChains(chainsData?.chains)
+      if (!findingsRes.ok && !apiChains.length) throw new Error(`Findings HTTP ${findingsRes.status}`)
+      const findingsData = findingsRes.ok ? await findingsRes.json() : null
+      const kpisData = kpisRes.ok ? await kpisRes.json() : null
+      setChainsFromApi(apiChains.length ? apiChains : null)
+      setFindings(parseFindingsResponse(findingsData))
+      setExecKpis(kpisData)
+    } catch (e) {
+      setError(e.message || t('pages.killChainOrchestrator.load_error', { error: '' }))
+    } finally {
+      setLoading(false)
+    }
   }, [t])
+
+  useEffect(() => {
+    loadKillChainData()
+  }, [loadKillChainData])
 
   const chains = useMemo(
     () => chainsFromApi ?? buildChainsFromFindings(findings),
@@ -412,16 +414,40 @@ export default function KillChainOrchestrator() {
     [chains, filterSeverity],
   )
 
+  const chainListFindings = useMemo(() => filteredChains.map((c) => ({
+    id: c.id,
+    severity: c.severity || 'medium',
+    title: c.name,
+    type: 'kill_chain',
+    description: c.summary || '',
+    resource: c.target || '',
+  })), [filteredChains])
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filteredFindings: filteredChainFindings,
+  } = useFindingsWorkbench(chainListFindings, {
+    csvPrefix: 'weissman-kill-chains',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleChains = useMemo(() => {
+    if (!searchQuery.trim()) return filteredChains
+    const ids = new Set(filteredChainFindings.map((f) => String(f.id)))
+    return filteredChains.filter((c) => ids.has(String(c.id)))
+  }, [filteredChains, filteredChainFindings, searchQuery])
+
   useEffect(() => {
-    if (!filteredChains.length) {
+    if (!visibleChains.length) {
       setActiveChain(null)
       return
     }
-    if (!activeChain || !filteredChains.some((c) => c.id === activeChain.id)) {
-      setActiveChain(filteredChains[0])
+    if (!activeChain || !visibleChains.some((c) => c.id === activeChain.id)) {
+      setActiveChain(visibleChains[0])
       setActivePhase(null)
     }
-  }, [filteredChains, activeChain])
+  }, [visibleChains, activeChain])
 
   const overallRisk = useMemo(() => {
     if (!chains.length) return execKpis?.security_score != null ? 100 - execKpis.security_score : 0
@@ -443,12 +469,22 @@ export default function KillChainOrchestrator() {
 
   const isLoading = loading || enginesLoading
 
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(findings, { csvPrefix: 'weissman-kill-chain' })
+
   return (
     <PageShell
       title={t('pages.killChainOrchestrator.title')}
       subtitle={t('pages.killChainOrchestrator.subtitle')}
       badge="ATT&CK"
       badgeColor="#ef4444"
+      actions={(
+        <ShellScanActions
+          onRefresh={loadKillChainData}
+          onExport={exportCsv}
+          refreshLoading={isLoading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <p className="text-xs text-white/45 font-mono mb-6">
         {t('pages.killChainOrchestrator.data_source_note', {
@@ -507,6 +543,15 @@ export default function KillChainOrchestrator() {
               </select>
             </div>
 
+            {filteredChains.length > 0 && (
+              <WeissmanListToolbar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                resultCount={visibleChains.length}
+                totalCount={filteredChains.length}
+              />
+            )}
+
             {filteredChains.length === 0 ? (
               <EmptyState
                 compact
@@ -515,8 +560,15 @@ export default function KillChainOrchestrator() {
                 body={t('pages.killChainOrchestrator.no_match_body')}
                 cta={{ label: t('pages.killChainOrchestrator.cta_view_findings'), to: '/findings' }}
               />
+            ) : visibleChains.length === 0 ? (
+              <EmptyState
+                compact
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+              />
             ) : (
-              filteredChains.map((chain) => {
+              visibleChains.map((chain) => {
                 const sm = severityMeta(chain.severity, t)
                 const progress = Math.round((chain.completedPhases / chain.totalPhases) * 100)
                 return (

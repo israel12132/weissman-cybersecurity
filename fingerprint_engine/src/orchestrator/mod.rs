@@ -1205,7 +1205,9 @@ async fn run_cycle_for_tenant(
         if target.is_empty() {
             continue;
         }
-        let client_engines = client_enabled_engines(client_configs.as_str());
+        let client_engines = crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(
+            client_enabled_engines(client_configs.as_str()),
+        );
         if client_engines.is_empty() {
             eprintln!(
                 "[Weissman][Orchestrator] Client id={} has no enabled engines; skipping.",
@@ -1370,6 +1372,8 @@ async fn run_cycle_for_tenant(
 
         let mut client_findings_context: Vec<String> = Vec::new();
         let mut client_findings_count = 0usize;
+        let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
+        let mut cross_job_params = serde_json::json!({});
         for source in client_engines.clone() {
             stealth_engine::apply_behavioral_jitter();
             let label = engine_display_label(source.as_str());
@@ -1778,6 +1782,10 @@ async fn run_cycle_for_tenant(
                         .await
                         .filter(|s| !s.is_empty());
                     tx.commit().await?;
+                    crate::ws_intelligence_bus::merge_params_artifacts(
+                        &mut cross_job_params,
+                        &intelligence_bus,
+                    );
                     let ctx = crate::engine_dispatch::EngineRunContext {
                         stealth: Some(stealth_config.clone()),
                         discovered_paths: discovered_paths.clone(),
@@ -1791,9 +1799,16 @@ async fn run_cycle_for_tenant(
                         app_pool: Some(app_pool.clone()),
                         agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                         client_id: Some(db_client_id),
-                        job_params: serde_json::json!({}),
+                        job_params: cross_job_params.clone(),
+                        job_id: None,
+                        swarm_broadcast: None,
+                        intelligence_bus: Some(intelligence_bus.clone()),
                     };
                     let r = crate::engine_dispatch::run_engine(other, &target, &ctx).await;
+                    crate::ws_intelligence_bus::merge_params_artifacts(
+                        &mut cross_job_params,
+                        &intelligence_bus,
+                    );
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                     (r, None)
                 }

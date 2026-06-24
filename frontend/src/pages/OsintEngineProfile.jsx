@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EmptyState from '../components/ui/EmptyState'
+import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 
 const MAX_LINES = 500
 const ENGINE_ID = 'osint'
@@ -60,6 +66,8 @@ export default function OsintEngineProfile() {
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [toast, setToast] = useState(null)
+  const [history, setHistory] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const eventSourceRef = useRef(null)
   const closeStream = useCallback(() => {
     const es = eventSourceRef.current
@@ -92,6 +100,21 @@ export default function OsintEngineProfile() {
       .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
   }, [])
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const r = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=100`)
+      const d = await r.json().catch(() => null)
+      if (r.ok) setHistory(d)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadHistory()
+  }, [loadHistory])
+
   useEffect(() => {
     if (!selectedClientId) return
     const client = clients.find((c) => String(c.id) === String(selectedClientId))
@@ -116,6 +139,24 @@ export default function OsintEngineProfile() {
     () => clients.find((c) => String(c.id) === String(selectedClientId))?.name ?? t('pages.osintEngineProfile.no_client_selected'),
     [clients, selectedClientId, t],
   )
+
+  const jobs = Array.isArray(history?.jobs) ? history.jobs : []
+  const findings = Array.isArray(history?.findings) ? history.findings : []
+
+  const kpi = useMemo(() => {
+    const completed = jobs.filter((j) => String(j?.status || '').toLowerCase() === 'completed').length
+    const running = jobs.filter((j) => String(j?.status || '').toLowerCase() === 'running').length
+    const totalFindings = findings.length || jobs.reduce((sum, j) => sum + Number(j?.findings_count || 0), 0)
+    return { jobs: jobs.length, completed, running, findings: totalFindings }
+  }, [jobs, findings])
+
+  const { exportCsv, filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(findings, { csvPrefix: 'weissman-osint' })
+
+  const visibleFindings = useMemo(() => {
+    if (!searchQuery.trim()) return findings
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return findings.filter((f) => ids.has(String(f.id)))
+  }, [findings, filteredFindings, searchQuery])
 
   const handleRun = useCallback(async () => {
     if (!selectedClientId) {
@@ -205,6 +246,14 @@ export default function OsintEngineProfile() {
       subtitle={t('pages.osintEngineProfile.subtitle')}
       badge={t('pages.osintEngineProfile.badge')}
       badgeColor="#06b6d4"
+      actions={(
+        <ShellScanActions
+          onRefresh={loadHistory}
+          onExport={exportCsv}
+          refreshLoading={historyLoading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       {toast && (
         <div
@@ -216,6 +265,41 @@ export default function OsintEngineProfile() {
         >
           {toast.message}
         </div>
+      )}
+
+      <EvidenceNotice>{t('pages.osintEngineProfile.evidence_notice')}</EvidenceNotice>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <ExecutiveWidget
+          label={t('pages.osintEngineProfile.kpi_jobs')}
+          value={historyLoading ? '—' : kpi.jobs.toLocaleString()}
+          accent="#22d3ee"
+        />
+        <ExecutiveWidget
+          label={t('pages.osintEngineProfile.kpi_completed')}
+          value={historyLoading ? '—' : kpi.completed.toLocaleString()}
+          accent="#34d399"
+        />
+        <ExecutiveWidget
+          label={t('pages.osintEngineProfile.kpi_running')}
+          value={historyLoading ? '—' : kpi.running.toLocaleString()}
+          accent="#f59e0b"
+        />
+        <ExecutiveWidget
+          label={t('pages.osintEngineProfile.kpi_findings')}
+          value={historyLoading ? '—' : kpi.findings.toLocaleString()}
+          accent="#a78bfa"
+        />
+      </div>
+
+      {!selectedClientId && !running && (
+        <EmptyState
+          icon="shield"
+          title={t('pages.osintEngineProfile.empty_client_title')}
+          body={t('pages.osintEngineProfile.empty_client_body')}
+          compact
+          className="mb-6"
+        />
       )}
 
       <section className="grid xl:grid-cols-[1.3fr_1fr] gap-6">
@@ -304,6 +388,48 @@ export default function OsintEngineProfile() {
           </div>
         </div>
       </section>
+
+      {findings.length > 0 && (
+        <section className="mt-6 rounded-2xl bg-black/40 border border-white/10 p-6 space-y-4">
+          <WeissmanListToolbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            resultCount={visibleFindings.length}
+            totalCount={findings.length}
+          />
+          {visibleFindings.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title={t('weissmanFindings.filtered_title')}
+              body={t('weissmanFindings.filtered_body')}
+              compact
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs font-mono text-white/70">
+                <thead>
+                  <tr className="text-white/40 border-b border-white/10">
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_severity', { defaultValue: 'Severity' })}</th>
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_title', { defaultValue: 'Title' })}</th>
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_type', { defaultValue: 'Type' })}</th>
+                    <th className="text-left py-2">{t('pages.osintEngineProfile.col_discovered', { defaultValue: 'Discovered' })}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleFindings.map((f) => (
+                    <tr key={f.id} className="border-b border-white/5">
+                      <td className="py-2 pr-3">{f.severity || '—'}</td>
+                      <td className="py-2 pr-3 text-white/85">{f.title || '—'}</td>
+                      <td className="py-2 pr-3">{f.type || f.asset_type || '—'}</td>
+                      <td className="py-2 text-white/50">{f.discovered_at ? new Date(f.discovered_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </PageShell>
   )
 }

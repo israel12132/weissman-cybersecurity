@@ -133,25 +133,138 @@ pub async fn run_opcua_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_opcua_attack, run_opcua_attack_result);
 
+/// Real, deep, **read-only** Modbus/TCP assessment: Read Device Identification (FC 0x2B/0x0E) +
+/// holding-register reads (FC 0x03) across common unit ids. Confirms unauthenticated read exposure
+/// and discloses device identity. Destructive writes (FC 0x05/0x06/0x0F/0x10) are NOT performed —
+/// write-capability validation is an explicitly authorized on-segment action.
 pub async fn run_modbus_exploit_result(target: &str) -> EngineResult {
-    agent_required_bus_attack(
-        "modbus_exploit",
-        target,
-        "Modbus write/coerce exploits require on-segment agent",
-        "Function-code abuse and register writes need L2/L3 access to the fieldbus from an OT-segment agent.",
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(target);
+    let Some(a) = crate::ot_ics_engine::modbus_deep_assess(&host).await else {
+        if tcp_open(&host, 502).await {
+            return EngineResult::ok(
+                vec![finding(
+                    "modbus_exploit",
+                    "Port 502/tcp open (Modbus candidate, unconfirmed)",
+                    "medium",
+                    "T0843",
+                    &format!("TCP {host}:502 accepts connections but no Modbus PDU was confirmed."),
+                    target,
+                )],
+                "modbus_exploit: port open, protocol unconfirmed".to_string(),
+            );
+        }
+        return empty_ok("modbus_exploit", target);
+    };
+
+    let mut findings: Vec<Value> = Vec::new();
+    if !a.device_objects.is_empty() {
+        let ident = a
+            .device_objects
+            .iter()
+            .map(|(id, v)| {
+                format!(
+                    "{}={}",
+                    crate::ot_ics_engine::modbus_device_id_label(*id),
+                    v
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        findings.push(finding(
+            "modbus_exploit",
+            "Modbus device identification exposed (unauthenticated)",
+            "high",
+            "T0888",
+            &format!(
+                "Unauthenticated Modbus Read Device Identification (FC 0x2B/0x0E) on {host}:502 returned: {ident}. Vendor/product/firmware are disclosed to any network peer."
+            ),
+            target,
+        ));
+    }
+    if !a.read_ok_units.is_empty() {
+        let severity = if a.device_objects.is_empty() {
+            "high"
+        } else {
+            "critical"
+        };
+        findings.push(finding(
+            "modbus_exploit",
+            "Unauthenticated Modbus register read permitted",
+            severity,
+            "T0861",
+            &format!(
+                "Holding-register read (FC 0x03) succeeded without authentication on unit id(s) {:?} at {host}:502. Process data is readable. Write/coerce testing (FC 0x05/0x06/0x0F/0x10) is destructive and requires explicit authorized on-segment action — not performed by this engine.",
+                a.read_ok_units
+            ),
+            target,
+        ));
+    }
+    if findings.is_empty() {
+        findings.push(finding(
+            "modbus_exploit",
+            "Modbus/TCP present (reads restricted)",
+            "medium",
+            "T0843",
+            &format!(
+                "Modbus/TCP confirmed on {host}:502 but holding-register reads returned exceptions on unit id(s) {:?}.",
+                a.exception_units
+            ),
+            target,
+        ));
+    }
+    EngineResult::ok(
+        findings,
+        format!("modbus_exploit: deep read-only Modbus assessment on {host}:502"),
     )
-    .await
 }
 cli_wrapper!(run_modbus_exploit, run_modbus_exploit_result);
 
+/// Read-only PLC protocol confirmations via S7comm (ISO-on-TCP), EtherNet/IP (CIP identity), and
+/// Modbus function-code reads. Reuses the tested `ot_ics_engine` probes — no writes, no downloads.
+async fn plc_protocol_confirmations(host: &str, engine_id: &str, target: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    if let Some(fp) = crate::ot_ics_engine::probe_s7(host).await {
+        out.push(ot_fingerprint_finding(&fp, engine_id, target));
+    }
+    if let Some(fp) = crate::ot_ics_engine::probe_enip(host).await {
+        out.push(ot_fingerprint_finding(&fp, engine_id, target));
+    }
+    if let Some(fp) = crate::ot_ics_engine::probe_modbus_function_code(host).await {
+        out.push(ot_fingerprint_finding(&fp, engine_id, target));
+    }
+    out
+}
+
+/// Real read-only PLC fingerprint: confirms an exposed PLC engineering/runtime interface
+/// (S7comm / EtherNet-IP CIP identity / Modbus). Logic download & runtime tampering — the actual
+/// "logic bomb" — are destructive and remain an explicitly authorized on-segment action (not done).
 pub async fn run_plc_logic_bomb_result(target: &str) -> EngineResult {
-    agent_required_bus_attack(
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(target);
+    let mut findings = plc_protocol_confirmations(&host, "plc_logic_bomb", target).await;
+    if findings.is_empty() {
+        return empty_ok("plc_logic_bomb", target);
+    }
+    findings.push(finding(
         "plc_logic_bomb",
+        &format!("Exposed PLC engineering/runtime interface on {host} (unauthenticated protocol response)"),
+        "high",
+        "T0843",
+        &format!(
+            "Confirmed industrial control protocol(s) responding on {host}. An exposed, unauthenticated PLC engineering interface enables logic read and — with authorized on-segment access — logic-download tampering. No write/download was performed."
+        ),
         target,
-        "PLC logic manipulation requires engineering-workstation agent",
-        "Logic downloads and runtime tampering are validated from an enrolled agent on the OT engineering network.",
+    ));
+    let n = findings.len();
+    EngineResult::ok(
+        findings,
+        format!("plc_logic_bomb: {n} PLC protocol signal(s) on {host}"),
     )
-    .await
 }
 cli_wrapper!(run_plc_logic_bomb, run_plc_logic_bomb_result);
 
@@ -199,14 +312,93 @@ pub async fn run_cold_boot_attack_result(target: &str) -> EngineResult {
 }
 cli_wrapper!(run_cold_boot_attack, run_cold_boot_attack_result);
 
+// ── HL7 / MLLP clinical interface — real read-only exposure probe ────────────────
+// MLLP framing: <SB=0x0B> payload <EB=0x1C><CR=0x0D>. We send a benign HL7 message with an UNKNOWN
+// trigger event so a real listener replies with an ACK/NACK (MSA segment), confirming an
+// unauthenticated HL7 interface WITHOUT performing any clinical action (no ADT/ORM orders sent).
+const MLLP_SB: u8 = 0x0B;
+const MLLP_EB: u8 = 0x1C;
+const MLLP_CR: u8 = 0x0D;
+
+/// Wrap an HL7 payload in an MLLP frame. Pure — unit-tested.
+pub fn build_mllp_frame(payload: &str) -> Vec<u8> {
+    let mut f = Vec::with_capacity(payload.len() + 3);
+    f.push(MLLP_SB);
+    f.extend_from_slice(payload.as_bytes());
+    f.push(MLLP_EB);
+    f.push(MLLP_CR);
+    f
+}
+
+/// Benign HL7 v2 probe: a minimal MSH with an unknown trigger so the listener NACKs (no clinical
+/// effect). Field separator `|`, encoding chars `^~\&`.
+fn hl7_probe_message() -> String {
+    "MSH|^~\\&|WEISSMAN_SCAN|SECURITY|RECEIVER|FACILITY|20260101000000||ZZZ^ZZZ|WSCAN1|P|2.5"
+        .to_string()
+}
+
+/// Does the response look like HL7/MLLP (framing or an MSH/MSA/ACK segment)? Pure — unit-tested.
+pub fn looks_like_hl7(resp: &[u8]) -> bool {
+    let mllp = resp.first() == Some(&MLLP_SB) || resp.contains(&MLLP_EB);
+    let text = String::from_utf8_lossy(resp);
+    let hl7 = text.contains("MSH|")
+        || text.contains("MSA|")
+        || text.contains("ACK^")
+        || text.contains("|AA")
+        || text.contains("|AE")
+        || text.contains("|AR");
+    mllp || hl7
+}
+
 pub async fn run_hospital_hl7_attack_result(target: &str) -> EngineResult {
-    agent_required_bus_attack(
-        "hospital_hl7_attack",
-        target,
-        "HL7/clinical interface attacks require on-segment agent",
-        "MLLP/HL7 manipulation and medical-device bus testing need an agent on the clinical network segment.",
-    )
-    .await
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(target);
+    let frame = build_mllp_frame(&hl7_probe_message());
+    let mut findings: Vec<Value> = Vec::new();
+    // Common MLLP listener ports (Mirth Connect, Cloverleaf, Rhapsody, generic HL7 interfaces).
+    for &port in &[2575u16, 6661, 6662, 6663, 7777] {
+        if !tcp_open(&host, port).await {
+            continue;
+        }
+        let confirmed = tcp_probe_response(&host, port, &frame)
+            .await
+            .map(|b| looks_like_hl7(&b))
+            .unwrap_or(false);
+        if confirmed {
+            findings.push(finding(
+                "hospital_hl7_attack",
+                &format!("Unauthenticated HL7/MLLP interface exposed on {host}:{port}"),
+                "high",
+                "T0883",
+                &format!(
+                    "MLLP listener on {host}:{port} replied to a benign HL7 probe with an HL7/ACK message — the clinical interface accepts unauthenticated messages (PHI exposure / message-injection risk). No ADT/ORM clinical orders were sent."
+                ),
+                target,
+            ));
+        } else {
+            findings.push(finding(
+                "hospital_hl7_attack",
+                &format!("Port {port}/tcp open (HL7/MLLP candidate, unconfirmed) on {host}"),
+                "medium",
+                "T0883",
+                &format!(
+                    "TCP {host}:{port} accepts connections but no HL7/MLLP ACK was confirmed."
+                ),
+                target,
+            ));
+        }
+    }
+    if findings.is_empty() {
+        empty_ok("hospital_hl7_attack", target)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(
+            findings,
+            format!("hospital_hl7_attack: {n} HL7/MLLP signal(s) on {host}"),
+        )
+    }
 }
 cli_wrapper!(run_hospital_hl7_attack, run_hospital_hl7_attack_result);
 
@@ -289,17 +481,127 @@ pub async fn run_dnp3_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_dnp3_attack, run_dnp3_attack_result);
 
+// ── MQTT (IoT broker) — real CONNECT/CONNACK probe ───────────────────────────────
+/// Encode an MQTT "remaining length" variable-byte integer. Pure — unit-tested.
+fn mqtt_encode_remaining_length(mut len: usize, out: &mut Vec<u8>) {
+    loop {
+        let mut byte = (len % 128) as u8;
+        len /= 128;
+        if len > 0 {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if len == 0 {
+            break;
+        }
+    }
+}
+
+/// Build an MQTT v3.1.1 CONNECT packet (clean session, no credentials). Pure — unit-tested.
+pub fn build_mqtt_connect(client_id: &str) -> Vec<u8> {
+    let cid = client_id.as_bytes();
+    // Variable header: protocol name "MQTT", level 4, connect flags 0x02 (clean session), keep-alive 60s.
+    let mut var = vec![0x00, 0x04, b'M', b'Q', b'T', b'T', 0x04, 0x02, 0x00, 0x3C];
+    // Payload: client id (length-prefixed).
+    var.push((cid.len() >> 8) as u8);
+    var.push((cid.len() & 0xFF) as u8);
+    var.extend_from_slice(cid);
+    let mut pkt = vec![0x10]; // CONNECT control packet type
+    mqtt_encode_remaining_length(var.len(), &mut pkt);
+    pkt.extend_from_slice(&var);
+    pkt
+}
+
+/// Parse the CONNACK return code from a broker response. Pure — unit-tested.
+pub fn parse_mqtt_connack(resp: &[u8]) -> Option<u8> {
+    // CONNACK: 0x20, remaining length 0x02, [session_present, return_code].
+    if resp.len() >= 4 && resp[0] == 0x20 {
+        Some(resp[3])
+    } else {
+        None
+    }
+}
+
+fn mqtt_connack_meaning(code: u8) -> &'static str {
+    match code {
+        0x00 => "connection accepted (anonymous access permitted)",
+        0x01 => "unacceptable protocol version",
+        0x02 => "client identifier rejected",
+        0x03 => "server unavailable",
+        0x04 => "bad username or password",
+        0x05 => "not authorized",
+        _ => "unknown return code",
+    }
+}
+
 pub async fn run_mqtt_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(
-        t,
-        "mqtt_attack",
-        "MQTT broker port",
-        "medium",
-        "T0809",
-        &[1883, 8883],
-        "MQTT plaintext/TLS broker.",
-    )
-    .await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+
+    // Plaintext MQTT (1883): send a real CONNECT and read the CONNACK return code.
+    if tcp_open(&host, 1883).await {
+        let pkt = build_mqtt_connect("weissman-scan");
+        match tcp_probe_response(&host, 1883, &pkt)
+            .await
+            .as_deref()
+            .and_then(parse_mqtt_connack)
+        {
+            Some(0x00) => findings.push(finding(
+                "mqtt_attack",
+                &format!("Anonymous MQTT broker access permitted on {host}:1883"),
+                "high",
+                "T0842",
+                &format!(
+                    "MQTT broker at {host}:1883 returned CONNACK 0x00 to an unauthenticated CONNECT — anonymous publish/subscribe is allowed (topic eavesdropping / message injection risk)."
+                ),
+                t,
+            )),
+            Some(code) => findings.push(finding(
+                "mqtt_attack",
+                &format!("MQTT broker confirmed on {host}:1883 (auth enforced)"),
+                "medium",
+                "T0842",
+                &format!(
+                    "MQTT broker at {host}:1883 responded with CONNACK 0x{code:02x} — {}.",
+                    mqtt_connack_meaning(code)
+                ),
+                t,
+            )),
+            None => findings.push(finding(
+                "mqtt_attack",
+                &format!("Port 1883/tcp open (MQTT candidate, unconfirmed) on {host}"),
+                "low",
+                "T0842",
+                &format!("TCP {host}:1883 accepts connections but no CONNACK was observed."),
+                t,
+            )),
+        }
+    }
+
+    // TLS MQTT (8883): port presence only (a TLS handshake is required before MQTT).
+    if tcp_open(&host, 8883).await {
+        findings.push(finding(
+            "mqtt_attack",
+            &format!("Port 8883/tcp open (MQTT-over-TLS candidate) on {host}"),
+            "low",
+            "T0842",
+            &format!("TCP {host}:8883 accepts connections (MQTT over TLS); CONNECT requires a TLS session."),
+            t,
+        ));
+    }
+
+    if findings.is_empty() {
+        empty_ok("mqtt_attack", t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(
+            findings,
+            format!("mqtt_attack: {n} MQTT signal(s) on {host}"),
+        )
+    }
 }
 cli_wrapper!(run_mqtt_attack, run_mqtt_attack_result);
 
@@ -381,6 +683,20 @@ pub async fn run_iec61850_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_iec61850_attack, run_iec61850_attack_result);
 
 pub async fn run_plc_logic_attack_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    // Prefer real protocol confirmation (S7comm / ENIP / Modbus) over a bare port-open signal.
+    let confirmations = plc_protocol_confirmations(&host, "plc_logic_attack", t).await;
+    if !confirmations.is_empty() {
+        let n = confirmations.len();
+        return EngineResult::ok(
+            confirmations,
+            format!("plc_logic_attack: {n} confirmed PLC protocol(s) on {host}"),
+        );
+    }
+    // No protocol confirmation — fall back to reporting open engineering ports as candidates.
     port_probe_finding(
         t,
         "plc_logic_attack",
@@ -474,3 +790,66 @@ cli_wrapper!(
     run_industrial_protocol_fuzz,
     run_industrial_protocol_fuzz_result
 );
+
+#[cfg(test)]
+mod hl7_tests {
+    use super::*;
+
+    #[test]
+    fn mllp_frame_wraps_with_sb_eb_cr() {
+        let f = build_mllp_frame("MSH|^~\\&|A");
+        assert_eq!(f.first(), Some(&0x0B));
+        assert_eq!(f[f.len() - 2], 0x1C);
+        assert_eq!(f[f.len() - 1], 0x0D);
+        // payload preserved between SB and EB
+        assert_eq!(&f[1..f.len() - 2], b"MSH|^~\\&|A");
+    }
+
+    #[test]
+    fn detects_hl7_ack_and_mllp_framing() {
+        // MLLP-framed ACK
+        let ack = build_mllp_frame("MSH|^~\\&|RECV|FAC|...||ACK^A19|1|P|2.5\rMSA|AA|WSCAN1");
+        assert!(looks_like_hl7(&ack));
+        // Bare MSA segment without framing
+        assert!(looks_like_hl7(b"MSA|AR|WSCAN1|Unknown message type"));
+        // Non-HL7 noise
+        assert!(!looks_like_hl7(b"HTTP/1.1 400 Bad Request\r\n\r\n"));
+        assert!(!looks_like_hl7(b""));
+    }
+}
+
+#[cfg(test)]
+mod mqtt_tests {
+    use super::*;
+
+    #[test]
+    fn connect_packet_is_well_formed() {
+        let pkt = build_mqtt_connect("weissman-scan");
+        assert_eq!(pkt[0], 0x10); // CONNECT control packet
+        let var = &pkt[2..]; // skip type + single remaining-length byte (payload < 128)
+        assert_eq!(&var[0..6], &[0x00, 0x04, b'M', b'Q', b'T', b'T']);
+        assert_eq!(var[6], 0x04); // protocol level 3.1.1
+        assert_eq!(var[7], 0x02); // clean-session flag
+    }
+
+    #[test]
+    fn remaining_length_varint_encoding() {
+        let mut o = Vec::new();
+        mqtt_encode_remaining_length(0, &mut o);
+        assert_eq!(o, vec![0x00]);
+        let mut o2 = Vec::new();
+        mqtt_encode_remaining_length(127, &mut o2);
+        assert_eq!(o2, vec![0x7F]);
+        let mut o3 = Vec::new();
+        mqtt_encode_remaining_length(128, &mut o3);
+        assert_eq!(o3, vec![0x80, 0x01]); // MQTT spec multi-byte example
+    }
+
+    #[test]
+    fn connack_return_code_parsed() {
+        assert_eq!(parse_mqtt_connack(&[0x20, 0x02, 0x00, 0x00]), Some(0x00));
+        assert_eq!(parse_mqtt_connack(&[0x20, 0x02, 0x00, 0x05]), Some(0x05));
+        assert_eq!(parse_mqtt_connack(&[0x30, 0x02, 0x00, 0x00]), None); // not a CONNACK
+        assert_eq!(parse_mqtt_connack(&[0x20, 0x02]), None); // too short
+    }
+}

@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EmptyState from '../components/ui/EmptyState'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
+import { alertDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 function pct(n) {
   const v = Number(n)
@@ -12,6 +18,7 @@ function pct(n) {
 
 export default function ClientSaasIdpDiscovery() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -59,15 +66,58 @@ export default function ClientSaasIdpDiscovery() {
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
-      alert(t('pages.clientSaasIdpDiscovery.copied'))
+      toast.success(t('pages.clientSaasIdpDiscovery.copied'))
     } catch {
-      alert(text)
+      await alertDialog({
+        title: t('pages.clientSaasIdpDiscovery.copy_manual_title', { defaultValue: 'Copy manually' }),
+        message: text,
+        variant: 'neutral',
+      })
     }
   }
 
   const domains = Array.isArray(report?.domains_considered) ? report.domains_considered : []
   const idps = Array.isArray(report?.idp_candidates) ? report.idp_candidates : []
   const saas = Array.isArray(report?.saas_signals) ? report.saas_signals : []
+
+  const listFindings = useMemo(() => [
+    ...idps.map((row) => ({
+      id: `idp-${row.vendor}`,
+      severity: 'medium',
+      title: vendorLabel(row.vendor),
+      type: 'idp_candidate',
+      description: row.evidence || row.domain || '',
+    })),
+    ...saas.map((row) => ({
+      id: `saas-${row.name}`,
+      severity: 'info',
+      title: row.name || vendorLabel(row.vendor),
+      type: 'saas_signal',
+      description: (Array.isArray(row.evidence) ? row.evidence[0] : row.signal) || row.domain || '',
+    })),
+  ], [idps, saas, t])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-saas-idp-discovery',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
+  const visibleIdps = useMemo(() => {
+    if (!searchQuery.trim()) return idps
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return idps.filter((row) => ids.has(`idp-${row.vendor}`))
+  }, [idps, filteredFindings, searchQuery])
+
+  const visibleSaas = useMemo(() => {
+    if (!searchQuery.trim()) return saas
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return saas.filter((row) => ids.has(`saas-${row.name}`))
+  }, [saas, filteredFindings, searchQuery])
 
   if (loading) {
     return (
@@ -84,6 +134,14 @@ export default function ClientSaasIdpDiscovery() {
     <PageShell
       title={clientName ? `${t('pages.clientSaasIdpDiscovery.title')} — ${clientName}` : t('pages.clientSaasIdpDiscovery.title')}
       subtitle={t('pages.clientSaasIdpDiscovery.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={runDiscovery}
+          onExport={exportCsv}
+          refreshLoading={loading || running}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -126,13 +184,29 @@ export default function ClientSaasIdpDiscovery() {
           </div>
         </div>
 
+        {listFindings.length > 0 && (
+          <WeissmanListToolbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            resultCount={visibleIdps.length + visibleSaas.length}
+            totalCount={listFindings.length}
+          />
+        )}
+
         <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.idp_heading')}</h2>
           {idps.length === 0 ? (
             <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_idp')}</div>
+          ) : visibleIdps.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title={t('weissmanFindings.filtered_title')}
+              body={t('weissmanFindings.filtered_body')}
+              compact
+            />
           ) : (
             <div className="mt-4 space-y-3">
-              {idps
+              {visibleIdps
                 .slice()
                 .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
                 .map((c) => {
@@ -200,9 +274,16 @@ export default function ClientSaasIdpDiscovery() {
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.saas_heading')}</h2>
           {saas.length === 0 ? (
             <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_saas')}</div>
+          ) : visibleSaas.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title={t('weissmanFindings.filtered_title')}
+              body={t('weissmanFindings.filtered_body')}
+              compact
+            />
           ) : (
             <div className="mt-4 space-y-3">
-              {saas.map((s) => (
+              {visibleSaas.map((s) => (
                 <div key={s.name} className="p-4 bg-slate-900/40 border border-slate-700 rounded-lg">
                   <div className="text-white font-semibold">{s.name}</div>
                   <div className="mt-2 text-xs text-slate-300 font-mono space-y-1">

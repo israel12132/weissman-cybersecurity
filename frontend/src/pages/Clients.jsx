@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonCardGrid, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 function fmtUsd(n) {
   if (n == null) return '$—'
@@ -19,6 +24,7 @@ function fmtUsd(n) {
 
 export default function Clients() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -101,7 +107,14 @@ export default function Clients() {
   )
 
   async function runScan(clientId, clientName) {
-    if (!confirm(t('clients_page.scan_confirm', { name: clientName }))) return
+    const ok = await confirmDialog({
+      title: t('clients_page.scan_title', { defaultValue: 'Launch full scan?' }),
+      message: t('clients_page.scan_confirm', { name: clientName }),
+      confirmLabel: t('clients_page.scan_action', { defaultValue: 'Launch scan' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'primary',
+    })
+    if (!ok) return
     setScanningId(clientId)
     setScanToast(null)
     try {
@@ -127,19 +140,25 @@ export default function Clients() {
   }
 
   async function deleteClient(clientId, clientName) {
-    if (!confirm(t('clients_page.delete_confirm', { name: clientName, defaultValue: `Are you sure you want to delete client "${clientName}"?` }))) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: t('clients_page.delete_title', { defaultValue: 'Delete client?' }),
+      message: t('clients_page.delete_confirm', { name: clientName, defaultValue: `Are you sure you want to delete client "${clientName}"?` }),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       const response = await apiFetch(`/api/clients/${clientId}`, { method: 'DELETE' })
       if (!response.ok) {
         const text = await response.text().catch(() => 'Failed to delete client')
-        alert(t('clients_page.delete_failed', { detail: text, defaultValue: `Failed to delete client: ${text}` }))
+        toast.error(t('clients_page.delete_failed', { detail: text, defaultValue: `Failed to delete client: ${text}` }))
         return
       }
       loadClients()
+      toast.success(t('clients_page.delete_success', { name: clientName, defaultValue: `Client "${clientName}" deleted` }))
     } catch (err) {
-      alert(t('clients_page.delete_error', { detail: err.message, defaultValue: `Error deleting client: ${err.message}` }))
+      toast.error(t('clients_page.delete_error', { detail: err.message, defaultValue: `Error deleting client: ${err.message}` }))
     }
   }
 
@@ -147,8 +166,44 @@ export default function Clients() {
     ? t('clients_page.clients_count', { count: 1 })
     : t('clients_page.clients_count_plural', { count: clients.length })
 
+  const listFindings = useMemo(() => clients.map((c) => ({
+    id: c.id,
+    severity: risk[c.id]?.sle_worst_usd > 1_000_000 ? 'critical' : risk[c.id] ? 'medium' : 'info',
+    title: c.name,
+    type: 'client',
+    description: c.contact_email || '',
+    resource: String(c.id),
+  })), [clients, risk])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-clients',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleClients = useMemo(() => {
+    if (!searchQuery.trim()) return clients
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return clients.filter((c) => ids.has(String(c.id)))
+  }, [clients, filteredFindings, searchQuery])
+
   return (
-    <PageShell title={t('clients_page.title')} subtitle={t('clients_page.subtitle')}>
+    <PageShell
+      title={t('clients_page.title')}
+      subtitle={t('clients_page.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadClients}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         <PremiumPageHeader
           title={t('clients_page.clients_heading')}
@@ -239,8 +294,24 @@ export default function Clients() {
         )}
 
         {!loading && !error && clients.length > 0 && (
+          <>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder={t('clients_page.search_placeholder', { defaultValue: 'Search clients…' })}
+              lastUpdated={lastUpdated}
+              resultCount={visibleClients.length}
+              totalCount={clients.length}
+            />
+            {visibleClients.length === 0 ? (
+              <EmptyState
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+              />
+            ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {clients.map((client) => {
+            {visibleClients.map((client) => {
               const domains = (() => {
                 try {
                   const parsed = typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
@@ -373,6 +444,8 @@ export default function Clients() {
               )
             })}
           </div>
+            )}
+          </>
         )}
       </div>
     </PageShell>

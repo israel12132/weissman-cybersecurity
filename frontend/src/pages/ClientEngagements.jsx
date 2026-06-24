@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EmptyState from '../components/ui/EmptyState'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 function isoNowLocal() {
   const d = new Date()
@@ -12,6 +18,7 @@ function isoNowLocal() {
 
 export default function ClientEngagements() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const { id } = useParams()
   const clientId = useMemo(() => String(id || '').trim(), [id])
 
@@ -68,7 +75,7 @@ export default function ClientEngagements() {
   async function createEngagement() {
     const n = name.trim()
     if (!n) {
-      alert(t('pages.clientEngagements.name_required'))
+      toast.warning(t('pages.clientEngagements.name_required'))
       return
     }
     setCreating(true)
@@ -95,6 +102,7 @@ export default function ClientEngagements() {
       setNotes('')
       setEndAt('')
       await loadAll()
+      toast.success(t('pages.clientEngagements.create_success', { defaultValue: 'Engagement created' }))
     } catch (e) {
       setError(e?.message || t('pages.clientEngagements.create_failed'))
     } finally {
@@ -103,7 +111,14 @@ export default function ClientEngagements() {
   }
 
   async function closeEngagement(engagement) {
-    if (!confirm(t('pages.clientEngagements.close_confirm', { name: engagement.name }))) return
+    const ok = await confirmDialog({
+      title: t('pages.clientEngagements.close_title', { defaultValue: 'Close engagement?' }),
+      message: t('pages.clientEngagements.close_confirm', { name: engagement.name }),
+      confirmLabel: t('pages.clientEngagements.close_action', { defaultValue: 'Close engagement' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'warning',
+    })
+    if (!ok) return
     try {
       const res = await apiFetch(`/api/engagements/${engagement.id}`, {
         method: 'PATCH',
@@ -112,14 +127,40 @@ export default function ClientEngagements() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert(data?.detail || `Close failed (HTTP ${res.status})`)
+        toast.error(data?.detail || `Close failed (HTTP ${res.status})`)
         return
       }
       await loadAll()
+      toast.success(t('pages.clientEngagements.close_success', { defaultValue: 'Engagement closed' }))
     } catch (e) {
-      alert(e?.message || t('pages.clientEngagements.close_failed'))
+      toast.error(e?.message || t('pages.clientEngagements.close_failed'))
     }
   }
+
+  const listFindings = useMemo(() => engagements.map((e) => ({
+    id: e.id,
+    severity: e.status === 'active' ? 'medium' : 'info',
+    title: e.name || `#${e.id}`,
+    type: e.roe_mode || 'engagement',
+    description: e.notes || '',
+    resource: e.status || '',
+  })), [engagements])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-client-engagements',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleEngagements = useMemo(() => {
+    if (!searchQuery.trim()) return engagements
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return engagements.filter((e) => ids.has(String(e.id)))
+  }, [engagements, filteredFindings, searchQuery])
 
   if (loading) {
     return (
@@ -138,6 +179,14 @@ export default function ClientEngagements() {
         ? t('pages.clientEngagements.title_with_client', { name: client.name })
         : t('pages.clientEngagements.title')}
       subtitle={t('pages.clientEngagements.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadAll}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -237,8 +286,24 @@ export default function ClientEngagements() {
               {t('pages.clientEngagements.empty')}
             </div>
           ) : (
+            <>
+            <WeissmanListToolbar
+              className="mt-4"
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleEngagements.length}
+              totalCount={engagements.length}
+            />
+            {visibleEngagements.length === 0 ? (
+              <EmptyState
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+                compact
+              />
+            ) : (
             <div className="mt-4 space-y-3">
-              {engagements.map((e) => (
+              {visibleEngagements.map((e) => (
                 <div key={e.id} className="p-4 border border-slate-800 rounded-lg bg-black/20">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -272,6 +337,8 @@ export default function ClientEngagements() {
                 </div>
               ))}
             </div>
+            )}
+            </>
           )}
         </div>
       </div>

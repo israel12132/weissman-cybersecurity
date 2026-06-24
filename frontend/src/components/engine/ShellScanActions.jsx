@@ -1,0 +1,38 @@
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { Download, RefreshCw } from 'lucide-react'
+
+/**
+ * Standard PageShell header actions: reload last engine run + export CSV.
+ */
+export default function ShellScanActions({
+  onRefresh,
+  onExport,
+  refreshLoading = false,
+  refreshDisabled = false,
+  exportDisabled = false,
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshDisabled || refreshLoading}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-mono text-white/55 hover:text-white/85 hover:border-white/25 disabled:opacity-40"
+      >
+        <RefreshCw className={`w-3.5 h-3.5 ${refreshLoading ? 'animate-spin' : ''}`} />
+        {t('weissmanFindings.refresh')}
+      </button>
+      <button
+        type="button"
+        onClick={onExport}
+        disabled={exportDisabled}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
+      >
+        <Download className="w-3.5 h-3.5" />
+        {t('weissmanFindings.export_csv')}
+      </button>
+    </div>
+  )
+}

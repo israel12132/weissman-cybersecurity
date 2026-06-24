@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { useEngineHistory } from '../hooks/useEngineHistory'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import KubernetesSecurityPanel from './KubernetesSecurityPanel'
 
 const CLOUD_TABS = [
   { id: 'aws', label: 'AWS', engine: 'aws_attack', color: '#f97316', icon: '☁' },
@@ -18,7 +24,7 @@ const ENGINE_DESCRIPTIONS = {
   aws_attack: 'IAM privilege escalation, S3 bucket exposure, Lambda event injection, STS token abuse',
   azure_attack: 'Azure AD token abuse, Blob SAS exposure, Function App command injection, RBAC misconfig',
   gcp_attack: 'GCP service account key exposure, Cloud Run abuse, BigQuery public dataset scan',
-  k8s_container: 'Kubernetes RBAC misconfig, privileged pod escape, etcd exposure, API server surface',
+  k8s_container: 'CNAPP-grade: 14 attack surfaces, CIS benchmark, CVE intel, attack paths, GitOps/observability, RBAC SSAR',
   iac_misconfig: 'Terraform/CloudFormation/Pulumi misconfiguration scan and drift detection',
   serverless_attack: 'Serverless event injection, function chaining exploitation, cold-start timing',
 }
@@ -52,11 +58,19 @@ function CloudTab({ tab, active, onClick }) {
   )
 }
 
-function CloudEnginePanel({ tab, clientId, target, showToast, t }) {
+function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdate, onStatusUpdate }) {
   const [status, setStatus] = useState('idle')
   const [lastRun, setLastRun] = useState(null)
   const [findings, setFindings] = useState([])
   const [pendingJobId, setPendingJobId] = useState(null)
+
+  useEffect(() => {
+    onFindingsUpdate?.(tab.engine, findings)
+  }, [findings, tab.engine, onFindingsUpdate])
+
+  useEffect(() => {
+    onStatusUpdate?.(tab.engine, status)
+  }, [status, tab.engine, onStatusUpdate])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
@@ -136,26 +150,6 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t }) {
         {lastRun && (
           <p className="text-[10px] font-mono text-white/25 mt-2">{t('pages.cloudControlTower.last_completed', { time: lastRun })}</p>
         )}
-
-        {findings.length === 0 && status !== 'running' && (
-          <div className="mt-4 rounded-xl bg-white/5 border border-white/5 p-4 text-center">
-            <p className="text-[11px] font-mono text-white/25">
-              {status === 'completed'
-                ? t('pages.cloudControlTower.no_findings_clean')
-                : t('pages.cloudControlTower.run_to_populate')}
-            </p>
-          </div>
-        )}
-
-        {findings.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {findings.map((f, i) => (
-              <div key={i} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs font-mono text-white/70">
-                {f.title ?? f.type}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </motion.div>
   )
@@ -167,6 +161,8 @@ export default function CloudControlTower() {
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [findingsByEngine, setFindingsByEngine] = useState({})
+  const [engineStatus, setEngineStatus] = useState({})
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -178,15 +174,71 @@ export default function CloudControlTower() {
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
     setToast({ id, sev, msg })
-    setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 5000)
+    setTimeout(() => setToast((cur) => (cur?.id === id ? null : cur)), 5000)
   }, [])
 
-  const activeTabDef = CLOUD_TABS.find((t) => t.id === activeTab) ?? CLOUD_TABS[0]
+  const activeTabDef = CLOUD_TABS.find((tab) => tab.id === activeTab) ?? CLOUD_TABS[0]
   const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
   const clientTarget = firstClientTarget(selectedClient)
 
+  const handleFindingsUpdate = useCallback((engine, findings) => {
+    setFindingsByEngine((prev) => ({ ...prev, [engine]: findings }))
+  }, [])
+
+  const handleStatusUpdate = useCallback((engine, status) => {
+    setEngineStatus((prev) => ({ ...prev, [engine]: status }))
+  }, [])
+
+  const allFindings = useMemo(
+    () => Object.values(findingsByEngine).flat(),
+    [findingsByEngine],
+  )
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(allFindings, {
+    csvPrefix: 'cloud-control-tower',
+    haystackFn: (f) => `${f.title || ''} ${f.type || ''} ${f.description || ''} ${f.engine || ''} ${f.category || ''}`,
+  })
+
+  const { loadLastRun, historyLoading, lastUpdated, lastJobId } = useEngineHistory(activeTabDef.engine)
+
+  const handleRefresh = useCallback(async () => {
+    const run = await loadLastRun()
+    if (run) {
+      handleFindingsUpdate(activeTabDef.engine, run.findings ?? [])
+    }
+  }, [loadLastRun, activeTabDef.engine, handleFindingsUpdate])
+
+  useEffect(() => {
+    handleRefresh()
+  }, [handleRefresh])
+
+  const activeRunning = engineStatus[activeTabDef.engine] === 'running'
+
   return (
-    <PageShell title={t('pages.cloudControlTower.title')} badge={t('pages.cloudControlTower.badge')} badgeColor="#3b82f6" subtitle={t('pages.cloudControlTower.subtitle', { count: CLOUD_TABS.length })}>
+    <PageShell
+      title={t('pages.cloudControlTower.title')}
+      badge={t('pages.cloudControlTower.badge')}
+      badgeColor="#3b82f6"
+      subtitle={t('pages.cloudControlTower.subtitle', { count: CLOUD_TABS.length })}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={historyLoading}
+          refreshDisabled={activeRunning}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="flex items-center gap-2 mb-6">
         <span className="text-[11px] font-mono text-white/40">{t('pages.cloudControlTower.client_label')}</span>
         <select
@@ -205,6 +257,36 @@ export default function CloudControlTower() {
         </div>
       )}
 
+      {/* External Attack Surface Management cross-link */}
+      <Link
+        to="/attack-surface"
+        className="group flex items-center justify-between gap-3 rounded-2xl border border-cyan-500/25 bg-gradient-to-r from-cyan-950/30 to-black/30 px-4 py-3 mb-4 hover:border-cyan-400/45 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🌐</span>
+          <div>
+            <p className="text-sm font-semibold text-white/90">Attack Surface Management (EASM)</p>
+            <p className="text-[11px] font-mono text-white/45">Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.</p>
+          </div>
+        </div>
+        <span className="text-[11px] font-mono text-cyan-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>
+      </Link>
+
+      {/* Agentless CSPM / CNAPP cross-link (Wiz-style) */}
+      <Link
+        to="/cloud-posture"
+        className="group flex items-center justify-between gap-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-950/30 to-black/30 px-4 py-3 mb-6 hover:border-orange-400/45 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">◈</span>
+          <div>
+            <p className="text-sm font-semibold text-white/90">Cloud Posture Management (CSPM)</p>
+            <p className="text-[11px] font-mono text-white/45">Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.</p>
+          </div>
+        </div>
+        <span className="text-[11px] font-mono text-orange-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>
+      </Link>
+
       {/* Cloud tabs */}
       <div className="flex flex-wrap gap-2 mb-8">
         {CLOUD_TABS.map((tab) => (
@@ -218,13 +300,48 @@ export default function CloudControlTower() {
         </div>
       )}
 
-      <CloudEnginePanel
-        key={activeTab}
-        tab={activeTabDef}
-        clientId={selectedClientId}
-        target={clientTarget}
-        showToast={showToast}
-        t={t}
+      {activeTab === 'k8s' ? (
+        <KubernetesSecurityPanel
+          key="k8s"
+          clientId={selectedClientId}
+          target={clientTarget}
+          showToast={showToast}
+          onFindingsUpdate={handleFindingsUpdate}
+          onStatusUpdate={handleStatusUpdate}
+        />
+      ) : (
+        <CloudEnginePanel
+          key={activeTab}
+          tab={activeTabDef}
+          clientId={selectedClientId}
+          target={clientTarget}
+          showToast={showToast}
+          t={t}
+          onFindingsUpdate={handleFindingsUpdate}
+          onStatusUpdate={handleStatusUpdate}
+        />
+      )}
+
+      <WeissmanFindingsPanel
+        className="mt-6"
+        findings={allFindings}
+        filteredFindings={filteredFindings}
+        counts={counts}
+        total={total}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        severityFilter={severityFilter}
+        onSeverityChange={setSeverityFilter}
+        loading={historyLoading && !allFindings.length}
+        pending={activeRunning && !allFindings.length}
+        lastUpdated={lastUpdated}
+        jobId={lastJobId}
+        accent={activeTabDef.color}
+        showEmptyReady={!activeRunning && !allFindings.length}
+        emptyReadyTitle={t('pages.cloudControlTower.run_to_populate')}
+        emptyReadyBody={t('pages.cloudControlTower.run_to_populate')}
+        emptyTitle={t('pages.cloudControlTower.no_findings_clean')}
+        emptyBody={t('pages.cloudControlTower.no_findings_clean')}
       />
     </PageShell>
   )

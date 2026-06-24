@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 export default function ContainmentRulesBuilder() {
@@ -81,8 +86,48 @@ export default function ContainmentRulesBuilder() {
     isolated: rules.filter((r) => r.action === 'isolate' && r.enabled).length,
   };
 
+  const listFindings = useMemo(() => rules.map((r) => ({
+    id: r.id,
+    severity: r.enabled ? 'medium' : 'info',
+    title: r.name || r.id,
+    type: r.action || 'containment',
+    description: r.condition || r.description || '',
+    resource: r.enabled ? 'enabled' : 'disabled',
+  })), [rules])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-containment-rules',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleRules = useMemo(() => {
+    if (!searchQuery.trim()) return rules
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return rules.filter((r) => ids.has(r.id))
+  }, [rules, filteredFindings, searchQuery])
+
+  const reloadRules = () => {
+    if (clientId != null) fetchRules(clientId)
+  }
+
   return (
-    <PageShell title={t('pages.containmentRulesBuilder.title')} icon={<Shield />}>
+    <PageShell
+      title={t('pages.containmentRulesBuilder.title')}
+      icon={<Shield />}
+      actions={(
+        <ShellScanActions
+          onRefresh={reloadRules}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
@@ -129,11 +174,17 @@ export default function ContainmentRulesBuilder() {
         </div>
 
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
               {t('pages.containmentRulesBuilder.rules_heading')}
             </h3>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleRules.length}
+              totalCount={rules.length}
+            />
           </div>
 
           {loading ? (
@@ -145,9 +196,11 @@ export default function ContainmentRulesBuilder() {
             <div className="p-8 text-center text-gray-500">
               {t('pages.containmentRulesBuilder.empty')}
             </div>
+          ) : visibleRules.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-white/5">
-              {rules.map((rule) => (
+              {visibleRules.map((rule) => (
                 <div
                   key={rule.id}
                   className="p-4 hover:bg-white/5 transition-colors"

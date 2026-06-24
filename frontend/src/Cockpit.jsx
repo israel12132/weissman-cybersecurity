@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { ClientProvider, useClient } from './context/ClientContext'
 import { TelemetryProvider } from './context/TelemetryContext'
 import { WarRoomProvider } from './context/WarRoomContext'
@@ -9,6 +10,18 @@ import ToastContainer from './components/cockpit/Toast'
 import ExecKpiStrip from './components/cockpit/ExecKpiStrip'
 import OnboardingWizard from './components/onboarding/OnboardingWizard'
 import GlobalSearch from './components/GlobalSearch'
+import EvidenceNotice from './components/ui/EvidenceNotice'
+
+function CockpitEvidenceStrip() {
+  const { t } = useTranslation()
+  return (
+    <div className="shrink-0 border-b border-white/[0.06] bg-black/45 px-3 py-1.5">
+      <EvidenceNotice className="rounded-lg border-cyan-500/15 bg-cyan-500/[0.03] px-3 py-2 text-[10px] leading-snug">
+        {t('pages.cockpit.evidence_notice')}
+      </EvidenceNotice>
+    </div>
+  )
+}
 
 function CockpitLayout({ ceoIntegrated }) {
   const { clients, refreshClients, setSelectedClientId } = useClient()
@@ -47,6 +60,7 @@ function CockpitLayout({ ceoIntegrated }) {
             />
             <div className="relative z-[1] flex flex-col h-full min-h-0">
             <ExecKpiStrip />
+            <CockpitEvidenceStrip />
             <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
               <GlobalNexus ceoIntegrated={ceoIntegrated} />
               <div id="main-content" className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden" tabIndex={-1}>

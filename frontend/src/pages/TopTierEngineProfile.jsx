@@ -1,9 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import {
   CartesianGrid,
   Line,
@@ -30,6 +36,7 @@ export default function TopTierEngineProfile() {
   const profile = getTopTierProfile(engineId)
   const [audit, setAudit] = useState(null)
   const [history, setHistory] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
@@ -37,34 +44,28 @@ export default function TopTierEngineProfile() {
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadAudit() {
-      const r = await apiFetch('/api/engines/top-tier/audit')
-      const d = await r.json().catch(() => null)
-      if (!cancelled && r.ok && Array.isArray(d?.engines)) {
-        const row = d.engines.find((x) => x.engine_id === engineId) || null
+  const reloadAll = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const [auditR, historyR] = await Promise.all([
+        apiFetch('/api/engines/top-tier/audit'),
+        apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/history?limit=80`),
+      ])
+      const auditD = await auditR.json().catch(() => null)
+      const historyD = await historyR.json().catch(() => null)
+      if (auditR.ok && Array.isArray(auditD?.engines)) {
+        const row = auditD.engines.find((x) => x.engine_id === engineId) || null
         setAudit(row)
       }
-    }
-    loadAudit()
-    return () => {
-      cancelled = true
+      if (historyR.ok) setHistory(historyD)
+    } finally {
+      setHistoryLoading(false)
     }
   }, [engineId])
 
   useEffect(() => {
-    let cancelled = false
-    async function loadHistory() {
-      const r = await apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/history?limit=80`)
-      const d = await r.json().catch(() => null)
-      if (!cancelled && r.ok) setHistory(d)
-    }
-    loadHistory()
-    return () => {
-      cancelled = true
-    }
-  }, [engineId])
+    reloadAll()
+  }, [reloadAll])
 
   useEffect(() => {
     let cancelled = false
@@ -88,6 +89,30 @@ export default function TopTierEngineProfile() {
 
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
   const findings = Array.isArray(history?.findings) ? history.findings : []
+
+  const jobListFindings = useMemo(() => jobs.map((j) => ({
+    id: String(j.job_id),
+    severity: String(j.status || '').toLowerCase() === 'failed' ? 'high' : 'info',
+    title: String(j.job_id),
+    type: j.kind || 'job',
+    description: `${j.status || ''} ${j.probe_status || ''}`.trim(),
+    resource: String(j.findings_count ?? ''),
+  })), [jobs])
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filteredFindings: filteredJobFindings,
+  } = useFindingsWorkbench(jobListFindings, {
+    csvPrefix: `weissman-top-tier-${engineId}-jobs`,
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleJobs = useMemo(() => {
+    if (!searchQuery.trim()) return jobs
+    const ids = new Set(filteredJobFindings.map((f) => String(f.id)))
+    return jobs.filter((j) => ids.has(String(j.job_id)))
+  }, [jobs, filteredJobFindings, searchQuery])
 
   const statusChartData = useMemo(() => {
     const tally = { completed: 0, running: 0, failed: 0, pending: 0, dead: 0 }
@@ -201,10 +226,19 @@ export default function TopTierEngineProfile() {
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.engine_detail')}</Link>
           <span className="text-white/20 text-xs">|</span>
           <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineProfile.strategic_page', { label: profile.label })}</h1>
+          <div className="ms-auto">
+            <ShellScanActions
+              onRefresh={reloadAll}
+              onExport={exportJson}
+              refreshLoading={historyLoading}
+            />
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <EvidenceNotice>{t('pages.topTierEngineProfile.evidence_notice')}</EvidenceNotice>
+
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-white/70">{profile.id}</span>
@@ -351,6 +385,31 @@ export default function TopTierEngineProfile() {
 
         <section className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
+          {jobs.length > 0 && (
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleJobs.length}
+              totalCount={jobs.length}
+            />
+          )}
+          {historyLoading ? (
+            <SkeletonTable rows={8} cols={5} />
+          ) : jobs.length === 0 ? (
+            <EmptyState
+              icon="inbox"
+              title={t('pages.topTierEngineProfile.empty_jobs_title')}
+              body={t('pages.topTierEngineProfile.empty_jobs_body')}
+              compact
+            />
+          ) : visibleJobs.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title={t('weissmanFindings.filtered_title')}
+              body={t('weissmanFindings.filtered_body')}
+              compact
+            />
+          ) : (
           <div className="overflow-auto">
             <table className="w-full text-xs font-mono text-white/70">
               <thead>
@@ -363,7 +422,7 @@ export default function TopTierEngineProfile() {
                 </tr>
               </thead>
               <tbody>
-                {jobs.slice(0, 20).map((j) => (
+                {visibleJobs.slice(0, 20).map((j) => (
                   <tr key={`${j.job_id}-${j.created_at}`} className="border-b border-white/5">
                     <td className="py-2">{j.job_id}</td>
                     <td className="py-2">{j.kind}</td>
@@ -375,6 +434,7 @@ export default function TopTierEngineProfile() {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </main>
     </div>

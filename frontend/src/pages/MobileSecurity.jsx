@@ -1,15 +1,46 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Smartphone, Shield, AlertTriangle, Search, Filter } from 'lucide-react';
+import { Smartphone, Shield, AlertTriangle, Search, Loader2, ExternalLink } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 
 const MOBILE_ENGINE = 'mobile_attack'
+const SEVERITY_KEYS = ['critical', 'high', 'medium', 'low', 'info']
+const SEV_META = {
+  critical: { color: '#f43f5e', rank: 5 },
+  high: { color: '#fb923c', rank: 4 },
+  medium: { color: '#fbbf24', rank: 3 },
+  low: { color: '#38bdf8', rank: 2 },
+  info: { color: '#94a3b8', rank: 1 },
+}
+const normSev = (s) => (SEV_META[String(s || '').toLowerCase()] ? String(s).toLowerCase() : 'info')
+
+function SeverityBadge({ severity, t }) {
+  const k = normSev(severity)
+  const { color } = SEV_META[k]
+  return (
+    <span
+      className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border"
+      style={{ color, borderColor: `${color}55`, background: `${color}14` }}
+    >
+      {t(`pages.mobileSecurity.sev_${k}`)}
+    </span>
+  )
+}
 
 /**
- * MobileSecurity - Mobile & App Security Analysis Dashboard
+ * MobileSecurity — mobile/app findings from the real GET /api/mobile-security/apps
+ * endpoint. Apps are derived from mobile-tagged vulnerabilities; each carries only
+ * the fields the backend actually returns (name, package_id, platform,
+ * findings_count, max_severity). No upload widget or fabricated app metadata.
  */
 export default function MobileSecurity() {
   const { t } = useTranslation();
@@ -25,15 +56,16 @@ export default function MobileSecurity() {
   const [scanError, setScanError] = useState(null);
 
   const fetchMobileApps = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await apiFetch('/api/mobile-security/apps');
       if (response.ok) {
         const data = await response.json();
-        setApps(data.apps || []);
-        setFindings(data.findings || []);
+        setApps(Array.isArray(data.apps) ? data.apps : []);
+        setFindings(Array.isArray(data.findings) ? data.findings : []);
       }
-    } catch (error) {
-      console.error('Failed to fetch mobile apps:', error);
+    } catch {
+      // non-critical: list stays empty and the empty-state explains next steps
     } finally {
       setLoading(false);
     }
@@ -48,8 +80,43 @@ export default function MobileSecurity() {
         setClients(d)
         if (d.length) setSelectedClientId(String(d[0].id))
       })
-      .catch(() => {});
+      .catch(() => setClients([]));
   }, [fetchMobileApps]);
+
+  const platformFindings = useMemo(
+    () => findings.filter((f) => filter === 'all' || f.platform === filter),
+    [findings, filter],
+  );
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    refreshFromHistory,
+    historyLoading,
+    lastUpdated,
+    lastJobId,
+    setLastUpdated,
+    setLastJobId,
+  } = useWeissmanEnginePage(MOBILE_ENGINE, platformFindings);
+
+  useEffect(() => {
+    refreshFromHistory().then((run) => {
+      if (run?.findings?.length) {
+        applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
+      }
+    })
+  }, [refreshFromHistory, setLastUpdated, setLastJobId])
+
+  const handleRefresh = useCallback(async () => {
+    await fetchMobileApps()
+    const run = await refreshFromHistory()
+    applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId: setLastJobId })
+  }, [fetchMobileApps, refreshFromHistory, setLastUpdated, setLastJobId])
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
@@ -61,6 +128,8 @@ export default function MobileSecurity() {
           return [...resolved.filter((f) => !ids.has(f.id)), ...prev]
         })
       }
+      setLastUpdated(new Date().toISOString())
+      if (pendingJobId) setLastJobId(pendingJobId)
       await fetchMobileApps()
       setScanningAppId(null)
       setPendingJobId(null)
@@ -110,32 +179,46 @@ export default function MobileSecurity() {
     }
   }, [selectedClientId, clients, t])
 
-  const filteredApps = apps
-    .filter((app) => filter === 'all' || app.platform === filter)
-    .filter((app) =>
-      searchTerm
-        ? app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          app.package_id.toLowerCase().includes(searchTerm.toLowerCase())
-        : true
-    );
+  const filteredApps = useMemo(
+    () =>
+      apps
+        .filter((app) => filter === 'all' || app.platform === filter)
+        .filter((app) => {
+          if (!searchTerm) return true
+          const q = searchTerm.toLowerCase()
+          return (
+            String(app.name || '').toLowerCase().includes(q) ||
+            String(app.package_id || '').toLowerCase().includes(q)
+          )
+        }),
+    [apps, filter, searchTerm],
+  );
 
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'critical':
-        return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'high':
-        return 'text-orange-400 bg-orange-500/10 border-orange-500/30';
-      case 'medium':
-        return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'low':
-        return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
-      default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-    }
-  };
+  const sevCounts = useMemo(() => {
+    const c = { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
+    for (const f of findings) c[normSev(f.severity)] += 1
+    return c
+  }, [findings]);
+
+  const refreshAction = (
+    <ShellScanActions
+      onRefresh={handleRefresh}
+      onExport={exportCsv}
+      refreshLoading={historyLoading || loading}
+      refreshDisabled={Boolean(pendingJobId)}
+      exportDisabled={!filteredFindings.length}
+    />
+  );
 
   return (
-    <PageShell title={t('pages.mobileSecurity.title')} icon={<Smartphone />}>
+    <PageShell
+      title={t('pages.mobileSecurity.title')}
+      subtitle={t('pages.mobileSecurity.subtitle')}
+      badge={t('pages.mobileSecurity.badge')}
+      badgeColor="#22d3ee"
+      icon={<Smartphone />}
+      actions={refreshAction}
+    >
       <div className="space-y-6">
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
@@ -151,164 +234,150 @@ export default function MobileSecurity() {
         )}
 
         {scanError && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             {scanError}
           </div>
         )}
 
-        {/* Header Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_total_apps')}</span>
-              <Smartphone className="w-4 h-4 text-cyan-400" />
+        {/* KPIs — all derived from the real API response */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { key: 'stat_total_apps', value: apps.length, color: '#22d3ee', Icon: Smartphone },
+            { key: 'stat_ios', value: apps.filter((a) => a.platform === 'ios').length, color: '#a78bfa', Icon: Shield },
+            { key: 'stat_android', value: apps.filter((a) => a.platform === 'android').length, color: '#34d399', Icon: Shield },
+            { key: 'stat_findings', value: findings.length, color: '#fb923c', Icon: AlertTriangle },
+          ].map(({ key, value, color, Icon }) => (
+            <div key={key} className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">
+                    {t(`pages.mobileSecurity.${key}`)}
+                  </div>
+                  <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
+                    {loading ? '—' : value}
+                  </div>
+                </div>
+                <Icon className="w-4 h-4 shrink-0" style={{ color }} />
+              </div>
             </div>
-            <div className="text-2xl font-bold text-white">{apps.length}</div>
-          </div>
-
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_ios_apps')}</span>
-              <Shield className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="text-2xl font-bold text-white">
-              {apps.filter((a) => a.platform === 'ios').length}
-            </div>
-          </div>
-
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_android_apps')}</span>
-              <Shield className="w-4 h-4 text-green-400" />
-            </div>
-            <div className="text-2xl font-bold text-white">
-              {apps.filter((a) => a.platform === 'android').length}
-            </div>
-          </div>
-
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.mobileSecurity.stats_vulnerabilities')}</span>
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-            </div>
-            <div className="text-2xl font-bold text-white">{findings.length}</div>
-          </div>
+          ))}
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+        {/* Severity distribution from the real findings list */}
+        {findings.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {SEVERITY_KEYS.filter((k) => sevCounts[k] > 0).map((k) => (
+              <span
+                key={k}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border"
+                style={{ color: SEV_META[k].color, borderColor: `${SEV_META[k].color}33`, background: `${SEV_META[k].color}0d` }}
+              >
+                {t(`pages.mobileSecurity.sev_${k}`)}
+                <span className="tabular-nums font-semibold">{sevCounts[k]}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Search and platform filter */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px] relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.mobileSecurity.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-
-          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
             {['all', 'ios', 'android'].map((f) => (
               <button
                 key={f}
+                type="button"
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                    : 'text-white/45 hover:text-white/80'
                 }`}
               >
-                {f === 'all' ? t('pages.mobileSecurity.filter_all') : f === 'ios' ? t('pages.mobileSecurity.filter_ios') : t('pages.mobileSecurity.filter_android')}
+                {t(`pages.mobileSecurity.filter_${f}`)}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Apps List */}
+        {/* Apps list */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-white/10">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Filter className="w-4 h-4 text-cyan-400" />
+              <Smartphone className="w-4 h-4 text-cyan-400" />
               {t('pages.mobileSecurity.apps_heading')}
             </h3>
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              {t('pages.mobileSecurity.loading')}
-            </div>
+            <div className="p-4"><SkeletonTable rows={4} cols={4} /></div>
           ) : filteredApps.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              {t('pages.mobileSecurity.empty')}
+            <div className="p-4">
+              <EmptyState
+                compact
+                icon="search"
+                title={t('pages.mobileSecurity.apps_empty_title')}
+                body={t('pages.mobileSecurity.apps_empty_body')}
+              />
             </div>
           ) : (
             <div className="divide-y divide-white/5">
               {filteredApps.map((app) => (
-                <div
-                  key={app.id}
-                  className="p-4 hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div
-                          className={`flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium ${
+                <div key={app.id} className="p-4 hover:bg-white/5 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${
                             app.platform === 'ios'
-                              ? 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
-                              : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                              ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                              : app.platform === 'android'
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                : 'bg-white/5 text-white/50 border-white/10'
                           }`}
                         >
                           <Smartphone className="w-3 h-3" />
-                          {app.platform === 'ios' ? t('pages.mobileSecurity.platform_ios') : t('pages.mobileSecurity.platform_android')}
-                        </div>
-                        <h4 className="text-sm font-semibold text-white">{app.name}</h4>
-                        <span className="text-xs text-gray-500">{app.version}</span>
+                          {t(`pages.mobileSecurity.platform_${app.platform || 'unknown'}`, { defaultValue: app.platform })}
+                        </span>
+                        <h4 className="text-sm font-semibold text-white truncate">
+                          {app.name || app.package_id || '—'}
+                        </h4>
+                        {app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
                       </div>
-
-                      <div className="flex items-center gap-4 text-xs text-gray-400 mb-2">
-                        <span>{t('pages.mobileSecurity.package_label')} {app.package_id}</span>
+                      <div className="flex items-center gap-3 text-xs text-white/40 font-mono flex-wrap">
+                        <span className="truncate">{t('pages.mobileSecurity.package_label')} {app.package_id || '—'}</span>
                         <span>•</span>
-                        <span>{t('pages.mobileSecurity.size_label', { size: app.size_mb })}</span>
-                        <span>•</span>
-                        <span>{t('pages.mobileSecurity.last_scanned_label')} {app.last_scan || t('pages.mobileSecurity.last_scanned_never')}</span>
+                        <span>{t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
                       </div>
-
-                      {app.findings && app.findings.length > 0 && (
-                        <div className="flex items-center gap-2 mt-2">
-                          {['critical', 'high', 'medium', 'low'].map((severity) => {
-                            const count = app.findings.filter(
-                              (f) => f.severity?.toLowerCase() === severity
-                            ).length;
-                            if (count === 0) return null;
-                            return (
-                              <div
-                                key={severity}
-                                className={`px-2 py-1 rounded-md text-xs font-medium ${getSeverityColor(
-                                  severity
-                                )}`}
-                              >
-                                {t(`pages.mobileSecurity.severity_count_${severity}`, { count })}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleScan(app)}
                         disabled={!selectedClientId || (scanningAppId === app.id && Boolean(pendingJobId))}
-                        className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
+                        {scanningAppId === app.id && pendingJobId && <Loader2 className="w-3 h-3 animate-spin" />}
                         {scanningAppId === app.id && pendingJobId ? t('pages.mobileSecurity.scanning') : t('pages.mobileSecurity.scan_now')}
                       </button>
-                      <button className="px-3 py-1.5 bg-white/5 text-gray-300 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors">
-                        {t('pages.mobileSecurity.view_details')}
-                      </button>
+                      <Link
+                        to={`/findings?q=${encodeURIComponent(app.package_id || app.name || '')}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-white/60 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 hover:text-white/90 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        {t('pages.mobileSecurity.view_findings')}
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -317,20 +386,36 @@ export default function MobileSecurity() {
           )}
         </div>
 
-        {/* Upload New App */}
-        <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">{t('pages.mobileSecurity.upload_title')}</h3>
-              <p className="text-xs text-gray-400">
-                {t('pages.mobileSecurity.upload_body')}
-              </p>
+        {/* Recent mobile findings (real list) */}
+        <WeissmanFindingsPanel
+          findings={platformFindings}
+          filteredFindings={filteredFindings}
+          counts={counts}
+          total={platformFindings.length}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          severityFilter={severityFilter}
+          onSeverityChange={setSeverityFilter}
+          pending={Boolean(pendingJobId) && platformFindings.length === 0}
+          loading={(loading || historyLoading) && platformFindings.length === 0}
+          lastUpdated={lastUpdated}
+          jobId={pendingJobId || lastJobId}
+          accent="#22d3ee"
+          title={t('pages.mobileSecurity.recent_findings_heading')}
+          showEmptyReady={!loading && platformFindings.length === 0}
+          emptyReadyTitle={t('pages.mobileSecurity.findings_empty_title')}
+          renderFinding={(f) => (
+            <div key={f.id} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 flex items-start gap-3">
+              <SeverityBadge severity={f.severity} t={t} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white/85 truncate">{f.title || '—'}</p>
+                <p className="text-[10px] text-white/35 font-mono mt-0.5">
+                  {(f.platform || 'unknown')} · {f.status || 'open'}
+                </p>
+              </div>
             </div>
-            <button className="px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors">
-              {t('pages.mobileSecurity.choose_file')}
-            </button>
-          </div>
-        </div>
+          )}
+        />
       </div>
     </PageShell>
   );

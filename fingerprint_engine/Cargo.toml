@@ -6,7 +6,8 @@ rust-version = "1.91.1"
 description = "Active tech stack fingerprinting for threat intel correlation"
 
 [features]
-default = []
+default = ["live-aws"]
+live-aws = []
 numa = ["dep:hwlocality"]
 
 [dependencies]
@@ -72,6 +73,40 @@ aws-sdk-sts = "1.14"
 aws-sdk-s3 = "1.14"
 aws-sdk-ec2 = "1.14"
 aws-sdk-ssm = "1.14"
+aws-sdk-cloudtrail = "1.14"
+aws-sdk-rds = "1.14"
+aws-sdk-lambda = "1.14"
+aws-sdk-kms = "1.14"
+aws-sdk-accessanalyzer = "1.14"
+aws-sdk-guardduty = "1.14"
+aws-sdk-config = "1.14"
+aws-sdk-eks = "1.14"
+aws-sdk-elasticloadbalancingv2 = "1.14"
+aws-sdk-secretsmanager = "1.14"
+aws-sdk-sns = "1.14"
+aws-sdk-sqs = "1.14"
+aws-sdk-s3control = "1.14"
+aws-sdk-ecs = "1.14"
+aws-sdk-elasticache = "1.14"
+aws-sdk-ecr = "1.14"
+aws-sdk-acm = "1.14"
+aws-sdk-dynamodb = "1.14"
+aws-sdk-apigateway = "1.14"
+aws-sdk-apigatewayv2 = "1.14"
+aws-sdk-opensearch = "1.14"
+aws-sdk-cloudfront = "1.14"
+aws-sdk-route53 = "1.14"
+aws-sdk-eventbridge = "1.14"
+aws-sdk-wafv2 = "1.14"
+aws-sdk-cloudwatchlogs = "1.14"
+aws-sdk-redshift = "1.14"
+aws-sdk-docdb = "1.14"
+aws-sdk-neptune = "1.14"
+aws-sdk-memorydb = "1.14"
+aws-sdk-backup = "1.14"
+aws-sdk-organizations = "1.14"
+aws-sdk-sfn = "1.14"
+aws-sdk-ssoadmin = "1.14"
 aws-types = "1"
 tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
@@ -91,6 +126,8 @@ thiserror = "1"
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
 redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
+tokio-tungstenite = { version = "0.21", features = ["native-tls", "connect"] }
+native-tls = "0.2"
 opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["http-proto", "reqwest-client"] }

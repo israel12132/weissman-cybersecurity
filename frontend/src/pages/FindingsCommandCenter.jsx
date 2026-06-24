@@ -20,6 +20,7 @@ import FilterPills from '../components/ui/FilterPills'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import SeverityBadge, {
   SEVERITY_META,
   getSeverityMeta,
@@ -29,20 +30,22 @@ import SeverityBadge, {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FINDING_STATUSES = [
-  { value: 'OPEN',          label: 'Open',          color: '#ef4444' },
-  { value: 'ACKNOWLEDGED',  label: 'Acknowledged',  color: '#f59e0b' },
-  { value: 'IN_PROGRESS',   label: 'In Progress',   color: '#3b82f6' },
-  { value: 'FIXED',         label: 'Fixed',         color: '#22c55e' },
-  { value: 'FALSE_POSITIVE',label: 'False Positive',color: '#6b7280' },
+  { value: 'OPEN', labelKey: 'findings.status_open', color: '#ef4444' },
+  { value: 'ACKNOWLEDGED', labelKey: 'findings.status_acknowledged', color: '#f59e0b' },
+  { value: 'IN_PROGRESS', labelKey: 'findings.status_in_progress', color: '#3b82f6' },
+  { value: 'FIXED', labelKey: 'findings.status_fixed', color: '#22c55e' },
+  { value: 'FALSE_POSITIVE', labelKey: 'findings.status_false_positive', color: '#6b7280' },
 ]
 
-function getStatusMeta(s) {
-  return FINDING_STATUSES.find((x) => x.value === (s || '').toUpperCase()) ??
-    { value: s, label: s || '—', color: '#6b7280' }
+function getStatusMeta(s, t) {
+  const key = (s || '').toUpperCase()
+  const found = FINDING_STATUSES.find((x) => x.value === key)
+  if (found) return { ...found, label: t(found.labelKey) }
+  return { value: s, label: s || '—', color: '#6b7280' }
 }
 
-function StatusBadge({ status }) {
-  const meta = getStatusMeta(status)
+function StatusBadge({ status, t }) {
+  const meta = getStatusMeta(status, t)
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono"
@@ -53,19 +56,19 @@ function StatusBadge({ status }) {
   )
 }
 
-function VerifiedBadge({ verified }) {
+function VerifiedBadge({ verified, t }) {
   if (verified) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono"
         style={{ color: '#22c55e', backgroundColor: '#22c55e15', border: '1px solid #22c55e40' }}>
-        ✓ Verified
+        ✓ {t('findings.verified')}
       </span>
     )
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono"
       style={{ color: '#94a3b8', backgroundColor: '#94a3b810', border: '1px solid #94a3b830' }}>
-      Potential
+      {t('findings.potential')}
     </span>
   )
 }
@@ -159,11 +162,11 @@ function ScoreBadge({ score }) {
 
 const columnHelper = createColumnHelper()
 
-function buildColumns() {
+function buildColumns(t) {
   return [
     columnHelper.accessor('severity', {
       id: 'severity',
-      header: 'Severity',
+      header: t('findings.col_severity'),
       size: 100,
       sortingFn: (a, b) => {
         const ao = getSeverityOrder(a.getValue('severity'))
@@ -178,7 +181,7 @@ function buildColumns() {
       (row) => resolveEngine(row.source || row.engine).label,
       {
         id: 'engine',
-        header: 'Engine Name',
+        header: t('findings.col_engine'),
         size: 150,
         cell: ({ row, getValue }) => {
           const eng = resolveEngine(row.original.source || row.original.engine)
@@ -209,14 +212,14 @@ function buildColumns() {
     ),
     columnHelper.accessor('title', {
       id: 'title',
-      header: 'Title',
+      header: t('findings.col_title'),
       size: 280,
       cell: ({ getValue }) => (
         <span
           className="text-[12px] text-white/85 line-clamp-2 leading-snug"
           title={sanitizeFindingPlainText(getValue() || '', 512)}
         >
-          {sanitizeFindingPlainText(getValue() || 'Untitled', 128)}
+          {sanitizeFindingPlainText(getValue() || t('findings.untitled'), 128)}
         </span>
       ),
     }),
@@ -224,7 +227,7 @@ function buildColumns() {
       (row) => row.target || row.raw?.target || null,
       {
         id: 'target',
-        header: 'Target',
+        header: t('findings.col_target'),
         size: 220,
         enableSorting: false,
         cell: ({ getValue }) => {
@@ -245,7 +248,7 @@ function buildColumns() {
       },
       {
         id: 'mitre',
-        header: 'MITRE ATT&CK',
+        header: t('findings.col_mitre'),
         size: 130,
         cell: ({ getValue }) => <MitreBadge id={getValue()} />,
         enableSorting: false,
@@ -255,7 +258,7 @@ function buildColumns() {
       (row) => row.priority_score ?? row.risk_score ?? row.cvss_score ?? null,
       {
         id: 'priority',
-        header: 'Priority',
+        header: t('findings.col_priority'),
         size: 90,
         sortingFn: (a, b) => {
           const av = parseFloat(a.getValue('priority') ?? NaN)
@@ -286,7 +289,7 @@ function buildColumns() {
       (row) => row.seen_count ?? 1,
       {
         id: 'seen_count',
-        header: 'Seen',
+        header: t('findings.col_seen'),
         size: 70,
         cell: ({ getValue }) => {
           const n = getValue()
@@ -303,7 +306,7 @@ function buildColumns() {
       (row) => row.cvss_score ?? row.score ?? null,
       {
         id: 'score',
-        header: 'Score (CVSS)',
+        header: t('findings.col_score'),
         size: 100,
         sortingFn: (a, b) => {
           const av = parseFloat(a.getValue('score') ?? NaN)
@@ -321,7 +324,7 @@ function buildColumns() {
       (row) => (Array.isArray(row.compliance) ? row.compliance.length : 0),
       {
         id: 'compliance',
-        header: 'Compliance',
+        header: t('findings.col_compliance'),
         size: 110,
         enableSorting: false,
         cell: ({ row, getValue }) => {
@@ -329,7 +332,7 @@ function buildColumns() {
           const has = count > 0
           return (
             <span className="text-[11px] font-mono" style={{ color: has ? '#a78bfa' : 'rgba(255,255,255,0.25)' }}>
-              {has ? `${count} tag${count === 1 ? '' : 's'}` : '—'}
+              {has ? t('findings.compliance_tags', { count }) : '—'}
             </span>
           )
         },
@@ -337,24 +340,24 @@ function buildColumns() {
     ),
     columnHelper.accessor('status', {
       id: 'status',
-      header: 'Status',
+      header: t('findings.col_status'),
       size: 130,
-      cell: ({ getValue }) => <StatusBadge status={getValue()} />,
+      cell: ({ getValue }) => <StatusBadge status={getValue()} t={t} />,
       filterFn: (row, _id, filterValue) =>
         !filterValue || (row.original.status || '').toUpperCase() === filterValue,
     }),
     columnHelper.accessor('verified', {
       id: 'verified',
-      header: 'Verified',
+      header: t('findings.col_verified'),
       size: 100,
       enableSorting: false,
-      cell: ({ getValue }) => <VerifiedBadge verified={!!getValue()} />,
+      cell: ({ getValue }) => <VerifiedBadge verified={!!getValue()} t={t} />,
     }),
     columnHelper.accessor(
       (row) => row.discovered_at || row.created_at || null,
       {
         id: 'date',
-        header: 'Time / Date',
+        header: t('findings.col_date'),
         size: 160,
         cell: ({ getValue }) => (
           <span className="text-[11px] font-mono text-white/45 whitespace-nowrap">
@@ -426,9 +429,9 @@ export default function FindingsCommandCenter() {
         setRawFindings(list)
         setLastUpdated(new Date())
       })
-      .catch((e) => setError(e?.message || 'Failed to load findings'))
+      .catch((e) => setError(e?.message || t('findings.load_error')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [t])
 
   // Load findings and public config
   useEffect(() => {
@@ -456,13 +459,13 @@ export default function FindingsCommandCenter() {
           setSelectedFinding((prev) =>
             prev && matchesId(prev) ? { ...prev, status: d.status } : prev,
           )
-          toast.success(`Status updated → ${d.status}`)
+          toast.success(t('findings.toast_status_updated', { status: d.status }))
         } else {
-          toast.error(`Status update rejected: ${d?.detail || 'unknown error'}`)
+          toast.error(t('findings.toast_status_rejected', { detail: d?.detail || t('findings.unknown_error') }))
         }
       })
-      .catch((e) => toast.error(`Status update failed: ${e?.message || 'network error'}`))
-  }, [toast])
+      .catch((e) => toast.error(t('findings.toast_status_failed', { detail: e?.message || t('findings.network_error') })))
+  }, [toast, t])
 
   const handleExportCsv = useCallback(() => {
     apiFetch('/api/findings/export/csv')
@@ -480,12 +483,12 @@ export default function FindingsCommandCenter() {
         a.download = filename
         a.click()
         URL.revokeObjectURL(url)
-        toast.success(`Downloaded ${filename}`)
+        toast.success(t('findings.toast_export_ok', { filename }))
       })
-      .catch((e) => toast.error(`CSV export failed: ${e?.message || 'network error'}`))
-  }, [toast])
+      .catch((e) => toast.error(t('findings.toast_export_failed', { detail: e?.message || t('findings.network_error') })))
+  }, [toast, t])
 
-  const columns = useMemo(() => buildColumns(), [])
+  const columns = useMemo(() => buildColumns(t), [t])
 
   const tableData = useMemo(() => {
     if (!kevFilter) return rawFindings
@@ -609,6 +612,8 @@ export default function FindingsCommandCenter() {
       </header>
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+        <EvidenceNotice>{t('findings.evidence_notice')}</EvidenceNotice>
+
         <PremiumPageHeader
           title={t('findings.command_center_title')}
           subtitle={t('findings.command_center_subtitle')}
@@ -665,7 +670,7 @@ export default function FindingsCommandCenter() {
                 },
                 ...FINDING_STATUSES.map((s) => ({
                   id: `findings-filter-status-${s.value}`,
-                  label: s.label,
+                  label: t(s.labelKey),
                   count: statusCounts[s.value] || 0,
                   active: statusFilter === s.value,
                   color: s.color,

@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bell, Plus, Trash2, Edit, Play, Pause, Filter, AlertTriangle } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 /**
  * AlertRulesEngine - Custom alert rule creation and management
@@ -18,6 +23,7 @@ import { api } from '../utils/apiFetch';
  */
 export default function AlertRulesEngine() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, enabled, disabled
@@ -35,6 +41,7 @@ export default function AlertRulesEngine() {
       setRules(data.rules || []);
     } catch (error) {
       console.error('Failed to fetch alert rules:', error);
+      toast.error(t('pages.alertRulesEngine.load_failed', { defaultValue: 'Failed to load alert rules' }));
     } finally {
       setLoading(false);
     }
@@ -48,32 +55,48 @@ export default function AlertRulesEngine() {
       setRules((prev) =>
         prev.map((r) => (r.id === ruleId ? { ...r, enabled: !currentState } : r))
       );
+      toast.success(
+        currentState
+          ? t('pages.alertRulesEngine.rule_disabled', { defaultValue: 'Rule disabled' })
+          : t('pages.alertRulesEngine.rule_enabled', { defaultValue: 'Rule enabled' })
+      );
     } catch (error) {
       console.error('Failed to toggle rule:', error);
+      toast.error(t('pages.alertRulesEngine.toggle_failed', { defaultValue: 'Failed to update rule' }));
     }
   };
 
   const deleteRule = async (ruleId) => {
-    if (!confirm(t('pages.alertRulesEngine.delete_confirm'))) return;
+    const ok = await confirmDialog({
+      title: t('pages.alertRulesEngine.delete_title', { defaultValue: 'Delete alert rule?' }),
+      message: t('pages.alertRulesEngine.delete_confirm'),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/api/alerts/rules/${ruleId}`);
       setRules((prev) => prev.filter((r) => r.id !== ruleId));
+      toast.success(t('pages.alertRulesEngine.delete_success', { defaultValue: 'Alert rule deleted' }));
     } catch (error) {
       console.error('Failed to delete rule:', error);
+      toast.error(t('pages.alertRulesEngine.delete_failed', { defaultValue: 'Failed to delete rule' }));
     }
   };
 
   const testRule = async (ruleId) => {
     try {
       const result = await api.post(`/api/alerts/rules/${ruleId}/test`);
-      alert(
-        result.success
-          ? t('pages.alertRulesEngine.test_success', { count: result.matched })
-          : t('pages.alertRulesEngine.test_failed')
-      );
+      if (result.success) {
+        toast.success(t('pages.alertRulesEngine.test_success', { count: result.matched }));
+      } else {
+        toast.warning(t('pages.alertRulesEngine.test_failed'));
+      }
     } catch (error) {
       console.error('Failed to test rule:', error);
+      toast.error(t('pages.alertRulesEngine.test_error', { defaultValue: 'Failed to run rule test' }));
     }
   };
 
@@ -89,8 +112,44 @@ export default function AlertRulesEngine() {
     triggered: rules.reduce((sum, r) => sum + (r.triggered_count || 0), 0),
   };
 
+  const listFindings = useMemo(() => rules.map((r) => ({
+    id: r.id,
+    severity: r.enabled ? 'medium' : 'info',
+    title: r.name || r.id,
+    type: r.condition_type || 'alert_rule',
+    description: r.description || '',
+    resource: r.enabled ? 'enabled' : 'disabled',
+  })), [rules])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-alert-rules',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleRules = useMemo(() => {
+    if (!searchQuery.trim()) return filteredRules
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return filteredRules.filter((r) => ids.has(r.id))
+  }, [filteredRules, filteredFindings, searchQuery])
+
   return (
-    <PageShell title={t('pages.alertRulesEngine.title')} icon={<Bell />}>
+    <PageShell
+      title={t('pages.alertRulesEngine.title')}
+      icon={<Bell />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchRules}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -156,11 +215,17 @@ export default function AlertRulesEngine() {
 
         {/* Rules List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-cyan-400" />
               {t('pages.alertRulesEngine.rules_heading', { count: filteredRules.length })}
             </h3>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleRules.length}
+              totalCount={filteredRules.length}
+            />
           </div>
 
           {loading ? (
@@ -172,9 +237,11 @@ export default function AlertRulesEngine() {
             <div className="p-8 text-center text-gray-500">
               No alert rules found. Click "Create Rule" to get started.
             </div>
+          ) : visibleRules.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-white/5">
-              {filteredRules.map((rule) => (
+              {visibleRules.map((rule) => (
                 <div
                   key={rule.id}
                   className="p-4 hover:bg-white/5 transition-colors"
@@ -355,6 +422,8 @@ export default function AlertRulesEngine() {
  * Rule Create/Edit Modal
  */
 function RuleModal({ rule, template, onClose, onSave }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: rule?.name || template?.name || '',
     description: rule?.description || '',
@@ -373,9 +442,15 @@ function RuleModal({ rule, template, onClose, onSave }) {
       } else {
         await api.post('/api/alerts/rules', formData);
       }
+      toast.success(
+        rule
+          ? t('pages.alertRulesEngine.save_updated', { defaultValue: 'Alert rule updated' })
+          : t('pages.alertRulesEngine.save_created', { defaultValue: 'Alert rule created' })
+      );
       onSave();
     } catch (error) {
       console.error('Failed to save rule:', error);
+      toast.error(t('pages.alertRulesEngine.save_failed', { defaultValue: 'Failed to save alert rule' }));
     } finally {
       setSaving(false);
     }

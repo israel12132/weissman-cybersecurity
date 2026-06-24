@@ -16,28 +16,51 @@ macro_rules! cli_wrapper {
 }
 
 // ── satellite_recon ───────────────────────────────────────────────────────────
-// Public satellite-imagery providers expose coverage tiles for known hosts. We probe ArcGIS / OSM /
-// public sentinel STAC catalogs and report when imagery is accessible for the host's IP geometry.
+// Query a public geolocation API only when DNS resolves; report coordinates when the API returns them.
 pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
     let ips = dns_a(&host).await;
+    if ips.is_empty() {
+        return empty_ok("satellite_recon", target);
+    }
+    let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    if !ips.is_empty() {
-        findings.push(finding(
-            "satellite_recon",
-            "Host IP geolocation enumerable",
-            "info",
-            "T1591.001",
-            &format!(
-                "Public DNS resolves {} → {}. Coordinates queryable via WHOIS/RIR — review physical OPSEC.",
-                host,
-                ips.join(", ")
-            ),
-            target,
-        ));
+    for ip in ips.iter().take(2) {
+        let url = format!("http://ip-api.com/json/{}?fields=status,lat,lon,country,city", ip);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.status != 200 {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                if v.get("status").and_then(Value::as_str) != Some("success") {
+                    continue;
+                }
+                let lat = v.get("lat").and_then(Value::as_f64);
+                let lon = v.get("lon").and_then(Value::as_f64);
+                if lat.is_none() || lon.is_none() {
+                    continue;
+                }
+                findings.push(finding(
+                    "satellite_recon",
+                    "Host IP geolocation enumerable",
+                    "info",
+                    "T1591.001",
+                    &format!(
+                        "{} resolves to {} → lat={}, lon={} ({}, {}). Physical OPSEC / facility exposure review recommended.",
+                        host,
+                        ip,
+                        lat.unwrap_or(0.0),
+                        lon.unwrap_or(0.0),
+                        v.get("city").and_then(Value::as_str).unwrap_or(""),
+                        v.get("country").and_then(Value::as_str).unwrap_or("")
+                    ),
+                    target,
+                ));
+            }
+        }
     }
     if findings.is_empty() {
         empty_ok("satellite_recon", target)
@@ -197,19 +220,31 @@ pub async fn run_financial_osint_result(target: &str) -> EngineResult {
     );
     if let Some(p) = http_get(&client, &url).await {
         if p.status == 200 && p.body.contains("EDGAR") {
-            let has_filings =
-                p.body.to_lowercase().contains("annual report") || p.body.contains("10-K");
-            findings.push(finding(
-                "financial_osint",
-                "SEC EDGAR query reachable",
-                "info",
-                "T1591.002",
-                &format!(
-                    "EDGAR search returned 200 for company keyword '{}' (filings={}).",
-                    host, has_filings
-                ),
-                target,
-            ));
+            let body_low = p.body.to_lowercase();
+            let host_tokens: Vec<String> = host
+                .split('.')
+                .filter(|s| s.len() > 2)
+                .map(|s| s.to_lowercase())
+                .collect();
+            let has_filings = body_low.contains("annual report")
+                || body_low.contains("10-k")
+                || body_low.contains("10-q")
+                || host_tokens
+                    .iter()
+                    .any(|tok| !tok.is_empty() && body_low.contains(tok.as_str()));
+            if has_filings {
+                findings.push(finding(
+                    "financial_osint",
+                    "SEC EDGAR filings indexed for target keyword",
+                    "info",
+                    "T1591.002",
+                    &format!(
+                        "EDGAR search returned filings referencing '{}' — review 10-K/10-Q for subsidiary and acquisition intel.",
+                        host
+                    ),
+                    target,
+                ));
+            }
         }
     }
     if findings.is_empty() {
@@ -427,15 +462,28 @@ pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
     for u in urls.iter() {
         if let Some(p) = http_get(&client, u).await {
             if p.status == 200 {
-                findings.push(finding(
-                    "job_posting_osint",
-                    "Public job search reachable",
-                    "info",
-                    "T1591.004",
-                    &format!("Public job board reachable for keyword '{}' ({}).", host, u),
-                    target,
-                ));
-                break;
+                let body_low = p.body.to_ascii_lowercase();
+                let mentions_target = host
+                    .split('.')
+                    .filter(|s| s.len() > 2)
+                    .any(|tok| body_low.contains(&tok.to_ascii_lowercase()));
+                if mentions_target
+                    || body_low.contains("job")
+                        && (body_low.contains("engineer") || body_low.contains("security"))
+                {
+                    findings.push(finding(
+                        "job_posting_osint",
+                        "Public job listings mention target org or role",
+                        "info",
+                        "T1591.004",
+                        &format!(
+                            "Job board {} returned listings referencing '{}' — review stack/infra hints in postings.",
+                            u, host
+                        ),
+                        target,
+                    ));
+                    break;
+                }
             }
         }
     }
@@ -484,19 +532,36 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let url = format!(
-        "https://urlhaus.abuse.ch/api/?{}=",
+        "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
         urlencoding::encode(&host)
     );
     if let Some(p) = http_get(&client, &url).await {
-        if p.status == 200 && p.body.to_ascii_lowercase().contains("urlhaus") {
-            findings.push(finding(
-                "threat_intel_fusion",
-                "URLhaus reachable for cross-reference",
-                "info",
-                "T1597",
-                "Abuse.ch URLhaus API reachable — supply WEISSMAN_URLHAUS_KEY for lookups.",
-                target,
-            ));
+        if p.status == 200 {
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                let listed = v
+                    .get("query_status")
+                    .and_then(Value::as_str)
+                    .map(|s| s.eq_ignore_ascii_case("ok"))
+                    .unwrap_or(false);
+                let url_count = v
+                    .get("urls")
+                    .and_then(Value::as_array)
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if listed && url_count > 0 {
+                    findings.push(finding(
+                        "threat_intel_fusion",
+                        &format!("URLhaus lists {} malicious URL(s) for host", url_count),
+                        "high",
+                        "T1597",
+                        &format!(
+                            "Abuse.ch URLhaus hostinfo returned {} URL(s) for {} — cross-check for malware delivery or C2.",
+                            url_count, host
+                        ),
+                        target,
+                    ));
+                }
+            }
         }
     }
     if findings.is_empty() {
@@ -517,6 +582,9 @@ pub async fn run_attack_surface_quantify_result(target: &str) -> EngineResult {
     }
     let asm = crate::asm_engine::run_asm_result(target).await;
     let cnt = asm.findings.len();
+    if cnt == 0 {
+        return empty_ok("attack_surface_quantify", target);
+    }
     let mut findings = asm.findings.clone();
     findings.push(finding(
         "attack_surface_quantify",
@@ -566,6 +634,12 @@ pub async fn run_dark_web_monitor_result(target: &str) -> EngineResult {
 cli_wrapper!(run_dark_web_monitor, run_dark_web_monitor_result);
 
 // ── passive_dns_forensics ─────────────────────────────────────────────────────
+/// True when at least one DNS record set is non-empty.
+#[must_use]
+fn passive_dns_has_records(a: &[String], mx: &[String], txt: &[String]) -> bool {
+    !a.is_empty() || !mx.is_empty() || !txt.is_empty()
+}
+
 pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -575,6 +649,9 @@ pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
     let a = dns_a(&host).await;
     let txt = dns_txt(&host).await;
     let mx = dns_mx(&host).await;
+    if !passive_dns_has_records(&a, &mx, &txt) {
+        return empty_ok("passive_dns_forensics", target);
+    }
     findings.push(finding(
         "passive_dns_forensics",
         &format!("Passive DNS snapshot for {}", host),
@@ -599,4 +676,16 @@ cli_wrapper!(run_passive_dns_forensics, run_passive_dns_forensics_result);
 #[inline]
 fn _unused(h: &[(String, String)]) -> bool {
     header_value(h, "x").is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn passive_dns_requires_at_least_one_record_set() {
+        assert!(!passive_dns_has_records(&[], &[], &[]));
+        assert!(passive_dns_has_records(&["1.2.3.4".into()], &[], &[]));
+        assert!(passive_dns_has_records(&[], &["mx.example.com".into()], &[]));
+    }
 }

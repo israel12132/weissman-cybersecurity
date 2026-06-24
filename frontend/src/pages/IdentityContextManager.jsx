@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, Shield, Key, AlertTriangle, CheckCircle, Clock, X } from 'lucide-react';
+import { Users, Shield, Key, AlertTriangle, Clock, X, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
@@ -64,9 +68,80 @@ export default function IdentityContextManager() {
     anomalies: identities.reduce((sum, i) => sum + (i.anomaly_count || 0), 0),
   };
 
+  const listFindings = useMemo(() => identities.map((i) => ({
+    id: i.id,
+    severity: i.risk_score >= 75 ? 'critical' : i.risk_score >= 50 ? 'high' : 'info',
+    title: i.username || i.email || i.id,
+    type: i.is_privileged ? 'privileged' : 'identity',
+    description: `Risk ${i.risk_score ?? 0}`,
+    resource: String(i.anomaly_count ?? 0),
+  })), [identities])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-identities',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleIdentities = useMemo(() => {
+    if (!searchQuery.trim()) return identities
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return identities.filter((i) => ids.has(i.id))
+  }, [identities, filteredFindings, searchQuery])
+
+  const reloadIdentities = () => {
+    if (clientId != null) fetchIdentities(clientId)
+  }
+
   return (
-    <PageShell title={t('pages.identityContextManager.title')} icon={<Users />}>
+    <PageShell
+      title={t('pages.identityContextManager.title')}
+      icon={<Users />}
+      actions={(
+        <ShellScanActions
+          onRefresh={reloadIdentities}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-violet-950/30 p-5"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
+                <Shield className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">
+                  {t('pages.identityContextManager.oauth_hub_title', { defaultValue: 'OAuth / OIDC / SSO Posture Assessment' })}
+                </h3>
+                <p className="text-xs text-gray-400 max-w-xl">
+                  {t('pages.identityContextManager.oauth_hub_body', {
+                    defaultValue: 'Run agentless identity-provider discovery, JWKS analysis, live authorization probing, and account-takeover attack-path synthesis.',
+                  })}
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/identity-security"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-sm font-medium hover:bg-cyan-500/30 transition-colors shrink-0"
+            >
+              {t('pages.identityContextManager.oauth_hub_cta', { defaultValue: 'Open Identity Security Center' })}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </motion.div>
+
         {/* Error Banner */}
         {error && (
           <motion.div
@@ -146,11 +221,17 @@ export default function IdentityContextManager() {
 
         {/* Identities List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
               {t('pages.identityContextManager.identities_heading', { count: identities.length })}
             </h3>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleIdentities.length}
+              totalCount={identities.length}
+            />
           </div>
 
           {loading ? (
@@ -172,9 +253,11 @@ export default function IdentityContextManager() {
               <p className="text-sm text-gray-400 mb-2">{t('pages.identityContextManager.empty_title')}</p>
               <p className="text-xs text-gray-500">{t('pages.identityContextManager.empty_body')}</p>
             </motion.div>
+          ) : visibleIdentities.length === 0 ? (
+            <div className="p-12 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-white/5 max-h-[70vh] overflow-y-auto">
-              {identities.map((identity, index) => (
+              {visibleIdentities.map((identity, index) => (
                 <motion.div
                   key={identity.id}
                   initial={{ opacity: 0, x: -20 }}

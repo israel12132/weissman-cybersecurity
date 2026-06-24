@@ -290,7 +290,11 @@ pub async fn run_password_hash_crack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_password_hash_crack, run_password_hash_crack_result);
 
 pub async fn run_oauth_advanced_attack_result(t: &str) -> EngineResult {
-    crate::oauth_oidc_engine::run_oauth_oidc_result(t).await
+    crate::oauth_oidc_engine::run_oauth_oidc_result(
+        t,
+        &crate::engine_dispatch::EngineRunContext::default(),
+    )
+    .await
 }
 cli_wrapper!(run_oauth_advanced_attack, run_oauth_advanced_attack_result);
 

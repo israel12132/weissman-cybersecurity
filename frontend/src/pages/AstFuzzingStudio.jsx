@@ -1,17 +1,42 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Braces, FlaskConical, Loader2, Play, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import CopyButton from '../components/ui/CopyButton'
 import { apiFetch } from '../lib/apiBase'
+
+const PRESETS = [
+  { id: 'json', value: '{"id":1,"name":"alice","enabled":true,"tags":["a","b"]}' },
+  { id: 'array', value: '[{"role":"admin"},{"role":"user"},{"role":"guest"}]' },
+  { id: 'form', value: 'username=admin&password=secret&remember=1&role=user' },
+]
+
+const MAX_LIMIT = 2000
+
+function classifyPayload(text) {
+  const s = String(text || '').trim()
+  if (!s) return 'empty'
+  try {
+    JSON.parse(s)
+    return 'json'
+  } catch {
+    return 'raw'
+  }
+}
 
 export default function AstFuzzingStudio() {
   const { t } = useTranslation()
-  const [payload, setPayload] = useState('{"id":1,"name":"alice","enabled":true,"tags":["a","b"]}')
+  const [payload, setPayload] = useState(PRESETS[0].value)
   const [maxMutations, setMaxMutations] = useState(200)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
   const canRun = useMemo(() => !!String(payload || '').trim(), [payload])
+  const payloadKind = useMemo(() => classifyPayload(payload), [payload])
 
   const run = useCallback(async () => {
     if (!canRun) return
@@ -19,13 +44,11 @@ export default function AstFuzzingStudio() {
     setError('')
     setResult(null)
     try {
+      const clamped = Math.min(Math.max(Number(maxMutations) || 200, 1), MAX_LIMIT)
       const r = await apiFetch('/api/fuzz/ast-preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payload,
-          max_mutations: Number(maxMutations) || 200,
-        }),
+        body: JSON.stringify({ payload, max_mutations: clamped }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.astFuzzingStudio.preview_failed'))
@@ -37,43 +60,129 @@ export default function AstFuzzingStudio() {
     }
   }, [canRun, payload, maxMutations, t])
 
+  const mutations = useMemo(() => (Array.isArray(result?.mutations) ? result.mutations : []), [result])
+
+  const mutationFindings = useMemo(() => mutations.map((m, i) => ({
+    title: `Mutation ${i + 1}`,
+    type: 'ast_mutation',
+    severity: 'info',
+    description: String(m),
+  })), [mutations])
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(mutationFindings, { csvPrefix: 'weissman-ast-mutations' })
+
+  const handleRefresh = useCallback(() => {
+    if (result) run()
+  }, [result, run])
+
+  const allText = useMemo(() => mutations.join('\n'), [mutations])
+
   return (
     <PageShell
       title={t('pages.astFuzzingStudio.title')}
       badge={t('pages.astFuzzingStudio.badge')}
       badgeColor="#f59e0b"
       subtitle={t('pages.astFuzzingStudio.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleRefresh}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          refreshDisabled={!result}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
-            {t('pages.astFuzzingStudio.input')}
-          </h3>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Input panel */}
+        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest flex items-center gap-2">
+              <Braces className="w-3.5 h-3.5 text-amber-300/70" />
+              {t('pages.astFuzzingStudio.input')}
+            </h3>
+            <span
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
+              style={
+                payloadKind === 'json'
+                  ? { color: '#34d399', borderColor: '#34d39940', background: '#34d39912' }
+                  : { color: '#fbbf24', borderColor: '#fbbf2440', background: '#fbbf2412' }
+              }
+            >
+              {payloadKind === 'json'
+                ? t('pages.astFuzzingStudio.json_valid')
+                : t('pages.astFuzzingStudio.json_invalid')}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-white/35 leading-relaxed">{t('pages.astFuzzingStudio.input_hint')}</p>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
+              {t('pages.astFuzzingStudio.presets_label')}
+            </span>
+            {PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPayload(p.value)}
+                className="px-2 py-1 rounded-md text-[10px] font-mono border border-white/10 text-white/55 hover:text-amber-200 hover:border-amber-500/30 transition-colors"
+              >
+                {t(`pages.astFuzzingStudio.preset_${p.id}`)}
+              </button>
+            ))}
+          </div>
+
           <textarea
             value={payload}
             onChange={(e) => setPayload(e.target.value)}
-            rows={14}
-            className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/70 font-mono focus:outline-none focus:border-amber-500/40"
+            rows={12}
+            spellCheck={false}
+            className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/75 font-mono focus:outline-none focus:border-amber-500/40 ltr-only"
           />
+
           <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-[11px] font-mono text-white/30 flex items-center gap-2">
+            <label className="text-[11px] font-mono text-white/40 flex items-center gap-2">
               {t('pages.astFuzzingStudio.max_mutations')}
               <input
                 type="number"
+                min={1}
+                max={MAX_LIMIT}
                 value={maxMutations}
                 onChange={(e) => setMaxMutations(e.target.value)}
-                className="w-24 rounded-lg bg-black/60 border border-white/10 px-2 py-1 text-[11px] text-white/70 font-mono focus:outline-none focus:border-amber-500/40"
+                className="w-24 rounded-lg bg-black/60 border border-white/10 px-2 py-1 text-[11px] text-white/75 font-mono focus:outline-none focus:border-amber-500/40"
               />
             </label>
             <button
               type="button"
               disabled={!canRun || loading}
               onClick={run}
-              className="px-4 py-2 rounded-xl border border-amber-500/30 text-amber-300/70 text-[12px] font-mono uppercase hover:bg-amber-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-500/30 text-amber-300/80 text-[12px] font-mono uppercase hover:bg-amber-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
               {loading ? t('pages.astFuzzingStudio.generating') : t('pages.astFuzzingStudio.generate')}
             </button>
+            {payload && (
+              <button
+                type="button"
+                onClick={() => setPayload('')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-white/45 text-[12px] font-mono hover:text-white/80 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {t('pages.astFuzzingStudio.clear')}
+              </button>
+            )}
           </div>
+
           {error && (
             <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-200">
               {error}
@@ -81,31 +190,53 @@ export default function AstFuzzingStudio() {
           )}
         </div>
 
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
-            {t('pages.astFuzzingStudio.mutations')}
-          </h3>
-          {!result ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="text-[11px] font-mono text-white/25">
-                {t('pages.astFuzzingStudio.preview_empty')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="text-[11px] text-white/35">
-                {t('pages.astFuzzingStudio.count')}{' '}
-                <span className="font-mono text-amber-300/80">{result.count}</span>
+        {/* Output panel */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest flex items-center gap-2">
+              <FlaskConical className="w-3.5 h-3.5 text-amber-300/70" />
+              {t('pages.astFuzzingStudio.mutations')}
+            </h3>
+            {mutations.length > 0 && (
+              <CopyButton value={allText} size="md" label={t('pages.astFuzzingStudio.copy_all')} />
+            )}
+          </div>
+
+          <WeissmanFindingsPanel
+            findings={mutationFindings}
+            filteredFindings={filteredFindings}
+            counts={counts}
+            total={total}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            severityFilter={severityFilter}
+            onSeverityChange={setSeverityFilter}
+            loading={loading && !mutationFindings.length}
+            pending={loading && !mutationFindings.length}
+            accent="#f59e0b"
+            title={t('pages.astFuzzingStudio.mutations')}
+            emptyTitle={t('pages.astFuzzingStudio.mutations')}
+            emptyBody={t('pages.astFuzzingStudio.preview_empty')}
+            showEmptyReady={!loading && !result}
+            emptyReadyTitle={t('pages.astFuzzingStudio.mutations')}
+            emptyReadyBody={t('pages.astFuzzingStudio.preview_empty')}
+            renderFinding={(f, i) => (
+              <div
+                key={i}
+                className="group flex items-start gap-2 px-3 py-2 rounded-lg border border-white/10 bg-black/30 hover:bg-white/[0.02]"
+              >
+                <span className="shrink-0 text-[10px] font-mono text-white/20 tabular-nums pt-0.5 w-8 text-right">
+                  {i + 1}
+                </span>
+                <code className="flex-1 min-w-0 text-[11px] font-mono text-white/70 break-words ltr-only">
+                  {f.description}
+                </code>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <CopyButton value={f.description} size="sm" />
+                </span>
               </div>
-              <div className="rounded-xl border border-white/10 bg-black/50 p-3 h-[420px] overflow-auto space-y-2">
-                {(result.mutations || []).map((m, i) => (
-                  <div key={i} className="text-[11px] font-mono text-white/70 break-words border-b border-white/5 pb-2">
-                    {m}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
+          />
         </div>
       </div>
     </PageShell>

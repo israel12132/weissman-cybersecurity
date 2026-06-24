@@ -142,6 +142,7 @@
     "client_detail": "Client Details",
     "threat_hunting": "ציד איומים",
     "threat_analysis": "ניתוח איומים מאוחד",
+    "engine_reliability": "אמינות מנועים",
     "dark_web": "Dark Web Monitor",
     "intel_map": "Global Intel Map",
     "incident_response": "תגובה לאירועים",
@@ -153,9 +154,31 @@
     "roe_approvals": "RoE Approvals",
     "remediation": "Remediation Hub",
     "cloud": "Cloud Control Tower",
+    "cloud_posture": "Cloud Posture (CSPM)",
+    "iac_security": "אבטחת תשתית כקוד (IaC)",
+    "attack_surface": "משטח תקיפה חיצוני (EASM)",
+    "dns_posture": "מצב אבטחת DNS ודומיין",
+    "cache_posture": "מצב אבטחת Cache",
+    "http_smuggling": "HTTP Smuggling & Desync",
+    "transport_security": "מרכז פיקוד אבטחת Transport",
+    "tls_posture": "TLS Posture",
+    "detection_surface": "משטח זיהוי והתחמקות",
+    "waf_bypass": "מעבדת WAF Bypass",
+    "websocket_security": "אבטחת WebSocket",
+    "email_posture": "אמון דואר ודומיין",
+    "identity_security": "אבטחת זהות ו-SSO",
+    "kerberos_security": "AD ו-Kerberos",
+    "smb_netbios": "אבטחת SMB / NetBIOS",
+    "password_spray": "תנוחת Password Spray",
+    "saml_security": "SAML ו-SSO Federation",
+    "graphql_security": "אבטחת GraphQL ו-API",
+    "serverless_security": "אבטחת Serverless",
+    "cicd_security": "אבטחת CI/CD",
     "supply_chain": "Supply Chain",
     "network": "Network Intelligence",
     "pqc_radar": "PQC Radar",
+    "jwt_lab": "מעבדת תקיפת JWT",
+    "file_upload_lab": "מעבדת אבטחת העלאת קבצים",
     "oast": "OAST / OOB",
     "oob_verify": "OOB Verification",
     "digital_twin": "Digital Twin",
@@ -277,6 +300,10 @@
     "pick_playbook": "בחר מדריך משמאל, או לחץ על + מדריך חדש.",
     "loaded_example": "תבנית דוגמה נטענה. ערוך ושמור.",
     "json_source": "טריגר ופעולות (JSON)",
+    "evidence_notice": "מדריכים והיסטוריית ריצות מ-GET /api/playbooks — כללים מופעלים רק על אירועי ממצאים חיים.",
+    "library_search": "חפש בספרייה…",
+    "export_json_playbook": "ייצא JSON",
+    "no_library_match": "אין מדריכים התואמים לחיפוש.",
     "json_invalid": "JSON לא תקין",
     "saving": "שומר…",
     "actions_ok": "{{ok}}/{{total}} הצליחו · {{failed}} נכשלו"
@@ -287,6 +314,7 @@
     "clients_heading": "לקוחות",
     "clients_count": "לקוח אחד מוגדר",
     "clients_count_plural": "{{count}} לקוחות מוגדרים",
+    "search_placeholder": "חיפוש לפי שם, אימייל או מזהה…",
     "no_clients_title": "אין לקוחות עדיין",
     "no_clients_body": "התחל בהוספת ארגון הלקוח הראשון שלך.",
     "loading_clients": "טוען לקוחות…",
@@ -335,7 +363,8 @@
     "ale_crown": "ALE/שנה: {{ale}} · crown: {{crown}}",
     "view": "View",
     "manage": "Manage →",
-    "delete_client": "Delete"
+    "delete_client": "Delete",
+    "evidence_notice": "רoster לקוחות מ-GET /api/clients. blast-radius FAIR מ-GET /api/financial-risk/:clientId (חישוב מחדש: ?recompute=1). סריקות baseline נשלחות לתור ב-POST /api/clients/:id/scan/run-all — רק רשומות חיות מוגבלות ל-tenant."
   },
   "auth": {
     "tenant_slug": "מזהה ארגון",
@@ -388,6 +417,7 @@
     "checking": "בודק מערכות…",
     "last_checked": "נבדק לאחרונה",
     "components": "רכיבים",
+    "search_components": "חיפוש ברכיבי הפלטפורמה…",
     "api_auth": "API / אימות",
     "engine_registry": "מנועי סריקה",
     "endpoint_agents": "סוכני קצה",
@@ -415,7 +445,19 @@
     "no_incidents": "No incidents observed during this session.",
     "ongoing": "Ongoing",
     "resolved_at": "Resolved {{time}}",
-    "active_engines": "{{count}} engines enabled in default tenant"
+    "active_engines": "{{count}} engines enabled in default tenant",
+    "evidence_notice": "בדיקות חיות: GET /api/health, GET /api/engines/production, GET /api/engines/top-tier/audit, GET /api/agents/status (אופציונלי עם auth). מתרענן כל 30 שניות.",
+    "detail_api_ok": "HTTP {{status}} · {{ms}} ms",
+    "detail_api_fail": "HTTP {{status}}",
+    "detail_db_ok": "PostgreSQL זמין",
+    "detail_db_fail": "PostgreSQL לא זמין",
+    "detail_db_missing": "חסר postgres_ok בתשובת health",
+    "detail_scan_active": "{{count}} מחזורי טננט פעילים",
+    "detail_scan_enabled": "סריקה מופעלת",
+    "detail_scan_paused": "סריקה מושהית",
+    "detail_engines_ok": "{{production}} production · {{catalog}} קטלוג",
+    "detail_agents_online": "{{online}}/{{total}} מקוונים",
+    "detail_http": "HTTP {{status}}"
   },
   "engines": {
     "title": "רשת מנועים",
@@ -502,7 +544,12 @@
     "catalog_matrix_link": "Engine Matrix (full view)",
     "catalog_threat_intel_link": "Threat Intel Hub (MITRE map)",
     "catalog_engines_count": "{{count}} engines",
-    "catalog_group_selected": "{{selected}}/{{total}} selected"
+    "catalog_group_selected": "{{selected}}/{{total}} נבחרו",
+    "catalog_lens_notice": "פרופילי תעשייה הם עדשות UX על קטלוג המנועים. דגלי Production: {{production}} מנועי production · {{capabilities}} רשומות מ-GET /api/engines/capabilities. תגי Telemetry מציגים סטטיסטיקות הרצה אמיתיות.",
+    "catalog_remote_detection": "REMOTE",
+    "catalog_production_only": "Production בלבד",
+    "catalog_remote_only": "Remote detection",
+    "evidence_notice": "מנועי production מ-GET /api/engines/production ומטריצת יכולות מ-GET /api/engines/capabilities. היסטוריה לפי מנוע: GET /api/engines/history/:engineId. סריקות נשלחות לתור ב-POST /api/command-center/scan ו-POST /api/scan/all-engines — ללא טלמטריה מזויפת."
   },
   "findings": {
     "title": "ממצאים",
@@ -529,7 +576,35 @@
     "live_badge": "חי",
     "loading_findings": "טוען ממצאים…",
     "verified": "מאומת",
-    "potential": "פוטנציאלי"
+    "potential": "פוטנציאלי",
+    "evidence_notice": "כל שורה היא ממצא חי מ-GET /api/findings. עדכון סטטוס נשמר ב-PATCH /api/findings/:id/status. ייצוא CSV מ-GET /api/findings/export/csv — ללא תוצאות מדומות.",
+    "col_severity": "חומרה",
+    "col_engine": "מנוע",
+    "col_title": "כותרת",
+    "col_target": "יעד",
+    "col_mitre": "MITRE ATT&CK",
+    "col_priority": "עדיפות",
+    "col_seen": "נצפה",
+    "col_score": "ציון (CVSS)",
+    "col_compliance": "רגולציה",
+    "col_status": "סטטוס",
+    "col_verified": "מאומת",
+    "col_date": "זמן / תאריך",
+    "untitled": "ללא כותרת",
+    "compliance_tags": "{{count}} תגיות",
+    "status_open": "פתוח",
+    "status_acknowledged": "מוכר",
+    "status_in_progress": "בטיפול",
+    "status_fixed": "תוקן",
+    "status_false_positive": "False Positive",
+    "load_error": "טעינת ממצאים נכשלה",
+    "network_error": "שגיאת רשת",
+    "unknown_error": "שגיאה לא ידועה",
+    "toast_status_updated": "סטטוס עודכן → {{status}}",
+    "toast_status_rejected": "עדכון סטטוס נדחה: {{detail}}",
+    "toast_status_failed": "עדכון סטטוס נכשל: {{detail}}",
+    "toast_export_ok": "הורד {{filename}}",
+    "toast_export_failed": "ייצוא CSV נכשל: {{detail}}"
   },
   "vuln_intel": {
     "title": "מודיעין חולשות",
@@ -549,7 +624,9 @@
     "failed_title": "טעינת הממצאים נכשלה",
     "showing_first": "מציג 200 ראשונים מתוך {{count}} ממצאים — צמצם סינון.",
     "open_evidence": "פתח מגירת ראיות",
-    "live_badge": "חי"
+    "live_badge": "חי",
+    "evidence_notice": "שורות מקושרות CVE נטענות חי מ-GET /api/findings — ללא קטלוג חולשות מזויף.",
+    "export_csv": "ייצא CSV"
   },
   "client_detail": {
     "title": "פרטי לקוח",
@@ -596,6 +673,7 @@
   "agents": {
     "title": "סוכני קצה",
     "subtitle": "צור טוקן רישום חד-פעמי, העתק את פקודת ההתקנה, והפעל אותה על נקודת הקצה.",
+    "badge": "AGENTS",
     "registered_count": "{{total}} רשומים",
     "online_count": "{{count}} מחוברים",
     "issue_token": "הפק טוקן רישום",
@@ -607,12 +685,47 @@
     "linux_macos": "Linux / macOS",
     "windows_ps": "Windows PowerShell (מנהל)",
     "no_agents": "אין סוכנים רשומים עדיין. צור טוקן ובצע את פקודת ההתקנה על נקודת קצה.",
+    "no_agents_title": "אין סוכנים רשומים",
     "version": "גרסה",
     "last_seen": "נראה לאחרונה",
     "caps": "{{count}} יכולות",
     "fleet_dispatch": "שגר צי (30 מנועים)",
     "fleet_dispatching": "שולח לצי…",
-    "select_client_first": "בחר לקוח תחילה"
+    "select_client_first": "בחר לקוח תחילה",
+    "load_failed": "טעינת סוכנים נכשלה (HTTP {{status}})",
+    "refresh": "רענן",
+    "live_on": "דגימה חיה פעילה",
+    "live_off": "דגימה חיה כבויה",
+    "kpi_registered": "רשומים",
+    "kpi_online": "מחוברים",
+    "kpi_offline": "מנותקים",
+    "kpi_capabilities": "יכולות",
+    "kpi_clients": "{{count}} לקוחות",
+    "filter_all": "הכל",
+    "filter_online": "מחוברים",
+    "filter_offline": "מנותקים",
+    "registered_heading": "סוכנים רשומים",
+    "col_status": "סטטוס",
+    "col_client": "לקוח",
+    "col_hostname": "Hostname",
+    "col_os": "OS / Arch",
+    "detail_heading": "פרטי סוכן",
+    "detail_hint": "בחר שורת סוכן לצפייה ביכולות ומטא-דאטה.",
+    "agent_id": "מזהה סוכן",
+    "capabilities_heading": "יכולות",
+    "no_capabilities": "לא דווחו יכולות",
+    "open_baseline": "צפה ב-baseline & drift →",
+    "status_online": "מחובר",
+    "status_offline": "מנותק",
+    "status_never": "לא נרשם",
+    "never_seen": "אף פעם",
+    "unknown": "לא ידוע",
+    "time_seconds": "לפני {{count}}ש׳",
+    "time_minutes": "לפני {{count}}דק׳",
+    "time_hours": "לפני {{count}}שע׳",
+    "time_days": "לפני {{count}}י",
+    "no_filter_title": "אין סוכנים תואמים",
+    "no_filter_body": "נסה מסנן סטטוס אחר."
   },
   "system_config": {
     "title": "הגדרות מערכת",
@@ -676,7 +789,191 @@
     "last_page": "Last page",
     "empty_title": "No audit entries",
     "empty_body": "No matching audit entries. Try a different filter, or perform an action (login, create client) and refresh.",
-    "load_error": "Failed to load audit log"
+    "load_error": "Failed to load audit log",
+    "evidence_notice": "שורות audit append-only מ-GET /api/audit-logs — מוגבל ל-tenant, ללא אירועי אבטחה סינתטיים.",
+    "kpi_shown": "מוצגים (עמוד זה)",
+    "kpi_denied": "נדחו / נכשלו (עמוד)",
+    "kpi_total": "סה\"כ תואמים"
+  },
+  "graphqlSec": {
+    "title": "מרכז שליטה לאבטחת GraphQL ו-API",
+    "subtitle": "מיפוי משטח תקיפה של GraphQL ללא סוכן — introspection, שחזור סכמה, ניתוח DoS ו-CSRF, מדורג מול OWASP API Top-10",
+    "hero_desc": "הערכה מרחוק מבוססת-ראיות בלבד: כל ממצא נתמך בתצפית HTTP אמיתית. לעולם לא מבוצעות mutations.",
+    "params_badge": "פרמטרים חיים",
+    "control_column": "עמודת שליטה לאבטחת API",
+    "sec_target": "קישור יעד",
+    "sec_scope": "היקף בדיקה",
+    "sec_dos_probes": "בדיקות DoS וניצול",
+    "sec_transport_probes": "בדיקות תעבורה ו-CSRF",
+    "sec_auth": "מישור אימות",
+    "sec_bola": "כוונון BOLA / IDOR",
+    "sec_advanced": "בדיקות API מתקדמות",
+    "executive_summary": "סיכום מנהלים",
+    "compliance_scorecard": "כרטיס ציונים OWASP API",
+    "remediation_priorities": "תעדוף תיקונים",
+    "sec_final": "בדיקות סבב סופי",
+    "export_pdf": "ייצוא PDF",
+    "export_json": "ייצוא JSON",
+    "probe_components": "רכיבי בדיקה",
+    "sec_endpoints": "משטח Endpoints",
+    "sec_dos": "כוונון DoS",
+    "sec_recon": "שחזור סכמה",
+    "sec_transport": "תעבורה / HTTP",
+    "sec_output": "פלט ומצב",
+    "sec_payload": "תצוגה מקדימה של ה-Payload",
+    "add_header": "הוסף header",
+    "hide_json": "הסתר JSON",
+    "show_json": "הצג את ה-JSON המדויק",
+    "running": "בודק API…",
+    "run": "הרץ סריקת אבטחת API",
+    "dry_run": "תוכנית הרצה יבשה (ללא בקשות)",
+    "schema_viz": "גרף סכמה חי",
+    "exposure_score": "ציון חשיפת API",
+    "attack_paths": "נתיבי תקיפה (צירופים רעילים)",
+    "telemetry": "טלמטריית סריקה",
+    "awaiting": "ממתין להערכה…",
+    "findings": "ממצאים"
+  },
+  "cicdSec": {
+    "title": "מרכז שליטה לאבטחת צינור CI/CD",
+    "subtitle": "DevSecOps ללא סוכן ברמת Wiz / Prisma / GitHub Advanced Security — זיהוי פלטפורמות CI, ניתוח סטטי של workflows, דליפת סודות וסינתזת נתיבי תקיפה",
+    "hero_desc": "מבוסס-ראיות בלבד: כל ממצא דורש אות HTTP/API חי או artifact של pipeline שנמשך. ללא תוצאות מומצאות.",
+    "params_badge": "פרמטרים חיים",
+    "control_column": "עמודת שליטה DevSecOps",
+    "sec_target": "קישור יעד",
+    "sec_scope": "היקף בדיקה",
+    "sec_platforms": "פלטפורמות CI/CD",
+    "sec_repo": "מישור Repository",
+    "sec_auth": "אימות",
+    "sec_paths": "דריסת נתיבים",
+    "sec_compliance": "מיפוי תאימות",
+    "sec_transport": "תעבורה ומגבלות",
+    "sec_payload": "תצוגה מקדימה של Payload",
+    "hide_json": "הסתר JSON",
+    "show_json": "הצג JSON מדויק",
+    "running": "בודק CI/CD…",
+    "run": "הרץ סריקת DevSecOps",
+    "dry_run": "תוכנית הרצה יבשה (ללא בקשות)",
+    "graph_viz": "גרף תקיפת Supply Chain",
+    "posture_score": "ציון חשיפת DevSecOps",
+    "attack_paths": "נתיבי תקיפה (צירופים רעילים)",
+    "risk_dimensions": "מודל סיכון 5-ממדי",
+    "compliance_posture": "מצב תאימות",
+    "remediation_playbook": "מדריך תיקון",
+    "telemetry": "טלמטריית סריקה",
+    "awaiting": "ממתין להערכה…",
+    "findings": "ממצאים"
+  },
+  "iacSecurity": {
+    "title": "מרכז אבטחת תשתית-כקוד (IaC)",
+    "subtitle": "מנוע CNAPP IaC ב-45 מסגרות — תאימות מלאה: חבילת ביקורת SOC2/PCI/HIPAA/NIST/ISO/FedRAMP",
+    "live_params": "פרמטרים חיים",
+    "hero_desc": "ניתוח סטטי דטרמיניסטי וללא-סוכן של קוד התשתית שלך, עם כיסוי מדיניות עמוק, גילוי סודות, מצב תאימות ותיקון ברמת הקוד — בהשראת Wiz, Checkov ו-tfsec.",
+    "control": "בקרת סריקה",
+    "sec_target": "קישור יעד",
+    "host_target": "מארח (מצב חשיפה)",
+    "sec_mode": "מצבי סריקה",
+    "sec_static": "IaC מוטמע",
+    "load_sample": "טען דוגמה",
+    "iac_content": "תוכן IaC",
+    "filename": "שם קובץ",
+    "iac_type": "סוג",
+    "sec_repo": "מאגר קוד",
+    "sec_frameworks": "מסגרות",
+    "frameworks_hint": "ממצאי סודות וחשיפה תמיד כלולים.",
+    "sec_providers": "ספקי ענן",
+    "sec_compliance": "חבילות תאימות",
+    "sec_detection": "זיהוי ושער איכות",
+    "sec_advanced": "מתקדם",
+    "sec_payload": "תצוגה מקדימה של הבקשה",
+    "hide_json": "הסתר JSON",
+    "show_json": "הצג את ה-JSON המדויק",
+    "scan": "הרץ סריקת IaC",
+    "scanning": "סורק…",
+    "posture": "מצב אבטחה",
+    "gate": "שער",
+    "severity_breakdown": "פילוח חומרה",
+    "compliance_posture": "מצב תאימות",
+    "telemetry": "טלמטריית סריקה",
+    "awaiting": "ממתין לסריקה…",
+    "findings": "ממצאים",
+    "running_note": "מנתח את קוד התשתית…",
+    "no_findings": "אין ממצאים עדיין — הגדר סריקה והרץ.",
+    "attack_paths": "נתיבי תקיפה (צירופים רעילים)",
+    "chains_detected": "שרשראות ממדיניות מקורלציות",
+    "export_bundle": "ייצוא חבילת תיקון",
+    "toxic_alert": "זוהה צירוף רעיל",
+    "toxic_hint": "מדיניות מקורלצית מצביעה על שרשראות תקיפה — עדכן לפי תור התיקון",
+    "framework_coverage": "כיסוי מדיניות לפי מסגרת",
+    "remediation_queue": "תור תיקון ממוקד",
+    "policy_catalog": "קטלוג מדיניות",
+    "mitre_rollup": "סיכום MITRE ATT&CK",
+    "export_fixes": "ייצוא חבילת תיקון קוד",
+    "drift_analysis": "זיהוי סחיפת מצב אבטחה",
+    "policy_waivers": "פטורים ממדיניות",
+    "attack_path_mermaid": "גרף נתיבי תקיפה",
+    "waivers_applied": "פטורים ממדיניות שהוחלו",
+    "readiness": "מוכנות תפעולית",
+    "cis_scorecard": "ציון תאימות CIS",
+    "drift_findings": "סחיפת מצב",
+    "multi_file": "חבילת קבצים מרובים",
+    "export_shell": "ייצוא סקריפט shell",
+    "risk_heatmap": "מפת חום סיכון",
+    "compliance_playbooks": "Playbooks תאימות",
+    "terraform_plan": "Terraform plan JSON",
+    "plan_reconcile": "התאמת plan ↔ קוד סטטי",
+    "plan_reconcile_hint": "מזהה פערים בין סריקת HCL ל-plan JSON — חוסם apply עיוור",
+    "soc2_report": "דוח SOC2 Trust Services",
+    "soc2_audit_ready": "מוכנות לביקורת",
+    "pci_report": "דוח PCI-DSS CDE",
+    "supply_chain": "מתאם שרשרת אספקה",
+    "hipaa_report": "מגיני HIPAA 164.312",
+    "nist_report": "משפחות NIST 800-53",
+    "iso27001_report": "ISO 27001 Annex A",
+    "fedramp_report": "FedRAMP Moderate",
+    "audit_packet": "חבילת ביקורת מאסטר",
+    "live_blast": "מנוע blast radius חי",
+    "live_blast_panel_title": "מנוע Live Blast ריבוני",
+    "live_blast_risk": "חי {{live}} / סטטי {{static}} (+{{elev}})",
+    "live_blast_verification": "אימות",
+    "live_blast_nodes": "צמתי גרף",
+    "live_blast_paths": "נתיבים מוכחים",
+    "live_blast_score": "ציון blast",
+    "live_blast_live": "מאושר חי",
+    "live_blast_irsa": "גשרי IRSA",
+    "live_blast_iam": "הוכחות IAM",
+    "live_blast_drift": "סחיפה",
+    "live_blast_reconcile": "התאמה חיה",
+    "live_blast_show_mermaid": "הצג mermaid נתיב חי",
+    "live_blast_hide_mermaid": "הסתר mermaid",
+    "autopilot": "תיקון אוטומטי Auto-Pilot",
+    "k8s_rbac_prove": "הוכחת RBAC ב-K8s (SAR)",
+    "iam_simulate_extended": "סימולציית IAM: S3/RDS/SM/KMS",
+    "export_audit_packet": "ייצוא חבילת ביקורת",
+    "gate_evidence": "ראיות ביקורת gate",
+    "export_gate_evidence": "ייצוא ראיות gate",
+    "refresh_last": "טען ריצה אחרונה",
+    "export_csv": "ייצוא CSV",
+    "last_scan": "סריקה אחרונה",
+    "findings_search": "חיפוש מדיניות, קובץ, משאב…",
+    "no_findings_filtered": "אין ממצאים התואמים לחיפוש ולסינון החומרה הנוכחיים."
+  },
+  "weissmanFindings": {
+    "title": "ממצאים",
+    "kpi_total": "סה״כ",
+    "search_placeholder": "חיפוש כותרת, סוג, מדיניות, תיאור…",
+    "filter_all": "הכל",
+    "refresh": "רענון",
+    "export_csv": "ייצוא CSV",
+    "scanning": "סריקה חיה בתהליך…",
+    "job": "Job",
+    "last_updated": "סנכרון אחרון {{time}}",
+    "empty_title": "אין ממצאים עדיין",
+    "empty_body": "הרץ סריקה על scope מורשה — תוצאות מופיעות כאן רק מפלט מנוע חי.",
+    "ready_title": "מוכן לסריקה",
+    "ready_body": "הגדר יעד ופרמטרים, ואז הפעל את ההערכה.",
+    "filtered_title": "אין התאמות",
+    "filtered_body": "אין ממצאים התואמים לחיפוש או לסינון החומרה הנוכחיים."
   },
   "nexusSwarm": {
     "title": "Nexus Sovereign Swarm Intelligence",
@@ -692,7 +989,34 @@
     "fleet_broadcast": "שדר לכל הסוכנים",
     "fleet_broadcasting": "משדר ל-fleet…",
     "no_agents": "אין סוכני קצה — התקן סוכנים כדי לגשר את ה-Hive למארחים.",
-    "swarm_ws_live": "טלמטריית swarm חיה מחוברת"
+    "swarm_ws_live": "טלמטריית swarm חיה מחוברת",
+    "params_badge": "פרמטרים חיים",
+    "control_column": "עמודת שליטה ריבונית",
+    "reset": "איפוס",
+    "bridged": "מגושרים",
+    "sec_target": "קישור יעד",
+    "sec_deployment": "פריסה",
+    "sec_adaptive": "אינטליגנציה אדפטיבית",
+    "sec_archetypes": "ארכיטיפים",
+    "archetypes_hint": "בחירה ריקה = כל הארכיטיפים. Correlator ו-Oracle מסנתזים מהאותות שנאספו.",
+    "sec_transport": "תעבורה / HTTP",
+    "add_header": "הוסף כותרת",
+    "sec_surface": "מיפוי משטח תקיפה",
+    "sec_consensus": "הסכמה ו-Oracle",
+    "sec_bridge": "גישור וקצה",
+    "sec_output": "פלט וסינון",
+    "sec_payload": "תצוגה מקדימה של בקשה",
+    "show_json": "הצג JSON מדויק",
+    "hide_json": "הסתר JSON",
+    "dry_run": "תוכנית יבשה (ללא בקשות)",
+    "wave_replay": "גל {{n}} בלבד",
+    "tls_panel": "תעודת TLS (חיבור חי :443)",
+    "body_surface": "סמני משטח Body",
+    "config_schema": "סכמת קונפיג",
+    "single_wave": "גל בודד (replay)",
+    "progress_interval": "מרווח אירועי התקדמות",
+    "parity_verified": "פריטי GUI מאומתים",
+    "world_class": "רמה עולמית"
   },
   "pages": {
     "jobsDashboard": {
@@ -717,7 +1041,30 @@
       "status_running": "רץ",
       "status_completed": "הושלם",
       "status_failed": "נכשל",
-      "status_cancelled": "בוטל"
+      "status_cancelled": "בוטל",
+      "evidence_notice": "תור משימות אסינכרוני חי מ-GET /api/jobs (מוגבל לטננט). למנכ\"ל: נפילה ל-/api/ceo/jobs/live כשהרשימה הסטנדרטית לא זמינה. ללא טלמטריה מדומה.",
+      "last_updated": "סנכרון אחרון {{time}}",
+      "export_csv": "ייצוא CSV",
+      "search_placeholder": "חיפוש מזהה, סוג, יעד, מנוע…",
+      "filter_all": "הכל",
+      "filter_queued": "בתור",
+      "filter_running": "רץ",
+      "filter_completed": "הושלם",
+      "filter_failed": "נכשל",
+      "filter_cancelled": "בוטל",
+      "col_target": "יעד",
+      "copy_id": "העתק מזהה משימה",
+      "detail_title": "פרטי משימה",
+      "detail_empty": "בחר משימה",
+      "detail_hint": "לחץ על שורה לצפייה ב-payload, worker, שגיאות וחותמות זמן מהתור החי.",
+      "empty_filtered": "אין משימות התואמות למסננים.",
+      "field_client": "לקוח",
+      "field_engine": "מנוע",
+      "field_worker": "Worker",
+      "field_created": "נוצר",
+      "field_updated": "עודכן",
+      "field_heartbeat": "Heartbeat",
+      "field_error": "שגיאה אחרונה"
     },
     "billing": {
       "title": "חיוב ושימוש",
@@ -749,23 +1096,44 @@
       "client_roster": "רoster לקוחות",
       "monthly_scans": "סריקות חודשיות",
       "usage_unavailable_title": "מוני שימוש לא זמינים",
-      "usage_unavailable_body": "פרטי המנוי נטענו, אך מדדי השימוש לא הוחזרו מה-API."
+      "usage_unavailable_body": "פרטי המנוי נטענו, אך מדדי השימוש לא הוחזרו מה-API.",
+      "evidence_notice": "מנוי, מגבלות ומוני שימוש מ-GET /api/billing/usage. שדרוגים דרך POST /api/billing/checkout-session. כל הערכים הם רשומות חיוב חיות לפי tenant — ללא סימולציה.",
+      "status_active": "פעיל",
+      "status_trialing": "תקופת ניסיון",
+      "status_past_due": "באיחור תשלום",
+      "status_paused": "מושהה",
+      "status_canceled": "בוטל",
+      "status_cancelled": "בוטל",
+      "status_unknown": "לא ידוע"
     },
     "metricsDashboard": {
       "title": "לוח מדדים תפעולי",
+      "subtitle": "בריאות פלטפורמה, חומרת ממצאים ומוני תור משימות",
       "live_metrics": "מדדי פלטפורמה חיים",
       "refreshing": "מרענן…",
       "load_error": "לא ניתן לטעון מדדי לוח הבקרה",
+      "auto_refresh": "רענון אוטומטי (10 שניות)",
+      "last_updated": "סנכרון אחרון {{time}}",
+      "evidence_notice": "מונים תפעוליים מ-GET /api/metrics/dashboard. פס KPI מנהלי (ציון אבטחה, MTTR, סוכנים) מ-GET /api/dashboard/exec-kpis כשזמין. הכל מוגבל לטננט — ללא סימולציה.",
       "postgres": "PostgreSQL",
       "connected": "מחובר",
       "unavailable": "לא זמין",
       "active_scans": "סריקות פעילות",
       "jobs_completed_24h": "משימות שהושלמו (24 שעות)",
       "jobs_failed_24h": "משימות שנכשלו (24 שעות)",
+      "jobs_running": "משימות רצות",
+      "security_score": "ציון אבטחה",
+      "mttr_hours": "זמן ממוצע לתיקון",
+      "agents_online": "סוכנים מקוונים",
       "findings_by_severity": "ממצאים פתוחים לפי חומרה",
       "total_count": "{{count}} סה״כ",
       "no_open_findings": "אין ממצאים פתוחים",
+      "no_findings_body": "הפעל מנועים על נכסים בטווח כדי לאכלס מדדי חומרה.",
+      "go_findings": "פתח מרכז ממצאים",
       "severity_breakdown": "פירוט חומרה",
+      "link_jobs": "לוח משימות",
+      "link_findings": "ממצאים",
+      "link_agents": "צי סוכנים",
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
@@ -791,7 +1159,8 @@
       "toggle_failed": "שינוי מצב לוח הזמנים נכשל",
       "scan_started": "הסריקה החלה: {{count}} משימות בתור.",
       "scan_started_ok": "הסריקה החלה בהצלחה!",
-      "scan_start_failed": "הפעלת הסריקה נכשלה"
+      "scan_start_failed": "הפעלת הסריקה נכשלה",
+      "evidence_notice": "הגדרות סריקה מתוזמנות מ-GET/POST /api/scan-schedules. cron מפעיל jobs אמיתיים של POST /api/command-center/scan — לוח ריק = אין schedules מוגדרים."
     },
     "systemConfiguration": {
       "title": "הגדרות מערכת",
@@ -805,14 +1174,150 @@
       "tab_compliance": "ציות",
       "loading": "טוען הגדרות…",
       "unsaved_changes": "שינויים שלא נשמרו",
+      "unsaved_changes_subtitle": "יש לך שינויי הגדרות שלא נשמרו",
+      "unsaved_warning": "שינויים שלא נשמרו",
       "save": "שמור הגדרות",
+      "save_changes": "שמור שינויים",
+      "save_all": "שמור את כל השינויים",
       "saving": "שומר…",
       "saved": "ההגדרות נשמרו",
-      "unsaved_warning": "שינויים שלא נשמרו"
+      "save_error": "שמירת ההגדרות נכשלה",
+      "evidence_notice": "הגדרות נטענות ונשמרות דרך GET/PUT /api/system/config. שירות MFA עצמי משתמש ב-GET /api/auth/mfa/status, POST /api/auth/mfa/setup, POST /api/auth/mfa/enable ו-POST /api/auth/mfa/disable — מצב סשן חי בלבד, ללא מדיניות מדומה.",
+      "common": {
+        "enabled": "מופעל",
+        "disabled": "מושבת"
+      },
+      "sections": {
+        "general": {
+          "title": "הגדרות כלליות"
+        },
+        "security": {
+          "title": "מדיניות אבטחה",
+          "password_policy": "מדיניות סיסמאות",
+          "session_management": "ניהול סשן",
+          "mfa": "אימות דו-שלבי (MFA)"
+        },
+        "scanning": {
+          "title": "תצורת סריקה"
+        },
+        "integrations": {
+          "title": "הגדרות אינטגרציה",
+          "webhook": "כתובת Webhook",
+          "siem": "אינטגרציית SIEM",
+          "email": "התראות דוא\"ל"
+        },
+        "retention": {
+          "title": "מדיניות שמירת נתונים"
+        },
+        "performance": {
+          "title": "כיוון ביצועים"
+        },
+        "compliance": {
+          "title": "מסגרות ציות"
+        }
+      },
+      "fields": {
+        "general": {
+          "org_name": "שם הארגון",
+          "timezone": "אזור זמן",
+          "language": "שפה",
+          "date_format": "פורמט תאריך"
+        },
+        "security": {
+          "password_min_length": "אורך מינימלי",
+          "password_max_age": "גיל מקסימלי (ימים)",
+          "password_require_uppercase": "דרוש אותיות גדולות",
+          "password_require_numbers": "דרוש מספרים",
+          "password_require_special": "דרוש תווים מיוחדים",
+          "session_timeout": "פסק זמן סשן (דקות)",
+          "max_concurrent_sessions": "מקסימום סשנים במקביל",
+          "mfa_required": "חייב MFA לכל המשתמשים"
+        },
+        "scanning": {
+          "default_timeout": "פסק זמן סריקה ברירת מחדל (שניות)",
+          "max_concurrency": "מקסימום מקביליות",
+          "auto_retry": "ניסיון חוזר אוטומטי לסריקות שנכשלו",
+          "max_retries": "מקסימום ניסיונות"
+        },
+        "retention": {
+          "scan_results": "תוצאות סריקה (ימים)",
+          "audit_logs": "יומני ביקורת (ימים)",
+          "findings": "ממצאים (ימים)",
+          "metrics": "מדדים (ימים)"
+        },
+        "performance": {
+          "worker_threads": "תהליכוני Worker",
+          "cache_ttl": "TTL מטמון (שניות)",
+          "max_memory": "זיכרון מקסימלי (MB)",
+          "db_pool_size": "גודל מאגר DB"
+        }
+      },
+      "options": {
+        "timezones": {
+          "utc": "UTC",
+          "eastern": "זמן מזרח ארה\"ב",
+          "pacific": "זמן האוקיינוס השקט",
+          "london": "לונדון",
+          "tokyo": "טוקיו"
+        },
+        "languages": {
+          "en": "אנגלית",
+          "he": "עברית",
+          "es": "ספרדית",
+          "fr": "צרפתית"
+        },
+        "dateFormats": {
+          "iso": "YYYY-MM-DD",
+          "us": "MM/DD/YYYY",
+          "eu": "DD/MM/YYYY"
+        },
+        "siem": {
+          "none": "ללא",
+          "splunk": "Splunk",
+          "qradar": "IBM QRadar",
+          "sentinel": "Microsoft Sentinel"
+        }
+      },
+      "placeholders": {
+        "webhook_url": "https://example.com/webhook",
+        "siem_endpoint": "כתובת SIEM",
+        "smtp_server": "smtp.example.com",
+        "smtp_port": "587"
+      },
+      "frameworks": {
+        "cis": "CIS",
+        "pci_dss": "PCI-DSS",
+        "nist": "NIST",
+        "hipaa": "HIPAA",
+        "soc2": "SOC2",
+        "gdpr": "GDPR",
+        "iso27001": "ISO27001"
+      },
+      "mfa": {
+        "loading_status": "טוען מצב MFA…",
+        "account_label": "החשבון שלך:",
+        "status_enabled": "MFA מופעל",
+        "status_disabled": "MFA מושבת",
+        "provisioning_in_progress": "(הקמה בתהליך)",
+        "working": "מעבד…",
+        "setup": "הגדר MFA",
+        "reprovision": "הקם MFA מחדש",
+        "enable": "הפעל MFA",
+        "disable": "השבת MFA",
+        "scan_uri_instructions": "סרוק את ה-URI ב-Authy / Google Authenticator, ואז הזן קוד בן 6 ספרות:",
+        "code_placeholder": "123456",
+        "errors": {
+          "status_fetch_failed": "טעינת מצב MFA נכשלה",
+          "setup_failed": "הקמת MFA נכשלה",
+          "enable_failed": "הפעלת MFA נכשלה",
+          "disable_failed": "השבתת MFA נכשלה"
+        }
+      }
     },
     "darkWebMonitor": {
       "title": "מעקב רשת אפלה",
-      "subtitle": "דליפות אישורים, typosquats ואזכורים ברשת האפלה",
+      "subtitle": "דליפות אישורים, typosquats ואזכורים — ממצאים חיים של הטננט",
+      "badge": "DARK WEB",
       "total_hits": "סה״כ פגיעות",
       "critical": "קריטי",
       "high": "גבוה",
@@ -822,13 +1327,26 @@
       "findings_heading": "ממצאי רשת אפלה",
       "open_findings": "פתח מרכז ממצאים →",
       "loading": "טוען…",
+      "refresh": "רענן",
+      "export_csv": "ייצא CSV",
+      "auto_on": "רענון חי פעיל",
+      "auto_off": "רענון חי כבוי",
+      "last_updated": "סונכרן לאחרונה {{time}}",
+      "evidence_notice": "כל שורה היא ממצא אמיתי מ-GET /api/findings המסונן ל-leak_hunter, darkweb_intel, dark_web_monitor ו-typosquatting_monitor — לעולם לא נתוני פריצה מדומים.",
+      "source_breakdown": "פגיעות לפי מנוע מקור",
+      "search_placeholder": "חפש כותרת, יעד או תיאור…",
+      "filter_all": "הכל",
+      "all_sources": "כל המקורות",
+      "no_filter_title": "אין ממצאים תואמים",
+      "no_filter_body": "נקה חיפוש או מסנני חומרה כדי לראות את כל הפגיעות.",
+      "showing_first": "מציג 200 ראשונים מתוך {{count}} התאמות",
       "col_severity": "חומרה",
       "col_title": "כותרת",
       "col_source": "מקור",
       "col_target": "יעד",
       "col_discovered": "התגלה",
       "empty_title": "אין מודיעין רשת אפלה עדיין לארגון זה.",
-      "empty_step_scan_before": "הוסף לקוח ו",
+      "empty_body": "הפעל Leak Hunter או darkweb_intel על דומיין מורשה. ממצאים יופיעו כאן אוטומטית מ-GET /api/findings.",
       "empty_step_scan_link": "הפעל סריקת בסיס",
       "empty_step_scan_after": "(Leak Hunter כלול בחבילה).",
       "empty_step_keys": "לפידים עשירים יותר, הגדר HIBP_API_KEY / OTX_API_KEY בהגדרות המערכת; המנוע מחובר אך מתדרדר בחן ללא מפתחות.",
@@ -856,7 +1374,19 @@
       "view_findings": "צפה בממצאים",
       "status_completed": "הושלם",
       "status_running": "רץ",
-      "status_pending": "ממתין"
+      "status_pending": "ממתין",
+      "subtitle": "לוח תיקון מדורג לפי עדיפות משוקללת חומרה — מונע כולו מממצאים חיים",
+      "badge": "תיקון",
+      "refresh": "רענן",
+      "crit_high": "קריטי / גבוה",
+      "search_placeholder": "חפש ממצאים…",
+      "filter_all": "הכול",
+      "sev_critical": "קריטי",
+      "sev_high": "גבוה",
+      "sev_medium": "בינוני",
+      "sev_low": "נמוך",
+      "sev_info": "מידע",
+      "evidence_notice": "ממצאים פתוחים ומשימות remediation מ-GET /api/findings עם workflow סטטוס PATCH /api/findings/:id/status. auto-remediation מ-playbooks מ-GET /api/playbooks — רק מצב ticket חי."
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",
@@ -874,7 +1404,8 @@
       "empty_body": "צור כלל כדי לקבל התראה כשממצאים תואמים לתנאים שלך.",
       "delete_confirm": "האם למחוק כלל התראה זה?",
       "test_success": "בדיקה הצליחה! {{count}} ממצאים תאמו לכלל זה.",
-      "test_failed": "הבדיקה נכשלה. בדוק את תנאי הכלל."
+      "test_failed": "הבדיקה נכשלה. בדוק את תנאי הכלל.",
+      "evidence_notice": "כללי detection מ-GET/POST /api/alert-rules. הפעלות מקושרות לאירועי ממצאים חיים ב-tenant — כללים לא מוערכים מול feeds סינתטיים."
     },
     "adminManagement": {
       "title": "ניהול מנהלים",
@@ -883,6 +1414,7 @@
       "load_failed": "טעינת משתמשים נכשלה",
       "email_password_required": "אימייל וסיסמה נדרשים",
       "loading": "טוען משתמשים…",
+      "search_placeholder": "חיפוש לפי אימייל, תפקיד או סטטוס…",
       "users_heading": "משתמשים ({{count}})",
       "create_user": "צור משתמש",
       "creating": "יוצר…",
@@ -897,7 +1429,8 @@
       "delete_confirm": "למחוק משתמש {{email}}?",
       "user_created": "המשתמש נוצר בהצלחה",
       "user_updated": "המשתמש עודכן בהצלחה",
-      "user_deleted": "המשתמש נמחק בהצלחה"
+      "user_deleted": "המשתמש נמחק בהצלחה",
+      "evidence_notice": "ניהול tenant, roster משתמשים ו-mutations של RBAC דרך /api/admin/* ו-/api/users מאומתים. כל שינוי נרשם ב-audit ל-GET /api/audit-logs."
     },
     "complianceFrameworks": {
       "title": "מסגרות ציות",
@@ -911,14 +1444,43 @@
       "controls_heading": "בקרות",
       "score_label": "ציון ציות",
       "export_report": "ייצא דוח",
+      "exporting": "מייצר…",
       "no_controls": "לא נמצאו בקרות למסגרת זו",
+      "no_controls_title": "אין נתוני בקרות",
+      "no_filter_results": "אין בקרות התואמות לחיפוש או למסנן.",
+      "no_filter_results_title": "אין בקרות תואמות",
+      "no_frameworks": "אין מסגרות ציות זמינות מה-API.",
+      "no_frameworks_title": "אין מסגרות",
       "status_compliant": "תואם",
       "status_non_compliant": "לא תואם",
-      "status_partial": "חלקי"
+      "status_partial": "חלקי",
+      "total_controls": "סה\"כ בקרות",
+      "refresh": "רענן",
+      "search_placeholder": "חפש בקרות לפי מזהה או כותרת…",
+      "load_failed": "טעינת מסגרות הציות נכשלה",
+      "controls_load_failed": "טעינת הבקרות למסגרת זו נכשלה",
+      "export_failed": "ייצוא הדוח נכשל",
+      "evidence_notice": "סטטוס הבקרות נגזר בזמן אמת מממצאי הטננט, כללי cloud posture וראיות פגיעות — לא ציונים מדומים.",
+      "framework_score": "{{score}}% תואם",
+      "gap_title": "ניתוח פערים",
+      "gap_body": "{{count}} בקרות לא תואמות ב-{{framework}}. טיפול בפערים אלה קריטי להיערכות להסמכה.",
+      "open_remediation": "פתח מרכז Remediation"
     },
     "clientNew": {
       "title": "הוסף לקוח חדש",
       "subtitle": "קליטת ארגון לקוח חדש עם היקף סריקה מורשה",
+      "evidence_notice": "קליטת לקוח דרך POST /api/clients. דומיינים ו-IP נשמרים לפי טננט; ברירות מחדל למנועים מוחלות בשרת — ללא פרופילים מדומים.",
+      "section_basic": "פרטים בסיסיים",
+      "section_scope": "היקף סריקה מורשה",
+      "scope_body": "הגדר דומיינים וטווחי IP מורשים. רק נכסים בטווח ייסרקו.",
+      "tech_body": "ציין טכנולוגיות ידועות לקורלציה טובה יותר, או הפעל זיהוי אוטומטי.",
+      "optional": "אופציונלי",
+      "known_tech": "טכנולוגיות ידועות",
+      "name_placeholder": "לדוגמה: Acme Corporation",
+      "email_placeholder": "security@example.com",
+      "domains_placeholder": "example.com\n*.example.com",
+      "ips_placeholder": "192.168.1.0/24",
+      "tech_placeholder": "nginx\nwordpress",
       "name_required": "שם הלקוח נדרש",
       "email_required": "אימייל ליצירת קשר נדרש",
       "domain_required": "יש לציין לפחות דומיין אחד להיקף מורשה",
@@ -931,11 +1493,13 @@
       "authorized_ips": "טווחי IP מורשים",
       "tech_stack": "מחסנית טכנולוגית",
       "auto_detect": "זיהוי אוטומטי של טכנולוגיות במהלך סריקות (מומלץ)",
-      "domains_hint": "דומיין אחד בכל שורה או מופרד בפסיקים",
-      "ips_hint": "אופציונלי — טווחי CIDR או כתובות IP בודדות",
-      "tech_hint": "אופציונלי — טכנולוגיות ידועות לתעדוף במהלך סריקות",
+      "domains_hint": "דומיין בכל שורה או מופרד בפסיקים. תמיכה ב-wildcard (*).",
+      "ips_hint": "תמיכה ב-CIDR. טווח בכל שורה או מופרד בפסיקים.",
+      "tech_hint": "טכנולוגיה בכל שורה או מופרד בפסיקים.",
       "create_failed": "יצירת לקוח נכשלה: {{detail}}",
-      "create_error": "שגיאה ביצירת לקוח: {{detail}}"
+      "create_error": "שגיאה ביצירת לקוח: {{detail}}",
+      "error_forbidden": "אין הרשאה ליצור לקוחות. {{detail}}",
+      "error_plan_limit": "הגעת למגבלת התוכנית: {{detail}}"
     },
     "threatIntelHub": {
       "title": "מרכז מודיעין איומים",
@@ -965,7 +1529,53 @@
       "link_apt_emulation": "סימולציית APT",
       "link_apt_emulation_desc": "סימולציית TTP של גורמי מדינה",
       "link_domain_discovery": "גילוי דומיינים",
-      "link_domain_discovery_desc": "מיפוי שטח התקיפה"
+      "link_domain_discovery_desc": "מיפוי שטח התקיפה",
+      "page_subtitle": "מודיעין CVE חי מ-NVD, מתואם מול הסביבה שלך",
+      "refresh": "רענן",
+      "auto_refresh": "אוטו",
+      "auto_refresh_hint": "רענון אוטומטי כל 60 שניות",
+      "last_updated": "עודכן {{time}}",
+      "tab_feed": "פיד איומים חי",
+      "tab_coverage": "כיסוי גילוי",
+      "stat_live_cves": "CVEs חיים (7 ימים)",
+      "stat_live_cves_hint": "פורסמו ב-7 הימים האחרונים · NVD",
+      "stat_crit_high_cves": "קריטי / גבוה",
+      "stat_crit_high_hint": "CVEs חמורים בפיד החי",
+      "stat_open_findings": "ממצאים פתוחים",
+      "stat_open_findings_hint": "לא טופלו בכל הנכסים",
+      "stat_security_score": "ציון אבטחה",
+      "stat_security_score_hint": "משוקלל לפי חומרה פתוחה",
+      "severity_distribution": "ממצאים פתוחים לפי חומרה",
+      "severity_distribution_hint": "Δ מול 24 שעות אחורה",
+      "top_cves_env": "ה-CVEs המובילים בסביבה שלך",
+      "top_cves_env_hint": "הנפוצים ביותר · ממצאים אמיתיים",
+      "top_cves_empty": "אין עדיין ממצאים מתויגי CVE.",
+      "top_mitre": "טכניקות MITRE ATT&CK מובילות",
+      "top_mitre_hint": "לפי נפח גילוי",
+      "top_mitre_empty": "טרם נרשמו פגיעות טכניקה.",
+      "hits": "{{count}} פגיעות",
+      "feed_heading": "פיד NVD חי — 7 ימים אחרונים",
+      "feed_count": "{{count}} CVEs",
+      "feed_search_placeholder": "חפש מזהה CVE או תיאור…",
+      "all_severities": "הכול",
+      "sort_label": "מיון",
+      "sort_newest": "החדש ביותר",
+      "sort_severity": "חומרה",
+      "published": "פורסם {{date}}",
+      "view_on_nvd": "צפה ב-NVD",
+      "feed_error": "לא ניתן לטעון את פיד האיומים החי.",
+      "feed_empty_title": "אין CVEs חיים זמינים",
+      "feed_empty_body": "פיד האיומים של NVD לא החזיר דבר. הגדר NVD_API_KEY בשרת כדי להפעיל את הפיד החי, או חזור מאוחר יותר אם NVD לא פרסם דבר ב-7 הימים האחרונים.",
+      "retry": "נסה שוב",
+      "coverage_intro": "קטלוג יכולות גילוי — מה הפלטפורמה מסוגלת לזהות. זהו מידע על יכולות הפלטפורמה, לא טלמטריה חיה.",
+      "sev_critical": "קריטי",
+      "sev_high": "גבוה",
+      "sev_medium": "בינוני",
+      "sev_low": "נמוך",
+      "sev_info": "מידע",
+      "link_findings": "מרכז פיקוד ממצאים",
+      "link_findings_desc": "טריאז' לכל ממצא פתוח",
+      "evidence_notice": "feed CVE מ-GET /api/threat-intel/feed (מקור NVD). overlay correlation לסביבה שלך מספירות חומרה ב-GET /api/dashboard/exec-kpis — לא threat theater עצמאי."
     },
     "incidentResponseCenter": {
       "title": "מרכז תגובה לאירועים",
@@ -1045,35 +1655,96 @@
           "step_6": "הקשח מערכת עם שטח תקיפה מינימלי",
           "step_7": "שתף IOCs עם ISAC / קהילת threat intel"
         }
-      }
+      },
+      "evidence_notice": "תור אירועים חי מ-GET /api/soc/incidents. שלבי פלייבוק נשמרים דרך PATCH /api/soc/incidents/:id/playbook-steps — ללא טלמטריית IR מדומה.",
+      "no_timeline": "אין אירועי audit מקושרים לאירוע זה עדיין.",
+      "export_csv": "ייצוא CSV",
+      "duration_hours_minutes": "{{hours}}ש׳ {{minutes}}ד׳",
+      "duration_minutes": "{{minutes}}ד׳",
+      "severity_critical": "קריטי",
+      "severity_high": "גבוה",
+      "severity_medium": "בינוני",
+      "severity_low": "נמוך",
+      "severity_info": "מידע"
     },
     "threatEmulation": {
       "title": "סימולציית איומי APT",
       "badge": "APT / TOP-TIER",
-      "subtitle": "{{count}} קבוצות יריב",
+      "subtitle": "{{count}} תרחישי יריב · הרצת מנוע חיה אחת",
       "target_client": "לקוח יעד:",
       "select_placeholder": "— בחר —",
       "emulate": "▶ סמלץ",
       "blocked": "נחסם",
-      "detected_not_blocked": "זוהה (לא נחסם)",
-      "results_summary": "{{tested}} טכניקות נבדקו · {{gaps}} פערי זיהוי",
-      "no_data": "אין נתוני סימולציה עדיין — הפעל כדי ליצור דוח.",
-      "run_all": "▶ הפעל את כל קבוצות ה-APT",
-      "select_client_warning": "בחר לקוח כדי לאפשר הרצות סימולציה.",
+      "detected_not_blocked": "הגיע ליעד (לא נחסם)",
+      "results_summary": "{{tested}} בדיקות עם surface · {{gaps}} פערי זיהוי",
+      "no_data": "אין attack surface תואם לקבוצה זו בממצאים השמורים.",
+      "no_surface": "אין surface",
+      "gap_badge": "{{count}} פערים",
+      "run_full": "הרץ סימולציית APT מלאה",
+      "running": "מריץ סימולציה…",
+      "refresh": "רענן",
+      "load_failed": "טעינת ממצאי סימולציה נכשלה",
+      "run_complete": "משימת סימולציה {{status}} — הממצאים רועננו",
+      "engine_notice": "POST /api/command-center/scan אחד עם engine threat_emulation מריץ את כל 7 תרחישי ה-APT של ה-backend מול היעד המורשה. הכרטיסים מציגים תוצאות לפי קבוצה מממצאים אמיתיים — ריק = אין אות (היעדר אמיתי, לא מעבר).",
+      "select_client_warning_title": "בחר לקוח",
+      "select_client_warning": "בחר לקוח עם דומיין מורשה להרצת סימולציית APT.",
       "select_client_first": "בחר לקוח תחילה",
       "emulation_failed": "הסימולציה נכשלה",
       "emulation_queued": "סימולציית APT בתור: משימה {{jobId}}",
       "missing_target": "ללקוח שנבחר אין דומיין ראשי — הוסף URL היקף תחילה.",
       "network_error": "שגיאת רשת",
+      "kpi_scenarios": "בדיקות עם surface",
+      "kpi_blocked": "נחסמו על ידי בקרות",
+      "kpi_gaps": "פערי זיהוי",
+      "kpi_coverage": "כיסוי קבוצות",
+      "kpi_coverage_detail": "{{count}} מתוך {{total}} קבוצות עם אות",
+      "history_heading": "משימות סימולציה אחרונות",
+      "view_job": "צפה במשימה",
       "apt_groups": {
-        "lazarus": { "description": "קבוצת nation-state הקשורה לגניבה פיננסית וקמפייני כופרה הרסניים." },
-        "apt28": { "description": "קבוצת ריגול GRU המכוונת ל-NATO, ממשלות וארגוני תקשורת." },
-        "apt29": { "description": "קבוצת SVR הידועה ב-SolarWinds supply chain ופרצות Microsoft." },
-        "apt41": { "description": "כפול — ריגול ממומן מדינה ופשע פיננסי דרך כופרה." },
-        "sandworm": { "description": "אחראית ל-NotPetya, מתקפות על רשת החשמל באוקראינה ו-Olympic Destroyer." },
-        "kimsuky": { "description": "איסוף מודיעין נגד דרום קוריאה, ארה\"ב ויעדים אירופיים." },
-        "equation": { "description": "שחקן האיום הטכני המתוחכם ביותר — Stuxnet, Flame, שתלי firmware בדיסק." }
-      }
+        "lazarus": {
+          "name": "Lazarus Group",
+          "alias": "APT38 / Hidden Cobra",
+          "nation": "DPRK",
+          "description": "קבוצת nation-state הקשורה לגניבה פיננסית וקמפייני כופרה הרסניים."
+        },
+        "apt28": {
+          "name": "Fancy Bear",
+          "alias": "APT28 / Sofacy",
+          "nation": "Russia (GRU)",
+          "description": "קבוצת ריגול GRU המכוונת ל-NATO, ממשלות וארגוני תקשורת."
+        },
+        "apt29": {
+          "name": "Cozy Bear",
+          "alias": "APT29 / Midnight Blizzard",
+          "nation": "Russia (SVR)",
+          "description": "קבוצת SVR הידועה ב-SolarWinds supply chain ופרצות Microsoft."
+        },
+        "apt41": {
+          "name": "Double Dragon",
+          "alias": "APT41 / Winnti",
+          "nation": "China (MSS)",
+          "description": "כפול — ריגול ממומן מדינה ופשע פיננסי דרך כופרה."
+        },
+        "sandworm": {
+          "name": "Sandworm",
+          "alias": "Voodoo Bear / Seashell Blizzard",
+          "nation": "Russia (GRU Unit 74455)",
+          "description": "אחראית ל-NotPetya, מתקפות על רשת החשמל באוקראינה ו-Olympic Destroyer."
+        },
+        "kimsuky": {
+          "name": "Kimsuky",
+          "alias": "Velvet Chollima / Black Banshee",
+          "nation": "DPRK (RGB)",
+          "description": "איסוף מודיעין נגד דרום קוריאה, ארה\"ב ויעדים אירופיים."
+        },
+        "equation": {
+          "name": "Equation Group",
+          "alias": "NSA TAO (alleged)",
+          "nation": "USA (alleged)",
+          "description": "שחקן האיום הטכני המתוחכם ביותר — Stuxnet, Flame, שתלי firmware בדיסק."
+        }
+      },
+      "evidence_notice": "כרטיסי APT הם taxonomies ייחוס MITRE מקושרים ל-GET /api/findings החי ול-GET /api/engines/history/threat_emulation — אחוז כיסוי משקף ממצאים ממופים אמיתיים, לא kill chains מסקריפט."
     },
     "otIcsSecurity": {
       "title": "אבטחת OT / ICS / IoT",
@@ -1116,7 +1787,27 @@
       "status_error": "שגיאה",
       "status_idle": "ממתין",
       "notice_title": "הודעת אבטחת OT",
-      "notice_body": "מערכות בקרה תעשייתיות דורשות טיפול מיוחד. כל הסריקות פסיביות כברירת מחדל. בדיקות פעילות דורשות הרשאה מפורשת ועלולות לשבש פעילות."
+      "notice_body": "מערכות בקרה תעשייתיות דורשות טיפול מיוחד. כל הסריקות פסיביות כברירת מחדל. בדיקות פעילות דורשות הרשאה מפורשת ועלולות לשבש פעילות.",
+      "subtitle": "טביעת אצבע פסיבית של מערכות בקרה תעשייתיות ו-IoT — מכשירים, פרוטוקולים וממצאים שנצפו בהיקף שלך",
+      "badge": "OT / ICS",
+      "refresh": "רענן",
+      "kpi_devices": "מכשירים שנצפו",
+      "kpi_protocols": "פרוטוקולים שנצפו",
+      "kpi_findings": "ממצאים פתוחים",
+      "kpi_severe": "קריטי / גבוה",
+      "inventory_heading": "מצאי מכשירים לפי סוג",
+      "devices_empty_title": "לא נצפו מכשירי OT/ICS",
+      "protocols_empty_title": "לא נצפו פרוטוקולים תעשייתיים",
+      "protocols_empty_body": "פרוטוקולים יופיעו כאן לאחר שסריקה פסיבית של OT/ICS תזהה אותם בהיקף שלך. הפעל סריקת מנוע למעלה כדי להתחיל.",
+      "protocol_status_info": "נצפה",
+      "protocol_status_warning": "לתשומת לב",
+      "protocol_status_critical": "קריטי",
+      "scan_findings_title": "ממצאי סריקת מנועים",
+      "scan_findings_empty_title": "אין עדיין ממצאי סריקת מנועים",
+      "scan_findings_empty_body": "הפעל סריקת מנוע OT/ICS למעלה. ממצאים מצטברים כאן מ-SCADA, Modbus, BACnet ו-OPC-UA.",
+      "scan_findings_ready_title": "מוכן לסריקה",
+      "scan_findings_ready_body": "בחר לקוח והפעל מנוע OT/ICS. ממצאים חיים ממשימות שהושלמו יופיעו כאן עם חיפוש, סינון חומרה וייצוא CSV.",
+      "evidence_notice": "probes פרוטוקול OT/ICS ב-POST /api/command-center/scan (ot_ics) על טווחי IP ת industrial מורשים. מצב ריק = אין PLCs/RTUs נגישים ב-scope — לא תעבורת Modbus מדומה."
     },
     "networkIntelligence": {
       "title": "מודיעין רשת",
@@ -1133,7 +1824,101 @@
       "status_running": "רץ",
       "status_done": "הושלם",
       "status_error": "שגיאה",
-      "status_idle": "ממתין"
+      "status_idle": "ממתין",
+      "target_label": "יעד / דומיין",
+      "target_placeholder": "example.com",
+      "target_required": "נדרש יעד (host)",
+      "other_engines": "מנועי רשת נוספים",
+      "flagship_title": "עמידות לחטיפת DNS ו-BGP",
+      "flagship_desc": "שאילתות authoritative ישירות, קונצנזוס recursive, DNSSEC, RPKI/BGP/IRR, more-specific, נעילת RDAP, TLS, dual-stack וזיהוי מורכב — לקריאה בלבד.",
+      "params": "פרמטרים",
+      "reset": "איפוס",
+      "sec_probes": "בדיקות",
+      "p_consensus": "קונצנזוס בין Resolvers",
+      "p_dnssec": "אימות DNSSEC",
+      "p_rpki": "אימות RPKI ROA",
+      "p_bgp": "מקור BGP / MOAS",
+      "p_caa": "בקרת הנפקת CAA",
+      "p_ns": "גיוון שרתי שמות",
+      "p_takeover": "השתלטות על תת-דומיין",
+      "p_aaaa": "רשומות IPv6 (AAAA)",
+      "p_tls": "אימות זהות TLS",
+      "p_bogon": "זיהוי IP bogon / martian",
+      "p_ttl": "אות TTL נמוך",
+      "p_routing_hist": "היסטוריית ניתוב BGP",
+      "p_dane": "DANE / TLSA",
+      "p_ct": "מלאי CT (crt.sh)",
+      "p_auth_recursive": "Authoritative מול recursive",
+      "p_rdap": "נעילת RDAP",
+      "p_irr": "IRR מול BGP",
+      "p_more_specific": "חטיפת more-specific",
+      "p_dual_stack": "קישור IPv4/IPv6",
+      "p_soa": "שלמות SOA",
+      "p_baseline": "דלתא baseline",
+      "p_caa_ct": "CAA⟷CT",
+      "p_hsts": "HSTS",
+      "p_redirect": "קישור redirect",
+      "p_mx": "קישור MX",
+      "p_glue": "Glue NS",
+      "p_visibility": "נראות BGP",
+      "low_ttl_secs": "סף TTL נמוך (שניות)",
+      "sec_bgp": "BGP / מקור",
+      "expected_asns": "מספרי AS מקור צפויים",
+      "expected_asns_hint": "רשימת היתר, לדוגמה AS13335, 15169. כל מקור אחר → התראת חטיפה.",
+      "expected_countries": "מדינות צפויות (ISO-2)",
+      "expected_countries_hint": "הפעל check_geo — למשל US, IL",
+      "ripe_base": "כתובת בסיס RIPEstat",
+      "sec_scope": "Resolvers והיקף",
+      "resolvers": "Resolvers מסוג DoH",
+      "resolvers_hint": "שורה לכל אחד: שם=https://host/dns-query. ריק = Cloudflare+Google+Quad9.",
+      "subdomains": "תת-דומיינים נוספים",
+      "subdomains_hint": "נבדקים גם להשתלטות דרך CNAME תלוש.",
+      "sec_transport": "תעבורה",
+      "timeout_ms": "פסק זמן לבדיקה (מ\"ש)",
+      "concurrency": "מקביליות",
+      "intensity": "עצימות",
+      "intensity_light": "קלה",
+      "intensity_normal": "רגילה",
+      "intensity_aggressive": "אגרסיבית",
+      "score_label": "עמידות",
+      "scanning": "⟳ סורק…",
+      "run_scan": "▶ הפעל סריקת עמידות לחטיפה",
+      "scan_running": "שואל authoritative NS, resolvers, DNSSEC, RPKI/IRR/BGP, RDAP, TLS ומישורי חטיפה…",
+      "empty_ready": "מוכן — הפעל כדי למדוד עמידות לחטיפת DNS/BGP.",
+      "findings": "ממצאים",
+      "roadmap": "מפת דרכים להקשחה",
+      "po_dnssec": "DNSSEC",
+      "po_rpki": "RPKI ROA",
+      "po_auth": "Auth=recursive",
+      "po_rdap": "נעילת RDAP",
+      "po_irr": "IRR=BGP",
+      "po_consensus": "קונצנזוס Resolvers",
+      "po_tls": "קישור TLS",
+      "po_bogon": "ללא bogon",
+      "po_caa": "CAA",
+      "po_ns": "גיוון שרתי שמות",
+      "po_origin": "מקור BGP",
+      "p_geo": "קישור מדינה (Geo)",
+      "p_ad_divergence": "סטיית דגל AD ב-DNSSEC",
+      "p_fcrdns": "FCrDNS (אימות PTR)",
+      "p_expected_ips": "רשימת A IPs מותרים",
+      "p_cname": "ביקורת שרשרת CNAME",
+      "p_spf": "SPF ב-apex",
+      "p_wildcard": "בדיקת Wildcard DNS",
+      "p_ns_lame": "Delegation לא תקין (lame)",
+      "p_cds": "אוטומציית CDS/CDNSKEY",
+      "p_orphan_ds": "זיהוי Orphan DS",
+      "p_timing": "אנומליית תזמון Resolver",
+      "expected_a_ips": "A IPs צפויים",
+      "expected_a_ips_hint": "הפעל check_expected_ips — רשימת IPv4 מופרדת בפסיקים",
+      "timing_factor": "מקדם תזמון Resolver (×)",
+      "p_autonomous": "גילוי אוטונומי (v7)",
+      "p_ct_discovery": "גילוי hosts מ-CT",
+      "p_delegation": "הליכת שרשרת delegation",
+      "p_udp_doh": "UDP/53 מול DoH",
+      "p_dmarc": "DMARC ב-_dmarc",
+      "p_parent_ns": "עקביות NS הורה/ילד",
+      "evidence_notice": "recon רשת, סיכון BGP/DNS hijack ואותות lateral-path מ-POST /api/command-center/scan (מנועי network / bgp_dns_hijacking). נתיבים דורשים scope IP/DNS מורשה."
     },
     "cloudControlTower": {
       "title": "מגדל הבקרה בענן",
@@ -1151,27 +1936,34 @@
       "run_to_populate": "הפעל את המנוע כדי לאכלס ממצאים.",
       "select_client_first": "בחר לקוח תחילה",
       "scan_failed": "הסריקה נכשלה",
-      "queued": "{{label}}: בתור {{jobId}}"
+      "queued": "{{label}}: בתור {{jobId}}",
+      "evidence_notice": "מלאי cloud, פאנל posture K8s וסריקות multi-provider מ-POST /api/command-center/scan ו-scope מ-GET /api/clients. ממצאי Kubernetes דורשים credentials ל-cluster ב-scope או API servers נגישים."
     },
     "socialEngineering": {
       "title": "סימולטור הנדסה חברתית",
+      "subtitle": "הערכות פישינג מייל מממצאי טננט חיים והרצות מנוע spear_phishing",
       "active_campaigns": "קמפיינים פעילים",
       "total_campaigns": "סה״כ קמפיינים",
       "critical_findings": "ממצאים קריטיים",
       "assessments_loaded": "הערכות שנטענו",
       "create_heading": "צור קמפיין פישינג",
-      "create_subtitle": "בחן את מודעות הצוות עם מיילי פישינג מדומים",
+      "create_subtitle": "רשום רשומת קמפיין המקושרת לממצאי לקוח",
       "new_campaign": "קמפיין חדש",
       "assessments_heading": "הערכות פישינג",
       "loading": "טוען קמפיינים...",
-      "empty": "אין ממצאי הנדסה חברתית עדיין. הפעל הערכת פישינג כדי לאכלס תצוגה זו.",
-      "templates_heading": "תבניות פישינג",
-      "click_preview": "לחץ לתצוגה מקדימה",
+      "refresh": "רענן",
+      "load_failed": "טעינת נתוני הנדסה חברתית נכשלה",
+      "empty_title": "אין הערכות עדיין",
+      "empty": "אין ממצאי הנדסה חברתית עדיין. הפעל הערכת spear_phishing או צור קמפיין.",
+      "templates_heading": "ערכות קמפיין",
+      "templates_notice": "ערכות הן presets ל-POST /api/soc/social-engineering/campaigns — פישינג מייל בלבד כרגע.",
+      "click_create": "לחץ ליצירת קמפיין",
+      "click_preview": "לחץ ליצירה",
       "untitled": "ללא כותרת",
       "type_fallback": "הערכת פישינג",
       "create_modal_title": "צור קמפיין פישינג",
       "campaign_name_label": "שם הקמפיין",
-      "template_label": "תבנית",
+      "template_label": "ערכה",
       "no_clients": "אין לקוחות זמינים",
       "creating": "יוצר…",
       "create_campaign": "צור קמפיין",
@@ -1179,12 +1971,24 @@
       "select_client": "בחר לקוח",
       "create_failed": "יצירת הקמפיין נכשלה",
       "campaign_name_default": "קמפיין {{template}}",
+      "data_notice": "שורות קמפיין נגזרות מ-vulnerabilities של הטננט עם תג social_engineering_phishing / phishing — לא שיעורי קליקים מדומים. הפעל spear_phishing ליצירת ממצאים חדשים.",
+      "run_assessment_heading": "הרץ הערכת spear phishing חיה",
+      "run_assessment_subtitle": "שולח מנוע production {{engine}} דרך POST /api/command-center/scan",
+      "run_assessment": "הרץ הערכה",
+      "scanning": "סורק…",
+      "scan_failed": "סריקת ההערכה נכשלה",
+      "missing_target": "ללקוח שנבחר אין URL יעד מורשה",
+      "search_placeholder": "חפש קמפיינים…",
+      "filter_all": "הכל",
+      "severity_distribution": "התפלגות חומרה",
+      "view_findings": "צפה בממצאים →",
       "template_password_reset": "איפוס סיסמה",
       "template_invoice": "חשבונית",
       "template_it_support": "תמיכת IT",
       "template_hr_notice": "הודעת HR",
       "template_package_delivery": "משלוח חבילה",
-      "template_account_verification": "אימות חשבון"
+      "template_account_verification": "אימות חשבון",
+      "evidence_notice": "artifacts קמפיין phishing/pretext נשלחים לתור ב-POST /api/command-center/scan (social_engineering) עם שערי council/RoE. אירועי click ו-capture מאומתים ב-OAST כשמוגדר."
     },
     "engineManagementConsole": {
       "title": "קונסולת ניהול מנועים",
@@ -1213,13 +2017,18 @@
       "timeout_detail": "פסק זמן: {{seconds}} שנ׳",
       "concurrency_detail": "מקביליות: {{count}}",
       "last_run_detail": "הרצה אחרונה: {{time}}",
-      "id_detail": "מזהה: {{id}}"
+      "id_detail": "מזהה: {{id}}",
+      "evidence_notice": "רשימת מנועים והפעלת טננט מ-GET /api/ceo/god-mode/snapshot עם נפילה ל-GET /api/health. מתגים נשמרים דרך PUT /api/ceo/tenant/engines; תצורה דרך PUT /api/system/config.",
+      "export_csv": "ייצוא CSV"
     },
     "strategicEngineProgram": {
       "back_matrix": "חזרה למטריצת מנועים",
       "top_tier_hub": "מרכז Top-Tier",
       "title": "תוכנית מנועים ייעודיים אסטרטגית",
+      "subtitle": "מפת דרכים לעדיפויות השקה, מולאה מול דגלי מנועי production חיים",
+      "badge": "ROADMAP",
       "prioritized_count": "{{count}} מנועים בעדיפות",
+      "prioritized_label": "גודל התוכנית",
       "p0_label": "P0 קריטי",
       "p0_desc": "תהליכי עסק מיידיים, נראות להנהלה ו-SLA תפעוליים.",
       "p1_label": "P1 אסטרטגי",
@@ -1238,7 +2047,16 @@
       "status_planned_wave_1": "גל 1 מתוכנן",
       "status_planned_wave_2": "גל 2 מתוכנן",
       "status_implemented_top_tier": "מיושם (Top-Tier)",
-      "open_page": "פתח דף"
+      "open_page": "פתח דף",
+      "roadmap_notice": "עדיפות וסיבות עסקיות מגיעות מקטלוג ההשקה הפנימי. תגיות Production/Catalog משקפות GET /api/engines/production חי — זה הטלמטריה החיה היחידה בעמוד זה.",
+      "live_production": "חיים בתוכנית",
+      "live_production_desc": "{{total}} מנועי production בפלטפורמה · {{program}} בתוכנית זו",
+      "loading_production": "טוען דגלי production…",
+      "search_placeholder": "חפש מנועים, מזהים או סיבות עסקיות…",
+      "filter_all": "הכל",
+      "showing_count": "{{count}} מתוך {{total}} מוצגים",
+      "no_results": "אין מנועים התואמים לחיפוש או למסנן.",
+      "evidence_notice": "מפת דרכים strategic למנועים קשורה לדגלי maturity ב-GET /api/engines/capabilities ול-GET /api/engines/top-tier/audit — עוקב אחר סטטוס אספקה אמיתי, לא checklists שיווקיים."
     },
     "businessEngineProfile": {
       "not_configured": "לא הוגדר דף עסקי ייעודי למנוע: {{engineId}}",
@@ -1268,6 +2086,7 @@
       "no_jobs": "אין משימות עדיין.",
       "live_findings": "תמונת ממצאים חיה",
       "no_findings": "אין ממצאים בתמונה.",
+      "search_placeholder": "חיפוש במשימות וממצאים…",
       "finding_fallback": "ממצא",
       "effective_payload": "Payload אפקטיבי",
       "pdf_business_engine": "מנוע עסקי",
@@ -1276,15 +2095,44 @@
       "pdf_findings_tracked": "ממצאים במעקב",
       "pdf_mission_heading": "משימה עסקית",
       "pdf_active_job": "משימה פעילה",
+      "evidence_notice": "משימות, ממצאים וייצוא מ-GET /api/engines/history ו-POST /api/command-center/scan — נתוני tenant חיים בלבד.",
+      "kpi_jobs": "משימות במעקב",
+      "kpi_findings": "תמונת ממצאים",
+      "kpi_completed": "ריצות שהושלמו",
+      "kpi_failed": "נכשלו / dead",
       "engines": {
-        "osint": { "title": "דף פיקוד OSINT", "mission": "מודיעין תפעולי ויצירת לידים לאיומים לתגובה פרואקטיבית." },
-        "asm": { "title": "דף ניהול שטח תקיפה", "mission": "בקרה ברמת הנהלה על חשיפה חיצונית, סחיפה באינטרנט ופערי בעלות." },
-        "leak_hunter": { "title": "דף צייד דליפות", "mission": "הכלה של דליפות אישורים ומעקב אחר סיכון פשרת זהות." },
-        "supply_chain": { "title": "דף הבטחת שרשרת אספקה", "mission": "ניטור תלויות וסיכון ספקים עם אותות הסלמה להנהלה." },
-        "semantic_ai_fuzz": { "title": "דף Semantic AI Fuzz", "mission": "פעולות סריקת AI בעלות גבוהה עם בקרות מכסה והרשאות." },
-        "ai_adversarial_redteam": { "title": "דף AI Adversarial Red Team", "mission": "בעלי סיכון מודלים זקוקים לציר זמן קמפיין יריב ייעודי." },
-        "k8s_container": { "title": "דף הבטחת מכולות ו-K8s", "mission": "צוותי פלטפורמת ענן זקוקים ללוח תאימות מכולות/K8s." },
-        "scada_ics": { "title": "דף תפעול SCADA / ICS", "mission": "סביבות OT דורשות UX מבודד והקשר בטיחות מפורש." }
+        "osint": {
+          "title": "דף פיקוד OSINT",
+          "mission": "מודיעין תפעולי ויצירת לידים לאיומים לתגובה פרואקטיבית."
+        },
+        "asm": {
+          "title": "דף ניהול שטח תקיפה",
+          "mission": "בקרה ברמת הנהלה על חשיפה חיצונית, סחיפה באינטרנט ופערי בעלות."
+        },
+        "leak_hunter": {
+          "title": "דף צייד דליפות",
+          "mission": "הכלה של דליפות אישורים ומעקב אחר סיכון פשרת זהות."
+        },
+        "supply_chain": {
+          "title": "דף הבטחת שרשרת אספקה",
+          "mission": "ניטור תלויות וסיכון ספקים עם אותות הסלמה להנהלה."
+        },
+        "semantic_ai_fuzz": {
+          "title": "דף Semantic AI Fuzz",
+          "mission": "פעולות סריקת AI בעלות גבוהה עם בקרות מכסה והרשאות."
+        },
+        "ai_adversarial_redteam": {
+          "title": "דף AI Adversarial Red Team",
+          "mission": "בעלי סיכון מודלים זקוקים לציר זמן קמפיין יריב ייעודי."
+        },
+        "k8s_container": {
+          "title": "דף הבטחת מכולות ו-K8s",
+          "mission": "צוותי פלטפורמת ענן זקוקים ללוח תאימות מכולות/K8s."
+        },
+        "scada_ics": {
+          "title": "דף תפעול SCADA / ICS",
+          "mission": "סביבות OT דורשות UX מבודד והקשר בטיחות מפורש."
+        }
       }
     },
     "threatHuntingWorkbench": {
@@ -1332,7 +2180,18 @@
       "col_added": "נוסף",
       "untitled_hunt": "ציד ללא כותרת",
       "unassigned": "לא משויך",
-      "untitled_query": "שאילתה ללא כותרת"
+      "untitled_query": "שאילתה ללא כותרת",
+      "evidence_notice": "קמפייני ציד, IOCs ושאילתות זיהוי מ-GET /api/soc/hunts — נגזרים מאשכולות ממצאים חיים, לא נתוני דמו.",
+      "export_csv": "ייצוא CSV",
+      "severity_critical": "קריטי",
+      "severity_high": "גבוה",
+      "severity_medium": "בינוני",
+      "severity_low": "נמוך",
+      "severity_info": "מידע",
+      "priority_critical": "קריטי",
+      "priority_high": "גבוה",
+      "priority_medium": "בינוני",
+      "priority_low": "נמוך"
     },
     "integrationManager": {
       "title": "מנהל אינטגרציות",
@@ -1351,7 +2210,8 @@
       "no_integrations_hint": "אין אינטגרציות מוגדרות. לחץ \"הוסף אינטגרציה\" כדי להתחיל.",
       "add_integration_modal": "הוסף אינטגרציה",
       "adding": "מוסיף…",
-      "last_test": "נבדק לאחרונה: {{time}}"
+      "last_test": "נבדק לאחרונה: {{time}}",
+      "evidence_notice": "אינטגרציות SIEM, ticketing ו-webhook מוגדרות ב-GET/PUT /api/integrations. בריאות delivery משקפת קריאה outbound אחרונה מוצלחת — credentials לא מוצגים ב-UI."
     },
     "killChainOrchestrator": {
       "title": "מתזמן שרשרת הריג",
@@ -1402,13 +2262,34 @@
       "severity_low": "נמוך",
       "severity_info": "מידע",
       "phases": {
-        "reconnaissance": { "label": "סיור", "description": "איסוף מודיעין על מערכות, רשתות, עובדים ותשתית לפני ניצול פעיל." },
-        "weaponization": { "label": "הנשקה", "description": "פיתוח או רכישת כלים, ניצולים ו-payloads מותאמים לפגיעויות היעד." },
-        "delivery": { "label": "מסירה", "description": "העברת payloads מונשקים לסביבת היעד דרך פישינג, ניצולי ווב או פשרת שרשרת אספקה." },
-        "exploitation": { "label": "ניצול", "description": "הפעלת קוד או ניצול פגיעויות לקבלת גישה ראשונית ביעד." },
-        "installation": { "label": "התקנה", "description": "התקנת backdoors, web shells או סוכנים מתמשכים לשמירת גישה." },
-        "c2": { "label": "פיקוד ושליטה", "description": "הקמת ערוצי תקשורת סמויים בין מארחים מפורקים לתשתית תוקף." },
-        "exfiltration": { "label": "דליפה", "description": "חילוץ נתונים רגישים מהיעד דרך ערוצים סמויים או שימוש לרעה באחסון ענן." }
+        "reconnaissance": {
+          "label": "סיור",
+          "description": "איסוף מודיעין על מערכות, רשתות, עובדים ותשתית לפני ניצול פעיל."
+        },
+        "weaponization": {
+          "label": "הנשקה",
+          "description": "פיתוח או רכישת כלים, ניצולים ו-payloads מותאמים לפגיעויות היעד."
+        },
+        "delivery": {
+          "label": "מסירה",
+          "description": "העברת payloads מונשקים לסביבת היעד דרך פישינג, ניצולי ווב או פשרת שרשרת אספקה."
+        },
+        "exploitation": {
+          "label": "ניצול",
+          "description": "הפעלת קוד או ניצול פגיעויות לקבלת גישה ראשונית ביעד."
+        },
+        "installation": {
+          "label": "התקנה",
+          "description": "התקנת backdoors, web shells או סוכנים מתמשכים לשמירת גישה."
+        },
+        "c2": {
+          "label": "פיקוד ושליטה",
+          "description": "הקמת ערוצי תקשורת סמויים בין מארחים מפורקים לתשתית תוקף."
+        },
+        "exfiltration": {
+          "label": "דליפה",
+          "description": "חילוץ נתונים רגישים מהיעד דרך ערוצים סמויים או שימוש לרעה באחסון ענן."
+        }
       }
     },
     "rateLimitAnalytics": {
@@ -1427,24 +2308,91 @@
       "endpoints_heading": "פירוט לפי נקודת קצה",
       "loading": "טוען ניתוח…",
       "no_violations": "אין הפרות בטווח שנבחר",
-      "no_data": "אין נתונים זמינים"
+      "no_data": "אין נתונים זמינים",
+      "subtitle": "ניצול תקציב בקשות בזמן אמת, אירועי האטה ולחץ לפי נקודת קצה",
+      "badge": "ממשל",
+      "attempts": "{{count}} ניסיונות",
+      "pct_used": "{{pct}}% בשימוש",
+      "of_max": "מתוך {{max}}",
+      "source_label": "מקור",
+      "source_redis": "Redis (מבוזר)",
+      "source_in_memory": "בזיכרון (צומת יחיד)",
+      "load_error": "לא ניתן לטעון ניתוח מגבלות קצב.",
+      "history_empty_title": "טרם נרשם שימוש",
+      "history_empty_body": "פעילות הבקשות עבור הטווח שנבחר תוצג כאן ככל שתעבור תנועה דרך ה-API.",
+      "endpoints_empty_title": "אין עדיין לחץ על נקודות קצה",
+      "violations_empty_title": "אין אירועי האטה",
+      "evidence_notice": "מטריקות rate-limit ודפוסי abuse מ-GET /api/metrics/dashboard ומוני בקשות ב-tenant שלך. חריגות סף מיושרות ללוגי API gateway חיים — לא sparklines אקראיים."
     },
     "aiAnalysisEngine": {
       "title": "מנוע ניתוח AI",
       "subtitle": "זיהוי דפוסי תקיפה · מתאם איומים · ציון סיכון",
       "loading": "טוען דפוסי AI…",
+      "load_error": "טעינת נתוני מודיעין נכשלה",
+      "load_error_detail": "לא ניתן לטעון נתוני מודיעין: {{detail}}",
+      "last_updated": "סנכרון אחרון {{time}}",
+      "export_csv": "ייצוא דפוסים",
+      "evidence_soc": "דפוסי SOC חיים מ-GET /api/soc/ai-patterns. מתאמים נגזרים מאשכולות multi-engine ויעדים משותפים בנתוני ממצאים אמיתיים — ללא שרשראות תקיפה מומצאות.",
+      "evidence_clusters": "SOC ריק — מציג אשכולות ממצאים מ-/api/findings/clusters (חברים מ-/api/findings).",
+      "evidence_findings": "אשכולות ריקים — מציג ממצאים בודדים מ-/api/findings עד שהאשכולות יתמלאו.",
       "no_patterns_title": "אין דפוסי תקיפה עדיין",
-      "no_patterns_body": "הפעל סריקות ומנועי AI כדי לאכלס זיהוי דפוסים.",
+      "no_patterns_body": "הפעל סריקות ומנועי זיהוי כדי לאכלס זיהוי דפוסים.",
+      "go_engines": "הפעל מנועים",
       "patterns_heading": "דפוסי תקיפה",
       "clusters_heading": "אשכולות ממצאים",
       "risk_score": "ציון סיכון מורכב",
       "confidence": "ביטחון",
+      "kpi_patterns": "דפוסים שזוהו",
+      "kpi_confidence": "ביטחון ממוצע",
+      "kpi_correlations": "מתאמים",
+      "kpi_critical": "דפוסים קריטיים",
+      "tab_patterns": "דפוסי תקיפה",
+      "tab_correlations": "מתאמים",
+      "search_placeholder": "חיפוש דפוסים, MITRE, יעדים…",
+      "filter_all_categories": "כל הקטגוריות",
+      "filter_all_severity": "כל רמות החומרה",
+      "severity_critical": "קריטי",
+      "severity_high": "גבוה",
+      "severity_medium": "בינוני",
+      "severity_low": "נמוך",
+      "severity_info": "מידע",
       "category_cloud": "תקיפות ענן",
       "category_supply": "שרשרת אספקה",
       "category_identity": "זהות",
       "category_cloud_native": "ענן מקורי",
       "category_web": "אפליקציית ווב",
-      "category_other": "אחר"
+      "category_other": "אחר",
+      "select_pattern": "בחר דפוס תקיפה לצפייה בניתוח AI",
+      "affected_systems": "מערכות מושפעות",
+      "mitre_techniques": "טכניקות MITRE",
+      "mitre_not_mapped": "לא ממופה",
+      "indicators": "סימני IOC",
+      "no_indicators": "אין סימני IOC רשומים לאשכול זה.",
+      "max_epss": "EPSS מקסימלי",
+      "max_cvss": "CVSS מקסימלי",
+      "correlated_signals": "אותות מתואמים",
+      "remediation": "הנחיות תיקון",
+      "no_remediation": "אין טקסט תיקון — טפל במרכז הממצאים.",
+      "last_seen": "נראה לאחרונה: {{time}}",
+      "status_label": "סטטוס: {{status}}",
+      "correlations_intro": "מתאמים נגזרים מאשכולות multi-engine ויעדים משותפים בנתוני ממצאים חיים.",
+      "no_correlations_title": "אין מתאמים עדיין",
+      "no_correlations_body": "אשכולות multi-engine או יעדים משותפים יופיעו כאן כשמנועים ידווחו ממצאים.",
+      "corr_multi_engine_title": "מתאם multi-engine: {{name}}",
+      "corr_multi_engine_body": "{{count}} ממצא(ים) מ-{{engines}} מתכנסים על {{target}}.",
+      "corr_co_located_title": "חשיפה משותפת על {{target}}",
+      "corr_co_located_body": "{{count}} אשכולות פגיעות שונים משפיעים על {{target}} — משטח תקיפה מצטבר.",
+      "risk_multiplier": "מכפיל סיכון:",
+      "detected": "זוהה",
+      "evidence_notice": "סינתזת דפוסים AI מ-GET /api/soc/ai-patterns עם fallback ל-GET /api/findings/clusters — מודלים מסכמים רק הוכחות tenant חיות."
+    },
+    "askWeissman": {
+      "evidence_notice": "תשובות בשפה טבעית מ-POST /api/ask בלבד — SQL לקריאה בלבד על נתוני tenant עם יומן ביקורת. התמליל מקומי לסשן עד לייצוא.",
+      "export_transcript": "ייצוא תמליל CSV",
+      "clear_history": "נקה היסטוריה",
+      "refresh_session": "רענן סשן",
+      "search_placeholder": "חיפוש בשאלות ותשובות בתמליל…",
+      "plan_label": "תוכנית שאילתה"
     },
     "pqcRadar": {
       "title": "מכ\"ם מוכנות פוסט-קוונטום",
@@ -1467,7 +2415,110 @@
       "empty_ready": "מוכן לסריקה — הפעל לבדיקת מוכנות TLS לקוונטום.",
       "status_final": "סופי",
       "status_draft": "טיוטה",
-      "status_quantum_vulnerable": "פגיע לקוונטום"
+      "status_quantum_vulnerable": "פגיע לקוונטום",
+      "subtitle_v2": "בדיקת חילופי-מפתח היברידיים PQC חיה · סיכון HNDL · NIST FIPS 203/204/205",
+      "readiness_score": "ציון מוכנות קוונטית",
+      "grade_leader": "מוביל בעמידות קוונטית",
+      "grade_progress": "מעבר בתהליך",
+      "grade_exposed": "חשוף לקוונטום",
+      "remediation": "תיקון",
+      "target_label": "יעד לבדיקה (בתוך ההיקף)",
+      "target_required": "נדרש יעד לבדיקה (חייב להיות בהיקף הלקוח).",
+      "reset": "איפוס",
+      "reset_done": "הפרמטרים אופסו לברירת המחדל",
+      "control_panel": "לוח בקרת בדיקה",
+      "hide_json": "הסתר JSON",
+      "show_json": "הצג בקשה",
+      "section_probes": "בדיקות",
+      "probe_tls": "בדיקת חילופי-מפתח היברידיים TLS 1.3",
+      "probe_tls_hint": "משא ומתן גולמי על קבוצות ב-ClientHello",
+      "deep_pqc_probe": "אימות PQC מעמיק בלבד",
+      "deep_pqc_probe_hint": "אילוץ HelloRetryRequest לחשיפת תמיכה",
+      "probe_ssh": "מיפוי אלגוריתמי SSH KEX",
+      "probe_ssh_hint": "זיהוי sntrup761 / mlkem768",
+      "probe_cert": "מצאי קריפטוגרפי של תעודות",
+      "probe_cert_hint": "סיווג פגיעוּת לאלגוריתם שור",
+      "check_hsts": "בדיקת HSTS / הורדת גרסה",
+      "check_well_known": "מסמכי PQC ב-‎.well-known",
+      "check_ct_logs": "מצאי תעודות מיומני CT",
+      "check_ct_logs_hint": "crt.sh — איטי יותר",
+      "tls_ports": "פורטים של TLS",
+      "ssh_ports": "פורטים של SSH",
+      "pqc_groups": "קבוצות PQC לבדיקה",
+      "all": "הכול",
+      "none": "ללא",
+      "intensity": "עוצמה",
+      "intensity_light": "קלה",
+      "intensity_normal": "רגילה",
+      "intensity_aggressive": "אגרסיבית",
+      "timeout_ms": "פסק-זמן שקע",
+      "concurrency": "מקביליות",
+      "section_hndl": "מודל Harvest-Now-Decrypt-Later",
+      "data_sensitivity": "רגישות מידע",
+      "sens_low": "נמוכה",
+      "sens_medium": "בינונית",
+      "sens_high": "גבוהה",
+      "sens_critical": "קריטית",
+      "confidentiality_years": "תוחלת סודיות",
+      "quantum_threat_year": "שנת הגעת CRQC משוערת",
+      "section_thresholds": "ספי מפתח ו-SNI",
+      "min_rsa_bits": "מינ' ביטים RSA",
+      "min_ecc_bits": "מינ' ביטים ECC",
+      "sni": "עקיפת SNI (רשות)",
+      "present": "קיים",
+      "absent": "חסר",
+      "pqc_kex": "חילופי-מפתח PQC",
+      "default": "ברירת מחדל",
+      "supported": "נתמך",
+      "none_cap": "אין",
+      "best_group": "הקבוצה הטובה ביותר",
+      "offered": "מוצע",
+      "hndl_risk": "סיכון HNDL",
+      "scanning_live": "בודק TLS / SSH / תעודות בזמן אמת…",
+      "job": "משימה",
+      "findings": "ממצאים",
+      "no_findings": "לא נצפה אות חי עבור יעד זה עם הבדיקות שנבחרו.",
+      "evidence_notice": "מוכנות post-quantum crypto מ-POST /api/command-center/scan (pqc_scanner). cipher suites ואלגוריתמי תעודות נמדדים ב-handshakes TLS חיים ל-hosts מורשים."
+    },
+    "edDetection": {
+      "title": "מרכז משטח זיהוי והתחמקות",
+      "badge": "עמידות זיהוי",
+      "subtitle": "WAF/bot חי · פערי CSP ו-cookies · טלמטריה · משטח debug · ציון עמידות 0–100",
+      "select_client": "— בחר לקוח —",
+      "target_placeholder": "example.com או https://example.com",
+      "scanning": "⟳ בודק משטח זיהוי…",
+      "run_scan": "▶ הפעל הערכה",
+      "control_panel": "לוח בקרת בדיקות",
+      "intensity_light": "קל",
+      "intensity_normal": "רגיל",
+      "intensity_aggressive": "אגרסיבי",
+      "ua_limit": "גודל מטריצת UA",
+      "rate_burst": "פרצ burst",
+      "resilience_score": "עמידות זיהוי",
+      "score_hint": "גבוה יותר = קשה יותר להתחמק",
+      "score_explainer": "ציון מורכב מחסימות edge, rate limits, טלמטריה בדף, CSP/cookies, ומשטחי debug חשופים. EDR מקומי (AMSI/ETW) דורש agent בנקודת הקצה.",
+      "findings": "ממצאים",
+      "empty_ready": "הגדר בדיקות והפעל הערכה חיה."
+    },
+    "wafBypass": {
+      "title": "מעבדת אפיון WAF Bypass",
+      "badge": "WAF ORACLE",
+      "subtitle": "טביעת vendor חיה · מטריצת encoding/header/path/verb · JSON smuggling · ציון 0–100",
+      "select_client": "— בחר לקוח —",
+      "target_placeholder": "example.com או https://example.com",
+      "scanning": "⟳ בודק משטח WAF…",
+      "run_scan": "▶ הפעל הערכת WAF",
+      "control_panel": "לוח בקרת בדיקות",
+      "technique": "מיקוד טכניקת bypass",
+      "intensity_light": "קל",
+      "intensity_normal": "רגיל",
+      "intensity_aggressive": "אגרסивי",
+      "extra_payloads_ph": "payloads נוספים (מופרדים בפסיק)",
+      "hardening_score": "קשיחות WAF",
+      "score_hint": "גבוה יותר = חסימה חזקה יותר",
+      "score_explainer": "ציון מורכב משיעור חסימה, זיהוי vendor, ומשטחי bypass שנצפו (encoding, headers, path, verb, JSON). כל ממצא מבדיקה חיה ולא מזויפת.",
+      "findings": "ממצאים",
+      "empty_ready": "בחר לקוח, הגדר בדיקות, והפעל הערכת WAF חיה."
     },
     "supplyChainHub": {
       "title": "מרכז שרשרת אספקה",
@@ -1484,12 +2535,28 @@
       "last_run": "הפעלה אחרונה: {{time}}",
       "finding_fallback": "ממצא",
       "engines": {
-        "supply_chain": { "label": "סורק שרשרת אספקה", "description": "זיהוי פשרה בתלויות ספקים" },
-        "cicd_pipeline": { "label": "צינור CI/CD", "description": "חשיפת ArgoCD, Jenkins, GitLab CI, Azure DevOps" },
-        "container_registry": { "label": "רישום מכולות", "description": "סריקת חשיפת DockerHub, ECR, /v2/_catalog" },
-        "sbom_analyzer": { "label": "מנתח SBOM", "description": "סריקת CVE בקובצי CycloneDX/SPDX" },
-        "typosquatting_monitor": { "label": "ניטור Typosquatting", "description": "זיהוי חיקוי חבילות NPM/PyPI" }
-      }
+        "supply_chain": {
+          "label": "סורק שרשרת אספקה",
+          "description": "זיהוי פשרה בתלויות ספקים"
+        },
+        "cicd_pipeline": {
+          "label": "צינור CI/CD",
+          "description": "חשיפת ArgoCD, Jenkins, GitLab CI, Azure DevOps"
+        },
+        "container_registry": {
+          "label": "רישום מכולות",
+          "description": "סריקת חשיפת DockerHub, ECR, /v2/_catalog"
+        },
+        "sbom_analyzer": {
+          "label": "מנתח SBOM",
+          "description": "סריקת CVE בקובצי CycloneDX/SPDX"
+        },
+        "typosquatting_monitor": {
+          "label": "ניטור Typosquatting",
+          "description": "זיהוי חיקוי חבילות NPM/PyPI"
+        }
+      },
+      "evidence_notice": "ממצאי SBOM, תלויות ו-typosquat מ-POST /api/command-center/scan (מנועי sbom_analyzer / typosquatting_monitor / supply_chain). שורות package ממופות לבדיקות registry שניתן לאמת."
     },
     "digitalTwinSimulator": {
       "title": "סימולטור תאום דיגיטלי",
@@ -1511,55 +2578,127 @@
       "simulating": "⟳ מסמל",
       "simulate": "▶ סמל",
       "vulnerable_paths": "פגיע — נמצאו {{count}} נתיבי תקיפה",
-      "not_vulnerable": "לא פגיע",
+      "not_vulnerable": "לא נמצאו נתיבים נצילים",
       "running_simulation": "מריץ סימולציה…",
       "simulation_signals": "{{count}} אותות סימולציה",
       "simulation_status": "סימולציה {{status}}",
       "scenarios": {
-        "xss": { "label": "הזרקת XSS", "description": "מדמה נתיבי XSS מוחזרים, מאוחסנים ו-DOM" },
-        "sqli": { "label": "הזרקת SQL", "description": "מדגם union, blind, time-based ו-OOB SQL injection" },
-        "mitm": { "label": "MITM / הורדת TLS", "description": "מדמה MITM דרך SSL stripping, הורדת cipher, עקיפת HSTS" },
-        "cors": { "label": "תצורת CORS שגויה", "description": "מדגם חשיפת cross-origin דרך CORS מתירני ו-wildcard origins" }
+        "xss": {
+          "label": "הזרקת XSS",
+          "description": "מדמה נתיבי XSS מוחזרים, מאוחסנים ו-DOM"
+        },
+        "sqli": {
+          "label": "הזרקת SQL",
+          "description": "מדגם union, blind, time-based ו-OOB SQL injection"
+        },
+        "mitm": {
+          "label": "MITM / הורדת TLS",
+          "description": "מדמה MITM דרך SSL stripping, הורדת cipher, עקיפת HSTS"
+        },
+        "cors": {
+          "label": "תצורת CORS שגויה",
+          "description": "מדגם חשיפת cross-origin דרך CORS מתירני ו-wildcard origins"
+        }
       },
       "risk_critical": "קריטי",
       "risk_high": "גבוה",
       "risk_medium": "בינוני",
-      "risk_low": "נמוך"
+      "risk_low": "נמוך",
+      "status_pending": "רץ",
+      "rerun": "הרץ שוב",
+      "not_run_hint": "הרץ את הסימולציה כדי למדל נתיבי תקיפה אמיתיים.",
+      "pending_status": "סימולציה רצה — תוצאה בהמתנה",
+      "job_ref": "משימה {{jobId}}",
+      "clear_results": "נקה תוצאות",
+      "overview_simulated": "סומלצו",
+      "overview_vulnerable": "פגיעים",
+      "overview_clear": "ללא נתיבים",
+      "overview_running": "רצים",
+      "posture_grade": "Posture של Attack Surface",
+      "roadmap_heading": "תיקון ממוקד לפי עדיפות",
+      "target_label": "כתובת יעד",
+      "build_full_twin": "▶ בנה תאום מלא",
+      "full_twin_queued": "סריקת תאום מלא בתור: {{jobId}}",
+      "show_params": "▸ פרמטרים",
+      "hide_params": "▾ פרמטרים",
+      "probe_categories": "קטגוריות בדיקה",
+      "probe_depth_label": "עומק בדיקה",
+      "depth_quick": "מהיר (פחות URLs)",
+      "depth_standard": "סטנדרטי",
+      "depth_deep": "עמוק (יותר paths/params)",
+      "extra_paths_label": "נתיבי בדיקה נוספים",
+      "max_urls_label": "מקסימום URLs לבדיקה",
+      "timeout_label": "Timeout (ms)",
+      "check_xss": "בדיקות XSS reflection",
+      "check_sqli": "בדיקות SQLi error-based",
+      "check_mitm": "בדיקות MITM / transport",
+      "check_cors": "בדיקות CORS misconfiguration",
+      "strict_mode": "מצב strict (הסלמת חומרה)",
+      "include_http_cleartext": "בדוק HTTP cleartext",
+      "canary_only": "payloads canary בטוחים בלבד",
+      "subscore_transport": "Transport / TLS",
+      "subscore_headers": "Security headers",
+      "subscore_cors": "מדיניות CORS",
+      "subscore_injection": "Injection surface",
+      "exploit_exploitable": "נתיבים ניצולים אושרו",
+      "exploit_partial": "ניצול חלקי",
+      "exploit_hardening": "פערי הקשחה נותרו",
+      "exploit_hardened": "לא נצפו נתיבים ניצולים",
+      "profile_server": "שרת",
+      "profile_stack": "מחסנית",
+      "profile_cleartext": "HTTP cleartext",
+      "profile_paths": "נתיבים שהתגלו",
+      "evidence_notice": "תרחישי digital twin משחזרים גרפי ממצאים מורשים ב-POST /api/command-center/scan (digital_twin). חישוב blast-radius משתמש ב-GET /api/financial-risk/:clientId כשיש קלט FAIR."
     },
     "exploitResearchLab": {
       "title": "מעבדת מחקר ניצול",
-      "subtitle": "מחקר אבטחה מתקדם · סריקה רב-וקטורית · מודיעין CVE",
+      "subtitle": "PoE synthesis, סריקות מודול, מודיעין CVE — מהממצאים ו-payload sync החיים",
       "badge": "מחקר",
+      "data_notice": "ממצאים נטענים מ-GET /api/soc/exploit-lab (שורות PoE sealed) עם fallback לממצאים critical/high של הטננט. הרצות סורק שולחות מנועי production אמיתיים.",
+      "refresh": "רענן",
       "kpi_modules": "מודולי סורק",
       "kpi_findings": "סה\"כ ממצאים",
       "kpi_critical": "ממצאים קריטיים",
       "kpi_cves": "CVE במעקב",
       "tab_scanners": "מודולי סורק",
       "tab_cves": "מפת ניצול CVE",
+      "tab_payloads": "ספריית Payloads",
       "load_error": "לא ניתן לטעון ממצאים: {{error}}",
       "findings_count": "{{count}} ממצאים",
       "loading": "טוען…",
-      "capabilities": "יכולות",
+      "capabilities": "יכולות ייחוס (טקסונומיית מודול)",
       "findings_heading": "ממצאים",
       "loading_findings": "טוען ממצאים…",
       "no_findings_module": "אין ממצאים קריטיים או גבוהים למודול זה עדיין.",
-      "run_scan_link": "הפעל סריקה",
-      "view_all_link": "Findings C2",
-      "no_findings_suffix": "או צפה בכולם ב",
+      "no_findings_suffix": "הפעל סורק מודול או PoE synthesis כדי לאכלס ראיות.",
       "finding_fallback": "ממצא",
       "cvss": "CVSS:",
       "cvss_label": "CVSS",
       "confidence": "ביטחון:",
       "via": "דרך {{source}}",
       "raw_evidence": "ראיות גולמיות",
-      "run_scanner": "▶ הפעל סורק",
-      "view_all_findings": "📋 צפה בכל הממצאים",
+      "run_scanner": "הרץ {{engine}}",
+      "scanning": "סורק…",
+      "scan_failed": "שליחת הסריקה נכשלה",
+      "select_client": "בחר לקוח טננט תחילה",
+      "missing_target": "ללקוח אין URL יעד מורשה",
+      "engine_not_production": "מנוע {{engine}} הוא קטלוג בלבד — לא ניתן לשלוח",
+      "poe_heading": "PoE Synthesis",
+      "poe_subtitle": "POST /api/poe-scan/run מול יעד לקוח מורשה",
+      "run_poe": "הרץ PoE scan",
+      "poe_running": "PoE רץ…",
+      "poe_failed": "PoE scan נכשל",
+      "payloads_intro": "Payloads חיים מ-GET /api/payload-sync/payloads (intel DB)",
+      "payloads_60d": "{{count}} payloads סונכרנו (60 יום)",
+      "no_payloads_title": "אין payloads מסונכרנים",
+      "no_payloads": "intel DB לא החזיר שורות. הפעל payload sync או המתן ל-ingest.",
+      "view_all_findings": "צפה בכל הממצאים",
       "cve_map_intro": "קבוצות CVE מממצאים קריטיים/גבוהים חיים — ממוינות לפי CVSS ומספר ממצאים.",
       "no_cve_findings": "אין ממצאים קריטיים/גבוהים מתויגי CVE עדיין.",
       "view_findings_link": "צפה בכל הממצאים",
       "findings_plural": "{{count}} ממצאים",
       "findings_singular": "ממצא {{count}}",
-      "exploit_signal": "⚠ אות ניצול בממצאים",
+      "exploit_signal": "אות ניצול בממצאים",
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
@@ -1571,55 +2710,28 @@
       "maturity_theoretical": "תיאורטי",
       "load_failed": "טעינת ממצאים נכשלה",
       "modules": {
-        "web-app": { "name": "סורק אפליקציות ווב", "description": "SQL injection, XSS, SSTI, XXE, path traversal, CSRF, open redirect וליקויי business logic." },
-        "cloud": { "name": "סורק תשתית ענן", "description": "תצורות שגויות AWS/Azure/GCP, הסלמת הרשאות IAM, חשיפת S3/Blob, ניצול metadata service." },
-        "api": { "name": "סורק אבטחת API", "description": "REST/GraphQL/gRPC: BOLA/IDOR, mass assignment, עקיפת auth, עקיפת rate limit, חשיפת schema." },
-        "active-directory": { "name": "סורק Active Directory", "description": "Kerberoasting, AS-REP Roasting, ניצול ACL, ניתוח נתיבים בסגנון BloodHound, ספירת GPO." },
-        "container": { "name": "סורק מכולות ו-K8s", "description": "Docker/Kubernetes: מכולות privileged, תצורות RBAC, חשיפת secrets, סריקת CVE בתמונות." }
-      }
-    },
-    "otIcsSecurity": {
-      "title": "אבטחת OT / ICS / IoT",
-      "client_label": "לקוח:",
-      "devices_scada": "מכשירי SCADA",
-      "devices_plc": "מכשירי PLC",
-      "devices_hmi": "מכשירי HMI",
-      "devices_rtu": "מכשירי RTU",
-      "protocols_heading": "פרוטוקולים תעשייתיים שזוהו",
-      "devices_count": "{{count}} מכשירים",
-      "devices_heading": "מכשירי OT/ICS/IoT",
-      "loading": "סורק רשת לאיתור מכשירי OT...",
-      "empty": "לא נמצאו מכשירי OT/ICS. הגדר טווח רשת לסריקה.",
-      "empty_scan_hint": "לא נמצאו מכשירי OT/ICS. הפעל סריקת מנוע למעלה לזיהוי פרוטוקולים תעשייתיים.",
-      "vendor": "יצרן:",
-      "protocol": "פרוטוקול:",
-      "ip_label": "IP:",
-      "port_label": "פורט:",
-      "confidence_label": "ביטחון:",
-      "unknown": "לא ידוע",
-      "scan": "סרוק",
-      "engines_heading": "סריקות מנוע OT/ICS",
-      "findings_heading": "ממצאי OT/ICS ({{count}})",
-      "findings_count": "{{count}} ממצאים",
-      "engine_scada": "סריקה פasive SCADA / ICS",
-      "engine_scada_desc": "זיהוי passive של Modbus, BACnet, OPC-UA, EtherNet/IP ו-S7 בהיקף הלקוח",
-      "engine_modbus": "בדיקת Modbus/TCP",
-      "engine_modbus_desc": "בדיקת function-code 03 בפורט 502 עם אישור FC03",
-      "engine_bacnet": "בדיקת BACnet/IP",
-      "engine_bacnet_desc": "בדיקת readProperty ב-UDP 47808 לאישור stack BACnet",
-      "engine_opcua": "גילוי OPC-UA",
-      "engine_opcua_desc": "לחיצת יד HEL/ACK ב-TCP 4840",
-      "select_client_first": "בחר לקוח תחילה",
-      "no_client_target": "ללקוח שנבחר אין דומיין או IP ראשי",
-      "scan_failed": "הסריקה נכשלה",
-      "queued": "{{label}} בתור (משימה {{jobId}})",
-      "last_scan": "סריקה אחרונה: {{time}}",
-      "status_running": "רץ",
-      "status_done": "הושלם",
-      "status_error": "שגיאה",
-      "status_idle": "ממתין",
-      "notice_title": "הודעת אבטחת OT",
-      "notice_body": "מערכות בקרה תעשייתיות דורשות טיפול מיוחד. כל הסריקות פasive כברירת מחדל. בדיקה אקטיבית דורשת הרשאה מפורשת ועלולה לשבש פעילות."
+        "web-app": {
+          "name": "סורק אפליקציות ווב",
+          "description": "SQL injection, XSS, SSTI, XXE, path traversal, CSRF, open redirect וליקויי business logic."
+        },
+        "cloud": {
+          "name": "סורק תשתית ענן",
+          "description": "תצורות שגויות AWS/Azure/GCP, הסלמת הרשאות IAM, חשיפת S3/Blob, ניצול metadata service."
+        },
+        "api": {
+          "name": "סורק אבטחת API",
+          "description": "REST/GraphQL/gRPC: BOLA/IDOR, mass assignment, עקיפת auth, עקיפת rate limit, חשיפת schema."
+        },
+        "active-directory": {
+          "name": "סורק Active Directory",
+          "description": "Kerberoasting, AS-REP Roasting, ניצול ACL, ניתוח נתיבים בסגנון BloodHound, ספירת GPO."
+        },
+        "container": {
+          "name": "סורק מכולות ו-K8s",
+          "description": "Docker/Kubernetes: מכולות privileged, תצורות RBAC, חשיפת secrets, סריקת CVE בתמונות."
+        }
+      },
+      "evidence_notice": "אימות exploit מבוקר רץ ב-POST /api/command-center/scan עם RoE קפדני ושערי council. הצלחת PoC דורשת התנהגות יעד חיה שניתנת לשחזור — ללא screenshots shell מוכנים."
     },
     "networkProtocols": {
       "title": "ניתוח פרוטוקולי רשת",
@@ -1640,7 +2752,14 @@
       "empty_suffix": "או מחדר המנועים. בחר לקוח למיזוג צמתי risk-graph כשזמינים.",
       "findings_one": "ממצא {{count}} מבדיקות חיות",
       "findings_other": "{{count}} ממצאים מבדיקות חיות",
-      "view_findings": "צפה בממצאים"
+      "view_findings": "צפה בממצאים",
+      "evidence_notice": "חשיפת פרוטוקולים מצטברת מ-GET /api/soc/network-protocols — מבדיקות חיות, ללא סטטיסטיקות מזויפות.",
+      "search_placeholder": "חפש פרוטוקולים…",
+      "export_csv": "ייצא CSV",
+      "status_critical": "קריטי",
+      "status_warning": "אזהרה",
+      "status_secure": "מאובטח",
+      "no_search_results": "אין פרוטוקולים התואמים לחיפוש."
     },
     "riskGraphVisualization": {
       "title": "הדמיית גרף סיכון",
@@ -1675,55 +2794,98 @@
       "asset_fallback": "נכס",
       "legend": "מקרא",
       "legend_hint": "גודל הצומת מייצג ציון סיכון. קווים אדומים מדגישים נתיבים דרך נקודות צוואר בקבוק.",
-      "risk_label": "סיכון {{severity}}"
+      "risk_label": "סיכון {{severity}}",
+      "evidence_notice": "גרף סיכון מ-GET /api/risk/graph?client_id=…. צילומי נתיבי תקיפה מ-GET /api/attack-paths/:clientId (חישוב מחדש דרך ?recompute=1).",
+      "attack_paths_heading": "נתיבי תקיפה סבירים",
+      "recompute_paths": "חשב נתיבים מחדש",
+      "no_attack_paths": "אין צילום נתיב תקיפה עדיין. סמן צמתים כחשופים לאינטרנט / crown-jewel, ואז חשב מחדש.",
+      "choke_points": "נקודות צוואר בקבוק (תקן אלה קודם)",
+      "export_csv": "ייצוא צמתים CSV",
+      "path_label": "נתיב #{{num}} · {{hops}} קפיצות",
+      "path_risk": "סיכון {{value}}",
+      "path_coverage": "{{pct}}% מהנתיבים",
+      "severity_critical": "קריטי",
+      "severity_high": "גבוה",
+      "severity_medium": "בינוני",
+      "severity_low": "נמוך"
     },
     "baselineAndDrift": {
       "title": "Baseline וזיהוי Drift",
-      "baseline_assets": "נכסי Baseline",
+      "subtitle": "UEBA מסוכני קצה — agent_metric_baselines + agent_anomalies",
+      "badge": "UEBA",
+      "baseline_assets": "סוכנים מנוטרים",
+      "baseline_rows": "מדדי Baseline",
+      "samples": "{{count}} דגימות",
       "drift_score": "ציון Drift",
       "anomalies": "חריגות",
       "last_update": "עדכון אחרון",
       "never": "אף פעם",
+      "refresh": "רענן",
+      "load_failed": "טעינת נתוני baseline נכשלה",
+      "evidence_notice": "ציוני drift וחריגות מחושבים מ-agent_metric_baselines ו-agent_anomalies חיים במסד הטננט — לא גרפים סינתטיים.",
       "drift_over_time": "Drift לאורך זמן",
-      "no_drift_data": "אין נתוני drift זמינים",
+      "anomaly_volume": "נפח חריגות",
+      "no_drift_data": "אין נתוני drift לטווח זה",
+      "no_anomaly_volume": "לא נרשמו חריגות בטווח זה",
+      "range_24h": "24ש׳",
+      "range_7d": "7י",
+      "range_30d": "30י",
+      "open_agents": "פרוס סוכנים →",
+      "deploy_agents": "פתח ניהול סוכנים",
+      "search_placeholder": "חפש מדד, סוכן או פירוט…",
+      "filter_all": "הכל",
       "anomalies_heading": "חריגות שזוהו ({{count}})",
       "loading_anomalies": "טוען חריגות...",
-      "no_anomalies": "לא זוהו חריגות",
-      "score_label": "ציון: {{score}}",
+      "no_anomalies": "לא זוהו חריגות בטווח זמן זה.",
+      "no_anomalies_title": "אין חריגות",
+      "no_filter_anomalies": "אין חריגות התואמות לחיפוש או למסנן.",
+      "score_label": "Z-score: {{score}}",
+      "agent_label": "סוכן",
+      "observed_vs_baseline": "נצפה {{observed}} מול baseline {{baseline}}",
       "detected_at": "זוהה: {{time}}",
       "no_baseline_title": "לא הוגדר Baseline",
       "no_baseline_body": "סוכני endpoint לומדים baseline אוטומטית במשך 7 ימים. פרוס סוכנים והמתן לדגימות UEBA."
     },
     "sbomBrowser": {
       "title": "דפדפן SBOM",
+      "subtitle": "Software Bill of Materials חי מ-client_sbom_components, מתואם עם ממצאי פגיעות של הטננט",
       "total_components": "סה\"כ רכיבים",
       "direct_transitive": "{{direct}} ישירים, {{transitive}} transitive",
       "vulnerable": "פגיעים",
-      "outdated": "מיושנים",
-      "licenses": "רישיונות",
+      "high_severity": "חומרה גבוהה",
+      "high_severity_hint": "רכיבים עם ממצאים critical או high מותאמים",
+      "high_severity_badge": "חומרה גבוהה",
+      "ecosystems": "Ecosystems",
       "risk_score": "ציון סיכון",
-      "search_placeholder": "חפש לפי שם, גרסה או רישיון...",
+      "risk_score_hint": "משוקלל מספירת פגיעויות מותאמות",
+      "search_placeholder": "חפש לפי שם, גרסה, ecosystem או source…",
       "filter_all": "הכל",
       "filter_vulnerable": "פגיעים",
-      "filter_outdated": "מיושנים",
+      "filter_high_severity": "חומרה גבוהה",
       "filter_direct": "ישירים",
       "filter_transitive": "Transitive",
-      "all_licenses": "כל הרישיונות",
+      "all_ecosystems": "כל ה-Ecosystems",
       "export_spdx": "ייצא SPDX",
       "export_cyclonedx": "ייצא CycloneDX",
       "components_heading": "רכיבים ({{count}})",
       "loading": "טוען SBOM...",
-      "empty": "לא נמצאו רכיבים התואמים למסננים.",
+      "refresh": "רענן",
+      "empty": "אין רכיבים התואמים למסננים.",
+      "empty_filter_hint": "נסה לנקות את החיפוש או את המסננים.",
+      "empty_data_title": "אין רכיבי SBOM",
+      "empty_data": "אין רכיבי SBOM שמורים ללקוח זה עדיין. הרץ סריקת supply-chain או SBOM ingest כדי למלא את התצוגה.",
+      "no_client_title": "בחר לקוח",
+      "no_client": "בחר לקוח טננט כדי לטעון רכיבי SBOM חיים מהמסד.",
+      "load_failed": "טעינת רכיבי SBOM נכשלה",
+      "export_failed": "ייצוא SBOM נכשל",
       "type_direct": "direct",
       "type_transitive": "transitive",
-      "outdated_badge": "מיושן",
-      "latest_version": "אחרון: v{{version}}",
       "known_vulnerabilities": "{{count}} פגיעויות ידועות",
       "more_vulnerabilities": "+{{count}} פגיעויות נוספות",
-      "dependencies_count": "{{count}} תלויות",
-      "view_details": "צפה בפרטים",
+      "ingested_at": "נקלט {{date}}",
       "alert_title": "התראת סיכון שרשרת אספקה",
-      "alert_body": "{{count}} רכיבים עם פגיעויות ידועות. עדכן חבילות אלה להפחתת סיכון."
+      "alert_body": "{{count}} רכיבים עם פגיעויות ידועות. עדכן חבילות אלה להפחתת סיכון.",
+      "evidence_notice": "רכיבי SBOM והתאמות CVE מ-POST /api/command-center/scan (sbom_analyzer) ו-GET /api/findings מסונן לפי מנועי supply-chain. קישורי CVE מצביעים לרשומות NVD."
     },
     "containmentRulesBuilder": {
       "title": "בונה כללי Containment",
@@ -1756,7 +2918,8 @@
       "action_alert": "התראה בלבד",
       "auto_trigger": "הפעלה אוטומטית בהתאמת תנאי",
       "saving": "שומר...",
-      "save_changes": "שמור שינויים"
+      "save_changes": "שמור שינויים",
+      "evidence_notice": "playbooks containment מ-GET/POST /api/containment-rules. פעולות מתבצעות על רשומות agent/session חיות כש-triggers תואמים — dry-run מציג רק קריאות API מתוכננות."
     },
     "templateEngineWorkbench": {
       "title": "מנוע תבניות",
@@ -1776,7 +2939,18 @@
       "verified": "אומת",
       "not_verified": "לא אומת",
       "verification": "אימות",
-      "steps": "שלבים"
+      "steps": "שלבים",
+      "evidence_notice": "תבניות מ-GET /api/template-engine/templates. הרצות מבצעות HTTP חי דרך POST /api/template-engine/run מול כתובת היעד המורשית.",
+      "result_status": "סטטוס",
+      "result_matched": "התאמה",
+      "result_steps": "שלבים",
+      "result_matched_yes": "התאים",
+      "result_matched_no": "ללא התאמה",
+      "steps_matched": "{{matched}} / {{total}} שלבים התאימו",
+      "step_label": "שלב {{id}}",
+      "step_matched": "התאים",
+      "step_no_match": "ללא התאמה",
+      "duration_ms": "{{ms}} מ״ש"
     },
     "ceoVault": {
       "title": "כספת CEO",
@@ -1809,7 +2983,8 @@
       "expiration_optional": "תאריך תפוגה (אופציונלי)",
       "cancel": "ביטול",
       "saving": "שומר...",
-      "save_secret": "שמור סוד"
+      "save_secret": "שמור סוד",
+      "evidence_notice": "רשומות vault הוכחות executive מ-GET /api/ceo/vault ו-/api/ceo/* קשורים. artifacts Genesis HPC ו-vaccine דורשים RBAC של CEO — ללא שורות crown-jewel placeholder."
     },
     "identityContextManager": {
       "title": "מנהל הקשר זהות",
@@ -1838,7 +3013,8 @@
       "never": "אף פעם",
       "anomalies_label": "חריגות",
       "recent_activity": "פעילות אחרונה",
-      "close": "סגור"
+      "close": "סגור",
+      "evidence_notice": "הקשר identity וגילוי IdP מ-GET /api/identity-context ו-endpoints SaaS/IdP לפי לקוח. שורות correlation ממופות ל-metadata SSO/OAuth חי — לא tenants Entra לדוגמה."
     },
     "ceoCommandCenter": {
       "title": "מרכז פיקוד CEO",
@@ -1846,7 +3022,10 @@
       "war_room": "זרם חדר מלחמה",
       "genesis_hpc": "Genesis ו-HPC",
       "vaccine_vault": "כספת חיסונים",
-      "sovereign_lab": "מעבדה ריבונית"
+      "sovereign_lab": "מעבדה ריבונית",
+      "evidence_notice": "טלמטריית CEO חיה מ-/api/ceo/* — זרם משימות חדר מלחמה, סטטוס Genesis HPC, רשומות כספת חיסונים והרצות מעבדה ריבונית. RBAC נאכף בצד השרת; ללא נתוני executive מדומים.",
+      "loading": "טוען פאנלי מרכז פיקוד…",
+      "search_placeholder": "סינון מזהה job או מקטע executive…"
     },
     "clientEngagements": {
       "title": "מעורבויות",
@@ -1938,7 +3117,8 @@
       "load_failed": "טעינת הבקשות נכשלה (HTTP {{status}}) {{detail}}",
       "approve_failed": "האישור נכשל (HTTP {{status}})",
       "reject_failed": "הדחייה נכשלה (HTTP {{status}})",
-      "network_error": "שגיאת רשת"
+      "network_error": "שגיאת רשת",
+      "evidence_notice": "בקשות Rules-of-Engagement מ-GET /api/roe ו-mutations אישור ב-POST /api/roe/:id/approve. אין סריקה שרצה עד RoE מאושר ל-scope היעד."
     },
     "councilHitlQueue": {
       "title": "תור HITL של המועצה",
@@ -1963,7 +3143,26 @@
       "approved_toast": "אושר והופעל — job {{jobId}}…",
       "approval_failed": "האישור נכשל: {{message}}",
       "rejected_toast": "ההצעה נדחתה.",
-      "rejection_failed": "הדחייה נכשלה: {{message}}"
+      "rejection_failed": "הדחייה נכשלה: {{message}}",
+      "evidence_notice": "פריטי תור מ-GET /api/council/hitl/queue. אישורים ודחיות דרך POST /api/council/hitl/{id}/approve ו-/reject. מגבלות בטיחות נאכפות בכל job — רשומות מועצה חיות בלבד.",
+      "tab_all": "הכל",
+      "tab_pending_approval": "ממתין",
+      "tab_fired": "הופעל",
+      "tab_rejected": "נדחה",
+      "status_PENDING_APPROVAL": "ממתין לאישור",
+      "status_APPROVED": "אושר",
+      "status_FIRED": "הופעל",
+      "status_REJECTED": "נדחה",
+      "status_FAILED": "נכשל",
+      "sev_critical": "קריטי",
+      "sev_high": "גבוה",
+      "sev_medium": "בינוני",
+      "sev_low": "נמוך",
+      "empty_title": "התור ריק",
+      "empty_search": "אין פריטים התואמים לחיפוש.",
+      "clear_search": "נקה חיפוש",
+      "search_placeholder": "חפש לפי מזהה, יעד, לקוח או חומרה…",
+      "export_csv": "ייצוא CSV"
     },
     "feedbackLoopVerification": {
       "title": "אימות לולאת משוב",
@@ -1974,12 +3173,60 @@
       "running": "⟳ מריץ…",
       "run_chain": "▶ הרץ שרשרת",
       "template_editable": "תבנית (ניתנת לעריכה)",
+      "loading_template": "טוען תבנית…",
+      "templates_empty": "לא התקבלו תבניות מ-/api/template-engine/templates — ניתן לערוך YAML ידנית.",
+      "load_failed": "טעינת התבנית נכשלה",
       "result": "תוצאה",
+      "result_empty_title": "עדיין לא הורצה שרשרת",
       "result_empty": "הרץ את השרשרת כדי לראות אימות וראיות שלבים.",
       "state_evidence": "State וראיות",
+      "steps_total": "שלבים",
+      "steps_passed": "עברו",
+      "verification": "אימות",
       "verified": "✓ אומת",
       "not_verified": "לא אומת",
-      "run_failed": "ההרצה נכשלה"
+      "run_failed": "ההרצה נכשלה",
+      "evidence_notice": "אימות closed-loop מריץ מחדש ממצאים שטופלו ב-POST /api/command-center/scan ומשווה ל-history ב-GET /api/findings — מאשר תיקונים על יעדים חיים."
+    },
+    "mobileSecurity": {
+      "title": "אבטחת מובייל ואפליקציות",
+      "subtitle": "ממצאי מובייל שהתגלו בהיקף שלך — iOS ו-Android, מקובצים לפי אפליקציה",
+      "badge": "מובייל",
+      "refresh": "רענן",
+      "client_label": "לקוח:",
+      "select_client_first": "בחר לקוח תחילה",
+      "no_client_domain": "ללקוח שנבחר אין דומיין או היקף IP ראשי",
+      "scan_failed": "הסריקה נכשלה",
+      "scan_no_job": "הסריקה לא החזירה מזהה משימה",
+      "network_error": "שגיאת רשת",
+      "stat_total_apps": "אפליקציות",
+      "stat_ios": "iOS",
+      "stat_android": "Android",
+      "stat_findings": "ממצאים פתוחים",
+      "sev_critical": "קריטי",
+      "sev_high": "גבוה",
+      "sev_medium": "בינוני",
+      "sev_low": "נמוך",
+      "sev_info": "מידע",
+      "search_placeholder": "חפש שם אפליקציה או חבילה…",
+      "filter_all": "הכול",
+      "filter_ios": "iOS",
+      "filter_android": "Android",
+      "apps_heading": "אפליקציות שהתגלו",
+      "apps_empty_title": "לא התגלו אפליקציות מובייל",
+      "apps_empty_body": "אפליקציות יופיעו כאן לאחר שסריקת מובייל תזהה ממצאי iOS/Android בהיקף שלך. בחר לקוח והפעל סריקה כדי להתחיל.",
+      "platform_ios": "iOS",
+      "platform_android": "Android",
+      "platform_unknown": "לא ידוע",
+      "package_label": "חבילה:",
+      "findings_count_badge": "{{count}} ממצאים",
+      "scanning": "סורק…",
+      "scan_now": "סרוק עכשיו",
+      "view_findings": "צפה בממצאים",
+      "recent_findings_heading": "ממצאי מובייל אחרונים",
+      "open_findings": "פתח ממצאים ←",
+      "findings_empty_title": "אין עדיין ממצאי מובייל",
+      "evidence_notice": "בדיקות surface לאפליקציות mobile ב-POST /api/command-center/scan (מנועי mobile). pinning וממצאי deep-link דורשים binaries שסופקו או hosts mobile API נגישים."
     },
     "astFuzzingStudio": {
       "title": "AST Smart Fuzzing",
@@ -1993,7 +3240,21 @@
       "preview_empty": "צור מוטציות לתצוגה מקדימה של וריאנטים.",
       "mutations": "מוטציות",
       "count": "כמות:",
-      "preview_failed": "התצוגה המקדימה נכשלה"
+      "preview_failed": "התצוגה המקדימה נכשלה",
+      "input_hint": "הדבק אובייקט/מערך JSON או גוף טופס. המוטציות נשארות תקינות מבנית תוך בדיקת מקרי קצה לפי סוג.",
+      "presets_label": "דוגמאות",
+      "preset_json": "אובייקט JSON",
+      "preset_array": "מערך JSON",
+      "preset_form": "גוף טופס",
+      "json_valid": "JSON תקין",
+      "json_invalid": "מחרוזת גולמית",
+      "clear": "נקה",
+      "copy_all": "העתק הכול",
+      "download": "הורד",
+      "search_placeholder": "סנן מוטציות…",
+      "no_match": "אין מוטציות התואמות לסינון.",
+      "showing_count": "{{shown}} מתוך {{total}}",
+      "evidence_notice": "קמפיינים fuzz מונחי-AST נשלחים לתור ב-POST /api/command-center/scan עם payloads מודעים ל-grammar. crashes ו-anomalies נשמרים כממצאי tenant רגילים."
     },
     "oobVerification": {
       "title": "אימות OOB",
@@ -2008,8 +3269,11 @@
       "polling": "בודק…",
       "poll": "בדוק Callback",
       "status": "סטטוס",
+      "hits_label": "פגיעות",
+      "token_label": "טוקן",
       "callback_domain": "דומיין callback",
-      "injection_hint": "רמז הזרקה",
+      "callback_url": "כתובת callback",
+      "injection_hint": "Payload להזרקה (העתק לשדה הפגיע)",
       "verified": "אומת",
       "not_verified": "טרם אומת",
       "mint_failed": "ההנפקה נכשלה",
@@ -2024,11 +3288,21 @@
       "verification_body": "בדוק את הטוקן כדי לאשר האם מאזין OAST ראה אינטראקציות DNS/HTTP.",
       "full_dashboard": "לוח מלא →",
       "mint_begin": "הנפק טוקן כדי להתחיל.",
+      "mint_empty_title": "אין probe פעיל",
       "hit_confirmed": "✓ פגיעה אושרה",
       "hits_count": "{{count}} פגיעות",
       "poll_btn": "בדוק",
       "first_hit": "פגיעה ראשונה: {{time}}",
-      "report_note": "בדוחות, ממצאים שאומתו דרך OOB callbacks מסומנים verification_method=oob_oast_callback."
+      "report_note": "בדוחות, ממצאים שאומתו דרך OOB callbacks מסומנים verification_method=oob_oast_callback.",
+      "evidence_notice": "טוקנים ופגיעות מ-POST /api/oast/probe ו-GET /api/oast/verify/:token — שורות callback מ-GET /api/oast/callbacks. פגיעה מאושרת = אינטראקציית DNS/HTTP אמיתית.",
+      "auto_poll_on": "בדיקה אוטומטית (5ש׳)",
+      "auto_poll_off": "בדיקה אוטומטית כבויה",
+      "callbacks_for_token": "Callbacks לטוקן זה ({{count}})",
+      "tenant_callbacks_heading": "Callbacks OAST אחרונים בטננט",
+      "col_time": "זמן",
+      "col_channel": "ערוץ",
+      "col_source": "IP מקור",
+      "col_payload": "Payload"
     },
     "domainDiscovery": {
       "dashboard": "← לוח בקרה",
@@ -2077,7 +3351,18 @@
       "select_one_domain": "בחר לפחות דומיין אחד",
       "discovered_toast": "התגלו {{total}} דומיינים ({{live}} פעילים)",
       "scan_queued": "סריקה בתור ל-{{count}} דומיינים (Job: {{jobId}})",
-      "network_error": "שגיאת רשת"
+      "network_error": "שגיאת רשת",
+      "evidence_notice": "מיפוי דומיינים דרך POST /api/discovery/domains. תור סריקה מרוכז דרך POST /api/scan/discovered-domains. כל הנכסים מגיעים מה-backend — ללא נתונים מוכנים מראש.",
+      "search_placeholder": "חיפוש דומיינים, IP, כותרות…",
+      "export_csv": "ייצוא CSV",
+      "stage_primary": "דומיין ראשי",
+      "stage_ct": "Certificate Transparency",
+      "stage_dns": "מיפוי DNS",
+      "stage_reverse_ip": "Reverse IP",
+      "stage_crawl": "Web Crawl",
+      "stage_whois": "WHOIS",
+      "stage_email": "רשומות אימייל",
+      "stage_pattern": "יצירת תבניות"
     },
     "topTierEngineHub": {
       "back_matrix": "← מטריצת מנועים",
@@ -2105,7 +3390,12 @@
       "probe_label": "probe: {{status}}",
       "findings_duration": "{{count}} ממצאים · {{ms}}ms",
       "open_dedicated": "פתח דף ייעודי",
-      "open_engine_detail": "פתח פרטי מנוע"
+      "open_engine_detail": "פתח פרטי מנוע",
+      "evidence_notice": "שורות ביקורת מ-GET /api/engines/top-tier/audit ובדיקות בריאות דרך POST /api/engines/top-tier/health-probe.",
+      "search_placeholder": "חפש מנועים לפי ID, שם או נתיב…",
+      "export_csv": "ייצא CSV ביקורת",
+      "showing_count": "{{count}} מתוך {{total}} מנועים",
+      "no_search_results": "אין מנועים התואמים לחיפוש."
     },
     "clientSaasIdpDiscovery": {
       "title": "גילוי SaaS / IdP",
@@ -2147,7 +3437,8 @@
     "oastDashboard": {
       "title": "לוח OAST / OOB",
       "badge": "APT / OOB",
-      "subtitle": "ניטור callbacks מחוץ לרשת",
+      "subtitle": "ניטור callbacks מחוץ לרשת — ממצאים קריטיים רק לאחר אישור OAST אמיתי",
+      "verification_banner": "מנוע OAST של Weissman מדווח critical/high רק כשה-listener של המפעיל מאשר callback אמיתי (verification_method=oob_oast_callback). בדיקות שזרעו probe בלי פגיעה הן info — אפס false-positive קריטיים.",
       "client": "לקוח:",
       "select_client": "— בחר לקוח —",
       "oob_probes": "בדיקות OOB",
@@ -2193,9 +3484,22 @@
         },
         "blind_ssrf": {
           "label": "Blind SSRF",
-          "description": "callback SSRF מחוץ לרשת לאישור הגעה OOB"
+          "description": "callback SSRF מחוץ לרשת ב-30+ פרמטרים — critical רק לאחר פגיעה ב-listener"
+        },
+        "xxe_oob": {
+          "label": "Blind XXE",
+          "description": "XXE OOB דרך POST XML ל-API — מתואם callback מאומת"
+        },
+        "cmd_dns": {
+          "label": "הזרקת פקודות DNS",
+          "description": "דפוסי exfil DNS (nslookup) — critical רק עם OAST מאושר"
+        },
+        "host_ssrf": {
+          "label": "Host-header SSRF",
+          "description": "קנרית OOB לשגיאות ניתוב Host / X-Forwarded-Host"
         }
-      }
+      },
+      "evidence_notice": "tokens OAST מ-POST /api/oast/probe ושורות callback מ-GET /api/oast/callbacks. hit = ה-listener קיבל אינטראקציה out-of-band אמיתית."
     },
     "osintEngineProfile": {
       "title": "מנוע OSINT",
@@ -2229,7 +3533,14 @@
       "queued": "> OSINT בתור: {{jobId}}",
       "connecting": "> מתחבר לזרם טלמטריה...",
       "invalid_job_id": "התקבל מזהה job לא תקין מהשרת",
-      "network_error": "שגיאת רשת"
+      "network_error": "שגיאת רשת",
+      "evidence_notice": "ריצות OSINT נכנסות לתור דרך POST /api/command-center/scan; KPIs מ-GET /api/engines/history/osint.",
+      "kpi_jobs": "משימות במעקב",
+      "kpi_completed": "הושלמו",
+      "kpi_running": "רצות",
+      "kpi_findings": "ממצאים",
+      "empty_client_title": "בחר לקוח להרצת OSINT",
+      "empty_client_body": "בחר לקוח מלוח ההרצה כדי להגביל סיור לדומיינים מורשים."
     },
     "topTierEngineProfile": {
       "unknown_engine": "מנוע Top-Tier לא מוכר: {{id}}",
@@ -2283,7 +3594,10 @@
       "col_kind": "סוג",
       "col_status": "סטטוס",
       "col_findings": "ממצאים",
-      "col_created": "נוצר"
+      "col_created": "נוצר",
+      "evidence_notice": "ביקורת, היסטוריה וייצוא מ-GET /api/engines/top-tier/* ו-POST /api/command-center/scan — ראיות מנוע חיות בלבד.",
+      "empty_jobs_title": "אין משימות במעקב עדיין",
+      "empty_jobs_body": "הכנס סריקה לתור מלוח ההרצה כדי למלא היסטוריית משימות למנוע Top-Tier זה."
     },
     "ssoDashboard": {
       "title": "SSO וספקי זהות",
@@ -2335,25 +3649,300 @@
       "test_passed": "✓ בדיקת החיבור עברה — ה-IdP נגיש.",
       "test_failed": "הבדיקה נכשלה: {{message}}",
       "providers": {
-        "okta": { "label": "Okta", "description": "Workforce Identity Cloud" },
-        "azure_ad": { "label": "Azure AD", "description": "Microsoft Entra ID" },
-        "google": { "label": "Google Workspace", "description": "Google Cloud Identity" },
-        "ping": { "label": "Ping Identity", "description": "PingFederate / PingOne" },
-        "saml_custom": { "label": "SAML 2.0 מותאם", "description": "כל ספק SAML 2.0" },
-        "oidc_custom": { "label": "OIDC מותאם", "description": "כל ספק OpenID Connect" }
+        "okta": {
+          "label": "Okta",
+          "description": "Workforce Identity Cloud"
+        },
+        "azure_ad": {
+          "label": "Azure AD",
+          "description": "Microsoft Entra ID"
+        },
+        "google": {
+          "label": "Google Workspace",
+          "description": "Google Cloud Identity"
+        },
+        "ping": {
+          "label": "Ping Identity",
+          "description": "PingFederate / PingOne"
+        },
+        "saml_custom": {
+          "label": "SAML 2.0 מותאם",
+          "description": "כל ספק SAML 2.0"
+        },
+        "oidc_custom": {
+          "label": "OIDC מותאם",
+          "description": "כל ספק OpenID Connect"
+        }
       },
       "fields": {
-        "name": { "label": "שם החיבור", "placeholder": "למשל Okta Production" },
-        "okta_domain": { "label": "דומיין Okta", "placeholder": "company.okta.com" },
-        "azure_tenant_id": { "label": "Azure Tenant ID", "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-        "issuer_url": { "label": "Issuer / Discovery URL", "placeholder": "https://idp.example.com" },
-        "client_id": { "label": "Client ID", "placeholder": "OAuth 2.0 Client ID" },
-        "client_secret": { "label": "Client Secret", "placeholder": "••••••••", "note": "השאר ריק כדי לשמור את הקיים" },
-        "saml_idp_sso_url": { "label": "IdP SSO URL / Metadata URL", "placeholder": "https://idp.example.com/metadata.xml" },
-        "saml_idp_cert_pem": { "label": "תעודת IdP (PEM)", "placeholder": "-----BEGIN CERTIFICATE-----\n..." },
-        "sp_entity_id": { "label": "SP Entity ID", "placeholder": "https://app.weissman.io (ריק לברירת מחדל)" },
-        "email_claim": { "label": "Email Claim", "placeholder": "email" }
+        "name": {
+          "label": "שם החיבור",
+          "placeholder": "למשל Okta Production"
+        },
+        "okta_domain": {
+          "label": "דומיין Okta",
+          "placeholder": "company.okta.com"
+        },
+        "azure_tenant_id": {
+          "label": "Azure Tenant ID",
+          "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+        "issuer_url": {
+          "label": "Issuer / Discovery URL",
+          "placeholder": "https://idp.example.com"
+        },
+        "client_id": {
+          "label": "Client ID",
+          "placeholder": "OAuth 2.0 Client ID"
+        },
+        "client_secret": {
+          "label": "Client Secret",
+          "placeholder": "••••••••",
+          "note": "השאר ריק כדי לשמור את הקיים"
+        },
+        "saml_idp_sso_url": {
+          "label": "IdP SSO URL / Metadata URL",
+          "placeholder": "https://idp.example.com/metadata.xml"
+        },
+        "saml_idp_cert_pem": {
+          "label": "תעודת IdP (PEM)",
+          "placeholder": "-----BEGIN CERTIFICATE-----\n..."
+        },
+        "sp_entity_id": {
+          "label": "SP Entity ID",
+          "placeholder": "https://app.weissman.io (ריק לברירת מחדל)"
+        },
+        "email_claim": {
+          "label": "Email Claim",
+          "placeholder": "email"
+        }
+      },
+      "evidence_notice": "הגדרות ספק SSO/OIDC/SAML מ-GET/PUT /api/sso-config. metadata ו-redirect URIs הם הגדרות tenant חיות — login בדיקה פוגע ב-IdP endpoints שהוגדרו."
+    },
+    "engineDetail": {
+      "evidence_notice": "היסטוריית ריצות מ-GET /api/engines/history/:engineId. סריקות חיות ב-POST /api/command-center/scan עם פרמטרים לפי מנוע. התקדמות בזמן אמת: GET /api/telemetry/stream?job_id=… — ממצאים נשמרים רק ב-tenant שלך."
+    },
+    "clientDetail": {
+      "evidence_notice": "רשומת לקוח, scope ונתוני engagement מ-GET /api/clients/:id ו-endpoints קשורים. חבילות סריקה ו-vault הוכחות הם רשומות DB חיות — ללא פרופילי דמו."
+    },
+    "jwtAttackLab": {
+      "evidence_notice": "בדיקות JWT/JWKS מתבצעות ב-POST /api/command-center/scan (מנוע jwt_attack). scope לקוח מ-GET /api/clients. כל ממצא משקף HTTP חי מורשה נגד היעד — ללא exploit מוכן מראש."
+    },
+    "jwtLab": {
+      "title": "מעבדת JWT Attack",
+      "badge": "זהות / JWT",
+      "subtitle": "alg-confusion · cracking סוד חלש · JWKS abuse · differential auth-bypass",
+      "client_label": "לקוח",
+      "select_client": "— בחר לקוח —",
+      "select_client_first": "בחר לקוח תחילה",
+      "target_label": "מארח יעד (ב-scope)",
+      "target_required": "נדרש מארח יעד (חייב להיות ב-scope הלקוח).",
+      "scan_failed": "הסריקה נכשלה",
+      "scan_queued": "סריקת JWT בתור: job {{jobId}}",
+      "reset": "איפוס",
+      "reset_done": "פרמטרים אופסו לברירת מחדל",
+      "scanning": "⟳ תוקף…",
+      "run_scan": "▶ הרץ הערכת JWT",
+      "control_panel": "לוח בקרת התקפה",
+      "hide_json": "הסתר JSON",
+      "show_json": "הצג בקשה",
+      "sample_jwt": "JWT לדוגמה (הדבק לניתוח + התקפה)",
+      "decoded": "מפוענח (מקומי)",
+      "section_attacks": "התקפות",
+      "test_alg_none": "קבלת alg=none",
+      "test_alg_none_hint": "none/None/NONE + חתימה ריקה",
+      "test_alg_confusion": "בלבול RS256→HS256",
+      "test_alg_confusion_hint": "חתימה עם מפתח ציבורי JWKS",
+      "test_weak_hmac": "פיצוח סוד HMAC חלש",
+      "test_weak_hmac_hint": "brute-force offline עם wordlist",
+      "check_jwks": "ביקורת JWKS hardening",
+      "check_jwks_hint": "RSA חלש / פרמטרים פרטיים דולפים",
+      "harvest": "איסוף tokens מתגובות",
+      "harvest_hint": "headers / cookies / body",
+      "analyze_claims": "ניתוח claims ו-lifetime",
+      "require_exp": "סמן exp חסר",
+      "auth_endpoints": "Endpoints מוגנים לבדיקה",
+      "harvest_paths": "נתיבים לאיסוף tokens",
+      "jwks_paths": "נתיבי JWKS / OIDC",
+      "jwks_url": "override ל-URL של JWKS (אופציונלי)",
+      "hmac_wordlist": "סודות HMAC נוספים (מתווספים לרשימה המובנית)",
+      "sensitive_claims": "מפתחות claims להרשאות",
+      "intensity": "עוצמה",
+      "intensity_light": "קלה",
+      "intensity_normal": "רגילה",
+      "intensity_aggressive": "אגרסיבית",
+      "timeout_ms": "timeout HTTP",
+      "concurrency": "מקביליות",
+      "max_lifetime": "אורך חיים מקסימלי ל-token",
+      "min_rsa_bits": "מינימום RSA bits",
+      "oast_host": "מארח OAST (jku/x5u)",
+      "kpi_title": "KPIs סשן",
+      "kpi_total": "סה״כ",
+      "job": "Job",
+      "last_updated": "סנכרון אחרון {{time}}",
+      "refresh": "רענון",
+      "export_csv": "ייצוא CSV",
+      "scanning_live": "אוסף tokens, מזייף ובודק חי…",
+      "findings": "ממצאים",
+      "search_placeholder": "חיפוש כותרת, סוג, תיאור…",
+      "filter_all": "הכל",
+      "no_findings_title": "אות נקי",
+      "no_findings": "לא נצפה אות JWT ליעד זה עם ההתקפות שנבחרו.",
+      "empty_filtered_title": "אין התאמות",
+      "empty_filtered": "אין ממצאים התואמים לחיפוש או לסינון החומרה.",
+      "empty_no_client_title": "בחר scope",
+      "empty_no_client": "בחר לקוח ויעד כדי להתחיל הערכת JWT.",
+      "empty_ready_title": "מוכן להערכה",
+      "empty_ready": "הדבק token או תן למנוע לאסוף אחד, ואז הרץ.",
+      "attack_reference": "ייחוס התקפות",
+      "remediation": "תיקון",
+      "attack_ref": {
+        "alg_none": { "id": "alg:none", "desc": "קבלת token לא חתום" },
+        "alg_confusion": { "id": "RS256→HS256", "desc": "בלבול אלגוריתם (מפתח ציבורי כסוד HMAC)" },
+        "weak_hmac": { "id": "Weak HMAC", "desc": "פיצוח סוד משותף → זיוף" },
+        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / החלפת מפתח" },
+        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "ערכת מפתחות ממארח תוקף" },
+        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "RSA חלש / פרמטרים פרטיים דולפים" }
       }
+    },
+    "iacSecurityCenter": {
+      "evidence_notice": "ניתוח misconfiguration ב-IaC דרך POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile ו-manifests של CI נפרסים בשרת — פגיעות מדיניות הן ממצאים סטטיים אמיתיים, לא ציוני CIS מדומים."
+    },
+    "graphqlSecurityCommandCenter": {
+      "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי."
+    },
+    "websocketSecurity": {
+      "title": "מרכז פיקוד אבטחת WebSocket",
+      "badge": "WEISSMAN · REAL-TIME API",
+      "subtitle": "DAST WebSocket ללא סוכן — handshake מאומת RFC6455, CSWSH דיפרנציאלי, fuzzing שיחתי stateful, מוטציית protobuf בינארית, race execution מסונכרן, Intelligence Bus חוצה-פרוטוקולים.",
+      "posture": "Posture WebSocket",
+      "worst": "חמור ביותר: {{sev}}",
+      "weak_areas": "אזורים חלשים:",
+      "select_client_first": "בחר לקוח תחילה",
+      "target_required": "נדרש Target URL",
+      "scan_failed": "הסריקה נכשלה",
+      "queued": "סריקת WebSocket בתור ({{jobId}})",
+      "scanning": "⟳ סורק…",
+      "run_scan": "▶ הרץ סריקת WebSocket",
+      "params": "פרמטרים",
+      "client": "לקוח",
+      "select_client": "— בחר לקוח —",
+      "target": "Target URL",
+      "intensity": "עוצמה",
+      "intensity_light": "קלה",
+      "intensity_normal": "רגילה",
+      "intensity_aggressive": "אגרסיבית",
+      "paths": "נתיבי WebSocket",
+      "foreign_origin": "Foreign Origin",
+      "session_cookie": "Session cookie (בדיקת CSWSH מאומת)",
+      "bearer_token": "Bearer token (אופציונלי)",
+      "timeout_ms": "Timeout (ms)",
+      "message_read_ms": "חלון קריאת הודעות (ms)",
+      "custom_messages": "הודעות WS מותאמות",
+      "advanced": "Weissman Standard (מתקדם)",
+      "race_connections": "חיבורי race במקביל",
+      "race_sync_us": "חלון סנכרון race (µs)",
+      "race_payload": "Frame טרנזקציוני ל-race",
+      "http_escalation_paths": "נתיבי HTTP escalation",
+      "last_run": "הושלם לאחרונה: {{time}}",
+      "select_client_hint": "בחר לקוח בתחום — הערכת WebSocket של Weissman דורשת הרשאת לקוח מפורשת.",
+      "empty_hint": "הרץ סריקה להערכת CSWSH, auth בהודעות חיות, Weissman Standard DAST ו-posture WebSocket.",
+      "groups": {
+        "handshake": "Handshake ו-transport",
+        "cswsh": "CSWSH ו-Origin",
+        "stacks": "Real-time stacks",
+        "messages": "Sessions לאחר handshake",
+        "enterprise": "Weissman Standard (DAST)",
+        "intel": "Weissman intelligence"
+      }
+    },
+    "attackSurfaceManagement": {
+      "evidence_notice": "מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה — ללא גרפי התקפה מוכנים מראש."
+    },
+    "dnsDomainPosture": {
+      "evidence_notice": "DNS, SPF, DMARC ו-posture תת-דומיינים מ-POST /api/command-center/scan (מנועי email_dns_posture / dns). רשומות נפתרות חי מול resolvers ציבוריים לדומיינים מורשים.",
+      "coverage_audit": "ביקורת כיסוי probes (v8)",
+      "coverage_complete": "כיסוי מלא",
+      "coverage_partial": "כיסוי חלקי",
+      "coverage_enabled": "מופעל",
+      "coverage_executed": "בוצע",
+      "coverage_passed": "עבר",
+      "coverage_failed": "נכשל"
+    },
+    "webCachePosture": {
+      "evidence_notice": "בדיקות cache poisoning ו-header smuggling ב-POST /api/command-center/scan (cache_poisoning). כל hit הוא differential תגובת HTTP שניתן לשחזור על יעד מורשה."
+    },
+    "httpSmugglingPosture": {
+      "evidence_notice": "בדיקות request-smuggling ו-desync ב-POST /api/command-center/scan (http_smuggling). הוכחת desync דורשת התנהגות front/back-end חיה על מארח מורשה."
+    },
+    "emailDnsPosture": {
+      "evidence_notice": "posture אימות דוא\"ל (SPF/DKIM/DMARC/BIMI) מ-POST /api/command-center/scan (email_dns_posture). בדיקות MX ו-TXT חיות — misconfiguration ממופה לסיכון deliverability אמיתי."
+    },
+    "transportSecurityCommandCenter": {
+      "evidence_notice": "posture transport-security ברמה עולמית (mtls_grpc): 38+ מודולי probe חיים — מטריצת TLS/crypto, gRPC/mTLS/gRPC-Web, CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, scorecard מנהלי ב-8 ממדים. כל ממצא מ-handshakes ו-HTTP probes אמיתיים ב-POST /api/command-center/scan (mtls_grpc). מרכז פיקוד: /transport-security."
+    },
+    "pkiTlsCommandCenter": {
+      "evidence_notice": "posture PKI/TLS, mTLS וממצאי מחזור תעודות מ-POST /api/command-center/scan (pki_tls). revocation ואמון שרשרת נבדקים מול trust stores חיים."
+    },
+    "cloudPostureCommandCenter": {
+      "evidence_notice": "כללי misconfiguration multi-cloud ב-POST /api/command-center/scan (cloud_posture / aws_attack / azure_attack / gcp_attack). בקרות ממופות להוכחות API חיות — לא placeholders של benchmark."
+    },
+    "edDetectionSurface": {
+      "evidence_notice": "כיסוי detection ופערי log-source נגזרים מ-GET /api/findings ו-correlation של POST /api/command-center/scan — מציג היכן המערכת שלך תפספס tradecraft אמיתי."
+    },
+    "wafBypassLab": {
+      "evidence_notice": "payloads לעקיפת WAF נשלחים ב-POST /api/command-center/scan (waf_bypass). evasion מוצלח מאומת עם differential תגובות HTTP על יעד מורשה בלבד."
+    },
+    "fileUploadSecurityLab": {
+      "evidence_notice": "בדיקות עקיפת פילטר upload ו-polyglot ב-POST /api/command-center/scan (file_upload). נתיבי upload שתגדיר מקבלים probes multipart חיים — ללא upload מדומה."
+    },
+    "identitySecurityCenter": {
+      "evidence_notice": "posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים."
+    },
+    "kerberosSecurityCommandCenter": {
+      "evidence_notice": "בדיקות חשיפת Kerberos/AD ב-POST /api/command-center/scan כש-RoE מאפשר. תוצאות משקפות תגובות LDAP/Kerberos חיות — ריק כשאין DC ב-scope."
+    },
+    "smbNetbiosCommandCenter": {
+      "evidence_notice": "enumeration SMB/NetBIOS ב-POST /api/command-center/scan (smb_netbios). רשימות shares ופערי signing דורשים hosts נגישים בטווחי IP מורשים."
+    },
+    "passwordSprayCommandCenter": {
+      "evidence_notice": "סימולציית password-spray נשלחת לתור ב-POST /api/command-center/scan עם throttling קפדני לפי RoE. מונים safe-to-lockout מגיעים מתגובות auth חיות — ללא אחוזי הצלחה סינתטיים."
+    },
+    "samlSecurityCommandCenter": {
+      "evidence_notice": "בדיקות assertion, חתימה ו-replay ב-SAML דרך POST /api/command-center/scan (saml_attack). metadata ו-ACS endpoints חייבים להיות ב-scope מורשה."
+    },
+    "cicdPipelineSecurityCommandCenter": {
+      "evidence_notice": "סריקות דליפת secrets ו-misconfig ב-CI/CD ב-POST /api/command-center/scan (cicd_pipeline). ממצאים קשורים ל-artifacts אמיתיים של repo/workflow שסיפקת או שהתגלו."
+    },
+    "serverlessSecurityCommandCenter": {
+      "evidence_notice": "בדיקות serverless/IaC/API-gateway ב-POST /api/command-center/scan (serverless_attack). URLs של functions ו-IAM bindings מוערכים מהוכחות cloud API חיות."
+    },
+    "threatAnalysisCenter": {
+      "evidence_notice": "clustering דפוסי התקפה ומיפוי MITRE מ-GET /api/findings ו-GET /api/soc/ai-patterns. כל שורת technique מקושרת להוכחת ממצא חיה ב-tenant שלך."
+    },
+    "engineReliability": {
+      "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."
+    },
+    "nexusSovereignSwarm": {
+      "evidence_notice": "פריסות swarm נשלחות לתור ב-POST /api/command-center/scan (nexus_sovereign_swarm). סטטוס fleet agents חי מ-GET /api/agents/status. טלמטריה WebSocket משדרת אירועי worker אמיתיים — לא אנימציות hive מסקריפט."
+    },
+    "engineClientCatalog": {
+      "evidence_notice": "תבניות פרופיל סריקה מפעילות חבילות מנועים אמיתיות ב-POST /api/command-center/scan ו-POST /api/scan/all-engines. כרטיסי פרופיל הם presets של RoE — טלמטריה מ-GET /api/engines/telemetry."
+    },
+    "agentManagement": {
+      "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. tasking מרחוק משתמש בערוצי agent מאומתים — agents offline מציגים timestamps last-seen כנים."
+    },
+    "zeroDayRadar": {
+      "evidence_notice": "correlation אות zero-day מ-GET /api/threat-intel/feed מול GET /api/findings ל-stack החשוף שלך — מדגיש CVEs מתפתחים מול fingerprints נכסים חיים."
+    },
+    "cockpit": {
+      "evidence_notice": "KPIs של Command Center מ-GET /api/dashboard/exec-kpis, pulse jobs מ-GET /api/jobs, ו-rollups חומרה מ-GET /api/findings — טלמטריה חיה מאוחדת ל-tenant."
+    },
+    "systemCore": {
+      "evidence_notice": "בריאות core הפלטפורמה מ-GET /api/health, עומק תור worker מ-GET /api/jobs, ודגלי production מנועים מ-GET /api/engines/production — אבחון חי ברמת operator."
+    },
+    "intelMap": {
+      "evidence_notice": "overlay גיאוגרפי מ-tags geo ב-GET /api/findings ומ-GET /api/threat-intel/feed — pins במפה מופיעים רק כשממצאים כוללים metadata מיקום שניתן לפתור."
     }
   },
   "components": {
@@ -3080,7 +4669,11 @@
       }
     },
     "onboarding": {
-      "steps": { "client": "לקוח", "scope": "היקף", "launch": "השקה" },
+      "steps": {
+        "client": "לקוח",
+        "scope": "היקף",
+        "launch": "השקה"
+      },
       "badge": "הגדרה ראשונה",
       "title": "ברוכים הבאים למרכז הפיקוד Weissman",
       "subtitle": "הוסף את הלקוח הראשון, אשר היקף מורשה והפעל את הסריקה הראשונה.",
@@ -3160,11 +4753,26 @@
       "no_target_error": "בחר לקוח למעלה או הזן URL יעד.",
       "clients_prefix": "לקוחות:",
       "engines": {
-        "supply_chain": { "label": "שרשרת אספקה", "short": "SC" },
-        "llm_path_fuzz": { "label": "AI Fuzz (vLLM)", "short": "AI" },
-        "bola_idor": { "label": "BOLA/IDOR", "short": "IDOR" },
-        "osint": { "label": "OSINT / רשת אפלה", "short": "OSINT" },
-        "asm": { "label": "Attack Surface", "short": "ASM" }
+        "supply_chain": {
+          "label": "שרשרת אספקה",
+          "short": "SC"
+        },
+        "llm_path_fuzz": {
+          "label": "AI Fuzz (vLLM)",
+          "short": "AI"
+        },
+        "bola_idor": {
+          "label": "BOLA/IDOR",
+          "short": "IDOR"
+        },
+        "osint": {
+          "label": "OSINT / רשת אפלה",
+          "short": "OSINT"
+        },
+        "asm": {
+          "label": "Attack Surface",
+          "short": "ASM"
+        }
       }
     },
     "reportView": {

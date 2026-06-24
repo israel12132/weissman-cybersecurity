@@ -565,6 +565,7 @@ async fn ws_agent(
                                 }
                                 "finding" => {
                                     let engine = v.get("engine").and_then(Value::as_str).unwrap_or("agent_finding").to_string();
+                                    let task_id = v.get("task_id").and_then(Value::as_str);
                                     let mut finding = v.get("finding").cloned().unwrap_or(Value::Null);
                                     if let (Some(aid), Value::Object(ref mut map)) =
                                         (agent_uuid.as_deref(), &mut finding)
@@ -573,12 +574,13 @@ async fn ws_agent(
                                             .or_insert_with(|| json!(aid));
                                     }
                                     if let Some(cid) = client_id {
-                                        let _ = crate::endpoint_agents::store_finding(
+                                        let _ = crate::endpoint_agents::store_finding_for_task(
                                             app_pool.as_ref(),
                                             tenant_id,
                                             cid,
                                             &engine,
                                             &finding,
+                                            task_id,
                                         )
                                         .await;
                                     }

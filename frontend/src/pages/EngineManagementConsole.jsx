@@ -1,9 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Cpu, Play, Pause, Filter, Search, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, Cpu, Play, Pause, Filter, Search, Clock, CheckCircle, XCircle, Download } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { ENGINES_BY_ID } from '../lib/enginesRegistry';
+
+const NS = 'pages.engineManagementConsole';
+
+function exportEnginesCsv(engines) {
+  const header = ['id', 'name', 'category', 'enabled', 'description'];
+  const rows = engines.map((e) => [
+    e.id,
+    (e.name || '').replace(/"/g, '""'),
+    e.category ?? '',
+    e.enabled ? 'yes' : 'no',
+    (e.description || '').replace(/"/g, '""'),
+  ]);
+  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `engines-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /**
  * EngineManagementConsole - Complete control over all 496 engines
@@ -195,9 +220,42 @@ export default function EngineManagementConsole() {
 
   const isFiltered = searchTerm || categoryFilter !== 'all' || statusFilter !== 'all';
 
+  const listFindings = useMemo(() => filteredEngines.map((e) => ({
+    id: e.id,
+    severity: e.enabled ? 'info' : 'low',
+    title: e.name || e.id,
+    type: e.category || 'engine',
+    description: e.description || '',
+  })), [filteredEngines])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-engines',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
   return (
-    <PageShell title={t('pages.engineManagementConsole.title')} icon={<Cpu />}>
+    <PageShell
+      title={t(`${NS}.title`)}
+      icon={<Cpu />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchEngines}
+          onExport={() => exportEnginesCsv(filteredEngines)}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {loading ? (
+          <>
+            <SkeletonWidgetGrid count={4} />
+            <SkeletonTable rows={10} cols={4} />
+          </>
+        ) : (
+        <>
         {/* Stats Header */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
@@ -330,22 +388,26 @@ export default function EngineManagementConsole() {
 
         {/* Engines List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
-              {t('pages.engineManagementConsole.engines_heading', {
+              {t(`${NS}.engines_heading`, {
                 count: filteredEngines.length,
               })}
-              {isFiltered ? t('pages.engineManagementConsole.filtered') : ''}
+              {isFiltered ? t(`${NS}.filtered`) : ''}
             </h3>
+            <button
+              type="button"
+              onClick={() => exportEnginesCsv(filteredEngines)}
+              disabled={filteredEngines.length === 0}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 text-xs font-mono text-cyan-300/80 hover:bg-cyan-500/10 disabled:opacity-40"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {t(`${NS}.export_csv`)}
+            </button>
           </div>
 
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-              {t('pages.engineManagementConsole.loading')}
-            </div>
-          ) : filteredEngines.length === 0 ? (
+          {filteredEngines.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               {t('pages.engineManagementConsole.empty')}
             </div>
@@ -458,6 +520,8 @@ export default function EngineManagementConsole() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Config Modal */}

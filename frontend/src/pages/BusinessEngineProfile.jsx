@@ -1,10 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
 
 const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
@@ -69,6 +74,7 @@ export default function BusinessEngineProfile() {
   const strategicRow = strategicEnginesNeedingDedicatedPage().find((r) => r.id === engineId)
 
   const [history, setHistory] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
   const [target, setTarget] = useState('')
@@ -82,16 +88,21 @@ export default function BusinessEngineProfile() {
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
   const findings = Array.isArray(history?.findings) ? history.findings : []
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadHistory() {
+  const reloadProfile = useCallback(async () => {
+    if (!def) return
+    setProfileLoading(true)
+    try {
       const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=100`)
       const d = await r.json().catch(() => null)
-      if (!cancelled && r.ok) setHistory(d)
+      if (r.ok) setHistory(d)
+    } finally {
+      setProfileLoading(false)
     }
-    if (def) loadHistory()
-    return () => { cancelled = true }
   }, [engineId, def])
+
+  useEffect(() => {
+    reloadProfile()
+  }, [reloadProfile])
 
   useEffect(() => {
     let cancelled = false
@@ -144,6 +155,55 @@ export default function BusinessEngineProfile() {
       findings: Number(j?.findings_count || 0),
     })).reverse()
   }, [jobs])
+
+  const kpi = useMemo(() => {
+    const completed = jobs.filter((j) => String(j?.status || '').toLowerCase() === 'completed').length
+    const failed = jobs.filter((j) => {
+      const s = String(j?.status || '').toLowerCase()
+      return s === 'failed' || s === 'dead'
+    }).length
+    return { jobs: jobs.length, findings: findings.length, completed, failed }
+  }, [jobs, findings])
+
+  const listFindings = useMemo(() => [
+    ...jobs.map((j) => ({
+      id: j.job_id || j.id,
+      severity: String(j.status || '').toLowerCase() === 'failed' ? 'high' : 'info',
+      title: j.kind || j.source || 'job',
+      type: 'job',
+      description: String(j.status || ''),
+      resource: String(j.findings_count ?? 0),
+    })),
+    ...findings.map((f) => ({
+      id: f.id,
+      severity: f.severity || 'medium',
+      title: f.title || 'finding',
+      type: 'finding',
+      description: f.source || '',
+      resource: f.discovered_at || '',
+    })),
+  ], [jobs, findings])
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    filteredFindings,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: `weissman-business-${engineId}`,
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleJobs = useMemo(() => {
+    if (!searchQuery.trim()) return jobs.slice(0, 20)
+    const jobIds = new Set(filteredFindings.filter((f) => f.type === 'job').map((f) => String(f.id)))
+    return jobs.filter((j) => jobIds.has(String(j.job_id || j.id))).slice(0, 20)
+  }, [jobs, filteredFindings, searchQuery])
+
+  const visibleFindings = useMemo(() => {
+    if (!searchQuery.trim()) return findings.slice(0, 20)
+    const fids = new Set(filteredFindings.filter((f) => f.type === 'finding').map((f) => String(f.id)))
+    return findings.filter((f) => fids.has(String(f.id))).slice(0, 20)
+  }, [findings, filteredFindings, searchQuery])
 
   async function queueRun() {
     if (!def) return
@@ -224,10 +284,26 @@ export default function BusinessEngineProfile() {
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono">{t('pages.businessEngineProfile.engine_detail')}</Link>
           <span className="text-white/20 text-xs">|</span>
           <h1 className="text-sm font-bold tracking-tight text-white">{title}</h1>
+          <div className="ms-auto">
+            <ShellScanActions
+              onRefresh={reloadProfile}
+              onExport={exportJson}
+              refreshLoading={profileLoading}
+            />
+          </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <EvidenceNotice>{t('pages.businessEngineProfile.evidence_notice')}</EvidenceNotice>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={kpi.jobs.toLocaleString()} accent="#22d3ee" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_findings')} value={kpi.findings.toLocaleString()} accent="#a78bfa" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_completed')} value={kpi.completed.toLocaleString()} accent="#34d399" />
+          <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={kpi.failed.toLocaleString()} accent="#f87171" />
+        </div>
+
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-white/70">{engineId}</span>
@@ -305,29 +381,44 @@ export default function BusinessEngineProfile() {
           </article>
         </section>
 
+        <WeissmanListToolbar
+          className="mb-2"
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t('pages.businessEngineProfile.search_placeholder', { defaultValue: 'Search jobs and findings…' })}
+          resultCount={filteredFindings.length}
+          totalCount={listFindings.length}
+        />
+
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <article className="rounded-xl border border-white/10 bg-black/40 p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {jobs.slice(0, 20).map((j) => (
+              {visibleJobs.map((j) => (
                 <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-white/10 bg-black/45 p-2 text-white/70 font-mono">
                   <div>{j.created_at || '-'} | {j.status || '-'} | findings={j.findings_count || 0}</div>
                   <div className="text-white/45">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
               ))}
               {!jobs.length && <div className="text-xs text-white/45">{t('pages.businessEngineProfile.no_jobs')}</div>}
+              {jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
+                <div className="text-xs text-white/45">{t('weissmanFindings.filtered_title')}</div>
+              )}
             </div>
           </article>
           <article className="rounded-xl border border-white/10 bg-black/40 p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
-              {findings.slice(0, 20).map((f) => (
+              {visibleFindings.map((f) => (
                 <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-white/10 bg-black/45 p-2 text-white/70">
                   <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
                   <div className="font-mono text-white/45">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}
               {!findings.length && <div className="text-xs text-white/45">{t('pages.businessEngineProfile.no_findings')}</div>}
+              {findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
+                <div className="text-xs text-white/45">{t('weissmanFindings.filtered_title')}</div>
+              )}
             </div>
           </article>
         </section>

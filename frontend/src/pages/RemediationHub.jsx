@@ -1,15 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, RefreshCw, X } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 
 /**
- * RemediationHub — derives the workflow board entirely from real `/api/findings`
- * data so it reflects the customer's actual posture. There are no hard-coded
- * workflows or fabricated "auto-fixed" totals.
+ * RemediationHub — derives the remediation board entirely from real `/api/findings`
+ * data so it reflects the customer's actual posture. Families, severity, and status
+ * are all computed from live findings; there are no fabricated workflows or totals.
  */
+
+const SEV_META = {
+  critical: { color: '#f43f5e', rank: 5, weight: 5 },
+  high: { color: '#fb923c', rank: 4, weight: 4 },
+  medium: { color: '#fbbf24', rank: 3, weight: 3 },
+  low: { color: '#38bdf8', rank: 2, weight: 2 },
+  info: { color: '#94a3b8', rank: 1, weight: 1 },
+}
+const SEVERITY_KEYS = ['critical', 'high', 'medium', 'low', 'info']
+const normSev = (s) => (SEV_META[String(s || '').toLowerCase()] ? String(s).toLowerCase() : 'info')
 
 const STATUS_FROM_FINDING = (status) => {
   const s = (status || '').toUpperCase()
@@ -37,26 +51,30 @@ function summarizeFamilies(findings) {
     const key = family?.id || 'other'
     const label = family?.label || 'Other Findings'
     const status = STATUS_FROM_FINDING(f.status)
-    const cur = buckets.get(key) || { id: key, label, total: 0, statuses: {} }
+    const sev = normSev(f.severity)
+    const cur = buckets.get(key) || { id: key, label, total: 0, statuses: {}, severities: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } }
     cur.total += 1
     cur.statuses[status] = (cur.statuses[status] || 0) + 1
+    cur.severities[sev] += 1
     buckets.set(key, cur)
   }
-  return Array.from(buckets.values()).map((b) => ({
-    ...b,
-    status:
-      (b.statuses.running || 0) > 0
-        ? 'running'
-        : (b.statuses.pending || 0) > 0
-        ? 'pending'
-        : (b.statuses.completed || 0) > 0
-        ? 'completed'
-        : 'pending',
-  })).sort((a, b) => b.total - a.total)
+  return Array.from(buckets.values())
+    .map((b) => ({
+      ...b,
+      priority: SEVERITY_KEYS.reduce((s, k) => s + b.severities[k] * SEV_META[k].weight, 0),
+      status:
+        (b.statuses.running || 0) > 0
+          ? 'running'
+          : (b.statuses.pending || 0) > 0
+          ? 'pending'
+          : (b.statuses.completed || 0) > 0
+          ? 'completed'
+          : 'pending',
+    }))
+    .sort((a, b) => b.priority - a.priority)
 }
 
-function StatusBadge({ status }) {
-  const { t } = useTranslation()
+function StatusBadge({ status, t }) {
   const colors = {
     completed: 'text-green-400 bg-green-500/10 border-green-500/30',
     running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
@@ -71,65 +89,142 @@ function StatusBadge({ status }) {
   )
 }
 
+function SeverityBar({ severities, total }) {
+  if (!total) return null
+  return (
+    <div className="flex h-1.5 w-full max-w-[220px] rounded-full overflow-hidden bg-white/5">
+      {SEVERITY_KEYS.map((k) => {
+        const v = severities[k]
+        if (!v) return null
+        return <div key={k} style={{ width: `${(v / total) * 100}%`, background: SEV_META[k].color }} title={`${k}: ${v}`} />
+      })}
+    </div>
+  )
+}
+
 export default function RemediationHub() {
   const { t } = useTranslation()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sevFilter, setSevFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const r = await apiFetch('/api/findings?limit=2000')
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const d = await r.json()
-        if (cancelled) return
-        const arr = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
-        setFindings(arr)
-      } catch (e) {
-        if (!cancelled) setError(e.message || 'Failed to load findings')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => { cancelled = true }
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await apiFetch('/api/findings?limit=2000')
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      const arr = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
+      setFindings(arr)
+    } catch (e) {
+      setError(e.message || 'Failed to load findings')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const workflows = useMemo(() => summarizeFamilies(findings), [findings])
+  useEffect(() => { load() }, [load])
+
+  const filteredFindings = useMemo(() => {
+    let list = findings
+    if (sevFilter !== 'all') list = list.filter((f) => normSev(f.severity) === sevFilter)
+    if (statusFilter !== 'all') list = list.filter((f) => STATUS_FROM_FINDING(f.status) === statusFilter)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter((f) => `${f.title ?? ''} ${f.description ?? ''}`.toLowerCase().includes(q))
+    }
+    return list
+  }, [findings, sevFilter, statusFilter, search])
+
+  const workflows = useMemo(() => summarizeFamilies(filteredFindings), [filteredFindings])
 
   const totals = useMemo(() => {
-    let completed = 0, running = 0, pending = 0
-    for (const f of findings) {
+    let completed = 0, running = 0, pending = 0, critHigh = 0
+    for (const f of filteredFindings) {
       const s = STATUS_FROM_FINDING(f.status)
       if (s === 'completed') completed += 1
       else if (s === 'running') running += 1
       else pending += 1
+      const sev = normSev(f.severity)
+      if (sev === 'critical' || sev === 'high') critHigh += 1
     }
-    return { completed, running, pending, total: findings.length }
-  }, [findings])
+    return { completed, running, pending, critHigh, total: filteredFindings.length }
+  }, [filteredFindings])
+
+  const { exportCsv } = useFindingsWorkbench(filteredFindings, { csvPrefix: 'weissman-remediation' })
 
   return (
-    <PageShell title={t('pages.remediationHub.title')} icon={<Wrench />}>
+    <PageShell
+      title={t('pages.remediationHub.title')}
+      subtitle={t('pages.remediationHub.subtitle')}
+      badge={t('pages.remediationHub.badge')}
+      badgeColor="#22d3ee"
+      icon={<Wrench />}
+      actions={(
+        <ShellScanActions
+          onRefresh={load}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
-        <p className="text-xs text-white/45 font-mono">
-          {t('pages.remediationHub.intro')}
-        </p>
+        <p className="text-xs text-white/45 font-mono">{t('pages.remediationHub.intro')}</p>
 
         {error && (
-          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm">
+          <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             {t('pages.remediationHub.load_error', { error })}
           </div>
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard label={t('pages.remediationHub.total_findings')} value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} />
-          <StatCard label={t('pages.remediationHub.pending_fix')} value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} />
-          <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} />
-          <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <StatCard label={t('pages.remediationHub.total_findings')} value={totals.total} icon={<ShieldCheck className="w-4 h-4 text-cyan-400" />} loading={loading} />
+          <StatCard label={t('pages.remediationHub.crit_high')} value={totals.critHigh} icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} color="#f43f5e" loading={loading} />
+          <StatCard label={t('pages.remediationHub.pending_fix')} value={totals.pending} icon={<AlertTriangle className="w-4 h-4 text-yellow-400" />} loading={loading} />
+          <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} loading={loading} />
+          <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} loading={loading} />
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('pages.remediationHub.search_placeholder')}
+              className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <Pill active={sevFilter === 'all'} onClick={() => setSevFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            {['critical', 'high', 'medium', 'low'].map((k) => (
+              <Pill key={k} active={sevFilter === k} color={SEV_META[k].color} onClick={() => setSevFilter((p) => (p === k ? 'all' : k))}>
+                {t(`pages.remediationHub.sev_${k}`)}
+              </Pill>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <Pill active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>{t('pages.remediationHub.filter_all')}</Pill>
+            {['pending', 'running', 'completed'].map((k) => (
+              <Pill key={k} active={statusFilter === k} onClick={() => setStatusFilter((p) => (p === k ? 'all' : k))}>
+                {t(`pages.remediationHub.status_${k}`)}
+              </Pill>
+            ))}
+          </div>
         </div>
 
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
@@ -143,22 +238,30 @@ export default function RemediationHub() {
 
           <div className="divide-y divide-white/5">
             {loading ? (
-              <div className="p-6 text-sm text-white/45">{t('pages.remediationHub.loading')}</div>
+              <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
             ) : workflows.length === 0 ? (
-              <div className="p-6 text-sm text-white/45 space-y-2">
-                <div>{t('pages.remediationHub.empty_title')}</div>
-                <div className="text-xs text-white/35">
-                  {t('pages.remediationHub.empty_hint')}
-                </div>
+              <div className="p-4">
+                <EmptyState
+                  compact
+                  icon="shield"
+                  title={t('pages.remediationHub.empty_title')}
+                  body={t('pages.remediationHub.empty_hint')}
+                />
               </div>
             ) : (
               workflows.map((w) => (
                 <div key={w.id} className="p-4 hover:bg-white/5 transition-colors">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-3 mb-1.5 flex-wrap">
                         <h4 className="text-sm font-semibold text-white truncate">{w.label}</h4>
-                        <StatusBadge status={w.status} />
+                        <StatusBadge status={w.status} t={t} />
+                      </div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <SeverityBar severities={w.severities} total={w.total} />
+                        <span className="text-[10px] font-mono text-white/35 whitespace-nowrap">
+                          {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-400">
                         {w.total === 1
@@ -173,7 +276,7 @@ export default function RemediationHub() {
                     </div>
                     <Link
                       to={`/findings?q=${encodeURIComponent(w.label)}`}
-                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors shrink-0"
                     >
                       {t('pages.remediationHub.view_findings')}
                     </Link>
@@ -188,14 +291,33 @@ export default function RemediationHub() {
   )
 }
 
-function StatCard({ label, value, icon }) {
+function Pill({ active, color = '#22d3ee', onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
+      style={{
+        color: active ? color : 'rgba(255,255,255,0.45)',
+        borderColor: active ? `${color}66` : 'rgba(255,255,255,0.1)',
+        background: active ? `${color}16` : 'transparent',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function StatCard({ label, value, icon, color, loading }) {
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">{label}</span>
+        <span className="text-xs text-gray-400">{label}</span>
         {icon}
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-2xl font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>
+        {loading ? '—' : value}
+      </div>
     </div>
   )
 }

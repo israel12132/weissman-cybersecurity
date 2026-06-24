@@ -14,8 +14,11 @@ import { useTranslation } from 'react-i18next'
 import { ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { useJobPoll, normalizeJobStatus } from '../lib/useJobPoll'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────
 // Each profile declares which engine *groups* are relevant for that client type.
@@ -186,7 +189,7 @@ function StatusDot({ status }) {
   )
 }
 
-function EngineRow({ engine, status, selected, onSelect, isProductionEngine, t }) {
+function EngineRow({ engine, status, selected, onSelect, isProductionEngine, capability, telemetry, t }) {
   const gDef = getGroupDef(engine.group)
   const groupColor = gDef?.color ?? '#6b7280'
   return (
@@ -243,6 +246,16 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, t }
               {t('engines.tier_badge_catalog')}
             </span>
           )}
+          {capability?.remote_detection && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/25 text-cyan-300/70">
+              {t('engines.catalog_remote_detection')}
+            </span>
+          )}
+          {telemetry?.last_status && (
+            <span className="text-[9px] font-mono text-white/35" title={telemetry.last_error || ''}>
+              {telemetry.last_status} · {telemetry.total_runs ?? 0} runs
+            </span>
+          )}
           <Link
             to={`/engines/${engine.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -294,16 +307,21 @@ function ProfileCard({ profile, count, active, onClick, enginesLabel }) {
 export default function EngineClientCatalog() {
   const { t } = useTranslation()
   const { productionCount, isProduction } = useProductionEngines()
+  const { byId: capabilityById, summary: capSummary, loading: capLoading, refresh: refreshCapabilities } = useEngineCapabilities()
+  const [telemetryById, setTelemetryById] = useState({})
   const [activeProfileId, setActiveProfileId] = useState('enterprise')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [engineStates, setEngineStates] = useState({})
   const [selectedEngines, setSelectedEngines] = useState(new Set())
   const [search, setSearch] = useState('')
+  const [productionOnly, setProductionOnly] = useState(false)
+  const [remoteOnly, setRemoteOnly] = useState(false)
   const [runAllLoading, setRunAllLoading] = useState(false)
   const [pendingJobId, setPendingJobId] = useState(null)
   const [pendingEngineIds, setPendingEngineIds] = useState([])
   const [toast, setToast] = useState(null)
+  const [capsRefreshing, setCapsRefreshing] = useState(false)
 
   // Load clients from API
   useEffect(() => {
@@ -311,6 +329,20 @@ export default function EngineClientCatalog() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch((err) => { if (import.meta.env.DEV) console.warn('[EngineClientCatalog] clients load failed:', err) })
+  }, [])
+
+  useEffect(() => {
+    apiFetch('/api/engines/telemetry')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.engines) return
+        const map = {}
+        for (const row of data.engines) {
+          if (row.engine_id) map[row.engine_id] = row
+        }
+        setTelemetryById(map)
+      })
+      .catch(() => {})
   }, [])
 
   const activeProfile = useMemo(
@@ -330,17 +362,57 @@ export default function EngineClientCatalog() {
   }, [activeProfileId])
 
   const filteredEngines = useMemo(() => {
-    if (!search.trim()) return profileEngineList
-    const q = search.toLowerCase()
-    return profileEngineList.filter(
-      (e) =>
-        e.label.toLowerCase().includes(q) ||
-        e.description.toLowerCase().includes(q) ||
-        (e.mitre || '').toLowerCase().includes(q) ||
-        e.id.toLowerCase().includes(q) ||
-        e.group.toLowerCase().includes(q),
-    )
-  }, [profileEngineList, search])
+    let list = profileEngineList
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(
+        (e) =>
+          e.label.toLowerCase().includes(q) ||
+          e.description.toLowerCase().includes(q) ||
+          (e.mitre || '').toLowerCase().includes(q) ||
+          e.id.toLowerCase().includes(q) ||
+          e.group.toLowerCase().includes(q),
+      )
+    }
+    if (productionOnly) list = list.filter((e) => isProduction(e.id))
+    if (remoteOnly) list = list.filter((e) => capabilityById[e.id]?.remote_detection)
+    return list
+  }, [profileEngineList, search, productionOnly, remoteOnly, isProduction, capabilityById])
+
+  const engineFindings = useMemo(() => filteredEngines.map((e) => ({
+    title: e.id,
+    type: e.group,
+    severity: isProduction(e.id) ? 'info' : 'low',
+    description: e.label,
+    remediation: e.description,
+    framework: e.mitre || '',
+    component: capabilityById[e.id]?.remote_detection ? 'remote_detection' : '',
+  })), [filteredEngines, isProduction, capabilityById])
+
+  const {
+    filteredFindings: exportableFindings,
+    exportCsv,
+  } = useFindingsWorkbench(engineFindings, { csvPrefix: 'weissman-engine-catalog' })
+
+  const handleCatalogRefresh = useCallback(async () => {
+    setCapsRefreshing(true)
+    try {
+      await refreshCapabilities()
+      const r = await apiFetch('/api/engines/telemetry')
+      if (r.ok) {
+        const data = await r.json()
+        if (data?.engines) {
+          const map = {}
+          for (const row of data.engines) {
+            if (row.engine_id) map[row.engine_id] = row
+          }
+          setTelemetryById(map)
+        }
+      }
+    } finally {
+      setCapsRefreshing(false)
+    }
+  }, [refreshCapabilities])
 
   const showToast = useCallback((severity, message) => {
     const id = Date.now()
@@ -515,7 +587,22 @@ export default function EngineClientCatalog() {
       subtitle={t('engines.catalog_subtitle', { live: liveCount, profiles: CLIENT_PROFILES.length })}
       badge="CATALOG"
       badgeColor={activeProfile.color}
+      actions={(
+        <ShellScanActions
+          onRefresh={handleCatalogRefresh}
+          onExport={exportCsv}
+          refreshLoading={capsRefreshing || capLoading}
+          exportDisabled={!exportableFindings.length}
+        />
+      )}
     >
+      <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70 mb-4 leading-relaxed">
+        {t('engines.catalog_lens_notice', {
+          production: productionCount,
+          capabilities: capSummary?.production ?? capLoading ? '…' : Object.keys(capabilityById).length,
+        })}
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-white/40">{t('engines.client_label')}:</span>
@@ -691,6 +778,24 @@ export default function EngineClientCatalog() {
             >
               {t('engines.catalog_clear_selection')}
             </button>
+            <button
+              type="button"
+              onClick={() => setProductionOnly((v) => !v)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
+                productionOnly ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-white/10 text-white/45'
+              }`}
+            >
+              {t('engines.catalog_production_only')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRemoteOnly((v) => !v)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
+                remoteOnly ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-white/10 text-white/45'
+              }`}
+            >
+              {t('engines.catalog_remote_only')}
+            </button>
           </div>
 
           {/* Engines grouped by group */}
@@ -772,6 +877,8 @@ export default function EngineClientCatalog() {
                               selected={selectedEngines.has(engine.id)}
                               onSelect={handleToggleEngine}
                               isProductionEngine={isProduction(engine.id)}
+                              capability={capabilityById[engine.id]}
+                              telemetry={telemetryById[engine.id]}
                               t={t}
                             />
                           ))}

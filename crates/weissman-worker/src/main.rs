@@ -255,7 +255,7 @@ async fn main() {
     let light_sem = Arc::new(Semaphore::new(light_n));
     let heavy_sem = Arc::new(Semaphore::new(heavy_n));
 
-    let channels = AsyncJobChannels::noop();
+    let channels = AsyncJobChannels::from_env();
     let wid = worker_id();
     info!(
         target: "weissman_worker",

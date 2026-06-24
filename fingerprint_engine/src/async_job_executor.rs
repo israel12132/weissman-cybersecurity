@@ -28,6 +28,7 @@ const TOP_TIER_ENGINES: &[&str] = &[
     "job_posting_osint",
     "github_secret_scan",
     "graphql_deep_attack",
+    "websocket_attack",
     "grpc_reflection_attack",
     "http2_attack",
 ];
@@ -54,6 +55,23 @@ impl AsyncJobChannels {
             radar: bus(),
             swarm: bus(),
             telemetry: bus(),
+        }
+    }
+
+    /// Worker/server channels with Redis cross-replica bridges when `REDIS_URL` is set.
+    pub fn from_env() -> Self {
+        fn bus(channel: &'static str) -> Arc<broadcast::Sender<String>> {
+            let (tx, _) = broadcast::channel(512);
+            let arc = Arc::new(tx);
+            crate::telemetry_bus::spawn_bridge(channel, (*arc).clone());
+            arc
+        }
+        Self {
+            timing: bus("timing"),
+            redteam: bus("redteam"),
+            radar: bus("radar"),
+            swarm: bus("swarm"),
+            telemetry: bus("telemetry"),
         }
     }
 }
@@ -270,6 +288,7 @@ pub async fn execute_job(
                         .collect()
                 })
                 .unwrap_or_default();
+            let intelligence_bus = Some(crate::ws_intelligence_bus::IntelligenceBus::new_shared());
             let ctx = crate::engine_dispatch::EngineRunContext {
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
@@ -281,6 +300,9 @@ pub async fn execute_job(
                 agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                 client_id: client_id_opt,
                 job_params,
+                job_id: Some(job.id.to_string()),
+                swarm_broadcast: Some(channels.swarm.clone()),
+                intelligence_bus,
                 ..Default::default()
             };
             if !weissman_core::models::engine::is_production_engine_id(engine) {
@@ -288,6 +310,8 @@ pub async fn execute_job(
             }
             // poe_synthesis has no engine_dispatch runner; route through exploit_synthesis like
             // poe_synthesis_run jobs (scan_routing already uses that kind for direct enqueue).
+            let mut last_engine_telemetry: Option<crate::engine_resilience::EngineExecTelemetry> =
+                None;
             let result = if engine == "poe_synthesis" {
                 let cfg = crate::orchestrator::load_poe_config_http(
                     app_pool.as_ref(),
@@ -325,7 +349,35 @@ pub async fn execute_job(
                     ),
                 }
             } else {
-                crate::engine_dispatch::run_engine(engine, target, &ctx).await
+                // Cross-cutting resilience: panic isolation + adaptive multi-strategy retry +
+                // per-attempt timeout, so a failing/hung/panicking engine never aborts the job and
+                // self-heals across target variants before giving up.
+                let ctx_ref = &ctx;
+                let eng = engine;
+                let (res, telem) = crate::engine_resilience::run_with_resilience(
+                    engine,
+                    target,
+                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                    move |variant| async move {
+                        crate::engine_dispatch::run_engine(eng, &variant, ctx_ref).await
+                    },
+                )
+                .await;
+                if telem.attempts > 1 || telem.status != "ok" {
+                    tracing::info!(
+                        target: "engine_resilience",
+                        engine = eng,
+                        attempts = telem.attempts,
+                        status = %telem.status,
+                        strategy = %telem.strategy,
+                        recovered = telem.recovered,
+                        elapsed_ms = telem.elapsed_ms,
+                        "resilient engine run"
+                    );
+                }
+                crate::engine_telemetry::record(eng, &telem);
+                last_engine_telemetry = Some(telem);
+                res
             };
 
             // Persist findings into report_runs + vulnerabilities so the Findings Command
@@ -348,6 +400,7 @@ pub async fn execute_job(
                 "findings": result.findings,
                 "findings_persisted": persisted,
                 "message": result.message,
+                "resilience": last_engine_telemetry.as_ref().map(|t| t.to_json()),
             }))
         }
         "top_tier_health_probe" => {
@@ -446,6 +499,9 @@ pub async fn execute_job(
                             github_token: github_token.clone(),
                             llm_base_url: llm_base.clone().unwrap_or_default(),
                             llm_model: llm_model.clone().unwrap_or_default(),
+                            intelligence_bus: Some(
+                                crate::ws_intelligence_bus::IntelligenceBus::new_shared(),
+                            ),
                             ..Default::default()
                         };
                         let run = tokio::time::timeout(
@@ -611,6 +667,11 @@ pub async fn execute_job(
                 .collect();
             let ordered_engines =
                 weissman_core::models::engine::order_engines_by_registry(&production_engines);
+            let ordered_engines =
+                crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(ordered_engines);
+
+            let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
+            let mut cross_job_params = serde_json::json!({});
 
             for engine_id in &ordered_engines {
                 let _ = telemetry.send(format!(
@@ -618,15 +679,33 @@ pub async fn execute_job(
                     job.id, engine_id
                 ));
 
+                crate::ws_intelligence_bus::merge_params_artifacts(&mut cross_job_params, &intelligence_bus);
                 let ctx = crate::engine_dispatch::EngineRunContext {
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
                     app_pool: Some(app.clone()),
                     agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                     client_id: Some(client_id),
+                    job_params: cross_job_params.clone(),
+                    intelligence_bus: Some(intelligence_bus.clone()),
                     ..Default::default()
                 };
-                let result = crate::engine_dispatch::run_engine(engine_id, &target, &ctx).await;
+                // Batch isolation: each engine runs with panic/timeout isolation + adaptive retry.
+                // A failing, hung, or panicking engine never aborts the batch — every other engine
+                // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
+                let ctx_ref = &ctx;
+                let eid = engine_id.as_str();
+                let (result, telem) = crate::engine_resilience::run_with_resilience(
+                    eid,
+                    &target,
+                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                    move |variant| async move {
+                        crate::engine_dispatch::run_engine(eid, &variant, ctx_ref).await
+                    },
+                )
+                .await;
+                crate::engine_telemetry::record(eid, &telem);
+                crate::ws_intelligence_bus::merge_params_artifacts(&mut cross_job_params, &intelligence_bus);
 
                 if result.success {
                     succeeded += 1;
@@ -644,6 +723,7 @@ pub async fn execute_job(
                     "success": result.success,
                     "findings_count": result.findings.len(),
                     "summary": result.summary,
+                    "resilience": telem.to_json(),
                 }));
 
                 let _ = persist_findings_best_effort(

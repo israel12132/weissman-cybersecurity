@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog'
+import { useToast } from '../components/ui/Toaster'
 
 /**
  * ScanScheduler - Automated scan scheduling and management
@@ -19,6 +24,7 @@ import { api } from '../utils/apiFetch';
  */
 export default function ScanScheduler() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, active, paused
@@ -50,25 +56,34 @@ export default function ScanScheduler() {
       await fetchSchedules();
     } catch (error) {
       console.error('Failed to toggle schedule:', error);
-      alert(error?.message || t('pages.scanScheduler.toggle_failed'));
+      toast.error(error?.message || t('pages.scanScheduler.toggle_failed'));
     }
   };
 
   const deleteSchedule = async (scheduleId) => {
-    if (!confirm(t('pages.scanScheduler.delete_confirm'))) return;
+    const ok = await confirmDialog({
+      title: t('pages.scanScheduler.delete_title', { defaultValue: 'Delete schedule?' }),
+      message: t('pages.scanScheduler.delete_confirm'),
+      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/api/scans/schedules/${scheduleId}`);
       setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
+      toast.success(t('pages.scanScheduler.delete_success', { defaultValue: 'Schedule deleted' }));
     } catch (error) {
       console.error('Failed to delete schedule:', error);
+      toast.error(t('pages.scanScheduler.delete_failed', { defaultValue: 'Failed to delete schedule' }));
     }
   };
 
   const runNow = async (scheduleId) => {
     try {
       const result = await api.post(`/api/scans/schedules/${scheduleId}/run`);
-      alert(
+      toast.success(
         result?.jobs_queued
           ? t('pages.scanScheduler.scan_started', { count: result.jobs_queued })
           : t('pages.scanScheduler.scan_started_ok')
@@ -76,7 +91,7 @@ export default function ScanScheduler() {
       await fetchSchedules();
     } catch (error) {
       console.error('Failed to start scan:', error);
-      alert(error?.message || t('pages.scanScheduler.scan_start_failed'));
+      toast.error(error?.message || t('pages.scanScheduler.scan_start_failed'));
     }
   };
 
@@ -94,8 +109,44 @@ export default function ScanScheduler() {
       .sort((a, b) => new Date(a.next_run) - new Date(b.next_run))[0],
   };
 
+  const listFindings = useMemo(() => schedules.map((s) => ({
+    id: s.id,
+    severity: s.enabled ? 'info' : 'low',
+    title: s.name || s.id,
+    type: s.engine || s.schedule_type || 'schedule',
+    description: s.cron || s.next_run || '',
+    resource: String(s.client_id || ''),
+  })), [schedules])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-scan-schedules',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleSchedules = useMemo(() => {
+    if (!searchQuery.trim()) return filteredSchedules
+    const ids = new Set(filteredFindings.map((f) => f.id))
+    return filteredSchedules.filter((s) => ids.has(s.id))
+  }, [filteredSchedules, filteredFindings, searchQuery])
+
   return (
-    <PageShell title={t('pages.scanScheduler.title')} icon={<Calendar />}>
+    <PageShell
+      title={t('pages.scanScheduler.title')}
+      icon={<Calendar />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchSchedules}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -163,11 +214,17 @@ export default function ScanScheduler() {
 
         {/* Schedules List */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-white/10 space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-cyan-400" />
               {t('pages.scanScheduler.schedules_heading', { count: filteredSchedules.length })}
             </h3>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleSchedules.length}
+              totalCount={filteredSchedules.length}
+            />
           </div>
 
           {loading ? (
@@ -179,9 +236,11 @@ export default function ScanScheduler() {
             <div className="p-8 text-center text-gray-500">
               No schedules found. Click "Create Schedule" to get started.
             </div>
+          ) : visibleSchedules.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-white/5">
-              {filteredSchedules.map((schedule) => (
+              {visibleSchedules.map((schedule) => (
                 <div
                   key={schedule.id}
                   className="p-4 hover:bg-white/5 transition-colors"

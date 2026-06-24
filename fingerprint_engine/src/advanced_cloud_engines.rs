@@ -536,7 +536,11 @@ cli_wrapper!(run_multi_cloud_pivot, run_multi_cloud_pivot_result);
 
 // ── cloud_worm_propagation ────────────────────────────────────────────────────
 pub async fn run_cloud_worm_propagation_result(target: &str) -> EngineResult {
-    crate::serverless_attack_engine::run_serverless_attack_result(target).await
+    crate::serverless_attack_engine::run_serverless_attack_result_ctx(
+        target,
+        &crate::engine_dispatch::EngineRunContext::default(),
+    )
+    .await
 }
 cli_wrapper!(
     run_cloud_worm_propagation,
@@ -545,7 +549,11 @@ cli_wrapper!(
 
 // ── serverless_injection ──────────────────────────────────────────────────────
 pub async fn run_serverless_injection_result(target: &str) -> EngineResult {
-    crate::serverless_attack_engine::run_serverless_attack_result(target).await
+    crate::serverless_attack_engine::run_serverless_attack_result_ctx(
+        target,
+        &crate::engine_dispatch::EngineRunContext::default(),
+    )
+    .await
 }
 cli_wrapper!(run_serverless_injection, run_serverless_injection_result);
 

@@ -4,6 +4,7 @@
 //! against the public registry. The target may be a package name or a domain whose dependency
 //! manifest is published. If no public match is found, we emit no finding.
 
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, finding, http_client, http_get, normalize_url};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -210,7 +211,7 @@ cli_wrapper!(
 );
 
 pub async fn run_build_system_compromise_result(t: &str) -> EngineResult {
-    crate::cicd_pipeline_engine::run_cicd_pipeline_result(t).await
+    crate::cicd_pipeline_engine::run_cicd_pipeline_result_ctx(t, &EngineRunContext::default()).await
 }
 cli_wrapper!(
     run_build_system_compromise,
@@ -280,6 +281,6 @@ cli_wrapper!(
 );
 
 pub async fn run_iac_supply_chain_result(t: &str) -> EngineResult {
-    crate::iac_misconfig_engine::run_iac_misconfig_result(t).await
+    crate::iac_misconfig_engine::run_iac_misconfig_result_default(t).await
 }
 cli_wrapper!(run_iac_supply_chain, run_iac_supply_chain_result);

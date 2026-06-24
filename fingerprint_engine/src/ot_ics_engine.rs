@@ -175,6 +175,191 @@ pub async fn probe_modbus_function_code(host: &str) -> Option<OtFingerprint> {
     })
 }
 
+/// Build a Modbus/TCP (MBAP) frame around a PDU. Pure — unit-tested.
+pub fn build_modbus_frame(tx_id: u16, unit: u8, pdu: &[u8]) -> Vec<u8> {
+    let mut f = Vec::with_capacity(7 + pdu.len());
+    f.extend_from_slice(&tx_id.to_be_bytes());
+    f.extend_from_slice(&[0x00, 0x00]); // protocol identifier (always 0 for Modbus)
+    let length = (pdu.len() as u16) + 1; // unit id byte + PDU
+    f.extend_from_slice(&length.to_be_bytes());
+    f.push(unit);
+    f.extend_from_slice(pdu);
+    f
+}
+
+/// Human label for a Modbus Read-Device-Identification object id.
+pub fn modbus_device_id_label(obj_id: u8) -> &'static str {
+    match obj_id {
+        0x00 => "vendor_name",
+        0x01 => "product_code",
+        0x02 => "revision",
+        0x03 => "vendor_url",
+        0x04 => "product_name",
+        0x05 => "model_name",
+        0x06 => "user_application_name",
+        _ => "object",
+    }
+}
+
+/// Parse a Read Device Identification (FC 0x2B / MEI 0x0E) response into `(object_id, value)`
+/// pairs. Pure — unit-tested. Returns empty when the frame is not a device-id response.
+pub fn parse_modbus_device_id(resp: &[u8]) -> Vec<(u8, String)> {
+    // MBAP(7) + FC(0x2B) + MEI(0x0E) + ReadDevIdCode + Conformity + MoreFollows + NextObjId
+    // + NumberOfObjects(idx 13) + objects(idx 14..)
+    if resp.len() < 14 || resp[7] != 0x2B || resp[8] != 0x0E {
+        return Vec::new();
+    }
+    let num = resp[13] as usize;
+    let mut out = Vec::new();
+    let mut i = 14usize;
+    for _ in 0..num {
+        if i + 2 > resp.len() {
+            break;
+        }
+        let obj_id = resp[i];
+        let len = resp[i + 1] as usize;
+        let start = i + 2;
+        let end = start + len;
+        if end > resp.len() {
+            break;
+        }
+        out.push((
+            obj_id,
+            String::from_utf8_lossy(&resp[start..end]).to_string(),
+        ));
+        i = end;
+    }
+    out
+}
+
+/// Result of a deep read-only Modbus assessment.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ModbusAssessment {
+    pub confirmed: bool,
+    pub read_ok_units: Vec<u8>,
+    pub exception_units: Vec<u8>,
+    pub device_objects: Vec<(u8, String)>,
+    pub raw_hex: String,
+}
+
+async fn modbus_txn(host: &str, frame: &[u8]) -> Option<Vec<u8>> {
+    let addr = format!("{}:{}", host, MODBUS_PORT);
+    let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
+        Ok(Ok(s)) => s,
+        _ => return None,
+    };
+    let _ = stream.set_nodelay(true);
+    match tokio::time::timeout(IO_TIMEOUT, stream.write_all(frame)).await {
+        Ok(Ok(())) => {}
+        _ => return None,
+    }
+    let mut resp = [0u8; 512];
+    match tokio::time::timeout(IO_TIMEOUT, stream.read(&mut resp)).await {
+        Ok(Ok(n)) if n > 0 => Some(resp[..n].to_vec()),
+        _ => None,
+    }
+}
+
+/// Deep **read-only** Modbus assessment: Read Device Identification (FC 0x2B/0x0E) plus holding
+/// register reads (FC 0x03) across common unit ids. No writes are performed — coil/register writes
+/// (FC 0x05/0x06/0x0F/0x10) are destructive and remain an explicitly authorized on-segment action.
+pub async fn modbus_deep_assess(host: &str) -> Option<ModbusAssessment> {
+    let mut a = ModbusAssessment {
+        confirmed: false,
+        read_ok_units: Vec::new(),
+        exception_units: Vec::new(),
+        device_objects: Vec::new(),
+        raw_hex: String::new(),
+    };
+
+    // Read Device Identification (basic) on unit 1.
+    let dev_req = build_modbus_frame(0x0001, 0x01, &[0x2B, 0x0E, 0x01, 0x00]);
+    if let Some(resp) = modbus_txn(host, &dev_req).await {
+        if a.raw_hex.is_empty() {
+            a.raw_hex = to_hex_prefix(&resp, 64);
+        }
+        if resp.len() >= 8 && resp[7] == 0x2B {
+            a.confirmed = true;
+            a.device_objects = parse_modbus_device_id(&resp);
+        }
+    }
+
+    // Holding-register read (addr 0, qty 1) across common unit ids.
+    for unit in [1u8, 0u8, 255u8] {
+        let req = build_modbus_frame(0x0002, unit, &[0x03, 0x00, 0x00, 0x00, 0x01]);
+        if let Some(resp) = modbus_txn(host, &req).await {
+            if a.raw_hex.is_empty() {
+                a.raw_hex = to_hex_prefix(&resp, 64);
+            }
+            if resp.len() >= 8 {
+                match resp[7] {
+                    0x03 => {
+                        a.confirmed = true;
+                        if !a.read_ok_units.contains(&unit) {
+                            a.read_ok_units.push(unit);
+                        }
+                    }
+                    0x83 => {
+                        a.confirmed = true;
+                        if !a.exception_units.contains(&unit) {
+                            a.exception_units.push(unit);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if a.confirmed {
+        Some(a)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod modbus_tests {
+    use super::*;
+
+    #[test]
+    fn modbus_frame_has_correct_mbap_header() {
+        let f = build_modbus_frame(0x0001, 0x01, &[0x03, 0x00, 0x00, 0x00, 0x01]);
+        // tx=0001, proto=0000, length = pdu(5)+unit(1)=6, unit=01, then pdu
+        assert_eq!(&f[0..2], &[0x00, 0x01]);
+        assert_eq!(&f[2..4], &[0x00, 0x00]);
+        assert_eq!(&f[4..6], &[0x00, 0x06]);
+        assert_eq!(f[6], 0x01);
+        assert_eq!(&f[7..], &[0x03, 0x00, 0x00, 0x00, 0x01]);
+    }
+
+    #[test]
+    fn parse_device_id_extracts_objects() {
+        // MBAP(7) + 2B 0E 01 00 00 NextObj=.. NumObjects=2 | obj0 len3 "ACM" | obj1 len2 "PX"
+        let resp = [
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x10, 0x01, // MBAP
+            0x2B, 0x0E, 0x01, 0x01, 0x00, 0x00, 0x02, // FC/MEI/.../numObjects=2
+            0x00, 0x03, b'A', b'C', b'M', // object 0 = vendor "ACM"
+            0x01, 0x02, b'P', b'X', // object 1 = product "PX"
+        ];
+        let objs = parse_modbus_device_id(&resp);
+        assert_eq!(objs.len(), 2);
+        assert_eq!(objs[0], (0x00, "ACM".to_string()));
+        assert_eq!(objs[1], (0x01, "PX".to_string()));
+        assert_eq!(modbus_device_id_label(0x00), "vendor_name");
+        assert_eq!(modbus_device_id_label(0x01), "product_code");
+    }
+
+    #[test]
+    fn parse_device_id_rejects_non_devid_frame() {
+        // FC 0x03 response, not a device-id frame.
+        let resp = [
+            0x00, 0x02, 0x00, 0x00, 0x00, 0x05, 0x01, 0x03, 0x02, 0x00, 0x00,
+        ];
+        assert!(parse_modbus_device_id(&resp).is_empty());
+    }
+}
+
 /// BACnet/IP: BVLC readProperty for device object-name (UDP 47808).
 pub async fn probe_bacnet_read_property(host: &str) -> Option<OtFingerprint> {
     use tokio::net::UdpSocket;
@@ -344,7 +529,7 @@ fn parse_enip_list_identity_data(data: &[u8]) -> Option<(u16, String, u8, u8)> {
 }
 
 /// EtherNet/IP: List Identity command 0x0063 (sessionless); parse CIP identity when present.
-async fn probe_enip(host: &str) -> Option<OtFingerprint> {
+pub async fn probe_enip(host: &str) -> Option<OtFingerprint> {
     let addr = format!("{}:{}", host, ENIP_PORT);
     let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
         Ok(Ok(s)) => s,
@@ -505,7 +690,7 @@ fn s7_cotp_params_slice(resp: &[u8]) -> Option<&[u8]> {
 }
 
 /// S7 ISO-on-TCP: minimal TPKT + COTP Connection Request (CR).
-async fn probe_s7(host: &str) -> Option<OtFingerprint> {
+pub async fn probe_s7(host: &str) -> Option<OtFingerprint> {
     let addr = format!("{}:{}", host, S7_PORT);
     let mut stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr)).await {
         Ok(Ok(s)) => s,

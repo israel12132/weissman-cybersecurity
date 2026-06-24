@@ -1,7 +1,12 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EmptyState from '../components/ui/EmptyState'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { apiFetch } from '../lib/apiBase'
 
 export default function ClientNew() {
@@ -30,7 +35,6 @@ export default function ClientNew() {
     e.preventDefault()
     setError('')
 
-    // Validation
     if (!formData.name.trim()) {
       setError(t('pages.clientNew.name_required'))
       return
@@ -44,24 +48,12 @@ export default function ClientNew() {
       return
     }
 
-    // Parse arrays
-    const domains = formData.domains
-      .split(/[\n,]+/)
-      .map((d) => d.trim())
-      .filter(Boolean)
-
-    const ip_ranges = formData.ip_ranges
-      .split(/[\n,]+/)
-      .map((ip) => ip.trim())
-      .filter(Boolean)
-
-    const tech_stack = formData.tech_stack
-      .split(/[\n,]+/)
-      .map((t) => t.trim())
-      .filter(Boolean)
+    const domains = formData.domains.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
+    const ip_ranges = formData.ip_ranges.split(/[\n,]+/).map((ip) => ip.trim()).filter(Boolean)
+    const tech_stack = formData.tech_stack.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean)
 
     if (domains.length === 0) {
-      setError('At least one valid domain is required')
+      setError(t('pages.clientNew.domain_required'))
       return
     }
 
@@ -75,29 +67,11 @@ export default function ClientNew() {
         ip_ranges: JSON.stringify(ip_ranges),
         tech_stack: JSON.stringify(tech_stack),
         auto_detect_tech_stack: formData.auto_detect_tech_stack,
-        client_configs: JSON.stringify({
-          enabled_engines: [
-            'osint',
-            'asm',
-            'supply_chain',
-            'leak_hunter',
-            'bola_idor',
-            'llm_path_fuzz',
-            'semantic_ai_fuzz',
-            'microsecond_timing',
-            'ai_adversarial_redteam',
-            'nexus_sovereign_swarm',
-          ],
-          roe_mode: 'safe_proofs',
-          stealth_level: 50,
-        }),
       }
 
       const response = await apiFetch('/api/clients', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
@@ -106,20 +80,18 @@ export default function ClientNew() {
         try {
           const data = await response.clone().json()
           detail = data.detail || data.error || detail
-        } catch (_) {
+        } catch {
           try {
             const text = await response.text()
             if (text) detail = text.slice(0, 500)
-          } catch (_) {
-            /* ignore */
-          }
+          } catch { /* ignore */ }
         }
         if (response.status === 403) {
-          setError(`You don't have permission to create clients. ${detail}`)
+          setError(t('pages.clientNew.error_forbidden', { detail }))
         } else if (response.status === 402) {
-          setError(`Plan limit reached: ${detail}`)
+          setError(t('pages.clientNew.error_plan_limit', { detail }))
         } else {
-          setError(`Failed to create client: ${detail}`)
+          setError(t('pages.clientNew.create_failed', { detail }))
         }
         setSubmitting(false)
         return
@@ -127,8 +99,6 @@ export default function ClientNew() {
 
       const data = await response.json()
       const clientId = data.id || data.client_id
-
-      // Redirect to client detail page
       navigate(clientId ? `/clients/${clientId}` : '/clients')
     } catch (err) {
       setError(t('pages.clientNew.create_error', { detail: err.message }))
@@ -136,147 +106,243 @@ export default function ClientNew() {
     }
   }
 
+  const draftFindings = useMemo(() => {
+    const items = []
+    const name = formData.name.trim()
+    if (name) {
+      items.push({
+        id: 'draft',
+        severity: 'info',
+        title: name,
+        type: 'client_draft',
+        description: formData.contact_email.trim(),
+        resource: formData.domains.trim(),
+      })
+    }
+    formData.domains.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean).forEach((domain, i) => {
+      items.push({
+        id: `domain-${i}`,
+        severity: 'info',
+        title: domain,
+        type: 'domain',
+        description: name || 'draft',
+        resource: domain,
+      })
+    })
+    formData.ip_ranges.split(/[\n,]+/).map((ip) => ip.trim()).filter(Boolean).forEach((ip, i) => {
+      items.push({
+        id: `ip-${i}`,
+        severity: 'info',
+        title: ip,
+        type: 'ip_range',
+        description: name || 'draft',
+        resource: ip,
+      })
+    })
+    formData.tech_stack.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean).forEach((tech, i) => {
+      items.push({
+        id: `tech-${i}`,
+        severity: 'info',
+        title: tech,
+        type: 'tech_stack',
+        description: name || 'draft',
+        resource: tech,
+      })
+    })
+    return items
+  }, [formData])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(draftFindings, {
+    csvPrefix: 'weissman-client-new-draft',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const scopePreviewLines = useMemo(() => {
+    const lines = [
+      ...formData.domains.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean).map((value, i) => ({ id: `domain-${i}`, label: value, kind: 'domain' })),
+      ...formData.ip_ranges.split(/[\n,]+/).map((ip) => ip.trim()).filter(Boolean).map((value, i) => ({ id: `ip-${i}`, label: value, kind: 'ip' })),
+      ...formData.tech_stack.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean).map((value, i) => ({ id: `tech-${i}`, label: value, kind: 'tech' })),
+    ]
+    if (!searchQuery.trim()) return lines
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return lines.filter((line) => ids.has(line.id))
+  }, [formData, filteredFindings, searchQuery])
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      contact_email: '',
+      domains: '',
+      ip_ranges: '',
+      tech_stack: '',
+      auto_detect_tech_stack: true,
+    })
+    setError('')
+  }
+
   return (
     <PageShell
       title={t('pages.clientNew.title')}
       subtitle={t('pages.clientNew.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={resetForm}
+          onExport={exportCsv}
+          refreshLoading={submitting}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <EvidenceNotice>{t('pages.clientNew.evidence_notice')}</EvidenceNotice>
+
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Error Display */}
           {error && (
-            <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400">
+            <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
               {error}
             </div>
           )}
 
-          {/* Section 1: Basic Information */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Basic Information</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('pages.clientNew.client_name')} <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="e.g., Acme Corporation"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="contact_email" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('pages.clientNew.contact_email')} <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="email"
-                  id="contact_email"
-                  name="contact_email"
-                  value={formData.contact_email}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="security@example.com"
-                />
-              </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-white">{t('pages.clientNew.section_basic')}</h3>
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-white/70 mb-2">
+                {t('pages.clientNew.client_name')} <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('pages.clientNew.name_placeholder')}
+              />
+            </div>
+            <div>
+              <label htmlFor="contact_email" className="block text-sm font-medium text-white/70 mb-2">
+                {t('pages.clientNew.contact_email')} <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="email"
+                id="contact_email"
+                name="contact_email"
+                value={formData.contact_email}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('pages.clientNew.email_placeholder')}
+              />
             </div>
           </div>
 
-          {/* Section 2: Authorized Scope */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-2">Authorized Scanning Scope</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Define the authorized domains and IP ranges for security scanning. Only assets within this scope will be scanned.
-            </p>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="domains" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('pages.clientNew.authorized_domains')} <span className="text-red-400">*</span>
-                </label>
-                <textarea
-                  id="domains"
-                  name="domains"
-                  value={formData.domains}
-                  onChange={handleChange}
-                  required
-                  rows={4}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-                  placeholder="example.com&#10;*.example.com&#10;api.example.com"
+          <div className="rounded-xl border border-white/10 bg-black/40 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-white">{t('pages.clientNew.section_scope')}</h3>
+            <p className="text-sm text-white/45">{t('pages.clientNew.scope_body')}</p>
+            {draftFindings.length > 0 && (
+              <>
+                <WeissmanListToolbar
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  resultCount={scopePreviewLines.length}
+                  totalCount={draftFindings.length}
                 />
-                <p className="mt-1 text-xs text-slate-500">One domain per line or comma-separated. Wildcards (*) supported.</p>
-              </div>
-
-              <div>
-                <label htmlFor="ip_ranges" className="block text-sm font-medium text-slate-300 mb-2">
-                  {t('pages.clientNew.authorized_ips')} <span className="text-slate-500">(Optional)</span>
-                </label>
-                <textarea
-                  id="ip_ranges"
-                  name="ip_ranges"
-                  value={formData.ip_ranges}
-                  onChange={handleChange}
-                  rows={3}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-                  placeholder="192.168.1.0/24&#10;10.0.0.0/8"
-                />
-                <p className="mt-1 text-xs text-slate-500">CIDR notation supported. One range per line or comma-separated.</p>
-              </div>
+                {searchQuery.trim() && scopePreviewLines.length === 0 ? (
+                  <EmptyState
+                    icon="search"
+                    title={t('weissmanFindings.filtered_title')}
+                    body={t('weissmanFindings.filtered_body')}
+                    compact
+                  />
+                ) : scopePreviewLines.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {scopePreviewLines.map((line) => (
+                      <span
+                        key={line.id}
+                        className="px-2 py-1 rounded-lg border border-white/10 bg-black/50 text-[11px] font-mono text-white/70"
+                      >
+                        {line.kind}: {line.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            )}
+            <div>
+              <label htmlFor="domains" className="block text-sm font-medium text-white/70 mb-2">
+                {t('pages.clientNew.authorized_domains')} <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                id="domains"
+                name="domains"
+                value={formData.domains}
+                onChange={handleChange}
+                required
+                rows={4}
+                className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white font-mono text-sm placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('pages.clientNew.domains_placeholder')}
+              />
+              <p className="mt-1 text-xs text-white/35">{t('pages.clientNew.domains_hint')}</p>
+            </div>
+            <div>
+              <label htmlFor="ip_ranges" className="block text-sm font-medium text-white/70 mb-2">
+                {t('pages.clientNew.authorized_ips')} <span className="text-white/35">({t('pages.clientNew.optional')})</span>
+              </label>
+              <textarea
+                id="ip_ranges"
+                name="ip_ranges"
+                value={formData.ip_ranges}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white font-mono text-sm placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('pages.clientNew.ips_placeholder')}
+              />
+              <p className="mt-1 text-xs text-white/35">{t('pages.clientNew.ips_hint')}</p>
             </div>
           </div>
 
-          {/* Section 3: Tech Stack */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-2">{t('pages.clientNew.tech_stack')}</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Specify known technologies for more accurate vulnerability correlation, or enable auto-detection.
-            </p>
-
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="auto_detect_tech_stack"
-                  name="auto_detect_tech_stack"
-                  checked={formData.auto_detect_tech_stack}
-                  onChange={handleChange}
-                  className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
-                />
-                <label htmlFor="auto_detect_tech_stack" className="ml-2 text-sm text-slate-300">
-                  Auto-detect technologies during scans (Recommended)
-                </label>
-              </div>
-
-              <div>
-                <label htmlFor="tech_stack" className="block text-sm font-medium text-slate-300 mb-2">
-                  Known Technologies <span className="text-slate-500">(Optional)</span>
-                </label>
-                <textarea
-                  id="tech_stack"
-                  name="tech_stack"
-                  value={formData.tech_stack}
-                  onChange={handleChange}
-                  rows={3}
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-                  placeholder="nginx&#10;php 8.1&#10;wordpress&#10;mysql"
-                />
-                <p className="mt-1 text-xs text-slate-500">Specify known software/versions. One per line or comma-separated.</p>
-              </div>
+          <div className="rounded-xl border border-white/10 bg-black/40 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-white">{t('pages.clientNew.tech_stack')}</h3>
+            <p className="text-sm text-white/45">{t('pages.clientNew.tech_body')}</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="auto_detect_tech_stack"
+                name="auto_detect_tech_stack"
+                checked={formData.auto_detect_tech_stack}
+                onChange={handleChange}
+                className="w-4 h-4 rounded border-white/20 bg-black/40 text-cyan-500"
+              />
+              <span className="text-sm text-white/70">{t('pages.clientNew.auto_detect')}</span>
+            </label>
+            <div>
+              <label htmlFor="tech_stack" className="block text-sm font-medium text-white/70 mb-2">
+                {t('pages.clientNew.known_tech')} <span className="text-white/35">({t('pages.clientNew.optional')})</span>
+              </label>
+              <textarea
+                id="tech_stack"
+                name="tech_stack"
+                value={formData.tech_stack}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white font-mono text-sm placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                placeholder={t('pages.clientNew.tech_placeholder')}
+              />
+              <p className="mt-1 text-xs text-white/35">{t('pages.clientNew.tech_hint')}</p>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-white/10">
             <button
               type="button"
               onClick={() => navigate('/clients')}
-              className="px-6 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+              className="px-6 py-2 border border-white/15 text-white/70 rounded-lg hover:bg-white/5 transition-colors"
               disabled={submitting}
             >
               {t('pages.clientNew.cancel')}
@@ -284,16 +350,12 @@ export default function ClientNew() {
             <button
               type="submit"
               disabled={submitting}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              className="px-6 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 disabled:opacity-50 font-medium transition-colors inline-flex items-center gap-2"
             >
-              {submitting ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  {t('pages.clientNew.creating')}
-                </>
-              ) : (
-                t('pages.clientNew.create_client')
+              {submitting && (
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               )}
+              {submitting ? t('pages.clientNew.creating') : t('pages.clientNew.create_client')}
             </button>
           </div>
         </form>

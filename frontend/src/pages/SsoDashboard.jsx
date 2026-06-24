@@ -6,12 +6,17 @@
  *  2. Configuration Form — fields tailored to the selected vendor
  *  3. Active IdP Table — list of configured IdPs with status, Test Connection, edit/delete
  */
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import EmptyState from '../components/ui/EmptyState'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
+import { confirmDialog } from '../utils/confirmDialog'
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
 
@@ -374,8 +379,45 @@ export default function SsoDashboard() {
 
   const showForm = selectedProv !== null
 
+  const listFindings = useMemo(() => idps.map((idp) => ({
+    id: idp.id,
+    severity: idp.enabled === false ? 'medium' : 'info',
+    title: idp.name || idp.vendor_hint || idp.id,
+    type: idp.vendor_hint || 'idp',
+    description: idp.entity_id || idp.issuer || '',
+  })), [idps])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-sso-idps',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
+  const visibleIdps = useMemo(() => {
+    if (!searchQuery.trim()) return idps
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return idps.filter((idp) => ids.has(String(idp.id)))
+  }, [idps, filteredFindings, searchQuery])
+
   return (
-    <PageShell title={t('pages.ssoDashboard.title')} badge={t('pages.ssoDashboard.badge')} badgeColor="#8b5cf6" subtitle={t('pages.ssoDashboard.subtitle')}>
+    <PageShell
+      title={t('pages.ssoDashboard.title')}
+      badge={t('pages.ssoDashboard.badge')}
+      badgeColor="#8b5cf6"
+      subtitle={t('pages.ssoDashboard.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchIdps}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="max-w-5xl mx-auto space-y-10">
 
         {/* Header */}
@@ -440,6 +482,15 @@ export default function SsoDashboard() {
             <p className="text-[11px] text-white/25 font-mono animate-pulse">{t('pages.ssoDashboard.loading')}</p>
           )}
 
+          {!loading && idps.length > 0 && (
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleIdps.length}
+              totalCount={idps.length}
+            />
+          )}
+
           <AnimatePresence>
             {!loading && idps.length === 0 && (
               <motion.div
@@ -451,7 +502,15 @@ export default function SsoDashboard() {
                 <p className="text-white/15 text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
               </motion.div>
             )}
-            {idps.map(idp => (
+            {!loading && idps.length > 0 && visibleIdps.length === 0 && (
+              <EmptyState
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+                compact
+              />
+            )}
+            {visibleIdps.map(idp => (
               <IdpRow
                 key={idp.id}
                 idp={idp}

@@ -1,9 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Search, Download } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
-import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS } from '../lib/enginesRegistry'
+import { SkeletonBar } from '../components/ui/Skeleton'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,16 +49,58 @@ function LiveBadge({ live, https }) {
   )
 }
 
+const STAGE_I18N_KEYS = {
+  'Primary Domain': 'stage_primary',
+  'Certificate Transparency': 'stage_ct',
+  'DNS Enumeration': 'stage_dns',
+  'Reverse IP Lookup': 'stage_reverse_ip',
+  'Web Crawl': 'stage_crawl',
+  'WHOIS Lookup': 'stage_whois',
+  'Email Records': 'stage_email',
+  'Pattern Generation': 'stage_pattern',
+}
+
 function StageBadge({ stage }) {
+  const { t } = useTranslation()
   const color = STAGE_COLORS[stage] ?? '#6b7280'
+  const label = STAGE_I18N_KEYS[stage]
+    ? t(`pages.domainDiscovery.${STAGE_I18N_KEYS[stage]}`)
+    : stage
   return (
     <span
       className="px-2 py-0.5 rounded text-[10px] font-mono border"
       style={{ borderColor: `${color}40`, color, backgroundColor: `${color}10` }}
     >
-      {stage}
+      {label}
     </span>
   )
+}
+
+function exportDomainsCsv(domains) {
+  const header = ['domain', 'stage', 'live', 'https', 'confidence', 'http_status', 'ip_addresses', 'title']
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    header.join(','),
+    ...domains.map((d) =>
+      [
+        d.domain,
+        d.stage,
+        d.live,
+        d.https_available,
+        d.confidence,
+        d.http_status,
+        Array.isArray(d.ip_addresses) ? d.ip_addresses.join(';') : '',
+        d.title,
+      ].map(esc).join(','),
+    ),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `weissman-domains-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── Domain Card ─────────────────────────────────────────────────────────────
@@ -171,8 +216,10 @@ export default function DomainDiscovery() {
   const [selectedDomains, setSelectedDomains] = useState(new Set())
   const [filterStage, setFilterStage] = useState('all')
   const [filterLive, setFilterLive] = useState('all')
+  const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
   const [scanAllLoading, setScanAllLoading] = useState(false)
+  const [lastSync, setLastSync] = useState(null)
 
   // Load clients
   useEffect(() => {
@@ -228,6 +275,7 @@ export default function DomainDiscovery() {
         return
       }
       setResult(d)
+      setLastSync(new Date())
       showToast('info', t('pages.domainDiscovery.discovered_toast', { total: d.total_discovered, live: d.live_domains }))
     } catch (e) {
       showToast('error', e?.message ?? t('pages.domainDiscovery.network_error'))
@@ -247,12 +295,6 @@ export default function DomainDiscovery() {
       return next
     })
   }, [])
-
-  const handleSelectAll = useCallback(() => {
-    if (!result?.domains) return
-    const filtered = getFilteredDomains()
-    setSelectedDomains(new Set(filtered.map((d) => d.domain)))
-  }, [result, getFilteredDomains])
 
   const handleSelectNone = useCallback(() => {
     setSelectedDomains(new Set())
@@ -298,20 +340,39 @@ export default function DomainDiscovery() {
     }
   }, [selectedClientId, selectedDomains, showToast])
 
-  const getFilteredDomains = useCallback(() => {
+  const filteredDomains = useMemo(() => {
     if (!result?.domains) return []
+    const q = search.trim().toLowerCase()
     return result.domains.filter((d) => {
       if (filterStage !== 'all' && d.stage !== filterStage) return false
       if (filterLive === 'live' && !d.live) return false
       if (filterLive === 'offline' && d.live) return false
+      if (q) {
+        const hay = [d.domain, d.title, ...(d.ip_addresses || [])].join(' ').toLowerCase()
+        if (!hay.includes(q)) return false
+      }
       return true
     })
-  }, [result, filterStage, filterLive])
+  }, [result, filterStage, filterLive, search])
 
-  const filteredDomains = getFilteredDomains()
+  const handleSelectAll = useCallback(() => {
+    if (!result?.domains) return
+    setSelectedDomains(new Set(filteredDomains.map((d) => d.domain)))
+  }, [result, filteredDomains])
+
+  const handleRefreshDiscovery = useCallback(async () => {
+    if (!target.trim()) return
+    await handleDiscover()
+  }, [target, handleDiscover])
+
   const uniqueStages = result?.domains
     ? [...new Set(result.domains.map((d) => d.stage))]
     : []
+
+  const stageLabel = useCallback((stage) => {
+    const key = STAGE_I18N_KEYS[stage]
+    return key ? t(`pages.domainDiscovery.${key}`) : stage
+  }, [t])
 
   return (
     <div
@@ -335,7 +396,7 @@ export default function DomainDiscovery() {
           </div>
 
           {/* Client selector */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-mono text-white/40">{t('pages.domainDiscovery.client')}</span>
             <select
               value={selectedClientId ?? ''}
@@ -347,6 +408,13 @@ export default function DomainDiscovery() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <ShellScanActions
+              onRefresh={handleRefreshDiscovery}
+              onExport={() => exportDomainsCsv(filteredDomains)}
+              refreshLoading={loading}
+              refreshDisabled={!target.trim()}
+              exportDisabled={!filteredDomains.length}
+            />
           </div>
         </div>
       </header>
@@ -371,6 +439,13 @@ export default function DomainDiscovery() {
       </AnimatePresence>
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
+        <EvidenceNotice>{t('pages.domainDiscovery.evidence_notice')}</EvidenceNotice>
+        {lastSync && (
+          <p className="text-[10px] font-mono text-white/35 -mt-4">
+            {t('weissmanFindings.last_updated', { time: lastSync.toLocaleString() })}
+          </p>
+        )}
+
         {/* Discovery form */}
         <motion.section
           initial={{ opacity: 0, y: 12 }}
@@ -419,8 +494,19 @@ export default function DomainDiscovery() {
           </p>
         </motion.section>
 
+        {loading && (
+          <div className="space-y-4">
+            <SkeletonBar className="h-20" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <SkeletonBar key={i} className="h-36" />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Results */}
-        {result && (
+        {result && !loading && (
           <>
             {/* Stats */}
             <StatsBar result={result} selectedCount={selectedDomains.size} />
@@ -429,6 +515,16 @@ export default function DomainDiscovery() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               {/* Filters */}
               <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('pages.domainDiscovery.search_placeholder')}
+                    className="bg-black/60 border border-white/10 rounded-lg pl-8 pr-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40 w-44"
+                  />
+                </div>
                 <select
                   value={filterStage}
                   onChange={(e) => setFilterStage(e.target.value)}
@@ -436,7 +532,7 @@ export default function DomainDiscovery() {
                 >
                   <option value="all">{t('pages.domainDiscovery.filter_all_stages')}</option>
                   {uniqueStages.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>{stageLabel(s)}</option>
                   ))}
                 </select>
                 <select
@@ -455,6 +551,15 @@ export default function DomainDiscovery() {
 
               {/* Selection actions */}
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => exportDomainsCsv(filteredDomains)}
+                  disabled={filteredDomains.length === 0}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-mono border border-emerald-500/30 text-emerald-300/80 hover:bg-emerald-500/10 disabled:opacity-40"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {t('pages.domainDiscovery.export_csv')}
+                </button>
                 <button
                   type="button"
                   onClick={handleSelectAll}

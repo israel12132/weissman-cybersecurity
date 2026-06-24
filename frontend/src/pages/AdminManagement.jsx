@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/apiBase'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { confirmDialog } from '../utils/confirmDialog'
 
 /**
  * Admin Management Dashboard - Enterprise User & Role Management
@@ -24,6 +28,7 @@ export default function AdminManagement() {
   const [newRole, setNewRole] = useState('viewer')
   const [newIsSuperadmin, setNewIsSuperadmin] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   // Edit user modal state
   const [editingUser, setEditingUser] = useState(null)
@@ -41,6 +46,7 @@ export default function AdminManagement() {
       }
       const data = await r.json()
       setUsers(Array.isArray(data) ? data : data.users || [])
+      setLastUpdated(new Date())
     } catch (err) {
       setError(err.message || t('pages.adminManagement.load_failed'))
     } finally {
@@ -117,7 +123,14 @@ export default function AdminManagement() {
   }
 
   const handleDeactivateUser = async (userId, email) => {
-    if (!window.confirm(`Deactivate user ${email}?`)) return
+    const ok = await confirmDialog({
+      title: t('pages.adminManagement.deactivate_title', { defaultValue: 'Deactivate user?' }),
+      message: t('pages.adminManagement.deactivate_confirm', { email, defaultValue: `Deactivate user ${email}?` }),
+      confirmLabel: t('pages.adminManagement.deactivate_action', { defaultValue: 'Deactivate' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       const r = await apiFetch(`/api/admin/users/${userId}/deactivate`, {
         method: 'POST',
@@ -139,6 +152,31 @@ export default function AdminManagement() {
     setEditIsSuperadmin(user.is_superadmin || false)
   }
 
+  const listFindings = useMemo(() => users.map((user) => ({
+    id: user.id,
+    severity: user.is_active === false ? 'high' : user.role === 'ceo' ? 'critical' : 'info',
+    title: user.email,
+    type: user.role || 'viewer',
+    description: user.is_superadmin ? 'Superadmin' : '',
+    resource: user.is_active !== false ? 'active' : 'inactive',
+  })), [users])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-admin-users',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
+  const visibleUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users
+    const emails = new Set(filteredFindings.map((f) => f.title))
+    return users.filter((u) => emails.has(u.email))
+  }, [users, filteredFindings, searchQuery])
+
   if (!isCeo && !session?.is_superadmin) {
     return (
       <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle_loading')}>
@@ -153,7 +191,18 @@ export default function AdminManagement() {
   }
 
   return (
-    <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle')}>
+    <PageShell
+      title={t('pages.adminManagement.title')}
+      subtitle={t('pages.adminManagement.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadUsers}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="p-6 max-w-6xl mx-auto space-y-8">
         {/* Success/Error Messages */}
         {successMsg && (
@@ -274,25 +323,26 @@ export default function AdminManagement() {
 
         {/* Users List Section */}
         <section className="bg-black/30 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col gap-4 mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <span className="text-violet-400">◎</span> System Users
             </h2>
-            <button
-              id="adminmgmt-refresh-users-btn"
-              type="button"
-              onClick={loadUsers}
-              disabled={loading}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/20 text-slate-400 hover:bg-white/5 disabled:opacity-50"
-            >
-              {loading ? 'Loading…' : 'Refresh'}
-            </button>
+            <WeissmanListToolbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder={t('pages.adminManagement.search_placeholder', { defaultValue: 'Search users…' })}
+              lastUpdated={lastUpdated}
+              resultCount={visibleUsers.length}
+              totalCount={users.length}
+            />
           </div>
 
           {loading && users.length === 0 ? (
             <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.loading')}</div>
           ) : users.length === 0 ? (
             <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.no_users')}</div>
+          ) : visibleUsers.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -316,7 +366,7 @@ export default function AdminManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user, idx) => (
+                  {visibleUsers.map((user, idx) => (
                     <tr
                       key={user.id || idx}
                       className="border-b border-white/5 hover:bg-white/5 transition-colors"

@@ -1,22 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw } from 'lucide-react';
-import PageShell from './PageShell'
+import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import PageShell from './PageShell';
+import ShellScanActions from '../components/engine/ShellScanActions';
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar';
+import EmptyState from '../components/ui/EmptyState';
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
+import EvidenceNotice from '../components/ui/EvidenceNotice';
+import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { apiUrl, authHeaders } from '../lib/apiBase';
 
-/**
- * SystemConfiguration - Complete system settings management
- *
- * Features:
- * - General settings (name, logo, timezone)
- * - Security policies (password, session, MFA)
- * - Scan configuration (default engines, timeout, concurrency)
- * - Integration settings (webhooks, SIEM, notifications)
- * - Data retention policies
- * - Performance tuning
- * - Compliance settings
- */
+const NS = 'pages.systemConfiguration';
+
+const TIMEZONE_OPTIONS = [
+  { value: 'UTC', labelKey: 'options.timezones.utc' },
+  { value: 'America/New_York', labelKey: 'options.timezones.eastern' },
+  { value: 'America/Los_Angeles', labelKey: 'options.timezones.pacific' },
+  { value: 'Europe/London', labelKey: 'options.timezones.london' },
+  { value: 'Asia/Tokyo', labelKey: 'options.timezones.tokyo' },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en', labelKey: 'options.languages.en' },
+  { value: 'he', labelKey: 'options.languages.he' },
+  { value: 'es', labelKey: 'options.languages.es' },
+  { value: 'fr', labelKey: 'options.languages.fr' },
+];
+
+const DATE_FORMAT_OPTIONS = [
+  { value: 'YYYY-MM-DD', labelKey: 'options.dateFormats.iso' },
+  { value: 'MM/DD/YYYY', labelKey: 'options.dateFormats.us' },
+  { value: 'DD/MM/YYYY', labelKey: 'options.dateFormats.eu' },
+];
+
+const SIEM_OPTIONS = [
+  { value: 'none', labelKey: 'options.siem.none' },
+  { value: 'splunk', labelKey: 'options.siem.splunk' },
+  { value: 'qradar', labelKey: 'options.siem.qradar' },
+  { value: 'sentinel', labelKey: 'options.siem.sentinel' },
+];
+
+const COMPLIANCE_FRAMEWORKS = [
+  { configKey: 'framework_cis', labelKey: 'frameworks.cis' },
+  { configKey: 'framework_pci-dss', labelKey: 'frameworks.pci_dss' },
+  { configKey: 'framework_nist', labelKey: 'frameworks.nist' },
+  { configKey: 'framework_hipaa', labelKey: 'frameworks.hipaa' },
+  { configKey: 'framework_soc2', labelKey: 'frameworks.soc2' },
+  { configKey: 'framework_gdpr', labelKey: 'frameworks.gdpr' },
+  { configKey: 'framework_iso27001', labelKey: 'frameworks.iso27001' },
+];
+
+function ConfigLoadingSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-live="polite">
+      <SkeletonBar className="h-6 w-48" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <SkeletonBar className="h-4 w-32" />
+            <SkeletonBar className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+      <SkeletonBar className="h-24 w-full" />
+      <SkeletonBar className="h-3 w-5/6" />
+      <SkeletonBar className="h-3 w-4/6" />
+    </div>
+  );
+}
+
 export default function SystemConfiguration() {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
@@ -32,15 +85,16 @@ export default function SystemConfiguration() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [unsavedChanges, setUnsavedChanges] = useState(false);
+  const [saveMessage, setSaveMessage] = useState(null);
 
   const tabs = [
-    { id: 'general', label: t('pages.systemConfiguration.tab_general'), icon: <Settings /> },
-    { id: 'security', label: t('pages.systemConfiguration.tab_security'), icon: <Shield /> },
-    { id: 'scanning', label: t('pages.systemConfiguration.tab_scanning'), icon: <Zap /> },
-    { id: 'integrations', label: t('pages.systemConfiguration.tab_integrations'), icon: <Globe /> },
-    { id: 'retention', label: t('pages.systemConfiguration.tab_retention'), icon: <Database /> },
-    { id: 'performance', label: t('pages.systemConfiguration.tab_performance'), icon: <RefreshCw /> },
-    { id: 'compliance', label: t('pages.systemConfiguration.tab_compliance'), icon: <Lock /> },
+    { id: 'general', label: t(`${NS}.tab_general`), icon: <Settings /> },
+    { id: 'security', label: t(`${NS}.tab_security`), icon: <Shield /> },
+    { id: 'scanning', label: t(`${NS}.tab_scanning`), icon: <Zap /> },
+    { id: 'integrations', label: t(`${NS}.tab_integrations`), icon: <Globe /> },
+    { id: 'retention', label: t(`${NS}.tab_retention`), icon: <Database /> },
+    { id: 'performance', label: t(`${NS}.tab_performance`), icon: <RefreshCw /> },
+    { id: 'compliance', label: t(`${NS}.tab_compliance`), icon: <Lock /> },
   ];
 
   useEffect(() => {
@@ -62,10 +116,16 @@ export default function SystemConfiguration() {
   const saveConfig = async () => {
     try {
       setSaving(true);
+      setSaveMessage(null);
       await api.put('/api/system/config', config);
       setUnsavedChanges(false);
+      setSaveMessage({ type: 'success', text: t(`${NS}.saved`) });
     } catch (error) {
       console.error('Failed to save config:', error);
+      setSaveMessage({
+        type: 'error',
+        text: error?.message || t(`${NS}.save_error`),
+      });
     } finally {
       setSaving(false);
     }
@@ -80,19 +140,82 @@ export default function SystemConfiguration() {
       },
     }));
     setUnsavedChanges(true);
+    setSaveMessage(null);
   };
 
+  const listFindings = useMemo(() => Object.entries(config).flatMap(([section, values]) => {
+    if (!values || typeof values !== 'object') return []
+    return Object.entries(values).map(([key, val]) => ({
+      id: `${section}:${key}`,
+      severity: 'info',
+      title: key,
+      type: section,
+      description: String(val ?? ''),
+    }))
+  }), [config])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-system-config',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
   return (
-    <PageShell title={t('pages.systemConfiguration.title')} subtitle={t('pages.systemConfiguration.subtitle')} icon={<Settings />}>
+    <PageShell
+      title={t(`${NS}.title`)}
+      subtitle={t(`${NS}.subtitle`)}
+      icon={<Settings />}
+      actions={(
+        <ShellScanActions
+          onRefresh={fetchConfig}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="space-y-6">
-        {/* Unsaved Changes Warning */}
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {saveMessage && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm flex items-center justify-between gap-3 ${
+              saveMessage.type === 'success'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-red-500/10 border-red-500/30 text-red-400'
+            }`}
+            role="alert"
+          >
+            <div className="flex items-center gap-2">
+              {saveMessage.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <XCircle className="w-4 h-4 shrink-0" />
+              )}
+              <span>{saveMessage.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveMessage(null)}
+              className="opacity-70 hover:opacity-100 shrink-0"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {unsavedChanges && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
               <div>
-                <h3 className="text-sm font-semibold text-yellow-400">{t('pages.systemConfiguration.unsaved_warning')}</h3>
-                <p className="text-xs text-gray-400">You have unsaved configuration changes</p>
+                <h3 className="text-sm font-semibold text-yellow-400">{t(`${NS}.unsaved_warning`)}</h3>
+                <p className="text-xs text-gray-400">{t(`${NS}.unsaved_changes_subtitle`)}</p>
               </div>
             </div>
             <button
@@ -101,12 +224,11 @@ export default function SystemConfiguration() {
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-black rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? t(`${NS}.saving`) : t(`${NS}.save_changes`)}
             </button>
           </div>
         )}
 
-        {/* Tabs */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
           <div className="flex overflow-x-auto border-b border-white/10">
             {tabs.map((tab) => (
@@ -125,28 +247,67 @@ export default function SystemConfiguration() {
             ))}
           </div>
 
-          {/* Tab Content */}
           <div className="p-6">
             {loading ? (
-              <div className="text-center py-12 text-gray-500">
-                <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
-                {t('pages.systemConfiguration.loading')}
-              </div>
+              <ConfigLoadingSkeleton />
             ) : (
               <>
-                {activeTab === 'general' && <GeneralSettings config={config.general} onChange={(key, value) => updateConfig('general', key, value)} />}
-                {activeTab === 'security' && <SecuritySettings config={config.security} onChange={(key, value) => updateConfig('security', key, value)} />}
-                {activeTab === 'scanning' && <ScanningSettings config={config.scanning} onChange={(key, value) => updateConfig('scanning', key, value)} />}
-                {activeTab === 'integrations' && <IntegrationsSettings config={config.integrations} onChange={(key, value) => updateConfig('integrations', key, value)} />}
-                {activeTab === 'retention' && <RetentionSettings config={config.retention} onChange={(key, value) => updateConfig('retention', key, value)} />}
-                {activeTab === 'performance' && <PerformanceSettings config={config.performance} onChange={(key, value) => updateConfig('performance', key, value)} />}
-                {activeTab === 'compliance' && <ComplianceSettings config={config.compliance} onChange={(key, value) => updateConfig('compliance', key, value)} />}
+                <WeissmanListToolbar
+                  className="mb-6"
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  resultCount={searchQuery.trim() ? filteredFindings.length : listFindings.length}
+                  totalCount={listFindings.length}
+                />
+                {searchQuery.trim() ? (
+                  filteredFindings.length === 0 ? (
+                    <EmptyState
+                      icon="search"
+                      title={t('weissmanFindings.filtered_title')}
+                      body={t('weissmanFindings.filtered_body')}
+                      compact
+                    />
+                  ) : (
+                    <div className="space-y-2 max-h-[480px] overflow-y-auto">
+                      {filteredFindings.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                          <div className="text-[10px] font-mono uppercase text-cyan-400/70">{item.type}</div>
+                          <div className="text-sm font-medium text-white mt-1">{item.title}</div>
+                          <div className="text-xs text-gray-400 font-mono mt-1 break-all">{item.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+              <>
+                {activeTab === 'general' && (
+                  <GeneralSettings config={config.general} onChange={(key, value) => updateConfig('general', key, value)} />
+                )}
+                {activeTab === 'security' && (
+                  <SecuritySettings config={config.security} onChange={(key, value) => updateConfig('security', key, value)} />
+                )}
+                {activeTab === 'scanning' && (
+                  <ScanningSettings config={config.scanning} onChange={(key, value) => updateConfig('scanning', key, value)} />
+                )}
+                {activeTab === 'integrations' && (
+                  <IntegrationsSettings config={config.integrations} onChange={(key, value) => updateConfig('integrations', key, value)} />
+                )}
+                {activeTab === 'retention' && (
+                  <RetentionSettings config={config.retention} onChange={(key, value) => updateConfig('retention', key, value)} />
+                )}
+                {activeTab === 'performance' && (
+                  <PerformanceSettings config={config.performance} onChange={(key, value) => updateConfig('performance', key, value)} />
+                )}
+                {activeTab === 'compliance' && (
+                  <ComplianceSettings config={config.compliance} onChange={(key, value) => updateConfig('compliance', key, value)} />
+                )}
+              </>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* Save Button */}
         <div className="flex justify-end">
           <button
             onClick={saveConfig}
@@ -154,7 +315,7 @@ export default function SystemConfiguration() {
             className="flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save All Changes'}
+            {saving ? t(`${NS}.saving`) : t(`${NS}.save_all`)}
           </button>
         </div>
       </div>
@@ -162,16 +323,17 @@ export default function SystemConfiguration() {
   );
 }
 
-// General Settings Component
 function GeneralSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">General Settings</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.general.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Organization Name
+            {t(`${NS}.fields.general.org_name`)}
           </label>
           <input
             type="text"
@@ -183,49 +345,52 @@ function GeneralSettings({ config, onChange }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Timezone
+            {t(`${NS}.fields.general.timezone`)}
           </label>
           <select
             value={config.timezone || 'UTC'}
             onChange={(e) => onChange('timezone', e.target.value)}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
-            <option value="UTC">UTC</option>
-            <option value="America/New_York">Eastern Time</option>
-            <option value="America/Los_Angeles">Pacific Time</option>
-            <option value="Europe/London">London</option>
-            <option value="Asia/Tokyo">Tokyo</option>
+            {TIMEZONE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(`${NS}.${opt.labelKey}`)}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Language
+            {t(`${NS}.fields.general.language`)}
           </label>
           <select
             value={config.language || 'en'}
             onChange={(e) => onChange('language', e.target.value)}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
-            <option value="en">English</option>
-            <option value="he">Hebrew</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
+            {LANGUAGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(`${NS}.${opt.labelKey}`)}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Date Format
+            {t(`${NS}.fields.general.date_format`)}
           </label>
           <select
             value={config.date_format || 'YYYY-MM-DD'}
             onChange={(e) => onChange('date_format', e.target.value)}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
-            <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-            <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-            <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+            {DATE_FORMAT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(`${NS}.${opt.labelKey}`)}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -233,32 +398,32 @@ function GeneralSettings({ config, onChange }) {
   );
 }
 
-// Security Settings Component
 function SecuritySettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Security Policies</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.security.title`)}</h3>
 
       <div className="space-y-4">
-        {/* Password Policy */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">Password Policy</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-2">Minimum Length</label>
+              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.password_min_length`)}</label>
               <input
                 type="number"
                 value={config.password_min_length || 12}
-                onChange={(e) => onChange('password_min_length', parseInt(e.target.value))}
+                onChange={(e) => onChange('password_min_length', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2">Max Age (days)</label>
+              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.password_max_age`)}</label>
               <input
                 type="number"
                 value={config.password_max_age || 90}
-                onChange={(e) => onChange('password_max_age', parseInt(e.target.value))}
+                onChange={(e) => onChange('password_max_age', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
@@ -271,7 +436,7 @@ function SecuritySettings({ config, onChange }) {
                 onChange={(e) => onChange('password_require_uppercase', e.target.checked)}
                 className="rounded"
               />
-              Require uppercase letters
+              {t(`${NS}.fields.security.password_require_uppercase`)}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input
@@ -280,7 +445,7 @@ function SecuritySettings({ config, onChange }) {
                 onChange={(e) => onChange('password_require_numbers', e.target.checked)}
                 className="rounded"
               />
-              Require numbers
+              {t(`${NS}.fields.security.password_require_numbers`)}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input
@@ -289,39 +454,37 @@ function SecuritySettings({ config, onChange }) {
                 onChange={(e) => onChange('password_require_special', e.target.checked)}
                 className="rounded"
               />
-              Require special characters
+              {t(`${NS}.fields.security.password_require_special`)}
             </label>
           </div>
         </div>
 
-        {/* Session Policy */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">Session Management</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-2">Session Timeout (minutes)</label>
+              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.session_timeout`)}</label>
               <input
                 type="number"
                 value={config.session_timeout || 60}
-                onChange={(e) => onChange('session_timeout', parseInt(e.target.value))}
+                onChange={(e) => onChange('session_timeout', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2">Max Concurrent Sessions</label>
+              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.max_concurrent_sessions`)}</label>
               <input
                 type="number"
                 value={config.max_concurrent_sessions || 3}
-                onChange={(e) => onChange('max_concurrent_sessions', parseInt(e.target.value))}
+                onChange={(e) => onChange('max_concurrent_sessions', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           </div>
         </div>
 
-        {/* MFA */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">Multi-Factor Authentication</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
           <label className="flex items-center gap-2 text-sm text-gray-300 mb-3">
             <input
               type="checkbox"
@@ -329,7 +492,7 @@ function SecuritySettings({ config, onChange }) {
               onChange={(e) => onChange('mfa_required', e.target.checked)}
               className="rounded"
             />
-            Require MFA for all users
+            {t(`${NS}.fields.security.mfa_required`)}
           </label>
           <MfaSelfServicePanel />
         </div>
@@ -338,68 +501,102 @@ function SecuritySettings({ config, onChange }) {
   );
 }
 
-// Self-service MFA: read /api/auth/mfa/status, allow enroll + disable.
 function MfaSelfServicePanel() {
-  const [status, setStatus] = React.useState(null)
-  const [setup, setSetup] = React.useState(null)
-  const [code, setCode] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const [err, setErr] = React.useState('')
+  const { t } = useTranslation();
+  const [status, setStatus] = React.useState(null);
+  const [setup, setSetup] = React.useState(null);
+  const [code, setCode] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
   const refresh = React.useCallback(async () => {
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/status'), { credentials: 'include', headers: authHeaders() })
-      const d = await r.json().catch(() => ({}))
-      setStatus(d)
+      const r = await fetch(apiUrl('/api/auth/mfa/status'), { credentials: 'include', headers: authHeaders() });
+      const d = await r.json().catch(() => ({}));
+      setStatus(d);
     } catch (e) {
-      setErr(e?.message || 'status fetch failed')
+      setErr(e?.message || t(`${NS}.mfa.errors.status_fetch_failed`));
     }
-  }, [])
-  React.useEffect(() => { refresh() }, [refresh])
+  }, [t]);
+
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const startSetup = async () => {
-    setBusy(true); setErr('')
+    setBusy(true);
+    setErr('');
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/setup'), { method: 'POST', credentials: 'include', headers: authHeaders() })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || 'setup failed')
-      setSetup(d)
-    } catch (e) { setErr(e?.message || 'setup failed') } finally { setBusy(false) }
-  }
+      const r = await fetch(apiUrl('/api/auth/mfa/setup'), { method: 'POST', credentials: 'include', headers: authHeaders() });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.setup_failed`));
+      setSetup(d);
+    } catch (e) {
+      setErr(e?.message || t(`${NS}.mfa.errors.setup_failed`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const enable = async () => {
-    setBusy(true); setErr('')
+    setBusy(true);
+    setErr('');
     try {
       const r = await fetch(apiUrl('/api/auth/mfa/enable'), {
-        method: 'POST', credentials: 'include',
+        method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ code: code.trim() }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || 'enable failed')
-      setSetup(null); setCode('')
-      await refresh()
-    } catch (e) { setErr(e?.message || 'enable failed') } finally { setBusy(false) }
-  }
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.enable_failed`));
+      setSetup(null);
+      setCode('');
+      await refresh();
+    } catch (e) {
+      setErr(e?.message || t(`${NS}.mfa.errors.enable_failed`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const disable = async () => {
-    setBusy(true); setErr('')
+    setBusy(true);
+    setErr('');
     try {
       const r = await fetch(apiUrl('/api/auth/mfa/disable'), {
-        method: 'POST', credentials: 'include',
+        method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ code: code.trim() }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || 'disable failed')
-      setCode('')
-      await refresh()
-    } catch (e) { setErr(e?.message || 'disable failed') } finally { setBusy(false) }
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.disable_failed`));
+      setCode('');
+      await refresh();
+    } catch (e) {
+      setErr(e?.message || t(`${NS}.mfa.errors.disable_failed`));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!status) {
+    return <p className="text-[11px] text-white/40">{t(`${NS}.mfa.loading_status`)}</p>;
   }
 
-  if (!status) return <p className="text-[11px] text-white/40">Loading MFA status…</p>
   return (
     <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
       <div className="text-[11px] font-mono text-white/60">
-        Your account: {status.mfa_enabled ? <span className="text-emerald-400">MFA enabled</span> : <span className="text-yellow-400">MFA disabled</span>}
-        {status.mfa_provisioned && !status.mfa_enabled && <span className="text-cyan-400 ml-2">(provisioning in progress)</span>}
+        {t(`${NS}.mfa.account_label`)}{' '}
+        {status.mfa_enabled ? (
+          <span className="text-emerald-400">{t(`${NS}.mfa.status_enabled`)}</span>
+        ) : (
+          <span className="text-yellow-400">{t(`${NS}.mfa.status_disabled`)}</span>
+        )}
+        {status.mfa_provisioned && !status.mfa_enabled && (
+          <span className="text-cyan-400 ml-2">{t(`${NS}.mfa.provisioning_in_progress`)}</span>
+        )}
       </div>
       {err && <div className="text-[11px] text-rose-400">{err}</div>}
       {!status.mfa_enabled && !setup && (
@@ -409,29 +606,32 @@ function MfaSelfServicePanel() {
           onClick={startSetup}
           className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
         >
-          {busy ? 'Working…' : status.mfa_provisioned ? 'Re-provision MFA' : 'Set up MFA'}
+          {busy ? t(`${NS}.mfa.working`) : status.mfa_provisioned ? t(`${NS}.mfa.reprovision`) : t(`${NS}.mfa.setup`)}
         </button>
       )}
       {setup && (
         <div className="space-y-2">
-          <p className="text-[11px] text-white/60">
-            Scan this URI in Authy / Google Authenticator, then enter the 6-digit code:
-          </p>
+          <p className="text-[11px] text-white/60">{t(`${NS}.mfa.scan_uri_instructions`)}</p>
           <code className="block break-all text-[10px] font-mono text-cyan-300 bg-black/40 p-2 rounded">
             {setup.otpauth_url}
           </code>
           <div className="flex items-center gap-2">
             <input
-              type="text" inputMode="numeric" maxLength={6}
-              value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder={t(`${NS}.mfa.code_placeholder`)}
               className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
             />
             <button
-              type="button" onClick={enable} disabled={busy || code.length !== 6}
+              type="button"
+              onClick={enable}
+              disabled={busy || code.length !== 6}
               className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
             >
-              {busy ? 'Working…' : 'Enable MFA'}
+              {busy ? t(`${NS}.mfa.working`) : t(`${NS}.mfa.enable`)}
             </button>
           </div>
         </div>
@@ -439,76 +639,82 @@ function MfaSelfServicePanel() {
       {status.mfa_enabled && (
         <div className="flex items-center gap-2 mt-2">
           <input
-            type="text" inputMode="numeric" maxLength={6}
-            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            placeholder="123456"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            placeholder={t(`${NS}.mfa.code_placeholder`)}
             className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
           />
           <button
-            type="button" onClick={disable} disabled={busy || code.length !== 6}
+            type="button"
+            onClick={disable}
+            disabled={busy || code.length !== 6}
             className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-rose-500/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
           >
-            {busy ? 'Working…' : 'Disable MFA'}
+            {busy ? t(`${NS}.mfa.working`) : t(`${NS}.mfa.disable`)}
           </button>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-// Scanning Settings Component
 function ScanningSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Scanning Configuration</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.scanning.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Default Scan Timeout (seconds)
+            {t(`${NS}.fields.scanning.default_timeout`)}
           </label>
           <input
             type="number"
             value={config.default_timeout || 300}
-            onChange={(e) => onChange('default_timeout', parseInt(e.target.value))}
+            onChange={(e) => onChange('default_timeout', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Max Concurrency
+            {t(`${NS}.fields.scanning.max_concurrency`)}
           </label>
           <input
             type="number"
             value={config.max_concurrency || 10}
-            onChange={(e) => onChange('max_concurrency', parseInt(e.target.value))}
+            onChange={(e) => onChange('max_concurrency', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Auto-Retry Failed Scans
+            {t(`${NS}.fields.scanning.auto_retry`)}
           </label>
           <select
-            value={config.auto_retry || 'false'}
+            value={String(config.auto_retry ?? false)}
             onChange={(e) => onChange('auto_retry', e.target.value === 'true')}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
+            <option value="true">{t(`${NS}.common.enabled`)}</option>
+            <option value="false">{t(`${NS}.common.disabled`)}</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Max Retries
+            {t(`${NS}.fields.scanning.max_retries`)}
           </label>
           <input
             type="number"
             value={config.max_retries || 3}
-            onChange={(e) => onChange('max_retries', parseInt(e.target.value))}
+            onChange={(e) => onChange('max_retries', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
@@ -517,67 +723,66 @@ function ScanningSettings({ config, onChange }) {
   );
 }
 
-// Integrations Settings Component
 function IntegrationsSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Integration Settings</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
 
       <div className="space-y-4">
-        {/* Webhook */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">Webhook URL</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
           <input
             type="text"
             value={config.webhook_url || ''}
             onChange={(e) => onChange('webhook_url', e.target.value)}
-            placeholder="https://example.com/webhook"
+            placeholder={t(`${NS}.placeholders.webhook_url`)}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
-        {/* SIEM */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">SIEM Integration</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
           <div className="space-y-3">
             <select
               value={config.siem_type || 'none'}
               onChange={(e) => onChange('siem_type', e.target.value)}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
-              <option value="none">None</option>
-              <option value="splunk">Splunk</option>
-              <option value="qradar">IBM QRadar</option>
-              <option value="sentinel">Microsoft Sentinel</option>
+              {SIEM_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(`${NS}.${opt.labelKey}`)}
+                </option>
+              ))}
             </select>
             {config.siem_type && config.siem_type !== 'none' && (
               <input
                 type="text"
                 value={config.siem_endpoint || ''}
                 onChange={(e) => onChange('siem_endpoint', e.target.value)}
-                placeholder="SIEM endpoint URL"
+                placeholder={t(`${NS}.placeholders.siem_endpoint`)}
                 className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             )}
           </div>
         </div>
 
-        {/* Email Notifications */}
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">Email Notifications</h4>
+          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
           <div className="space-y-3">
             <input
               type="text"
               value={config.smtp_server || ''}
               onChange={(e) => onChange('smtp_server', e.target.value)}
-              placeholder="smtp.example.com"
+              placeholder={t(`${NS}.placeholders.smtp_server`)}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
             <input
               type="number"
               value={config.smtp_port || 587}
-              onChange={(e) => onChange('smtp_port', parseInt(e.target.value))}
-              placeholder="587"
+              onChange={(e) => onChange('smtp_port', parseInt(e.target.value, 10))}
+              placeholder={t(`${NS}.placeholders.smtp_port`)}
               className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
@@ -587,57 +792,58 @@ function IntegrationsSettings({ config, onChange }) {
   );
 }
 
-// Retention Settings Component
 function RetentionSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Data Retention Policies</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.retention.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Scan Results (days)
+            {t(`${NS}.fields.retention.scan_results`)}
           </label>
           <input
             type="number"
             value={config.scan_results_retention || 90}
-            onChange={(e) => onChange('scan_results_retention', parseInt(e.target.value))}
+            onChange={(e) => onChange('scan_results_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Audit Logs (days)
+            {t(`${NS}.fields.retention.audit_logs`)}
           </label>
           <input
             type="number"
             value={config.audit_logs_retention || 365}
-            onChange={(e) => onChange('audit_logs_retention', parseInt(e.target.value))}
+            onChange={(e) => onChange('audit_logs_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Findings (days)
+            {t(`${NS}.fields.retention.findings`)}
           </label>
           <input
             type="number"
             value={config.findings_retention || 180}
-            onChange={(e) => onChange('findings_retention', parseInt(e.target.value))}
+            onChange={(e) => onChange('findings_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Metrics (days)
+            {t(`${NS}.fields.retention.metrics`)}
           </label>
           <input
             type="number"
             value={config.metrics_retention || 30}
-            onChange={(e) => onChange('metrics_retention', parseInt(e.target.value))}
+            onChange={(e) => onChange('metrics_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
@@ -646,57 +852,58 @@ function RetentionSettings({ config, onChange }) {
   );
 }
 
-// Performance Settings Component
 function PerformanceSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Performance Tuning</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.performance.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Worker Threads
+            {t(`${NS}.fields.performance.worker_threads`)}
           </label>
           <input
             type="number"
             value={config.worker_threads || 4}
-            onChange={(e) => onChange('worker_threads', parseInt(e.target.value))}
+            onChange={(e) => onChange('worker_threads', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Cache TTL (seconds)
+            {t(`${NS}.fields.performance.cache_ttl`)}
           </label>
           <input
             type="number"
             value={config.cache_ttl || 300}
-            onChange={(e) => onChange('cache_ttl', parseInt(e.target.value))}
+            onChange={(e) => onChange('cache_ttl', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Max Memory (MB)
+            {t(`${NS}.fields.performance.max_memory`)}
           </label>
           <input
             type="number"
             value={config.max_memory || 2048}
-            onChange={(e) => onChange('max_memory', parseInt(e.target.value))}
+            onChange={(e) => onChange('max_memory', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Database Pool Size
+            {t(`${NS}.fields.performance.db_pool_size`)}
           </label>
           <input
             type="number"
             value={config.db_pool_size || 20}
-            onChange={(e) => onChange('db_pool_size', parseInt(e.target.value))}
+            onChange={(e) => onChange('db_pool_size', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
@@ -705,22 +912,26 @@ function PerformanceSettings({ config, onChange }) {
   );
 }
 
-// Compliance Settings Component
 function ComplianceSettings({ config, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-bold text-white mb-4">Compliance Frameworks</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.compliance.title`)}</h3>
 
       <div className="space-y-3">
-        {['CIS', 'PCI-DSS', 'NIST', 'HIPAA', 'SOC2', 'GDPR', 'ISO27001'].map((framework) => (
-          <label key={framework} className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors">
+        {COMPLIANCE_FRAMEWORKS.map((framework) => (
+          <label
+            key={framework.configKey}
+            className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+          >
             <input
               type="checkbox"
-              checked={config[`framework_${framework.toLowerCase()}`] || false}
-              onChange={(e) => onChange(`framework_${framework.toLowerCase()}`, e.target.checked)}
+              checked={config[framework.configKey] || false}
+              onChange={(e) => onChange(framework.configKey, e.target.checked)}
               className="rounded"
             />
-            <span className="text-sm font-medium text-white">{framework}</span>
+            <span className="text-sm font-medium text-white">{t(`${NS}.${framework.labelKey}`)}</span>
           </label>
         ))}
       </div>

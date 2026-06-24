@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import { confirmDialog } from '../utils/confirmDialog'
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -47,7 +50,14 @@ export default function ClientDetail() {
   }
 
   async function launchScan() {
-    if (!confirm(t('clients_page.scan_confirm', { name: client.name }))) return
+    const ok = await confirmDialog({
+      title: t('clients_page.scan_title', { defaultValue: 'Launch full scan?' }),
+      message: t('clients_page.scan_confirm', { name: client.name }),
+      confirmLabel: t('clients_page.scan_action', { defaultValue: 'Launch scan' }),
+      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      variant: 'primary',
+    })
+    if (!ok) return
 
     setLaunchingScan(true)
     setScanResult(null)
@@ -158,8 +168,33 @@ export default function ClientDetail() {
   const navBtnClass =
     'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all whitespace-nowrap'
 
+  const listFindings = useMemo(() => [{
+    id: client.id,
+    severity: 'info',
+    title: client.name,
+    type: 'client',
+    description: client.contact_email || '',
+    resource: domains.join(', '),
+  }], [client, domains])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-client-detail',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
   return (
-    <PageShell title={client.name} subtitle={t('client_detail.subtitle')}>
+    <PageShell
+      title={client.name}
+      subtitle={t('client_detail.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={loadClient}
+          onExport={exportCsv}
+          refreshLoading={loading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
+    >
       <div className="max-w-5xl mx-auto space-y-5">
         <PremiumPageHeader
           title={client.name}

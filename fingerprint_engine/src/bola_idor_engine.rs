@@ -458,10 +458,24 @@ fn finding_reachable(path: &str, method: &str, status: u16, note: &str) -> Value
         "path": path,
         "method": method,
         "status": status,
-        "severity": "medium",
-        "title": format!("Endpoint reachable: {}", path),
+        "severity": "info",
+        "title": format!("API endpoint reachable: {}", path),
         "message": note,
     })
+}
+
+/// Only emit reachability hints for JSON API-looking 2xx bodies (avoid static HTML noise).
+#[must_use]
+fn api_reachable_signal(status: u16, body: &str) -> bool {
+    if !(200..300).contains(&status) {
+        return false;
+    }
+    let trimmed = body.trim_start();
+    if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+        return false;
+    }
+    trimmed.contains('"')
+        && (trimmed.contains("id") || trimmed.contains("email") || trimmed.contains("user"))
 }
 
 /// Parallel OAST correlation checks (capped; avoids serial stall on many tokens).
@@ -605,7 +619,7 @@ async fn probe_fallback_bola_paths(
             if let Some((st, body)) =
                 request_with_identity(&client, "GET", &url, st_j.as_deref(), None, None).await
             {
-                if (200..300).contains(&st) {
+                if api_reachable_signal(st, &body) {
                     extend_harvest_pool(
                         &body,
                         &path,
@@ -619,7 +633,7 @@ async fn probe_fallback_bola_paths(
                         &path,
                         "GET",
                         st,
-                        "Fallback BOLA probe: 2xx without cross-auth contexts; verify authorization.",
+                        "Fallback BOLA probe: JSON API returned 2xx without cross-auth contexts; verify authorization.",
                     ));
                 }
             }
@@ -689,13 +703,15 @@ async fn probe_fallback_bola_paths(
     );
     if let Ok(r) = post_req.send().await {
         let s = r.status().as_u16();
-        if matches!(s, 401 | 400 | 200) {
-            findings.push(finding_reachable(
-                "/rest/user/login",
-                "POST",
-                s,
-                "Login endpoint reachable (Juice Shop style probe).",
-            ));
+        if let Ok(body) = r.text().await {
+            if api_reachable_signal(s, &body) {
+                findings.push(finding_reachable(
+                    "/rest/user/login",
+                    "POST",
+                    s,
+                    "Login endpoint returned JSON API response (Juice Shop style probe).",
+                ));
+            }
         }
     }
 
@@ -1104,4 +1120,62 @@ pub async fn run_bola_idor_result_with_paths(
 
 pub async fn run_bola_idor(target: &str) {
     print_result(run_bola_idor_result(target, None).await);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn path_param_names_collects_path_and_id_params() {
+        let params = json!([
+            {"name": "userId", "in": "path"},
+            {"name": "filter", "in": "query"},
+            {"name": "uuid", "in": "query"}
+        ]);
+        let names = path_param_names(params.as_array().unwrap());
+        assert!(names.contains(&"userId".to_string()));
+        assert!(names.contains(&"uuid".to_string()));
+        assert!(!names.contains(&"filter".to_string()));
+    }
+
+    #[test]
+    fn substitute_path_params_replaces_braced_names() {
+        let out = substitute_path_params("/api/users/{userId}/orders/{orderId}", &["userId".into(), "orderId".into()], "42");
+        assert_eq!(out, "/api/users/42/orders/42");
+    }
+
+    #[test]
+    fn sensitive_leak_overlap_detects_shared_email() {
+        let a = r#"{"email":"alice@corp.test","name":"Alice"}"#;
+        let b = r#"{"email":"alice@corp.test","name":"Bob"}"#;
+        let leaks = sensitive_leak_overlap(a, b).expect("shared email");
+        assert!(leaks.iter().any(|s| s.contains('@')));
+    }
+
+    #[test]
+    fn sensitive_leak_overlap_empty_when_no_shared_sensitive_fields() {
+        assert!(sensitive_leak_overlap(r#"{"id":1}"#, r#"{"id":2}"#).is_none());
+    }
+
+    #[test]
+    fn api_reachable_requires_json_with_resource_markers() {
+        assert!(api_reachable_signal(200, r#"{"userId":1,"email":"a@b.com"}"#));
+        assert!(!api_reachable_signal(200, "<html><body>ok</body></html>"));
+        assert!(!api_reachable_signal(404, r#"{"id":1}"#));
+    }
+
+    #[test]
+    fn is_id_param_matches_common_names() {
+        assert!(is_id_param("userId"));
+        assert!(is_id_param("uuid"));
+        assert!(!is_id_param("filter"));
+    }
+
+    #[test]
+    fn looks_like_email_validates_basic_shape() {
+        assert!(looks_like_email("user@example.com"));
+        assert!(!looks_like_email("not-an-email"));
+    }
 }

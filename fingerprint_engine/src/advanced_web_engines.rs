@@ -5,8 +5,9 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_probes::{
-    empty_ok, finding, finding_with_probe_depth, has_header, header_value, http_client, http_get,
-    http_post_json, join_url, normalize_url, HttpProbe,
+    empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
+    http_client, http_get, http_get_with_headers, http_post_json, join_url, normalize_url,
+    HttpProbe,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -168,6 +169,47 @@ cli_wrapper!(
     run_grpc_reflection_attack_result
 );
 
+/// Classify CORS misconfiguration from response headers and the Origin we sent (if any).
+#[must_use]
+fn cors_misconfiguration_signal(
+    sent_origin: Option<&str>,
+    acao: &str,
+    allow_credentials: bool,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    let acao = acao.trim();
+    if acao.is_empty() {
+        return None;
+    }
+    if acao == "*" {
+        return Some((
+            "CORS Allow-Origin: * observed",
+            if allow_credentials {
+                "high"
+            } else {
+                "medium"
+            },
+            "Wildcard ACAO — any origin may read responses",
+        ));
+    }
+    if acao.contains("null") && allow_credentials {
+        return Some((
+            "CORS Allow-Origin: null with credentials",
+            "high",
+            "Origin=null with credentials=true — exploitable from sandboxed iframe",
+        ));
+    }
+    if let Some(sent) = sent_origin {
+        if acao == sent {
+            return Some((
+                "CORS reflects arbitrary Origin (credentialed cross-origin read)",
+                if allow_credentials { "critical" } else { "high" },
+                "Server echoes the request Origin in ACAO — attacker-controlled site can read authenticated responses",
+            ));
+        }
+    }
+    None
+}
+
 // ── cors_misconfiguration ─────────────────────────────────────────────────────
 pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
@@ -175,29 +217,36 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
     }
     let client = http_client().await;
     let url = normalize_url(target);
+    let host = extract_host(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        if let Some(origin) = header_value(&p.headers, "access-control-allow-origin") {
-            let creds = has_header(&p.headers, "access-control-allow-credentials");
-            if origin.trim() == "*" {
-                findings.push(finding(
-                    "cors_misconfiguration",
-                    "CORS Allow-Origin: * observed",
-                    "medium",
-                    "T1185",
-                    &format!("Wildcard origin on {} (credentials={})", p.final_url, creds),
-                    target,
-                ));
-            } else if origin.contains("null") && creds {
-                findings.push(finding(
-                    "cors_misconfiguration",
-                    "CORS Allow-Origin: null with credentials",
-                    "high",
-                    "T1185",
-                    &format!("Origin=null with credentials=true on {} — exploitable from sandboxed iframe", p.final_url),
-                    target,
-                ));
-            }
+    let evil_origin = format!("https://weissman-cors-probe.{}", host);
+    for (sent_origin, probe) in [
+        (None, http_get(&client, &url).await),
+        (
+            Some(evil_origin.as_str()),
+            http_get_with_headers(&client, &url, &[("Origin", evil_origin.as_str())]).await,
+        ),
+    ] {
+        let Some(p) = probe else { continue };
+        let Some(acao) = header_value(&p.headers, "access-control-allow-origin") else {
+            continue;
+        };
+        let creds = has_header(&p.headers, "access-control-allow-credentials");
+        if let Some((title, severity, detail)) =
+            cors_misconfiguration_signal(sent_origin, &acao, creds)
+        {
+            findings.push(finding(
+                "cors_misconfiguration",
+                title,
+                severity,
+                "T1185",
+                &format!(
+                    "{} on {} (ACAO='{}', credentials={}, Origin sent={:?}).",
+                    detail, p.final_url, acao, creds, sent_origin
+                ),
+                target,
+            ));
+            break;
         }
     }
     if findings.is_empty() {
@@ -407,7 +456,7 @@ pub async fn run_css_injection_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let csp = header_value(&p.headers, "content-security-policy").unwrap_or("");
-        if !csp.contains("style-src") || csp.contains("style-src 'unsafe-inline'") {
+        if css_injection_csp_weak(csp) {
             findings.push(finding(
                 "css_injection",
                 "Permissive style-src enables CSS injection",
@@ -542,14 +591,19 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         let payload = serde_json::json!({"is_admin": true, "role": "admin"});
         if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
-            if p.status < 500 && (p.body.contains("admin") || p.body.contains("role")) {
+            let body_low = p.body.to_ascii_lowercase();
+            if (200..300).contains(&p.status)
+                && (body_low.contains("\"is_admin\":true")
+                    || body_low.contains("\"role\":\"admin\"")
+                    || body_low.contains("'is_admin': true"))
+            {
                 findings.push(finding(
                     "api_mass_assignment",
                     "Endpoint echoes privileged fields in response",
-                    "medium",
+                    "high",
                     "T1548",
                     &format!(
-                        "POST {} returned HTTP {} and response references 'admin'/'role' — verify privilege escalation via mass assignment.",
+                        "POST {} returned HTTP {} and response reflects privileged assignment fields — verify mass-assignment escalation.",
                         p.final_url, p.status
                     ),
                     target,
@@ -901,6 +955,38 @@ pub async fn run_deserialization_net_result(target: &str) -> EngineResult {
 }
 cli_wrapper!(run_deserialization_net, run_deserialization_net_result);
 
+/// True when a CSP is present but style-src is absent or allows inline styles.
+#[must_use]
+fn css_injection_csp_weak(csp: &str) -> bool {
+    let csp = csp.trim();
+    if csp.is_empty() {
+        return false;
+    }
+    !csp.contains("style-src") || csp.contains("style-src 'unsafe-inline'")
+}
+
+/// True when a NoSQL operator payload yields a stronger success signal than a baseline login attempt.
+#[must_use]
+fn nosql_bypass_signal(
+    baseline_status: u16,
+    baseline_body: &str,
+    operator_status: u16,
+    operator_body: &str,
+) -> bool {
+    if operator_status < 200 || operator_status >= 300 {
+        return false;
+    }
+    let baseline_ok = baseline_status >= 200 && baseline_status < 300;
+    if baseline_ok {
+        return false;
+    }
+    let body_low = operator_body.to_ascii_lowercase();
+    let auth_markers = ["token", "access_token", "jwt", "session", "success", "authenticated"];
+    auth_markers
+        .iter()
+        .any(|m| body_low.contains(m) && !baseline_body.to_ascii_lowercase().contains(m))
+}
+
 // ── nosql_deep_injection ──────────────────────────────────────────────────────
 pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
@@ -911,17 +997,22 @@ pub async fn run_nosql_deep_injection_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     for path in ["/api/users", "/api/login", "/login", "/api/v1/users"] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let payload = serde_json::json!({"username": {"$ne": null}, "password": {"$ne": null}});
-        if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
-            if p.status == 200 && (p.body.contains("token") || p.body.contains("success")) {
+        let baseline_payload =
+            serde_json::json!({"username": "weissman_probe", "password": "weissman_probe"});
+        let operator_payload =
+            serde_json::json!({"username": {"$ne": null}, "password": {"$ne": null}});
+        let baseline = crate::engine_probes::http_post_json(&client, &url, &baseline_payload).await;
+        let operator = crate::engine_probes::http_post_json(&client, &url, &operator_payload).await;
+        if let (Some(b), Some(o)) = (baseline, operator) {
+            if nosql_bypass_signal(b.status, &b.body, o.status, &o.body) {
                 findings.push(finding(
                     "nosql_deep_injection",
                     "NoSQL-style operator accepted by login endpoint",
                     "high",
                     "T1190",
                     &format!(
-                        "POST {} with {{$ne}} returned HTTP {} — bypass candidate.",
-                        p.final_url, p.status
+                        "POST {} baseline HTTP {} vs operator HTTP {} — {{$ne}} bypass candidate (baseline denied, operator succeeded with auth markers).",
+                        o.final_url, b.status, o.status
                     ),
                     target,
                 ));
@@ -1194,4 +1285,59 @@ cli_wrapper!(
 #[inline]
 fn _shut_up_unused(p: &HttpProbe) -> bool {
     !p.headers.is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cors_signal_flags_reflective_origin_with_credentials() {
+        let sent = "https://weissman-cors-probe.example.com";
+        let sig = cors_misconfiguration_signal(Some(sent), sent, true);
+        assert!(sig.is_some());
+        let (_, sev, _) = sig.unwrap();
+        assert_eq!(sev, "critical");
+    }
+
+    #[test]
+    fn cors_signal_ignores_unrelated_acao() {
+        assert!(cors_misconfiguration_signal(
+            Some("https://evil.test"),
+            "https://legit.test",
+            false
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn css_weak_only_when_csp_present() {
+        assert!(!css_injection_csp_weak(""));
+        assert!(css_injection_csp_weak(
+            "default-src 'self'; script-src 'self'"
+        ));
+        assert!(css_injection_csp_weak(
+            "style-src 'unsafe-inline'; default-src 'self'"
+        ));
+    }
+
+    #[test]
+    fn java_deser_error_matches_known_signatures() {
+        assert!(java_deser_error(
+            "java.io.invalidclassexception at readobject"
+        ));
+        assert!(!java_deser_error("404 not found"));
+    }
+
+    #[test]
+    fn nosql_bypass_requires_operator_success_not_baseline() {
+        assert!(nosql_bypass_signal(
+            401,
+            "invalid credentials",
+            200,
+            r#"{"access_token":"abc"}"#
+        ));
+        assert!(!nosql_bypass_signal(200, "ok token", 200, "ok token"));
+        assert!(!nosql_bypass_signal(401, "denied", 401, "denied"));
+    }
 }

@@ -359,6 +359,36 @@ impl AgentRegistry {
     }
 }
 
+/// Live + recently-enrolled agents for a client that advertise a given engine capability.
+pub async fn agent_uuids_capable_for_client(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    limit: i32,
+) -> Result<Vec<String>, sqlx::Error> {
+    let cap = json!([engine]);
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query_scalar::<_, String>(
+        r#"SELECT agent_uuid::text FROM endpoint_agents
+            WHERE tenant_id = $1 AND client_id = $2
+              AND status IN ('online', 'enrolled')
+              AND capabilities @> $4::jsonb
+            ORDER BY
+              CASE WHEN status = 'online' THEN 0 ELSE 1 END,
+              last_seen_at DESC NULLS LAST
+            LIMIT $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(limit)
+    .bind(cap)
+    .fetch_all(&mut *tx)
+    .await?;
+    let _ = tx.commit().await;
+    Ok(rows)
+}
+
 /// Live + recently-enrolled agents for a client, ordered for fleet dispatch.
 pub async fn agent_uuids_for_client(
     pool: &PgPool,
@@ -424,7 +454,18 @@ pub async fn enqueue_and_dispatch_fleet(
     params: &Value,
 ) -> Result<(Uuid, bool), sqlx::Error> {
     let task_uuid = enqueue_task(pool, tenant_id, client_id, engine, target, params).await?;
-    let agents = agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?;
+    let agents = match agent_uuids_capable_for_client(
+        pool,
+        tenant_id,
+        client_id,
+        engine,
+        FLEET_MAX_AGENTS,
+    )
+    .await
+    {
+        Ok(capable) if !capable.is_empty() => capable,
+        _ => agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?,
+    };
     let start = registry.dispatch_cursor.fetch_add(1, Ordering::Relaxed);
     let mut live = false;
     for (offset, _uuid) in agents.iter().enumerate() {
@@ -742,14 +783,45 @@ pub async fn store_finding(
     engine: &str,
     finding: &Value,
 ) -> Result<(), sqlx::Error> {
+    store_finding_for_task(pool, tenant_id, client_id, engine, finding, None).await
+}
+
+/// Persist an agent finding, optionally correlating it to the scan job that dispatched the task.
+pub async fn store_finding_for_task(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    finding: &Value,
+    task_id: Option<&str>,
+) -> Result<(), sqlx::Error> {
     if engine == "ueba_baseline" {
         if let Some(payload) = parse_ueba_ingest(finding, client_id) {
             let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
         }
         return Ok(());
     }
-    let target = finding
+    let scan_job_id = if let Some(tid) = task_id {
+        task_scan_job_id(pool, tenant_id, tid).await
+    } else {
+        None
+    };
+    let mut enriched = finding.clone();
+    if let Some(obj) = enriched.as_object_mut() {
+        obj.entry("source")
+            .or_insert_with(|| json!("agent"));
+        if let Some(ref jid) = scan_job_id {
+            obj.entry("scan_job_id")
+                .or_insert_with(|| json!(jid));
+        }
+        if let Some(tid) = task_id {
+            obj.entry("agent_task_id")
+                .or_insert_with(|| json!(tid));
+        }
+    }
+    let target = enriched
         .get("target")
+        .or_else(|| enriched.get("value"))
         .and_then(Value::as_str)
         .unwrap_or("endpoint");
     let source = format!("agent.{engine}");
@@ -759,7 +831,7 @@ pub async fn store_finding(
         Some(client_id),
         &source,
         target,
-        std::slice::from_ref(finding),
+        std::slice::from_ref(&enriched),
     )
     .await
     {
@@ -771,8 +843,132 @@ pub async fn store_finding(
             error = %e,
             "findings_persist failed for agent finding"
         );
+    } else if let Some(jid) = scan_job_id {
+        let title = enriched
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("agent finding");
+        let msg = serde_json::json!({
+            "job_id": jid,
+            "status": "running",
+            "message": format!("Agent finding: {title}"),
+            "engine": engine,
+            "source": "agent",
+            "agent_task_id": task_id,
+        })
+        .to_string();
+        crate::telemetry_bus::publish_bus("telemetry", &msg).await;
     }
     Ok(())
+}
+
+/// Resolve the parent scan job id stored on an agent task (if any).
+pub async fn task_scan_job_id(
+    pool: &PgPool,
+    tenant_id: i64,
+    task_uuid: &str,
+) -> Option<String> {
+    let Ok(uuid) = Uuid::parse_str(task_uuid) else {
+        return None;
+    };
+    let mut conn = pool.acquire().await.ok()?;
+    crate::db::set_tenant_conn(&mut *conn, tenant_id).await.ok()?;
+    sqlx::query_scalar::<_, Option<String>>(
+        r#"SELECT params->>'scan_job_id' FROM endpoint_agent_tasks
+            WHERE task_uuid = $1 AND tenant_id = $2"#,
+    )
+    .bind(uuid)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .ok()
+    .flatten()
+    .flatten()
+    .filter(|s| !s.trim().is_empty())
+}
+
+/// Periodic UEBA baseline sampling for every online endpoint agent (leader-only).
+pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegistry>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(45 * 60));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            let Ok(tenants) = sqlx::query_scalar::<_, i64>(
+                r#"SELECT DISTINCT tenant_id FROM endpoint_agents
+                    WHERE status = 'online'
+                      AND last_seen_at > now() - interval '3 minutes'
+                    LIMIT 200"#,
+            )
+            .fetch_all(pool.as_ref())
+            .await
+            else {
+                continue;
+            };
+            for tenant_id in tenants {
+                let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let clients = match sqlx::query_as::<_, (i64,)>(
+                    r#"SELECT DISTINCT client_id FROM endpoint_agents
+                        WHERE tenant_id = $1
+                          AND status = 'online'
+                          AND last_seen_at > now() - interval '3 minutes'"#,
+                )
+                .bind(tenant_id)
+                .fetch_all(&mut *tx)
+                .await
+                {
+                    Ok(rows) => rows,
+                    Err(_) => continue,
+                };
+                let _ = tx.commit().await;
+                for (client_id,) in clients {
+                    let recent = {
+                        let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await
+                        {
+                            Ok(t) => t,
+                            Err(_) => continue,
+                        };
+                        let ok = sqlx::query_scalar::<_, bool>(
+                            r#"SELECT EXISTS(
+                                SELECT 1 FROM endpoint_agent_tasks
+                                 WHERE tenant_id = $1 AND client_id = $2
+                                   AND engine = 'ueba_baseline'
+                                   AND created_at > now() - interval '40 minutes'
+                                   AND status IN ('pending','running','done')
+                            )"#,
+                        )
+                        .bind(tenant_id)
+                        .bind(client_id)
+                        .fetch_one(&mut *tx)
+                        .await
+                        .unwrap_or(true);
+                        let _ = tx.commit().await;
+                        ok
+                    };
+                    if recent {
+                        continue;
+                    }
+                    let params = json!({
+                        "priority": "low",
+                        "ueba_periodic": true,
+                    });
+                    let _ = enqueue_and_dispatch_fleet(
+                        pool.as_ref(),
+                        &registry,
+                        tenant_id,
+                        client_id,
+                        "ueba_baseline",
+                        None,
+                        &params,
+                    )
+                    .await;
+                }
+            }
+        }
+    });
 }
 
 /// Find any pending tasks for the given client and convert them into ServerToAgent::Task messages.

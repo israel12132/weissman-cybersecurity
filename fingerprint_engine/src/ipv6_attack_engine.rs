@@ -29,31 +29,57 @@ pub async fn run_ipv6_attack_result(target: &str) -> EngineResult {
     let client = build_client().await;
     let mut findings: Vec<serde_json::Value> = Vec::new();
 
-    // Resolve AAAA records via Cloudflare DoH
-    let doh_url = format!(
+    // Resolve A and AAAA via Cloudflare DoH for dual-stack parity
+    let doh_a = format!(
+        "https://cloudflare-dns.com/dns-query?name={}&type=A",
+        domain
+    );
+    let doh_aaaa = format!(
         "https://cloudflare-dns.com/dns-query?name={}&type=AAAA",
         domain
     );
+    let mut ipv4_addrs: Vec<String> = Vec::new();
     let mut ipv6_addrs: Vec<String> = Vec::new();
 
-    if let Ok(resp) = client
-        .get(&doh_url)
-        .header("Accept", "application/dns-json")
-        .send()
-        .await
-    {
-        if let Ok(data) = resp.json::<serde_json::Value>().await {
-            if let Some(answers) = data.get("Answer").and_then(|a| a.as_array()) {
-                for ans in answers {
-                    // AAAA = type 28
-                    if ans.get("type").and_then(|t| t.as_u64()) == Some(28) {
-                        if let Some(ip) = ans.get("data").and_then(|d| d.as_str()) {
-                            ipv6_addrs.push(ip.to_string());
+    for (url, want_type) in [(doh_a, 1_u16), (doh_aaaa, 28_u16)] {
+        if let Ok(resp) = client
+            .get(&url)
+            .header("Accept", "application/dns-json")
+            .send()
+            .await
+        {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Some(answers) = data.get("Answer").and_then(|a| a.as_array()) {
+                    for ans in answers {
+                        if ans.get("type").and_then(|t| t.as_u64()) == Some(want_type as u64) {
+                            if let Some(ip) = ans.get("data").and_then(|d| d.as_str()) {
+                                if want_type == 1 {
+                                    ipv4_addrs.push(ip.to_string());
+                                } else {
+                                    ipv6_addrs.push(ip.to_string());
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if !ipv4_addrs.is_empty() && !ipv6_addrs.is_empty() {
+        findings.push(json!({
+            "type": "ipv6_attack",
+            "title": format!("Dual-stack DNS: {} has A + AAAA records", domain),
+            "severity": "medium",
+            "mitre_attack": "T1590.005",
+            "description": format!(
+                "Domain {} publishes both IPv4 ({:?}) and IPv6 ({:?}). Verify WAF, rate limits, auth, and logging parity across stacks — IPv6 bypass is a common control gap.",
+                domain, ipv4_addrs, ipv6_addrs
+            ),
+            "value": domain,
+            "ipv4_addresses": ipv4_addrs,
+            "ipv6_addresses": ipv6_addrs.clone()
+        }));
     }
 
     if ipv6_addrs.is_empty() {

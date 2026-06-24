@@ -1,142 +1,213 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import PageShell from './PageShell'
-import { apiFetch } from '../lib/apiBase'
+import { TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
+import PageShell from './PageShell';
+import ShellScanActions from '../components/engine/ShellScanActions';
+import WeissmanListToolbar from '../components/engine/WeissmanListToolbar';
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton';
+import { apiFetch } from '../lib/apiBase';
 
 /**
- * RateLimitAnalytics - Comprehensive rate limit monitoring and analytics
+ * RateLimitAnalytics — live request-budget monitoring.
  *
- * Features:
- * - Historical usage charts
- * - Peak usage times
- * - Violation history
- * - Per-endpoint breakdown
- * - Tenant comparison
+ * Every number is sourced from GET /api/rate-limits/analytics (current usage vs.
+ * server-configured caps, usage history, throttling violations, per-endpoint hits).
+ * Until the first response lands we render skeletons — we never show placeholder caps.
  */
+
+const RANGES = ['1h', '6h', '24h', '7d'];
+
+function utilColor(pct) {
+  if (pct >= 90) return '#f43f5e';
+  if (pct >= 70) return '#fbbf24';
+  return '#34d399';
+}
+
+const CHART_TOOLTIP = {
+  backgroundColor: '#0f172a',
+  border: '1px solid #334155',
+  borderRadius: '8px',
+  color: '#e2e8f0',
+};
+
+function UsageTile({ label, current, max, color }) {
+  const pct = max > 0 ? Math.min((current / max) * 100, 100) : 0;
+  const accent = utilColor(pct);
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-white/45">{label}</span>
+        <span
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
+          style={{ color: accent, borderColor: `${accent}40`, background: `${accent}12` }}
+        >
+          {pct.toFixed(0)}%
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold tabular-nums" style={{ color }}>{current}</span>
+        <span className="text-sm text-white/35 font-mono">/ {max}</span>
+      </div>
+      <div className="h-2 bg-white/5 rounded-full overflow-hidden mt-3">
+        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: accent }} />
+      </div>
+    </div>
+  );
+}
+
 export default function RateLimitAnalytics() {
   const { t } = useTranslation();
-  const [data, setData] = useState({
-    current: {
-      scans: { current: 0, max: 24 },
-      logins: { current: 0, max: 8 },
-      api: { current: 0, max: 30 },
-    },
-    history: [],
-    violations: [],
-    endpoints: [],
-  });
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('1h'); // 1h, 6h, 24h, 7d
+  const [error, setError] = useState(null);
+  const [timeRange, setTimeRange] = useState('1h');
 
-  useEffect(() => {
-    fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, [timeRange]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
+    setError(null);
     try {
-      setLoading(true);
       const response = await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`);
-      if (response.ok) {
-        const analyticsData = await response.json();
-        setData(analyticsData);
-      }
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setData(await response.json());
+    } catch (err) {
+      setError(err?.message || 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
 
-  const getStatusColor = (current, max) => {
-    const percentage = (current / max) * 100;
-    if (percentage >= 90) return 'text-red-400 bg-red-500/10 border-red-500/30';
-    if (percentage >= 70) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-    return 'text-green-400 bg-green-500/10 border-green-500/30';
-  };
+  useEffect(() => {
+    setLoading(true);
+    fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, 30000);
+    return () => clearInterval(interval);
+  }, [fetchAnalytics]);
+
+  const TILE_COLORS = { scans: '#22d3ee', logins: '#fbbf24', api: '#34d399' };
+  const history = data?.history ?? [];
+  const violations = data?.violations ?? [];
+  const endpoints = data?.endpoints ?? [];
+  const source = data?.source;
+
+  const listFindings = useMemo(() => [
+    ...(violations || []).map((v, i) => ({
+      id: `violation-${i}`,
+      severity: 'high',
+      title: v.endpoint || v.key || 'violation',
+      type: 'rate_limit_violation',
+      description: String(v.count ?? v.hits ?? ''),
+    })),
+    ...(endpoints || []).map((e, i) => ({
+      id: `ep-${i}`,
+      severity: 'info',
+      title: e.path || e.endpoint || 'endpoint',
+      type: 'endpoint_hits',
+      description: String(e.hits ?? e.count ?? ''),
+    })),
+  ], [violations, endpoints])
+
+  const {
+    exportCsv,
+    filteredFindings,
+    searchQuery,
+    setSearchQuery,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-rate-limits',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
+
+  const visibleEndpoints = useMemo(() => {
+    if (!searchQuery.trim()) return endpoints
+    const ids = new Set(filteredFindings.map((f) => String(f.id)))
+    return endpoints.filter((e, i) => ids.has(`ep-${i}`))
+  }, [endpoints, filteredFindings, searchQuery])
+
+  const actions = (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
+        {RANGES.map((range) => (
+          <button
+            key={range}
+            type="button"
+            onClick={() => setTimeRange(range)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all ${
+              timeRange === range
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                : 'text-white/45 hover:text-white/80'
+            }`}
+          >
+            {t(`pages.rateLimitAnalytics.range_${range}`)}
+          </button>
+        ))}
+      </div>
+      <ShellScanActions
+        onRefresh={fetchAnalytics}
+        onExport={exportCsv}
+        refreshLoading={loading}
+        exportDisabled={!filteredFindings.length}
+      />
+    </div>
+  );
 
   return (
-    <PageShell title={t('pages.rateLimitAnalytics.title')} icon={<BarChart3 />}>
+    <PageShell
+      title={t('pages.rateLimitAnalytics.title')}
+      subtitle={t('pages.rateLimitAnalytics.subtitle')}
+      badge={t('pages.rateLimitAnalytics.badge')}
+      badgeColor="#22d3ee"
+      icon={<BarChart3 />}
+      actions={actions}
+    >
       <div className="space-y-6">
-        {/* Header Controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Activity className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-lg font-semibold text-white">{t('pages.rateLimitAnalytics.usage_analytics')}</h2>
+        {error && (
+          <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-900/20 text-rose-200 text-sm flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {t('pages.rateLimitAnalytics.load_error')}
           </div>
-          <div className="flex items-center gap-3">
-            {/* Time range selector */}
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
-              {['1h', '6h', '24h', '7d'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    timeRange === range
-                      ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  {t(`pages.rateLimitAnalytics.range_${range}`)}
-                </button>
-              ))}
-            </div>
+        )}
 
-            <button
-              onClick={fetchAnalytics}
-              className="flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-            >
-              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-              {t('common.refresh')}
-            </button>
+        {/* Current usage — real caps from server config; skeleton until first load */}
+        {!data ? (
+          <SkeletonWidgetGrid count={3} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(data.current ?? {}).map(([key, v]) => (
+              <UsageTile
+                key={key}
+                label={t(`pages.rateLimitAnalytics.${key}_label`, { defaultValue: key })}
+                current={v?.current ?? 0}
+                max={v?.max ?? 0}
+                color={TILE_COLORS[key] ?? '#22d3ee'}
+              />
+            ))}
           </div>
-        </div>
+        )}
 
-        {/* Current Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(data.current).map(([key, { current, max }]) => {
-            const percentage = (current / max) * 100;
-            const label = t(`pages.rateLimitAnalytics.${key}_label`, { defaultValue: key.charAt(0).toUpperCase() + key.slice(1) });
+        {source && (
+          <div className="flex items-center gap-2 text-[10px] font-mono text-white/35">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${source === 'redis' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+            />
+            {t('pages.rateLimitAnalytics.source_label')}:{' '}
+            {t(`pages.rateLimitAnalytics.source_${source}`, { defaultValue: source })}
+          </div>
+        )}
 
-            return (
-              <div key={key} className={`p-4 rounded-xl border backdrop-blur-md ${getStatusColor(current, max)}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium opacity-90">{label}</span>
-                  <Activity className="w-4 h-4" />
-                </div>
-                <div className="flex items-end gap-2 mb-2">
-                  <span className="text-3xl font-bold">{current}</span>
-                  <span className="text-lg opacity-60 mb-1">/ {max}</span>
-                </div>
-                <div className="h-2 bg-black/20 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-current transition-all duration-300"
-                    style={{ width: `${Math.min(percentage, 100)}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-xs opacity-75">
-                  {percentage.toFixed(1)}% used
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Usage History Chart */}
+        {/* Usage over time */}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-semibold text-white">Usage Over Time</h3>
-            </div>
+          <div className="flex items-center gap-2 mb-6">
+            <TrendingUp className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.usage_history')}</h3>
           </div>
-
-          {data.history && data.history.length > 0 ? (
+          {!data ? (
+            <SkeletonBar className="h-[300px] w-full" />
+          ) : history.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data.history}>
+              <AreaChart data={history}>
                 <defs>
                   <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -154,108 +225,96 @@ export default function RateLimitAnalytics() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '12px' }} />
                 <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: '#e2e8f0',
-                  }}
-                />
+                <Tooltip contentStyle={CHART_TOOLTIP} />
                 <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="scans"
-                  stroke="#06b6d4"
-                  fillOpacity={1}
-                  fill="url(#colorScans)"
-                  name="Scans"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="logins"
-                  stroke="#f59e0b"
-                  fillOpacity={1}
-                  fill="url(#colorLogins)"
-                  name="Logins"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="api"
-                  stroke="#10b981"
-                  fillOpacity={1}
-                  fill="url(#colorApi)"
-                  name="API Calls"
-                />
+                <Area type="monotone" dataKey="scans" stroke="#06b6d4" fillOpacity={1} fill="url(#colorScans)" name={t('pages.rateLimitAnalytics.scans_label')} />
+                <Area type="monotone" dataKey="logins" stroke="#f59e0b" fillOpacity={1} fill="url(#colorLogins)" name={t('pages.rateLimitAnalytics.logins_label')} />
+                <Area type="monotone" dataKey="api" stroke="#10b981" fillOpacity={1} fill="url(#colorApi)" name={t('pages.rateLimitAnalytics.api_label')} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-500">
-              No historical data available
-            </div>
+            <EmptyState
+              compact
+              icon="search"
+              title={t('pages.rateLimitAnalytics.history_empty_title')}
+              body={t('pages.rateLimitAnalytics.history_empty_body')}
+            />
           )}
         </div>
 
-        {/* Violations History */}
-        {data.violations && data.violations.length > 0 && (
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <h3 className="text-sm font-semibold text-white">Recent Violations</h3>
-            </div>
+        {/* Throttling violations */}
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.violations_heading')}</h3>
+          </div>
+          {!data ? (
+            <SkeletonBar className="h-24 w-full" />
+          ) : violations.length > 0 ? (
             <div className="space-y-2">
-              {data.violations.slice(0, 10).map((violation, index) => (
+              {violations.slice(0, 10).map((violation, index) => (
                 <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/20 rounded-lg"
+                  key={`${violation.endpoint || violation.type}-${index}`}
+                  className="flex items-center justify-between p-3 bg-rose-500/5 border border-rose-500/20 rounded-lg"
                 >
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-red-400" />
-                    <div>
-                      <div className="text-sm text-white">{violation.endpoint || violation.type}</div>
-                      <div className="text-xs text-gray-400">{violation.time}</div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Clock className="w-4 h-4 text-rose-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm text-white truncate">{violation.endpoint || violation.type}</div>
+                      <div className="text-xs text-gray-400 font-mono">{violation.time}</div>
                     </div>
                   </div>
-                  <div className="text-xs text-red-400 font-medium">
-                    {violation.attempts} attempts
+                  <div className="text-xs text-rose-300 font-mono shrink-0">
+                    {t('pages.rateLimitAnalytics.attempts', { count: violation.attempts ?? 0 })}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <EmptyState compact icon="shield" title={t('pages.rateLimitAnalytics.violations_empty_title')} />
+          )}
+        </div>
 
-        {/* Top Endpoints */}
-        {data.endpoints && data.endpoints.length > 0 && (
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-semibold text-white">Top Endpoints by Usage</h3>
-            </div>
+        {/* Per-endpoint breakdown */}
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.endpoints_heading')}</h3>
+          </div>
+          {!data ? (
+            <SkeletonBar className="h-[250px] w-full" />
+          ) : endpoints.length > 0 ? (
+            <>
+            <WeissmanListToolbar
+              className="mb-4"
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              resultCount={visibleEndpoints.length}
+              totalCount={endpoints.length}
+            />
+            {visibleEndpoints.length === 0 ? (
+              <EmptyState
+                compact
+                icon="search"
+                title={t('weissmanFindings.filtered_title')}
+                body={t('weissmanFindings.filtered_body')}
+              />
+            ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data.endpoints.slice(0, 10)} layout="vertical">
+              <BarChart data={visibleEndpoints.slice(0, 10)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} />
-                <YAxis
-                  type="category"
-                  dataKey="endpoint"
-                  stroke="#64748b"
-                  style={{ fontSize: '12px' }}
-                  width={150}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    color: '#e2e8f0',
-                  }}
-                />
+                <YAxis type="category" dataKey="endpoint" stroke="#64748b" style={{ fontSize: '12px' }} width={150} />
+                <Tooltip contentStyle={CHART_TOOLTIP} />
                 <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
+            )}
+            </>
+          ) : (
+            <EmptyState compact icon="search" title={t('pages.rateLimitAnalytics.endpoints_empty_title')} />
+          )}
+        </div>
       </div>
     </PageShell>
   );

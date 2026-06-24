@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ENGINES_REGISTRY } from './enginesRegistry'
 import { apiFetch } from './apiBase'
 
 let cachedProductionIds = null
 let fetchPromise = null
 let registryIndex = null
+
+export function invalidateProductionEnginesCache() {
+  cachedProductionIds = null
+  fetchPromise = null
+}
 
 async function fetchProductionIds() {
   if (cachedProductionIds) return cachedProductionIds
@@ -97,6 +102,14 @@ export function useProductionEngines() {
     [isProduction],
   )
 
+  const refresh = useCallback(async () => {
+    invalidateProductionEnginesCache()
+    setLoading(true)
+    const ids = await fetchProductionIds()
+    setProductionIds(ids)
+    setLoading(false)
+  }, [])
+
   return {
     engines,
     productionIds: productionIds || [],
@@ -104,5 +117,6 @@ export function useProductionEngines() {
     catalogCount,
     loading,
     isProduction,
+    refresh,
   }
 }

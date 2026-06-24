@@ -2952,10 +2952,14 @@ async fn run_alias_probe(
         .await;
     }
 
-    // Agent-required engines must go through run_engine (fleet queue + live dispatch).
+    // Agent-required canonical: remote surface + agent fleet (hybrid).
     if crate::engine_dispatch::is_agent_required_engine(canonical) {
-        let mut result =
+        let remote = crate::agent_remote_surface::run_remote_surface_probe(canonical, target, ctx)
+            .await;
+        let agent =
             crate::engine_dispatch::run_agent_required_engine(canonical, target, ctx).await;
+        let mut result =
+            crate::engine_dispatch::merge_agent_hybrid(remote, agent, canonical);
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
                 obj.insert("type".to_string(), json!(engine_id));
@@ -2967,7 +2971,7 @@ async fn run_alias_probe(
                     obj,
                     engine_id,
                     canonical,
-                    "agent_required",
+                    "agent_hybrid",
                     cognitive_hint,
                 );
             }
@@ -2978,17 +2982,48 @@ async fn run_alias_probe(
         return result;
     }
 
-    // Delegate to the canonical production probe, then re-tag findings for this alias.
-    let mut result =
+    // Dedicated alias probe (distinct from canonical retag).
+    let specialized =
+        crate::alias_specialized_probes::run_specialized_probe(engine_id, canonical, target, ctx)
+            .await;
+
+    // Enrich with canonical probe findings when specialized probe is sparse.
+    let mut canon_result =
         crate::engine_dispatch::dispatch_canonical_engine(canonical, target, ctx).await;
-    for f in &mut result.findings {
+
+    let mut merged: Vec<serde_json::Value> = specialized.findings;
+    for f in canon_result.findings.drain(..) {
+        let title = f.get("title").and_then(|v| v.as_str()).unwrap_or("");
+        if merged.iter().any(|m| {
+            m.get("title").and_then(|v| v.as_str()).unwrap_or("") == title
+        }) {
+            continue;
+        }
+        merged.push(f);
+    }
+
+    for f in &mut merged {
         if let Some(obj) = f.as_object_mut() {
             obj.insert("type".to_string(), json!(engine_id));
             obj.insert("source_engine".to_string(), json!(engine_id));
             obj.insert("engine_id".to_string(), json!(engine_id));
             obj.insert("canonical_engine".to_string(), json!(canonical));
             obj.insert("alias_category".to_string(), json!(category));
-            apply_alias_honest_metadata(obj, engine_id, canonical, "alias_retag", cognitive_hint);
+            let fidelity = if obj.get("probe_fidelity").is_some() {
+                obj.get("probe_fidelity")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("specialized_probe")
+                    .to_string()
+            } else {
+                "canonical_enrichment".to_string()
+            };
+            apply_alias_honest_metadata(
+                obj,
+                engine_id,
+                canonical,
+                &fidelity,
+                cognitive_hint,
+            );
             if !mitre.is_empty() {
                 obj.entry("mitre_attack".to_string())
                     .or_insert_with(|| json!(mitre));
@@ -3003,10 +3038,17 @@ async fn run_alias_probe(
             }
         }
     }
-    if !result.message.contains(engine_id) {
-        result.message = format!("{}: {}", engine_id, result.message);
-    }
-    result
+
+    let msg = if merged.is_empty() {
+        format!("{}: no live signal observed on {}", engine_id, target)
+    } else {
+        format!(
+            "{}: {} finding(s) (specialized + canonical)",
+            engine_id,
+            merged.len()
+        )
+    };
+    EngineResult::ok(merged, msg)
 }
 
 async fn run_http_fuzz_alias(

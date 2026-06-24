@@ -102,6 +102,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "nexus_sovereign_swarm",
     "http_feedback_fuzz",
     "aws_attack",
+    "cloud_posture",
     "azure_attack",
     "gcp_attack",
     "k8s_container",
@@ -121,6 +122,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "kerberoasting",
     "saml_attack",
     "crypto_engine",
+    "email_dns_posture",
     "bgp_dns_hijacking",
     "ipv6_attack",
     "mtls_grpc",
@@ -291,6 +293,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     // ── Advanced Recon engines ────────────────────────────────────────────────
     "threat_intel_fusion",
     "attack_surface_quantify",
+    "external_exposure_supreme",
     "adversarial_simulation",
     "dark_web_monitor",
     "passive_dns_forensics",
@@ -628,6 +631,14 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "threat_model_automation",
     "attack_graph_traversal",
     "prometheus_hyperion_nexus",
+    // ── Next-Gen Arsenal: enterprise core ──
+    "sap_erp_attack",
+    "mainframe_zos_attack",
+    // ── Next-Gen Arsenal: initial access / endpoint ──
+    "malvertising_seo_poison",
+    "infostealer_emulation",
+    "printer_mfp_attack",
+    "radius_nac_bypass",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -666,6 +677,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "nexus_sovereign_swarm",
     // Cloud / Infra
     "aws_attack",
+    "cloud_posture",
     "azure_attack",
     "gcp_attack",
     "k8s_container",
@@ -688,6 +700,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "kerberoasting",
     "saml_attack",
     "crypto_engine",
+    "email_dns_posture",
     // Network / Protocol
     "bgp_dns_hijacking",
     "ipv6_attack",
@@ -933,6 +946,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "storage_covert_channel",
     "threat_intel_fusion",
     "attack_surface_quantify",
+    "external_exposure_supreme",
     "adversarial_simulation",
     "dark_web_monitor",
     "passive_dns_forensics",

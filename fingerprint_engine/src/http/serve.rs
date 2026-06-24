@@ -1356,10 +1356,17 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         app_pool.clone(),
         state.endpoint_agents.clone(),
     );
+    if is_leader {
+        crate::endpoint_agents::spawn_ueba_baseline_scheduler(
+            app_pool.clone(),
+            state.endpoint_agents.clone(),
+        );
+    }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
     // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
     crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());
+    crate::telemetry_bus::spawn_bridge("swarm", (*state.swarm_broadcast_tx).clone());
     crate::observability::register_llm_tenant_metering(app_pool.clone());
     crate::observability::spawn_pool_metrics_loop(
         app_pool.clone(),
@@ -1554,6 +1561,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/ask", post(api_ask))
         // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
+        // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).
+        .route("/api/ndr/flows", post(api_ndr_flows_ingest))
+        .route("/api/itdr/auth-events", post(api_itdr_auth_ingest))
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
         .route("/api/baseline/summary", get(api_baseline_summary))
         .route("/api/baseline/drift", get(api_baseline_drift))
@@ -1561,6 +1571,12 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/config/public", get(api_config_public))
         .route("/api/engines/production", get(api_engines_production))
         .route("/api/engines/accounting", get(api_engines_accounting))
+        .route("/api/engines/capabilities", get(api_engines_capabilities))
+        .route(
+            "/api/engines/nexus_sovereign_swarm/schema",
+            get(api_nssi_config_schema),
+        )
+        .route("/api/engines/telemetry", get(api_engines_telemetry))
         .route("/api/openapi.json", get(api_openapi_spec))
         .route("/api/docs", get(crate::api_docs::api_docs_swagger))
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
@@ -1968,6 +1984,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         )
         .route("/api/heal-verify/:job_id/steps", get(api_heal_verify_steps))
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
+        .route("/api/swarm/events", get(api_swarm_events))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))
         .route("/api/sbom/components", get(api_sbom_components_alias))
         .route("/api/sbom/export", get(api_sbom_export_alias))

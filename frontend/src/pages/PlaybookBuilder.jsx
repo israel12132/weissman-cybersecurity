@@ -17,9 +17,14 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Search,
+  Download,
 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { downloadBytes } from '../lib/pdfExport'
+import ShellScanActions from '../components/engine/ShellScanActions'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -39,6 +44,31 @@ const ACTION_KINDS = [
   { kind: 'page_oncall',  labelKey: 'playbooks.action.page_oncall',  params: { team: 'sec-oncall', severity: '{{severity}}' } },
   { kind: 'http_post',    labelKey: 'playbooks.action.http_post',    params: { url: '', body: { } } },
 ]
+
+function exportPlaybooksCsv(list) {
+  const header = ['id', 'name', 'description', 'enabled', 'failure_count', 'actions_count']
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    header.join(','),
+    ...list.map((pb) =>
+      [
+        pb.id,
+        pb.name,
+        pb.description || '',
+        pb.enabled ? 'yes' : 'no',
+        pb.failure_count ?? 0,
+        Array.isArray(pb.actions) ? pb.actions.length : 0,
+      ].map(esc).join(','),
+    ),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `playbooks-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function buildExamplePlaybook(t) {
   return {
@@ -221,6 +251,7 @@ export default function PlaybookBuilder() {
   const [fireResult, setFireResult] = useState(null)
   const [jsonSource, setJsonSource] = useState('')
   const [jsonError, setJsonError] = useState(false)
+  const [librarySearch, setLibrarySearch] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -448,6 +479,29 @@ export default function PlaybookBuilder() {
     return t('playbooks.summary', { count: list.length, enabled, failures: fails })
   }, [list, t])
 
+  const filteredList = useMemo(() => {
+    const q = librarySearch.trim().toLowerCase()
+    if (!q) return list
+    return list.filter((pb) => {
+      const hay = `${pb.name || ''} ${pb.description || ''} ${pb.id || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [list, librarySearch])
+
+  const exportPlaybookJson = () => {
+    if (!draft) return
+    const payload = {
+      name: draft.name,
+      description: draft.description || '',
+      enabled: !!draft.enabled,
+      trigger: draft.trigger || {},
+      actions: draft.actions || [],
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2))
+    const slug = (draft.name || selected?.name || 'playbook').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    downloadBytes(bytes, `${slug || 'playbook'}.json`, 'application/json')
+  }
+
   const actionLabel = (kind) => {
     const entry = ACTION_KINDS.find((a) => a.kind === kind)
     return entry?.labelKey ? t(entry.labelKey) : kind
@@ -473,6 +527,12 @@ export default function PlaybookBuilder() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ShellScanActions
+              onRefresh={refresh}
+              onExport={() => exportPlaybooksCsv(list)}
+              refreshLoading={loading}
+              exportDisabled={!list.length}
+            />
             <Link to="/" className="px-3 py-2 text-[12px] text-white/40 transition-colors hover:text-white/70">
               ← {t('nav.cockpit')}
             </Link>
@@ -495,6 +555,10 @@ export default function PlaybookBuilder() {
         </div>
       </header>
 
+      <div className="px-5 lg:px-8 pb-4">
+        <EvidenceNotice>{t('playbooks.evidence_notice')}</EvidenceNotice>
+      </div>
+
       {/* Three-panel layout */}
       <div className="grid min-h-[calc(100dvh-88px)] grid-cols-1 xl:grid-cols-[280px_1fr_300px]">
         {/* Left — Library */}
@@ -504,6 +568,16 @@ export default function PlaybookBuilder() {
               <FileJson className="h-3.5 w-3.5" />
               {t('playbooks.library')}
             </h2>
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 pointer-events-none" />
+              <input
+                type="search"
+                value={librarySearch}
+                onChange={(e) => setLibrarySearch(e.target.value)}
+                placeholder={t('playbooks.library_search')}
+                className="w-full rounded-lg bg-black/40 pl-8 pr-3 py-2 text-[11px] text-white/80 ring-1 ring-white/[0.08] placeholder:text-white/30 focus:outline-none focus:ring-cyan-400/30"
+              />
+            </div>
             {loadError && (
               <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300 ring-1 ring-rose-500/25">{loadError}</p>
             )}
@@ -514,9 +588,11 @@ export default function PlaybookBuilder() {
               </div>
             ) : list.length === 0 ? (
               <p className="py-6 text-[12px] leading-relaxed text-white/40">{t('playbooks.no_playbooks')}</p>
+            ) : filteredList.length === 0 ? (
+              <p className="py-6 text-[12px] leading-relaxed text-white/40">{t('playbooks.no_library_match')}</p>
             ) : (
               <ul className="space-y-1 custom-scroll max-h-[calc(100dvh-180px)] overflow-y-auto">
-                {list.map((pb) => {
+                {filteredList.map((pb) => {
                   const isActive = selected?.id === pb.id
                   return (
                     <li key={pb.id}>
@@ -734,6 +810,15 @@ export default function PlaybookBuilder() {
                 >
                   <Play className="h-4 w-4" />
                   {t('playbooks.dry_run')}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportPlaybookJson}
+                  disabled={!draft}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[12px] font-medium text-emerald-200 ring-1 ring-emerald-500/30 transition-all hover:bg-emerald-500/10 disabled:opacity-40"
+                >
+                  <Download className="h-4 w-4" />
+                  {t('playbooks.export_json_playbook')}
                 </button>
                 {selected && (
                   <button

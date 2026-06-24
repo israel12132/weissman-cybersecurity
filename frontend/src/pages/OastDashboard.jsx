@@ -1,16 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 
-const PROBE_IDS = ['log4shell', 'blind_xss', 'blind_xxe', 'blind_ssrf']
+const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
 
 const PROBE_META = {
   log4shell: { mitre: 'T1190' },
+  blind_ssrf: { mitre: 'T1090' },
   blind_xss: { mitre: 'T1059.007' },
-  blind_xxe: { mitre: 'T1190' },
-  blind_ssrf: { mitre: 'T1190' },
+  xxe_oob: { mitre: 'T1190' },
+  cmd_dns: { mitre: 'T1059' },
+  host_ssrf: { mitre: 'T1090' },
 }
 
 function ProbeCard({ probeId, active, onRun, disabled }) {
@@ -49,33 +54,6 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
   )
 }
 
-function CallbackRow({ cb }) {
-  const { t } = useTranslation()
-  const timeAgo = cb.timestamp
-    ? t('pages.oastDashboard.seconds_ago', {
-        count: Math.round((Date.now() - new Date(cb.timestamp).getTime()) / 1000),
-      })
-    : t('pages.oastDashboard.just_now')
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#22d3ee]/5 border border-[#22d3ee]/20"
-    >
-      <span className="relative flex w-2 h-2 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-mono text-cyan-300 truncate">{cb.source_ip ?? '—'}</p>
-        <p className="text-[10px] font-mono text-white/30 truncate">{cb.probe_type ?? 'unknown'} · {cb.payload?.slice(0, 40) ?? ''}</p>
-      </div>
-      <span className="text-[10px] font-mono text-white/25 shrink-0">{timeAgo}</span>
-    </motion.div>
-  )
-}
-
 export default function OastDashboard() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
@@ -83,6 +61,8 @@ export default function OastDashboard() {
   const [callbacks, setCallbacks] = useState([])
   const [activeProbes, setActiveProbes] = useState(new Set())
   const [toast, setToast] = useState(null)
+  const [callbacksInitialLoading, setCallbacksInitialLoading] = useState(true)
+  const [refreshLoading, setRefreshLoading] = useState(false)
   const pollRef = useRef(null)
 
   const [mintTarget, setMintTarget] = useState('')
@@ -98,20 +78,54 @@ export default function OastDashboard() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const r = await apiFetch('/api/oast/callbacks')
-        if (r.ok) {
-          const d = await r.json()
-          if (Array.isArray(d)) setCallbacks(d.slice(-50).reverse())
-        }
-      } catch {}
+  const reloadCallbacks = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setRefreshLoading(true)
+    try {
+      const r = await apiFetch('/api/oast/callbacks')
+      if (r.ok) {
+        const d = await r.json()
+        const list = Array.isArray(d?.callbacks)
+          ? d.callbacks
+          : (Array.isArray(d) ? d : [])
+        setCallbacks(list.slice(0, 50))
+      }
+    } catch {}
+    finally {
+      if (!silent) setRefreshLoading(false)
+      setCallbacksInitialLoading(false)
     }
-    poll()
-    pollRef.current = setInterval(poll, 5000)
-    return () => clearInterval(pollRef.current)
   }, [])
+
+  useEffect(() => {
+    reloadCallbacks({ silent: true })
+    pollRef.current = setInterval(() => reloadCallbacks({ silent: true }), 5000)
+    return () => clearInterval(pollRef.current)
+  }, [reloadCallbacks])
+
+  const listFindings = useMemo(() => callbacks.map((cb, i) => {
+    const confirmed = cb.probe_confirmed ?? cb.confirmed ?? true
+    return {
+      id: cb.id ?? i,
+      severity: confirmed ? 'critical' : 'info',
+      title: `${cb.probe_type ?? 'unknown'} — ${cb.source_ip ?? '—'}`,
+      description: cb.payload ?? '',
+      type: cb.probe_type,
+    }
+  }), [callbacks])
+
+  const {
+    filteredFindings,
+    counts,
+    searchQuery,
+    setSearchQuery,
+    severityFilter,
+    setSeverityFilter,
+    exportCsv,
+    total,
+  } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'oast-callbacks',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
+  })
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
@@ -199,7 +213,19 @@ export default function OastDashboard() {
       badge={t('pages.oastDashboard.badge')}
       badgeColor="#22d3ee"
       subtitle={t('pages.oastDashboard.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={() => reloadCallbacks()}
+          onExport={exportCsv}
+          refreshLoading={refreshLoading}
+          exportDisabled={!filteredFindings.length}
+        />
+      )}
     >
+      <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-[11px] font-mono text-cyan-200/80 leading-relaxed">
+        {t('pages.oastDashboard.verification_banner')}
+      </div>
+
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-white/40">{t('pages.oastDashboard.client')}</span>
         <select
@@ -235,30 +261,18 @@ export default function OastDashboard() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.oastDashboard.live_callbacks')}</h3>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex w-1.5 h-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
-              </span>
-              <span className="text-[10px] font-mono text-white/30">{t('pages.oastDashboard.polling_every')}</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 h-[400px] overflow-auto space-y-2">
-            <AnimatePresence>
-              {callbacks.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-[11px] font-mono text-white/20">{t('pages.oastDashboard.callbacks_empty')}</p>
-                </div>
-              ) : (
-                callbacks.map((cb, i) => (
-                  <CallbackRow key={cb.id ?? i} cb={cb} />
-                ))
-              )}
-            </AnimatePresence>
-          </div>
+          <WeissmanFindingsPanel
+            findings={listFindings}
+            filteredFindings={filteredFindings}
+            counts={counts}
+            total={total}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            severityFilter={severityFilter}
+            onSeverityChange={setSeverityFilter}
+            loading={callbacksInitialLoading && !listFindings.length}
+            accent="#22d3ee"
+          />
         </div>
       </div>
 

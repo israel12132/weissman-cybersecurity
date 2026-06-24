@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import { EngineRealitySummary } from '../EngineRealityBadge'
 
 const REFRESH_MS = 15_000
 
@@ -223,6 +224,13 @@ export default function ExecKpiStrip() {
               registered: fmtCount(agents.registered || 0),
             })}
           </span>
+          <span className="text-white/20 hidden lg:inline">|</span>
+          <Link
+            to="/engine-reliability"
+            className="hidden lg:inline-flex items-center gap-2 hover:text-cyan-300/90 transition-colors"
+          >
+            <EngineRealitySummary compact className="text-[8px]" />
+          </Link>
         </div>
         <div className="text-white/30 flex items-center gap-1.5 tabular-nums">
           <span>{fmtAgo(lastUpdated)}</span>
