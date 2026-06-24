@@ -8,6 +8,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import {
@@ -237,6 +238,7 @@ export default function TopTierEngineProfile() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <AgentRequiredGate engineId={engineId}>
         <EvidenceNotice>{t('pages.topTierEngineProfile.evidence_notice')}</EvidenceNotice>
 
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
@@ -436,6 +438,7 @@ export default function TopTierEngineProfile() {
           </div>
           )}
         </section>
+        </AgentRequiredGate>
       </main>
     </div>
   )

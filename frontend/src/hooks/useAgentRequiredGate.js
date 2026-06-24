@@ -11,7 +11,7 @@ export function useAgentRequiredGate(engineId) {
   const { hasOnlineAgent, onlineCount, loading: fleetLoading } = useAgentFleetStatus()
 
   const cap = engineId ? byId[engineId] : null
-  const isAgentRequired = cap?.kind === 'agent_required'
+  const isAgentRequired = cap?.kind === 'agent_required' || cap?.remote_detection === false
 
   const blocked = useMemo(
     () => Boolean(engineId && isAgentRequired && !fleetLoading && !hasOnlineAgent),

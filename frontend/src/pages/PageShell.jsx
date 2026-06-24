@@ -10,6 +10,7 @@ import AppShell from '../components/layout/AppShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import { resolveRouteEvidence } from '../lib/routeEvidence'
+import { resolveRouteEngineId } from '../lib/routeEngineId'
 
 export default function PageShell({
   title,
@@ -32,6 +33,7 @@ export default function PageShell({
 }) {
   const { pathname } = useLocation()
   const { t } = useTranslation()
+  const resolvedEngineId = engineId ?? resolveRouteEngineId(pathname)
 
   let evidenceNode = null
   if (evidence === false || hideEvidence) {
@@ -65,8 +67,8 @@ export default function PageShell({
           {t('weissmanFindings.last_updated', { time: new Date(syncAt).toLocaleString() })}
         </p>
       )}
-      {engineId ? (
-        <AgentRequiredGate engineId={engineId}>{children}</AgentRequiredGate>
+      {resolvedEngineId ? (
+        <AgentRequiredGate engineId={resolvedEngineId}>{children}</AgentRequiredGate>
       ) : (
         children
       )}

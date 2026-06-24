@@ -1559,15 +1559,6 @@ async fn api_scan_all_engines(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
-    {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
-    }
 
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
@@ -1611,6 +1602,21 @@ async fn api_scan_all_engines(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": "No engines configured for this client"})),
+        )
+            .into_response();
+    }
+
+    let job_count = engines.len() as u64;
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
         )
             .into_response();
     }
@@ -1699,8 +1705,33 @@ async fn api_scan_discovered_domains(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+
+    if body.domains.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "domains list required"})),
+        )
+            .into_response();
+    }
+
+    // Default engines for domain scanning (recon-focused)
+    let engines = body.engines.clone().unwrap_or_else(|| {
+        vec![
+            "osint".to_string(),
+            "asm".to_string(),
+            "discovery_engine".to_string(),
+            "recon".to_string(),
+            "leak_hunter".to_string(),
+        ]
+    });
+
+    let job_count = (body.domains.len() * engines.len()) as u64;
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
     {
         return (
             StatusCode::PAYMENT_REQUIRED,
@@ -1724,25 +1755,6 @@ async fn api_scan_discovered_domains(
         .await;
         let _ = tx.commit().await;
     }
-
-    if body.domains.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "domains list required"})),
-        )
-            .into_response();
-    }
-
-    // Default engines for domain scanning (recon-focused)
-    let engines = body.engines.clone().unwrap_or_else(|| {
-        vec![
-            "osint".to_string(),
-            "asm".to_string(),
-            "discovery_engine".to_string(),
-            "recon".to_string(),
-            "leak_hunter".to_string(),
-        ]
-    });
 
     let payload = json!({
         "client_id": body.client_id,

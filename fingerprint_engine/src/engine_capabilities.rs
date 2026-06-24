@@ -28,8 +28,15 @@ pub fn classify(id: &str) -> &'static str {
 }
 
 /// Whether a kind performs real detection from a remote scan without an agent.
-pub fn detects_remotely(kind: &str) -> bool {
-    matches!(kind, "real_probe" | "alias" | "special")
+pub fn detects_remotely(kind: &str, id: &str) -> bool {
+    if kind == "agent_required" {
+        return false;
+    }
+    if kind == "alias" {
+        let canonical = resolve_engine_id(id);
+        return !crate::engine_dispatch::AGENT_REQUIRED_ENGINES.contains(&canonical);
+    }
+    matches!(kind, "real_probe" | "special")
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -58,7 +65,7 @@ pub fn capabilities() -> Vec<EngineCapability> {
                 id: id.to_string(),
                 kind: kind.to_string(),
                 canonical,
-                remote_detection: detects_remotely(kind),
+                remote_detection: detects_remotely(kind, id),
             }
         })
         .collect()
@@ -116,6 +123,23 @@ mod tests {
             } else {
                 assert!(c.canonical.is_none());
             }
+        }
+    }
+
+    #[test]
+    fn alias_of_agent_required_is_not_remote() {
+        let caps = capabilities();
+        let alias = caps.iter().find(|c| c.kind == "alias" && !c.remote_detection);
+        assert!(
+            alias.is_some(),
+            "expected at least one alias whose canonical engine requires an agent"
+        );
+    }
+
+    #[test]
+    fn agent_required_never_remote() {
+        for c in capabilities().iter().filter(|c| c.kind == "agent_required") {
+            assert!(!c.remote_detection, "{} should not detect remotely", c.id);
         }
     }
 
