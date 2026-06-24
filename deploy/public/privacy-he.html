@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>מדיניות פרטיות — Weissman Cybersecurity</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/_shared.css" />
+  <meta name="robots" content="index,follow" />
+  <link rel="alternate" hreflang="en" href="/privacy.html" />
+  <link rel="alternate" hreflang="he" href="/privacy-he.html" />
+</head>
+<body>
+  <nav><div class="container nav-inner">
+    <a href="/"><strong style="font-family:Orbitron,sans-serif;letter-spacing:2px;color:#22d3ee">WEISSMAN</strong></a>
+    <div class="nav-links">
+      <a href="/terms-he.html">תנאים</a>
+      <a href="/privacy-he.html" style="color:#22d3ee">פרטיות (HE)</a>
+      <a href="/privacy.html">Privacy (EN)</a>
+      <a href="/command-center/login" class="cta-ghost">כניסה</a>
+    </div>
+  </div></nav>
+  <article class="doc">
+    <h1>מדיניות פרטיות</h1>
+    <p class="meta">בתוקף: 2026-06-03 · GDPR / CCPA aligned · DPO: <a href="mailto:dpo@weissman.io">dpo@weissman.io</a></p>
+    <p>Full English version: <a href="/privacy.html">Privacy Policy (EN)</a>.</p>
+
+    <h2>1. מי אנחנו</h2>
+    <p>Weissman Cybersecurity Ltd. — פלטפורמת SOC. רשומה בישראל. DPO: dpo@weissman.io.</p>
+
+    <h2>2. מה אנחנו אוספים</h2>
+    <p><strong>חשבון:</strong> email, hash סיסמה (bcrypt), MFA (מוצפן), tenant, role, IP ב-login.</p>
+    <p><strong>סריקות:</strong> Targets, findings, evidence, telemetry מ-agent — מבודד per-tenant (RLS).</p>
+    <p><strong>תפעול:</strong> לוגי API, audit logs (append-only), שגיאות ללא PII.</p>
+
+    <h2>3. מה לא אוספים</h2>
+    <ul>
+      <li>אין pixels פרסום, Google Analytics, trackers צד-ג.</li>
+      <li>אין cookies cross-site.</li>
+    </ul>
+
+    <h2>4. Cookies</h2>
+    <p>רק functional: session JWT, שפה, consent banner.</p>
+
+    <h2>5. מטרות עיבוד</h2>
+    <p>מתן השירות, אבטחה, billing, תמיכה, חובות חוק.</p>
+
+    <h2>6. שיתוף</h2>
+    <p>Sub-processors: <a href="/subprocessors.html">רשימה</a>. Paddle לתשלום. לא מוכרים נתונים.</p>
+
+    <h2>7. שמירה</h2>
+    <p>נתוני account — כל עוד החשבון פעיל + 90 יום. Findings — לפי הגדרות tenant / חוזה.</p>
+
+    <h2>8. זכויות (GDPR)</h2>
+    <p>גישה, תיקון, מחיקה, portability — <a href="mailto:dpo@weissman.io">dpo@weissman.io</a>. תשובה תוך 30 יום.</p>
+
+    <h2>9. אבטחה</h2>
+    <p>RLS, הצפנה בתעבורה (TLS), MFA, audit. ראו <a href="/security-policy.html">Responsible Disclosure</a> ומסמך Enterprise `SECURITY_AND_COMPLIANCE.md`.</p>
+
+    <h2>10. ילדים</h2>
+    <p>השירות B2B — לא מיועד מתחת לגיל 18.</p>
+
+    <h2>11. שינויים</h2>
+    <p>הודעה 30 יום על שינוי מהותי ב-email.</p>
+
+    <h2>12. יצירת קשר</h2>
+    <p><a href="mailto:dpo@weissman.io">dpo@weissman.io</a></p>
+  </article>
+  <footer><div class="container"><div class="footer-bottom" style="border-top:none">
+    <span>© <span id="y"></span> Weissman Cybersecurity Ltd.</span>
+    <span><a href="/privacy.html" style="color:#94a3b8">English</a> · <a href="/dpa.html" style="color:#94a3b8">DPA</a></span>
+  </div></div></footer>
+  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+</body>
+</html>

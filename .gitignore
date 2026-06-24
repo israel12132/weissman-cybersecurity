@@ -53,3 +53,6 @@ fingerprint_engine/target/
 # Runtime data directories (already listed above, ensure explicit)
 data/
 reports/
+
+# Company legal details (copy from deploy/company.details.example.json)
+deploy/company.details.json

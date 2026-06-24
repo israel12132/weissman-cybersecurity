@@ -14,8 +14,9 @@
 | **Billing / quota** | ✅ מלא | כל נתיבי enqueue; strict ב-production |
 | **Guards אבטחה** | ✅ מלא | `security_startup.rs` חוסם סודות חלשים |
 | **Docker stack** | ✅ מוכן בקוד | דורש `docker compose up --build` על חומרה מתאימה |
-| **דפים משפטיים** | ✅ קיימים | `deploy/public/` — terms, privacy, DPA |
-| **Runbooks** | ✅ קיימים | חבילה זו + runbooks בשורש |
+| **דפים משפטיים** | ✅ קיימים | `deploy/public/` — terms/privacy **EN+HE**, DPA |
+| **Runbooks** | ✅ קיימים | Ops: `docs/operations/` + Week-1 go-live |
+| **Go-live QA** | ✅ | `./scripts/go_live_check.sh` |
 | **ספר מוצר (מכירות)** | ✅ **681 עמודים** | `docs/sales/viewer/index.html` |
 | **MSA template** | ✅ outline | `docs/legal/MSA-ORDER-FORM-OUTLINE-he.md` |
 | **מוכנות חברה (קוד)** | ✅ 100% | `docs/sales/COMPANY-READINESS-he.md` |
@@ -70,7 +71,7 @@
 
 | פער | השפעה | פתרון |
 |-----|--------|--------|
-| `GETTING_STARTED.md` מזכיר `changeme` | בלבול | להשתמש בספר **02** + `PRODUCTION.env.template` |
+| `GETTING_STARTED.md` legacy | בלבול | **תוקן** — מפנה ל-manuals + `go_live_check.sh` |
 | אין וידאו הדרכה | אימוץ איטי | workshop חי + חבילה זו |
 | AI דורש LLM | Council/Mission idle | `WEISSMAN_LLM_BASE_URL` |
 | בינארי Agent per OS | התקנה נכשלת | `scripts/package_agent_binaries.sh` |
@@ -113,3 +114,5 @@
 - [01-platform-overview](01-platform-overview.md)
 - [18-qa-verification](18-qa-verification.md)
 - [05-production-security](05-production-security.md)
+- [Week-1 go-live](../../sales/WEEK-1-GOLIVE-he.md)
+- [Incident/on-call](../../operations/INCIDENT-ONCALL-RUNBOOK-he.md)

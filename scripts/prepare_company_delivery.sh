@@ -13,4 +13,6 @@ node scripts/weissman-ui-audit.mjs >/dev/null
 echo ""
 echo "OK — product book: docs/sales/viewer/index.html"
 echo "OK — readiness:    docs/sales/COMPANY-READINESS-he.md"
-echo "OK — legal outline: docs/legal/MSA-ORDER-FORM-OUTLINE-he.md"
+echo ""
+echo "Next: ./scripts/go_live_check.sh"
+echo "Week 1: docs/sales/WEEK-1-GOLIVE-he.md"

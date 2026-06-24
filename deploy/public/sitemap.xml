@@ -4,6 +4,8 @@
   <url><loc>https://weissman.io/pricing.html</loc>           <changefreq>monthly</changefreq> <priority>0.9</priority></url>
   <url><loc>https://weissman.io/terms.html</loc>             <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
   <url><loc>https://weissman.io/privacy.html</loc>           <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
-  <url><loc>https://weissman.io/dpa.html</loc>               <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
+  <url><loc>https://weissman.io/terms-he.html</loc>         <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
+  <url><loc>https://weissman.io/privacy-he.html</loc>       <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
+  <url><loc>https://weissman.io/subprocessors.html</loc>   <changefreq>yearly</changefreq>  <priority>0.4</priority></url>
   <url><loc>https://weissman.io/security-policy.html</loc>   <changefreq>yearly</changefreq>  <priority>0.5</priority></url>
 </urlset>

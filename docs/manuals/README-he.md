@@ -59,13 +59,15 @@
 
 | מסמך | מיקום |
 |------|--------|
-| התחלה מהירה (legacy) | `/GETTING_STARTED.md` |
+| התחלה מהירה | `/GETTING_STARTED.md` → manuals + `go_live_check.sh` |
+| Ops (incident, git security) | `/docs/operations/README-he.md` |
+| Week-1 go-live | `/docs/sales/WEEK-1-GOLIVE-he.md` |
 | Runbook onboarding | `/ONBOARDING_RUNBOOK.md` |
 | אבטחה ותאימות | `/SECURITY_AND_COMPLIANCE.md` |
 | SLA | `/SLA_AND_STATUS.md` |
 | ארכיטקטורה | `/docs/architecture.md` |
 | תבנית Production | `/PRODUCTION.env.template` |
-| משפטי (אתר) | `/deploy/public/terms.html`, `privacy.html`, `dpa.html` |
+| משפטי (אתר) | `/deploy/public/terms.html`, `terms-he.html`, `privacy.html`, `privacy-he.html`, `dpa.html` |
 | תדריך מנהלים (עברית) | `/Weissman_Cybersecurity_מסמך_טכני_מנהלי_עברית.md` |
 
 ---
