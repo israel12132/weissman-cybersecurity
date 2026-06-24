@@ -35,6 +35,7 @@ export default defineConfig({
     // Dev-only: API lives on the Rust process. Do not use for production access.
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/ws': { target: 'ws://127.0.0.1:8000', ws: true, changeOrigin: true },
     },
   },
   preview: {
@@ -42,6 +43,7 @@ export default defineConfig({
     // Optional: test production build locally with `npm run build && npm run preview`
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/ws': { target: 'ws://127.0.0.1:8000', ws: true, changeOrigin: true },
     },
   },
 })

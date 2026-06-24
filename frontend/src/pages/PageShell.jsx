@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import AppShell from '../components/layout/AppShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import { resolveRouteEvidence } from '../lib/routeEvidence'
 
 export default function PageShell({
@@ -21,6 +22,8 @@ export default function PageShell({
   children,
   contentClassName,
   maxWidth,
+  /** When set, agent-required engines show empty state until an endpoint agent is online */
+  engineId,
   /** Custom evidence node/string; pass false to suppress auto banner */
   evidence,
   hideEvidence = false,
@@ -62,7 +65,11 @@ export default function PageShell({
           {t('weissmanFindings.last_updated', { time: new Date(syncAt).toLocaleString() })}
         </p>
       )}
-      {children}
+      {engineId ? (
+        <AgentRequiredGate engineId={engineId}>{children}</AgentRequiredGate>
+      ) : (
+        children
+      )}
     </AppShell>
   )
 }

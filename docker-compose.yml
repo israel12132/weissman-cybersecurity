@@ -68,12 +68,17 @@ services:
       WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATIONS_DIR: /srv/migrations
       REDIS_URL: redis://redis:6379/0
-      WEISSMAN_PUBLIC_BASE_URL: http://localhost
-      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
+      WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-http://localhost}
+      # Required secrets — set in `.env` (see .env.example). Compose refuses to start without them.
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env — generate: openssl rand -base64 48}
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
       WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
-      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:-changeme}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:?Set WEISSMAN_ADMIN_PASSWORD in .env}
+      # HTTPS-only session cookies in production (WEISSMAN_ENV=production); default 0 for local http://localhost
+      WEISSMAN_COOKIE_SECURE: ${WEISSMAN_COOKIE_SECURE:-0}
+      # Strict Paddle subscription + monthly scan quota (auto-on when WEISSMAN_ENV=production)
+      WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
@@ -112,7 +117,8 @@ services:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
-      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:-change-me-in-production-docker}
+      WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}
+      WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
     depends_on:
       backend:
         condition: service_healthy

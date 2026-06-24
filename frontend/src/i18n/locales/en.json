@@ -949,6 +949,13 @@
     "findings_search": "Search policy, file, resource…",
     "no_findings_filtered": "No findings match the current search and severity filters."
   },
+  "agentRequired": {
+    "empty_title": "Endpoint agent required",
+    "empty_body": "You must install the Weissman Agent on your endpoint to view this data. Remote scans cannot observe host-local signals for this engine.",
+    "install_cta": "Open Agent Management",
+    "install_hint": "Generate an enrollment token in Agent Management, run the install script on the target host, then refresh once the agent connects.",
+    "engine_id": "Engine"
+  },
   "weissmanFindings": {
     "title": "Findings",
     "kpi_total": "Total",

@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -295,6 +296,7 @@ export default function BusinessEngineProfile() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <AgentRequiredGate engineId={engineId}>
         <EvidenceNotice>{t('pages.businessEngineProfile.evidence_notice')}</EvidenceNotice>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -427,6 +429,7 @@ export default function BusinessEngineProfile() {
           <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.effective_payload')}</h3>
           <JsonView value={effectivePayload} />
         </section>
+        </AgentRequiredGate>
       </main>
     </div>
   )

@@ -11,7 +11,8 @@ use weissman_db::auth_access;
 pub use webhook::{handle_paddle_webhook, PaddleWebhookError};
 
 /// When `true`, tenants must have an active or trialing Paddle subscription to add clients or run scans.
-/// Default: `true` if `PADDLE_API_KEY` is non-empty, else `false` (local dev without billing).
+/// Default: `true` in production (`WEISSMAN_ENV=production` et al.), else `true` when `PADDLE_API_KEY`
+/// is non-empty, else `false` (local dev without billing).
 pub fn billing_strict_enabled() -> bool {
     if let Ok(v) = std::env::var("WEISSMAN_BILLING_STRICT") {
         let s = v.trim();
@@ -21,6 +22,9 @@ pub fn billing_strict_enabled() -> bool {
         if s == "0" || s.eq_ignore_ascii_case("false") {
             return false;
         }
+    }
+    if weissman_core::tls_policy::is_production_environment() {
+        return true;
     }
     std::env::var("PADDLE_API_KEY")
         .map(|k| !k.trim().is_empty())
@@ -98,7 +102,12 @@ pub async fn enforce_client_create(pool: &PgPool, tenant_id: i64) -> Result<(), 
 }
 
 pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
-    if !billing_strict_enabled() {
+    enforce_scan_quota(pool, tenant_id, 1).await
+}
+
+/// Verify the tenant can enqueue `job_count` additional scan jobs this billing period.
+pub async fn enforce_scan_quota(pool: &PgPool, tenant_id: i64, job_count: u64) -> Result<(), String> {
+    if job_count == 0 || !billing_strict_enabled() {
         return Ok(());
     }
     let row = sqlx::query(
@@ -122,6 +131,9 @@ pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), Str
         ));
     }
     let max_s: i32 = r.try_get("max_scans_month").map_err(|e| e.to_string())?;
+    if max_s <= 0 {
+        return Ok(());
+    }
     let period = period_ym_now();
     let used: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COALESCE(scans_started,0)::bigint FROM tenant_usage_counters WHERE tenant_id = $1 AND period_ym = $2",
@@ -132,34 +144,58 @@ pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), Str
     .await
     .map_err(|e| e.to_string())?
     .unwrap_or(0);
-    if used >= max_s as i64 {
+    let requested = i64::try_from(job_count).unwrap_or(i64::MAX);
+    if used.saturating_add(requested) > max_s as i64 {
         return Err(format!(
-            "Monthly scan limit reached ({}/{}). Upgrade or wait for the next billing period.",
-            used, max_s
+            "Monthly scan limit would be exceeded ({used}/{max_s} used; requested {requested} more). Upgrade or wait for the next billing period.",
+            used = used,
+            max_s = max_s,
+            requested = requested
         ));
     }
     Ok(())
 }
 
-/// Enforce subscription + monthly quota and increment the usage counter.
+/// Enforce subscription + monthly quota and increment the usage counter by one.
 /// No-op when [`billing_strict_enabled`] is false.
 pub async fn gate_scan_enqueue(pool: &PgPool, tenant_id: i64) -> Result<(), String> {
-    enforce_scan_start(pool, tenant_id).await?;
-    record_scan_started(pool, tenant_id)
+    gate_scan_enqueue_n(pool, tenant_id, 1).await
+}
+
+/// Enforce quota for a bulk enqueue (run-all, schedules, cron) and record all jobs atomically.
+pub async fn gate_scan_enqueue_n(pool: &PgPool, tenant_id: i64, job_count: u64) -> Result<(), String> {
+    if job_count == 0 {
+        return Ok(());
+    }
+    enforce_scan_quota(pool, tenant_id, job_count).await?;
+    record_scans_started(pool, tenant_id, job_count)
         .await
         .map_err(|e| e.to_string())
 }
 
 pub async fn record_scan_started(pool: &PgPool, tenant_id: i64) -> Result<(), sqlx::Error> {
+    record_scans_started(pool, tenant_id, 1).await
+}
+
+pub async fn record_scans_started(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_count: u64,
+) -> Result<(), sqlx::Error> {
+    if job_count == 0 {
+        return Ok(());
+    }
+    let increment = i64::try_from(job_count).unwrap_or(i64::MAX);
     let period = period_ym_now();
     sqlx::query(
         r#"INSERT INTO tenant_usage_counters (tenant_id, period_ym, scans_started)
-           VALUES ($1, $2, 1)
+           VALUES ($1, $2, $3)
            ON CONFLICT (tenant_id, period_ym)
-           DO UPDATE SET scans_started = tenant_usage_counters.scans_started + 1"#,
+           DO UPDATE SET scans_started = tenant_usage_counters.scans_started + $3"#,
     )
     .bind(tenant_id)
     .bind(&period)
+    .bind(increment)
     .execute(pool)
     .await?;
     Ok(())

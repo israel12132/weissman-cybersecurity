@@ -958,6 +958,13 @@
     "findings_search": "חיפוש מדיניות, קובץ, משאב…",
     "no_findings_filtered": "אין ממצאים התואמים לחיפוש ולסינון החומרה הנוכחיים."
   },
+  "agentRequired": {
+    "empty_title": "נדרש סוכן קצה",
+    "empty_body": "יש להתקין את Weissman Agent על נקודת הקצה כדי לצפות בנתונים אלה. סריקות מרוחקות לא יכולות לצפות באותות מקומיים של מנוע זה.",
+    "install_cta": "פתח ניהול סוכנים",
+    "install_hint": "צור enrollment token בניהול סוכנים, הרץ את סקרipt ההתקנה על המארח, ורענן לאחר שהסוכן מתחבר.",
+    "engine_id": "מנוע"
+  },
   "weissmanFindings": {
     "title": "ממצאים",
     "kpi_total": "סה״כ",

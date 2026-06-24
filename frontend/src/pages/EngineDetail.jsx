@@ -10,6 +10,7 @@ import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
@@ -1324,6 +1325,7 @@ export default function EngineDetail() {
       </AnimatePresence>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        <AgentRequiredGate engineId={engineId}>
         <EvidenceNotice>{t('pages.engineDetail.evidence_notice')}</EvidenceNotice>
 
         {/* ── Hero header ─────────────────────────────────────────────────── */}
@@ -1611,6 +1613,7 @@ export default function EngineDetail() {
           </div>
         </motion.section>
 
+        </AgentRequiredGate>
       </main>
     </div>
   )

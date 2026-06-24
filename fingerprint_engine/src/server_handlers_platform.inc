@@ -2290,15 +2290,6 @@ async fn api_scan_schedules_run(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
-    {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
-    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
     };
@@ -2355,6 +2346,22 @@ async fn api_scan_schedules_run(
                 "ok": false,
                 "detail": "Target client has no authorized domains configured",
             })),
+        )
+            .into_response();
+    }
+
+    let job_count = (domains.len() * engines.len()) as u64;
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
+    {
+        let _ = tx.rollback().await;
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
         )
             .into_response();
     }

@@ -375,15 +375,6 @@ async fn api_clients_scan_run_all(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
-    {
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok": false, "detail": detail})),
-        )
-            .into_response();
-    }
 
     // Resolve the client's authorized domains.
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -445,6 +436,21 @@ async fn api_clients_scan_run_all(
         "waf_bypass",
         "liminal_boundary",
     ];
+
+    let job_count = (domains.len() * baseline_engines.len()) as u64;
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
 
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {

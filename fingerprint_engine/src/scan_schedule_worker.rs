@@ -34,6 +34,7 @@ pub fn compute_next_run_at(schedule_type: &str, from: DateTime<Utc>) -> DateTime
 
 async fn run_due_schedule(
     app_pool: &PgPool,
+    auth_pool: &PgPool,
     tenant_id: i64,
     schedule_id: i64,
 ) -> Result<(), String> {
@@ -87,6 +88,22 @@ async fn run_due_schedule(
     if domains.is_empty() {
         let _ = tx.rollback().await;
         return Ok(());
+    }
+
+    let job_count = (domains.len() * engines.len()) as u64;
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue_n(auth_pool, tenant_id, job_count).await
+    {
+        let _ = tx.rollback().await;
+        tracing::warn!(
+            target: "scan_schedule_worker",
+            tenant_id,
+            schedule_id,
+            job_count,
+            detail = %detail,
+            "cron billing gate denied — schedule not advanced"
+        );
+        return Err(detail);
     }
 
     let next = compute_next_run_at(&schedule_type, Utc::now());
@@ -174,7 +191,7 @@ async fn tick(app_pool: &PgPool, auth_pool: &PgPool) {
 
     for tenant_id in tenants {
         for schedule_id in due_schedule_ids(app_pool, tenant_id).await {
-            if let Err(e) = run_due_schedule(app_pool, tenant_id, schedule_id).await {
+            if let Err(e) = run_due_schedule(app_pool, auth_pool, tenant_id, schedule_id).await {
                 tracing::warn!(
                     target: "scan_schedule_worker",
                     tenant_id,
