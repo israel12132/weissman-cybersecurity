@@ -44,6 +44,13 @@
 | 17 | [17-troubleshooting.md](he/17-troubleshooting.md) | תקלות נפוצות ופתרונות |
 | 18 | [18-qa-verification.md](he/18-qa-verification.md) | רשימת בדיקות לפני מסירה |
 
+### ספר מערכת — Command Center (מנועים + כל הלוחות)
+
+| ספר | תיאור |
+|-----|--------|
+| **[WEISSMAN-COMMAND-CENTER-BOOK.md](he/WEISSMAN-COMMAND-CENTER-BOOK.md)** | **ספר הפעלה מלא** — תוכן עניינים, כל לוח, מסלולי עבודה, 533 מנועים |
+| [WEISSMAN-COMMAND-CENTER-BOOK-en.md](en/WEISSMAN-COMMAND-CENTER-BOOK-en.md) | Same book in English |
+
 ---
 
 ## מסמכים נוספים במאגר

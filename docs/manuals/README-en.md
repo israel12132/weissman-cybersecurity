@@ -44,6 +44,13 @@ This directory is the **official delivery documentation pack** for Weissman Cybe
 | 17 | [17-troubleshooting.md](en/17-troubleshooting.md) | Common failures and fixes |
 | 18 | [18-qa-verification.md](en/18-qa-verification.md) | Pre-delivery test checklist, scripts |
 
+### Command Center system book (boards + all engines)
+
+| Book | Description |
+|------|-------------|
+| [WEISSMAN-COMMAND-CENTER-BOOK-en.md](en/WEISSMAN-COMMAND-CENTER-BOOK-en.md) | **Full operations book** — TOC, every board, workflows, 533 engines |
+| [WEISSMAN-COMMAND-CENTER-BOOK.md](../he/WEISSMAN-COMMAND-CENTER-BOOK.md) | Same book in Hebrew |
+
 ---
 
 ## Related repository documents
