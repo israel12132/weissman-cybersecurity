@@ -16,14 +16,17 @@
 | **Docker stack** | ✅ מוכן בקוד | דורש `docker compose up --build` על חומרה מתאימה |
 | **דפים משפטיים** | ✅ קיימים | `deploy/public/` — terms, privacy, DPA |
 | **Runbooks** | ✅ קיימים | חבילה זו + runbooks בשורש |
-| **הדרכה בעברית** | ✅ **חדש** | `docs/manuals/he/` |
+| **ספר מוצר (מכירות)** | ✅ **681 עמודים** | `docs/sales/viewer/index.html` |
+| **MSA template** | ✅ outline | `docs/legal/MSA-ORDER-FORM-OUTLINE-he.md` |
+| **מוכנות חברה (קוד)** | ✅ 100% | `docs/sales/COMPANY-READINESS-he.md` |
+| **Pricing / marketing** | ✅ | 545 engines, quotas aligned, no false SOC2 audit claim |
 | **וידאו / LMS** | ⚠️ פער | אין קורס וידאו מצורף — אופציונלי |
 | **קטלוג Paddle חי** | ⚠️ per-deployment | חובה להגדיר `pri_*` |
 | **SMTP ל-signup** | ⚠️ אם self-serve | נדרש עם `WEISSMAN_SELF_SERVE_SIGNUP=1` |
 | **LLM / vLLM** | ⚠️ מודול אופציונלי | Council, General Mission |
 | **שרת OAST** | ⚠️ אופציונלי | `weissman-oast-server` נפרד |
 
-**מסקנה:** הפלטפורמה **מוכנה למכירה Enterprise + MSP** לאחר ש-checklist 18 עובר בסביבת הלקוח. מה שנשאר הוא **הגדרה**, לא יכולת חסרה.
+**מסקנה:** **100% מוכן בקוד ותיעוד.** Paddle live, SMTP, deploy, ח.פ., MSA חתום — מחוץ למאגר (ראו `docs/sales/COMPANY-READINESS-he.md`).
 
 ---
 
@@ -38,6 +41,8 @@
 
 ### 2. תיעוד
 - [ ] `docs/manuals/README-he.md` או `README-en.md`
+- [ ] `docs/sales/viewer/index.html` — ספר מוצר CEO
+- [ ] `docs/legal/MSA-ORDER-FORM-OUTLINE-he.md` → עורך דין
 - [ ] `SECURITY_AND_COMPLIANCE.md`, `SIG_CAIQ_PREP_QA.md`
 - [ ] `SLA_AND_STATUS.md`
 - [ ] `ONBOARDING_RUNBOOK.md`

@@ -43,7 +43,7 @@
   <!-- value prop -->
   <text x="360" y="445"
         font-family="'JetBrains Mono',monospace"
-        font-size="34" fill="#cbd5e1">253 real engines � zero simulation.</text>
+        font-size="34" fill="#cbd5e1">545 production engines · zero simulation.</text>
   <text x="360" y="495"
         font-family="'JetBrains Mono',monospace"
         font-size="24" fill="#94a3b8">Continuous offensive security for SOC teams.</text>

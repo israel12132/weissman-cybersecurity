@@ -1,0 +1,12 @@
+{
+  "legal_name_en": "Weissman Cybersecurity Ltd.",
+  "legal_name_he": "ויסמן סייבר סקיוריטי בע\"מ",
+  "company_id_israel": "REPLACE_WITH_ח.פ._FROM_רשם_החברות",
+  "registered_address": "Tel Aviv-Yafo, Israel",
+  "dpo_email": "dpo@weissman.io",
+  "legal_email": "legal@weissman.io",
+  "security_email": "security@weissman.io",
+  "sales_email": "sales@weissman.io",
+  "support_email": "support@weissman.io",
+  "notes": "Fill after incorporation. Do not commit real ח.פ. until public. Update deploy/public/*.html footers when finalized."
+}
