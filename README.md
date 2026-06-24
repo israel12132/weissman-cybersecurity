@@ -109,6 +109,8 @@ via WSS+JWT, and on every dispatch ships:
 
 | File | What it covers |
 |------|----------------|
+| **[Instruction manuals (EN/HE)](docs/manuals/README-en.md)** | **Official delivery pack** — 19 topics × 2 languages, sales readiness, install, ops, QA |
+| [`docs/manuals/README-he.md`](docs/manuals/README-he.md) | אינדקס ספרי הוראות בעברית |
 | [`docs/architecture.md`](docs/architecture.md) | System map, data flow, table inventory |
 | [`docs/operations.md`](docs/operations.md) | Env-var reference, runbooks, migration runner, intel workers, read-only role |
 | [`GETTING_STARTED.md`](GETTING_STARTED.md) | End-to-end onboarding: client → scope → first scan → PDF |

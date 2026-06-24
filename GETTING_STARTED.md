@@ -68,13 +68,12 @@ You'll be redirected to: **http://localhost/command-center/**
 
 ### Step 3: Log In
 
-**Default credentials** (CHANGE IMMEDIATELY in production):
-- **Email:** Set via `WEISSMAN_ADMIN_EMAIL` (default: `admin@localhost`)
-- **Password:** Set via `WEISSMAN_ADMIN_PASSWORD` (default: `changeme`)
+**Credentials** come from your `.env` file (required — there is no default password in Docker Compose):
 
-**After first login:**
-1. Go to **Admin** → **Change Password**
-2. Enable MFA (recommended)
+- **Email:** `WEISSMAN_ADMIN_EMAIL` (e.g. `admin@yourcompany.com`)
+- **Password:** `WEISSMAN_ADMIN_PASSWORD` (set a strong value before `docker compose up`)
+
+See **[docs/manuals/en/02-installation-docker.md](docs/manuals/en/02-installation-docker.md)** (or Hebrew: [docs/manuals/he/02-installation-docker.md](docs/manuals/he/02-installation-docker.md)) for the full install guide.
 
 ---
 
