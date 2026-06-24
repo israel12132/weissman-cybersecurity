@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -106,6 +107,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) 
   }, [clientId, engineId, label, showToast, t])
 
   return (
+    <AgentRequiredGate engineId={engineId} className="rounded-2xl">
     <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -156,6 +158,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) 
         )
       })()}
     </div>
+    </AgentRequiredGate>
   )
 }
 

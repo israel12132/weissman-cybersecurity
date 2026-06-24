@@ -95,6 +95,15 @@ async fn api_swarm_run(
     if !ok {
         return (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "client not found"}))).into_response();
     }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
         auth.tenant_id,
@@ -164,6 +173,15 @@ async fn api_threat_ingest_run(
         "llm_base": llm_base,
         "llm_model": llm_model,
     });
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
         auth.tenant_id,

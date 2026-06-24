@@ -33,6 +33,10 @@ export const ROUTE_ENGINE_ID = {
   '/waf-bypass': 'waf_bypass',
   '/websocket-security': 'websocket_attack',
   '/engines/osint': 'osint',
+  '/threat-emulation': 'threat_emulation',
+  '/supply-chain': 'supply_chain',
+  '/social-engineering': 'spear_phishing',
+  '/oast': 'oast_oob',
 }
 
 /** Prefix routes for nested engine profiles */

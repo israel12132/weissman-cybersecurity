@@ -1,6 +1,10 @@
 # Weissman Phase 2: PostgreSQL + Rust API + Nginx (SPA + /api /ws proxy on :80).
 # Run from repo root: docker compose up --build
 #
+# Prerequisites: copy `.env.example` → `.env` and set WEISSMAN_JWT_SECRET + WEISSMAN_ADMIN_PASSWORD.
+# Production: also set WEISSMAN_ENV=production, WEISSMAN_COOKIE_SECURE=1, strong DB_* passwords,
+# WEISSMAN_METRICS_TOKEN (≥32 chars), and WEISSMAN_PUBLIC_BASE_URL (HTTPS).
+#
 # URLs: http://localhost/ → Command Center. Migrations run once at backend start when WEISSMAN_MIGRATE_URL is set.
 #
 # DB roles (from sqlx migrations): postgres superuser runs migrations; app uses weissman_app (RLS); auth uses weissman_auth (BYPASSRLS).
@@ -79,6 +83,9 @@ services:
       WEISSMAN_COOKIE_SECURE: ${WEISSMAN_COOKIE_SECURE:-0}
       # Strict Paddle subscription + monthly scan quota (auto-on when WEISSMAN_ENV=production)
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      # Production: set WEISSMAN_ENV=production + WEISSMAN_METRICS_TOKEN (≥32 chars) in `.env`
+      WEISSMAN_ENV: ${WEISSMAN_ENV:-}
+      WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:-}
       # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}

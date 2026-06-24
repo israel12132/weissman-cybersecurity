@@ -84,6 +84,15 @@ async fn api_general_mission(
     if domain.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "domain required"}))).into_response();
     }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     let mut map = serde_json::Map::new();
     map.insert("domain".into(), json!(domain));
     if let Some(cid) = body.client_id {
@@ -146,6 +155,15 @@ async fn api_council_debate(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "target_brief required"})),
+        )
+            .into_response();
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
         )
             .into_response();
     }
@@ -217,6 +235,30 @@ async fn api_general_ascension(
 ) -> Response {
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
+    }
+    if !crate::general::ascension_autonomous_enabled() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": "ascension_autonomous_disabled",
+                "detail": "Set WEISSMAN_ASCENSION_AUTONOMOUS_ENQUEUE=1 and WEISSMAN_ASCENSION_AUTONOMOUS_I_ACKNOWLEDGE=1 to enable autonomous mission enqueue.",
+            })),
+        )
+            .into_response();
+    }
+    let job_count = crate::general::ascension_max_job_quota();
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        job_count,
+    )
+    .await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
     }
     let payload = json!({});
     match crate::async_jobs::enqueue(
@@ -1961,6 +2003,15 @@ async fn api_payload_sync_run(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"started": false, "detail": detail})),
+        )
+            .into_response();
+    }
     match crate::async_jobs::enqueue(
         state.app_pool.as_ref(),
         auth.tenant_id,
@@ -2093,6 +2144,18 @@ async fn api_council_hitl_approve(
     Path(item_id): Path<i64>,
     Json(body): Json<HitlReviewBody>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) =
+        crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
+    {
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok": false, "detail": detail})),
+        )
+            .into_response();
+    }
     match crate::council_hitl::approve_and_fire(
         state.app_pool.as_ref(),
         auth.tenant_id,

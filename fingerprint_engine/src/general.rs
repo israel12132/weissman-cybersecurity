@@ -252,7 +252,8 @@ async fn llm_rank_clients(
     }
 }
 
-fn ascension_autonomous_enabled() -> bool {
+/// Whether ascension wave may enqueue child scan jobs (explicit operator ack required).
+pub fn ascension_autonomous_enabled() -> bool {
     matches!(
         std::env::var("WEISSMAN_ASCENSION_AUTONOMOUS_ENQUEUE").as_deref(),
         Ok("1") | Ok("true") | Ok("yes")
@@ -260,6 +261,15 @@ fn ascension_autonomous_enabled() -> bool {
         std::env::var("WEISSMAN_ASCENSION_AUTONOMOUS_I_ACKNOWLEDGE").as_deref(),
         Ok("1") | Ok("true") | Ok("yes")
     )
+}
+
+/// Max child scan jobs ascension may enqueue (`WEISSMAN_ASCENSION_MAX_JOBS`, default 6, cap 24).
+pub fn ascension_max_job_quota() -> u64 {
+    std::env::var("WEISSMAN_ASCENSION_MAX_JOBS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(6)
+        .clamp(1, 24) as u64
 }
 
 /// Enqueue engine jobs for top-risk mission nodes (ASM → BOLA → path fuzz). Respects `WEISSMAN_ASCENSION_MAX_JOBS` (default 6).
@@ -274,11 +284,7 @@ pub async fn run_ascension_wave(
                 .into(),
         );
     }
-    let max_jobs: usize = std::env::var("WEISSMAN_ASCENSION_MAX_JOBS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(6)
-        .clamp(1, 24);
+    let max_jobs: usize = ascension_max_job_quota() as usize;
 
     let mut map = build_dynamic_mission_map(pool.as_ref(), tenant_id).await?;
     if map.is_empty() {
