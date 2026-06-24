@@ -43,6 +43,7 @@ This directory is the **official delivery documentation pack** for Weissman Cybe
 | 16 | [16-operations-monitoring.md](en/16-operations-monitoring.md) | Metrics, Prometheus, backups, retention |
 | 17 | [17-troubleshooting.md](en/17-troubleshooting.md) | Common failures and fixes |
 | 18 | [18-qa-verification.md](en/18-qa-verification.md) | Pre-delivery test checklist, scripts |
+| 19 | [19-go-live-optional-services.md](en/19-go-live-optional-services.md) | Go-live: Paddle, SMTP, LLM, OAST, agent, staging build, QA |
 
 ### Command Center system book (boards + all engines)
 

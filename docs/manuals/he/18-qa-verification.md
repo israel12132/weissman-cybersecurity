@@ -58,6 +58,16 @@ cargo clippy --workspace
 cd frontend && npm ci && npm run build
 ```
 
+### 6. Staging QA (one command)
+
+```bash
+chmod +x scripts/staging-qa.sh
+./scripts/staging-qa.sh
+./scripts/staging-qa.sh --live http://localhost
+```
+
+ספר **19** — Paddle, SMTP, LLM, OAST, Agent, Docker staging.
+
 ---
 
 ## אימות אבטחה

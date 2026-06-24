@@ -1,0 +1,70 @@
+# Staging / go-live overlay — use with base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile staging --profile oast up -d --build
+#
+# Adds:
+#   - Mailpit (SMTP capture for self-serve signup testing)
+#   - OAST listener (optional profile `oast`)
+#   - Backend env wiring for SMTP, OAST, LLM URL passthrough
+
+services:
+  backend:
+    environment:
+      WEISSMAN_AGENT_BIN_DIR: /srv/bin/agents
+      # Self-serve signup + SMTP (Mailpit when profile staging is active)
+      WEISSMAN_SELF_SERVE_SIGNUP: ${WEISSMAN_SELF_SERVE_SIGNUP:-1}
+      WEISSMAN_SMTP_ENABLED: ${WEISSMAN_SMTP_ENABLED:-true}
+      WEISSMAN_SMTP_HOST: ${WEISSMAN_SMTP_HOST:-mailpit}
+      WEISSMAN_SMTP_PORT: ${WEISSMAN_SMTP_PORT:-1025}
+      WEISSMAN_SMTP_FROM: ${WEISSMAN_SMTP_FROM:-noreply@weissman.local}
+      WEISSMAN_SMTP_TO: ${WEISSMAN_SMTP_TO:-admin@localhost}
+      # OAST (when profile oast is active — set domain in .env)
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+      # LLM for Council / General Mission (external — set in .env)
+      WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
+      WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
+      # Paddle (sandbox on staging)
+      PADDLE_ENVIRONMENT: ${PADDLE_ENVIRONMENT:-sandbox}
+      PADDLE_API_KEY: ${PADDLE_API_KEY:-}
+      PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
+      WEISSMAN_PADDLE_PRICE_STARTER: ${WEISSMAN_PADDLE_PRICE_STARTER:-}
+      WEISSMAN_PADDLE_PRICE_PROFESSIONAL: ${WEISSMAN_PADDLE_PRICE_PROFESSIONAL:-}
+      WEISSMAN_PADDLE_PRICE_ENTERPRISE: ${WEISSMAN_PADDLE_PRICE_ENTERPRISE:-}
+
+  worker:
+    environment:
+      WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
+      WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+
+  # SMTP capture for signup verification emails — UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: [staging]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    restart: unless-stopped
+
+  oast:
+    build:
+      context: .
+      dockerfile: deploy/oast.Dockerfile
+    profiles: [oast]
+    environment:
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+      OAST_HTTP_LISTEN: 0.0.0.0:9090
+      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
+    expose:
+      - "9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --connect-timeout 2 http://127.0.0.1:9090/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped

@@ -43,6 +43,7 @@
 | 16 | [16-operations-monitoring.md](he/16-operations-monitoring.md) | Metrics, Prometheus, גיבויים |
 | 17 | [17-troubleshooting.md](he/17-troubleshooting.md) | תקלות נפוצות ופתרונות |
 | 18 | [18-qa-verification.md](he/18-qa-verification.md) | רשימת בדיקות לפני מסירה |
+| 19 | [19-go-live-optional-services.md](he/19-go-live-optional-services.md) | Go-live: Paddle, SMTP, LLM, OAST, Agent, staging build, QA |
 
 ### ספר מערכת — Command Center (מנועים + כל הלוחות)
 

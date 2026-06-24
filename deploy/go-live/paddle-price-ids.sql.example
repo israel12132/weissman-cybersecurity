@@ -1,0 +1,17 @@
+-- After creating prices in Paddle Billing, run against Postgres (superuser or weissman_auth):
+--
+--   docker compose exec postgres psql -U postgres -d weissman -f /path/to/this/file
+--
+-- Replace pri_... with your sandbox or live catalog price IDs.
+
+UPDATE billing_plans SET paddle_price_id = 'pri_REPLACE_STARTER'
+  WHERE slug = 'starter';
+
+UPDATE billing_plans SET paddle_price_id = 'pri_REPLACE_PROFESSIONAL'
+  WHERE slug = 'professional';
+
+UPDATE billing_plans SET paddle_price_id = 'pri_REPLACE_ENTERPRISE'
+  WHERE slug = 'enterprise';
+
+-- Verify:
+-- SELECT slug, display_name, paddle_price_id, max_clients, max_scans_month FROM billing_plans;
