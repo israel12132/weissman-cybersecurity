@@ -1,3 +1,4 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +47,7 @@ export default function SocialEngineering() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [scanClientId, setScanClientId] = useState('');
+  const { postScan } = useCommandCenterScan(scanClientId)
   const [scanning, setScanning] = useState(false);
   const [scanJobId, setScanJobId] = useState(null);
 
@@ -106,17 +108,12 @@ export default function SocialEngineering() {
     setScanning(true);
     setError('');
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: ASSESSMENT_ENGINE,
-          client_id: Number(scanClientId),
-          target,
-        }),
+      const { ok, data: d } = await postScan({
+        engine: ASSESSMENT_ENGINE,
+        client_id: Number(scanClientId),
+        target,
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || d.error || t('pages.socialEngineering.scan_failed'));
+      if (!ok) throw new Error(d.detail || d.error || t('pages.socialEngineering.scan_failed'));
       if (d.job_id) setScanJobId(String(d.job_id));
       else {
         setScanning(false);

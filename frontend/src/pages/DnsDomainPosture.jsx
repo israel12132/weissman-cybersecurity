@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -144,16 +147,6 @@ function gradeColor(grade) {
 }
 function sevValue(s) {
   return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0
-}
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.replace(/^https?:\/\//, '').split('/')[0]
 }
 function csvToArray(s) {
   return String(s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean)
@@ -409,6 +402,7 @@ export default function DnsDomainPosture() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [showParams, setShowParams] = useState(false)
@@ -521,16 +515,19 @@ export default function DnsDomainPosture() {
     return body
   }, [target, toggles, subdomains, maxCtHosts, ripeBase, timeoutMs, concurrency, lowTtlThreshold, expectedCountries, expectedAips, resolverTimingFactor, clientId, expectedAsns, resolversText])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast('error', t('pages.dnsDomainPosture.select_client_first', 'Select a client first')); return }
     if (!target.trim()) { showToast('error', t('pages.dnsDomainPosture.target_required', 'A target domain is required')); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.dnsDomainPosture.scan_failed', 'Scan failed')); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.dnsDomainPosture.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.dnsDomainPosture.queued', 'Posture scan queued ({{jobId}})', { jobId }))
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -544,6 +541,7 @@ export default function DnsDomainPosture() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.dnsDomainPosture.title', 'DNS & BGP Hijack-Resistance')}
       badge={t('pages.dnsDomainPosture.badge', 'DNS / DNSSEC / BGP / RPKI')}
       badgeColor={ACCENT}

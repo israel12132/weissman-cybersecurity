@@ -1,3 +1,4 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -217,6 +218,7 @@ export default function ThreatEmulation() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [emulationFindings, setEmulationFindings] = useState([])
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
@@ -308,17 +310,12 @@ export default function ThreatEmulation() {
     setRunning(true)
     setError('')
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: 'threat_emulation',
-          client_id: Number(selectedClientId),
-          target,
-        }),
+      const { ok, data: d } = await postScan({
+        engine: 'threat_emulation',
+        client_id: Number(selectedClientId),
+        target,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      if (!ok) {
         showToast('error', d.detail || d.error || t('pages.threatEmulation.emulation_failed'))
         return
       }

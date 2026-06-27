@@ -18,6 +18,17 @@ export function clientPrimaryTargetUrl(client) {
   return first.startsWith('http') ? first.trim() : `https://${first.replace(/^\/+/, '')}`
 }
 
+/** Alias used across command-center hubs. */
+export const firstClientTarget = clientPrimaryTargetUrl
+
+/** Resolve client from id + list (or pass client object directly). */
+export function resolveClient(clientId, clients) {
+  if (!clients) return null
+  if (!Array.isArray(clients)) return clients
+  if (!clientId) return null
+  return clients.find((c) => String(c.id) === String(clientId)) ?? null
+}
+
 /** Engines that do not need a URL target (tenant/global job). */
 export function engineRunsWithoutTarget(engineId) {
   // Kept for backward compat; new code should import TARGETLESS_ENGINE_IDS from enginesRegistry.js

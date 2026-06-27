@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -72,7 +74,9 @@ function StatusBadge({ status, t }) {
   );
 }
 
-function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpdate, showToast, t }) {
+function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpdate, showToast, isFocused, onFocus, t }) {
+  const { postScan } = useCommandCenterScan(clientId)
+  useHubEngineFocus(engine.id, { active: isFocused })
   const [status, setStatus] = useState('idle');
   const [findings, setFindings] = useState([]);
   const [lastRun, setLastRun] = useState(null);
@@ -106,13 +110,8 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
     setStatus('running');
     setFindings([]);
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engine.id, client_id: Number(clientId), target }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
+      const { ok, data: d } = await postScan({ engine: engine.id, client_id: Number(clientId), target });
+      if (!ok) {
         setStatus('error');
         showToast('error', d.detail || d.error || t('pages.otIcsSecurity.scan_failed'));
         return;
@@ -132,7 +131,11 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
 
   return (
     <AgentRequiredGate engineId={engine.id} className="rounded-xl">
-    <div className="rounded-xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3 hover:border-white/20 transition-all">
+    <div
+      className="rounded-xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3 hover:border-white/20 transition-all"
+      onMouseEnter={onFocus}
+      onFocus={onFocus}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -219,6 +222,7 @@ export default function OtIcsSecurity() {
   const [findings, setFindings] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const [focusedEngineId, setFocusedEngineId] = useState(OT_ENGINES[0].id);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -342,6 +346,7 @@ export default function OtIcsSecurity() {
 
   return (
     <PageShell
+      engineId={focusedEngineId}
       title={t('pages.otIcsSecurity.title')}
       subtitle={t('pages.otIcsSecurity.subtitle')}
       badge={t('pages.otIcsSecurity.badge')}
@@ -435,6 +440,8 @@ export default function OtIcsSecurity() {
                 engine={engine}
                 clientId={selectedClientId}
                 clients={clients}
+                isFocused={focusedEngineId === engine.id}
+                onFocus={() => setFocusedEngineId(engine.id)}
                 onScanComplete={fetchOtDevices}
                 onFindingsUpdate={handleFindingsUpdate}
                 showToast={showToast}
@@ -538,11 +545,11 @@ export default function OtIcsSecurity() {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-                        <span>{t('pages.otIcsSecurity.ip_label', { defaultValue: 'IP:' })} {device.ip ?? device.host ?? t('pages.otIcsSecurity.unknown')}</span>
+                        <span>{t('pages.otIcsSecurity.ip_label')} {device.ip ?? device.host ?? t('pages.otIcsSecurity.unknown')}</span>
                         {device.port > 0 && (
                           <>
                             <span>•</span>
-                            <span>{t('pages.otIcsSecurity.port_label', { defaultValue: 'Port:' })} {device.port}</span>
+                            <span>{t('pages.otIcsSecurity.port_label')} {device.port}</span>
                           </>
                         )}
                         <span>•</span>
@@ -552,7 +559,7 @@ export default function OtIcsSecurity() {
                         {device.confidence != null && (
                           <>
                             <span>•</span>
-                            <span>{t('pages.otIcsSecurity.confidence_label', { defaultValue: 'Confidence:' })} {(device.confidence * 100).toFixed(0)}%</span>
+                            <span>{t('pages.otIcsSecurity.confidence_label')} {(device.confidence * 100).toFixed(0)}%</span>
                           </>
                         )}
                       </div>

@@ -98,3 +98,7 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_alert_rules.inc"
 ));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_sovereign_defense.inc"
+));

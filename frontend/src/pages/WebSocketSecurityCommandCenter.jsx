@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -210,15 +213,6 @@ const SEV_STYLE = {
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
 function linesToList(s) { return String(s || '').split(/[\n,]+/).map((x) => x.trim()).filter(Boolean) }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') { try { domains = JSON.parse(domains) } catch { domains = [] } }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  const bare = first.replace(/^https?:\/\//, '').split('/')[0]
-  return bare.startsWith('http') ? bare : `https://${bare}`
-}
 
 function isSummary(f) {
   return f && (f.category === 'posture_summary' || f.summary === true || typeof f.posture_score === 'number' || (f.title || '').includes('WebSocket Posture'))
@@ -344,6 +338,7 @@ export default function WebSocketSecurityCommandCenter() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [showParams, setShowParams] = useState(true)
@@ -457,16 +452,19 @@ export default function WebSocketSecurityCommandCenter() {
     return body
   }, [target, intensity, paths, foreignOrigin, sessionCookie, bearerToken, customMessages, timeoutMs, messageReadMs, concurrency, toggles, clientId, raceConnections, raceSyncUs, racePayload, statefulFuzzRounds, httpEscalationPaths])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast('error', t('pages.websocketSecurity.select_client_first', 'Select a client first')); return }
     if (!target.trim()) { showToast('error', t('pages.websocketSecurity.target_required', 'Target URL required')); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.websocketSecurity.scan_failed', 'Scan failed')); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.websocketSecurity.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.websocketSecurity.queued', 'WebSocket scan queued ({{jobId}})', { jobId }))
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -480,6 +478,7 @@ export default function WebSocketSecurityCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.websocketSecurity.title', 'WebSocket Security Command Center')}
       badge={t('pages.websocketSecurity.badge', 'WEISSMAN · REAL-TIME API')}
       badgeColor={ACCENT}

@@ -1,5 +1,9 @@
 //! Central dispatch for production scan engines — real probes only, no simulated findings.
 //! Catalog-only registry IDs resolve via aliases to implemented engines.
+//!
+//! Alias surface: `alias_engine_runner.rs` (~221 arms). Sovereign/synthesis engines use
+//! dedicated modules (`chronos_engine`, `external_exposure_supreme`, `identity_attack_chain_engine`,
+//! `pipeline_to_runtime_risk_engine`).
 
 use crate::engine_result::EngineResult;
 use crate::stealth_engine::StealthConfig;
@@ -33,6 +37,48 @@ pub struct EngineRunContext {
     pub swarm_broadcast: Option<std::sync::Arc<tokio::sync::broadcast::Sender<String>>>,
     /// Cross-protocol Memory Intelligence Bus — WS artifacts shared with HTTP/API engines in the same job.
     pub intelligence_bus: Option<std::sync::Arc<crate::ws_intelligence_bus::IntelligenceBus>>,
+    /// Prior winning payloads from pentest_memory (tried first by HTTP offensive engines).
+    pub memory_payloads: Vec<String>,
+    /// DB ids for replay hit accounting when a memory payload re-confirms.
+    pub memory_path_ids: Vec<i64>,
+    /// Tenant OAST listener URL from `system_configs` (overrides env per job when set).
+    pub oast_listener_url: Option<String>,
+    /// Tenant OAST DNS domain from `system_configs`.
+    pub oast_domain: Option<String>,
+    /// Tenant OAST API key from `system_configs`.
+    pub oast_api_key: Option<String>,
+}
+
+/// Load tenant OAST settings from `system_configs` (used by scan workers).
+pub async fn load_tenant_oast_configs(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return (None, None, None);
+    };
+    async fn cfg(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tenant_id: i64,
+        key: &str,
+    ) -> Option<String> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+        )
+        .bind(tenant_id)
+        .bind(key)
+        .fetch_optional(&mut **tx)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    }
+    let listener = cfg(&mut tx, tenant_id, "oast_listener_url").await;
+    let domain = cfg(&mut tx, tenant_id, "oast_domain").await;
+    let api_key = cfg(&mut tx, tenant_id, "oast_api_key").await;
+    let _ = tx.commit().await;
+    (listener, domain, api_key)
 }
 
 pub fn production_ids_json() -> Vec<serde_json::Value> {
@@ -42,166 +88,34 @@ pub fn production_ids_json() -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// Engines whose detection must run on an enrolled endpoint agent (not from a remote probe).
-pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
-    // Stealth / EDR (host-only observation)
-    "process_hollowing",
-    "dll_hijacking_engine",
-    "process_inventory",
-    "av_bypass_engine",
-    "log_tampering_engine",
-    "anti_debug_evasion",
-    "rootkit_simulation",
-    "memory_forensics_evasion",
-    "usb_enumeration",
-    "dns_tunneling_c2",
-    "icmp_covert",
-    // Malware / persistence (advanced_malware_engines agent_required_ok)
-    "bootkit_uefi",
-    "persistence_mechanism",
-    "polymorphic_engine",
-    "ransomware_emulation",
-    // Data exfiltration (advanced_data_engines agent_required_ok)
-    "acoustic_exfil",
-    "em_exfil_engine",
-    "optical_exfil",
-    "keyboard_acoustic",
-    "screen_capture_exfil",
-    "clipboard_hijack",
-    "insider_exfil",
-    "storage_covert_channel",
-    // Network / wireless (advanced_network_engines agent_required_ok)
-    "arp_spoofing_engine",
-    "vlan_hopping_attack",
-    "dhcp_attack_engine",
-    "wifi_attack_engine",
-    "bluetooth_attack_engine",
-    "lte_5g_attack",
-    "wpa3_attack_engine",
-    "packet_injection_engine",
-    "network_tap_advanced",
-    "multicast_attack",
-    "nat_traversal_attack",
-    // Mobile (advanced_mobile_engines agent_required_ok)
-    "sim_swap_engine",
-    "bluetooth_mobile_attack",
-    "nfc_relay_attack",
-    // Social engineering (advanced_social_engines agent_required_ok)
-    "deepfake_voice_engine",
-    "pretexting_engine",
-    "insider_threat_engine",
-    "physical_social_eng",
-    // OT / physical bus-level (no remote HTTP/crypto stand-in)
-    // NOTE: modbus_exploit is NOT here — it now runs a real read-only Modbus/TCP assessment
-    // (device identification + register reads) via advanced_ot_engines::run_modbus_exploit_result.
-    // NOTE: plc_logic_bomb is NOT here — it now runs a real read-only PLC fingerprint
-    // (S7comm / EtherNet-IP / Modbus) via advanced_ot_engines::run_plc_logic_bomb_result.
-    "lorawan_attack",
-    "lora_attack",
-    "voltage_glitch_attack",
-    "tpm_firmware_attack",
-    "cold_boot_attack",
-    // NOTE: hospital_hl7_attack is NOT here — it now runs a real read-only HL7/MLLP exposure
-    // probe (benign NACK-eliciting message) via advanced_ot_engines::run_hospital_hl7_attack_result.
-    // Next-Gen Arsenal — host-resident collector (commodity infostealer blast-radius).
-    "infostealer_emulation",
-];
+#[path = "engine_dispatch_agent.rs"]
+mod engine_dispatch_agent;
 
-#[must_use]
-pub fn is_agent_required_engine(id: &str) -> bool {
-    AGENT_REQUIRED_ENGINES.iter().any(|&k| k == id)
-}
-
-/// Dispatch an agent-required engine to the endpoint fleet (or return a status finding).
-pub async fn run_agent_required_engine(
-    engine_id: &str,
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
-    if let (Some(pool), Some(registry), Some(client_id), Some(tenant_id)) = (
-        ctx.app_pool.as_ref(),
-        ctx.agents.as_ref(),
-        ctx.client_id,
-        ctx.tenant_id,
-    ) {
-        return dispatch_to_agent(
-            pool.as_ref(),
-            registry,
-            tenant_id,
-            client_id,
-            engine_id,
-            target,
-            ctx,
-        )
-        .await;
-    }
-    let f = serde_json::json!({
-        "type": engine_id,
-        "category": "agent_required",
-        "title": format!("{} requires an enrolled endpoint agent", engine_id),
-        "severity": "info",
-        "mitre_attack": "",
-        "description": "This detection runs on the host. Enrol the Weissman Endpoint Agent on this client and re-run the engine.",
-        "target": target,
-        "remediation": "Go to Dashboard → Agents → Generate token → run the install command on the affected host.",
-        "agent_required": true,
-    });
-    EngineResult::ok(vec![f], format!("{}: requires endpoint agent", engine_id))
-}
-
-/// Run a production engine (or alias). Returns empty ok for unknown catalog-only IDs.
-///
-/// We prefer the **raw** engine_id when it has a dedicated implementation in
-/// `advanced_*_engines` (per real probe). Only when the raw ID is not in our
-/// `PRODUCTION_ENGINE_IDS` set do we fall back to `resolve_engine_id` for legacy
-/// aliases (so old `client_configs.enabled_engines` rows keep working).
-/// Merge remote-surface findings with agent dispatch / guidance for hybrid engines.
-pub(crate) fn merge_agent_hybrid(
-    remote: EngineResult,
-    agent: EngineResult,
-    engine_id: &str,
-) -> EngineResult {
-    let mut findings = remote.findings;
-    for f in agent.findings {
-        let dup = findings.iter().any(|existing| {
-            existing.get("title").and_then(|v| v.as_str())
-                == f.get("title").and_then(|v| v.as_str())
-        });
-        if !dup {
-            findings.push(f);
-        }
-    }
-    if findings.is_empty() {
-        return EngineResult {
-            status: agent.status,
-            findings: Vec::new(),
-            message: agent.message,
-            success: agent.success,
-            summary: agent.summary,
-            graph_nodes: agent.graph_nodes,
-            graph_edges: agent.graph_edges,
-        };
-    }
-    let has_agent_guidance = findings
-        .iter()
-        .any(|f| f.get("agent_required").and_then(|v| v.as_bool()).unwrap_or(false));
-    let msg = if has_agent_guidance {
-        format!(
-            "{}: {} finding(s) — remote surface probed; endpoint agent recommended for host-resident validation",
-            engine_id,
-            findings.len()
-        )
-    } else {
-        format!(
-            "{}: {} finding(s) (remote surface + agent)",
-            engine_id,
-            findings.len()
-        )
-    };
-    EngineResult::ok(findings, msg)
-}
+pub use engine_dispatch_agent::{
+    is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
+};
+pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
+    let _oast_guard = {
+        let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
+        let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();
+        if !listener.is_empty() || !domain.is_empty() {
+            Some(crate::fuzz_oob::push_tenant_oast(crate::fuzz_oob::TenantOastConfig {
+                listener_url: listener.to_string(),
+                domain: domain.to_string(),
+                api_key: ctx
+                    .oast_api_key
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string(),
+            }))
+        } else {
+            None
+        }
+    };
+
     let raw = engine_id.trim();
     if target.trim().is_empty() && is_production_engine_id(raw) {
         return EngineResult::error("target required");
@@ -231,7 +145,22 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     }
 
     let canonical = dispatch_engine_id(raw);
-    let mut result = dispatch_engine_match(canonical, target, ctx).await;
+    let mut ctx = ctx.clone();
+    if crate::pentest_memory::is_http_offensive_engine(canonical) {
+        if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
+            let winners = crate::pentest_memory::load_memory_for_engine(
+                pool.as_ref(),
+                tid,
+                canonical,
+                target,
+                12,
+            )
+            .await;
+            ctx.memory_path_ids = winners.iter().map(|w| w.id).collect();
+            ctx.memory_payloads = winners.into_iter().map(|w| w.payload).collect();
+        }
+    }
+    let mut result = dispatch_engine_match(canonical, target, &ctx).await;
     if raw != canonical || !result.findings.is_empty() {
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -334,11 +263,12 @@ async fn dispatch_engine_match(
             crate::liminal_boundary_engine::run_liminal_boundary_result_ctx(target, ctx).await
         }
         "prototype_pollution" => {
-            crate::prototype_pollution_engine::run_prototype_pollution_result(target).await
+            crate::prototype_pollution_engine::run_prototype_pollution_result_ctx(target, ctx)
+                .await
         }
         "ssrf_advanced" => crate::ssrf_advanced_engine::run_ssrf_advanced_result_ctx(target, ctx).await,
-        "xxe" => crate::xxe_engine::run_xxe_result(target).await,
-        "ssti" => crate::ssti_engine::run_ssti_result(target).await,
+        "xxe" => crate::xxe_engine::run_xxe_result_ctx(target, ctx).await,
+        "ssti" => crate::ssti_engine::run_ssti_result_ctx(target, ctx).await,
         "file_upload" => crate::file_upload_engine::run_file_upload_result_ctx(target, ctx).await,
         "websocket_attack" => crate::websocket_attack_engine::run_websocket_attack_result_ctx(target, ctx).await,
         "cache_poisoning" => crate::cache_poisoning_engine::run_cache_poisoning_result_ctx(target, ctx).await,
@@ -681,6 +611,24 @@ async fn dispatch_engine_match(
         "external_exposure_supreme" => {
             crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
         }
+        "identity_attack_chain" => {
+            crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
+        }
+        "pipeline_to_runtime_risk" => {
+            crate::pipeline_to_runtime_risk_engine::run_pipeline_to_runtime_risk_result(target, ctx)
+                .await
+        }
+        "risk_superposition_collapse" => {
+            crate::risk_superposition_collapse_engine::run_risk_superposition_collapse_result(
+                target, ctx,
+            )
+            .await
+        }
+        "chronos" => crate::chronos_engine::run_chronos_result(target, ctx).await,
+        "liquid_matrix" => crate::liquid_matrix_engine::run_liquid_matrix_result(target, ctx).await,
+        "cognitive_starvation" => {
+            crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
+        }
         "adversarial_simulation" => crate::advanced_recon_engines::run_adversarial_simulation_result(target).await,
         "dark_web_monitor" => crate::advanced_recon_engines::run_dark_web_monitor_result(target).await,
         "passive_dns_forensics" => crate::advanced_recon_engines::run_passive_dns_forensics_result(target).await,
@@ -878,67 +826,3 @@ mod tests {
     }
 }
 
-async fn dispatch_to_agent(
-    pool: &sqlx::PgPool,
-    registry: &std::sync::Arc<crate::endpoint_agents::AgentRegistry>,
-    tenant_id: i64,
-    client_id: i64,
-    engine: &str,
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
-    let mut params = if ctx.job_params.is_null() {
-        serde_json::json!({})
-    } else {
-        ctx.job_params.clone()
-    };
-    if let Some(obj) = params.as_object_mut() {
-        obj.entry("priority")
-            .or_insert_with(|| serde_json::json!("high"));
-        if let Some(job_id) = &ctx.job_id {
-            obj.entry("scan_job_id")
-                .or_insert_with(|| serde_json::json!(job_id));
-        }
-    }
-    let (task, live_dispatched) = match crate::endpoint_agents::enqueue_and_dispatch_fleet(
-        pool,
-        registry,
-        tenant_id,
-        client_id,
-        engine,
-        Some(target),
-        &params,
-    )
-    .await
-    {
-        Ok(pair) => pair,
-        Err(e) => {
-            return EngineResult::ok(
-                vec![],
-                format!("agent task enqueue failed for {}: {}", engine, e),
-            );
-        }
-    };
-    let f = serde_json::json!({
-        "type": engine,
-        "category": "agent_dispatched",
-        "title": if live_dispatched {
-            format!("{}: task dispatched to online agent", engine)
-        } else {
-            format!("{}: task queued for next online agent", engine)
-        },
-        "severity": "info",
-        "mitre_attack": "",
-        "description": format!(
-            "Detection task {} routed to {} agent for client {}. Findings will stream to the dashboard as the agent reports them.",
-            task,
-            if live_dispatched { "live" } else { "next" },
-            client_id
-        ),
-        "target": target,
-        "task_id": task.to_string(),
-        "live_dispatched": live_dispatched,
-        "remediation": "View streaming findings under Dashboard → Findings, filtered by source = agent.",
-    });
-    EngineResult::ok(vec![f], format!("{}: task {} dispatched", engine, task))
-}

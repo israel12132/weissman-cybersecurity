@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -39,7 +40,7 @@ const inputCls =
   'w-full px-4 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40'
 const textareaCls = `${inputCls} font-mono text-sm`
 
-export default function ClientOnboardingWizard({ onSubmit, submitting, error: externalError }) {
+export default function ClientOnboardingWizard({ onSubmit, submitting, error: externalError, filterQuery = '' }) {
   const { t, i18n } = useTranslation()
   const isHe = i18n.language?.startsWith('he')
   const { catalog, tenantStatus, loading, error: loadError } = useEngineRequirements()
@@ -190,7 +191,11 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {STEPS.map((s, i) => (
+        {STEPS.map((s, i) => {
+          const stepLabel = t(`pages.clientOnboarding.step_${s}`)
+          const q = filterQuery.trim().toLowerCase()
+          if (q && !stepLabel.toLowerCase().includes(q) && !s.includes(q)) return null
+          return (
           <button
             key={s}
             type="button"
@@ -201,9 +206,10 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 : 'border-white/10 text-white/40 hover:text-white/70'
             }`}
           >
-            {i + 1}. {t(`pages.clientOnboarding.step_${s}`)}
+            {i + 1}. {stepLabel}
           </button>
-        ))}
+          )
+        })}
       </div>
 
       <div className="rounded-xl border border-white/10 bg-black/40 p-6 space-y-5">
@@ -319,7 +325,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                       <input className={inputCls} value={form.aws_cross_account_role_arn} onChange={(e) => patch({ aws_cross_account_role_arn: e.target.value })} placeholder="arn:aws:iam::123456789012:role/WeissmanAudit" />
                     </Field>
                     <Field label="AWS External ID" required>
-                      <input className={inputCls} value={form.aws_external_id} onChange={(e) => patch({ aws_external_id: e.target.value })} />
+                      <input type="password" autoComplete="off" className={inputCls} value={form.aws_external_id} onChange={(e) => patch({ aws_external_id: e.target.value })} />
                     </Field>
                   </>
                 )}
@@ -395,6 +401,9 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 <StatusRow ok={tenantStatus.llm_configured} label={label(catalog?.requirements?.tenant_llm)} />
                 <StatusRow ok={tenantStatus.oast_configured} label={label(catalog?.requirements?.tenant_oast)} />
                 <StatusRow ok={tenantStatus.ai_heavy_entitled !== false} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
+                <Link to="/system-core" className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">
+                  {t('pages.clientOnboarding.configure_tenant', { defaultValue: 'Configure tenant prerequisites → System Core' })}
+                </Link>
               </div>
             )}
           </>

@@ -318,6 +318,79 @@ fn trigger_emergency_global_scan(
     });
 }
 
+/// One threat-intel sync cycle: defensive feed checks; EPSS/KEV enrichment unaffected.
+pub async fn run_one_cycle(
+    app_pool: Arc<PgPool>,
+    intel_pool: Arc<PgPool>,
+    auth_pool: Arc<PgPool>,
+    telemetry: Arc<broadcast::Sender<String>>,
+    llm_base: &str,
+    llm_model: &str,
+) {
+    log_intel_integration_status();
+    run_ingest_cycle(
+        app_pool,
+        intel_pool,
+        auth_pool,
+        telemetry,
+        llm_base,
+        llm_model,
+    )
+    .await;
+}
+
+fn log_intel_integration_status() {
+    let gh = std::env::var("GITHUB_TOKEN")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if gh.is_none() {
+        tracing::warn!(
+            target: "threat_ingest",
+            integration = "github_advisories",
+            fallback = "skip_github_feed",
+            "GITHUB_TOKEN missing — GitHub advisory ingestion disabled; NVD/OSV/EPSS/KEV continue"
+        );
+    }
+    let otx = std::env::var("OTX_API_KEY")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if otx.is_none() {
+        tracing::warn!(
+            target: "threat_ingest",
+            integration = "otx",
+            fallback = "public_otx_or_skip",
+            "OTX_API_KEY missing — AlienVault OTX pulse feed disabled; archival uses public domain URL list only"
+        );
+    }
+    let hibp = std::env::var("HIBP_API_KEY")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if hibp.is_none() {
+        tracing::warn!(
+            target: "threat_ingest",
+            integration = "hibp",
+            fallback = "skip_hibp_breach_lookup",
+            "HIBP_API_KEY missing — Have I Been Pwned domain checks disabled"
+        );
+    }
+    let intelx = std::env::var("INTELX_API_KEY")
+        .or_else(|_| std::env::var("WEISSMAN_INTELX_KEY"))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if intelx.is_none() {
+        tracing::warn!(
+            target: "threat_ingest",
+            integration = "intelx",
+            fallback = "skip_intelx_darkweb",
+            "INTELX_API_KEY missing — IntelX dark-web lookup disabled"
+        );
+    }
+}
+
 /// One ingestion pass: fetch feeds, LLM signatures, SBOM match, optional emergency scan.
 pub async fn run_ingest_cycle(
     app_pool: Arc<PgPool>,
@@ -331,9 +404,11 @@ pub async fn run_ingest_cycle(
         Ok(v) => v,
         Err(e) => {
             if matches!(e, GitHubAdvisoryFetchError::ApiTokenMissing) {
-                tracing::error!(
+                tracing::warn!(
                     target: "threat_ingest",
+                    integration = "github_advisories",
                     error = %e,
+                    fallback = "continue_nvd_osv_epss_kev",
                     "GitHub advisory feed skipped — set GITHUB_TOKEN for authenticated GitHub API"
                 );
             } else {
@@ -463,7 +538,7 @@ pub fn spawn_ingest_worker(
                 .ok()
                 .filter(|s| !s.trim().is_empty())
                 .unwrap_or_default();
-            run_ingest_cycle(
+            run_one_cycle(
                 app_pool.clone(),
                 intel_pool.clone(),
                 auth_pool.clone(),

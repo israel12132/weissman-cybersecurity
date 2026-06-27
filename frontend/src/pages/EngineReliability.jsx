@@ -154,7 +154,7 @@ export default function EngineReliability() {
 
   return (
     <PageShell
-      title={t('pages.engineReliability.title', { defaultValue: 'Engine Reliability' })}
+      title={t('pages.engineReliability.title')}
       icon={<Activity />}
       actions={(
         <ShellScanActions
@@ -168,10 +168,7 @@ export default function EngineReliability() {
       <div className="space-y-6">
         <div className="space-y-2 max-w-2xl">
           <p className="text-sm text-gray-400">
-            {t('pages.engineReliability.subtitle', {
-              defaultValue:
-                'Fleet health for every engine: reality classification plus live run telemetry — attempts, self-heal recoveries, failures, and last-run latency. Auto-refreshing.',
-            })}
+            {t('pages.engineReliability.subtitle', { })}
           </p>
           <EngineRealitySummary compact />
         </div>
@@ -191,44 +188,44 @@ export default function EngineReliability() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <StatCard
-                label={t('pages.engineReliability.total_engines', { defaultValue: 'Engine IDs' })}
+                label={t('pages.engineReliability.total_engines')}
                 value={total}
                 icon={<Cpu className="w-4 h-4 text-cyan-400" />}
               />
               <StatCard
-                label={t('pages.engineReliability.remote_capable', { defaultValue: 'Remote detect' })}
+                label={t('pages.engineReliability.remote_capable')}
                 value={remoteDetectionCount}
                 tone="#22d3ee"
                 icon={<Globe className="w-4 h-4 text-cyan-400" />}
                 hint="Engines that can detect from a remote scan without an agent"
               />
               <StatCard
-                label={t('pages.engineReliability.real_probes', { defaultValue: 'Live probes' })}
+                label={t('pages.engineReliability.real_probes')}
                 value={summary.real_probe ?? 0}
                 tone="#34d399"
               />
               <StatCard
-                label={t('pages.engineReliability.aliases', { defaultValue: 'Aliases' })}
+                label={t('pages.engineReliability.aliases')}
                 value={summary.alias ?? 0}
                 tone="#9ca3af"
               />
               <StatCard
-                label={t('pages.engineReliability.agent_required', { defaultValue: 'Agent-required' })}
+                label={t('pages.engineReliability.agent_required')}
                 value={summary.agent_required ?? 0}
                 tone="#f59e0b"
                 icon={<WifiOff className="w-4 h-4 text-amber-400" />}
               />
               <StatCard
-                label={t('pages.engineReliability.engines_observed', { defaultValue: 'Engines with runs' })}
+                label={t('pages.engineReliability.engines_observed')}
                 value={telem?.engines_observed ?? 0}
                 icon={<Activity className="w-4 h-4 text-purple-400" />}
               />
               <StatCard
-                label={t('pages.engineReliability.total_runs', { defaultValue: 'Runs observed' })}
+                label={t('pages.engineReliability.total_runs')}
                 value={telem?.total_runs ?? 0}
               />
               <StatCard
-                label={t('pages.engineReliability.recovery_rate', { defaultValue: 'Self-heal rate' })}
+                label={t('pages.engineReliability.recovery_rate')}
                 value={`${recoveryRate}%`}
                 tone="#34d399"
                 icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
@@ -238,10 +235,7 @@ export default function EngineReliability() {
             {(telem?.failed_runs ?? 0) > 0 && (
               <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                 <AlertTriangle className="w-4 h-4" />
-                {t('pages.engineReliability.failed_note', {
-                  defaultValue:
-                    '{{failed}} run(s) exhausted all strategies (isolated — they never stopped other engines).',
-                  failed: telem.failed_runs,
+                {t('pages.engineReliability.failed_note', { failed: telem.failed_runs,
                 })}
               </div>
             )}
@@ -249,7 +243,7 @@ export default function EngineReliability() {
             {Object.keys(legend).length > 0 && (
               <details className="bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-xs text-gray-400">
                 <summary className="cursor-pointer font-mono uppercase tracking-wider text-gray-500 select-none">
-                  {t('pages.engineReliability.legend', { defaultValue: 'Reality legend (from API)' })}
+                  {t('pages.engineReliability.legend')}
                 </summary>
                 <ul className="mt-3 space-y-1.5 font-mono">
                   {Object.entries(legend).map(([k, desc]) => (
@@ -276,7 +270,7 @@ export default function EngineReliability() {
                     }`}
                   >
                     {k === 'all'
-                      ? t('pages.engineReliability.all', { defaultValue: 'All' })
+                      ? t('pages.engineReliability.all')
                       : (REALITY_KIND_META[k]?.label ?? k)}
                   </button>
                 ))}
@@ -288,7 +282,7 @@ export default function EngineReliability() {
                   onChange={(e) => setOnlyRuns(e.target.checked)}
                   className="accent-cyan-500"
                 />
-                {t('pages.engineReliability.only_runs', { defaultValue: 'Only engines that have run' })}
+                {t('pages.engineReliability.only_runs')}
               </label>
               <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                 <input
@@ -297,10 +291,10 @@ export default function EngineReliability() {
                   onChange={(e) => setOnlyRemote(e.target.checked)}
                   className="accent-cyan-500"
                 />
-                {t('pages.engineReliability.only_remote', { defaultValue: 'Remote detection only' })}
+                {t('pages.engineReliability.only_remote')}
               </label>
               <span className="text-[11px] font-mono text-gray-500 ml-auto">
-                {rows.length} {t('pages.engineReliability.shown', { defaultValue: 'shown' })}
+                {rows.length} {t('pages.engineReliability.shown')}
                 {telemLoading && !telem ? ' · telemetry…' : ''}
               </span>
             </div>
@@ -315,9 +309,9 @@ export default function EngineReliability() {
               severityFilter={severityFilter}
               onSeverityChange={setSeverityFilter}
               accent="#22d3ee"
-              title={t('pages.engineReliability.col_engine', { defaultValue: 'Engine fleet' })}
-              emptyTitle={t('pages.engineReliability.no_match', { defaultValue: 'No engines match filters' })}
-              emptyBody={t('pages.engineReliability.search_ph', { defaultValue: 'Filter engines…' })}
+              title={t('pages.engineReliability.col_engine')}
+              emptyTitle={t('pages.engineReliability.no_match')}
+              emptyBody={t('pages.engineReliability.search_ph')}
               renderFinding={(f) => {
                 const r = f._row
                 if (!r) return null
@@ -374,7 +368,7 @@ export default function EngineReliability() {
                             <span className="text-[9px] font-mono text-gray-600">{formatTs(h.updated_ts)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-600">{t('pages.engineReliability.never_run', { defaultValue: 'never run' })}</span>
+                          <span className="text-xs text-gray-600">{t('pages.engineReliability.never_run')}</span>
                         )}
                       </div>
                     </div>

@@ -1,3 +1,6 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams, useHubEngineFocus } from '../hooks/useLaunchEngineScan'
+import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -103,16 +106,6 @@ const splitCsv = (s) => String(s || '').split(/[\n,\s;]+/).map((x) => x.trim()).
 const numOr = (v, d) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : d
-}
-
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  return first || ''
 }
 
 function buildBgpBody(params, clientId, target) {
@@ -363,8 +356,11 @@ function StatusBadge({ status, t }) {
 
 // ─── Flagship: BGP/DNS Hijack-Resistance ─────────────────────────────────────
 
-function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady }) {
+function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFocused, onFocus }) {
+  const { postScan } = useCommandCenterScan(clientId)
+  useHubEngineFocus(FLAGSHIP_ID, { active: isFocused })
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(FLAGSHIP_ID, params)
   const [findings, setFindings] = useState([])
   const [scanning, setScanning] = useState(false)
   const [pendingJobId, setPendingJobId] = useState(null)
@@ -436,12 +432,8 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady }) {
     setScanning(true)
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBgpBody(params, clientId, target)),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setScanning(false); showToast('error', d.detail || t('pages.networkIntelligence.scan_failed')); return }
+      const { ok, data: d, status } = await postScan(buildBgpBody(params, clientId, target))
+      if (!ok) { setScanning(false); showToast('error', d.detail || t('pages.networkIntelligence.scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.networkIntelligence.queued', { label: 'BGP/DNS', jobId }))
       if (jobId) setPendingJobId(jobId); else setScanning(false)
@@ -449,7 +441,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady }) {
       setScanning(false)
       showToast('error', e?.message ?? t('pages.networkIntelligence.scan_failed'))
     }
-  }, [clientId, target, params, showToast, t, tt])
+  }, [clientId, target, params, postScan, showToast, t, tt])
 
   const score = summary ? Number(summary.hijack_resistance_score ?? 0) : null
   const ev = summary?.evidence ?? {}
@@ -457,6 +449,8 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      onMouseEnter={onFocus}
+      onFocus={onFocus}
       className="rounded-2xl bg-gradient-to-br from-[#f97316]/10 to-black/40 backdrop-blur-md border border-[#f97316]/20 p-6">
       <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
         <div>
@@ -623,7 +617,9 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady }) {
 
 // ─── Secondary network engine cards ──────────────────────────────────────────
 
-function NetworkEngineCard({ engine, clientId, target, showToast, t }) {
+function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onFocus, t }) {
+  const { postScan } = useCommandCenterScan(clientId)
+  useHubEngineFocus(engine.id, { active: isFocused })
   const [status, setStatus] = useState('idle')
   const [findings, setFindings] = useState([])
   const [lastRun, setLastRun] = useState(null)
@@ -644,12 +640,8 @@ function NetworkEngineCard({ engine, clientId, target, showToast, t }) {
     setStatus('running')
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engine.id, client_id: Number(clientId), ...(target.trim() ? { target: target.trim() } : {}) }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.networkIntelligence.scan_failed')); return }
+      const { ok, data: d } = await postScan({ engine: engine.id, client_id: Number(clientId), target })
+      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.networkIntelligence.scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.networkIntelligence.queued', { label: engine.label, jobId }))
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -657,10 +649,12 @@ function NetworkEngineCard({ engine, clientId, target, showToast, t }) {
       setStatus('error')
       showToast('error', e?.message ?? t('pages.networkIntelligence.scan_failed'))
     }
-  }, [clientId, engine, target, showToast, t])
+  }, [clientId, engine, target, postScan, showToast, t])
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      onMouseEnter={onFocus}
+      onFocus={onFocus}
       className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4 hover:border-white/20 transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -699,6 +693,7 @@ export default function NetworkIntelligence() {
   const tt = useCallback((key, def) => t(`pages.networkIntelligence.${key}`, { defaultValue: def }), [t])
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const [focusedEngineId, setFocusedEngineId] = useState(FLAGSHIP_ID)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [toast, setToast] = useState(null)
@@ -711,11 +706,7 @@ export default function NetworkIntelligence() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (targetTouched) return
-    const client = clients.find((c) => String(c.id) === String(selectedClientId))
-    setTarget(firstClientTarget(client))
-  }, [selectedClientId, clients, targetTouched])
+  useClientTargetPrefill(selectedClientId, clients, setTarget, { respectTouched: true, targetTouched })
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
@@ -725,6 +716,8 @@ export default function NetworkIntelligence() {
 
   return (
     <PageShell
+      engineId={focusedEngineId}
+      hideHubParams
       title={t('pages.networkIntelligence.title')}
       badge={t('pages.networkIntelligence.badge')}
       badgeColor="#f97316"
@@ -768,12 +761,30 @@ export default function NetworkIntelligence() {
         </div>
       )}
 
-      <BgpDnsFlagship clientId={selectedClientId} target={target} showToast={showToast} t={t} tt={tt} onShellReady={setShellHandlers} />
+      <BgpDnsFlagship
+        clientId={selectedClientId}
+        target={target}
+        showToast={showToast}
+        t={t}
+        tt={tt}
+        isFocused={focusedEngineId === FLAGSHIP_ID}
+        onFocus={() => setFocusedEngineId(FLAGSHIP_ID)}
+        onShellReady={setShellHandlers}
+      />
 
       <h3 className="text-[11px] font-mono text-white/40 uppercase tracking-widest mt-8 mb-4">{tt('other_engines', 'Other Network Engines')}</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {OTHER_ENGINES.map((engine) => (
-          <NetworkEngineCard key={engine.id} engine={engine} clientId={selectedClientId} target={target} showToast={showToast} t={t} />
+          <NetworkEngineCard
+            key={engine.id}
+            engine={engine}
+            clientId={selectedClientId}
+            target={target}
+            isFocused={focusedEngineId === engine.id}
+            onFocus={() => setFocusedEngineId(engine.id)}
+            showToast={showToast}
+            t={t}
+          />
         ))}
       </div>
     </PageShell>

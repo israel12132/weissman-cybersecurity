@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -97,16 +100,6 @@ const TOGGLES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.replace(/^https?:\/\//, '')
-}
 
 function severityColor(s) {
   return SEVERITY_META[(s || 'info').toLowerCase()]?.color ?? '#6b7280'
@@ -299,8 +292,10 @@ function FindingCard({ f }) {
 export default function AttackSurfaceManagement() {
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE, params)
   const [showConfig, setShowConfig] = useState(true)
   const [status, setStatus] = useState('idle')
   const [jobId, setJobId] = useState(null)
@@ -390,15 +385,10 @@ export default function AttackSurfaceManagement() {
         if (v === '' || v === null || v === undefined) continue
         body[k] = v
       }
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      const { ok, data: d, status } = await postScan(body)
+      if (!ok) {
         setStatus('error')
-        showToast('error', d.detail || d.error || `Scan failed (${r.status})`)
+        showToast('error', d.detail || d.error || `Scan failed (${status})`)
         return
       }
       const jid = d.job_id ?? ''
@@ -449,6 +439,7 @@ export default function AttackSurfaceManagement() {
 
   return (
     <PageShell
+      hideHubParams
       title="Attack Surface Management"
       badge="EASM"
       badgeColor={ACCENT}

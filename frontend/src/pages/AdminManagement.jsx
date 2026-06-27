@@ -124,10 +124,10 @@ export default function AdminManagement() {
 
   const handleDeactivateUser = async (userId, email) => {
     const ok = await confirmDialog({
-      title: t('pages.adminManagement.deactivate_title', { defaultValue: 'Deactivate user?' }),
-      message: t('pages.adminManagement.deactivate_confirm', { email, defaultValue: `Deactivate user ${email}?` }),
-      confirmLabel: t('pages.adminManagement.deactivate_action', { defaultValue: 'Deactivate' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      title: t('pages.adminManagement.deactivate_title'),
+      message: t('pages.adminManagement.deactivate_confirm', { email }),
+      confirmLabel: t('pages.adminManagement.deactivate_action'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     })
     if (!ok) return
@@ -330,7 +330,7 @@ export default function AdminManagement() {
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              searchPlaceholder={t('pages.adminManagement.search_placeholder', { defaultValue: 'Search users…' })}
+              searchPlaceholder={t('pages.adminManagement.search_placeholder')}
               lastUpdated={lastUpdated}
               resultCount={visibleUsers.length}
               totalCount={users.length}

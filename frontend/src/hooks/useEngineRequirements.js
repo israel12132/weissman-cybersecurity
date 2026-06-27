@@ -68,7 +68,10 @@ export function computeLocalReadiness(catalog, tenantStatus, form, selectedModul
     iac_repos: repos.length > 0,
     endpoint_agent: platforms.length > 0,
     industrial_ot: form.industrial_ot_enabled && ips.length > 0,
-    llm_secops_endpoints: true,
+    llm_secops_endpoints: (() => {
+      const urls = form.llm_secops_urls.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
+      return urls.length > 0
+    })(),
     tenant_llm: tenantStatus?.llm_configured,
     tenant_oast: tenantStatus?.oast_configured,
     tenant_ai_entitlement: tenantStatus?.ai_heavy_entitled !== false,

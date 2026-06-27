@@ -118,7 +118,22 @@ pub fn eval_requirement(req_id: &str, client: &Value, tenant: &Value) -> Require
                 .unwrap_or(false);
             ot && eval_requirement("scope_ips", client, tenant).satisfied
         }
-        "llm_secops_endpoints" => true,
+        "llm_secops_endpoints" => {
+            let endpoints = get_path(client, "onboarding.llm_secops.endpoints")
+                .or_else(|| get_path(client, "client_configs.onboarding.llm_secops.endpoints"));
+            endpoints
+                .and_then(Value::as_array)
+                .map(|a| {
+                    !a.is_empty()
+                        && a.iter().any(|ep| {
+                            ep.get("url")
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| !s.trim().is_empty())
+                                || ep.as_str().is_some_and(|s| !s.trim().is_empty())
+                        })
+                })
+                .unwrap_or(false)
+        }
         "tenant_llm" => tenant
             .get("llm_configured")
             .and_then(Value::as_bool)
@@ -223,5 +238,18 @@ mod tests {
         let client = json!({"domains": "[\"example.com\"]", "contact_email": "a@b.com"});
         let tenant = json!({});
         assert!(eval_requirement("scope_domains", &client, &tenant).satisfied);
+    }
+
+    #[test]
+    fn llm_secops_requires_endpoints_when_module_selected() {
+        let client = json!({
+            "onboarding": {
+                "llm_secops": { "endpoints": [{ "url": "https://api.example.com/v1/chat" }] }
+            }
+        });
+        let tenant = json!({});
+        assert!(eval_requirement("llm_secops_endpoints", &client, &tenant).satisfied);
+        let empty = json!({"onboarding": { "llm_secops": { "endpoints": [] } }});
+        assert!(!eval_requirement("llm_secops_endpoints", &empty, &tenant).satisfied);
     }
 }

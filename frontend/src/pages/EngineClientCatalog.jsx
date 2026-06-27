@@ -7,6 +7,7 @@
  *
  * Route: /engine-catalog
  */
+import { firstClientTarget } from '../lib/clientTarget'
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -19,6 +20,9 @@ import { useJobPoll, normalizeJobStatus } from '../lib/useJobPoll'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { useRegisterHubClient } from '../context/EngineHubContext'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────
 // Each profile declares which engine *groups* are relevant for that client type.
@@ -131,16 +135,6 @@ function getGroupDef(groupId) {
   return ENGINE_GROUP_DEFS.find((g) => g.id === groupId)
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
-}
 
 /** All engines belonging to a client profile (deduplicated, stable order) */
 function profileEngines(profile) {
@@ -322,8 +316,29 @@ export default function EngineClientCatalog() {
   const [pendingEngineIds, setPendingEngineIds] = useState([])
   const [toast, setToast] = useState(null)
   const [capsRefreshing, setCapsRefreshing] = useState(false)
+  const [clientReadiness, setClientReadiness] = useState(null)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
 
-  // Load clients from API
+  useRegisterHubClient(selectedClientId)
+  const launchScan = useLaunchEngineScan(selectedClientId)
+
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientReadiness(null)
+      setClientIntegrations(null)
+      return
+    }
+    let cancelled = false
+    apiFetch(`/api/clients/${selectedClientId}/readiness`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setClientReadiness(d?.readiness || null) })
+      .catch(() => { if (!cancelled) setClientReadiness(null) })
+    apiFetch(`/api/clients/${selectedClientId}/integrations`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setClientIntegrations(normalizeIntegrations(d)) })
+      .catch(() => { if (!cancelled) setClientIntegrations(null) })
+    return () => { cancelled = true }
+  }, [selectedClientId])
   useEffect(() => {
     apiFetch('/api/clients')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -484,34 +499,38 @@ export default function EngineClientCatalog() {
   const runEngine = useCallback(async (engineId) => {
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
-      const body = { engine: engineId, client_id: Number(selectedClientId) }
       const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
       const clientTarget = firstClientTarget(selectedClient)
-      if (clientTarget) body.target = clientTarget
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { ok, data, status } = await launchScan({
+        engineId,
+        clientId: selectedClientId,
+        target: clientTarget,
+        integrations: clientIntegrations,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      if (!ok) {
         setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
-        return { ok: false, msg: d.detail || d.error || r.statusText }
+        return { ok: false, msg: data.detail || data.error || `HTTP ${status}` }
       }
       setEngineStates((prev) => ({
         ...prev,
         [engineId]: { ...prev[engineId], status: 'running', lastRun: 'just now' },
       }))
-      return { ok: true, jobId: d.job_id }
+      return { ok: true, jobId: data.job_id }
     } catch (e) {
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
       return { ok: false, msg: e?.message ?? 'Network error' }
     }
-  }, [selectedClientId, clients])
+  }, [selectedClientId, clients, clientIntegrations])
 
   const handleRunAll = useCallback(async () => {
     if (!selectedClientId) {
       showToast('error', 'Select a client first')
+      return
+    }
+    if (clientReadiness && !clientReadiness.ready) {
+      showToast('error', t('pages.engineClientCatalog.readiness_blocked', {
+        pct: clientReadiness.percent,
+      }))
       return
     }
     const runnable = Array.from(selectedEngines).filter(isProduction)
@@ -551,7 +570,7 @@ export default function EngineClientCatalog() {
       showToast('error', e?.message ?? 'Network error')
       setRunAllLoading(false)
     }
-  }, [selectedClientId, selectedEngines, showToast, isProduction, t])
+  }, [selectedClientId, selectedEngines, showToast, isProduction, t, clientReadiness])
 
   // Group engines by their group for display
   const groupedEngines = useMemo(() => {
@@ -620,6 +639,11 @@ export default function EngineClientCatalog() {
             <span className="text-[10px] font-mono text-amber-400/70">
               ⚠ {t('engines.catalog_select_client_warn')}
             </span>
+          )}
+          {selectedClientId && clientReadiness && !clientReadiness.ready && (
+            <Link to={`/clients/${selectedClientId}/integrations`} className="text-[10px] font-mono text-amber-300 hover:text-amber-200">
+              ⚠ {t('pages.engineClientCatalog.readiness_pct', { pct: clientReadiness.percent })}
+            </Link>
           )}
         </div>
 

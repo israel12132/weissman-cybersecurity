@@ -76,6 +76,8 @@ export const ROUTE_EVIDENCE = {
   '/supply-chain': 'pages.supplyChainHub.evidence_notice',
   '/pqc-radar': 'pages.pqcRadar.evidence_notice',
   '/nexus-swarm': 'pages.nexusSovereignSwarm.evidence_notice',
+  '/superposition-collapse': 'pages.superpositionCollapse.evidence_notice',
+  '/sovereign-defense-matrix': 'pages.sovereignDefense.evidence_notice',
   '/digital-twin': 'pages.digitalTwinSimulator.evidence_notice',
   '/ast-fuzzing': 'pages.astFuzzingStudio.evidence_notice',
   '/feedback-loop': 'pages.feedbackLoopVerification.evidence_notice',

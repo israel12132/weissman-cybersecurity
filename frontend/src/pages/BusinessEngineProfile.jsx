@@ -1,3 +1,4 @@
+import { firstClientTarget } from '../lib/clientTarget'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +12,11 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import { buildScanPayload, normalizeIntegrations } from '../lib/engineClientPrefill'
+import { useEngineScanParams } from '../hooks/useEngineScanParams'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
 
 const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
@@ -34,16 +40,6 @@ for (const row of strategicEnginesNeedingDedicatedPage()) {
   }
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
-}
 
 function JsonView({ value }) {
   return (
@@ -55,14 +51,14 @@ function JsonView({ value }) {
 
 function engineTitle(engineId, reg, t) {
   const key = `pages.businessEngineProfile.engines.${engineId}.title`
-  const translated = t(key, { defaultValue: '' })
+  const translated = t(key)
   if (translated && translated !== key) return translated
   return `${reg?.label || engineId} Page`
 }
 
 function engineMission(engineId, rowReason, t) {
   const key = `pages.businessEngineProfile.engines.${engineId}.mission`
-  const translated = t(key, { defaultValue: '' })
+  const translated = t(key)
   if (translated && translated !== key) return translated
   return rowReason || ''
 }
@@ -82,6 +78,10 @@ export default function BusinessEngineProfile() {
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
+  const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
+  useSyncHubScanParams(engineId, extraParams)
+  const { postScan } = useCommandCenterScan(clientId)
 
   const title = engineTitle(engineId, reg, t)
   const mission = engineMission(engineId, strategicRow?.reason, t)
@@ -117,6 +117,21 @@ export default function BusinessEngineProfile() {
   }, [])
 
   useEffect(() => {
+    if (!clientId) {
+      setClientIntegrations(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
+      const d = r.ok ? await r.json() : null
+      if (cancelled) return
+      setClientIntegrations(normalizeIntegrations(d))
+    })()
+    return () => { cancelled = true }
+  }, [clientId])
+
+  useEffect(() => {
     if (!activeJobId) return undefined
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`)
@@ -132,14 +147,16 @@ export default function BusinessEngineProfile() {
   }, [activeJobId])
 
   const effectivePayload = useMemo(() => {
-    const payload = { ...(def?.samplePayload || {}), engine: engineId }
-    if (clientId) payload.client_id = Number(clientId)
     const selectedClient = clients.find((c) => String(c.id) === String(clientId))
     const fallbackTarget = firstClientTarget(selectedClient)
-    if (target.trim()) payload.target = target.trim()
-    else if (fallbackTarget) payload.target = fallbackTarget
-    return payload
-  }, [def, engineId, clientId, target, clients])
+    return buildScanPayload(engineId, {
+      clientId,
+      target: target.trim() || fallbackTarget,
+      integrations: clientIntegrations,
+      samplePayload: def?.samplePayload || {},
+      extraParams,
+    })
+  }, [def, engineId, clientId, target, clients, clientIntegrations, extraParams])
 
   const statusData = useMemo(() => {
     const tally = { completed: 0, running: 0, failed: 0, pending: 0, dead: 0 }
@@ -208,19 +225,14 @@ export default function BusinessEngineProfile() {
 
   async function queueRun() {
     if (!def) return
-    if (def.requiresTarget && !target.trim()) {
+    if (def.requiresTarget && !effectivePayload.target) {
       setRunState({ running: false, msg: t('pages.businessEngineProfile.target_required_error') })
       return
     }
     setRunState({ running: true, msg: t('pages.businessEngineProfile.queueing') })
-    const r = await apiFetch('/api/command-center/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(effectivePayload),
-    })
-    const d = await r.json().catch(() => ({}))
-    if (!r.ok) {
-      setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status: r.status }) })
+    const { ok, data: d, status } = await postScan(effectivePayload)
+    if (!ok) {
+      setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status }) })
       return
     }
     setActiveJobId(d.job_id || '')
@@ -344,6 +356,16 @@ export default function BusinessEngineProfile() {
               {runState.running ? t('pages.businessEngineProfile.running') : t('pages.businessEngineProfile.queue_scan')}
             </button>
           </div>
+          {paramSchema.length > 0 && (
+            <EngineScanParamsPanel
+              engineId={engineId}
+              schema={paramSchema}
+              values={extraParams}
+              onChange={setParam}
+              clientId={clientId}
+              disabled={runState.running}
+            />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</button>
             <button type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</button>
@@ -387,7 +409,7 @@ export default function BusinessEngineProfile() {
           className="mb-2"
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          searchPlaceholder={t('pages.businessEngineProfile.search_placeholder', { defaultValue: 'Search jobs and findings…' })}
+          searchPlaceholder={t('pages.businessEngineProfile.search_placeholder')}
           resultCount={filteredFindings.length}
           totalCount={listFindings.length}
         />

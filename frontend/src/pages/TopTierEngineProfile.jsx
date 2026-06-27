@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
+import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
+import { useEngineScanParams } from '../hooks/useEngineScanParams'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -44,6 +49,10 @@ export default function TopTierEngineProfile() {
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
   const [liveJob, setLiveJob] = useState(null)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
+  const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(engineId, clientIntegrations)
+  useSyncHubScanParams(engineId, extraParams)
+  const { postScan } = useCommandCenterScan(clientId)
 
   const reloadAll = useCallback(async () => {
     setHistoryLoading(true)
@@ -81,12 +90,30 @@ export default function TopTierEngineProfile() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!clientId) {
+      setClientIntegrations(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
+      const d = r.ok ? await r.json() : null
+      if (cancelled) return
+      setClientIntegrations(normalizeIntegrations(d))
+    })()
+    return () => { cancelled = true }
+  }, [clientId])
+
   const effectivePayload = useMemo(() => {
-    const p = { ...(profile?.samplePayload || {}) }
+    const p = { engine: engineId, ...(profile?.samplePayload || {}) }
     if (clientId) p.client_id = Number(clientId)
     if (target.trim()) p.target = target.trim()
+    for (const [k, v] of Object.entries(extraParams)) {
+      if (v !== '' && v != null) p[k] = v
+    }
     return p
-  }, [profile, clientId, target])
+  }, [profile, clientId, target, engineId, extraParams])
 
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
   const findings = Array.isArray(history?.findings) ? history.findings : []
@@ -150,14 +177,9 @@ export default function TopTierEngineProfile() {
     if (!profile) return
     setRunState({ running: true, msg: t('pages.topTierEngineProfile.queueing') })
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(effectivePayload),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setRunState({ running: false, msg: d.detail || t('pages.topTierEngineProfile.scan_failed', { status: r.status }) })
+      const { ok, data: d, status } = await postScan(effectivePayload)
+      if (!ok) {
+        setRunState({ running: false, msg: d.detail || t('pages.topTierEngineProfile.scan_failed', { status }) })
         return
       }
       setActiveJobId(d.job_id || '')
@@ -225,6 +247,14 @@ export default function TopTierEngineProfile() {
           <Link to="/engines/top-tier" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.back_hub')}</Link>
           <span className="text-white/20 text-xs">|</span>
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.engine_detail')}</Link>
+          {TOP_TIER_PARAM_ROUTES[engineId] && (
+            <>
+              <span className="text-white/20 text-xs">|</span>
+              <Link to={TOP_TIER_PARAM_ROUTES[engineId]} className="text-violet-400/80 hover:text-violet-300 text-xs font-mono transition-colors">
+                {t('pages.topTierEngineProfile.command_center')}
+              </Link>
+            </>
+          )}
           <span className="text-white/20 text-xs">|</span>
           <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineProfile.strategic_page', { label: profile.label })}</h1>
           <div className="ms-auto">
@@ -302,6 +332,16 @@ export default function TopTierEngineProfile() {
               {runState.running ? t('pages.topTierEngineProfile.running') : t('pages.topTierEngineProfile.queue_scan')}
             </button>
           </div>
+          {paramSchema.length > 0 && (
+            <EngineScanParamsPanel
+              engineId={engineId}
+              schema={paramSchema}
+              values={extraParams}
+              onChange={setParam}
+              clientId={clientId}
+              disabled={runState.running}
+            />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

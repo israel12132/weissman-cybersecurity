@@ -59,6 +59,8 @@ export const NAV_GROUPS = [
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
+      { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
+      { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },
     ],
   },
   {
@@ -144,6 +146,8 @@ const PATH_OVERRIDES = [
   { prefix: '/clients/new', groupId: 'primary', labelKey: 'nav.client_new' },
   { prefix: '/clients/', groupId: 'primary', labelKey: 'nav.client_detail' },
   { prefix: '/billing', groupId: 'primary', labelKey: 'nav.billing' },
+  { prefix: '/superposition-collapse', groupId: 'command', labelKey: 'nav.superposition_collapse' },
+  { prefix: '/sovereign-defense-matrix', groupId: 'command', labelKey: 'nav.sovereign_defense' },
   { prefix: '/engines/top-tier/', groupId: 'engines', labelKey: 'nav.engine_profile' },
   { prefix: '/engines/top-tier', groupId: 'engines', labelKey: 'nav.top_tier_engines' },
   { prefix: '/engines/strategic', groupId: 'engines', labelKey: 'nav.strategic_engines' },

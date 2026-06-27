@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -449,6 +451,7 @@ function FindingCard({ f }) {
 export default function CloudPostureCommandCenter() {
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [roleArn, setRoleArn] = useState('')
   const [externalId, setExternalId] = useState('')
   const [sessionName, setSessionName] = useState('weissman-cspm')
@@ -563,16 +566,19 @@ export default function CloudPostureCommandCenter() {
     return body
   }, [roleArn, externalId, sessionName, regions, enabledServices, frameworks, minSeverity, intensity, maxResources, accessKeyMaxAge, acmExpiryDays, toggles, clientId])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast('error', 'Select a client first'); return }
     if (!roleArn.trim()) { showToast('error', 'AWS cross-account role ARN is required'); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
       const jobId = d.job_id ?? ''
       showToast('info', `CSPM scan queued (${jobId})`)
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -592,6 +598,7 @@ export default function CloudPostureCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title="Cloud Posture Management"
       badge="Agentless CSPM / CNAPP"
       badgeColor="#f97316"

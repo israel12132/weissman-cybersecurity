@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, CheckCircle2, XCircle, Layers } from 'lucide-react'
@@ -13,6 +15,9 @@ const DEFAULT_TEMPLATE = 'multi_step_state_demo'
 
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()
+  const [clients, setClients] = useState([])
+  const [selectedClientId, setSelectedClientId] = useState(null)
+  useCommandCenterScan(selectedClientId)
   const [templates, setTemplates] = useState([])
   const [selectedId, setSelectedId] = useState(DEFAULT_TEMPLATE)
   const [targetUrl, setTargetUrl] = useState('')
@@ -26,6 +31,15 @@ export default function FeedbackLoopVerification() {
     () => !!targetUrl.trim() && !!yaml.trim(),
     [targetUrl, yaml],
   )
+
+  useEffect(() => {
+    apiFetch('/api/clients')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (Array.isArray(d)) setClients(d) })
+      .catch(() => {})
+  }, [])
+
+  useClientTargetPrefill(selectedClientId, clients, setTargetUrl)
 
   useEffect(() => {
     apiFetch('/api/template-engine/templates')
@@ -135,6 +149,17 @@ export default function FeedbackLoopVerification() {
           <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
             {t('pages.feedbackLoopVerification.chain_runner')}
           </h3>
+
+          {clients.length > 0 && (
+            <select
+              value={selectedClientId ?? ''}
+              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-violet-500/40"
+            >
+              <option value="">{t('pages.feedbackLoopVerification.select_client')}</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
 
           <input
             value={targetUrl}

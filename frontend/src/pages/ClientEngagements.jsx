@@ -102,7 +102,7 @@ export default function ClientEngagements() {
       setNotes('')
       setEndAt('')
       await loadAll()
-      toast.success(t('pages.clientEngagements.create_success', { defaultValue: 'Engagement created' }))
+      toast.success(t('pages.clientEngagements.create_success'))
     } catch (e) {
       setError(e?.message || t('pages.clientEngagements.create_failed'))
     } finally {
@@ -112,10 +112,10 @@ export default function ClientEngagements() {
 
   async function closeEngagement(engagement) {
     const ok = await confirmDialog({
-      title: t('pages.clientEngagements.close_title', { defaultValue: 'Close engagement?' }),
+      title: t('pages.clientEngagements.close_title'),
       message: t('pages.clientEngagements.close_confirm', { name: engagement.name }),
-      confirmLabel: t('pages.clientEngagements.close_action', { defaultValue: 'Close engagement' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('pages.clientEngagements.close_action'),
+      cancelLabel: t('common.cancel'),
       variant: 'warning',
     })
     if (!ok) return
@@ -131,7 +131,7 @@ export default function ClientEngagements() {
         return
       }
       await loadAll()
-      toast.success(t('pages.clientEngagements.close_success', { defaultValue: 'Engagement closed' }))
+      toast.success(t('pages.clientEngagements.close_success'))
     } catch (e) {
       toast.error(e?.message || t('pages.clientEngagements.close_failed'))
     }

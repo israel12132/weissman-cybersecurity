@@ -2,6 +2,9 @@
 // (engine id: k8s_container). Self-contained and bilingual (en/he) so it adds no shared-locale
 // coupling. Exposes EVERY operator knob the Rust engine reads from job_params and renders the
 // engine's posture score, security graph, attack paths and evidence-rich findings.
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import { useIntegrationsPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -499,9 +502,11 @@ function Segmented({ value, onChange, options }) {
 }
 
 export default function KubernetesSecurityPanel({ clientId, target: defaultTarget, showToast, onFindingsUpdate, onStatusUpdate }) {
+  const { postScan } = useCommandCenterScan(clientId)
   const { i18n } = useTranslation()
   const L = LABELS[i18n.language?.startsWith('he') ? 'he' : 'en']
   const [params, setParams] = useState(defaultParams)
+  useIntegrationsPrefill('k8s_container', clientId, setParams)
   const [target, setTarget] = useState(defaultTarget || '')
   const [status, setStatus] = useState('idle')
   const [findings, setFindings] = useState([])
@@ -561,15 +566,18 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
     return body
   }, [clientId, target, params])
 
+  const hubScanParams = React.useMemo(() => {
+    const { engine, target: _t, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams('k8s_container', hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast?.('error', L.selectClient); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast?.('error', d.detail || L.scanFailed); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast?.('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToast?.('info', `${L.queued} · ${jobId}`)
       if (jobId) setPendingJobId(jobId); else setStatus('error')

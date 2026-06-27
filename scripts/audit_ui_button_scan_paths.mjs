@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 const BASE_URL = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1'
 const LOGIN_EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
 const LOGIN_PASSWORD = process.env.WEISSMAN_SMOKE_LOGIN_PASSWORD || process.env.WEISSMAN_ADMIN_PASSWORD || 'changeme'
@@ -5,7 +8,7 @@ const TENANT_SLUG = process.env.WEISSMAN_TENANT_SLUG || 'default'
 const CLIENT_NAME = process.env.WEISSMAN_SMOKE_CLIENT_NAME || 'CI Smoke Client'
 const POLL_TIMEOUT_MS = Number(process.env.WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS || 180000)
 
-const UI_BUTTON_SCENARIOS = [
+const UI_BUTTON_SCENARIOS_BASE = [
   {
     source: 'frontend/src/components/CommandBar.jsx',
     kind: 'command-center-scan',
@@ -82,6 +85,31 @@ const UI_BUTTON_SCENARIOS = [
     payload: { target: 'https://example.com' },
   },
 ]
+
+/** Auto-discover scan-wired hub pages not listed explicitly above. */
+function discoverScanHubScenarios() {
+  const pagesDir = join(process.cwd(), 'frontend/src/pages')
+  const existing = new Set(UI_BUTTON_SCENARIOS_BASE.map((s) => s.source))
+  const extra = []
+  for (const file of readdirSync(pagesDir)) {
+    if (!file.endsWith('.jsx') || file === 'PageShell.jsx') continue
+    const source = `frontend/src/pages/${file}`
+    if (existing.has(source)) continue
+    const src = readFileSync(join(pagesDir, file), 'utf8')
+    if (!/useCommandCenterScan|useLaunchEngineScan|launchEngineScan|postEngineScan/.test(src)) continue
+    const engineMatch = src.match(/engine(?:Id)?\s*[:=]\s*['"]([a-z0-9_]+)['"]/i)
+      || src.match(/ENGINE_ID\s*=\s*['"]([a-z0-9_]+)['"]/)
+    const engine = engineMatch?.[1] || 'recon'
+    extra.push({
+      source,
+      kind: 'command-center-scan',
+      payload: { engine, target: 'https://example.com' },
+    })
+  }
+  return extra
+}
+
+const UI_BUTTON_SCENARIOS = [...UI_BUTTON_SCENARIOS_BASE, ...discoverScanHubScenarios()]
 
 const UI_PLACEHOLDER_NOTES = [
   {

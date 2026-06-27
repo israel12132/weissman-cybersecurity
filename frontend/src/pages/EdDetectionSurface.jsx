@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -63,16 +66,6 @@ function extractScore(findings) {
   return m ? Number(m[1]) : null
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.replace(/^https?:\/\//, '').split('/')[0]
-}
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
@@ -117,8 +110,10 @@ export default function EdDetectionSurface() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE, params)
   const [scanning, setScanning] = useState(false)
   const [pendingJobId, setPendingJobId] = useState(null)
   const [findings, setFindings] = useState([])
@@ -195,13 +190,8 @@ export default function EdDetectionSurface() {
       else if (v !== '' && v != null) body[k] = v
     }
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setScanning(false); return }
+      const { ok, data: d, status } = await postScan(body)
+      if (!ok) { setScanning(false); return }
       if (d.job_id) setPendingJobId(d.job_id)
       else setScanning(false)
     } catch {
@@ -213,6 +203,7 @@ export default function EdDetectionSurface() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.edDetection.title')}
       badge={t('pages.edDetection.badge')}
       badgeColor={ACCENT}

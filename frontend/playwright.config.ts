@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const E2E_PORT = process.env.PLAYWRIGHT_PORT || '5199'
+const E2E_BASE = `http://localhost:${E2E_PORT}`
+
 /**
- * Command Center E2E — Vite dev server + API mocks (no Rust backend required).
+ * Command Center E2E — UI smoke only (Vite dev server + API mocks).
+ * NOT a live-stack contract: real API/browser E2E runs in CI via
+ * scripts/audit_ui_button_scan_paths.mjs against weissman-server.
  * Mocks live under tests-e2e/ only; they are never imported by the production SPA bundle.
  */
 export default defineConfig({
@@ -14,17 +19,16 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    // Use localhost (not 127.0.0.1): Vite binds in a way that rejects 127.0.0.1 on some Linux setups.
-    baseURL: 'http://localhost:5173',
+    baseURL: E2E_BASE,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     ...devices['Desktop Chrome'],
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173/command-center/',
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --port ${E2E_PORT} --strictPort`,
+    url: `${E2E_BASE}/command-center/operations`,
+    reuseExistingServer: true,
     timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: {} }],

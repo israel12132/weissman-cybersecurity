@@ -163,7 +163,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
             if (!meta) return null
             const label = t(`pages.ssoDashboard.fields.${key}.label`)
             const placeholder = t(`pages.ssoDashboard.fields.${key}.placeholder`)
-            const note = meta.hasNote ? t(`pages.ssoDashboard.fields.${key}.note`, { defaultValue: '' }) : ''
+            const note = meta.hasNote ? t(`pages.ssoDashboard.fields.${key}.note`) : ''
             if (meta.type === 'textarea') return (
               <div key={key} className="sm:col-span-2 space-y-1">
                 <label className="text-[11px] font-mono text-white/40 uppercase">{label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}</label>

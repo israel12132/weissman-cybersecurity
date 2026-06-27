@@ -6,6 +6,11 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { useRegisterHubClient } from '../context/EngineHubContext'
+import { useLaunchEngineScan, useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import { useEngineScanParams } from '../hooks/useEngineScanParams'
+import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
@@ -68,7 +73,12 @@ export default function OsintEngineProfile() {
   const [toast, setToast] = useState(null)
   const [history, setHistory] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
   const eventSourceRef = useRef(null)
+  const { schema: paramSchema, extraParams, setParam } = useEngineScanParams(ENGINE_ID, clientIntegrations)
+  useRegisterHubClient(selectedClientId)
+  useSyncHubScanParams(ENGINE_ID, extraParams)
+  const launchScan = useLaunchEngineScan(selectedClientId)
   const closeStream = useCallback(() => {
     const es = eventSourceRef.current
     if (!es) return
@@ -127,6 +137,19 @@ export default function OsintEngineProfile() {
     if (first) setTarget(first.startsWith('http') ? first : `https://${first}`)
   }, [selectedClientId, clients])
 
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientIntegrations(null)
+      return
+    }
+    let cancelled = false
+    apiFetch(`/api/clients/${selectedClientId}/integrations`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setClientIntegrations(normalizeIntegrations(d)) })
+      .catch(() => { if (!cancelled) setClientIntegrations(null) })
+    return () => { cancelled = true }
+  }, [selectedClientId])
+
   useEffect(() => () => closeStream(), [closeStream])
 
   const showToast = useCallback((severity, message) => {
@@ -172,23 +195,20 @@ export default function OsintEngineProfile() {
     setLines([])
 
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: ENGINE_ID,
-          client_id: Number(selectedClientId),
-          target: target.trim(),
-        }),
+      const { ok, data, status } = await launchScan({
+        engineId: ENGINE_ID,
+        clientId: selectedClientId,
+        target: target.trim(),
+        integrations: clientIntegrations,
+        extraParams,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        showToast('error', d.detail || d.error || t('pages.osintEngineProfile.scan_failed', { status: r.status }))
+      if (!ok) {
+        showToast('error', data.detail || data.error || t('pages.osintEngineProfile.scan_failed', { status }))
         setRunning(false)
         return
       }
 
-      const jobId = d.job_id || ''
+      const jobId = data.job_id || ''
       setLines([
         t('pages.osintEngineProfile.queued', { jobId: jobId || '(no id)' }),
         t('pages.osintEngineProfile.connecting'),
@@ -238,10 +258,11 @@ export default function OsintEngineProfile() {
       showToast('error', e?.message ?? t('pages.osintEngineProfile.network_error'))
       setRunning(false)
     }
-  }, [closeStream, selectedClientId, target, showToast, t])
+  }, [closeStream, selectedClientId, target, clientIntegrations, extraParams, launchScan, showToast, t])
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.osintEngineProfile.title')}
       subtitle={t('pages.osintEngineProfile.subtitle')}
       badge={t('pages.osintEngineProfile.badge')}
@@ -372,6 +393,16 @@ export default function OsintEngineProfile() {
                 className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
               />
             </div>
+            <EngineScanParamsPanel
+              engineId={ENGINE_ID}
+              schema={paramSchema}
+              values={extraParams}
+              onChange={setParam}
+              clientId={selectedClientId}
+              disabled={running}
+              compact
+              maxVisible={8}
+            />
             <button
               type="button"
               onClick={handleRun}
@@ -409,10 +440,10 @@ export default function OsintEngineProfile() {
               <table className="w-full text-xs font-mono text-white/70">
                 <thead>
                   <tr className="text-white/40 border-b border-white/10">
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_severity', { defaultValue: 'Severity' })}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_title', { defaultValue: 'Title' })}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_type', { defaultValue: 'Type' })}</th>
-                    <th className="text-left py-2">{t('pages.osintEngineProfile.col_discovered', { defaultValue: 'Discovered' })}</th>
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_severity')}</th>
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_title')}</th>
+                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_type')}</th>
+                    <th className="text-left py-2">{t('pages.osintEngineProfile.col_discovered')}</th>
                   </tr>
                 </thead>
                 <tbody>

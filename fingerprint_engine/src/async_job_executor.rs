@@ -276,8 +276,22 @@ pub async fn execute_job(
             let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
             let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
+            let (oast_listener, oast_domain, oast_api_key) =
+                crate::engine_dispatch::load_tenant_oast_configs(app_pool.as_ref(), tid).await;
             let _ = tx.commit().await;
-            let job_params = p.clone();
+            let mut job_payload = p.clone();
+            if let Err(e) =
+                crate::scan_routing::hydrate_stored_job_payload(app_pool.as_ref(), tid, &mut job_payload)
+                    .await
+            {
+                tracing::warn!(
+                    target: "async_jobs",
+                    tenant_id = tid,
+                    error = %e,
+                    "hydrate_stored_job_payload failed; continuing with stripped payload"
+                );
+            }
+            let job_params = job_payload;
             let discovered_paths: Vec<String> = p
                 .get("discovered_paths")
                 .and_then(|v| v.as_array())
@@ -303,6 +317,9 @@ pub async fn execute_job(
                 job_id: Some(job.id.to_string()),
                 swarm_broadcast: Some(channels.swarm.clone()),
                 intelligence_bus,
+                oast_listener_url: oast_listener,
+                oast_domain,
+                oast_api_key,
                 ..Default::default()
             };
             if !weissman_core::models::engine::is_production_engine_id(engine) {
@@ -350,23 +367,39 @@ pub async fn execute_job(
                 }
             } else {
                 // Cross-cutting resilience: panic isolation + adaptive multi-strategy retry +
-                // per-attempt timeout, so a failing/hung/panicking engine never aborts the job and
-                // self-heals across target variants before giving up.
-                let ctx_ref = &ctx;
-                let eng = engine;
-                let (res, telem) = crate::engine_resilience::run_with_resilience(
-                    engine,
-                    target,
-                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                    move |variant| async move {
-                        crate::engine_dispatch::run_engine(eng, &variant, ctx_ref).await
-                    },
-                )
+                // per-attempt timeout. Engine dispatch runs on a large-stack thread so Tokio's
+                // default worker stack cannot overflow on deep `dispatch_engine_match` futures.
+                let eng = engine.to_string();
+                let tgt = target.to_string();
+                let ctx_owned = ctx.clone();
+                let eng_label = eng.clone();
+                let (res, telem) = crate::engine_stack_runtime::run_on_large_stack(move || {
+                    let eng_outer = eng.clone();
+                    let tgt = tgt.clone();
+                    let ctx_owned = ctx_owned.clone();
+                    async move {
+                        let eng_ref = eng_outer.clone();
+                        crate::engine_resilience::run_with_resilience(
+                            &eng_ref,
+                            &tgt,
+                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            move |variant| {
+                                let eng = eng_outer.clone();
+                                let ctx_owned = ctx_owned.clone();
+                                async move {
+                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx_owned)
+                                        .await
+                                }
+                            },
+                        )
+                        .await
+                    }
+                })
                 .await;
                 if telem.attempts > 1 || telem.status != "ok" {
                     tracing::info!(
                         target: "engine_resilience",
-                        engine = eng,
+                        engine = %eng_label,
                         attempts = telem.attempts,
                         status = %telem.status,
                         strategy = %telem.strategy,
@@ -375,7 +408,7 @@ pub async fn execute_job(
                         "resilient engine run"
                     );
                 }
-                crate::engine_telemetry::record(eng, &telem);
+                crate::engine_telemetry::record(&eng_label, &telem);
                 last_engine_telemetry = Some(telem);
                 res
             };
@@ -738,6 +771,17 @@ pub async fn execute_job(
             }
 
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scan-all-engines completed: {}/{} succeeded","status":"completed"}}"#, job.id, succeeded, ordered_engines.len()));
+
+            if !target.trim().is_empty() {
+                let _ = crate::superposition_followup::enqueue_after_batch(
+                    app.as_ref(),
+                    tid,
+                    client_id,
+                    &target,
+                    "scan_all_engines",
+                )
+                .await;
+            }
 
             Ok(json!({
                 "ok": true,

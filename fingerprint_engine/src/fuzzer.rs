@@ -603,16 +603,15 @@ async fn execute_legacy_feedback_fuzz(
         .map(|p| load_guided_payloads_from_file(&p))
         .unwrap_or_default();
     if let (Some(pool), Some(tid)) = (app_pool, tenant_id) {
-        let host = target_host_for_memory(target_url);
+        let host = pentest_memory::target_host_for_memory(target_url);
         if !host.is_empty() {
-            let fp = pentest_memory::build_target_fingerprint(&host, None, None, &[]);
             let winners =
-                pentest_memory::prior_winners(pool, tid, "http_feedback_fuzz", &fp, 12).await;
-            for w in winners.into_iter().rev() {
-                if !guided.iter().any(|g| g == &w.payload) {
-                    guided.insert(0, w.payload);
-                }
-            }
+                pentest_memory::load_memory_for_engine(pool, tid, "http_feedback_fuzz", target_url, 12)
+                    .await;
+            pentest_memory::prepend_memory_payloads(
+                &mut guided,
+                &winners.into_iter().map(|w| w.payload).collect::<Vec<_>>(),
+            );
         }
     }
     let mutations = resolve_mutations(&mutator, &guided);
@@ -755,11 +754,11 @@ async fn execute_generative_feedback_fuzz(
         .unwrap_or("")
         .to_string();
     if let (Some(pool), Some(tid)) = (app_pool, llm_tenant_id) {
-        let host = target_host_for_memory(target_url);
+        let host = pentest_memory::target_host_for_memory(target_url);
         if !host.is_empty() {
-            let fp = pentest_memory::build_target_fingerprint(&host, None, None, &[]);
             let winners =
-                pentest_memory::prior_winners(pool, tid, "http_feedback_fuzz", &fp, 8).await;
+                pentest_memory::load_memory_for_engine(pool, tid, "http_feedback_fuzz", target_url, 8)
+                    .await;
             if !winners.is_empty() {
                 let hints: Vec<String> = winners
                     .iter()

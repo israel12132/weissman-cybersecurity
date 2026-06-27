@@ -94,6 +94,14 @@ export default function WeissmanFindingsPanel({
         <span className="text-[12px] font-mono text-white/90 min-w-0">{f.title || f.type || 'Finding'}</span>
       </div>
       {f.description && <p className="text-[10px] font-mono text-white/45 leading-relaxed">{f.description}</p>}
+      {(f.confidence_multiplier != null || f.effective_risk_confidence != null) && (
+        <p className="text-[9px] font-mono text-cyan-400/80">
+          {t('weissmanFindings.confidence', {
+            value: (f.effective_risk_confidence ?? f.confidence_multiplier ?? 1).toFixed?.(2)
+              ?? f.effective_risk_confidence ?? f.confidence_multiplier,
+          })}
+        </p>
+      )}
     </div>
   )
 

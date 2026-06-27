@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
 import ClientOnboardingWizard from '../components/clients/ClientOnboardingWizard'
 import { apiFetch } from '../lib/apiBase'
 
@@ -11,6 +12,7 @@ export default function ClientNew() {
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   async function handleSubmit(payload) {
     setError('')
@@ -57,10 +59,24 @@ export default function ClientNew() {
     <PageShell
       title={t('pages.clientNew.title')}
       subtitle={t('pages.clientOnboarding.subtitle')}
+      actions={(
+        <ShellScanActions
+          onRefresh={() => window.location.reload()}
+          onExport={() => {}}
+          exportDisabled
+        />
+      )}
     >
       <div className="max-w-4xl mx-auto space-y-6">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t('pages.clientNew.search_placeholder')}
+          className="w-full max-w-md px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/30"
+        />
         <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
-        <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} />
+        <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />
         <div className="text-center">
           <button
             type="button"

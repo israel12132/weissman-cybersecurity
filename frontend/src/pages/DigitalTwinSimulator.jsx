@@ -1,3 +1,6 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useHubBodySync } from '../hooks/useLaunchEngineScan'
+import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
@@ -225,7 +228,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
           {running || isPending ? <Loader2 className="w-3 h-3 animate-spin" />
             : hasResult ? <RotateCw className="w-3 h-3" /> : <Play className="w-3 h-3" />}
           {running ? t('pages.digitalTwinSimulator.simulating')
-            : isPending ? t('pages.digitalTwinSimulator.status_pending')
+            : isPending ? t('pages.digitalTwinSimulatostatus_pending')
               : hasResult ? t('pages.digitalTwinSimulator.rerun')
                 : t('pages.digitalTwinSimulator.simulate')}
         </button>
@@ -267,6 +270,7 @@ export default function DigitalTwinSimulator() {
   const { clientId: routeClientId } = useParams()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(routeClientId ?? null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [envProfile, setEnvProfile] = useState(null)
   const [twinProfile, setTwinProfile] = useState(null)
@@ -284,6 +288,19 @@ export default function DigitalTwinSimulator() {
   const [toggles, setToggles] = useState(() =>
     Object.fromEntries(TOGGLES.map((tg) => [tg.key, tg.defaultVal])),
   )
+  const hubParams = useMemo(() => ({
+    probe_depth: probeDepth,
+    max_probe_urls: Number(maxProbeUrls) || 32,
+    timeout_ms: Number(timeoutMs) || 8000,
+    ...toggles,
+    ...(probePaths.trim() ? { probe_paths: probePaths.trim() } : {}),
+  }), [probeDepth, maxProbeUrls, timeoutMs, toggles, probePaths])
+  useHubBodySync(ENGINE, () => ({
+    engine: ENGINE,
+    client_id: Number(selectedClientId),
+    target: target.trim(),
+    ...hubParams,
+  }))
 
   const detailFindings = useMemo(() => rawFindings.filter((f) => !isSummary(f)), [rawFindings])
 
@@ -347,12 +364,10 @@ export default function DigitalTwinSimulator() {
         domains: Array.isArray(domains) ? domains : [],
         tech_stack: Array.isArray(techStack) ? techStack : [],
       })
-      if (!target && Array.isArray(domains) && domains[0]) {
-        const d = domains[0]
-        setTarget(d.startsWith('http') ? d : `https://${d}`)
-      }
     }
-  }, [selectedClientId, clients, target])
+  }, [selectedClientId, clients])
+
+  useClientTargetPrefill(selectedClientId, clients, setTarget)
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
@@ -416,13 +431,8 @@ export default function DigitalTwinSimulator() {
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
     setRunningId(scenarioId)
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
+      const { ok, data: d, status } = await postScan(body)
+      if (!ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.digitalTwinSimulator.simulation_queued', { jobId }))
       if (jobId) setPendingJobs((prev) => ({ ...prev, [scenarioId]: jobId }))
@@ -440,13 +450,8 @@ export default function DigitalTwinSimulator() {
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
     setRunningId('all')
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
+      const { ok, data: d, status } = await postScan(body)
+      if (!ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.digitalTwinSimulator.full_twin_queued', { jobId }))
       if (jobId) setPendingJobs((prev) => ({ ...prev, all: jobId }))
@@ -501,7 +506,7 @@ export default function DigitalTwinSimulator() {
   const isScanning = Object.values(pendingJobs).some(Boolean) || !!runningId
 
   return (
-    <PageShell title={t('pages.digitalTwinSimulator.title')} badge={t('pages.digitalTwinSimulator.badge')}
+    <PageShell hideHubParams engineId={ENGINE} title={t('pages.digitalTwinSimulator.title')} badge={t('pages.digitalTwinSimulator.badge')}
       badgeColor="#8b5cf6" subtitle={t('pages.digitalTwinSimulator.subtitle')}
       actions={(
         <ShellScanActions

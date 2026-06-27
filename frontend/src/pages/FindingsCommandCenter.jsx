@@ -594,7 +594,7 @@ export default function FindingsCommandCenter() {
           </Link>
           <span className="text-white/15">|</span>
           <Link to="/engines" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
-            {t('nav.engine_matrix', { defaultValue: 'Engine Matrix' })}
+            {t('nav.engine_matrix')}
           </Link>
           {region && (
             <>
@@ -766,7 +766,7 @@ export default function FindingsCommandCenter() {
             title={t('findings.no_findings_yet')}
             body={t('findings.no_findings_body')}
             cta={{ label: t('findings.run_scan_cta'), to: '/clients' }}
-            secondary={{ label: t('nav.engine_matrix', { defaultValue: 'Engine Matrix' }), to: '/engines' }}
+            secondary={{ label: t('nav.engine_matrix'), to: '/engines' }}
           />
         )}
 

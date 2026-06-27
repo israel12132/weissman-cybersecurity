@@ -516,7 +516,7 @@ export default function StatusPage() {
             className="mb-4"
             searchQuery={serviceSearch}
             onSearchChange={setServiceSearch}
-            searchPlaceholder={t('status.search_components', { defaultValue: 'Search platform components…' })}
+            searchPlaceholder={t('status.search_components')}
             resultCount={filteredServices.length}
             totalCount={services.length}
           />

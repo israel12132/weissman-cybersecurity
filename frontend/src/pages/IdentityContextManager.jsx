@@ -123,12 +123,10 @@ export default function IdentityContextManager() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-white mb-1">
-                  {t('pages.identityContextManager.oauth_hub_title', { defaultValue: 'OAuth / OIDC / SSO Posture Assessment' })}
+                  {t('pages.identityContextManager.oauth_hub_title')}
                 </h3>
                 <p className="text-xs text-gray-400 max-w-xl">
-                  {t('pages.identityContextManager.oauth_hub_body', {
-                    defaultValue: 'Run agentless identity-provider discovery, JWKS analysis, live authorization probing, and account-takeover attack-path synthesis.',
-                  })}
+                  {t('pages.identityContextManager.oauth_hub_body', { })}
                 </p>
               </div>
             </div>
@@ -136,7 +134,7 @@ export default function IdentityContextManager() {
               to="/identity-security"
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-sm font-medium hover:bg-cyan-500/30 transition-colors shrink-0"
             >
-              {t('pages.identityContextManager.oauth_hub_cta', { defaultValue: 'Open Identity Security Center' })}
+              {t('pages.identityContextManager.oauth_hub_cta')}
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

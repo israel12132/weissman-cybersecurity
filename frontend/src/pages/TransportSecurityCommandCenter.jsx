@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -91,15 +94,6 @@ function gradeColor(g) {
 
 function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') { try { domains = JSON.parse(domains) } catch { domains = [] } }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  const bare = first.replace(/^https?:\/\//, '').split('/')[0]
-  return bare.startsWith('http') ? bare : `https://${bare}`
-}
 
 function isSummary(f) {
   return f?.category === 'posture_score' || (typeof f?.title === 'string' && f.title.includes('Transport Security Posture'))
@@ -201,6 +195,7 @@ export default function TransportSecurityCommandCenter() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [profile, setProfile] = useState('full')
@@ -305,16 +300,19 @@ export default function TransportSecurityCommandCenter() {
     return body
   }, [profile, intensity, ports, grpcPorts, grpcPaths, sni, timeoutMs, toggles, target, clientId])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast('error', t('pages.transportSecurity.select_client', 'Select a client first')); return }
     if (!target.trim()) { showToast('error', t('pages.transportSecurity.target_required', 'Target required')); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
+      const { ok, data: d } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast('error', d.detail || 'Scan failed'); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.transportSecurity.queued', 'Transport scan queued ({{id}})', { id: jobId }))
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -330,6 +328,7 @@ export default function TransportSecurityCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.transportSecurity.title', 'Transport Security Command Center')}
       badge={t('pages.transportSecurity.badge', 'TLS / mTLS / gRPC / HTTP HARDENING')}
       badgeColor={ACCENT}

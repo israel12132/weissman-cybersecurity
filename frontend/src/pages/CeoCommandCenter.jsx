@@ -55,7 +55,7 @@ export default function CeoCommandCenter() {
         <WeissmanListToolbar
           searchQuery={sectionSearch}
           onSearchChange={setSectionSearch}
-          searchPlaceholder={t('pages.ceoCommandCenter.search_placeholder', { defaultValue: 'Filter war-room job ID or section…' })}
+          searchPlaceholder={t('pages.ceoCommandCenter.search_placeholder')}
         />
 
         {booting ? (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
 
@@ -12,15 +13,33 @@ export default function AIModelRiskTab() {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [endpoints, setEndpoints] = useState([{ url: '', model: '', authorization: '' }])
 
   const vectorLabel = (key) => t(`${NS}.vectors.${key}`, key)
+
+  const loadEndpoints = useCallback(async () => {
+    if (!selectedClientId) return
+    const r = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
+    if (!r.ok) return
+    const d = await r.json()
+    const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
+      ? d.llm_secops_endpoints.map((e) => ({
+          url: e.url || '',
+          model: e.model || '',
+          authorization: e.authorization?.configured ? '••••••••' : '',
+        }))
+      : [{ url: '', model: '', authorization: '' }]
+    setEndpoints(eps)
+  }, [selectedClientId])
 
   const load = useCallback(async () => {
     if (!selectedClientId) return
     setLoading(true)
     setMsg(null)
     try {
+      await loadEndpoints()
       const [sRes, eRes] = await Promise.all([
         apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`),
         apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`),
@@ -43,11 +62,41 @@ export default function AIModelRiskTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedClientId])
+  }, [selectedClientId, loadEndpoints])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const saveEndpoints = async () => {
+    if (!selectedClientId) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      const llm_secops_endpoints = endpoints
+        .filter((e) => e.url.trim())
+        .map((e) => ({
+          url: e.url.trim(),
+          model: e.model.trim() || undefined,
+          authorization: e.authorization.trim() || undefined,
+        }))
+      const r = await apiFetch(`/api/clients/${selectedClientId}/integrations`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ llm_secops_endpoints }),
+      })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        throw new Error(d.detail || `HTTP ${r.status}`)
+      }
+      setMsg({ type: 'ok', text: t(`${NS}.endpointsSaved`, { defaultValue: 'LLM endpoints saved securely.' }) })
+      await loadEndpoints()
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const runFuzz = async () => {
     if (!selectedClientId) return
@@ -85,28 +134,75 @@ export default function AIModelRiskTab() {
     <div className="p-6 md:p-8 space-y-8 max-w-6xl">
       <div className="rounded-2xl bg-gradient-to-br from-violet-950/40 to-black/60 border border-violet-500/30 p-6">
         <h2 className="text-lg font-semibold text-white mb-1">{t(`${NS}.title`)}</h2>
-        <p className="text-sm text-white/60 mb-4">
-          {t(`${NS}.descriptionBefore`)}
-          <code className="text-violet-300 bg-black/40 px-1 rounded">llm_secops.endpoints</code>
-          {t(`${NS}.descriptionAfter`)}
-        </p>
-        <pre className="text-[11px] font-mono text-emerald-400/90 bg-black/50 rounded-lg p-3 overflow-x-auto border border-white/10 mb-4">
-          {`{
-  "llm_secops": {
-    "endpoints": [
-      { "url": "https://api.example.com/v1/chat/completions", "authorization": "sk-...", "model": "gpt-4o-mini" }
-    ]
-  }
-}`}
-        </pre>
-        <button
-          type="button"
-          disabled={running || !selectedClientId}
-          onClick={runFuzz}
-          className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-violet-500/50 bg-violet-600/20 text-violet-200 hover:bg-violet-600/30 disabled:opacity-40"
-        >
-          {running ? t(`${NS}.runningProbes`) : t(`${NS}.runSuite`)}
-        </button>
+        <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`, {
+          defaultValue: 'Configure authorized client LLM/chat API endpoints. Secrets are masked at rest and sent only for live probes.',
+        })}</p>
+
+        <div className="space-y-3 mb-4">
+          {endpoints.map((ep, i) => (
+            <div key={i} className="grid md:grid-cols-12 gap-2 p-3 rounded-xl border border-white/10 bg-black/40">
+              <input
+                className="md:col-span-5 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
+                placeholder="https://api.example.com/v1/chat/completions"
+                value={ep.url}
+                onChange={(e) => {
+                  const next = [...endpoints]
+                  next[i] = { ...next[i], url: e.target.value }
+                  setEndpoints(next)
+                }}
+              />
+              <input
+                className="md:col-span-3 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white"
+                placeholder="gpt-4o-mini"
+                value={ep.model}
+                onChange={(e) => {
+                  const next = [...endpoints]
+                  next[i] = { ...next[i], model: e.target.value }
+                  setEndpoints(next)
+                }}
+              />
+              <input
+                type="password"
+                autoComplete="off"
+                className="md:col-span-4 px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-sm text-white font-mono"
+                placeholder="Bearer sk-…"
+                value={ep.authorization}
+                onChange={(e) => {
+                  const next = [...endpoints]
+                  next[i] = { ...next[i], authorization: e.target.value }
+                  setEndpoints(next)
+                }}
+              />
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
+              + {t(`${NS}.addEndpoint`, { defaultValue: 'Add endpoint' })}
+            </button>
+            <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
+              {t(`${NS}.fullIntegrations`, { defaultValue: 'Full integrations →' })}
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={saveEndpoints}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border border-violet-500/40 bg-violet-600/20 text-violet-100 hover:bg-violet-600/30 disabled:opacity-40"
+          >
+            {saving ? t(`${NS}.saving`, { defaultValue: 'Saving…' }) : t(`${NS}.saveEndpoints`, { defaultValue: 'Save endpoints' })}
+          </button>
+          <button
+            type="button"
+            disabled={running || !selectedClientId}
+            onClick={runFuzz}
+            className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-violet-500/50 bg-violet-600/20 text-violet-200 hover:bg-violet-600/30 disabled:opacity-40"
+          >
+            {running ? t(`${NS}.runningProbes`) : t(`${NS}.runSuite`)}
+          </button>
+        </div>
         {msg && (
           <p className={`mt-3 text-sm ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</p>
         )}
@@ -133,19 +229,13 @@ export default function AIModelRiskTab() {
                   <div>
                     <div className="text-[10px] text-red-400/90 mb-0.5">{t(`${NS}.leakageScore`)}</div>
                     <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-red-600 to-orange-500 transition-all"
-                        style={{ width: `${leak}%` }}
-                      />
+                      <div className="h-full rounded-full bg-gradient-to-r from-red-600 to-orange-500 transition-all" style={{ width: `${leak}%` }} />
                     </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-amber-400/90 mb-0.5">{t(`${NS}.hallucinationDuress`)}</div>
                     <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-amber-600 to-yellow-400 transition-all"
-                        style={{ width: `${hall}%` }}
-                      />
+                      <div className="h-full rounded-full bg-gradient-to-r from-amber-600 to-yellow-400 transition-all" style={{ width: `${hall}%` }} />
                     </div>
                   </div>
                 </div>
@@ -173,19 +263,13 @@ export default function AIModelRiskTab() {
             <tbody>
               {events.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="p-4 text-white/40">
-                    {t(`${NS}.noEvents`)}
-                  </td>
+                  <td colSpan={5} className="p-4 text-white/40">{t(`${NS}.noEvents`)}</td>
                 </tr>
               )}
               {events.map((e) => (
                 <tr key={e.id} className="border-t border-white/5 hover:bg-white/5">
-                  <td className="p-2 text-violet-300 font-mono max-w-[140px] truncate" title={e.attack_vector}>
-                    {vectorLabel(e.attack_vector)}
-                  </td>
-                  <td className="p-2 text-white/70 font-mono max-w-[200px] truncate" title={e.endpoint_url}>
-                    {e.endpoint_url}
-                  </td>
+                  <td className="p-2 text-violet-300 font-mono max-w-[140px] truncate" title={e.attack_vector}>{vectorLabel(e.attack_vector)}</td>
+                  <td className="p-2 text-white/70 font-mono max-w-[200px] truncate" title={e.endpoint_url}>{e.endpoint_url}</td>
                   <td className="p-2 text-red-300">{(e.leakage_score ?? 0).toFixed(2)}</td>
                   <td className="p-2 text-amber-300">{(e.hallucination_score ?? 0).toFixed(2)}</td>
                   <td className="p-2">{e.blocked ? t(`${NS}.blockedYes`) : '—'}</td>

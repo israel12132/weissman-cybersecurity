@@ -22,6 +22,8 @@ export const ROUTE_ENGINE_ID = {
   '/kerberos-security': 'kerberoasting',
   '/mobile-security': 'mobile_attack',
   '/nexus-swarm': 'nexus_sovereign_swarm',
+  '/superposition-collapse': 'risk_superposition_collapse',
+  '/sovereign-defense-matrix': 'chronos',
   '/ot-ics': 'scada_ics',
   '/password-spray': 'password_spray',
   '/pqc-radar': 'pqc_scanner',
@@ -37,7 +39,21 @@ export const ROUTE_ENGINE_ID = {
   '/supply-chain': 'supply_chain',
   '/social-engineering': 'spear_phishing',
   '/oast': 'oast_oob',
+  '/exploit-lab': 'exploit_lab',
+  '/network': 'bgp_dns_hijacking',
+  '/verification/oob': 'oast_oob',
+  '/engine-catalog': 'asm',
+  '/cloud': 'aws_attack',
+  '/network-protocols': 'bgp_dns_hijacking',
+  '/feedback-loop': 'feedback_fuzz',
+  '/zero-day-radar': 'zero_day_radar',
 }
+
+/** Parametric hub routes: /digital-twin/:clientId → engine id */
+export const ROUTE_ENGINE_ID_PARAM_PREFIX = [
+  { prefix: '/digital-twin/', engine: 'digital_twin' },
+  { prefix: '/timing-profiler/', engine: 'side_channel' },
+]
 
 /** Prefix routes for nested engine profiles */
 export const ROUTE_ENGINE_ID_PREFIX = [
@@ -59,6 +75,10 @@ export function resolveRouteEngineId(pathname) {
   if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
 
   if (ROUTE_ENGINE_ID[p]) return ROUTE_ENGINE_ID[p]
+
+  for (const rule of ROUTE_ENGINE_ID_PARAM_PREFIX) {
+    if (p.startsWith(rule.prefix)) return rule.engine
+  }
 
   for (const rule of ROUTE_ENGINE_ID_PREFIX) {
     if (!p.startsWith(rule.prefix)) continue

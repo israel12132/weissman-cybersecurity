@@ -62,10 +62,10 @@ export default function ScanScheduler() {
 
   const deleteSchedule = async (scheduleId) => {
     const ok = await confirmDialog({
-      title: t('pages.scanScheduler.delete_title', { defaultValue: 'Delete schedule?' }),
+      title: t('pages.scanScheduler.delete_title'),
       message: t('pages.scanScheduler.delete_confirm'),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     });
     if (!ok) return;
@@ -73,10 +73,10 @@ export default function ScanScheduler() {
     try {
       await api.delete(`/api/scans/schedules/${scheduleId}`);
       setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
-      toast.success(t('pages.scanScheduler.delete_success', { defaultValue: 'Schedule deleted' }));
+      toast.success(t('pages.scanScheduler.delete_success'));
     } catch (error) {
       console.error('Failed to delete schedule:', error);
-      toast.error(t('pages.scanScheduler.delete_failed', { defaultValue: 'Failed to delete schedule' }));
+      toast.error(t('pages.scanScheduler.delete_failed'));
     }
   };
 

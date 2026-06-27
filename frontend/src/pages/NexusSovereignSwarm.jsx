@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -852,10 +854,10 @@ function StatusHistogramPanel({ histogram }) {
       <div className="space-y-1">
         {rows.slice(0, 10).map((r) => {
           const pct = Math.round(((r.count ?? 0) / max) * 100)
-          const color = r.status === '200' ? '#34d399' : r.status?.startsWith('4') ? '#f59e0b' : r.status?.startsWith('5') ? '#ef4444' : '#94a3b8'
+          const color = status === '200' ? '#34d399' : status?.startsWith('4') ? '#f59e0b' : status?.startsWith('5') ? '#ef4444' : '#94a3b8'
           return (
-            <div key={r.status} className="flex items-center gap-2">
-              <span className="text-[9px] font-mono w-8 text-right shrink-0" style={{ color }}>{r.status}</span>
+            <div key={status} className="flex items-center gap-2">
+              <span className="text-[9px] font-mono w-8 text-right shrink-0" style={{ color }}>{status}</span>
               <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }} />
               </div>
@@ -1186,8 +1188,10 @@ export default function NexusSovereignSwarm() {
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE_ID, params)
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [metrics, setMetrics] = useState(null)
@@ -1409,19 +1413,14 @@ export default function NexusSovereignSwarm() {
     setLaunchingEngine(engineId)
     appendLine(`[NSSI] Launching follow-up engine: ${engineId}`)
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: engineId,
-          client_id: Number(selectedClientId),
-          target: target.trim(),
-          timeout: 300,
-          source: 'nssi_engine_recommendation',
-        }),
+      const { ok, data } = await postScan({
+        engine: engineId,
+        client_id: Number(selectedClientId),
+        target: target.trim(),
+        timeout: 300,
+        source: 'nssi_engine_recommendation',
       })
-      const data = await r.json()
-      appendLine(r.ok ? `[NSSI] ${engineId} queued: ${data.job_id}` : `[ERROR] ${data.detail || 'launch failed'}`)
+      appendLine(ok ? `[NSSI] ${engineId} queued: ${data.job_id}` : `[ERROR] ${data.detail || 'launch failed'}`)
     } catch (e) {
       appendLine(`[ERROR] ${e.message}`)
     } finally {
@@ -1556,13 +1555,8 @@ export default function NexusSovereignSwarm() {
     if (opts.dryRun) body.dry_run = true
 
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await r.json()
-      if (!r.ok) {
+      const { ok, data } = await postScan(body)
+      if (!ok) {
         appendLine(`[ERROR] ${data.detail || 'Scan failed'}`)
         setRunning(false)
         return
@@ -1614,6 +1608,7 @@ export default function NexusSovereignSwarm() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('nexusSwarm.title', 'Nexus Sovereign Swarm Intelligence')}
       subtitle={t('nexusSwarm.subtitle', 'Hyper-scale autonomous hive-mind — thousands of AI agents, emergent consensus, breakthrough SIQ scoring')}
     >
@@ -1949,7 +1944,7 @@ export default function NexusSovereignSwarm() {
               </div>
               <p className="text-[11px] text-white/50">
                 {fleetForClient.length
-                  ? t('nexusSwarm.fleet_online', { online: fleetOnline, total: fleetForClient.length, defaultValue: `${fleetOnline} of ${fleetForClient.length} online` })
+                  ? t('nexusSwarm.fleet_online', { online: fleetOnline, total: fleetForClient.length })
                   : t('nexusSwarm.no_agents', 'No endpoint agents enrolled for this client.')}
               </p>
               <div className="flex flex-wrap gap-2">

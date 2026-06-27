@@ -124,6 +124,21 @@ async fn api_client_semantic_reasoning(
 }
 
 async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+    fn mask_config_value(key: &str, value: &str) -> String {
+        const SECRET_KEYS: &[&str] = &[
+            "github_token",
+            "oast_api_key",
+            "smtp_password",
+            "censys_api_secret",
+            "pagerduty_routing_key",
+            "shodan_api_key",
+            "gitlab_token",
+        ];
+        if SECRET_KEYS.contains(&key) && !value.trim().is_empty() {
+            return "••••••••".to_string();
+        }
+        value.to_string()
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
     };
@@ -135,9 +150,11 @@ async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(au
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
+            let key = r.try_get::<String,_>("key").unwrap_or_default();
+            let raw = r.try_get::<String,_>("value").unwrap_or_default();
             json!({
-                "key": r.try_get::<String,_>("key").unwrap_or_default(),
-                "value": r.try_get::<String,_>("value").unwrap_or_default(),
+                "key": key,
+                "value": mask_config_value(&key, &raw),
                 "description": r.try_get::<String,_>("description").unwrap_or_default(),
             })
         })
@@ -179,6 +196,9 @@ async fn api_system_configs_post(
     };
     let mut updated = 0u32;
     for (key, value) in pairs {
+        if value.trim() == "••••••••" {
+            continue;
+        }
         if sqlx::query(
             "INSERT INTO system_configs (tenant_id, key, value, description) VALUES ($1, $2, $3, '') ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
         )

@@ -1,5 +1,9 @@
 // SMB / NetBIOS Security Command Center — live binary-protocol assessment (engine: smb_netbios).
 // Impacket / CrackMapExec / Nessus-class: SMB2/3 negotiate, signing, encryption, IPC$/RPC pipes, NTLM fingerprint, attack graph.
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import { useIntegrationsPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -249,16 +253,6 @@ function sevValue(s) {
   return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.replace(/^https?:\/\//, '').split('/')[0]
-}
 
 function isSummary(f) {
   return f?.category === 'posture_summary' || f?.summary === true || typeof f?.posture_score === 'number'
@@ -613,9 +607,11 @@ export default function SmbNetbiosCommandCenter() {
 
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useIntegrationsPrefill(ENGINE_ID, clientId, setParams)
   const [showParams, setShowParams] = useState(true)
   const [status, setStatus] = useState('idle')
   const [findings, setFindings] = useState([])
@@ -677,19 +673,20 @@ export default function SmbNetbiosCommandCenter() {
     return body
   }, [target, params, clientId])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE_ID, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToastMsg('error', L.selectClientFirst); return }
     if (!target.trim()) { showToastMsg('error', L.targetPh); return }
     setStatus('running')
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) {
         setStatus('error')
         showToastMsg('error', d.detail || L.scanFailed)
         return
@@ -768,6 +765,7 @@ export default function SmbNetbiosCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={L.title}
       badge={L.badge}
       badgeColor={ACCENT}

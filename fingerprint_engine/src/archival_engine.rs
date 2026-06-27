@@ -88,6 +88,19 @@ pub async fn otx_urls_for_domain(
     if domain.is_empty() {
         return vec![];
     }
+    let otx_key = std::env::var("OTX_API_KEY")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if otx_key.is_none() {
+        tracing::warn!(
+            target: "archival_intel",
+            integration = "otx",
+            domain = %domain,
+            fallback = "public_url_list_api",
+            "OTX_API_KEY missing — using unauthenticated OTX domain URL list (rate-limited)"
+        );
+    }
     let c = client(stealth);
     let url = format!(
         "https://otx.alienvault.com/api/v1/indicators/domain/{}/url_list?limit=100",

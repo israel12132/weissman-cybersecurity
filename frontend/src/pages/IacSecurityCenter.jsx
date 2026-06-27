@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,6 +10,8 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import { useClientIntegrations } from '../hooks/useClientIntegrations'
+import { prefillParamsForEngine } from '../lib/engineClientPrefill'
 
 const ENGINE_ID = 'iac_misconfig'
 
@@ -1487,8 +1491,8 @@ function PciReportPanel({ report }) {
         {report.requirements.slice(0, 10).map((r) => (
           <div key={r.requirement} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5">
             <p className="text-[9px] font-mono text-rose-200/90">Req {r.requirement}</p>
-            <p className={`text-[10px] font-mono mt-0.5 ${r.status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-              {r.findings_linked ?? 0} · {r.status}
+            <p className={`text-[10px] font-mono mt-0.5 ${status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+              {r.findings_linked ?? 0} · {status}
             </p>
           </div>
         ))}
@@ -1632,8 +1636,16 @@ export default function IacSecurityCenter() {
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
+  const { postScan } = useCommandCenterScan(selectedClientId)
+  const { integrations } = useClientIntegrations(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE_ID, params)
+
+  useEffect(() => {
+    if (!integrations) return
+    setParams((prev) => prefillParamsForEngine(ENGINE_ID, integrations, prev))
+  }, [integrations])
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [summary, setSummary] = useState(null)
@@ -1743,9 +1755,8 @@ export default function IacSecurityCenter() {
     appendLine(`[IaC] Launching scan — modes: ${params.scan_modes.join(', ')} (${paramCount} params)…`)
     const body = buildScanBody(params, selectedClientId, effectiveTarget())
     try {
-      const r = await apiFetch('/api/command-center/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const data = await r.json()
-      if (!r.ok) { appendLine(`[ERROR] ${data.detail || 'scan failed'}`); setRunning(false); return }
+      const { ok, data } = await postScan(body)
+      if (!ok) { appendLine(`[ERROR] ${data.detail || 'scan failed'}`); setRunning(false); return }
       const jobId = data.job_id
       appendLine(`[IaC] Job queued: ${jobId}`)
       if (esRef.current) esRef.current.close()
@@ -1899,6 +1910,7 @@ export default function IacSecurityCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('iacSecurity.title', 'IaC Security Center')}
       subtitle={t('iacSecurity.subtitle', '45-framework CNAPP IaC — complete compliance: SOC2/PCI/HIPAA/NIST/ISO/FedRAMP audit packet')}
       actions={shellActions}

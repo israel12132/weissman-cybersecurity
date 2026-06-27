@@ -69,7 +69,7 @@ export default function ClientSaasIdpDiscovery() {
       toast.success(t('pages.clientSaasIdpDiscovery.copied'))
     } catch {
       await alertDialog({
-        title: t('pages.clientSaasIdpDiscovery.copy_manual_title', { defaultValue: 'Copy manually' }),
+        title: t('pages.clientSaasIdpDiscovery.copy_manual_title'),
         message: text,
         variant: 'neutral',
       })

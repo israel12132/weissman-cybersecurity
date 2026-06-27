@@ -1,0 +1,101 @@
+name: Nightly E2E (full findings)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  findings-e2e-full:
+    name: Full engine groups findings E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weissman
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d weissman"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.91.1
+
+      - name: Apply database migrations
+        env:
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+        run: cargo run -q -p weissman-db --example run_migrate
+
+      - name: Build server and worker
+        run: cargo build -p weissman-server -p weissman-worker
+
+      - name: Start weissman-server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: nightly-e2e-secret-min-32-chars
+          WEISSMAN_ENV: production
+          WEISSMAN_COOKIE_SECURE: "1"
+          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: nightly@localhost
+          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: nightly-e2e-password
+          PORT: "18000"
+        run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
+
+      - name: Start weissman-worker
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: nightly-e2e-secret-min-32-chars
+          WEISSMAN_ENV: production
+        run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:18000/api/health" > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Full findings E2E (all engine groups)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: nightly@localhost
+          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_FINDINGS_E2E_FULL: "1"
+          WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
+          WEISSMAN_FINDINGS_E2E_POLL_MAX: "120"
+        run: node scripts/verify_engine_groups_findings_e2e.mjs

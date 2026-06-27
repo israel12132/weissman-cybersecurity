@@ -67,7 +67,7 @@ export default function Clients() {
       const response = await apiFetch('/api/clients')
       if (!response.ok) {
         const text = await response.text().catch(() => 'Failed to load clients')
-        setError(t('clients_page.load_failed', { detail: text, defaultValue: `Failed to load clients: ${text}` }))
+        setError(t('clients_page.load_failed', { detail: text }))
         setLoading(false)
         return
       }
@@ -76,7 +76,7 @@ export default function Clients() {
       setClients(clientList)
       setLastUpdated(new Date())
     } catch (err) {
-      setError(t('clients_page.load_error', { detail: err.message, defaultValue: `Error loading clients: ${err.message}` }))
+      setError(t('clients_page.load_error', { detail: err.message }))
     } finally {
       setLoading(false)
     }
@@ -108,10 +108,10 @@ export default function Clients() {
 
   async function runScan(clientId, clientName) {
     const ok = await confirmDialog({
-      title: t('clients_page.scan_title', { defaultValue: 'Launch full scan?' }),
+      title: t('clients_page.scan_title'),
       message: t('clients_page.scan_confirm', { name: clientName }),
-      confirmLabel: t('clients_page.scan_action', { defaultValue: 'Launch scan' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('clients_page.scan_action'),
+      cancelLabel: t('common.cancel'),
       variant: 'primary',
     })
     if (!ok) return
@@ -123,17 +123,17 @@ export default function Clients() {
       if (!r.ok) {
         setScanToast({
           kind: 'error',
-          message: data.detail || t('clients_page.scan_failed', { status: r.status, defaultValue: `Scan launch failed (HTTP ${r.status})` }),
+          message: data.detail || t('clients_page.scan_failed', { status: r.status }),
         })
         return
       }
       setScanToast({
         kind: 'ok',
-        message: data.message || t('clients_page.scan_queued', { count: data.jobs_queued ?? 0, defaultValue: `Queued ${data.jobs_queued ?? 0} jobs.` }),
+        message: data.message || t('clients_page.scan_queued', { count: data.jobs_queued ?? 0 }),
         jobs_queued: data.jobs_queued ?? 0,
       })
     } catch (err) {
-      setScanToast({ kind: 'error', message: err.message || t('clients_page.scan_error', { defaultValue: 'Scan launch failed' }) })
+      setScanToast({ kind: 'error', message: err.message || t('clients_page.scan_error') })
     } finally {
       setScanningId(null)
     }
@@ -141,10 +141,10 @@ export default function Clients() {
 
   async function deleteClient(clientId, clientName) {
     const ok = await confirmDialog({
-      title: t('clients_page.delete_title', { defaultValue: 'Delete client?' }),
-      message: t('clients_page.delete_confirm', { name: clientName, defaultValue: `Are you sure you want to delete client "${clientName}"?` }),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      title: t('clients_page.delete_title'),
+      message: t('clients_page.delete_confirm', { name: clientName }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     })
     if (!ok) return
@@ -152,13 +152,13 @@ export default function Clients() {
       const response = await apiFetch(`/api/clients/${clientId}`, { method: 'DELETE' })
       if (!response.ok) {
         const text = await response.text().catch(() => 'Failed to delete client')
-        toast.error(t('clients_page.delete_failed', { detail: text, defaultValue: `Failed to delete client: ${text}` }))
+        toast.error(t('clients_page.delete_failed', { detail: text }))
         return
       }
       loadClients()
-      toast.success(t('clients_page.delete_success', { name: clientName, defaultValue: `Client "${clientName}" deleted` }))
+      toast.success(t('clients_page.delete_success', { name: clientName }))
     } catch (err) {
-      toast.error(t('clients_page.delete_error', { detail: err.message, defaultValue: `Error deleting client: ${err.message}` }))
+      toast.error(t('clients_page.delete_error', { detail: err.message }))
     }
   }
 
@@ -272,7 +272,7 @@ export default function Clients() {
             {scanToast.kind === 'ok' && (
               <div className="mt-1.5 text-xs text-white/45 font-mono">
                 {t('clients_page.track_jobs')}{' '}
-                <Link to="/jobs" className="underline hover:text-emerald-200">{t('nav.jobs', { defaultValue: 'Jobs Dashboard' })}</Link>
+                <Link to="/jobs" className="underline hover:text-emerald-200">{t('nav.jobs')}</Link>
                 {' · '}
                 <Link to="/findings" className="underline hover:text-emerald-200">{t('clients_page.track_findings')}</Link>
               </div>
@@ -298,7 +298,7 @@ export default function Clients() {
             <WeissmanListToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              searchPlaceholder={t('clients_page.search_placeholder', { defaultValue: 'Search clients…' })}
+              searchPlaceholder={t('clients_page.search_placeholder')}
               lastUpdated={lastUpdated}
               resultCount={visibleClients.length}
               totalCount={clients.length}
@@ -373,7 +373,7 @@ export default function Clients() {
                           type="button"
                           onClick={() => recomputeRisk(client.id)}
                           className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
-                          title={t('clients_page.compute_title', { defaultValue: 'Compute FAIR blast-radius now' })}
+                          title={t('clients_page.compute_title')}
                         >
                           {t('clients_page.compute_risk')}
                         </button>
@@ -426,7 +426,7 @@ export default function Clients() {
                         onClick={() => runScan(client.id, client.name)}
                         disabled={scanningId === client.id || domains.length === 0}
                         className="text-sm text-emerald-300 hover:text-emerald-200 disabled:text-white/25 disabled:cursor-not-allowed transition-colors font-mono"
-                        title={domains.length === 0 ? t('clients_page.scan_no_domain', { defaultValue: 'Add a domain to enable scanning' }) : t('clients_page.scan_title', { defaultValue: 'Queue baseline scan bundle' })}
+                        title={domains.length === 0 ? t('clients_page.scan_no_domain') : t('clients_page.scan_title')}
                       >
                         {scanningId === client.id ? t('clients_page.queuing') : t('clients_page.scan_now')}
                       </button>
@@ -434,7 +434,7 @@ export default function Clients() {
                         type="button"
                         onClick={() => deleteClient(client.id, client.name)}
                         className="text-sm text-rose-400/80 hover:text-rose-300 transition-colors font-mono"
-                        title={t('clients_page.delete_title', { defaultValue: 'Delete client' })}
+                        title={t('clients_page.delete_title')}
                       >
                         {t('clients_page.delete_client')}
                       </button>

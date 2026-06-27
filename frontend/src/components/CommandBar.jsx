@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
+import { launchEngineScan } from '../lib/launchEngineScan'
 
 const ENGINE_IDS = [
   { id: 'supply_chain', color: 'emerald' },
@@ -110,19 +111,13 @@ export default function CommandBar({ onScanLaunched, onError }) {
     setLoading(engineId)
     setLastResult(null)
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engineId, target: tTarget }),
+      const { ok, data, status } = await launchEngineScan({
+        engineId,
+        clientId: selectedClientId || undefined,
+        target: tTarget,
       })
-      let data = null
-      try {
-        data = await r.json()
-      } catch {
-        data = null
-      }
-      if (!r.ok) {
-        const msg = formatApiErrorFromBody(data, r.status)
+      if (!ok) {
+        const msg = formatApiErrorFromBody(data, status)
         if (onError) onError(msg)
         setLastResult({ engine: engineId, error: msg })
         return

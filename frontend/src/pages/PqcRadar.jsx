@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -55,16 +58,6 @@ const numOr = (v, d) => {
   return Number.isFinite(n) ? n : d
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
-}
 
 /** Serialize the control state into the exact POST /api/command-center/scan body. */
 function buildScanBody(params, clientId, target) {
@@ -294,9 +287,11 @@ export default function PqcRadar() {
 
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE_ID, params)
   const [findings, setFindings] = useState([])
   const [scanning, setScanning] = useState(false)
   const [pendingJobId, setPendingJobId] = useState(null)
@@ -382,13 +377,8 @@ export default function PqcRadar() {
     setScanning(true)
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildScanBody(params, selectedClientId, target)),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setScanning(false); showToast('error', d.detail || tt('scan_failed', 'Scan failed')); return }
+      const { ok, data: d, status } = await postScan(buildScanBody(params, selectedClientId, target))
+      if (!ok) { setScanning(false); showToast('error', d.detail || tt('scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', tt('scan_queued', 'PQC scan queued: job {{jobId}}').replace('{{jobId}}', jobId))
       if (jobId) setPendingJobId(jobId)
@@ -411,6 +401,7 @@ export default function PqcRadar() {
 
   return (
     <PageShell
+      hideHubParams
       title={tt('title', 'Post-Quantum Readiness Radar')}
       badge={tt('badge', 'CRYPTO / PQC')}
       badgeColor="#10b981"

@@ -50,6 +50,15 @@ export async function installCommandCenterApiMocks(page: Page): Promise<void> {
       })
     }
 
+    if (path === '/api/auth/me' && method === 'GET') {
+      return fulfillJson(route, {
+        ok: true,
+        email: 'e2e@weissman.test',
+        role: 'analyst',
+        is_superadmin: false,
+      })
+    }
+
     if (path === '/api/clients' && method === 'GET') {
       return fulfillJson(route, [MOCK_CLIENT])
     }
@@ -63,6 +72,10 @@ export async function installCommandCenterApiMocks(page: Page): Promise<void> {
     }
 
     const configMatch = path.match(/^\/api\/clients\/(\d+)\/config$/)
+    if (/^\/api\/clients\/\d+\/integrations$/.test(path) && method === 'GET') {
+      return fulfillJson(route, { integrations: {} })
+    }
+
     if (configMatch && method === 'GET') {
       return fulfillJson(route, {
         enabled_engines: ['osint', 'asm', 'semantic_ai_fuzz'],

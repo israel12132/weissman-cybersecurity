@@ -6,6 +6,7 @@ import { useTelemetry } from '../../context/TelemetryContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { apiFetch, apiEventSourceUrl } from '../../lib/apiBase'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
+import { launchEngineScan } from '../../lib/launchEngineScan'
 import { ENGINES_BY_ID } from '../../lib/enginesRegistry'
 import EngineRealityBadge from '../EngineRealityBadge'
 
@@ -31,7 +32,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
   const [hasError, setHasError] = useState(false)
   const [runBusy, setRunBusy] = useState(false)
   const terminalRef = useRef(null)
-  const { selectedClientId, selectedClient } = useClient()
+  const { selectedClientId, selectedClient, clientIntegrations } = useClient()
   const { addToast, progressByEngine, addProgress } = useTelemetry()
   const { commandConfirmed } = useWarRoom()
   const progress = progressByEngine ?? {}
@@ -56,26 +57,22 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     }
     setRunBusy(true)
     try {
-      const body = { engine: engineId, client_id: cidNum }
-      if (!engineRunsWithoutTarget(engineId)) {
-        body.target = primaryTarget
-      }
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { ok, data, status } = await launchEngineScan({
+        engineId,
+        clientId: cidNum,
+        target: engineRunsWithoutTarget(engineId) ? undefined : primaryTarget,
+        integrations: clientIntegrations,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        const msg = d.detail || d.error || r.statusText || t(`${NS}.toastScanFailed`)
+      if (!ok) {
+        const msg = data.detail || data.error || status || t(`${NS}.toastScanFailed`)
         addToast('error', String(msg), engineId)
         addProgress(String(cidNum), engineId, t(`${NS}.toastQueueFailed`, { msg }))
         return
       }
-      const jid = d.job_id || d.jobId || ''
+      const jid = data.job_id || data.jobId || ''
       const line = jid
-        ? t(`${NS}.toastQueuedJob`, { jobId: jid, kind: d.job_kind || engineId })
-        : (d.message || t(`${NS}.toastQueued`))
+        ? t(`${NS}.toastQueuedJob`, { jobId: jid, kind: data.job_kind || engineId })
+        : (data.message || t(`${NS}.toastQueued`))
       addToast('info', line, engineId)
       addProgress(String(cidNum), engineId, line)
     } catch (e) {
@@ -90,6 +87,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     canRunTargeted,
     primaryTarget,
     engineId,
+    clientIntegrations,
     addToast,
     addProgress,
     t,

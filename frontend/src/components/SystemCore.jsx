@@ -38,6 +38,14 @@ export default function SystemCore() {
   // Module 8: CI/CD Integrations
   const [githubToken, setGithubToken] = useState('')
   const [gitlabApiUrl, setGitlabApiUrl] = useState('')
+  // Tenant OAST (blind SSRF/XSS correlation)
+  const [oastListenerUrl, setOastListenerUrl] = useState('')
+  const [oastDomain, setOastDomain] = useState('')
+  const [oastApiKey, setOastApiKey] = useState('')
+  const [oastTestResult, setOastTestResult] = useState(null)
+  const [oastTesting, setOastTesting] = useState(false)
+  // AI-heavy entitlement (48 engines)
+  const [aiHeavyEntitled, setAiHeavyEntitled] = useState(true)
   // Module 9: PoE Synthesis Safety Rails
   const [enablePoeSynthesis, setEnablePoeSynthesis] = useState(true)
   const [safetyRailsNoShells, setSafetyRailsNoShells] = useState(true)
@@ -100,6 +108,13 @@ export default function SystemCore() {
         }
         setGithubToken(list?.find((c) => c.key === 'github_token')?.value ?? '')
         setGitlabApiUrl(list?.find((c) => c.key === 'gitlab_api_url')?.value ?? '')
+        const oastListener = list?.find((c) => c.key === 'oast_listener_url')?.value ?? ''
+        setOastListenerUrl(oastListener && oastListener !== '••••••••' ? oastListener : '')
+        setOastDomain(list?.find((c) => c.key === 'oast_domain')?.value ?? '')
+        const oastKey = list?.find((c) => c.key === 'oast_api_key')?.value ?? ''
+        setOastApiKey(oastKey === '••••••••' ? '••••••••' : oastKey)
+        const aiEnt = list?.find((c) => c.key === 'ai_heavy_entitled')?.value ?? 'true'
+        setAiHeavyEntitled(aiEnt !== 'false' && aiEnt !== '0')
         setEnablePoeSynthesis((list?.find((c) => c.key === 'enable_poe_synthesis')?.value ?? 'true') === 'true')
         setSafetyRailsNoShells((list?.find((c) => c.key === 'poe_safety_rails_no_shells')?.value ?? 'true') === 'true')
         setPoeMaxPocLength(Math.max(0, parseInt(list?.find((c) => c.key === 'poe_max_poc_length')?.value ?? '1048576', 10) ?? 1048576))
@@ -191,15 +206,13 @@ export default function SystemCore() {
   function saveCicdConfig() {
     setSaving(true)
     setError('')
+    const gh = githubToken.trim()
+    const configs = { gitlab_api_url: gitlabApiUrl.trim() }
+    if (gh && gh !== '••••••••') configs.github_token = gh
     apiFetch(`/api/system/configs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        configs: {
-          github_token: githubToken.trim(),
-          gitlab_api_url: gitlabApiUrl.trim(),
-        },
-      }),
+      body: JSON.stringify({ configs }),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
@@ -248,6 +261,51 @@ export default function SystemCore() {
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
+  function saveOastConfig() {
+    setSaving(true)
+    setError('')
+    const configs = {
+      oast_listener_url: oastListenerUrl.trim(),
+      oast_domain: oastDomain.trim(),
+    }
+    const key = oastApiKey.trim()
+    if (key && key !== '••••••••') configs.oast_api_key = key
+    apiFetch(`/api/system/configs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configs }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
+      .then(() => setSaving(false))
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
+  }
+
+  async function testOastConnection() {
+    setOastTesting(true)
+    setOastTestResult(null)
+    try {
+      const body = { listener_url: oastListenerUrl.trim() }
+      const k = oastApiKey.trim()
+      if (k && k !== '••••••••') body.api_key = k
+      const r = await apiFetch('/api/onboarding/oast-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const d = await r.json().catch(() => ({}))
+      setOastTestResult(r.ok ? { ok: true, msg: d.url || 'OK' } : { ok: false, msg: d.detail || `HTTP ${r.status}` })
+    } catch (e) {
+      setOastTestResult({ ok: false, msg: e.message })
+    } finally {
+      setOastTesting(false)
+    }
+  }
+
+  function handleAiEntitlementToggle(enabled) {
+    setAiHeavyEntitled(enabled)
+    saveConfig('ai_heavy_entitled', enabled ? 'true' : 'false')
+  }
+
   function saveTimingConfig() {
     setSaving(true)
     setError('')
@@ -264,6 +322,51 @@ export default function SystemCore() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
+  }
+
+  function saveOastConfig() {
+    setSaving(true)
+    setError('')
+    const configs = {
+      oast_listener_url: oastListenerUrl.trim(),
+      oast_domain: oastDomain.trim(),
+    }
+    const key = oastApiKey.trim()
+    if (key && key !== '••••••••') configs.oast_api_key = key
+    apiFetch(`/api/system/configs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configs }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
+      .then(() => setSaving(false))
+      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
+  }
+
+  async function testOastConnection() {
+    setOastTesting(true)
+    setOastTestResult(null)
+    try {
+      const body = { listener_url: oastListenerUrl.trim() }
+      const k = oastApiKey.trim()
+      if (k && k !== '••••••••') body.api_key = k
+      const r = await apiFetch('/api/onboarding/oast-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const d = await r.json().catch(() => ({}))
+      setOastTestResult(r.ok ? { ok: true, msg: d.url || 'OK' } : { ok: false, msg: d.detail || `HTTP ${r.status}` })
+    } catch (e) {
+      setOastTestResult({ ok: false, msg: e.message })
+    } finally {
+      setOastTesting(false)
+    }
+  }
+
+  function handleAiEntitlementToggle(enabled) {
+    setAiHeavyEntitled(enabled)
+    saveConfig('ai_heavy_entitled', enabled ? 'true' : 'false')
   }
 
   function saveSemanticConfig() {
@@ -487,6 +590,65 @@ export default function SystemCore() {
         <p className="mt-4 text-xs text-slate-500">
           {t('components.systemCore.semantic_hint')}
         </p>
+      </section>
+
+      <section className="max-w-2xl mt-8 rounded-xl border border-violet-600/40 bg-violet-950/20 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-violet-200 mb-4">{t('components.systemCore.oast_heading', { defaultValue: 'OAST — Out-of-Band Callbacks' })}</h2>
+        <p className="text-sm text-slate-400 mb-6">
+          {t('components.systemCore.oast_body', { defaultValue: 'Configure blind SSRF, XXE, and Log4Shell callback correlation. Required for oast_blind module engines.' })}
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_listener_label', { defaultValue: 'Listener URL' })}</label>
+            <input type="url" value={oastListenerUrl} onChange={(e) => setOastListenerUrl(e.target.value)}
+              placeholder="https://oast.your-domain.example:9090"
+              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_domain_label', { defaultValue: 'DNS domain (wildcard)' })}</label>
+            <input type="text" value={oastDomain} onChange={(e) => setOastDomain(e.target.value)}
+              placeholder="oast.your-domain.example"
+              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_api_key_label', { defaultValue: 'API key (optional)' })}</label>
+            <input type="password" autoComplete="off" value={oastApiKey} onChange={(e) => setOastApiKey(e.target.value)}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={saveOastConfig} disabled={saving}
+              className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium">
+              {saving ? t('components.systemCore.saving') : t('components.systemCore.save_oast', { defaultValue: 'Save OAST' })}
+            </button>
+            <button type="button" onClick={testOastConnection} disabled={oastTesting || !oastListenerUrl.trim()}
+              className="px-4 py-2 rounded-lg border border-violet-500/40 text-violet-200 text-sm hover:bg-violet-500/10 disabled:opacity-50">
+              {oastTesting ? t('components.systemCore.oast_testing', { defaultValue: 'Testing…' }) : t('components.systemCore.oast_test', { defaultValue: 'Test connectivity' })}
+            </button>
+            <Link to="/oast" className="px-4 py-2 text-sm text-violet-300 hover:text-violet-200 self-center">
+              {t('components.systemCore.oast_dashboard', { defaultValue: 'OAST Dashboard →' })}
+            </Link>
+          </div>
+          {oastTestResult && (
+            <p className={`text-xs ${oastTestResult.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {oastTestResult.ok ? `✓ ${oastTestResult.msg}` : oastTestResult.msg}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="max-w-2xl mt-8 rounded-xl border border-pink-600/30 bg-pink-950/15 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-pink-200 mb-4">{t('components.systemCore.ai_entitlement_heading', { defaultValue: 'AI-Heavy Entitlement' })}</h2>
+        <p className="text-sm text-slate-400 mb-4">
+          {t('components.systemCore.ai_entitlement_body', { defaultValue: 'Gates 48 AI red-team / semantic fuzz engines. Disable for tenants without AI workload authorization.' })}
+        </p>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-300">{t('components.systemCore.ai_entitlement_label', { defaultValue: 'Allow AI-heavy engines' })}</span>
+          <button type="button" role="switch" aria-checked={aiHeavyEntitled}
+            onClick={() => handleAiEntitlementToggle(!aiHeavyEntitled)}
+            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${aiHeavyEntitled ? 'bg-pink-500/80 border-pink-400' : 'bg-slate-600 border-slate-500'}`}>
+            <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${aiHeavyEntitled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">

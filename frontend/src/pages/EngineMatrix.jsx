@@ -1,3 +1,4 @@
+import { firstClientTarget } from '../lib/clientTarget'
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,6 +10,9 @@ import {
   ENGINES_BY_ID,
 } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
+import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { useRegisterHubClient } from '../context/EngineHubContext'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
@@ -49,16 +53,6 @@ function severityColor(s) {
   return SEVERITY_COLOR[(s || '').toLowerCase()] ?? '#6b7280'
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
-}
 
 function engineMatchesSearch(engine, q) {
   const hay = `${engine.id} ${engine.label || ''} ${engine.description || ''} ${engine.mitre || ''} ${engine.group || ''}`.toLowerCase()
@@ -405,10 +399,14 @@ export default function EngineMatrix() {
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientConfig, setClientConfig] = useState(null)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
   const [configLoading, setConfigLoading] = useState(false)
   const [engineStates, setEngineStates] = useState({})
   const [toast, setToast] = useState(null)
   const [runAllLoading, setRunAllLoading] = useState(false)
+
+  useRegisterHubClient(selectedClientId)
+  const launchScan = useLaunchEngineScan(selectedClientId)
 
   useEffect(() => {
     const tier = searchParams.get('tier')
@@ -427,12 +425,19 @@ export default function EngineMatrix() {
   useEffect(() => {
     if (selectedClientId == null) {
       setClientConfig(null)
+      setClientIntegrations(null)
       return
     }
     setConfigLoading(true)
-    apiFetch(`/api/clients/${selectedClientId}/config`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setClientConfig(d))
+    Promise.all([
+      apiFetch(`/api/clients/${selectedClientId}/config`),
+      apiFetch(`/api/clients/${selectedClientId}/integrations`),
+    ])
+      .then(async ([cfgR, intR]) => {
+        if (cfgR.ok) setClientConfig(await cfgR.json())
+        if (intR.ok) setClientIntegrations(normalizeIntegrations(await intR.json()))
+        else setClientIntegrations(null)
+      })
       .catch(() => {})
       .finally(() => setConfigLoading(false))
   }, [selectedClientId])
@@ -538,21 +543,19 @@ export default function EngineMatrix() {
     const clientTarget = firstClientTarget(selectedClient)
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
-      const body = { engine: engineId, client_id: Number(selectedClientId) }
-      if (clientTarget) body.target = clientTarget
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      const { ok, data, status } = await launchScan({
+        engineId,
+        clientId: selectedClientId,
+        target: clientTarget,
+        integrations: clientIntegrations,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        const msg = d.detail || d.error || r.statusText || 'Scan failed'
+      if (!ok) {
+        const msg = data.detail || data.error || `Scan failed (${status})`
         showToast('error', `${engine?.label ?? engineId}: ${msg}`)
         setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
         return
       }
-      showToast('info', `${engine?.label ?? engineId}: queued job ${d.job_id ?? ''}`)
+      showToast('info', `${engine?.label ?? engineId}: queued job ${data.job_id ?? ''}`)
       setEngineStates((prev) => ({
         ...prev,
         [engineId]: { ...prev[engineId], status: 'running', lastRun: 'just now' },
@@ -561,7 +564,7 @@ export default function EngineMatrix() {
       showToast('error', e?.message ?? 'Network error')
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
     }
-  }, [selectedClientId, clients, showToast, t, isProduction])
+  }, [selectedClientId, clients, clientIntegrations, launchScan, showToast, t, isProduction])
 
   const handleRunGroup = useCallback(async (engineIds) => {
     if (selectedClientId == null) {

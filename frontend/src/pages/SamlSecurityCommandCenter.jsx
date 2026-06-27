@@ -1,4 +1,8 @@
 // SAML & Enterprise SSO Federation Security Command Center (engine: saml_attack).
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useIntegrationsPrefill } from '../hooks/useHubLocalScanParams'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -141,21 +145,15 @@ function Toggle({ on, onClick, label }) {
   )
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') { try { domains = JSON.parse(domains) } catch { domains = [] } }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http') ? first : `https://${first}`
-}
 
 export default function SamlSecurityCommandCenter() {
   const { i18n } = useTranslation()
   const L = LABELS[i18n.language?.startsWith('he') ? 'he' : 'en']
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(clientId)
   const [params, setParams] = useState(defaultParams)
+  useIntegrationsPrefill(ENGINE_ID, clientId, setParams)
   const [target, setTarget] = useState('')
   const [status, setStatus] = useState('idle')
   const [findings, setFindings] = useState([])
@@ -203,17 +201,20 @@ export default function SamlSecurityCommandCenter() {
     return body
   }, [clientId, target, params])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE_ID, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToastMsg('error', L.selectClientFirst); return }
     if (!target.trim()) { showToastMsg('error', L.target); return }
     setStatus('running')
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToastMsg('error', d.detail || L.scanFailed); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToastMsg('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToastMsg('info', `${L.queued} · ${jobId}`)
       if (jobId) setPendingJobId(jobId)
@@ -279,6 +280,7 @@ export default function SamlSecurityCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={L.title}
       badge={L.badge}
       badgeColor={ACCENT}

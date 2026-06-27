@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClientProvider, useClient } from './context/ClientContext'
+import { useClient } from './context/ClientContext'
 import { TelemetryProvider } from './context/TelemetryContext'
 import { WarRoomProvider } from './context/WarRoomContext'
 import GlobalNexus from './components/cockpit/GlobalNexus'
@@ -79,12 +79,10 @@ function CockpitLayout({ ceoIntegrated }) {
 
 export default function Cockpit({ ceoIntegrated = false }) {
   return (
-    <ClientProvider>
       <TelemetryProvider>
         <WarRoomProvider>
           <CockpitLayout ceoIntegrated={ceoIntegrated} />
         </WarRoomProvider>
       </TelemetryProvider>
-    </ClientProvider>
   )
 }

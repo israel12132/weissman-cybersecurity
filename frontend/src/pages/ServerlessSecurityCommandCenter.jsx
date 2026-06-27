@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -221,8 +223,10 @@ export default function ServerlessSecurityCommandCenter() {
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE_ID, params)
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [metrics, setMetrics] = useState(null)
@@ -303,9 +307,8 @@ export default function ServerlessSecurityCommandCenter() {
     const body = buildScanBody(params, selectedClientId, target)
     if (opts.dryRun) body.dry_run = true
     try {
-      const r = await apiFetch('/api/command-center/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const data = await r.json()
-      if (!r.ok) { appendLine(`[ERROR] ${data.detail || 'Scan failed'}`); setRunning(false); return }
+      const { ok, data } = await postScan(body)
+      if (!ok) { appendLine(`[ERROR] ${data.detail || 'Scan failed'}`); setRunning(false); return }
       const jobId = data.job_id
       appendLine(`[λ] Job queued: ${jobId}`)
       if (esRef.current) esRef.current.close()
@@ -340,6 +343,7 @@ export default function ServerlessSecurityCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('serverlessSec.title', 'Serverless Security Command Center')}
       subtitle={t('serverlessSec.subtitle', 'Agentless FaaS posture — Lambda, Azure Functions, Vercel, Netlify, Cloudflare Workers — Wiz-grade attack-path synthesis')}
       badge="Serverless"

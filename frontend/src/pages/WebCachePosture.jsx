@@ -1,3 +1,6 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -271,14 +274,6 @@ const SEV_STYLE = {
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
 function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') { try { domains = JSON.parse(domains) } catch { domains = [] } }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.replace(/^https?:\/\//, '').split('/')[0]
-}
 function csvToArray(s) { return String(s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) }
 function isSummary(f) { return f && (f.category === 'posture_summary' || f.summary === true || typeof f.posture_score === 'number') }
 
@@ -559,6 +554,7 @@ export default function WebCachePosture() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const { postScan } = useCommandCenterScan(clientId)
   const [target, setTarget] = useState('')
   const [targetTouched, setTargetTouched] = useState(false)
   const [showParams, setShowParams] = useState(false)
@@ -660,16 +656,19 @@ export default function WebCachePosture() {
     return body
   }, [target, toggles, intensity, includeInfo, timeoutMs, concurrency, paths, deceptionExts, clientId, extraHeaders, queryParam, pathConcurrency, maxPaths, canaryDomain])
 
+  const hubScanParams = useMemo(() => {
+    const { engine, target, client_id, ...rest } = buildBody()
+    return rest
+  }, [buildBody])
+  useSyncHubScanParams(ENGINE, hubScanParams)
+
   const handleRun = useCallback(async () => {
     if (!clientId) { showToast('error', t('pages.webCachePosture.select_client_first', 'Select a client first')); return }
     if (!target.trim()) { showToast('error', t('pages.webCachePosture.target_required', 'A target URL is required')); return }
     setStatus('running'); setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildBody()),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.webCachePosture.scan_failed', 'Scan failed')); return }
+      const { ok, data: d, status } = await postScan(buildBody())
+      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.webCachePosture.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.webCachePosture.queued', 'Posture scan queued ({{jobId}})', { jobId }))
       if (jobId) setPendingJobId(jobId); else setStatus('error')
@@ -683,6 +682,7 @@ export default function WebCachePosture() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.webCachePosture.title', 'Web Cache Poisoning & Deception')}
       badge={t('pages.webCachePosture.badge', 'WEB CACHE / CDN EDGE')}
       badgeColor={ACCENT}

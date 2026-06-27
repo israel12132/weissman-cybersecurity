@@ -41,13 +41,74 @@ fn oast_verify_url_template() -> Option<String> {
 
 /// Canonical OAST DNS suffix: `WEISSMAN_OAST_DOMAIN` (preferred) or `WEISSMAN_OAST_BASE_DOMAIN` (legacy).
 /// Empty if unset — no implicit default so local/dev runs do not phone home to production.
+/// Tenant `system_configs.oast_domain` overrides env when set via [`push_tenant_oast`].
 fn oast_base_domain() -> String {
+    if let Some(d) = tenant_oast_domain() {
+        if !d.is_empty() {
+            return d;
+        }
+    }
     std::env::var("WEISSMAN_OAST_DOMAIN")
         .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
         .unwrap_or_default()
         .trim()
         .trim_end_matches('.')
         .to_lowercase()
+}
+
+/// Per-job tenant OAST override (loaded from `system_configs` in the worker).
+#[derive(Clone, Default, Debug)]
+pub struct TenantOastConfig {
+    pub listener_url: String,
+    pub domain: String,
+    pub api_key: String,
+}
+
+thread_local! {
+    static TENANT_OAST: std::cell::RefCell<Option<TenantOastConfig>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard — clears tenant OAST override when the engine run completes.
+pub struct OastOverrideGuard;
+
+impl Drop for OastOverrideGuard {
+    fn drop(&mut self) {
+        TENANT_OAST.with(|c| *c.borrow_mut() = None);
+    }
+}
+
+/// Apply tenant-scoped OAST settings for the duration of an engine run.
+pub fn push_tenant_oast(cfg: TenantOastConfig) -> OastOverrideGuard {
+    TENANT_OAST.with(|c| *c.borrow_mut() = Some(cfg));
+    OastOverrideGuard
+}
+
+fn tenant_oast_domain() -> Option<String> {
+    TENANT_OAST.with(|c| {
+        c.borrow()
+            .as_ref()
+            .map(|t| t.domain.trim().trim_end_matches('.').to_lowercase())
+            .filter(|s| !s.is_empty())
+    })
+}
+
+fn tenant_oast_listener() -> Option<String> {
+    TENANT_OAST.with(|c| {
+        c.borrow()
+            .as_ref()
+            .map(|t| t.listener_url.trim().trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty())
+    })
+}
+
+fn tenant_oast_api_key() -> Option<String> {
+    TENANT_OAST.with(|c| {
+        c.borrow()
+            .as_ref()
+            .map(|t| t.api_key.trim().to_string())
+            .filter(|s| !s.is_empty())
+    })
 }
 
 /// Effective OAST DNS suffix when configured (for canary monitor URLs, etc.).
@@ -74,6 +135,9 @@ pub fn oast_operator_prompt_hint() -> String {
 }
 
 fn oast_listener_base_url() -> String {
+    if let Some(u) = tenant_oast_listener() {
+        return u;
+    }
     std::env::var("WEISSMAN_OAST_LISTENER_URL")
         .unwrap_or_else(|_| "http://127.0.0.1:9090".to_string())
         .trim()
@@ -194,11 +258,13 @@ pub async fn verify_oob_token_seen_with_client(client: &reqwest::Client, token: 
             "User-Agent",
             crate::fuzz_http_pool::random_fuzz_user_agent(),
         );
-    if let Ok(k) = std::env::var("WEISSMAN_OAST_API_KEY") {
-        let k = k.trim();
-        if !k.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", k));
-        }
+    if let Some(k) = tenant_oast_api_key().or_else(|| {
+        std::env::var("WEISSMAN_OAST_API_KEY")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }) {
+        req = req.header("Authorization", format!("Bearer {}", k));
     }
     let Ok(resp) = req.send().await else {
         return false;

@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
@@ -58,6 +60,7 @@ export default function OastDashboard() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [callbacks, setCallbacks] = useState([])
   const [activeProbes, setActiveProbes] = useState(new Set())
   const [toast, setToast] = useState(null)
@@ -77,6 +80,8 @@ export default function OastDashboard() {
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
   }, [])
+
+  useClientTargetPrefill(selectedClientId, clients, setMintTarget)
 
   const reloadCallbacks = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setRefreshLoading(true)
@@ -140,17 +145,12 @@ export default function OastDashboard() {
     }
     setActiveProbes((prev) => new Set([...prev, probeId]))
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: 'oast_oob',
-          client_id: Number(selectedClientId),
-          probe_type: probeId,
-        }),
+      const { ok, data: d } = await postScan({
+        engine: 'oast_oob',
+        client_id: Number(selectedClientId),
+        probe_type: probeId,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      if (!ok) {
         showToast('error', d.detail || t('pages.oastDashboard.probe_failed'))
         return
       }

@@ -136,10 +136,10 @@ export default function ClientEvidenceVault() {
 
   async function deleteEvidence(item) {
     const ok = await confirmDialog({
-      title: t('pages.clientEvidenceVault.delete_title', { defaultValue: 'Delete evidence?' }),
+      title: t('pages.clientEvidenceVault.delete_title'),
       message: t('pages.clientEvidenceVault.delete_confirm', { name: item.filename }),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     })
     if (!ok) return
@@ -151,7 +151,7 @@ export default function ClientEvidenceVault() {
         return
       }
       await loadAll()
-      toast.success(t('pages.clientEvidenceVault.delete_success', { defaultValue: 'Evidence deleted' }))
+      toast.success(t('pages.clientEvidenceVault.delete_success'))
     } catch (e) {
       toast.error(e?.message || t('pages.clientEvidenceVault.delete_failed'))
     }

@@ -9,6 +9,7 @@ export const TOP_TIER_ENGINE_IDS = [
   'zero_day_prediction',
   'threat_emulation',
   'poe_synthesis',
+  'risk_superposition_collapse',
   'satellite_recon',
   'darkweb_intel',
   'financial_osint',
@@ -109,6 +110,20 @@ const PROFILES = {
     intelligenceFocus: 'PoE narrative quality, reproducibility cues, validation artifacts.',
     expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'PoE synthesis stream and status timeline'],
     samplePayload: { engine: 'poe_synthesis', target: 'https://target.example' },
+  },
+  risk_superposition_collapse: {
+    mission: 'Collapse hundreds of weak multi-engine signals into high-confidence MITRE attack chains no single scanner can emit.',
+    intelligenceFocus: 'Bayesian belief fusion (noisy-or / cumulative-odds / hybrid), STRIPS planning, toxic combinations, temporal kill-chain correlation, risk-graph paths, FAIR ALE.',
+    expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'Superposition posture grade A+–F', 'Collapsed MITRE chains with weak-signal provenance', 'Toxic combination alerts', 'Graph choke points'],
+    samplePayload: {
+      engine: 'risk_superposition_collapse',
+      target: 'https://target.example',
+      fusion_mode: 'hybrid',
+      collapsed_belief_threshold: 0.55,
+      include_toxic_combinations: true,
+      include_strips_collapse: true,
+      include_financial_ale: true,
+    },
   },
   satellite_recon: {
     mission: 'Extended external reconnaissance for broad surface expansion signals.',

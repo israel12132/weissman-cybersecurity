@@ -1,3 +1,5 @@
+import { firstClientTarget } from '../lib/clientTarget'
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -29,16 +31,6 @@ const ENGINE_DESCRIPTIONS = {
   serverless_attack: 'Serverless event injection, function chaining exploitation, cold-start timing',
 }
 
-function firstClientTarget(client) {
-  if (!client) return ''
-  let domains = client.domains
-  if (typeof domains === 'string') {
-    try { domains = JSON.parse(domains) } catch { domains = [] }
-  }
-  const first = Array.isArray(domains) ? domains.find((d) => typeof d === 'string' && d.trim()) : ''
-  if (!first) return ''
-  return first.startsWith('http://') || first.startsWith('https://') ? first : `https://${first}`
-}
 
 function CloudTab({ tab, active, onClick }) {
   return (
@@ -59,6 +51,7 @@ function CloudTab({ tab, active, onClick }) {
 }
 
 function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdate, onStatusUpdate }) {
+  const { postScan } = useCommandCenterScan(clientId)
   const [status, setStatus] = useState('idle')
   const [lastRun, setLastRun] = useState(null)
   const [findings, setFindings] = useState([])
@@ -87,13 +80,8 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
     setStatus('running')
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: tab.engine, client_id: Number(clientId), ...(target ? { target } : {}) }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { setStatus('error'); showToast('error', d.detail || t('pages.cloudControlTower.scan_failed')); return }
+      const { ok, data: d } = await postScan({ engine: tab.engine, client_id: Number(clientId), ...(target ? { target } : {}) })
+      if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.cloudControlTower.scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.cloudControlTower.queued', { label: tab.label, jobId }))
       if (jobId) setPendingJobId(jobId)
@@ -102,7 +90,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
       setStatus('error')
       showToast('error', e?.message ?? t('pages.cloudControlTower.scan_failed'))
     }
-  }, [clientId, tab, target, showToast, t])
+  }, [clientId, tab, target, showToast, t, postScan])
 
   const statusColor = { idle: '#374151', running: tab.color, completed: '#4ade80', error: '#ef4444' }[status]
 
@@ -160,6 +148,7 @@ export default function CloudControlTower() {
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [engineStatus, setEngineStatus] = useState({})
@@ -225,6 +214,8 @@ export default function CloudControlTower() {
 
   return (
     <PageShell
+      engineId={activeTabDef.engine}
+      hideHubParams={activeTab === 'k8s'}
       title={t('pages.cloudControlTower.title')}
       badge={t('pages.cloudControlTower.badge')}
       badgeColor="#3b82f6"

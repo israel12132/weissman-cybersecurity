@@ -1,5 +1,5 @@
 /**
- * Master registry of all 529 attack engines.
+ * Master registry of all 551 attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -30,7 +30,7 @@ export const ENGINE_GROUP_DEFS = [
 /** Flat map of groupId → group definition for quick lookup */
 export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
 
-/** All 529 engines in registry order */
+/** All 551 engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -3884,6 +3884,43 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'risk_superposition_collapse',
+    label: 'Risk Superposition Collapse',
+    group: 'recon',
+    mitre: 'T1595',
+    description:
+      'World-first multi-engine Bayesian belief fusion: hundreds of weak finding clusters collapse via noisy-or corroboration + STRIPS attack planning + live risk-graph paths into MITRE kill chains no single scanner can emit — 100% live DB evidence, zero LLM hallucination',
+    requiresTarget: true,
+  },
+  {
+    id: 'chronos',
+    label: 'CHRONOS Temporal Rollback',
+    group: 'defense',
+    mitre: 'T1055',
+    description:
+      '5ms process-delta ring buffer on endpoint agent + eBPF syscall ingest; autonomous SIGSTOP on web-server→shell spawn with live rollback evidence',
+    requiresTarget: true,
+    requiresAgent: true,
+  },
+  {
+    id: 'liquid_matrix',
+    label: 'LIQUID-MATRIX MTD',
+    group: 'defense',
+    mitre: 'T1599',
+    description:
+      'TOTP-synchronized routing tokens rotate internal IP/port/OS fingerprint every 3s — moving target defense for gateway and DNS layers',
+    requiresTarget: true,
+  },
+  {
+    id: 'cognitive_starvation',
+    label: 'COGNITIVE STARVATION',
+    group: 'defense',
+    mitre: 'T1566',
+    description:
+      'Detects LLM/bot scanners and feeds adversarial poison payloads via deception shadow routes — offensive AI starvation, not 403 blocks',
+    requiresTarget: true,
+  },
+  {
     id: 'adversarial_simulation',
     label: 'Full Adversarial Simulation Engine',
     group: 'recon',
@@ -4376,6 +4413,110 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1650',
     description: 'Cross-domain AI adversarial swarm: 14 specialized attack agents run simultaneously across every domain, sharing intelligence via game-theoretic optimal strategy; emergent kill-chain synthesis from intersecting cloud/AI/mobile/supply-chain/OT vulnerabilities; real-time adaptive evasion that mutates TTPs faster than SIEM/EDR rules; quantum-graph Grover search for globally optimal attack path; GNN-based zero-day prediction from CVE/NVD history; self-healing C2 infrastructure; simultaneous purple-team feedback loop with live detection recommendations',
     requiresTarget: false,
+  },
+  {
+    id: 'http_feedback_fuzz',
+    label: 'HTTP Feedback Fuzz',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Live HTTP response differential fuzzing for injection and logic flaws',
+    requiresTarget: true,
+  },
+  {
+    id: 'microsecond_timing',
+    label: 'Microsecond Timing',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Sub-millisecond timing side-channel analysis for auth and crypto endpoints',
+    requiresTarget: true,
+  },
+  {
+    id: 'can_bus_surface',
+    label: 'CAN Bus Surface',
+    group: 'ot',
+    mitre: 'T1595',
+    description: 'Read-only automotive CAN bus exposure and diagnostic surface mapping',
+    requiresTarget: true,
+  },
+  {
+    id: 'ollama_fuzz',
+    label: 'Ollama Fuzz',
+    group: 'ai',
+    mitre: 'T1190',
+    description: 'Live fuzzing of Ollama/LLM local inference APIs',
+    requiresTarget: true,
+  },
+  {
+    id: 'lora_attack',
+    label: 'LoRa Attack',
+    group: 'ot',
+    mitre: 'T1595',
+    description: 'LoRaWAN key extraction and replay surface assessment',
+    requiresTarget: true,
+  },
+  {
+    id: 'sap_erp_attack',
+    label: 'SAP ERP Attack',
+    group: 'apt',
+    mitre: 'T1190',
+    description: 'SAP NetWeaver and ERP exposed interface assessment',
+    requiresTarget: true,
+  },
+  {
+    id: 'mainframe_zos_attack',
+    label: 'Mainframe z/OS Attack',
+    group: 'apt',
+    mitre: 'T1190',
+    description: 'z/OS TN3270 and mainframe service exposure probes',
+    requiresTarget: true,
+  },
+  {
+    id: 'malvertising_seo_poison',
+    label: 'Malvertising SEO Poison',
+    group: 'social',
+    mitre: 'T1566',
+    description: 'Search poisoning and malvertising redirect chain detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'infostealer_emulation',
+    label: 'Infostealer Emulation',
+    group: 'malware',
+    mitre: 'T1005',
+    description: 'Endpoint agent: commodity infostealer blast-radius emulation',
+    requiresTarget: true,
+  },
+  {
+    id: 'printer_mfp_attack',
+    label: 'Printer MFP Attack',
+    group: 'network',
+    mitre: 'T1595',
+    description: 'MFP/printer admin interface and spool exposure',
+    requiresTarget: true,
+  },
+  {
+    id: 'radius_nac_bypass',
+    label: 'RADIUS NAC Bypass',
+    group: 'network',
+    mitre: 'T1557',
+    description: 'RADIUS/NAC misconfiguration and bypass surface',
+    requiresTarget: true,
+  },
+  {
+    id: 'identity_attack_chain',
+    label: 'Identity Attack Chain',
+    group: 'crypto',
+    mitre: 'T1078',
+    description: 'Fusion: password spray + Kerberos + ITDR auth telemetry',
+    requiresTarget: true,
+  },
+  {
+    id: 'pipeline_to_runtime_risk',
+    label: 'Pipeline-to-Runtime Risk',
+    group: 'supply_chain',
+    mitre: 'T1195',
+    description: 'Fusion: IaC misconfig + supply chain + CI/CD pipeline',
+    requiresTarget: true,
   },
 ]
 

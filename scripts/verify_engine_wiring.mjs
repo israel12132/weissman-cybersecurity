@@ -1,8 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+
+const gen = spawnSync('node', ['scripts/generate_engine_param_defs.mjs'], { cwd: root, encoding: 'utf8' })
+if (gen.status !== 0) {
+  console.error(gen.stderr || gen.stdout || 'generate_engine_param_defs.mjs failed')
+  process.exit(gen.status ?? 1)
+}
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')

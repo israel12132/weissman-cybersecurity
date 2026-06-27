@@ -4,6 +4,7 @@
 use crate::engine_probes::{
     empty_ok, finding_with_probe_depth, http_client, http_get, normalize_url,
 };
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -231,6 +232,46 @@ pub async fn run_prototype_pollution_result(target: &str) -> EngineResult {
         let n = findings.len();
         EngineResult::ok(findings, format!("prototype_pollution: {} live finding(s)", n))
     }
+}
+
+pub async fn run_prototype_pollution_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
+    let mut result = run_prototype_pollution_result(target).await;
+    if ctx.memory_payloads.is_empty() || target.trim().is_empty() {
+        return result;
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    for path in API_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        for payload_str in &ctx.memory_payloads {
+            let Ok(payload) = serde_json::from_str::<Value>(payload_str) else {
+                continue;
+            };
+            if let Some(polluted) = http_post_json(&client, &url, &payload).await {
+                if sentinel_leaked(&polluted.body, SENTINEL) {
+                    result.findings.push(pp_finding(
+                        "Prototype pollution via attacker-memory payload",
+                        "critical",
+                        &format!(
+                            "Memory-replayed JSON body on {} leaked sentinel '{}'.",
+                            polluted.final_url, SENTINEL
+                        ),
+                        target,
+                        json!({ "path": path, "attacker_memory": true }),
+                    ));
+                    if let Some(id) = ctx.memory_path_ids.first() {
+                        if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
+                            crate::pentest_memory::record_replay_hit(pool.as_ref(), tid, *id).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
 }
 
 pub async fn run_prototype_pollution(target: &str) {

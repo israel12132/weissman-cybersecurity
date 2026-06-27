@@ -1,3 +1,4 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +49,7 @@ export default function MobileSecurity() {
   const [findings, setFindings] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,19 +152,14 @@ export default function MobileSecurity() {
     setScanError(null)
     setScanningAppId(app.id)
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: MOBILE_ENGINE,
-          client_id: Number(selectedClientId),
-          target,
-          package_id: app.package_id,
-          platform: app.platform,
-        }),
+      const { ok, data: d } = await postScan({
+        engine: MOBILE_ENGINE,
+        client_id: Number(selectedClientId),
+        target,
+        package_id: app.package_id,
+        platform: app.platform,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
+      if (!ok) {
         setScanError(d.detail || d.error || t('pages.mobileSecurity.scan_failed'))
         setScanningAppId(null)
         return

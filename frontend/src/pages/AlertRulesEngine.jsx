@@ -41,7 +41,7 @@ export default function AlertRulesEngine() {
       setRules(data.rules || []);
     } catch (error) {
       console.error('Failed to fetch alert rules:', error);
-      toast.error(t('pages.alertRulesEngine.load_failed', { defaultValue: 'Failed to load alert rules' }));
+      toast.error(t('pages.alertRulesEngine.load_failed'));
     } finally {
       setLoading(false);
     }
@@ -57,21 +57,21 @@ export default function AlertRulesEngine() {
       );
       toast.success(
         currentState
-          ? t('pages.alertRulesEngine.rule_disabled', { defaultValue: 'Rule disabled' })
-          : t('pages.alertRulesEngine.rule_enabled', { defaultValue: 'Rule enabled' })
+          ? t('pages.alertRulesEngine.rule_disabled')
+          : t('pages.alertRulesEngine.rule_enabled')
       );
     } catch (error) {
       console.error('Failed to toggle rule:', error);
-      toast.error(t('pages.alertRulesEngine.toggle_failed', { defaultValue: 'Failed to update rule' }));
+      toast.error(t('pages.alertRulesEngine.toggle_failed'));
     }
   };
 
   const deleteRule = async (ruleId) => {
     const ok = await confirmDialog({
-      title: t('pages.alertRulesEngine.delete_title', { defaultValue: 'Delete alert rule?' }),
+      title: t('pages.alertRulesEngine.delete_title'),
       message: t('pages.alertRulesEngine.delete_confirm'),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     });
     if (!ok) return;
@@ -79,10 +79,10 @@ export default function AlertRulesEngine() {
     try {
       await api.delete(`/api/alerts/rules/${ruleId}`);
       setRules((prev) => prev.filter((r) => r.id !== ruleId));
-      toast.success(t('pages.alertRulesEngine.delete_success', { defaultValue: 'Alert rule deleted' }));
+      toast.success(t('pages.alertRulesEngine.delete_success'));
     } catch (error) {
       console.error('Failed to delete rule:', error);
-      toast.error(t('pages.alertRulesEngine.delete_failed', { defaultValue: 'Failed to delete rule' }));
+      toast.error(t('pages.alertRulesEngine.delete_failed'));
     }
   };
 
@@ -96,7 +96,7 @@ export default function AlertRulesEngine() {
       }
     } catch (error) {
       console.error('Failed to test rule:', error);
-      toast.error(t('pages.alertRulesEngine.test_error', { defaultValue: 'Failed to run rule test' }));
+      toast.error(t('pages.alertRulesEngine.test_error'));
     }
   };
 
@@ -444,13 +444,13 @@ function RuleModal({ rule, template, onClose, onSave }) {
       }
       toast.success(
         rule
-          ? t('pages.alertRulesEngine.save_updated', { defaultValue: 'Alert rule updated' })
-          : t('pages.alertRulesEngine.save_created', { defaultValue: 'Alert rule created' })
+          ? t('pages.alertRulesEngine.save_updated')
+          : t('pages.alertRulesEngine.save_created')
       );
       onSave();
     } catch (error) {
       console.error('Failed to save rule:', error);
-      toast.error(t('pages.alertRulesEngine.save_failed', { defaultValue: 'Failed to save alert rule' }));
+      toast.error(t('pages.alertRulesEngine.save_failed'));
     } finally {
       setSaving(false);
     }

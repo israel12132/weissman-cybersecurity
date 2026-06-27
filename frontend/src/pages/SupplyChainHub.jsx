@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { Link } from 'react-router-dom'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -58,7 +60,9 @@ function FindingCard({ finding, t }) {
   )
 }
 
-function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) {
+function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFocused, onFocus, t }) {
+  const { postScan } = useCommandCenterScan(clientId)
+  useHubEngineFocus(engineId, { active: isFocused })
   const [running, setRunning] = useState(false)
   const [findings, setFindings] = useState([])
   const [lastRun, setLastRun] = useState(null)
@@ -89,13 +93,8 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) 
     setRunning(true)
     setFindings([])
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: engineId, client_id: Number(clientId) }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast('error', d.detail || t('pages.supplyChainHub.scan_failed')); setRunning(false); return }
+      const { ok, data: d } = await postScan({ engine: engineId, client_id: Number(clientId) })
+      if (!ok) { showToast('error', d.detail || t('pages.supplyChainHub.scan_failed')); setRunning(false); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.supplyChainHub.queued', { label, jobId }))
       if (jobId) setPendingJobId(jobId)
@@ -108,7 +107,11 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, t }) 
 
   return (
     <AgentRequiredGate engineId={engineId} className="rounded-2xl">
-    <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+    <div
+      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4"
+      onMouseEnter={onFocus}
+      onFocus={onFocus}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-white">{label}</h3>
@@ -169,6 +172,7 @@ export default function SupplyChainHub() {
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [refreshLoading, setRefreshLoading] = useState(false)
+  const [focusedEngineId, setFocusedEngineId] = useState(SUPPLY_ENGINE_IDS[0])
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -228,6 +232,7 @@ export default function SupplyChainHub() {
 
   return (
     <PageShell
+      engineId={focusedEngineId}
       title={t('pages.supplyChainHub.title')}
       badge={t('pages.supplyChainHub.badge')}
       badgeColor={ACCENT}
@@ -275,6 +280,8 @@ export default function SupplyChainHub() {
             <EngineRunPanel
               engineId={engineId}
               clientId={selectedClientId}
+              isFocused={focusedEngineId === engineId}
+              onFocus={() => setFocusedEngineId(engineId)}
               showToast={showToast}
               onFindingsUpdate={handleFindingsUpdate}
               t={t}

@@ -63,6 +63,9 @@ fn job_is_heavy(kind: &str) -> bool {
             | "sovereign_learning_feedback"
             | "genesis_eternal_fuzz"
             | "genesis_knowledge_match"
+            | "command_center_engine"
+            | "scan_all_engines"
+            | "scan_discovered_domains"
     )
 }
 

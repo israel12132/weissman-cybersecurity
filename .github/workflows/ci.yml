@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: clippy
 
@@ -98,8 +98,11 @@ jobs:
       - name: Clippy (correctness + suspicious bug gate)
         run: cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
 
-      - name: Run Rust tests
-        run: cargo test --workspace
+      - name: Build Rust workspace
+        run: cargo build --workspace
+
+      - name: Run Rust tests (blocking gate)
+        run: cargo test --workspace --all-targets
 
   security-scan:
     name: Security — secrets & dependency scan
@@ -164,6 +167,10 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Playwright UI smoke (mock API — not live stack)
+        run: npx playwright install chromium && npm run test:e2e
+        working-directory: frontend
+
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
@@ -201,7 +208,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: rustfmt, clippy
 
@@ -218,6 +225,27 @@ jobs:
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
+      - name: Verify engine scan wiring
+        run: node scripts/verify_engine_scan_wiring.mjs
+
+      - name: Verify hub local params wiring
+        run: node scripts/verify_hub_local_params.mjs
+
+      - name: Verify command center supreme coverage
+        run: node scripts/verify_command_center_coverage.mjs
+
+      - name: Engine reality audit
+        run: node scripts/engine_reality_audit.mjs
+
+      - name: Cloud posture catalog parity
+        run: node scripts/verify_cloud_posture_catalog.mjs
+
+      - name: Weissman UI compliance audit
+        run: node scripts/weissman-ui-audit.mjs
+
+      - name: i18n defaultValue gate
+        run: node scripts/verify_i18n_no_default_values.mjs
+
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend
@@ -228,6 +256,14 @@ jobs:
 
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
+
+      - name: Apply database migrations
+        env:
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+        run: cargo run -q -p weissman-db --example run_migrate
+
+      - name: Run Rust workspace tests (blocking gate)
+        run: cargo test --workspace --all-targets
 
       - name: Build Docker production images
         run: docker compose build backend worker gateway
@@ -315,6 +351,44 @@ jobs:
           WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
         run: node scripts/audit_ui_button_scan_paths.mjs
 
+      - name: Live scan pipeline E2E contract
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_E2E_POLL_MS: "2000"
+          WEISSMAN_E2E_POLL_MAX: "90"
+        run: node scripts/verify_scan_pipeline_e2e.mjs
+
+      - name: Live scan pipeline pytest contract
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_E2E_POLL_MS: "2000"
+          WEISSMAN_E2E_POLL_MAX: "90"
+        run: python -m pytest tests/e2e/test_scan_pipeline_live.py -v --tb=short
+
+      - name: Engine groups findings + risk E2E
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
+          WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
+        run: node scripts/verify_engine_groups_findings_e2e.mjs
+
+      - name: FP/TP confidence feedback E2E
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+        run: node scripts/verify_fp_tp_confidence_e2e.mjs
+
       - name: Dump server logs on failure
         if: failure()
         run: |
@@ -347,4 +421,4 @@ jobs:
             --config p/security-audit \
             --config p/secrets \
             --config p/owasp-top-ten \
-            --metrics off || true
+            --metrics off

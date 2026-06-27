@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -405,8 +407,10 @@ export default function CicdPipelineSecurityCommandCenter() {
   const engine = ENGINES_BY_ID[ENGINE_ID]
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [target, setTarget] = useState('')
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams(ENGINE_ID, params)
   const [running, setRunning] = useState(false)
   const [lines, setLines] = useState([])
   const [metrics, setMetrics] = useState(null)
@@ -504,13 +508,8 @@ export default function CicdPipelineSecurityCommandCenter() {
     if (opts.dryRun) body.dry_run = true
 
     try {
-      const r = await apiFetch('/api/command-center/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await r.json()
-      if (!r.ok) {
+      const { ok, data } = await postScan(body)
+      if (!ok) {
         appendLine(`[ERROR] ${data.detail || 'Scan failed'}`)
         setRunning(false)
         return
@@ -552,6 +551,7 @@ export default function CicdPipelineSecurityCommandCenter() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('cicdSec.title', 'CI/CD Pipeline Security Command Center')}
       subtitle={t('cicdSec.subtitle', 'Agentless DevSecOps at Wiz / Prisma / GitHub Advanced Security depth — multi-platform CI fingerprinting, workflow static analysis, secret leakage & attack-path synthesis')}
       badge="DevSecOps"

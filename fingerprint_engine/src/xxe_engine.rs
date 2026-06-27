@@ -2,7 +2,9 @@
 //! MITRE: T1190 (Exploit Public-Facing Application).
 
 use crate::engine_probes::{empty_ok, finding_with_probe_depth, http_client, normalize_url};
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
+use crate::pentest_memory;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -98,6 +100,52 @@ const CONTENT_TYPES: &[&str] = &[
 
 fn file_disclosed(body: &str, canaries: &[&str], path_marker: &str) -> bool {
     canaries.iter().any(|c| body.contains(c)) && !body.contains(path_marker)
+}
+
+pub async fn run_xxe_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
+    let mut result = run_xxe_result(target).await;
+    if ctx.memory_payloads.is_empty() || target.trim().is_empty() {
+        return result;
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    for path in XML_PATHS {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        for payload in &ctx.memory_payloads {
+            if payload.trim().is_empty() {
+                continue;
+            }
+            if let Some(p) = http_post_body(&client, &url, "application/xml", payload).await {
+                if file_disclosed(&p.body, PASSWD_CANARIES, "/etc/passwd")
+                    || file_disclosed(&p.body, HOSTNAME_CANARIES, "/etc/hostname")
+                {
+                    result.findings.push(xxe_finding(
+                        "XXE confirmed via attacker-memory payload replay",
+                        "critical",
+                        &format!(
+                            "Memory-replayed payload on {} disclosed file content (HTTP {}).",
+                            url, p.status
+                        ),
+                        target,
+                        json!({ "path": path, "attacker_memory": true }),
+                    ));
+                    if let Some(id) = ctx.memory_path_ids.first() {
+                        if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
+                            pentest_memory::record_replay_hit(pool.as_ref(), tid, *id).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !result.findings.is_empty() {
+        result.message = format!(
+            "XXE: {} finding(s) ({} memory-augmented)",
+            result.findings.len(),
+            ctx.memory_payloads.len()
+        );
+    }
+    result
 }
 
 pub async fn run_xxe_result(target: &str) -> EngineResult {

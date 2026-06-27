@@ -42,7 +42,7 @@ export default function CeoVault() {
       setSecrets(data.secrets || []);
     } catch (error) {
       console.error('Failed to fetch secrets:', error);
-      toast.error(t('pages.ceoVault.load_failed', { defaultValue: 'Failed to load vault secrets' }));
+      toast.error(t('pages.ceoVault.load_failed'));
     } finally {
       setLoading(false);
     }
@@ -67,10 +67,10 @@ export default function CeoVault() {
 
   const deleteSecret = async (secretId) => {
     const ok = await confirmDialog({
-      title: t('pages.ceoVault.delete_title', { defaultValue: 'Delete secret?' }),
+      title: t('pages.ceoVault.delete_title'),
       message: t('pages.ceoVault.delete_confirm'),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     });
     if (!ok) return;
@@ -78,10 +78,10 @@ export default function CeoVault() {
     try {
       await api.delete(`/api/ceo/vault/secrets/${secretId}`);
       setSecrets((prev) => prev.filter((s) => s.id !== secretId));
-      toast.success(t('pages.ceoVault.delete_success', { defaultValue: 'Secret deleted' }));
+      toast.success(t('pages.ceoVault.delete_success'));
     } catch (error) {
       console.error('Failed to delete secret:', error);
-      toast.error(t('pages.ceoVault.delete_failed', { defaultValue: 'Failed to delete secret' }));
+      toast.error(t('pages.ceoVault.delete_failed'));
     }
   };
 

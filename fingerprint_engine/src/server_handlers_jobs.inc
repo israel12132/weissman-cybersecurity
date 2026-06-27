@@ -118,7 +118,8 @@ async fn api_async_job_status(
     Path(job_id): Path<uuid::Uuid>,
 ) -> Response {
     match db::job_queue::get_job_for_tenant(state.app_pool.as_ref(), auth.tenant_id, job_id).await {
-        Ok(Some(status)) => {
+        Ok(Some(mut status)) => {
+            status.payload = crate::scan_payload_redaction::redact_for_api(&status.payload);
             return (StatusCode::OK, Json(json!(status))).into_response();
         }
         Err(e) => {

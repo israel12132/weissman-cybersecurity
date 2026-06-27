@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
+import { normalizeIntegrations } from '../lib/engineClientPrefill'
 
 const defaultConfig = {
   enabled_engines: ['osint', 'asm', 'nexus_sovereign_swarm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
@@ -30,6 +31,8 @@ export function ClientProvider({ children }) {
   const [configLoading, setConfigLoading] = useState(false)
   const [configError, setConfigError] = useState(null)
   const [poeJobId, setPoeJobId] = useState(null)
+  const [clientIntegrations, setClientIntegrations] = useState(null)
+  const [integrationsLoading, setIntegrationsLoading] = useState(false)
   const selectedClientIdRef = useRef(null)
 
   selectedClientIdRef.current = selectedClientId
@@ -91,6 +94,35 @@ export function ClientProvider({ children }) {
     }
   }, [])
 
+  const refreshIntegrations = useCallback(async (clientId) => {
+    if (clientId == null) {
+      setClientIntegrations(null)
+      return null
+    }
+    setIntegrationsLoading(true)
+    try {
+      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
+      if (r.ok) {
+        const data = normalizeIntegrations(await r.json())
+        if (selectedClientIdRef.current === clientId) {
+          setClientIntegrations(data)
+        }
+        return data
+      }
+      if (selectedClientIdRef.current === clientId) {
+        setClientIntegrations(null)
+      }
+      return null
+    } catch {
+      if (selectedClientIdRef.current === clientId) {
+        setClientIntegrations(null)
+      }
+      return null
+    } finally {
+      setIntegrationsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     refreshClients()
   }, [refreshClients])
@@ -98,7 +130,8 @@ export function ClientProvider({ children }) {
   useEffect(() => {
     setPoeJobId(null)
     refreshConfig(selectedClientId)
-  }, [selectedClientId, refreshConfig])
+    refreshIntegrations(selectedClientId)
+  }, [selectedClientId, refreshConfig, refreshIntegrations])
 
   const patchConfig = useCallback(async (clientId, patch) => {
     if (clientId == null) return false
@@ -151,6 +184,9 @@ export function ClientProvider({ children }) {
     defaultConfig,
     poeJobId,
     setPoeJobId,
+    clientIntegrations,
+    integrationsLoading,
+    refreshIntegrations: () => refreshIntegrations(selectedClientId),
   }
 
   return (

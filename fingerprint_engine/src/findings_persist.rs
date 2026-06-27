@@ -414,6 +414,43 @@ pub async fn persist_engine_findings(
         let signature_hash =
             findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
 
+        // ── Confidence multiplier + effective risk (persist-time, not read-time only) ──
+        let conf_mult =
+            fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)
+                .await;
+        let base_risk = if cvss > 0.0 {
+            cvss
+        } else {
+            severity_to_score(&severity)
+        };
+        let effective_risk = ((base_risk * conf_mult).min(10.0) * 10.0).round() / 10.0;
+        let finding_verified = f.get("verified").and_then(Value::as_bool).unwrap_or(false)
+            || f
+                .get("verification_method")
+                .and_then(Value::as_str)
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+        let poc_sealed = finding_verified || !poc.is_empty();
+        if let Value::Object(obj) = &mut raw_data_enriched {
+            obj.insert(
+                "confidence_multiplier".to_string(),
+                json!(conf_mult),
+            );
+            obj.insert("effective_risk".to_string(), json!(effective_risk));
+            obj.insert("verified".to_string(), json!(poc_sealed));
+            if poc_sealed {
+                obj.insert(
+                    "verification_status".to_string(),
+                    json!("verified"),
+                );
+            } else {
+                obj.insert(
+                    "verification_status".to_string(),
+                    json!("unverified"),
+                );
+            }
+        }
+
         // If a suppression rule exists for this combo, demote to FALSE_POSITIVE
         // before insert. We still persist (audit trail) but the inbox stays clean.
         // We have to commit the existing tx to call is_suppressed (which opens its
@@ -434,10 +471,11 @@ pub async fn persist_engine_findings(
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
-                  intel_enriched_at)
+                  intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $14, $9, $10, $11, now(),
-                       $12, $13, $15, $16, $17,
-                       CASE WHEN $13 IS NOT NULL OR $15 THEN now() ELSE NULL END)
+                       $12, $13, $16, $17, $18,
+                       CASE WHEN $13 IS NOT NULL OR $16 THEN now() ELSE NULL END,
+                       $19, $20, $21)
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -451,6 +489,9 @@ pub async fn persist_engine_findings(
                    kev_known_ransomware = vulnerabilities.kev_known_ransomware OR EXCLUDED.kev_known_ransomware,
                    kev_due_date         = COALESCE(EXCLUDED.kev_due_date, vulnerabilities.kev_due_date),
                    intel_enriched_at    = COALESCE(EXCLUDED.intel_enriched_at, vulnerabilities.intel_enriched_at),
+                   confidence_multiplier = EXCLUDED.confidence_multiplier,
+                   effective_risk       = EXCLUDED.effective_risk,
+                   poc_sealed           = vulnerabilities.poc_sealed OR EXCLUDED.poc_sealed,
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
@@ -473,6 +514,9 @@ pub async fn persist_engine_findings(
         .bind(kev_listed)
         .bind(kev_known_ransomware)
         .bind(kev_due_date)
+        .bind(conf_mult)
+        .bind(effective_risk)
+        .bind(poc_sealed)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
@@ -625,6 +669,18 @@ pub async fn persist_engine_findings(
     }
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    if inserted > 0 {
+        let pool_arc = std::sync::Arc::new((*pool).clone());
+        crate::superposition_followup::spawn_after_persist(
+            pool_arc,
+            tenant_id,
+            client_id,
+            target.to_string(),
+            engine.to_string(),
+        );
+    }
+
     Ok(inserted)
 }
 
@@ -690,6 +746,15 @@ mod tests {
         assert_eq!(extract_cvss(&json!({"unrelated": 1})), 0.0);
         assert_eq!(severity_to_score("critical"), 9.5);
         assert_eq!(severity_to_score("info"), 1.0);
+    }
+
+    #[test]
+    fn effective_risk_clamped_from_base_and_multiplier() {
+        let base = severity_to_score("high");
+        let conf_mult = 0.83_f64;
+        let effective = ((base * conf_mult).min(10.0) * 10.0).round() / 10.0;
+        assert!(effective > 0.0 && effective <= 10.0);
+        assert_eq!(effective, 6.2); // 7.5 * 0.83 = 6.225 → 6.2
     }
 
     #[test]

@@ -2,6 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { ClientProvider } from './context/ClientContext'
+import { EngineHubProvider } from './context/EngineHubContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import './i18n' // bootstrap i18next before any component renders
@@ -102,6 +104,8 @@ const CouncilHitlQueue = React.lazy(() => import('./pages/CouncilHitlQueue'))
 const RoeApprovals = React.lazy(() => import('./pages/RoeApprovals'))
 const SsoDashboard = React.lazy(() => import('./pages/SsoDashboard'))
 const NexusSovereignSwarm = React.lazy(() => import('./pages/NexusSovereignSwarm'))
+const RiskSuperpositionCollapse = React.lazy(() => import('./pages/RiskSuperpositionCollapse'))
+const SovereignDefenseMatrix = React.lazy(() => import('./pages/SovereignDefenseMatrix'))
 const GraphqlSecurityCommandCenter = React.lazy(() => import('./pages/GraphqlSecurityCommandCenter'))
 const CicdPipelineSecurityCommandCenter = React.lazy(() => import('./pages/CicdPipelineSecurityCommandCenter'))
 const ServerlessSecurityCommandCenter = React.lazy(() => import('./pages/ServerlessSecurityCommandCenter'))
@@ -149,6 +153,7 @@ const ExploitResearchLab = React.lazy(() => import('./pages/ExploitResearchLab')
 const Clients = React.lazy(() => import('./pages/Clients'))
 const ClientNew = React.lazy(() => import('./pages/ClientNew'))
 const ClientDetail = React.lazy(() => import('./pages/ClientDetail'))
+const ClientIntegrations = React.lazy(() => import('./pages/ClientIntegrations'))
 const ClientEngagements = React.lazy(() => import('./pages/ClientEngagements'))
 const ClientEvidenceVault = React.lazy(() => import('./pages/ClientEvidenceVault'))
 const ClientSaasIdpDiscovery = React.lazy(() => import('./pages/ClientSaasIdpDiscovery'))
@@ -164,11 +169,15 @@ import './index.css'
 function ProtectedOutlet() {
   const location = useLocation()
   return (
-    <RouteErrorBoundary key={location.pathname}>
-      <React.Suspense fallback={<RouteLoader />}>
-        <Outlet />
-      </React.Suspense>
-    </RouteErrorBoundary>
+    <ClientProvider>
+      <EngineHubProvider>
+        <RouteErrorBoundary key={location.pathname}>
+          <React.Suspense fallback={<RouteLoader />}>
+            <Outlet />
+          </React.Suspense>
+        </RouteErrorBoundary>
+      </EngineHubProvider>
+    </ClientProvider>
   )
 }
 
@@ -257,6 +266,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="digital-twin" element={<DigitalTwinSimulator />} />
             <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
             <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
+            <Route path="superposition-collapse" element={<RiskSuperpositionCollapse />} />
+            <Route path="sovereign-defense-matrix" element={<SovereignDefenseMatrix />} />
             <Route path="graphql-security" element={<GraphqlSecurityCommandCenter />} />
             <Route path="cicd-security" element={<CicdPipelineSecurityCommandCenter />} />
             <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />
@@ -275,6 +286,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="clients" element={<Clients />} />
             <Route path="clients/new" element={<ClientNew />} />
             <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="clients/:id/integrations" element={<ClientIntegrations />} />
             <Route path="clients/:id/engagements" element={<ClientEngagements />} />
             <Route path="clients/:id/evidence" element={<ClientEvidenceVault />} />
             <Route path="clients/:id/discovery/saas-idp" element={<ClientSaasIdpDiscovery />} />

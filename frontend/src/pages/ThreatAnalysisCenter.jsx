@@ -68,9 +68,7 @@ export default function ThreatAnalysisCenter() {
       const res = await api.get(`/api/threat-analysis/${clientId}?persist=1`);
       setReport(res || null);
       setPersistedNote(
-        t('pages.threatAnalysis.persisted', {
-          defaultValue: 'Persisted {{n}} correlation incident(s).',
-          n: res?.persisted_incidents ?? 0,
+        t('pages.threatAnalysis.persisted', { n: res?.persisted_incidents ?? 0,
         }),
       );
     } catch (e) {
@@ -145,7 +143,7 @@ export default function ThreatAnalysisCenter() {
 
   return (
     <PageShell
-      title={t('pages.threatAnalysis.title', { defaultValue: 'Unified Threat Analysis' })}
+      title={t('pages.threatAnalysis.title')}
       icon={<Puzzle />}
       actions={(
         <div className="flex items-center gap-2 flex-wrap">
@@ -164,18 +162,15 @@ export default function ThreatAnalysisCenter() {
           >
             <ShieldAlert className="w-4 h-4" />
             {persisting
-              ? t('pages.threatAnalysis.persisting', { defaultValue: 'Persisting\u2026' })
-              : t('pages.threatAnalysis.persist', { defaultValue: 'Persist incidents' })}
+              ? t('pages.threatAnalysis.persisting')
+              : t('pages.threatAnalysis.persist')}
           </button>
         </div>
       )}
     >
       <div className="space-y-6">
         <p className="text-sm text-gray-400 max-w-2xl">
-          {t('pages.threatAnalysis.subtitle', {
-            defaultValue:
-              'Grounded attack-chain plan + multi-stage kill-chain correlation over this client\u2019s live findings, scored as one incident.',
-          })}
+          {t('pages.threatAnalysis.subtitle', { })}
         </p>
 
         {persistedNote && (
@@ -191,15 +186,13 @@ export default function ThreatAnalysisCenter() {
         ) : clientId == null ? (
           <EmptyState
             icon="shield"
-            title={t('pages.threatAnalysis.no_client_title', { defaultValue: 'No client selected' })}
-            body={t('pages.threatAnalysis.no_client_body', {
-              defaultValue: 'Add a client with findings to run unified threat analysis.',
-            })}
+            title={t('pages.threatAnalysis.no_client_title')}
+            body={t('pages.threatAnalysis.no_client_body', { })}
           />
         ) : error ? (
           <EmptyState
             icon="alert"
-            title={t('pages.threatAnalysis.error_title', { defaultValue: 'Could not load analysis' })}
+            title={t('pages.threatAnalysis.error_title')}
             body={error}
           />
         ) : (
@@ -208,30 +201,28 @@ export default function ThreatAnalysisCenter() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className={`rounded-xl p-5 border ${tone.ring} ${tone.bg}`}>
                 <div className="text-xs text-gray-400 mb-1">
-                  {t('pages.threatAnalysis.incident_score', { defaultValue: 'Incident score' })}
+                  {t('pages.threatAnalysis.incident_score')}
                 </div>
                 <div className={`text-4xl font-bold ${tone.text}`}>{score.toFixed(0)}</div>
                 <div className="text-[11px] text-gray-500 mt-1">
-                  {t('pages.threatAnalysis.findings_analyzed', {
-                    defaultValue: '{{n}} findings analyzed',
-                    n: report?.findings_analyzed ?? 0,
+                  {t('pages.threatAnalysis.findings_analyzed', { n: report?.findings_analyzed ?? 0,
                   })}
                 </div>
               </div>
               <SummaryCard
-                label={t('pages.threatAnalysis.reached_objective', { defaultValue: 'Objective reachable' })}
-                value={summary.reached_objective ? t('common.yes', { defaultValue: 'Yes' }) : t('common.no', { defaultValue: 'No' })}
+                label={t('pages.threatAnalysis.reached_objective')}
+                value={summary.reached_objective ? t('common.yes') : t('common.no')}
                 valueClass={summary.reached_objective ? 'text-red-400' : 'text-emerald-400'}
                 icon={<GitBranch className="w-4 h-4 text-cyan-400" />}
               />
               <SummaryCard
-                label={t('pages.threatAnalysis.correlation_incidents', { defaultValue: 'Correlation incidents' })}
+                label={t('pages.threatAnalysis.correlation_incidents')}
                 value={summary.correlation_incidents ?? 0}
                 valueClass="text-orange-400"
                 icon={<ShieldAlert className="w-4 h-4 text-orange-400" />}
               />
               <SummaryCard
-                label={t('pages.threatAnalysis.detections', { defaultValue: 'Network + identity' })}
+                label={t('pages.threatAnalysis.detections')}
                 value={`${summary.network_detections ?? 0} / ${summary.identity_detections ?? 0}`}
                 valueClass="text-white"
                 icon={<Network className="w-4 h-4 text-purple-400" />}
@@ -243,9 +234,9 @@ export default function ThreatAnalysisCenter() {
               <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-5">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
                   <GitBranch className="w-4 h-4 text-red-400" />
-                  {t('pages.threatAnalysis.attack_chain', { defaultValue: 'Grounded attack chain' })}
+                  {t('pages.threatAnalysis.attack_chain')}
                   <span className="text-[11px] text-gray-500 font-normal">
-                    {t('pages.threatAnalysis.goal', { defaultValue: 'goal' })}: {chain.goal} · cost {chain.total_cost}
+                    {t('pages.threatAnalysis.goal')}: {chain.goal} · cost {chain.total_cost}
                   </span>
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -272,13 +263,9 @@ export default function ThreatAnalysisCenter() {
               severityFilter={severityFilter}
               onSeverityChange={setSeverityFilter}
               accent={ACCENT}
-              title={t('pages.threatAnalysis.multi_stage', { defaultValue: 'Multi-stage correlation & detections' })}
-              emptyTitle={t('pages.threatAnalysis.no_incidents', {
-                defaultValue: 'No multi-stage progression correlated in the current findings window.',
-              })}
-              emptyBody={t('pages.threatAnalysis.no_incidents', {
-                defaultValue: 'No multi-stage progression correlated in the current findings window.',
-              })}
+              title={t('pages.threatAnalysis.multi_stage')}
+              emptyTitle={t('pages.threatAnalysis.no_incidents', { })}
+              emptyBody={t('pages.threatAnalysis.no_incidents', { })}
               renderFinding={(f) => (
                 <div key={f.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -294,7 +281,7 @@ export default function ThreatAnalysisCenter() {
                   </div>
                   {f.target && (
                     <div className="text-[11px] text-gray-400 mb-2">
-                      {t('pages.threatAnalysis.target', { defaultValue: 'target' })}:{' '}
+                      {t('pages.threatAnalysis.target')}:{' '}
                       <span className="font-mono text-white/70">{f.target}</span>
                     </div>
                   )}

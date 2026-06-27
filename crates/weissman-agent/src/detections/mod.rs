@@ -3,6 +3,7 @@
 
 mod arp_table;
 mod baseline;
+mod chronos;
 mod clipboard;
 mod edr_presence;
 mod exfil_local;
@@ -86,6 +87,8 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "usb_enumeration",
         // UEBA — periodic baseline sample
         "ueba_baseline",
+        // CHRONOS — 5ms process-delta ring buffer + SIGSTOP on shell spawn
+        "chronos",
     ]
 }
 
@@ -152,6 +155,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
                 infostealer::run(&engine, target.as_deref(), &params).await
             }
             "ueba_baseline" => baseline::run(&engine).await,
+            "chronos" => chronos::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"
             )),
@@ -203,6 +207,7 @@ mod tests {
         "bluetooth_mobile_attack", "nfc_relay_attack", "deepfake_voice_engine", "pretexting_engine",
         "insider_threat_engine", "physical_social_eng", "lorawan_attack", "lora_attack",
         "voltage_glitch_attack", "tpm_firmware_attack", "cold_boot_attack", "infostealer_emulation",
+        "chronos",
     ];
 
     #[test]

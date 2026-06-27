@@ -14,7 +14,7 @@
 use axum::http::StatusCode;
 use chrono::Utc;
 use serde_json::{json, Value};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use weissman_core::models::engine::is_production_engine_id;
 
@@ -327,6 +327,247 @@ pub async fn check_tenant_entitlement(
 
 // --- Extracted body (single pass) -------------------------------------------
 
+const MASKED_SECRET: &str = "••••••••";
+
+fn is_masked_secret_value(v: &Value) -> bool {
+    v.as_str().is_some_and(|s| {
+        let t = s.trim();
+        t == MASKED_SECRET || t.starts_with("••••")
+    })
+}
+
+fn extra_value_usable(v: &Value) -> bool {
+    if v.is_null() {
+        return false;
+    }
+    if is_masked_secret_value(v) {
+        return false;
+    }
+    if let Some(s) = v.as_str() {
+        return !s.trim().is_empty();
+    }
+    true
+}
+
+#[derive(Debug, Clone)]
+struct ClientCredentialSnapshot {
+    aws_role_arn: String,
+    aws_external_id: String,
+    gcp_project_id: String,
+    azure_subscription_id: String,
+    azure_tenant_id: String,
+    ad_domain: String,
+    first_repo_url: String,
+    ebpf_ssh_host: String,
+    ebpf_ssh_user: String,
+}
+
+#[derive(Debug, Clone, Default)]
+struct TenantScanSecrets {
+    github_token: String,
+    oast_domain: String,
+    oast_api_key: String,
+}
+
+async fn tenant_config_string(
+    pool: &PgPool,
+    tenant_id: i64,
+    key: &str,
+) -> Result<String, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx for {key}: {e}"))?;
+    let val: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+    )
+    .bind(tenant_id)
+    .bind(key)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("read system_configs.{key}: {e}"))?;
+    let _ = tx.commit().await;
+    Ok(val.unwrap_or_default().trim().to_string())
+}
+
+async fn load_tenant_scan_secrets(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<TenantScanSecrets, String> {
+    let github_token = tenant_config_string(pool, tenant_id, "github_token").await?;
+    let mut oast_domain = tenant_config_string(pool, tenant_id, "oast_domain").await?;
+    let oast_api_key = tenant_config_string(pool, tenant_id, "oast_api_key").await?;
+    if oast_domain.is_empty() {
+        oast_domain = std::env::var("WEISSMAN_OAST_DOMAIN")
+            .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+    }
+    let github_token = if github_token.is_empty() {
+        std::env::var("GITHUB_TOKEN").unwrap_or_default().trim().to_string()
+    } else {
+        github_token
+    };
+    let oast_api_key = if oast_api_key.is_empty() {
+        std::env::var("WEISSMAN_OAST_API_KEY")
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    } else {
+        oast_api_key
+    };
+    Ok(TenantScanSecrets {
+        github_token,
+        oast_domain,
+        oast_api_key,
+    })
+}
+
+async fn load_client_credentials(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Option<ClientCredentialSnapshot>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx for client credentials: {e}"))?;
+    let row = sqlx::query(
+        r#"SELECT
+            COALESCE(trim(aws_cross_account_role_arn),'') AS aws_arn,
+            COALESCE(trim(aws_external_id),'') AS aws_ext,
+            COALESCE(trim(gcp_project_id),'') AS gcp,
+            COALESCE(NULLIF(trim(client_configs), ''), '{}') AS client_configs
+           FROM clients WHERE id = $1"#,
+    )
+    .bind(client_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("read client credentials: {e}"))?;
+    let _ = tx.commit().await;
+    let Some(r) = row else {
+        return Ok(None);
+    };
+    let aws_arn: String = r.try_get("aws_arn").unwrap_or_default();
+    let aws_ext: String = r.try_get("aws_ext").unwrap_or_default();
+    let gcp: String = r.try_get("gcp").unwrap_or_default();
+    let config_str: String = r
+        .try_get("client_configs")
+        .unwrap_or_else(|_| "{}".to_string());
+    let config_val: Value = serde_json::from_str(&config_str).unwrap_or(json!({}));
+    let onboarding = config_val.get("onboarding").cloned().unwrap_or(json!({}));
+    let azure_subscription_id = onboarding
+        .get("azure_subscription_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let azure_tenant_id = onboarding
+        .get("azure_tenant_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let ad_domain = onboarding
+        .get("ad_domain")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let first_repo_url = onboarding
+        .get("repo_urls")
+        .and_then(Value::as_array)
+        .and_then(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .find(|s| !s.trim().is_empty())
+        })
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let ebpf_ssh_host = onboarding
+        .get("ebpf_ssh_host")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let ebpf_ssh_user = onboarding
+        .get("ebpf_ssh_user")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    Ok(Some(ClientCredentialSnapshot {
+        aws_role_arn: aws_arn,
+        aws_external_id: aws_ext,
+        gcp_project_id: gcp,
+        azure_subscription_id,
+        azure_tenant_id,
+        ad_domain,
+        first_repo_url,
+        ebpf_ssh_host,
+        ebpf_ssh_user,
+    }))
+}
+
+fn hydrate_extras_from_client(
+    extras: &mut std::collections::HashMap<String, Value>,
+    creds: &ClientCredentialSnapshot,
+) {
+    fn insert_if_absent(
+        extras: &mut std::collections::HashMap<String, Value>,
+        key: &str,
+        val: &str,
+    ) {
+        if val.trim().is_empty() {
+            return;
+        }
+        let needs = extras
+            .get(key)
+            .map(|v| !extra_value_usable(v))
+            .unwrap_or(true);
+        if needs {
+            extras.insert(key.to_string(), json!(val));
+        }
+    }
+    insert_if_absent(extras, "aws_cross_account_role_arn", &creds.aws_role_arn);
+    insert_if_absent(extras, "aws_role_arn", &creds.aws_role_arn);
+    insert_if_absent(extras, "aws_external_id", &creds.aws_external_id);
+    insert_if_absent(extras, "gcp_project", &creds.gcp_project_id);
+    insert_if_absent(extras, "gcp_project_id", &creds.gcp_project_id);
+    insert_if_absent(extras, "azure_subscription_id", &creds.azure_subscription_id);
+    insert_if_absent(extras, "azure_tenant_id", &creds.azure_tenant_id);
+    insert_if_absent(extras, "ad_domain", &creds.ad_domain);
+    insert_if_absent(extras, "domain", &creds.ad_domain);
+    insert_if_absent(extras, "repo_url", &creds.first_repo_url);
+    insert_if_absent(extras, "ebpf_ssh_host", &creds.ebpf_ssh_host);
+    insert_if_absent(extras, "ebpf_ssh_user", &creds.ebpf_ssh_user);
+}
+
+fn hydrate_extras_from_tenant(
+    extras: &mut std::collections::HashMap<String, Value>,
+    secrets: &TenantScanSecrets,
+) {
+    fn insert_if_absent(
+        extras: &mut std::collections::HashMap<String, Value>,
+        key: &str,
+        val: &str,
+    ) {
+        if val.trim().is_empty() {
+            return;
+        }
+        let needs = extras
+            .get(key)
+            .map(|v| !extra_value_usable(v))
+            .unwrap_or(true);
+        if needs {
+            extras.insert(key.to_string(), json!(val));
+        }
+    }
+    insert_if_absent(extras, "github_token", &secrets.github_token);
+    insert_if_absent(extras, "oast_domain", &secrets.oast_domain);
+    insert_if_absent(extras, "oast_api_key", &secrets.oast_api_key);
+}
+
 #[derive(Debug, Clone)]
 struct ScanBodyFields {
     target: String,
@@ -368,7 +609,7 @@ fn extract_fields(body: &Value) -> ScanBodyFields {
     let mut extras = std::collections::HashMap::new();
     if let Some(obj) = body.as_object() {
         for (k, v) in obj {
-            if !reserved.contains(&k.as_str()) {
+            if !reserved.contains(&k.as_str()) && extra_value_usable(v) {
                 extras.insert(k.clone(), v.clone());
             }
         }
@@ -673,6 +914,58 @@ fn inject_scope_validation(
     payload
 }
 
+/// Strip hydrated secrets before the async-job row is written; workers re-hydrate live from DB.
+fn seal_payload_for_queue(payload: Value) -> Value {
+    crate::scan_payload_redaction::strip_secrets_for_storage(payload)
+}
+
+/// Re-hydrate client/tenant credentials into an in-memory job payload (worker execution only).
+pub async fn hydrate_stored_job_payload(
+    pool: &PgPool,
+    tenant_id: i64,
+    payload: &mut Value,
+) -> Result<(), String> {
+    let client_id = payload
+        .get("client_id")
+        .and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+        });
+    let reserved = [
+        "target",
+        "client_id",
+        "engine",
+        "validated_scope",
+        "oast_interaction_token",
+        "repo_url",
+        "base_payload",
+        "ai_endpoint",
+        "timeout",
+    ];
+    let mut extras = std::collections::HashMap::new();
+    if let Some(obj) = payload.as_object() {
+        for (k, v) in obj {
+            if !reserved.contains(&k.as_str()) {
+                extras.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if let Some(cid) = client_id {
+        if let Ok(Some(creds)) = load_client_credentials(pool, tenant_id, cid).await {
+            hydrate_extras_from_client(&mut extras, &creds);
+        }
+    }
+    if let Ok(secrets) = load_tenant_scan_secrets(pool, tenant_id).await {
+        hydrate_extras_from_tenant(&mut extras, &secrets);
+    }
+    if let Some(obj) = payload.as_object_mut() {
+        for (k, v) in extras {
+            obj.insert(k, v);
+        }
+    }
+    Ok(())
+}
+
 /// Returns `(job_kind, job_payload)` after registry validation, entitlement check, and optional OAST injection.
 pub async fn route_scan_job(
     body: &Value,
@@ -690,8 +983,17 @@ pub async fn route_scan_job(
         )));
     }
 
-    let ctx = extract_fields(body);
+    let mut ctx = extract_fields(body);
     let client_id = parse_client_id(&ctx);
+
+    if let Some(cid) = client_id {
+        if let Ok(Some(creds)) = load_client_credentials(pool, tenant_id, cid).await {
+            hydrate_extras_from_client(&mut ctx.extras, &creds);
+        }
+    }
+    if let Ok(secrets) = load_tenant_scan_secrets(pool, tenant_id).await {
+        hydrate_extras_from_tenant(&mut ctx.extras, &secrets);
+    }
 
     // ── BLOCKER #1: Strict scope validation ──────────────────────────────────
     //
@@ -748,7 +1050,7 @@ pub async fn route_scan_job(
         if let Some(t) = oast {
             payload = inject_oast_token(payload, t);
         }
-        return Ok((def.job_kind.to_string(), payload));
+        return Ok((def.job_kind.to_string(), seal_payload_for_queue(payload)));
     }
 
     // Default: command_center_engine (known engines + extras not in explicit table)
@@ -760,5 +1062,103 @@ pub async fn route_scan_job(
     if let Some(scope) = scope_outcome.as_ref() {
         payload = inject_scope_validation(payload, scope);
     }
-    Ok(("command_center_engine".to_string(), payload))
+    Ok(("command_center_engine".to_string(), seal_payload_for_queue(payload)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn masked_secret_values_are_not_usable() {
+        assert!(is_masked_secret_value(&json!("••••••••")));
+        assert!(is_masked_secret_value(&json!("••••abcd")));
+        assert!(!is_masked_secret_value(&json!("real-token")));
+        assert!(!extra_value_usable(&json!("••••••••")));
+        assert!(!extra_value_usable(&json!("")));
+        assert!(extra_value_usable(&json!("live-value")));
+    }
+
+    #[test]
+    fn extract_fields_strips_masked_extras() {
+        let body = json!({
+            "engine": "osint",
+            "target": "https://example.com",
+            "client_id": 1,
+            "github_token": "••••••••",
+            "depth": "2"
+        });
+        let ctx = extract_fields(&body);
+        assert_eq!(ctx.target, "https://example.com");
+        assert!(ctx.extras.contains_key("depth"));
+        assert!(!ctx.extras.contains_key("github_token"));
+    }
+
+    #[test]
+    fn hydrate_client_skips_masked_overrides() {
+        let creds = ClientCredentialSnapshot {
+            aws_role_arn: "arn:aws:iam::123:role/scan".into(),
+            aws_external_id: "ext-from-db".into(),
+            gcp_project_id: String::new(),
+            azure_subscription_id: String::new(),
+            azure_tenant_id: String::new(),
+            ad_domain: String::new(),
+            first_repo_url: String::new(),
+            ebpf_ssh_host: String::new(),
+            ebpf_ssh_user: String::new(),
+        };
+        let mut extras = std::collections::HashMap::from([
+            ("aws_external_id".into(), json!("••••••••")),
+            ("aws_role_arn".into(), json!("")),
+        ]);
+        hydrate_extras_from_client(&mut extras, &creds);
+        assert_eq!(
+            extras.get("aws_external_id").and_then(Value::as_str),
+            Some("ext-from-db")
+        );
+        assert_eq!(
+            extras.get("aws_role_arn").and_then(Value::as_str),
+            Some("arn:aws:iam::123:role/scan")
+        );
+    }
+
+    #[test]
+    fn hydrate_tenant_fills_absent_github_token() {
+        let secrets = TenantScanSecrets {
+            github_token: "ghp_live".into(),
+            oast_domain: "oast.example".into(),
+            oast_api_key: String::new(),
+        };
+        let mut extras = std::collections::HashMap::from([("github_token".into(), json!("••••••••"))]);
+        hydrate_extras_from_tenant(&mut extras, &secrets);
+        assert_eq!(
+            extras.get("github_token").and_then(Value::as_str),
+            Some("ghp_live")
+        );
+        assert_eq!(
+            extras.get("oast_domain").and_then(Value::as_str),
+            Some("oast.example")
+        );
+    }
+
+    #[test]
+    fn enforce_scope_validation_exemptions() {
+        assert!(!enforce_scope_validation_for_engine("pipeline"));
+        assert!(!enforce_scope_validation_for_engine("zero_day_radar"));
+        assert!(enforce_scope_validation_for_engine("osint"));
+    }
+
+    #[test]
+    fn seal_payload_strips_secrets_before_queue() {
+        let raw = json!({
+            "engine": "osint",
+            "target": "https://example.com",
+            "github_token": "ghp_live",
+            "depth": "1"
+        });
+        let sealed = seal_payload_for_queue(raw);
+        assert!(sealed.get("github_token").is_none());
+        assert_eq!(sealed.get("depth").and_then(Value::as_str), Some("1"));
+    }
 }

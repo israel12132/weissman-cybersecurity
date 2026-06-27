@@ -1,3 +1,5 @@
+import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -250,7 +252,7 @@ function FindingRow({ f, t }) {
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
             <p className="text-[11px] font-mono text-white/55 leading-relaxed">{f.description}</p>
-            {f.remediation && <p className="mt-2 text-[10px] font-mono text-purple-300/80 leading-relaxed"><span className="text-white/40">{t('pages.jwtLab.remediation', { defaultValue: 'Remediation' })}: </span>{f.remediation}</p>}
+            {f.remediation && <p className="mt-2 text-[10px] font-mono text-purple-300/80 leading-relaxed"><span className="text-white/40">{t('pages.jwtLab.remediation')}: </span>{f.remediation}</p>}
             {Array.isArray(f.compliance) && f.compliance.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">{f.compliance.map((c) => <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/45">{c}</span>)}</div>
             )}
@@ -266,7 +268,9 @@ export default function JwtAttackLab() {
   const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
+  const { postScan } = useCommandCenterScan(selectedClientId)
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  useSyncHubScanParams('jwt_attack', params)
   const [target, setTarget] = useState('')
   const [scanResult, setScanResult] = useState(null)
   const [scanning, setScanning] = useState(false)
@@ -372,15 +376,14 @@ export default function JwtAttackLab() {
   }, [params, selectedClientId, target])
 
   const handleScan = useCallback(async () => {
-    if (!selectedClientId) { showToast('error', t('pages.jwtLab.select_client_first', { defaultValue: 'Select a client first' })); return }
-    if (!target.trim()) { showToast('error', t('pages.jwtLab.target_required', { defaultValue: 'A target host is required (must be in the client scope).' })); return }
+    if (!selectedClientId) { showToast('error', t('pages.jwtLab.select_client_first')); return }
+    if (!target.trim()) { showToast('error', t('pages.jwtLab.target_required')); return }
     setScanning(true); setScanResult(null); setJobStatus('queued')
     try {
-      const r = await apiFetch('/api/command-center/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) { showToast('error', d.detail || t('pages.jwtLab.scan_failed', { defaultValue: 'Scan failed' })); setScanning(false); return }
+      const { ok, data: d, status } = await postScan(requestBody)
+      if (!ok) { showToast('error', d.detail || t('pages.jwtLab.scan_failed')); setScanning(false); return }
       const jobId = d.job_id ?? ''
-      showToast('info', t('pages.jwtLab.scan_queued', { defaultValue: 'JWT scan queued: job {{jobId}}', jobId }))
+      showToast('info', t('pages.jwtLab.scan_queued', { jobId }))
       if (jobId) { setPendingJobId(jobId); setScanResult({ findings: [], job_id: jobId, pending: true }) } else setScanning(false)
     } catch (e) { showToast('error', e?.message ?? t('common.error')); setScanning(false) }
   }, [selectedClientId, target, requestBody, showToast, t])
@@ -407,11 +410,11 @@ export default function JwtAttackLab() {
   }, [sortedFindings, searchQuery, severityFilter])
 
   const supremeLabels = useMemo(() => ({
-    categoryScores: t('pages.jwtLab.category_scores', { defaultValue: 'JWT security domain scores' }),
-    toxicTitle: t('pages.jwtLab.toxic_title', { defaultValue: 'Toxic combination detected' }),
-    roadmapTitle: t('pages.jwtLab.roadmap_title', { defaultValue: 'Prioritized remediation roadmap' }),
-    agentTitle: t('pages.jwtLab.agent_title', { defaultValue: 'Agent-required capabilities' }),
-    pathsTitle: t('pages.jwtLab.paths_title', { defaultValue: 'Attack paths' }),
+    categoryScores: t('pages.jwtLab.category_scores'),
+    toxicTitle: t('pages.jwtLab.toxic_title'),
+    roadmapTitle: t('pages.jwtLab.roadmap_title'),
+    agentTitle: t('pages.jwtLab.agent_title'),
+    pathsTitle: t('pages.jwtLab.paths_title'),
   }), [t])
 
   const displayFindings = useMemo(() => {
@@ -448,6 +451,7 @@ export default function JwtAttackLab() {
 
   return (
     <PageShell
+      hideHubParams
       title={t('pages.jwtLab.title')}
       badge={t('pages.jwtLab.badge')}
       badgeColor={ACCENT}
@@ -456,20 +460,20 @@ export default function JwtAttackLab() {
     >
       <div className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-end gap-3 flex-wrap">
-          <Field label={t('pages.jwtLab.client_label', { defaultValue: 'Client:' })}>
+          <Field label={t('pages.jwtLab.client_label')}>
             <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[180px]">
-              <option value="">{t('pages.jwtLab.select_client', { defaultValue: '— Select client —' })}</option>
+              <option value="">{t('pages.jwtLab.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label={t('pages.jwtLab.target_label', { defaultValue: 'Target host (in scope)' })}>
+          <Field label={t('pages.jwtLab.target_label')}>
             <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://api.example.com" className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[240px]" />
           </Field>
         </div>
         <div className="flex items-center gap-2">
           {jobStatus && scanning && <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{jobStatus}</span>}
-          <button type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done', { defaultValue: 'Parameters reset to defaults' })) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/5 transition-all">{t('pages.jwtLab.reset', { defaultValue: 'Reset' })}</button>
-          <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-[#a855f7]/40 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{scanning ? t('pages.jwtLab.scanning', { defaultValue: '⟳ Attacking…' }) : t('pages.jwtLab.run_scan', { defaultValue: '▶ Run JWT Assessment' })}</button>
+          <button type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done')) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/5 transition-all">{t('pages.jwtLab.reset')}</button>
+          <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-[#a855f7]/40 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{scanning ? t('pages.jwtLab.scanning') : t('pages.jwtLab.run_scan')}</button>
         </div>
       </div>
 
@@ -481,53 +485,53 @@ export default function JwtAttackLab() {
         {/* Control panel */}
         <motion.aside initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="xl:col-span-4 space-y-5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 self-start">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-mono text-white/55 uppercase tracking-widest">{t('pages.jwtLab.control_panel', { defaultValue: 'Attack Control Panel' })}</h3>
-            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-white/35 hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json', { defaultValue: 'hide JSON' }) : t('pages.jwtLab.show_json', { defaultValue: 'view request' })}</button>
+            <h3 className="text-xs font-mono text-white/55 uppercase tracking-widest">{t('pages.jwtLab.control_panel')}</h3>
+            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-white/35 hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json') : t('pages.jwtLab.show_json')}</button>
           </div>
 
-          <Field label={t('pages.jwtLab.sample_jwt', { defaultValue: 'Sample JWT (paste to analyze + attack)' })}>
+          <Field label={t('pages.jwtLab.sample_jwt')}>
             <textarea value={params.sample_jwt} onChange={(e) => set({ sample_jwt: e.target.value })} rows={3} placeholder="eyJhbGciOi..." className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[10px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40 resize-y break-all" />
           </Field>
           {decoded && (
             <div className="rounded-lg border border-[#a855f7]/20 bg-[#a855f7]/5 p-2 space-y-1">
-              <p className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.decoded', { defaultValue: 'Decoded (local)' })}</p>
+              <p className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.decoded')}</p>
               <pre className="text-[9px] font-mono text-emerald-300/80 overflow-x-auto">{JSON.stringify(decoded.header)}</pre>
               <pre className="text-[9px] font-mono text-sky-300/80 overflow-x-auto max-h-24">{JSON.stringify(decoded.payload, null, 1)}</pre>
             </div>
           )}
 
           <div className="space-y-2">
-            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.section_attacks', { defaultValue: 'Attacks' })}</p>
-            <Toggle label={t('pages.jwtLab.test_alg_none', { defaultValue: 'alg=none acceptance' })} hint={t('pages.jwtLab.test_alg_none_hint', { defaultValue: 'none/None/NONE + empty sig' })} checked={params.test_alg_none} onChange={(v) => set({ test_alg_none: v })} />
-            <Toggle label={t('pages.jwtLab.test_alg_confusion', { defaultValue: 'RS256→HS256 confusion' })} hint={t('pages.jwtLab.test_alg_confusion_hint', { defaultValue: 'sign with JWKS public key' })} checked={params.test_alg_confusion} onChange={(v) => set({ test_alg_confusion: v })} />
-            <Toggle label={t('pages.jwtLab.test_weak_hmac', { defaultValue: 'Weak HMAC secret crack' })} hint={t('pages.jwtLab.test_weak_hmac_hint', { defaultValue: 'offline wordlist brute-force' })} checked={params.test_weak_hmac} onChange={(v) => set({ test_weak_hmac: v })} />
-            <Toggle label={t('pages.jwtLab.check_jwks', { defaultValue: 'JWKS hardening review' })} hint={t('pages.jwtLab.check_jwks_hint', { defaultValue: 'weak RSA / leaked private params' })} checked={params.check_jwks} onChange={(v) => set({ check_jwks: v })} />
-            <Toggle label={t('pages.jwtLab.harvest', { defaultValue: 'Harvest tokens from responses' })} hint={t('pages.jwtLab.harvest_hint', { defaultValue: 'headers / cookies / body' })} checked={params.harvest} onChange={(v) => set({ harvest: v })} />
-            <Toggle label={t('pages.jwtLab.analyze_claims', { defaultValue: 'Analyze claims & lifetime' })} checked={params.analyze_claims} onChange={(v) => set({ analyze_claims: v })} />
-            <Toggle label={t('pages.jwtLab.require_exp', { defaultValue: 'Flag missing exp' })} checked={params.require_exp} onChange={(v) => set({ require_exp: v })} />
-            <Toggle label={t('pages.jwtLab.attack_paths', { defaultValue: 'Synthesize attack paths' })} hint={t('pages.jwtLab.attack_paths_hint', { defaultValue: 'Wiz-style toxic combinations' })} checked={params.attack_paths} onChange={(v) => set({ attack_paths: v })} />
-            <Toggle label={t('pages.jwtLab.emit_agent_guidance', { defaultValue: 'Emit agent-required guidance' })} checked={params.emit_agent_guidance} onChange={(v) => set({ emit_agent_guidance: v })} />
+            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.section_attacks')}</p>
+            <Toggle label={t('pages.jwtLab.test_alg_none')} hint={t('pages.jwtLab.test_alg_none_hint')} checked={params.test_alg_none} onChange={(v) => set({ test_alg_none: v })} />
+            <Toggle label={t('pages.jwtLab.test_alg_confusion')} hint={t('pages.jwtLab.test_alg_confusion_hint')} checked={params.test_alg_confusion} onChange={(v) => set({ test_alg_confusion: v })} />
+            <Toggle label={t('pages.jwtLab.test_weak_hmac')} hint={t('pages.jwtLab.test_weak_hmac_hint')} checked={params.test_weak_hmac} onChange={(v) => set({ test_weak_hmac: v })} />
+            <Toggle label={t('pages.jwtLab.check_jwks')} hint={t('pages.jwtLab.check_jwks_hint')} checked={params.check_jwks} onChange={(v) => set({ check_jwks: v })} />
+            <Toggle label={t('pages.jwtLab.harvest')} hint={t('pages.jwtLab.harvest_hint')} checked={params.harvest} onChange={(v) => set({ harvest: v })} />
+            <Toggle label={t('pages.jwtLab.analyze_claims')} checked={params.analyze_claims} onChange={(v) => set({ analyze_claims: v })} />
+            <Toggle label={t('pages.jwtLab.require_exp')} checked={params.require_exp} onChange={(v) => set({ require_exp: v })} />
+            <Toggle label={t('pages.jwtLab.attack_paths')} hint={t('pages.jwtLab.attack_paths_hint')} checked={params.attack_paths} onChange={(v) => set({ attack_paths: v })} />
+            <Toggle label={t('pages.jwtLab.emit_agent_guidance')} checked={params.emit_agent_guidance} onChange={(v) => set({ emit_agent_guidance: v })} />
           </div>
 
-          <ListEditor label={t('pages.jwtLab.auth_endpoints', { defaultValue: 'Protected endpoints to test' })} value={params.auth_endpoints} onChange={(v) => set({ auth_endpoints: v })} placeholder="/api/me" />
-          <ListEditor label={t('pages.jwtLab.harvest_paths', { defaultValue: 'Paths to harvest tokens from' })} value={params.harvest_paths} onChange={(v) => set({ harvest_paths: v })} placeholder="/login" />
-          <ListEditor label={t('pages.jwtLab.jwks_paths', { defaultValue: 'JWKS / OIDC paths' })} value={params.jwks_paths} onChange={(v) => set({ jwks_paths: v })} placeholder="/.well-known/jwks.json" />
-          <Field label={t('pages.jwtLab.jwks_url', { defaultValue: 'JWKS URL override (optional)' })}>
+          <ListEditor label={t('pages.jwtLab.auth_endpoints')} value={params.auth_endpoints} onChange={(v) => set({ auth_endpoints: v })} placeholder="/api/me" />
+          <ListEditor label={t('pages.jwtLab.harvest_paths')} value={params.harvest_paths} onChange={(v) => set({ harvest_paths: v })} placeholder="/login" />
+          <ListEditor label={t('pages.jwtLab.jwks_paths')} value={params.jwks_paths} onChange={(v) => set({ jwks_paths: v })} placeholder="/.well-known/jwks.json" />
+          <Field label={t('pages.jwtLab.jwks_url')}>
             <input value={params.jwks_url} onChange={(e) => set({ jwks_url: e.target.value })} placeholder="https://idp.example.com/jwks.json" className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40" />
           </Field>
-          <ListEditor label={t('pages.jwtLab.hmac_wordlist', { defaultValue: 'Extra HMAC secrets (added to built-in list)' })} value={params.hmac_wordlist} onChange={(v) => set({ hmac_wordlist: v })} placeholder="company-name-2024" />
-          <ListEditor label={t('pages.jwtLab.sensitive_claims', { defaultValue: 'Privilege claim keys' })} value={params.sensitive_claims} onChange={(v) => set({ sensitive_claims: v })} placeholder="role" />
+          <ListEditor label={t('pages.jwtLab.hmac_wordlist')} value={params.hmac_wordlist} onChange={(v) => set({ hmac_wordlist: v })} placeholder="company-name-2024" />
+          <ListEditor label={t('pages.jwtLab.sensitive_claims')} value={params.sensitive_claims} onChange={(v) => set({ sensitive_claims: v })} placeholder="role" />
 
           <div className="space-y-3">
-            <Segmented label={t('pages.jwtLab.intensity', { defaultValue: 'Intensity' })} value={params.intensity} options={[{ value: 'light', label: t('pages.jwtLab.intensity_light', { defaultValue: 'Light' }) }, { value: 'normal', label: t('pages.jwtLab.intensity_normal', { defaultValue: 'Normal' }) }, { value: 'aggressive', label: t('pages.jwtLab.intensity_aggressive', { defaultValue: 'Aggressive' }) }]} onChange={(v) => set({ intensity: v })} />
-            <Slider label={t('pages.jwtLab.timeout_ms', { defaultValue: 'HTTP timeout' })} value={params.timeout_ms} min={1000} max={20000} step={500} suffix="ms" onChange={(v) => set({ timeout_ms: v })} />
-            <Slider label={t('pages.jwtLab.concurrency', { defaultValue: 'Concurrency' })} value={params.concurrency} min={1} max={32} step={1} onChange={(v) => set({ concurrency: v })} />
-            <Slider label={t('pages.jwtLab.max_lifetime', { defaultValue: 'Max token lifetime' })} value={params.max_token_lifetime_minutes} min={5} max={10080} step={5} suffix="m" onChange={(v) => set({ max_token_lifetime_minutes: v })} />
+            <Segmented label={t('pages.jwtLab.intensity')} value={params.intensity} options={[{ value: 'light', label: t('pages.jwtLab.intensity_light') }, { value: 'normal', label: t('pages.jwtLab.intensity_normal') }, { value: 'aggressive', label: t('pages.jwtLab.intensity_aggressive') }]} onChange={(v) => set({ intensity: v })} />
+            <Slider label={t('pages.jwtLab.timeout_ms')} value={params.timeout_ms} min={1000} max={20000} step={500} suffix="ms" onChange={(v) => set({ timeout_ms: v })} />
+            <Slider label={t('pages.jwtLab.concurrency')} value={params.concurrency} min={1} max={32} step={1} onChange={(v) => set({ concurrency: v })} />
+            <Slider label={t('pages.jwtLab.max_lifetime')} value={params.max_token_lifetime_minutes} min={5} max={10080} step={5} suffix="m" onChange={(v) => set({ max_token_lifetime_minutes: v })} />
             <div className="grid grid-cols-2 gap-3">
-              <Field label={t('pages.jwtLab.min_rsa_bits', { defaultValue: 'Min RSA bits' })}>
+              <Field label={t('pages.jwtLab.min_rsa_bits')}>
                 <select value={params.min_rsa_bits} onChange={(e) => set({ min_rsa_bits: Number(e.target.value) })} className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40">{[1024, 2048, 3072, 4096].map((b) => <option key={b} value={b}>{b}</option>)}</select>
               </Field>
-              <Field label={t('pages.jwtLab.oast_host', { defaultValue: 'OAST host (jku/x5u)' })}>
+              <Field label={t('pages.jwtLab.oast_host')}>
                 <input value={params.oast_host} onChange={(e) => set({ oast_host: e.target.value })} placeholder="oast.example" className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40" />
               </Field>
             </div>

@@ -220,7 +220,7 @@ export default function AskWeissman() {
           className="mb-3 shrink-0"
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          searchPlaceholder={t('pages.askWeissman.search_placeholder', { defaultValue: 'Search transcript…' })}
+          searchPlaceholder={t('pages.askWeissman.search_placeholder')}
           resultCount={searchQuery.trim() ? filteredFindings.length : completedTurns.length}
           totalCount={completedTurns.length}
         />

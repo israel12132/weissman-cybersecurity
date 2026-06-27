@@ -79,7 +79,7 @@ export default function RoeApprovals() {
         return
       }
       await load()
-      toast.success(t('pages.roeApprovals.approve_success', { defaultValue: 'Override request approved' }))
+      toast.success(t('pages.roeApprovals.approve_success'))
     } finally {
       setActionId(null)
     }
@@ -87,12 +87,12 @@ export default function RoeApprovals() {
 
   async function reject(req) {
     const reason = await promptDialog({
-      title: t('pages.roeApprovals.reject_title', { defaultValue: 'Reject override request' }),
+      title: t('pages.roeApprovals.reject_title'),
       message: t('pages.roeApprovals.reject_prompt'),
-      label: t('pages.roeApprovals.reject_reason_label', { defaultValue: 'Reason' }),
-      placeholder: t('pages.roeApprovals.reject_reason_placeholder', { defaultValue: 'Why is this being rejected?' }),
-      confirmLabel: t('pages.roeApprovals.reject_action', { defaultValue: 'Reject' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      label: t('pages.roeApprovals.reject_reason_label'),
+      placeholder: t('pages.roeApprovals.reject_reason_placeholder'),
+      confirmLabel: t('pages.roeApprovals.reject_action'),
+      cancelLabel: t('common.cancel'),
       multiline: true,
     })
     if (reason === null) return
@@ -109,7 +109,7 @@ export default function RoeApprovals() {
         return
       }
       await load()
-      toast.success(t('pages.roeApprovals.reject_success', { defaultValue: 'Override request rejected' }))
+      toast.success(t('pages.roeApprovals.reject_success'))
     } finally {
       setActionId(null)
     }

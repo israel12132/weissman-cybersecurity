@@ -52,10 +52,10 @@ export default function ClientDetail() {
 
   async function launchScan() {
     const ok = await confirmDialog({
-      title: t('clients_page.scan_title', { defaultValue: 'Launch full scan?' }),
+      title: t('clients_page.scan_title'),
       message: t('clients_page.scan_confirm', { name: client.name }),
-      confirmLabel: t('clients_page.scan_action', { defaultValue: 'Launch scan' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      confirmLabel: t('clients_page.scan_action'),
+      cancelLabel: t('common.cancel'),
       variant: 'primary',
     })
     if (!ok) return
@@ -228,6 +228,9 @@ export default function ClientDetail() {
         </PremiumPageHeader>
 
         <div className="flex flex-wrap gap-2">
+          <Link to={`/clients/${client.id}/integrations`} className={navBtnClass}>
+            {t('client_detail.integrations')}
+          </Link>
           <Link to={`/clients/${client.id}/engagements`} className={navBtnClass}>
             {t('client_detail.engagements')}
           </Link>

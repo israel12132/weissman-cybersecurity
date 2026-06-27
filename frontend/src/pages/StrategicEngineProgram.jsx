@@ -59,7 +59,9 @@ export default function StrategicEngineProgram() {
     const reg = ENGINES_BY_ID[row.id]
     return {
       id: row.id,
-      severity: row.priority === 'P0' ? 'critical' : 'medium',
+      severity: 'info',
+      category: 'roadmap',
+      roadmap: true,
       title: reg?.label || row.id,
       type: row.priority || 'engine',
       description: row.reason || '',

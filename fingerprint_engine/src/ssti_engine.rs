@@ -198,10 +198,11 @@ struct ScanConfig {
     include_info: bool,
     attack_paths: bool,
     posture_score: bool,
+    memory_payloads: Vec<String>,
 }
 
 impl ScanConfig {
-    fn load(cfg: &ArsenalConfig) -> Self {
+    fn load(cfg: &ArsenalConfig, memory_payloads: Vec<String>) -> Self {
         let intensity = cfg.intensity();
         Self {
             timeout_ms: cfg.timeout_ms(8000),
@@ -222,6 +223,7 @@ impl ScanConfig {
             include_info: cfg.bool_or("include_info_findings", true),
             attack_paths: cfg.bool_or("check_attack_paths", true),
             posture_score: cfg.bool_or("check_posture_score", true),
+            memory_payloads,
         }
     }
 }
@@ -247,6 +249,7 @@ impl Clone for ScanConfig {
             include_info: self.include_info,
             attack_paths: self.attack_paths,
             posture_score: self.posture_score,
+            memory_payloads: self.memory_payloads.clone(),
         }
     }
 }
@@ -288,6 +291,17 @@ struct PayloadSpec {
     build: fn(&ScanMath) -> (String, String),
     confidence: f64,
 }
+
+fn memory_placeholder(_: &ScanMath) -> (String, String) {
+    (String::new(), String::new())
+}
+
+const MEMORY_PAYLOAD_SPEC: PayloadSpec = PayloadSpec {
+    id: "attacker_memory",
+    engine: "memory_replay",
+    build: memory_placeholder,
+    confidence: 0.9,
+};
 
 fn jinja_mul(m: &ScanMath) -> (String, String) {
     (format!("{{{{{a}*{b}}}}}", a = m.a, b = m.b), m.product.clone())
@@ -790,6 +804,44 @@ async fn probe_path(
 
     let mut confirmed_here = false;
 
+    // Attacker-memory payloads first (prior winning SSTI vectors on similar stacks).
+    for mem_payload in cfg.memory_payloads.iter().take(8) {
+        if mem_payload.is_empty() {
+            continue;
+        }
+        for param in cfg.params.iter().take(6) {
+            let encoded = urlencoding::encode(mem_payload);
+            let probe_url = if url.contains('?') {
+                format!("{}&{}={}", url, param, encoded)
+            } else {
+                format!("{}?{}={}", url, param, encoded)
+            };
+            if let Some(p) = http_get(client, &probe_url).await {
+                posture.checks += 1;
+                if evaluation_confirmed(&p, mem_payload, &math.product, &baseline) {
+                    emit_confirmed(
+                        &mut findings,
+                        &mut posture,
+                        target,
+                        &probe_url,
+                        "query",
+                        param,
+                        &MEMORY_PAYLOAD_SPEC,
+                        mem_payload,
+                        &math.product,
+                        &p,
+                        Some("memory"),
+                    );
+                    confirmed_here = true;
+                    break;
+                }
+            }
+        }
+        if confirmed_here {
+            break;
+        }
+    }
+
     'confirmed: for spec in PAYLOAD_SPECS.iter().take(max_payloads) {
         let (payload, expected) = (spec.build)(math);
         let variants = if cfg.check_bypass_transforms {
@@ -1186,7 +1238,7 @@ pub async fn run_ssti_result_ctx(target: &str, ctx: &EngineRunContext) -> Engine
         return EngineResult::error("target required");
     }
 
-    let cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx));
+    let cfg = ScanConfig::load(&ArsenalConfig::from_ctx(ctx), ctx.memory_payloads.clone());
     let client = http_client().await;
     let base = normalize_url(target);
     let math = scan_math(&cfg.canary_prefix);

@@ -589,6 +589,7 @@ async fn api_findings_clusters(
     let severity = q.get("severity").map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
     let only_open = q.get("status").map(|s| s.trim().to_uppercase() == "OPEN").unwrap_or(false);
     let only_kev = q.get("kev").map(|s| s == "1" || s == "true").unwrap_or(false);
+    let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse().ok());
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false, "detail": "DB unavailable"}))).into_response();
@@ -603,6 +604,7 @@ async fn api_findings_clusters(
             WHERE ($3::text  IS NULL OR lower(max_severity) = $3)
               AND ($4::bool  IS NULL OR ($4 AND status = 'OPEN') OR NOT $4)
               AND ($5::bool  IS NULL OR ($5 AND kev_listed) OR NOT $5)
+              AND ($6::bigint IS NULL OR client_id = $6)
             ORDER BY
                 CASE WHEN kev_listed THEN 0 ELSE 1 END,
                 COALESCE(max_epss, 0)::float DESC,
@@ -617,17 +619,20 @@ async fn api_findings_clusters(
     .bind(severity.as_deref())
     .bind(only_open)
     .bind(only_kev)
+    .bind(client_filter)
     .fetch_all(&mut *tx).await.unwrap_or_default();
 
     let total: i64 = sqlx::query_scalar(
         r#"SELECT COUNT(*)::bigint FROM weissman_finding_clusters
             WHERE ($1::text IS NULL OR lower(max_severity) = $1)
               AND ($2::bool IS NULL OR ($2 AND status = 'OPEN') OR NOT $2)
-              AND ($3::bool IS NULL OR ($3 AND kev_listed) OR NOT $3)"#,
+              AND ($3::bool IS NULL OR ($3 AND kev_listed) OR NOT $3)
+              AND ($4::bigint IS NULL OR client_id = $4)"#,
     )
     .bind(severity.as_deref())
     .bind(only_open)
     .bind(only_kev)
+    .bind(client_filter)
     .fetch_one(&mut *tx).await.unwrap_or(0);
     let _ = tx.commit().await;
 
@@ -801,7 +806,8 @@ async fn api_findings(
          COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256, \
          COALESCE(raw_data, '{}'::jsonb) AS raw_data, \
          epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, \
-         intel_enriched_at, signature_hash, cluster_id, seen_count \
+         intel_enriched_at, signature_hash, cluster_id, seen_count, \
+         confidence_multiplier, effective_risk \
          FROM vulnerabilities \
          WHERE ($3::text[] IS NULL OR lower(severity) = ANY($3)) \
            AND ($4::bigint IS NULL OR client_id = $4) \
@@ -907,16 +913,18 @@ async fn api_findings(
         if kev_ransom {
             risk *= 1.15;
         }
-        // confidence multiplier (FP/TP) — looked up from the batch-loaded map (no per-row query).
+        // confidence multiplier (FP/TP) — prefer persisted column, else batch map.
+        let stored_conf = r.try_get::<Option<f64>, _>("confidence_multiplier").ok().flatten();
         let conf_mult = match signature_hash.as_deref() {
-            Some(sig) if !sig.is_empty() => {
+            Some(sig) if !sig.is_empty() => stored_conf.unwrap_or_else(|| {
                 let eng = r.try_get::<String, _>("source").unwrap_or_default();
                 *conf_map.get(&(eng, sig.to_string())).unwrap_or(&1.0)
-            }
-            _ => 1.0,
+            }),
+            _ => stored_conf.unwrap_or(1.0),
         };
+        let stored_effective = r.try_get::<Option<f64>, _>("effective_risk").ok().flatten();
         risk *= conf_mult;
-        let risk = (risk.min(10.0) * 10.0).round() / 10.0;
+        let risk = stored_effective.unwrap_or_else(|| (risk.min(10.0) * 10.0).round() / 10.0);
 
         // Tamper-evident attestation: re-derive the digest from the stored fields and
         // verify it against the stored receipt. attestation_valid=false means the row
@@ -952,6 +960,7 @@ async fn api_findings(
             "poc_commitment_sha256": r.try_get::<String, _>("poc_commitment_sha256").unwrap_or_default(),
             "cvss_score": cvss,
             "risk_score": risk,
+            "effective_risk": risk,
             "priority_score": risk,
             "confidence_multiplier": conf_mult,
             "attested": attested,
@@ -1177,30 +1186,55 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
         .filter(|s| !s.trim().is_empty());
 
     let mut llm_configured = llm_env.is_some();
+    let mut oast_configured = oast_env.is_some();
     let mut ai_heavy_entitled = true;
+    let mut oast_listener_url = oast_env.clone().unwrap_or_default();
+    let mut oast_domain = std::env::var("WEISSMAN_OAST_DOMAIN")
+        .or_else(|_| std::env::var("WEISSMAN_OAST_BASE_DOMAIN"))
+        .unwrap_or_default();
+    let mut oast_api_key_configured = std::env::var("WEISSMAN_OAST_API_KEY")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .is_some();
 
     if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        let llm_db: Option<String> = sqlx::query_scalar(
-            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_base_url'",
-        )
-        .bind(tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        if llm_db.as_ref().is_some_and(|s| !s.trim().is_empty()) {
+        async fn cfg_val(
+            tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+            tenant_id: i64,
+            key: &str,
+        ) -> Option<String> {
+            sqlx::query_scalar::<_, String>(
+                "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
+            )
+            .bind(tenant_id)
+            .bind(key)
+            .fetch_optional(&mut **tx)
+            .await
+            .ok()
+            .flatten()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+        }
+
+        let llm_db = cfg_val(&mut tx, tenant_id, "llm_base_url").await;
+        if llm_db.is_some() {
             llm_configured = true;
         }
 
-        let ai_raw: Option<String> = sqlx::query_scalar(
-            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'ai_heavy_entitled'",
-        )
-        .bind(tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
-        if let Some(raw) = ai_raw {
+        if let Some(u) = cfg_val(&mut tx, tenant_id, "oast_listener_url").await {
+            oast_configured = true;
+            oast_listener_url = u;
+        }
+        if let Some(d) = cfg_val(&mut tx, tenant_id, "oast_domain").await {
+            oast_configured = true;
+            oast_domain = d;
+        }
+        let oast_db_key = cfg_val(&mut tx, tenant_id, "oast_api_key").await;
+        if oast_db_key.is_some() {
+            oast_api_key_configured = true;
+        }
+
+        if let Some(raw) = cfg_val(&mut tx, tenant_id, "ai_heavy_entitled").await {
             ai_heavy_entitled = !matches!(
                 raw.trim().to_ascii_lowercase().as_str(),
                 "false" | "0" | "no"
@@ -1211,8 +1245,11 @@ async fn tenant_onboarding_facts(pool: &PgPool, tenant_id: i64) -> Value {
 
     json!({
         "llm_configured": llm_configured,
-        "oast_configured": oast_env.is_some(),
+        "oast_configured": oast_configured,
         "ai_heavy_entitled": ai_heavy_entitled,
+        "oast_listener_url": oast_listener_url,
+        "oast_domain": oast_domain,
+        "oast_api_key_configured": oast_api_key_configured,
     })
 }
 

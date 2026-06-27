@@ -108,10 +108,10 @@ export default function IntegrationManager() {
 
   const deleteIntegration = async (integrationId) => {
     const ok = await confirmDialog({
-      title: t('pages.integrationManager.delete_title', { defaultValue: 'Remove integration?' }),
-      message: t('pages.integrationManager.delete_confirm', { defaultValue: 'Are you sure you want to remove this integration?' }),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-      cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+      title: t('pages.integrationManager.delete_title'),
+      message: t('pages.integrationManager.delete_confirm'),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
       variant: 'danger',
     });
     if (!ok) return;
@@ -119,10 +119,10 @@ export default function IntegrationManager() {
     try {
       await api.delete(`/api/integrations/${integrationId}`);
       setIntegrations((prev) => prev.filter((i) => i.id !== integrationId));
-      toast.success(t('pages.integrationManager.delete_success', { defaultValue: 'Integration removed' }));
+      toast.success(t('pages.integrationManager.delete_success'));
     } catch (error) {
       console.error('Failed to delete integration:', error);
-      toast.error(t('pages.integrationManager.delete_failed', { defaultValue: 'Failed to remove integration' }));
+      toast.error(t('pages.integrationManager.delete_failed'));
     }
   };
 

@@ -1578,6 +1578,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route("/api/engines/capabilities", get(api_engines_capabilities))
         .route("/api/engines/requirements", get(api_engines_requirements))
         .route("/api/onboarding/tenant-status", get(api_onboarding_tenant_status))
+        .route("/api/onboarding/oast-test", post(api_onboarding_oast_test))
         .route(
             "/api/engines/nexus_sovereign_swarm/schema",
             get(api_nssi_config_schema),
@@ -1891,6 +1892,26 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             "/api/clients/:id/runtime-traces",
             get(api_runtime_traces_list).post(api_runtime_traces_ingest),
         )
+        .route(
+            "/api/sovereign-defense/:client_id/dashboard",
+            get(api_sovereign_defense_dashboard),
+        )
+        .route(
+            "/api/sovereign-defense/:client_id/liquid-matrix/rotate",
+            post(api_sovereign_defense_rotate),
+        )
+        .route(
+            "/api/sovereign-defense/:client_id/chronos/events",
+            get(api_sovereign_defense_chronos_events),
+        )
+        .route(
+            "/api/sovereign-defense/:client_id/cognitive/sessions",
+            get(api_sovereign_defense_cognitive_sessions),
+        )
+        .route(
+            "/api/sovereign-defense/poison-library",
+            get(api_sovereign_defense_poison_library),
+        )
         .route("/api/clients/:id/auto-heal", post(api_auto_heal))
         .route(
             "/api/clients/:id/heal-requests",
@@ -1904,6 +1925,10 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .route(
             "/api/clients/:id/cloud-integration",
             patch(api_client_cloud_integration_patch),
+        )
+        .route(
+            "/api/clients/:id/integrations",
+            get(api_client_integrations_get).patch(api_client_integrations_patch),
         )
         .route(
             "/api/clients/:id/cloud-scan/run",

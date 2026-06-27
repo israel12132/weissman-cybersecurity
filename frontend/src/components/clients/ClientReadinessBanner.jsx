@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
@@ -53,9 +54,12 @@ export default function ClientReadinessBanner({ clientId }) {
         </div>
       </div>
       {!ready && (
-        <span className="text-xs font-mono text-amber-200/70">
+        <Link
+          to={`/clients/${clientId}/integrations`}
+          className="text-xs font-medium text-amber-200/90 hover:text-amber-100 underline-offset-2 hover:underline"
+        >
           {t('pages.clientOnboarding.fix_in_settings')}
-        </span>
+        </Link>
       )}
     </div>
   )

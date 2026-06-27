@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-06-24T23:33:00.381Z",
-  "production_engine_count": 546,
+  "generated_at": "2026-06-26T16:18:57.299Z",
+  "production_engine_count": 550,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 407
+      "engine_count": 410
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -255,7 +255,7 @@
         "endpoint_agent",
         "scope_domains"
       ],
-      "engine_count": 45
+      "engine_count": 46
     },
     "iac_supply_chain": {
       "id": "iac_supply_chain",
@@ -2569,6 +2569,72 @@
       "label": "External Exposure Supreme",
       "requirements": [
         "contact_email",
+        "scope_domains"
+      ]
+    },
+    "identity_attack_chain": {
+      "id": "identity_attack_chain",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Identity Attack Chain",
+      "requirements": [
+        "contact_email",
+        "client_id",
+        "scope_domains"
+      ]
+    },
+    "pipeline_to_runtime_risk": {
+      "id": "pipeline_to_runtime_risk",
+      "group": "supply_chain",
+      "kind": "real_probe",
+      "label": "Pipeline-to-Runtime Risk",
+      "requirements": [
+        "contact_email",
+        "scope_domains",
+        "iac_repos"
+      ]
+    },
+    "risk_superposition_collapse": {
+      "id": "risk_superposition_collapse",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Risk Superposition Collapse",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "chronos": {
+      "id": "chronos",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "CHRONOS Temporal Rollback",
+      "requirements": [
+        "contact_email",
+        "client_id",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "liquid_matrix": {
+      "id": "liquid_matrix",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "LIQUID-MATRIX MTD",
+      "requirements": [
+        "contact_email",
+        "client_id",
+        "scope_domains"
+      ]
+    },
+    "cognitive_starvation": {
+      "id": "cognitive_starvation",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "COGNITIVE STARVATION",
+      "requirements": [
+        "contact_email",
+        "client_id",
         "scope_domains"
       ]
     },

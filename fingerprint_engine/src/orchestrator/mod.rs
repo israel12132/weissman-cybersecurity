@@ -39,6 +39,75 @@ pub(crate) use weissman_core::{
     finding_description, finding_title_and_severity, infer_poc_exploit,
 };
 
+const MAX_CLIENT_WEB_TARGETS: usize = 64;
+
+fn target_schedule_interval_ms() -> u64 {
+    std::env::var("WEISSMAN_TARGET_SCHEDULE_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(750)
+        .clamp(100, 10_000)
+}
+
+/// Priority queue: approved domains first (https), then IP/CIDR hosts (http).
+fn resolve_client_web_targets(
+    domains_json: &str,
+    ip_ranges_json: &str,
+    fallback_name: &str,
+    max_targets: usize,
+) -> Vec<String> {
+    let cap = max_targets.min(MAX_CLIENT_WEB_TARGETS);
+    let mut out: Vec<String> = Vec::new();
+
+    if let Ok(domains) = serde_json::from_str::<Vec<String>>(domains_json.trim()) {
+        for d in domains {
+            let d = d.trim();
+            if d.is_empty() {
+                continue;
+            }
+            let url = if d.starts_with("http://") || d.starts_with("https://") {
+                d.to_string()
+            } else {
+                format!("https://{}", d.trim_start_matches('/'))
+            };
+            if !out.contains(&url) {
+                out.push(url);
+            }
+            if out.len() >= cap {
+                return out;
+            }
+        }
+    }
+
+    let hosts = crate::ot_ics_engine::resolve_scan_hosts("[]", ip_ranges_json, cap.saturating_sub(out.len()));
+    for h in hosts {
+        let url = if h.contains(':') && !h.starts_with('[') {
+            format!("http://{}", h)
+        } else {
+            format!("http://{}", h)
+        };
+        if !out.contains(&url) {
+            out.push(url);
+        }
+        if out.len() >= cap {
+            return out;
+        }
+    }
+
+    if out.is_empty() {
+        let fb = fallback_name.trim();
+        if !fb.is_empty() {
+            let url = if fb.starts_with("http://") || fb.starts_with("https://") {
+                fb.to_string()
+            } else {
+                format!("https://{}", fb)
+            };
+            out.push(url);
+        }
+    }
+    out
+}
+
 /// Operator-controlled "continuous scanning enabled" toggle. The scheduled cycle only
 /// kicks off real work when this is `true`. **Does NOT** indicate whether a cycle is
 /// currently executing — use [`active_tenant_scan_count`] for that.
@@ -1200,11 +1269,12 @@ async fn run_cycle_for_tenant(
     let mut run_max_targets = 0usize;
     let mut run_max_paths = 0usize;
     for (db_client_id, name, domains_json, ip_ranges_json, client_configs) in clients.clone() {
-        let targets: Vec<String> = serde_json::from_str(&domains_json).unwrap_or_default();
-        let target: String = targets.first().cloned().unwrap_or_else(|| name.clone());
-        if target.is_empty() {
+        let client_targets =
+            resolve_client_web_targets(&domains_json, &ip_ranges_json, &name, MAX_CLIENT_WEB_TARGETS);
+        if client_targets.is_empty() {
             continue;
         }
+        let target = client_targets[0].clone();
         let client_engines = crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(
             client_enabled_engines(client_configs.as_str()),
         );
@@ -1216,8 +1286,8 @@ async fn run_cycle_for_tenant(
             continue;
         }
         eprintln!(
-            "[Weissman][Orchestrator] Scanning client id={} name={} target={} (enabled_engines: {:?})",
-            db_client_id, name, target, client_engines
+            "[Weissman][Orchestrator] Scanning client id={} name={} targets={} primary={} (enabled_engines: {:?})",
+            db_client_id, name, client_targets.len(), target, client_engines
         );
         let cid = db_client_id.to_string();
         if let Some((_cur, paused, skip_to_stage)) =
@@ -1250,11 +1320,7 @@ async fn run_cycle_for_tenant(
         );
         let mut identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
         let mut client_had_crash = false;
-        let mut target_list: Vec<String> = vec![if target.starts_with("http") {
-            target.clone()
-        } else {
-            format!("https://{}", target)
-        }];
+        let mut target_list: Vec<String> = client_targets.clone();
         let mut discovery_ctx = pipeline_context::DiscoveryContext::new();
         discovery_ctx.merge_paths(pipeline_context::expanded_path_wordlist());
         let llm_base = get_config_tx(&mut tx, tenant_id, "llm_base_url")
@@ -1266,28 +1332,41 @@ async fn run_cycle_for_tenant(
         broadcast_engine_progress(
             telemetry_tx.as_ref(),
             "discovery",
-            "[Spider-Sense] Initial crawl + Archival + AI path prediction...",
+            &format!(
+                "[Spider-Sense] Scheduling {} approved target(s) (rate-limited queue)…",
+                target_list.len()
+            ),
             Some(cid.as_str()),
             wr,
         );
         tx.commit().await?;
-        if let Some(edge_meta) = crate::edge_swarm_intel::resolve_edge_swarm_for_target(
-            app_pool.as_ref().clone(),
-            tenant_id,
-            &target_list[0],
-            &llm_base,
-            llm_model.as_str(),
-            Some(tenant_id),
-        )
-        .await
-        {
-            tracing::info!(
-                target: "edge_swarm",
+        let schedule_ms = target_schedule_interval_ms();
+        for (idx, scan_target) in target_list.iter().enumerate() {
+            if idx > 0 {
+                tokio::time::sleep(Duration::from_millis(schedule_ms)).await;
+            }
+            if let Some(edge_meta) = crate::edge_swarm_intel::resolve_edge_swarm_for_target(
+                app_pool.as_ref().clone(),
                 tenant_id,
-                client_id = %cid,
-                edge = %serde_json::to_string(&edge_meta).unwrap_or_default(),
-                "smart proximity edge assignment (orchestrator)"
-            );
+                scan_target,
+                &llm_base,
+                llm_model.as_str(),
+                Some(tenant_id),
+            )
+            .await
+            {
+                tracing::info!(
+                    target: "edge_swarm",
+                    tenant_id,
+                    client_id = %cid,
+                    scan_target = %scan_target,
+                    edge = %serde_json::to_string(&edge_meta).unwrap_or_default(),
+                    "smart proximity edge assignment (orchestrator)"
+                );
+            }
+            let archival_paths =
+                archival_engine::run_archival_discovery(scan_target, Some(&stealth_config)).await;
+            discovery_ctx.merge_paths(archival_paths);
         }
         discovery_engine::run_spider_crawl(
             &target_list,
@@ -1296,9 +1375,6 @@ async fn run_cycle_for_tenant(
             &mut discovery_ctx.paths_403,
         )
         .await;
-        let archival_paths =
-            archival_engine::run_archival_discovery(&target, Some(&stealth_config)).await;
-        discovery_ctx.merge_paths(archival_paths);
         let predicted = discovery_engine::predict_paths_llm(
             &discovery_ctx.all_paths(),
             &llm_base,
@@ -1803,6 +1879,7 @@ async fn run_cycle_for_tenant(
                         job_id: None,
                         swarm_broadcast: None,
                         intelligence_bus: Some(intelligence_bus.clone()),
+                        ..Default::default()
                     };
                     let r = crate::engine_dispatch::run_engine(other, &target, &ctx).await;
                     crate::ws_intelligence_bus::merge_params_artifacts(
