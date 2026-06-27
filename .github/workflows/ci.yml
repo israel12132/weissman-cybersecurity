@@ -14,7 +14,7 @@ jobs:
     name: Migration trees in sync
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check fingerprint_engine ↔ weissman-db migrations
         run: bash scripts/check-migration-sync.sh
@@ -23,10 +23,10 @@ jobs:
     name: Python — pip-audit & lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -55,15 +55,15 @@ jobs:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -108,7 +108,7 @@ jobs:
     name: Security — secrets & dependency scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Secret scan (gitleaks, working tree)
         run: |
@@ -118,7 +118,7 @@ jobs:
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -142,7 +142,7 @@ jobs:
     name: Frontend — lint, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -198,7 +198,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -208,12 +208,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -273,7 +273,7 @@ jobs:
         # actual runtime image (base OS packages baked into weissman-backend:stable).
         # ignore-unfixed keeps it actionable — only CRITICALs with an available fix
         # fail the build (then bump the base image; Dependabot 'docker' helps here).
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: weissman-backend:stable
@@ -401,10 +401,10 @@ jobs:
     name: Semgrep SAST (report-only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
