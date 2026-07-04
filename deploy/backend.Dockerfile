@@ -6,7 +6,7 @@
 #   Cargo.toml/Cargo.lock · fuzz_core · fingerprint_engine · backend · crates · scripts · shared
 #
 # Native deps: openssl-sys, aws-lc-sys (rustls), hwlocality→hwloc+libudev, libsqlite3-sys (sqlx), ring.
-FROM rust:1.91-bookworm AS build
+FROM rust:1.96-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \

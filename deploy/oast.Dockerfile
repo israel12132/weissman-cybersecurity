@@ -1,6 +1,6 @@
 # Weissman OAST listener (out-of-band interaction correlation).
 # Workspace members must all exist even when building a single crate.
-FROM rust:1.91-bookworm AS build
+FROM rust:1.96-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*

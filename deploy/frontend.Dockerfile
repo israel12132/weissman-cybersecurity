@@ -5,7 +5,7 @@
 #   Cargo workspace (for weissman-ast-cap + weissman-ui-provenance WASM)
 #
 # Stage 1 — Rust WASM (ast-cap, ui-provenance)
-FROM rust:1.91-bookworm AS wasm-build
+FROM rust:1.96-bookworm AS wasm-build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
