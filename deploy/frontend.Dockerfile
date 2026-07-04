@@ -41,7 +41,7 @@ WORKDIR /build/frontend
 RUN node ../scripts/generate_engine_param_defs.mjs && npx vite build
 
 # Stage 3 — Nginx gateway (non-root, :8080 inside → :80 on host)
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 USER root
 RUN apk add --no-cache curl
 COPY deploy/nginx-gateway.conf          /etc/nginx/conf.d/default.conf
