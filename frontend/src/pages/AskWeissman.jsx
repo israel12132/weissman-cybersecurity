@@ -176,7 +176,7 @@ export default function AskWeissman() {
   }, [history])
 
   return (
-    <div
+    <main
       id="main-content"
       tabIndex={-1}
       className="min-h-[100dvh] text-slate-100 p-5 lg:p-6 flex flex-col outline-none"
@@ -370,6 +370,6 @@ export default function AskWeissman() {
           {loading ? t('ask_weissman.asking') : t('ask_weissman.ask_button')}
         </button>
       </form>
-    </div>
+    </main>
   )
 }

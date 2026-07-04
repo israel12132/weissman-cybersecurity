@@ -127,7 +127,7 @@ export const NAV_GROUPS = [
     id: 'administration',
     labelKey: 'nav.groups.administration',
     items: [
-      { to: '/integrations', labelKey: 'nav.integrations', icon: '🔗' },
+      { to: '/settings/integrations', labelKey: 'nav.integrations', icon: '🔗' },
       { to: '/identity-context', labelKey: 'nav.identity_context', icon: '👤' },
       { to: '/sso-config', labelKey: 'nav.sso_config', icon: '🔑' },
       { to: '/engine-management', labelKey: 'nav.engine_management', icon: '⚙' },
@@ -135,6 +135,7 @@ export const NAV_GROUPS = [
       { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
       { to: '/admin', labelKey: 'nav.admin', icon: '👑' },
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
+      { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
@@ -155,6 +156,7 @@ const PATH_OVERRIDES = [
   { prefix: '/engines/', groupId: 'engines', labelKey: 'nav.engine_detail' },
   { prefix: '/digital-twin/', groupId: 'engines', labelKey: 'nav.digital_twin' },
   { prefix: '/ceo', groupId: 'administration', labelKey: 'nav.ceo' },
+  { prefix: '/supreme-nerve-center', groupId: 'administration', labelKey: 'nav.supreme_nerve_center' },
   { prefix: '/operations', groupId: 'command', labelKey: 'nav.operations_view' },
   { prefix: '/system-core', groupId: 'administration', labelKey: 'nav.system_core' },
 ]
@@ -253,7 +255,7 @@ function dedupeCrumbs(crumbs) {
 /** Gate restricted nav targets (admin / CEO vault). */
 export function canAccessNavItem(item, session) {
   if (item?.hideFromNav) return false
-  const restricted = item?.to === '/admin' || item?.to === '/ceo-vault' || item?.to === '/ceo'
+  const restricted = item?.to === '/admin' || item?.to === '/ceo-vault' || item?.to === '/ceo' || item?.to === '/supreme-nerve-center'
   if (!restricted) return true
   const role = (session?.role || '').toLowerCase()
   return session?.is_superadmin === true || session?.is_ceo === true || role === 'ceo'

@@ -3,9 +3,10 @@
  * Fetches live from /api/clients/:id, /api/clients/:id/report/crypto-proof. No mock data.
  */
 import { useState, useEffect } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 export default function ReportView() {
   const { t } = useTranslation()
@@ -35,9 +36,9 @@ export default function ReportView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">{t('components.reportView.loading')}</p>
-      </div>
+      <StandaloneLabShell title={t('components.reportView.loading')}>
+        <p className="text-cyan-400" role="status">{t('components.reportView.loading')}</p>
+      </StandaloneLabShell>
     )
   }
 
@@ -52,21 +53,19 @@ export default function ReportView() {
   const breakdownPairs = Object.entries(verificationBreakdown).sort((a, b) => b[1] - a[1])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6 max-w-4xl mx-auto">
-      <header className="flex items-center justify-between border-b border-slate-700 pb-4 mb-6">
-        <h1 className="text-xl font-bold text-cyan-400">{t('components.reportView.title', { name: clientName })}</h1>
-        <div className="flex gap-4">
-          <a
-            href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
-            download
-            className="text-sm text-cyan-400 hover:underline"
-          >
-            {t('components.reportView.download_pdf')}
-          </a>
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t('components.reportView.back_war_room')}</Link>
-        </div>
-      </header>
-
+    <StandaloneLabShell
+      title={t('components.reportView.title', { name: clientName })}
+      maxWidth="max-w-4xl"
+      actions={(
+        <a
+          href={apiUrl(`/api/clients/${clientId}/report/pdf`)}
+          download
+          className="text-sm text-cyan-400 hover:underline"
+        >
+          {t('components.reportView.download_pdf')}
+        </a>
+      )}
+    >
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
           {error}
@@ -161,6 +160,6 @@ export default function ReportView() {
           </p>
         )}
       </section>
-    </div>
+    </StandaloneLabShell>
   )
 }

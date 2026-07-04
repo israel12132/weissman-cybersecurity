@@ -133,6 +133,7 @@ export default function ClientIntegrations() {
     repo_urls: form.repo_urls,
     agent_platforms: form.agent_platforms,
     industrial_ot_enabled: form.industrial_ot_enabled,
+    llm_secops_urls: form.llm_endpoints?.map((e) => e.url).filter(Boolean).join('\n') || '',
     engagement_modules: form.engagement_modules,
   }), [form])
 

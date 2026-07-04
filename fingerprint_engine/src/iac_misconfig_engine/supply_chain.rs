@@ -9,8 +9,17 @@ use Severity::{Critical, High};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "supply_chain", provider: "generic",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "supply_chain",
+            provider: "generic",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -101,8 +110,18 @@ mod tests {
     #[test]
     fn detects_tf_module_plus_secret() {
         let files = [
-            IacFile { name: "main.tf".into(), content: String::new(), forced: None, origin: "inline".into() },
-            IacFile { name: ".env".into(), content: String::new(), forced: None, origin: "inline".into() },
+            IacFile {
+                name: "main.tf".into(),
+                content: String::new(),
+                forced: None,
+                origin: "inline".into(),
+            },
+            IacFile {
+                name: ".env".into(),
+                content: String::new(),
+                forced: None,
+                origin: "inline".into(),
+            },
         ];
         let findings = vec![
             Finding::new(MODULE_UNPINNED, "main.tf", "module.x"),

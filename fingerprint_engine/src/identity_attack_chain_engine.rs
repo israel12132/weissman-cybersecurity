@@ -74,11 +74,7 @@ fn ingest_source(
 }
 
 async fn itdr_findings_from_db(ctx: &EngineRunContext, host: &str) -> Vec<Value> {
-    let (pool, tenant_id, client_id) = match (
-        ctx.app_pool.as_ref(),
-        ctx.tenant_id,
-        ctx.client_id,
-    ) {
+    let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.as_ref(), t, c),
         _ => return Vec::new(),
     };
@@ -269,9 +265,7 @@ pub async fn run_identity_attack_chain_result(
 }
 
 pub async fn run_identity_attack_chain(target: &str) {
-    print_result(
-        run_identity_attack_chain_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_identity_attack_chain_result(target, &EngineRunContext::default()).await);
 }
 
 #[cfg(test)]

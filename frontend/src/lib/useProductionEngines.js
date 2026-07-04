@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ENGINES_REGISTRY } from './enginesRegistry'
 import { apiFetch } from './apiBase'
+import { loadEnginesRegistry, prefetchEnginesRegistry } from './enginesRegistryLoader'
 
 let cachedProductionIds = null
 let fetchPromise = null
-let registryIndex = null
 
 export function invalidateProductionEnginesCache() {
   cachedProductionIds = null
@@ -29,25 +28,25 @@ async function fetchProductionIds() {
   return fetchPromise
 }
 
-function getRegistryIndex() {
-  if (registryIndex) return registryIndex
-  const idSet = new Set()
-  const byId = new Map()
-  for (const engine of ENGINES_REGISTRY) {
-    idSet.add(engine.id)
-    byId.set(engine.id, engine)
-  }
-  registryIndex = { idSet, byId }
-  return registryIndex
-}
-
 /**
  * Registry entries backed by live engine probes (GET /api/engines/production).
- * All 531 registry engines are wired to real probes (dedicated or alias runner).
+ * Full catalog loads in isolated `data-engines-registry` micro-chunk.
  */
-export function useProductionEngines() {
+export function useProductionEngines({ prefetch = false } = {}) {
   const [productionIds, setProductionIds] = useState(cachedProductionIds)
   const [loading, setLoading] = useState(!cachedProductionIds)
+  const [registry, setRegistry] = useState(null)
+
+  useEffect(() => {
+    if (prefetch) prefetchEnginesRegistry()
+    let cancelled = false
+    loadEnginesRegistry().then((mod) => {
+      if (!cancelled) setRegistry(mod)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [prefetch])
 
   useEffect(() => {
     if (cachedProductionIds) {
@@ -71,36 +70,39 @@ export function useProductionEngines() {
     [productionIds],
   )
 
-  const { idSet: registryIdSet, byId: registryById } = useMemo(
-    () => getRegistryIndex(),
-    [],
-  )
+  const registryIndex = useMemo(() => {
+    if (!registry?.ENGINES_REGISTRY) return { idSet: new Set(), byId: new Map() }
+    const idSet = new Set()
+    const byId = new Map()
+    for (const engine of registry.ENGINES_REGISTRY) {
+      idSet.add(engine.id)
+      byId.set(engine.id, engine)
+    }
+    return { idSet, byId }
+  }, [registry])
+
+  const { idSet: registryIdSet, byId: registryById } = registryIndex
 
   const isProduction = useMemo(
     () => (id) => registryIdSet.has(id) || productionSet.has(id),
     [productionSet, registryIdSet],
   )
 
-  const engines = useMemo(
-    () => {
-      if (!productionIds || productionIds.length === 0) {
-        return ENGINES_REGISTRY
-      }
-      const out = []
-      for (const id of productionIds) {
-        const engine = registryById.get(id)
-        if (engine) out.push(engine)
-      }
-      // Keep the "catalog-all" behavior for existing UI assumptions.
-      return out.length > 0 ? out : ENGINES_REGISTRY
-    },
-    [productionIds, registryById],
-  )
+  const engines = useMemo(() => {
+    const catalog = registry?.ENGINES_REGISTRY || []
+    if (!productionIds || productionIds.length === 0) return catalog
+    const out = []
+    for (const id of productionIds) {
+      const engine = registryById.get(id)
+      if (engine) out.push(engine)
+    }
+    return out.length > 0 ? out : catalog
+  }, [productionIds, registryById, registry])
 
-  const catalogCount = useMemo(
-    () => ENGINES_REGISTRY.filter((e) => !isProduction(e.id)).length,
-    [isProduction],
-  )
+  const catalogCount = useMemo(() => {
+    const catalog = registry?.ENGINES_REGISTRY || []
+    return catalog.filter((e) => !isProduction(e.id)).length
+  }, [registry, isProduction])
 
   const refresh = useCallback(async () => {
     invalidateProductionEnginesCache()
@@ -115,8 +117,10 @@ export function useProductionEngines() {
     productionIds: productionIds || [],
     productionCount: engines.length,
     catalogCount,
-    loading,
+    loading: loading || !registry,
+    registryReady: !!registry,
     isProduction,
     refresh,
+    ENGINES_BY_ID: registry?.ENGINES_BY_ID || {},
   }
 }

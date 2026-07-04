@@ -11,8 +11,17 @@ use Severity::High;
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "drift", provider: "generic",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "drift",
+            provider: "generic",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -75,7 +84,13 @@ pub const IAM_SCOPE_DRIFT: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![S3_ACL_DRIFT, SG_CIDR_DRIFT, K8S_PRIV_DRIFT, RDS_ENC_DRIFT, IAM_SCOPE_DRIFT]
+    vec![
+        S3_ACL_DRIFT,
+        SG_CIDR_DRIFT,
+        K8S_PRIV_DRIFT,
+        RDS_ENC_DRIFT,
+        IAM_SCOPE_DRIFT,
+    ]
 }
 
 #[derive(Default)]
@@ -113,10 +128,17 @@ pub fn analyze(files: &[IacFile]) -> Vec<Finding> {
     for file in files {
         let fw = detect::detect(&file.name, &file.content, file.forced);
         match fw {
-            Framework::Terraform | Framework::Terragrunt => {
-                scan_terraform(&file.name, &file.content, &mut s3, &mut sg, &mut rds_enc, &mut iam_scope)
+            Framework::Terraform | Framework::Terragrunt => scan_terraform(
+                &file.name,
+                &file.content,
+                &mut s3,
+                &mut sg,
+                &mut rds_enc,
+                &mut iam_scope,
+            ),
+            Framework::Kubernetes | Framework::Helm => {
+                scan_k8s(&file.name, &file.content, &mut dep)
             }
-            Framework::Kubernetes | Framework::Helm => scan_k8s(&file.name, &file.content, &mut dep),
             _ => {}
         }
     }
@@ -196,7 +218,16 @@ fn scan_terraform(
                 current_name = parts[3].to_string();
                 in_block = true;
             }
-            scan_tf_line(t, &current_type, &current_name, file, s3, sg, rds_enc, iam_scope);
+            scan_tf_line(
+                t,
+                &current_type,
+                &current_name,
+                file,
+                s3,
+                sg,
+                rds_enc,
+                iam_scope,
+            );
             continue;
         }
         if !in_block {
@@ -206,7 +237,16 @@ fn scan_terraform(
             in_block = false;
             continue;
         }
-        scan_tf_line(t, &current_type, &current_name, file, s3, sg, rds_enc, iam_scope);
+        scan_tf_line(
+            t,
+            &current_type,
+            &current_name,
+            file,
+            s3,
+            sg,
+            rds_enc,
+            iam_scope,
+        );
     }
 }
 
@@ -222,29 +262,51 @@ fn scan_tf_line(
 ) {
     let tl = t.to_ascii_lowercase();
     if current_type == "aws_s3_bucket" {
-        if tl.contains("acl") && (tl.contains("public") || tl.contains("\"public-read\"") || tl.contains("public-read")) {
-            s3.entry(current_name.to_string()).or_default().public_files.push(file.to_string());
+        if tl.contains("acl")
+            && (tl.contains("public")
+                || tl.contains("\"public-read\"")
+                || tl.contains("public-read"))
+        {
+            s3.entry(current_name.to_string())
+                .or_default()
+                .public_files
+                .push(file.to_string());
         } else if tl.contains("acl") && (tl.contains("private") || tl.contains("\"private\"")) {
-            s3.entry(current_name.to_string()).or_default().private_files.push(file.to_string());
+            s3.entry(current_name.to_string())
+                .or_default()
+                .private_files
+                .push(file.to_string());
         }
     }
     if current_type == "aws_security_group" || current_type == "aws_security_group_rule" {
         if tl.contains("0.0.0.0/0") {
-            sg.entry(current_name.to_string()).or_default().open_files.push(file.to_string());
+            sg.entry(current_name.to_string())
+                .or_default()
+                .open_files
+                .push(file.to_string());
         } else if tl.contains("cidr") && !tl.contains("0.0.0.0/0") {
-            sg.entry(current_name.to_string()).or_default().closed_files.push(file.to_string());
+            sg.entry(current_name.to_string())
+                .or_default()
+                .closed_files
+                .push(file.to_string());
         }
     }
     if current_type == "aws_db_instance" || current_type == "aws_rds_cluster" {
-        let entry = rds_enc.entry(current_name.to_string()).or_insert_with(|| (Vec::new(), Vec::new()));
+        let entry = rds_enc
+            .entry(current_name.to_string())
+            .or_insert_with(|| (Vec::new(), Vec::new()));
         if tl.contains("storage_encrypted") && (tl.contains("true") || tl.contains("\"true\"")) {
             entry.0.push(file.to_string());
-        } else if tl.contains("storage_encrypted") && (tl.contains("false") || tl.contains("\"false\"")) {
+        } else if tl.contains("storage_encrypted")
+            && (tl.contains("false") || tl.contains("\"false\""))
+        {
             entry.1.push(file.to_string());
         }
     }
     if current_type.starts_with("aws_iam_") {
-        let entry = iam_scope.entry(current_name.to_string()).or_insert_with(|| (Vec::new(), Vec::new()));
+        let entry = iam_scope
+            .entry(current_name.to_string())
+            .or_insert_with(|| (Vec::new(), Vec::new()));
         if tl.contains("action") && tl.contains("*") && tl.contains("resource") {
             entry.0.push(file.to_string());
         } else if tl.contains("action") && !tl.contains("\"*\"") {
@@ -255,7 +317,9 @@ fn scan_tf_line(
 
 fn scan_k8s(file: &str, content: &str, dep: &mut HashMap<String, DepState>) {
     for de in serde_yaml::Deserializer::from_str(content) {
-        let Ok(doc) = serde_yaml::Value::deserialize(de) else { continue };
+        let Ok(doc) = serde_yaml::Value::deserialize(de) else {
+            continue;
+        };
         if doc.get("kind").and_then(|k| k.as_str()) != Some("Deployment") {
             continue;
         }
@@ -268,9 +332,15 @@ fn scan_k8s(file: &str, content: &str, dep: &mut HashMap<String, DepState>) {
         let raw = serde_yaml::to_string(&doc).unwrap_or_default();
         let lc = raw.to_ascii_lowercase();
         if lc.contains("privileged: true") {
-            dep.entry(name).or_default().priv_files.push(file.to_string());
+            dep.entry(name)
+                .or_default()
+                .priv_files
+                .push(file.to_string());
         } else if lc.contains("privileged: false") || lc.contains("securitycontext:") {
-            dep.entry(name).or_default().unpriv_files.push(file.to_string());
+            dep.entry(name)
+                .or_default()
+                .unpriv_files
+                .push(file.to_string());
         }
     }
 }

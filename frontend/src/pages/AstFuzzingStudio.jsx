@@ -3,9 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Braces, FlaskConical, Loader2, Play, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
-import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import CopyButton from '../components/ui/CopyButton'
+import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
+import AstTreeViewer from '../engineC2/modules/AstTreeViewer'
+import { useResolvedEngineManifest } from '../engineC2/EngineManifestContext'
+import { useLocation } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 
 const PRESETS = [
@@ -29,6 +32,25 @@ function classifyPayload(text) {
 
 export default function AstFuzzingStudio() {
   const { t } = useTranslation()
+  return (
+    <PageShell
+      title={t('pages.astFuzzingStudio.title')}
+      badge={t('pages.astFuzzingStudio.badge')}
+      badgeColor="#f59e0b"
+      subtitle={t('pages.astFuzzingStudio.subtitle')}
+    >
+      <AstFuzzingStudioBody />
+    </PageShell>
+  )
+}
+
+function AstFuzzingStudioBody() {
+  useInsideEngineC2()
+  const { pathname } = useLocation()
+  const manifest = useResolvedEngineManifest({ pathname })
+  const maxAstNodes = manifest?.capabilities?.max_ast_nodes ?? 50_000
+  const { t } = useTranslation()
+  const { signal, killed } = useC2AbortSignal()
   const [payload, setPayload] = useState(PRESETS[0].value)
   const [maxMutations, setMaxMutations] = useState(200)
   const [loading, setLoading] = useState(false)
@@ -39,7 +61,7 @@ export default function AstFuzzingStudio() {
   const payloadKind = useMemo(() => classifyPayload(payload), [payload])
 
   const run = useCallback(async () => {
-    if (!canRun) return
+    if (!canRun || killed) return
     setLoading(true)
     setError('')
     setResult(null)
@@ -49,6 +71,7 @@ export default function AstFuzzingStudio() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payload, max_mutations: clamped }),
+        signal,
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.astFuzzingStudio.preview_failed'))
@@ -58,7 +81,7 @@ export default function AstFuzzingStudio() {
     } finally {
       setLoading(false)
     }
-  }, [canRun, payload, maxMutations, t])
+  }, [canRun, payload, maxMutations, t, signal, killed])
 
   const mutations = useMemo(() => (Array.isArray(result?.mutations) ? result.mutations : []), [result])
 
@@ -87,12 +110,8 @@ export default function AstFuzzingStudio() {
   const allText = useMemo(() => mutations.join('\n'), [mutations])
 
   return (
-    <PageShell
-      title={t('pages.astFuzzingStudio.title')}
-      badge={t('pages.astFuzzingStudio.badge')}
-      badgeColor="#f59e0b"
-      subtitle={t('pages.astFuzzingStudio.subtitle')}
-      actions={(
+    <>
+      <div className="flex justify-end mb-4">
         <ShellScanActions
           onRefresh={handleRefresh}
           onExport={exportCsv}
@@ -100,8 +119,7 @@ export default function AstFuzzingStudio() {
           refreshDisabled={!result}
           exportDisabled={!filteredFindings.length}
         />
-      )}
-    >
+      </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Input panel */}
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
@@ -202,43 +220,15 @@ export default function AstFuzzingStudio() {
             )}
           </div>
 
-          <WeissmanFindingsPanel
-            findings={mutationFindings}
-            filteredFindings={filteredFindings}
-            counts={counts}
-            total={total}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            severityFilter={severityFilter}
-            onSeverityChange={setSeverityFilter}
-            loading={loading && !mutationFindings.length}
-            pending={loading && !mutationFindings.length}
-            accent="#f59e0b"
-            title={t('pages.astFuzzingStudio.mutations')}
+          <AstTreeViewer
+            nodes={mutations}
+            maxNodes={maxAstNodes}
+            loading={loading && !mutations.length}
             emptyTitle={t('pages.astFuzzingStudio.mutations')}
             emptyBody={t('pages.astFuzzingStudio.preview_empty')}
-            showEmptyReady={!loading && !result}
-            emptyReadyTitle={t('pages.astFuzzingStudio.mutations')}
-            emptyReadyBody={t('pages.astFuzzingStudio.preview_empty')}
-            renderFinding={(f, i) => (
-              <div
-                key={i}
-                className="group flex items-start gap-2 px-3 py-2 rounded-lg border border-white/10 bg-black/30 hover:bg-white/[0.02]"
-              >
-                <span className="shrink-0 text-[10px] font-mono text-white/20 tabular-nums pt-0.5 w-8 text-right">
-                  {i + 1}
-                </span>
-                <code className="flex-1 min-w-0 text-[11px] font-mono text-white/70 break-words ltr-only">
-                  {f.description}
-                </code>
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <CopyButton value={f.description} size="sm" />
-                </span>
-              </div>
-            )}
           />
         </div>
       </div>
-    </PageShell>
+    </>
   )
 }

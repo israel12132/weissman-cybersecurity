@@ -37,7 +37,9 @@ impl IntelligenceBus {
             return;
         }
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        if g.iter().any(|a| a.kind == artifact.kind && a.value == artifact.value) {
+        if g.iter()
+            .any(|a| a.kind == artifact.kind && a.value == artifact.value)
+        {
             return;
         }
         g.push(artifact);
@@ -62,10 +64,7 @@ impl IntelligenceBus {
     }
 
     pub fn snapshot(&self) -> Vec<IntelArtifact> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn snapshot_for_cross_protocol(&self) -> Vec<IntelArtifact> {
@@ -109,7 +108,10 @@ pub fn prioritize_ws_intelligence_chain(mut engines: Vec<String>) -> Vec<String>
     if let (Some(ws), Some(gql)) = (ws_pos, gql_pos) {
         if ws > gql {
             let ws_id = engines.remove(ws);
-            let insert_at = engines.iter().position(|e| e == "graphql_attack").unwrap_or(gql);
+            let insert_at = engines
+                .iter()
+                .position(|e| e == "graphql_attack")
+                .unwrap_or(gql);
             engines.insert(insert_at, ws_id);
         }
     }
@@ -139,7 +141,10 @@ pub fn apply_intelligence_artifacts_to_headers(
     if has_auth {
         return;
     }
-    let Some(arr) = params.get("intelligence_artifacts").and_then(Value::as_array) else {
+    let Some(arr) = params
+        .get("intelligence_artifacts")
+        .and_then(Value::as_array)
+    else {
         return;
     };
     for art in arr {
@@ -162,7 +167,10 @@ pub fn apply_intelligence_artifacts_to_headers(
         }
         match kind {
             "cookie" | "session_cookie" => {
-                if !extra_headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("cookie")) {
+                if !extra_headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("cookie"))
+                {
                     extra_headers.push(("Cookie".to_string(), value.to_string()));
                 }
             }
@@ -217,7 +225,10 @@ pub async fn verify_http_privilege_escalation(
         }
         "api_key" => headers.push(("X-Api-Key".to_string(), artifact.value.clone())),
         "connectionToken" | "connectionId" | "token" | "sid" | "sessionId" | "session_id" => {
-            headers.push(("Authorization".to_string(), format!("Bearer {}", artifact.value)));
+            headers.push((
+                "Authorization".to_string(),
+                format!("Bearer {}", artifact.value),
+            ));
         }
         _ => headers.push(("Authorization".to_string(), artifact.value.clone())),
     }
@@ -385,7 +396,12 @@ mod tests {
     #[test]
     fn merge_params_injects_artifacts() {
         let bus = IntelligenceBus::default();
-        bus.publish_token("jwt", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.x", "wss://x/ws", "jwt_pattern_in_ws_frame");
+        bus.publish_token(
+            "jwt",
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.x",
+            "wss://x/ws",
+            "jwt_pattern_in_ws_frame",
+        );
         let mut params = json!({});
         merge_params_artifacts(&mut params, &bus);
         assert!(params.get("intelligence_artifacts").is_some());

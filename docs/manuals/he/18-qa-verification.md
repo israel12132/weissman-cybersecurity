@@ -2,7 +2,17 @@
 
 ## מטרה
 
-רשימת sign-off לפני handoff ללקוח או go-live production. מאמת wiring wiring UI, guards, smoke end-to-end.
+Sign-off לפני handoff או go-live. מאמת wiring, UI, guards, smoke end-to-end, ו**חבילת ראיות לביקורת**.
+
+---
+
+## שער ראשי — להריץ קודם
+
+```bash
+bash scripts/full_audit_gate.sh
+```
+
+**Pass:** exit 0, `GLOBAL PASS`. מאגד G1–G7 (בנייה, בדיקות, lint, wiring, reality, migrations, live + evidence).
 
 ---
 
@@ -10,15 +20,13 @@
 
 - staging כ-production
 - `WEISSMAN_ENV=production` (מומלץ)
-- סודות חזקים
+- JWT **≥48 תווים**; סודות metrics/destructive/job-bus **≥32**
 - פריסה מלאה (Docker/systemd/K8s)
-- admin + MFA נבדק
+- admin + MFA
 
 ---
 
 ## סקריפטים אוטומטיים
-
-משורש המאגר:
 
 ### 1. Engine wiring
 
@@ -26,7 +34,7 @@
 node scripts/verify_engine_wiring.mjs
 ```
 
-**Pass:** exit 0, אפס gaps. **545 מנועים**, UI ↔ `PRODUCTION_ENGINE_IDS` ↔ dispatch.
+**Pass:** exit 0. **558 מנועים**, 0 gaps.
 
 ### 2. Engine reality
 
@@ -34,7 +42,7 @@ node scripts/verify_engine_wiring.mjs
 node scripts/engine_reality_audit.mjs
 ```
 
-**Pass:** אפס `no_path`. ספירה: `real_probe`, `agent_required`, `alias`, `special`.
+**Pass:** 0 `no_path`. **300** real_probe, **213** alias, **45** agent_required.
 
 ### 3. UI audit
 
@@ -42,31 +50,32 @@ node scripts/engine_reality_audit.mjs
 node scripts/weissman-ui-audit.mjs
 ```
 
-**Pass:** כל עמודי Command Center — evidence, refresh, export, search. **94/94**.
+**Pass:** **95/95** דפים, **112/112** נתיבים.
 
-### 4. Rust
-
-```bash
-cargo build --workspace
-cargo test --workspace
-cargo clippy --workspace
-```
-
-### 5. Frontend
+### 4. Rust + Frontend
 
 ```bash
-cd frontend && npm ci && npm run build
+cargo test --workspace --all-targets
+cd frontend && npm run test:coverage
 ```
 
-### 6. Staging QA (one command)
+### 5. Playwright live (שלב 6)
 
 ```bash
-chmod +x scripts/staging-qa.sh
-./scripts/staging-qa.sh
-./scripts/staging-qa.sh --live http://localhost
+./scripts/run_playwright_live_e2e.sh
 ```
 
-ספר **19** — Paddle, SMTP, LLM, OAST, Agent, Docker staging.
+### 6. Evidence pack (שלב 6)
+
+```bash
+./scripts/generate_audit_evidence_pack.sh
+```
+
+### 7. Go-live
+
+```bash
+./scripts/go_live_check.sh
+```
 
 ---
 
@@ -74,134 +83,28 @@ chmod +x scripts/staging-qa.sh
 
 | בדיקה | Pass |
 |-------|------|
-| JWT חלש → refuse boot | blocked |
+| JWT < 48 → refuse boot | blocked |
 | secure cookies + HTTPS | Secure flag |
 | metrics ללא token → 401 | 401 |
 | destructive ללא header → 403 | 403 |
-| admin password rotated | changed |
-| billing strict | quota error ללא מנוי |
 
-ספר **05**.
+ראו ספר **05**.
 
 ---
 
-## Smoke tests
+## Sign-off
 
-### Auth
-
-- [ ] `POST /api/login` ב-`/command-center/login`
-- [ ] `GET /api/auth/me` admin
-- [ ] MFA setup + verify
-- [ ] logout
-- [ ] viewer לא מריץ scans
-- [ ] operator מריץ
-
-### Client / billing
-
-- [ ] client + domains
-- [ ] Billing usage
-- [ ] max_clients (strict)
-
-### Scan pipeline
-
-- [ ] `POST /api/command-center/scan` → job
-- [ ] worker claim < 60s
-- [ ] findings ב-UI
-- [ ] `completed`
-
-מנועים: `real_probe` + `agent_required` (empty לפני agent, findings אחרי).
-
-### Agent (אם ב-scope)
-
-- [ ] `/install/agent.sh`
-- [ ] online
-- [ ] host finding
-
-### Reports
-
-- [ ] CSV
-- [ ] PDF
-
-### Integrations / SSO (אם נמכר)
-
-- [ ] CI webhook
-- [ ] alert webhook
-- [ ] SSO login
-
----
-
-## תשתית
-
-```bash
-curl -sf https://staging.example.com/api/health
-curl -sf https://staging.example.com/command-center/
-docker compose ps
 ```
-
-- [ ] Postgres backups tested
-- [ ] Redis (multi-replica)
-- [ ] TLS valid
-- [ ] legal pages (`/terms.html`, `/privacy.html`, `/dpa.html`)
-
-Monitoring:
-
-```bash
-docker compose --profile monitoring up -d
+  [ ] full_audit_gate.sh — GLOBAL PASS
+  [ ] 558 engines, 112 routes, 0 gaps
+  [ ] evidence-pack JSON + PDF
+  [ ] login + scan + findings + PDF
 ```
 
 ---
 
-## Baseline ביצועים
-
-| מetric | יעד staging |
-|--------|-------------|
-| health p95 | < 200 ms |
-| claim latency | < 30 s |
-| recon engine | < 5 min |
-| concurrent light | = `WEISSMAN_WORKER_LIGHT_CONCURRENCY` |
-
----
-
-## מסמך sign-off
-
-```
-לקוח: _______________
-URL: _______________
-תאריך: _______________
-
-אוטומטי:
-  [ ] verify_engine_wiring.mjs — 0 gaps
-  [ ] engine_reality_audit.mjs — 0 no_path
-  [ ] weissman-ui-audit.mjs — pass
-  [ ] cargo test — pass
-  [ ] frontend build — pass
-
-ידני:
-  [ ] login + MFA
-  [ ] client + scan + findings
-  [ ] agent (אם scope)
-  [ ] PDF
-  [ ] security guards
-
-אישור: _______________
-```
-
----
-
-## Regression אחרי שדרוג
-
-1. rebuild
-2. סקריפטים 1–3
-3. health + smoke scan
-4. migration logs
-
----
-
-## ספרים קשורים
+## קשור
 
 - [00-sales-delivery-readiness](00-sales-delivery-readiness.md)
 - [05-production-security](05-production-security.md)
-- [09-client-onboarding](09-client-onboarding.md)
-- [10-scans-engines-jobs](10-scans-engines-jobs.md)
-- [16-operations-monitoring](16-operations-monitoring.md)
-- [17-troubleshooting](17-troubleshooting.md)
+- [Inspection Day Runbook](../../operations/INSPECTION-DAY-RUNBOOK.md)

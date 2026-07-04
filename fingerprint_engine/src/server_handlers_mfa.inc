@@ -59,8 +59,14 @@ async fn api_auth_mfa_verify(
     let secret: String = row.try_get("mfa_secret").unwrap_or_default();
     let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
     let email: String = row.try_get("email").unwrap_or_default();
-    if let Some(retry_after) = crate::http::check_lockout(ctx.tenant_id, &email).await {
-        return crate::http::locked_response(retry_after);
+    match crate::http::check_lockout_status(ctx.tenant_id, &email).await {
+        crate::http::LockoutStatus::Locked(retry_after) => {
+            return crate::http::locked_response(retry_after);
+        }
+        crate::http::LockoutStatus::DistributedStoreUnavailable => {
+            return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+        }
+        crate::http::LockoutStatus::Allowed => {}
     }
     if !enabled || secret.is_empty() {
         return (
@@ -103,11 +109,13 @@ async fn api_auth_mfa_verify(
     )
     .await;
     let _ = tx.commit().await;
+    let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (access_jwt, access_cookie, refresh_cookie) =
         match crate::auth_refresh::build_session_cookie_headers(
             state.auth_pool.as_ref(),
             ctx.user_id,
             ctx.tenant_id,
+            &binding,
         )
         .await
         {

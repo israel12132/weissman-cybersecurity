@@ -5,7 +5,7 @@
 //!   * `real_probe`     — canonical engine with a live dispatch arm (real network/host I/O)
 //!   * `alias`          — a retag that resolves to another canonical engine (same detection logic)
 //!   * `agent_required` — remote-impossible; returns an info finding until the endpoint agent runs
-//!   * `special`        — `poe_synthesis` (executed via the async-job path, not the dispatch match)
+//!   * `special`        — reserved for async-only engines without a sync dispatch arm
 //!
 //! Mirrors `scripts/engine_reality_audit.mjs` exactly, but computed at runtime in Rust.
 
@@ -21,8 +21,8 @@ pub fn classify(id: &str) -> &'static str {
     if canonical != id {
         return "alias";
     }
-    if id == "poe_synthesis" {
-        return "special";
+    if crate::critical_infra::is_critical_infra_engine(id) {
+        return "real_probe";
     }
     "real_probe"
 }
@@ -78,7 +78,7 @@ pub fn to_json() -> serde_json::Value {
     for c in &caps {
         *counts.entry(c.kind.clone()).or_insert(0) += 1;
     }
-    serde_json::json!({
+    let mut body = serde_json::json!({
         "total": caps.len(),
         "summary": counts,
         "engines": caps,
@@ -88,7 +88,21 @@ pub fn to_json() -> serde_json::Value {
             "agent_required": "Requires the endpoint agent; info-only from a remote scan",
             "special": "poe_synthesis — runs via the async-job path"
         },
-    })
+    });
+    if let Some(secret) = provenance_signing_secret() {
+        if let Some(manifest) = weissman_ui_provenance::sign_capabilities_manifest(&body, &secret) {
+            body["provenance"] = serde_json::to_value(manifest).unwrap_or(serde_json::Value::Null);
+        }
+    }
+    body
+}
+
+pub fn provenance_signing_secret() -> Option<String> {
+    std::env::var("WEISSMAN_UI_PROVENANCE_SECRET")
+        .ok()
+        .or_else(|| std::env::var("WEISSMAN_JWT_SECRET").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 #[cfg(test)]
@@ -97,7 +111,8 @@ mod tests {
 
     #[test]
     fn known_kinds_classify_correctly() {
-        assert_eq!(classify("poe_synthesis"), "special");
+        assert_eq!(classify("poe_synthesis"), "real_probe");
+        assert_eq!(classify("avionics_adsb_attack"), "real_probe");
         // wifi_attack_engine genuinely needs RF hardware via the agent.
         assert_eq!(classify("wifi_attack_engine"), "agent_required");
         // modbus_exploit was promoted to a real read-only probe (removed from agent-required).
@@ -115,7 +130,7 @@ mod tests {
         // Buckets must partition the catalog exactly (no id left unclassified).
         assert_eq!(real + alias + agent + special, caps.len());
         assert!(real > 0 && alias > 0 && agent > 0);
-        assert_eq!(special, 1);
+        assert_eq!(special, 0);
         // Aliases must carry a canonical target; real probes must not.
         for c in &caps {
             if c.kind == "alias" {
@@ -129,7 +144,9 @@ mod tests {
     #[test]
     fn alias_of_agent_required_is_not_remote() {
         let caps = capabilities();
-        let alias = caps.iter().find(|c| c.kind == "alias" && !c.remote_detection);
+        let alias = caps
+            .iter()
+            .find(|c| c.kind == "alias" && !c.remote_detection);
         assert!(
             alias.is_some(),
             "expected at least one alias whose canonical engine requires an agent"

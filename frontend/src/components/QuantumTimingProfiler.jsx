@@ -3,7 +3,7 @@
  * WebSocket stream: baseline (blue) vs payload (red) latency in μs; live Z-Score and confidence %.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   LineChart,
@@ -17,6 +17,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { apiFetch } from '../lib/apiBase'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const NS = 'components.tools.quantumTimingProfiler'
 
@@ -139,25 +140,7 @@ export default function QuantumTimingProfiler() {
     : [{ index: 0, baseline_us: 0, payload_us: 0 }]
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
-            >
-              {t(`${NS}.back_war_room`)}
-            </Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              {t(`${NS}.title`)}
-            </h1>
-          </div>
-          <span className="text-slate-500 text-sm">
-            {t(`${NS}.subtitle`)}
-          </span>
-        </div>
-
+    <StandaloneLabShell title={t(`${NS}.title`)} subtitle={t(`${NS}.subtitle`)}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
             <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">
@@ -299,7 +282,6 @@ export default function QuantumTimingProfiler() {
             {t(`${NS}.footer`)}
           </p>
         </div>
-      </div>
-    </div>
+    </StandaloneLabShell>
   )
 }

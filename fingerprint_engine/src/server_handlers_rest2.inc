@@ -9,7 +9,9 @@ async fn api_client_findings_all(
     };
     let rows = sqlx::query(
         r#"SELECT id, finding_id, title, severity, source, COALESCE(description,''), COALESCE(poc_exploit,''),
-                  COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,'') FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
+                  COALESCE(poc_sealed, false), COALESCE(poc_commitment_sha256,''),
+                  COALESCE(raw_data, '{}'::jsonb) AS raw_data
+             FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC"#,
     )
     .bind(cid)
     .fetch_all(&mut *tx)
@@ -19,8 +21,25 @@ async fn api_client_findings_all(
     let findings: Vec<Value> = rows
         .into_iter()
         .map(|r| {
+            let row_id = r.try_get::<i64, _>("id").unwrap_or(0);
+            let raw_data: Value = r
+                .try_get::<Value, _>("raw_data")
+                .unwrap_or_else(|_| json!({}));
+            let target = raw_data
+                .get("target")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let live_verification = raw_data.get("live_verification").cloned().unwrap_or(Value::Null);
+            let live_verdict = raw_data
+                .get("live_verification")
+                .and_then(|v| v.get("verdict"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             json!({
-                "id": r.try_get::<i64,_>("id").unwrap_or(0),
+                "id": row_id,
+                "raw_id": row_id,
                 "finding_id": r.try_get::<String,_>("finding_id").unwrap_or_default(),
                 "title": r.try_get::<String,_>("title").unwrap_or_default(),
                 "severity": r.try_get::<String,_>("severity").unwrap_or_default(),
@@ -29,6 +48,9 @@ async fn api_client_findings_all(
                 "poc_exploit": r.try_get::<String,_>("poc_exploit").unwrap_or_default(),
                 "poc_sealed": r.try_get::<bool,_>("poc_sealed").unwrap_or(false),
                 "poc_commitment_sha256": r.try_get::<String,_>("poc_commitment_sha256").unwrap_or_default(),
+                "target": target,
+                "live_verification": live_verification,
+                "live_verdict": live_verdict,
             })
         })
         .collect();
@@ -444,6 +466,52 @@ async fn api_findings_update_status(
             tracing::error!(target: "findings", error = %e, "Failed to update finding status");
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "DB error"}))).into_response()
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct FindingLiveVerifyBody {
+    deep: Option<bool>,
+}
+
+/// POST /api/findings/:id/verify — multi-tier live validity check (attestation, scope, evidence, HTTP replay, optional re-scan).
+async fn api_findings_verify_live(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Json(body): Json<FindingLiveVerifyBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let deep = body.deep.unwrap_or(false);
+    match crate::finding_live_verify::verify_finding_live(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        id,
+        deep,
+    )
+    .await
+    {
+        Ok(result) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "id": id,
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "reproducible": result.reproducible,
+                "checks": result.checks,
+                "verified_at": result.verified_at,
+                "recommended_status": result.recommended_status,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
     }
 }
 

@@ -1,5 +1,11 @@
 //! Distributed rate-limit counters via Redis (`REDIS_URL`). Falls back to in-process governor when unset.
+//!
+//! In production multi-replica mode (`REDIS_URL` set, `WEISSMAN_ALLOW_SINGLE_NODE` unset), Redis
+//! failures are **fail-closed** — callers must not silently degrade to per-replica memory.
 
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use redis::AsyncCommands;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -158,8 +164,7 @@ pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
 }
 
 // ── Distributed login lockout (keyed by tenant + normalized email) ─────────────
-const LOCKOUT_MAX_FAILURES: u64 = 10;
-const LOCKOUT_SECS: u64 = 15 * 60;
+use super::login_lockout::{LOCKOUT_MAX_FAILURES, LOCKOUT_SECS};
 
 fn lockout_fail_key(tenant_id: i64, email: &str) -> String {
     format!(
@@ -174,16 +179,34 @@ fn lockout_until_key(tenant_id: i64, email: &str) -> String {
     )
 }
 
-/// Returns `Some(retry_after_secs)` when the account is locked. `None` means not
-/// locked (or Redis unavailable — the caller treats that as not locked / falls back).
+/// Returns `Some(retry_after_secs)` when the account is locked. `None` means not locked.
 pub async fn lockout_check(tenant_id: i64, email: &str) -> Option<u64> {
-    let rl = shared()?;
-    let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
-    let ttl: i64 = conn.ttl(lockout_until_key(tenant_id, email)).await.ok()?;
+    match lockout_check_strict(tenant_id, email).await {
+        StrictOp::Ok(v) => v,
+        StrictOp::Unavailable => None,
+    }
+}
+
+/// Strict lockout check — surfaces Redis outage separately from "not locked".
+pub async fn lockout_check_strict(tenant_id: i64, email: &str) -> StrictOp<Option<u64>> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(None)
+        };
+    };
+    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+        return StrictOp::Unavailable;
+    };
+    let ttl: i64 = match conn.ttl(lockout_until_key(tenant_id, email)).await {
+        Ok(t) => t,
+        Err(_) => return StrictOp::Unavailable,
+    };
     if ttl > 0 {
-        Some(ttl as u64)
+        StrictOp::Ok(Some(ttl as u64))
     } else {
-        None
+        StrictOp::Ok(None)
     }
 }
 
@@ -223,4 +246,102 @@ pub async fn lockout_clear(tenant_id: i64, email: &str) {
 #[must_use]
 pub fn is_enabled() -> bool {
     shared().is_some()
+}
+
+/// Production multi-replica deployments require Redis-backed distributed state.
+#[must_use]
+pub fn distributed_state_required() -> bool {
+    crate::security_startup::production_distributed_state_required()
+}
+
+/// Tri-state result for strict distributed ops (distinguishes Redis outage from "not locked").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrictOp<T> {
+    Ok(T),
+    Unavailable,
+}
+
+/// Verify Redis connectivity at boot when distributed state is mandatory.
+pub async fn verify_redis_at_startup() -> Result<(), String> {
+    if !distributed_state_required() {
+        return Ok(());
+    }
+    let Some(rl) = shared() else {
+        return Err(
+            "REDIS_URL is set but Redis client could not be initialized; distributed lockout/rate limits unavailable"
+                .into(),
+        );
+    };
+    let mut conn = rl
+        .client
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(|e| format!("Redis PING failed at startup: {e}"))?;
+    redis::cmd("PING")
+        .query_async::<String>(&mut conn)
+        .await
+        .map_err(|e| format!("Redis PING failed at startup: {e}"))?;
+    Ok(())
+}
+
+/// Standard 503 when Redis is required but unreachable (fail-closed).
+#[must_use]
+pub fn distributed_store_unavailable_response() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({
+            "ok": false,
+            "code": "distributed_store_unavailable",
+            "detail": "Distributed security store (Redis) is unavailable; request rejected (fail-closed).",
+        })),
+    )
+        .into_response()
+}
+
+async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(0)
+        };
+    };
+    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+        return StrictOp::Unavailable;
+    };
+    let count: u64 = match conn.incr(key, 1u64).await {
+        Ok(c) => c,
+        Err(_) => return StrictOp::Unavailable,
+    };
+    if count == 1 {
+        let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
+    }
+    StrictOp::Ok(count)
+}
+
+/// Like [`incr_login_ip`] but fail-closed aware for middleware.
+pub async fn incr_login_ip_strict(client_ip: &str) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:login:{client_ip}"),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
+/// Like [`incr_enroll_ip`] but fail-closed aware for middleware.
+pub async fn incr_enroll_ip_strict(client_ip: &str) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:enroll:{client_ip}"),
+        Duration::from_secs(60),
+    )
+    .await
+}
+
+/// Like [`incr_api_ip`] but fail-closed aware for middleware.
+pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:api:{client_ip}"),
+        Duration::from_secs(1),
+    )
+    .await
 }

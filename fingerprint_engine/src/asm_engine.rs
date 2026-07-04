@@ -384,9 +384,7 @@ fn port_severity(port: u16) -> &'static str {
         | 5984 | 11211 => "critical",
         // Remote admin / orchestration / secrets — high
         22 | 23 | 3389 | 5900 | 445 | 135 | 139 | 2375 | 2376 | 4243 | 6443 | 10250 | 10255
-        | 8200 | 8500 | 8300 | 8301 | 50000 | 8161 | 5672 | 15672 | 9092 | 2181 | 21 | 25 => {
-            "high"
-        }
+        | 8200 | 8500 | 8300 | 8301 | 50000 | 8161 | 5672 | 15672 | 9092 | 2181 | 21 | 25 => "high",
         _ => "medium",
     }
 }
@@ -505,7 +503,10 @@ async fn analyse_email_posture(
     mx: &[String],
     issues: &mut Vec<Value>,
 ) {
-    let spf: Vec<&String> = txt.iter().filter(|t| t.to_lowercase().contains("v=spf1")).collect();
+    let spf: Vec<&String> = txt
+        .iter()
+        .filter(|t| t.to_lowercase().contains("v=spf1"))
+        .collect();
     if spf.is_empty() {
         if !mx.is_empty() {
             issues.push(asm_finding(
@@ -534,7 +535,10 @@ async fn analyse_email_posture(
     }
     let dmarc_host = format!("_dmarc.{domain}");
     let dmarc = lookup_strings(resolver, &dmarc_host, RecordType::TXT).await;
-    let dmarc_txt: Vec<&String> = dmarc.iter().filter(|t| t.to_lowercase().contains("v=dmarc1")).collect();
+    let dmarc_txt: Vec<&String> = dmarc
+        .iter()
+        .filter(|t| t.to_lowercase().contains("v=dmarc1"))
+        .collect();
     if dmarc_txt.is_empty() {
         issues.push(asm_finding(
             "email_posture",
@@ -546,7 +550,11 @@ async fn analyse_email_posture(
             "Publish a DMARC record and progress toward p=reject.",
         ));
     } else {
-        let joined = dmarc_txt.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ");
+        let joined = dmarc_txt
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         if joined.contains("p=none") {
             issues.push(asm_finding(
                 "email_posture",
@@ -633,7 +641,11 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
     if !present("content-security-policy") {
         missing.push("Content-Security-Policy");
     }
-    if !present("x-frame-options") && !get("content-security-policy").map(|c| c.contains("frame-ancestors")).unwrap_or(false) {
+    if !present("x-frame-options")
+        && !get("content-security-policy")
+            .map(|c| c.contains("frame-ancestors"))
+            .unwrap_or(false)
+    {
         missing.push("X-Frame-Options");
     }
     if !present("x-content-type-options") {
@@ -659,7 +671,12 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
     let mut cloud_signals: Vec<&'static str> = Vec::new();
     let hkeys: Vec<String> = headers.keys().map(|k| k.as_str().to_lowercase()).collect();
     let has = |needle: &str| hkeys.iter().any(|k| k.contains(needle));
-    if has("cf-ray") || server.as_deref().map(|s| s.to_lowercase().contains("cloudflare")).unwrap_or(false) {
+    if has("cf-ray")
+        || server
+            .as_deref()
+            .map(|s| s.to_lowercase().contains("cloudflare"))
+            .unwrap_or(false)
+    {
         cloud_signals.push("Cloudflare");
     }
     if has("x-amz-") || has("x-amzn-") {
@@ -717,10 +734,7 @@ fn tls_probe_blocking(host: &str, port: u16, timeout_ms: u64) -> Option<TlsInfo>
     use std::net::ToSocketAddrs;
 
     let timeout = Duration::from_millis(timeout_ms);
-    let addr = format!("{host}:{port}")
-        .to_socket_addrs()
-        .ok()?
-        .next()?;
+    let addr = format!("{host}:{port}").to_socket_addrs().ok()?.next()?;
     let tcp = std::net::TcpStream::connect_timeout(&addr, timeout).ok()?;
     tcp.set_read_timeout(Some(timeout)).ok()?;
     tcp.set_write_timeout(Some(timeout)).ok()?;
@@ -801,7 +815,10 @@ fn cloud_from_cname(cname: &str) -> Option<&'static str> {
         ("vercel-dns.com", "Vercel"),
         ("digitaloceanspaces.com", "DigitalOcean"),
     ];
-    table.iter().find(|(suf, _)| c.contains(suf)).map(|(_, p)| *p)
+    table
+        .iter()
+        .find(|(suf, _)| c.contains(suf))
+        .map(|(_, p)| *p)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -832,11 +849,52 @@ fn asm_finding(
 
 /// Prefixes on discovered subdomains that usually indicate shadow IT / high-value targets.
 const SHADOW_IT_PREFIXES: &[&str] = &[
-    "dev", "development", "staging", "stage", "stg", "test", "testing", "qa", "uat", "sandbox",
-    "preprod", "beta", "demo", "lab", "labs", "admin", "superadmin", "manage", "management",
-    "console", "dashboard", "panel", "vpn", "remote", "internal", "intranet", "jenkins", "ci",
-    "gitlab", "github", "kibana", "grafana", "prometheus", "vault", "consul", "backup", "old",
-    "legacy", "mysql", "postgres", "redis", "elastic", "mongo", "db", "api-dev", "api-staging",
+    "dev",
+    "development",
+    "staging",
+    "stage",
+    "stg",
+    "test",
+    "testing",
+    "qa",
+    "uat",
+    "sandbox",
+    "preprod",
+    "beta",
+    "demo",
+    "lab",
+    "labs",
+    "admin",
+    "superadmin",
+    "manage",
+    "management",
+    "console",
+    "dashboard",
+    "panel",
+    "vpn",
+    "remote",
+    "internal",
+    "intranet",
+    "jenkins",
+    "ci",
+    "gitlab",
+    "github",
+    "kibana",
+    "grafana",
+    "prometheus",
+    "vault",
+    "consul",
+    "backup",
+    "old",
+    "legacy",
+    "mysql",
+    "postgres",
+    "redis",
+    "elastic",
+    "mongo",
+    "db",
+    "api-dev",
+    "api-staging",
 ];
 
 fn subdomain_label(host: &str, apex: &str) -> Option<String> {
@@ -989,10 +1047,12 @@ async fn rdap_domain_intel(client: &reqwest::Client, domain: &str) -> Vec<Value>
 
     if let Some(status) = body.get("status").and_then(Value::as_array) {
         let statuses: Vec<&str> = status.iter().filter_map(|s| s.as_str()).collect();
-        if statuses
-            .iter()
-            .any(|s| matches!(*s, "client hold" | "clientHold" | "server hold" | "serverHold"))
-        {
+        if statuses.iter().any(|s| {
+            matches!(
+                *s,
+                "client hold" | "clientHold" | "server hold" | "serverHold"
+            )
+        }) {
             out.push(asm_finding(
                 "rdap",
                 "high",
@@ -1010,10 +1070,7 @@ async fn rdap_domain_intel(client: &reqwest::Client, domain: &str) -> Vec<Value>
 
     if let Some(events) = body.get("events").and_then(Value::as_array) {
         for ev in events {
-            let action = ev
-                .get("eventAction")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let action = ev.get("eventAction").and_then(Value::as_str).unwrap_or("");
             let date = ev.get("eventDate").and_then(Value::as_str).unwrap_or("");
             if action.eq_ignore_ascii_case("expiration") && !date.is_empty() {
                 out.push(asm_finding(
@@ -1089,8 +1146,18 @@ async fn cymru_asn_for_ip(resolver: &TokioResolver, ip: &str) -> Option<String> 
 }
 
 const DKIM_SELECTORS: &[&str] = &[
-    "default", "google", "selector1", "selector2", "k1", "s1", "mail", "dkim", "smtp", "mandrill",
-    "sendgrid", "mailgun",
+    "default",
+    "google",
+    "selector1",
+    "selector2",
+    "k1",
+    "s1",
+    "mail",
+    "dkim",
+    "smtp",
+    "mandrill",
+    "sendgrid",
+    "mailgun",
 ];
 
 async fn probe_dkim_selectors(resolver: &TokioResolver, domain: &str) -> Vec<Value> {
@@ -1231,7 +1298,12 @@ async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Valu
             continue;
         }
         let looks_real = match *path {
-            "/.env" => body_snip.contains('=') && (body_snip.contains("KEY") || body_snip.contains("SECRET") || body_snip.contains("PASSWORD")),
+            "/.env" => {
+                body_snip.contains('=')
+                    && (body_snip.contains("KEY")
+                        || body_snip.contains("SECRET")
+                        || body_snip.contains("PASSWORD"))
+            }
             "/.git/HEAD" => body_snip.starts_with("ref:"),
             "/actuator/health" => body_snip.contains("status") || body_snip.contains("UP"),
             "/backup.sql" => body_snip.contains("INSERT") || body_snip.contains("CREATE TABLE"),
@@ -1255,8 +1327,19 @@ async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Valu
 }
 
 const ROBOTS_SENSITIVE: &[&str] = &[
-    "admin", "backup", "private", "internal", "staging", "dev", "api", "config", "secret",
-    ".git", "wp-admin", "phpmyadmin", "database",
+    "admin",
+    "backup",
+    "private",
+    "internal",
+    "staging",
+    "dev",
+    "api",
+    "config",
+    "secret",
+    ".git",
+    "wp-admin",
+    "phpmyadmin",
+    "database",
 ];
 
 async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> {
@@ -1294,7 +1377,10 @@ async fn harvest_robots_txt(client: &reqwest::Client, host: &str) -> Vec<Value> 
             url.clone(),
             format!("robots.txt published on {host}"),
             "T1590",
-            format!("robots.txt is reachable ({} bytes) — no high-risk disallow paths flagged.", body.len()),
+            format!(
+                "robots.txt is reachable ({} bytes) — no high-risk disallow paths flagged.",
+                body.len()
+            ),
             "Review robots.txt; do not rely on it for access control.",
         )];
     }
@@ -1365,8 +1451,12 @@ async fn dns_wildcard_detect(resolver: &TokioResolver, domain: &str) -> bool {
         .unwrap_or("rand")
         .to_string();
     let probe = format!("{token}-weissman-probe.{domain}");
-    !lookup_strings(resolver, &probe, RecordType::A).await.is_empty()
-        || !lookup_strings(resolver, &probe, RecordType::AAAA).await.is_empty()
+    !lookup_strings(resolver, &probe, RecordType::A)
+        .await
+        .is_empty()
+        || !lookup_strings(resolver, &probe, RecordType::AAAA)
+            .await
+            .is_empty()
 }
 
 async fn analyse_dns_hardening(resolver: &TokioResolver, domain: &str, findings: &mut Vec<Value>) {
@@ -1411,9 +1501,17 @@ async fn analyse_dns_hardening(resolver: &TokioResolver, domain: &str, findings:
 fn finding_tags(f: &Value) -> BTreeSet<&'static str> {
     let mut tags = BTreeSet::new();
     let asset = f.get("asset").and_then(Value::as_str).unwrap_or("");
-    let title = f.get("title").and_then(Value::as_str).unwrap_or("").to_lowercase();
+    let title = f
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_lowercase();
     let sev = f.get("severity").and_then(Value::as_str).unwrap_or("");
-    let value = f.get("value").and_then(Value::as_str).unwrap_or("").to_lowercase();
+    let value = f
+        .get("value")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_lowercase();
 
     match asset {
         "port" if sev == "critical" => {
@@ -1443,7 +1541,11 @@ fn finding_tags(f: &Value) -> BTreeSet<&'static str> {
         "rdap" if title.contains("hold") => {
             tags.insert("rdap_hold");
         }
-        "banner" if title.contains("version") || value.contains("openssh") || value.contains("redis") => {
+        "banner"
+            if title.contains("version")
+                || value.contains("openssh")
+                || value.contains("redis") =>
+        {
             tags.insert("banner_intel");
         }
         _ => {}
@@ -1668,7 +1770,9 @@ pub async fn run_asm_result_ctx(
     let do_dkim = p.bool_or("dkim_probe", true) && is_domain;
     let subdomain_sources = p.str_or("subdomain_sources", "both").to_ascii_lowercase();
     let max_subdomains = p.usize_or("max_subdomains", 50).clamp(0, 500);
-    let port_timeout = p.u64_or("port_timeout_ms", PORT_TIMEOUT_MS).clamp(100, 5000);
+    let port_timeout = p
+        .u64_or("port_timeout_ms", PORT_TIMEOUT_MS)
+        .clamp(100, 5000);
     let http_timeout = p.u64_or("http_timeout_ms", 6000).clamp(1000, 30000);
     let threshold = p.str_or("severity_threshold", "info").to_ascii_lowercase();
     let max_findings = p.usize_or("max_findings", 800).clamp(1, 5000);
@@ -1699,13 +1803,19 @@ pub async fn run_asm_result_ctx(
         if subdomain_sources == "passive" || subdomain_sources == "both" {
             let ct = crtsh_subdomains(&client, &host, max_subdomains.max(1) * 2).await;
             if !ct.is_empty() {
-                notes.push(format!("Certificate Transparency surfaced {} name(s).", ct.len()));
+                notes.push(format!(
+                    "Certificate Transparency surfaced {} name(s).",
+                    ct.len()
+                ));
             }
             subdomains.extend(ct);
         }
         if subdomain_sources == "bruteforce" || subdomain_sources == "both" {
             let wordlist: Vec<String> = if custom_wordlist.is_empty() {
-                DEFAULT_SUBDOMAINS.iter().map(|s| (*s).to_string()).collect()
+                DEFAULT_SUBDOMAINS
+                    .iter()
+                    .map(|s| (*s).to_string())
+                    .collect()
             } else {
                 custom_wordlist.clone()
             };
@@ -1742,7 +1852,12 @@ pub async fn run_asm_result_ctx(
                 "T1590.002",
                 format!(
                     "A={:?} AAAA={:?} CNAME={:?} MX={:?} NS={:?} TXT_records={}",
-                    prof.a, prof.aaaa, prof.cname, prof.mx, prof.ns, prof.txt.len()
+                    prof.a,
+                    prof.aaaa,
+                    prof.cname,
+                    prof.mx,
+                    prof.ns,
+                    prof.txt.len()
                 ),
                 "Confirm every published record is intentional; remove stale entries.",
             ));
@@ -1863,7 +1978,10 @@ pub async fn run_asm_result_ctx(
                         "http_posture",
                         sev,
                         hp.final_url.clone(),
-                        format!("Missing security headers on {ph} ({} of 6)", hp.missing_headers.len()),
+                        format!(
+                            "Missing security headers on {ph} ({} of 6)",
+                            hp.missing_headers.len()
+                        ),
                         "T1190",
                         format!(
                             "{} returned HTTP {} and is missing: {}.",
@@ -1882,7 +2000,9 @@ pub async fn run_asm_result_ctx(
                             hp.final_url.clone(),
                             format!("Server version disclosed on {ph}"),
                             "T1592.002",
-                            format!("Server header discloses '{server}', aiding targeted exploitation."),
+                            format!(
+                                "Server header discloses '{server}', aiding targeted exploitation."
+                            ),
                             "Suppress version banners (Server / X-Powered-By).",
                         ));
                     }
@@ -1894,7 +2014,10 @@ pub async fn run_asm_result_ctx(
                         hp.final_url.clone(),
                         format!("X-Powered-By disclosed on {ph}"),
                         "T1592.002",
-                        format!("X-Powered-By header discloses '{}'.", hp.powered_by.unwrap_or_default()),
+                        format!(
+                            "X-Powered-By header discloses '{}'.",
+                            hp.powered_by.unwrap_or_default()
+                        ),
                         "Remove the X-Powered-By header.",
                     ));
                 }
@@ -1905,7 +2028,8 @@ pub async fn run_asm_result_ctx(
                         hp.final_url.clone(),
                         format!("Insecure cookie flags on {ph}"),
                         "T1539",
-                        "A cookie over HTTPS is missing the Secure and/or HttpOnly attribute.".to_string(),
+                        "A cookie over HTTPS is missing the Secure and/or HttpOnly attribute."
+                            .to_string(),
                         "Set Secure, HttpOnly and SameSite on all session cookies.",
                     ));
                 }
@@ -1944,7 +2068,9 @@ pub async fn run_asm_result_ctx(
                         "T1190",
                         format!(
                             "Certificate for {ph} (CN={}, issuer={}) expired {} day(s) ago.",
-                            tls.subject, tls.issuer, tls.days_to_expiry.abs()
+                            tls.subject,
+                            tls.issuer,
+                            tls.days_to_expiry.abs()
                         ),
                         "Renew and automate certificate rotation (e.g. ACME).",
                     ));
@@ -1955,7 +2081,10 @@ pub async fn run_asm_result_ctx(
                         ph,
                         format!("TLS certificate expiring soon on {ph}"),
                         "T1190",
-                        format!("Certificate for {ph} expires in {} day(s).", tls.days_to_expiry),
+                        format!(
+                            "Certificate for {ph} expires in {} day(s).",
+                            tls.days_to_expiry
+                        ),
                         "Renew before expiry; automate rotation.",
                     ));
                 }
@@ -1966,7 +2095,10 @@ pub async fn run_asm_result_ctx(
                         ph,
                         format!("Self-signed TLS certificate on {ph}"),
                         "T1587.003",
-                        format!("Certificate for {ph} appears self-signed (CN={}).", tls.subject),
+                        format!(
+                            "Certificate for {ph} appears self-signed (CN={}).",
+                            tls.subject
+                        ),
                         "Use a publicly-trusted CA-issued certificate.",
                     ));
                 }
@@ -1977,7 +2109,10 @@ pub async fn run_asm_result_ctx(
                         ph,
                         format!("Weak TLS protocol negotiated on {ph}"),
                         "T1040",
-                        format!("{ph} negotiated {} — a deprecated, attackable protocol.", tls.protocol),
+                        format!(
+                            "{ph} negotiated {} — a deprecated, attackable protocol.",
+                            tls.protocol
+                        ),
                         "Disable TLS 1.0/1.1 and SSLv3; require TLS 1.2+ (prefer 1.3).",
                     ));
                 }
@@ -2028,7 +2163,11 @@ pub async fn run_asm_result_ctx(
                     "fingerprint",
                     "info",
                     url.clone(),
-                    format!("Tech stack on {} — {}", url, techs.join(", ").chars().take(140).collect::<String>()),
+                    format!(
+                        "Tech stack on {} — {}",
+                        url,
+                        techs.join(", ").chars().take(140).collect::<String>()
+                    ),
                     "T1592.002",
                     format!("Detected technologies: {}.", techs.join(", ")),
                     "Track component versions for vulnerability management.",
@@ -2078,7 +2217,14 @@ pub async fn run_asm_result_ctx(
         s == "info" || sev_rank(s) >= min_rank
     });
 
-    let report = build_surface_report(&findings, &host, subdomains.len(), &ports, &notes, &subdomains);
+    let report = build_surface_report(
+        &findings,
+        &host,
+        subdomains.len(),
+        &ports,
+        &notes,
+        &subdomains,
+    );
     findings.sort_by(|a, b| {
         let sa = a.get("severity").and_then(Value::as_str).unwrap_or("info");
         let sb = b.get("severity").and_then(Value::as_str).unwrap_or("info");
@@ -2098,7 +2244,11 @@ pub async fn run_asm_result_ctx(
     let msg = format!(
         "EASM scan of {host}: {} finding(s){}, {} subdomain(s)",
         all.len().saturating_sub(1),
-        if crit > 0 { format!(", {crit} critical") } else { String::new() },
+        if crit > 0 {
+            format!(", {crit} critical")
+        } else {
+            String::new()
+        },
         subdomains.len()
     );
 
@@ -2284,8 +2434,14 @@ mod tests {
 
     #[test]
     fn target_host_parsing() {
-        assert_eq!(target_to_host("https://example.com/path").as_deref(), Some("example.com"));
-        assert_eq!(target_to_host("EXAMPLE.com").as_deref(), Some("example.com"));
+        assert_eq!(
+            target_to_host("https://example.com/path").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            target_to_host("EXAMPLE.com").as_deref(),
+            Some("example.com")
+        );
     }
 
     #[tokio::test]

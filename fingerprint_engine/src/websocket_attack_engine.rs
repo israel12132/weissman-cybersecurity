@@ -76,7 +76,9 @@
 
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, extract_host, http_get, http_get_with_headers, http_post_json_with_headers};
+use crate::engine_probes::{
+    empty_ok, extract_host, http_get, http_get_with_headers, http_post_json_with_headers,
+};
 use crate::engine_result::{print_result, EngineResult};
 use crate::ws_binary_protocol::{binary_mutation_probe, synthetic_protobuf_seed};
 use crate::ws_intelligence_bus::{
@@ -292,7 +294,7 @@ async fn ws_handshake(
 #[derive(Default, Clone)]
 struct WsPosture {
     endpoints: Vec<String>,
-    cswsh: Vec<String>,           // origin not validated (foreign)
+    cswsh: Vec<String>, // origin not validated (foreign)
     null_origin_cswsh: Vec<String>,
     missing_origin_cswsh: Vec<String>,
     authenticated_cswsh: Vec<String>, // confirmed with session cookie
@@ -403,26 +405,70 @@ impl WsPosture {
                 v.push(cat);
             }
         };
-        push(&mut out, "authenticated_cswsh", !self.authenticated_cswsh.is_empty());
-        push(&mut out, "auth_differential", !self.auth_differential.is_empty());
+        push(
+            &mut out,
+            "authenticated_cswsh",
+            !self.authenticated_cswsh.is_empty(),
+        );
+        push(
+            &mut out,
+            "auth_differential",
+            !self.auth_differential.is_empty(),
+        );
         push(&mut out, "cswsh", !self.cswsh.is_empty());
-        push(&mut out, "null_origin_cswsh", !self.null_origin_cswsh.is_empty());
-        push(&mut out, "foreign_origin_data", !self.foreign_origin_data.is_empty());
+        push(
+            &mut out,
+            "null_origin_cswsh",
+            !self.null_origin_cswsh.is_empty(),
+        );
+        push(
+            &mut out,
+            "foreign_origin_data",
+            !self.foreign_origin_data.is_empty(),
+        );
         push(&mut out, "sensitive_leak", !self.sensitive_leaks.is_empty());
         push(&mut out, "graphql_unauth", !self.graphql_unauth.is_empty());
-        push(&mut out, "graphql_introspection", !self.graphql_introspection.is_empty());
+        push(
+            &mut out,
+            "graphql_introspection",
+            !self.graphql_introspection.is_empty(),
+        );
         push(&mut out, "host_injection", !self.host_injection.is_empty());
-        push(&mut out, "forwarded_bypass", !self.forwarded_bypass.is_empty());
+        push(
+            &mut out,
+            "forwarded_bypass",
+            !self.forwarded_bypass.is_empty(),
+        );
         push(&mut out, "tls_downgrade", !self.tls_downgrade.is_empty());
         push(&mut out, "stomp_unauth", !self.stomp_unauth.is_empty());
-        push(&mut out, "subprotocol_abuse", !self.subprotocol_abuse.is_empty());
+        push(
+            &mut out,
+            "subprotocol_abuse",
+            !self.subprotocol_abuse.is_empty(),
+        );
         push(&mut out, "no_rate_limit", !self.no_rate_limit.is_empty());
-        push(&mut out, "missing_origin_cswsh", !self.missing_origin_cswsh.is_empty());
-        push(&mut out, "version_downgrade", !self.version_downgrade.is_empty());
+        push(
+            &mut out,
+            "missing_origin_cswsh",
+            !self.missing_origin_cswsh.is_empty(),
+        );
+        push(
+            &mut out,
+            "version_downgrade",
+            !self.version_downgrade.is_empty(),
+        );
         push(&mut out, "ws_reflection", !self.ws_reflection.is_empty());
-        push(&mut out, "binary_accepted", !self.binary_accepted.is_empty());
+        push(
+            &mut out,
+            "binary_accepted",
+            !self.binary_accepted.is_empty(),
+        );
         push(&mut out, "stateful_fuzz", !self.stateful_fuzz.is_empty());
-        push(&mut out, "binary_mutation", !self.binary_mutation.is_empty());
+        push(
+            &mut out,
+            "binary_mutation",
+            !self.binary_mutation.is_empty(),
+        );
         push(&mut out, "race_condition", !self.race_condition.is_empty());
         push(
             &mut out,
@@ -534,10 +580,7 @@ fn resolve_ws_path(raw: &str, base: &str) -> Option<String> {
         return None;
     }
     if t.starts_with("ws://") || t.starts_with("wss://") {
-        return Some(
-            t.replace("wss://", "https://")
-                .replace("ws://", "http://"),
-        );
+        return Some(t.replace("wss://", "https://").replace("ws://", "http://"));
     }
     if t.starts_with("http://") || t.starts_with("https://") {
         return Some(t.to_string());
@@ -545,7 +588,11 @@ fn resolve_ws_path(raw: &str, base: &str) -> Option<String> {
     if t.starts_with('/') {
         return Some(format!("{}{}", base.trim_end_matches('/'), t));
     }
-    Some(format!("{}/{}", base.trim_end_matches('/'), t.trim_start_matches('/')))
+    Some(format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        t.trim_start_matches('/')
+    ))
 }
 
 /// Mine HTML/JS for WebSocket endpoints referenced by the target application.
@@ -801,7 +848,10 @@ fn minimal_compare_probes(framework: Option<&str>, subproto: Option<&str>) -> Ve
     let sp = subproto.unwrap_or("").to_ascii_lowercase();
     if fw.contains("GraphQL") || sp.contains("graphql") {
         p.push(r#"{"type":"connection_init","payload":{}}"#.to_string());
-        p.push(r#"{"type":"subscribe","id":"diff-1","payload":{"query":"{ __typename }"}}"#.to_string());
+        p.push(
+            r#"{"type":"subscribe","id":"diff-1","payload":{"query":"{ __typename }"}}"#
+                .to_string(),
+        );
     }
     if fw.contains("Socket.IO") {
         p.push("40".to_string());
@@ -824,11 +874,7 @@ async fn probe_auth_differential(
     let probes = minimal_compare_probes(framework, subproto);
     let base_opts = |with_auth: bool| WsSessionOpts {
         origin: Some(same_origin.to_string()),
-        auth: if with_auth {
-            auth.to_vec()
-        } else {
-            Vec::new()
-        },
+        auth: if with_auth { auth.to_vec() } else { Vec::new() },
         subprotocol: subproto.map(str::to_string),
         read_ms,
         max_messages: 8,
@@ -846,7 +892,9 @@ async fn probe_auth_differential(
         return Vec::new();
     }
     if unauth_secrets
-        || (unauth_meaningful && auth_meaningful && unauth.received.len() >= with_auth.received.len())
+        || (unauth_meaningful
+            && auth_meaningful
+            && unauth.received.len() >= with_auth.received.len())
     {
         return vec![with_fields(
             finding_rich(
@@ -969,13 +1017,18 @@ async fn probe_binary_ws_frames(
 ) -> Vec<Value> {
     let opts = ws_connect_opts(same_origin, &[], None, read_ms, 6);
     let payload = b"\x00weissman_binary_probe\x7b\x22type\x22:\x22ping\x22\x7d".to_vec();
-    let Some(ex) = crate::ws_session::exchange_frames(http_url, &opts, &[], std::slice::from_ref(&payload)).await
+    let Some(ex) =
+        crate::ws_session::exchange_frames(http_url, &opts, &[], std::slice::from_ref(&payload))
+            .await
     else {
         return Vec::new();
     };
     let got_binary = !ex.received_binary.is_empty();
     let got_app_reply = got_binary
-        || ex.received.iter().any(|t| !t.is_empty() && !t.to_ascii_lowercase().contains("error"));
+        || ex
+            .received
+            .iter()
+            .any(|t| !t.is_empty() && !t.to_ascii_lowercase().contains("error"));
     if !got_app_reply {
         return Vec::new();
     }
@@ -1179,7 +1232,11 @@ async fn probe_ws_race_condition(
     if !outcome.duplicate_success && !outcome.timing_anomaly {
         return Vec::new();
     }
-    let sev = if outcome.duplicate_success { "high" } else { "medium" };
+    let sev = if outcome.duplicate_success {
+        "high"
+    } else {
+        "medium"
+    };
     vec![with_fields(
         finding_rich(
             ENGINE_ID,
@@ -1333,7 +1390,9 @@ async fn probe_ws_messages(
     {
         let gql_ok = session.received.iter().any(|r| {
             let l = r.to_ascii_lowercase();
-            (l.contains("connection_ack") || l.contains("\"type\":\"next\"") || l.contains("\"type\": \"next\""))
+            (l.contains("connection_ack")
+                || l.contains("\"type\":\"next\"")
+                || l.contains("\"type\": \"next\""))
                 && !l.contains("unauthorized")
                 && !l.contains("authentication")
         });
@@ -1412,9 +1471,7 @@ async fn probe_ws_messages(
         }
     }
 
-    if cfg.check_reflection
-        && combined_recv.contains(&cfg.reflection_marker)
-    {
+    if cfg.check_reflection && combined_recv.contains(&cfg.reflection_marker) {
         findings.push(with_fields(
             finding_rich(
                 ENGINE_ID,
@@ -1492,10 +1549,17 @@ async fn probe_signalr_negotiate(
         let url = if path.starts_with("http") {
             path.clone()
         } else {
-            format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'))
+            format!(
+                "{}/{}",
+                base.trim_end_matches('/'),
+                path.trim_start_matches('/')
+            )
         };
         let payload = json!({});
-        let extra = [("Origin", same_origin), ("X-Requested-With", "XMLHttpRequest")];
+        let extra = [
+            ("Origin", same_origin),
+            ("X-Requested-With", "XMLHttpRequest"),
+        ];
         let Some(resp) = http_post_json_with_headers(client, &url, &payload, &extra).await else {
             continue;
         };
@@ -1611,12 +1675,19 @@ async fn probe_endpoint(
         .with("url", url.clone())
         .with("http_status", same.status)
         .with("accept_verified", same.verified)
-        .with("sec_websocket_accept", same.accept.clone().unwrap_or_default())
+        .with(
+            "sec_websocket_accept",
+            same.accept.clone().unwrap_or_default(),
+        )
         .with("subprotocol", same.protocol.clone().unwrap_or_default())
         .with("extensions", same.extensions.clone().unwrap_or_default())
         .with("server", same.server.clone().unwrap_or_default())
         .with("framework", fw.unwrap_or("generic"))
-        .check("rfc6455_handshake", same.verified, "Sec-WebSocket-Accept cryptographically verified");
+        .check(
+            "rfc6455_handshake",
+            same.verified,
+            "Sec-WebSocket-Accept cryptographically verified",
+        );
     findings.push(with_fields(
         finding_rich(
             ENGINE_ID,
@@ -1707,7 +1778,9 @@ async fn probe_endpoint(
     // 2) CSWSH — foreign origins (multi-origin sweep).
     if cfg.check_cswsh {
         for foreign_origin in &cfg.foreign_origins {
-            if let Some(foreign) = ws_handshake(client, &url, Some(foreign_origin.as_str()), &[]).await {
+            if let Some(foreign) =
+                ws_handshake(client, &url, Some(foreign_origin.as_str()), &[]).await
+            {
                 if foreign.verified {
                     out.cswsh = true;
                     findings.push(with_fields(
@@ -1734,7 +1807,10 @@ async fn probe_endpoint(
 
                     // Authenticated CSWSH — foreign origin + supplied session cookie still succeeds.
                     if !cfg.auth.is_empty() {
-                        if let Some(fa) = ws_handshake(client, &url, Some(foreign_origin.as_str()), &cfg.auth).await {
+                        if let Some(fa) =
+                            ws_handshake(client, &url, Some(foreign_origin.as_str()), &cfg.auth)
+                                .await
+                        {
                             if fa.verified {
                                 out.auth_cswsh = true;
                                 findings.push(with_fields(
@@ -2072,7 +2148,10 @@ fn synthesize_attack_paths(target: &str, p: &WsPosture) -> Vec<Value> {
                 0.9,
                 ev,
             ),
-            &[("category", json!("attack_path")), ("kill_chain", json!(steps))],
+            &[
+                ("category", json!("attack_path")),
+                ("kill_chain", json!(steps)),
+            ],
         ));
     };
     if !p.authenticated_cswsh.is_empty() {
@@ -2445,7 +2524,8 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
         "race_payload",
         r#"{"type":"subscribe","id":"race-1","payload":{"action":"transfer","amount":1}}"#,
     );
-    let http_escalation_paths = cfg.string_list_or("http_escalation_paths", DEFAULT_HTTP_ESCALATION_PATHS);
+    let http_escalation_paths =
+        cfg.string_list_or("http_escalation_paths", DEFAULT_HTTP_ESCALATION_PATHS);
     let ws_burst_count = cfg.usize_or(
         "ws_burst_count",
         match intensity {
@@ -2454,9 +2534,7 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
             Intensity::Aggressive => 20,
         },
     );
-    let message_read_ms = cfg
-        .usize_or("message_read_ms", 3000)
-        .clamp(500, 15_000) as u64;
+    let message_read_ms = cfg.usize_or("message_read_ms", 3000).clamp(500, 15_000) as u64;
     let max_message_endpoints = cfg.usize_or(
         "max_message_endpoints",
         match intensity {
@@ -2559,7 +2637,11 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
             } else if p.starts_with("ws://") || p.starts_with("wss://") {
                 p.replace("wss://", "https://").replace("ws://", "http://")
             } else {
-                format!("{}/{}", base.trim_end_matches('/'), p.trim_start_matches('/'))
+                format!(
+                    "{}/{}",
+                    base.trim_end_matches('/'),
+                    p.trim_start_matches('/')
+                )
             }
         })
         .collect();
@@ -2697,50 +2779,56 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
             )
             .await;
             if check_auth_differential && !auth.is_empty() {
-                msg_findings.extend(probe_auth_differential(
-                    &ep.url,
-                    target,
-                    &same_origin,
-                    &auth,
-                    fw,
-                    sp,
-                    message_read_ms,
-                )
-                .await);
+                msg_findings.extend(
+                    probe_auth_differential(
+                        &ep.url,
+                        target,
+                        &same_origin,
+                        &auth,
+                        fw,
+                        sp,
+                        message_read_ms,
+                    )
+                    .await,
+                );
             }
             if check_foreign_origin_messages {
-                msg_findings.extend(probe_foreign_origin_session(
-                    &ep.url,
-                    target,
-                    &foreign_origin_probe,
-                    fw,
-                    sp,
-                    message_read_ms,
-                )
-                .await);
+                msg_findings.extend(
+                    probe_foreign_origin_session(
+                        &ep.url,
+                        target,
+                        &foreign_origin_probe,
+                        fw,
+                        sp,
+                        message_read_ms,
+                    )
+                    .await,
+                );
             }
             if check_ws_rate_limit {
-                msg_findings.extend(probe_ws_rate_limit_burst(
-                    &ep.url,
-                    target,
-                    &same_origin,
-                    ws_burst_count,
-                    message_read_ms,
-                )
-                .await);
+                msg_findings.extend(
+                    probe_ws_rate_limit_burst(
+                        &ep.url,
+                        target,
+                        &same_origin,
+                        ws_burst_count,
+                        message_read_ms,
+                    )
+                    .await,
+                );
             }
             if check_binary_frames {
-                msg_findings.extend(probe_binary_ws_frames(
-                    &ep.url,
-                    target,
-                    &same_origin,
-                    message_read_ms,
-                )
-                .await);
+                msg_findings.extend(
+                    probe_binary_ws_frames(&ep.url, target, &same_origin, message_read_ms).await,
+                );
             }
             for f in &msg_findings {
                 let cat = f.get("category").and_then(Value::as_str).unwrap_or("");
-                let url = f.get("url").and_then(Value::as_str).unwrap_or(&ep.url).to_string();
+                let url = f
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&ep.url)
+                    .to_string();
                 match cat {
                     "ws_sensitive_leak" => posture.sensitive_leaks.push(url),
                     "graphql_ws_unauth" => posture.graphql_unauth.push(url),
@@ -2770,10 +2858,8 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
         || check_cross_protocol_chain;
     if enterprise_tier && !enterprise_endpoints.is_empty() {
         enterprise_endpoints.truncate(max_message_endpoints.max(1));
-        let escalation_paths: Vec<&str> = http_escalation_paths
-            .iter()
-            .map(|s| s.as_str())
-            .collect();
+        let escalation_paths: Vec<&str> =
+            http_escalation_paths.iter().map(|s| s.as_str()).collect();
         for ep in &enterprise_endpoints {
             let fw = ep.framework.as_deref();
             let sp = ep.subprotocol.as_deref();
@@ -2791,9 +2877,12 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
                 )
                 .await;
                 for f in &tier_findings {
-                    posture
-                        .stateful_fuzz
-                        .push(f.get("url").and_then(Value::as_str).unwrap_or(&ep.url).to_string());
+                    posture.stateful_fuzz.push(
+                        f.get("url")
+                            .and_then(Value::as_str)
+                            .unwrap_or(&ep.url)
+                            .to_string(),
+                    );
                 }
                 findings.extend(tier_findings);
             }
@@ -2809,9 +2898,12 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
                 )
                 .await;
                 for f in &tier_findings {
-                    posture
-                        .binary_mutation
-                        .push(f.get("url").and_then(Value::as_str).unwrap_or(&ep.url).to_string());
+                    posture.binary_mutation.push(
+                        f.get("url")
+                            .and_then(Value::as_str)
+                            .unwrap_or(&ep.url)
+                            .to_string(),
+                    );
                 }
                 findings.extend(tier_findings);
             }
@@ -2829,14 +2921,18 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
                 )
                 .await;
                 for f in &tier_findings {
-                    posture
-                        .race_condition
-                        .push(f.get("url").and_then(Value::as_str).unwrap_or(&ep.url).to_string());
+                    posture.race_condition.push(
+                        f.get("url")
+                            .and_then(Value::as_str)
+                            .unwrap_or(&ep.url)
+                            .to_string(),
+                    );
                 }
                 findings.extend(tier_findings);
             }
         }
-        if check_cross_protocol_chain && !intelligence_bus.snapshot_for_cross_protocol().is_empty() {
+        if check_cross_protocol_chain && !intelligence_bus.snapshot_for_cross_protocol().is_empty()
+        {
             let chain_findings = verify_cross_protocol_escalation(
                 &client,
                 &base,
@@ -2859,7 +2955,9 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
 
     // SignalR negotiate — real HTTP probe that precedes the WebSocket upgrade in ASP.NET stacks.
     if check_signalr {
-        for (path, token) in probe_signalr_negotiate(&client, &base, &signalr_paths, &same_origin).await {
+        for (path, token) in
+            probe_signalr_negotiate(&client, &base, &signalr_paths, &same_origin).await
+        {
             posture.signalr_tokens.push(path.clone());
             intelligence_bus.publish_token("connectionToken", &token, &path, "signalr_negotiate");
             findings.push(with_fields(
@@ -2926,7 +3024,11 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
     if posture.endpoints.is_empty() {
         if let Some(p) = http_get(&client, &base).await {
             let b = p.body.to_ascii_lowercase();
-            if b.contains("new websocket(") || b.contains("io.connect(") || b.contains("socket.io") || b.contains("websocket") {
+            if b.contains("new websocket(")
+                || b.contains("io.connect(")
+                || b.contains("socket.io")
+                || b.contains("websocket")
+            {
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
@@ -2977,7 +3079,10 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
             .with("foreign_origin_data", json!(posture.foreign_origin_data))
             .with("host_injection", json!(posture.host_injection))
             .with("version_downgrade", json!(posture.version_downgrade))
-            .with("graphql_introspection", json!(posture.graphql_introspection))
+            .with(
+                "graphql_introspection",
+                json!(posture.graphql_introspection),
+            )
             .with("no_rate_limit", json!(posture.no_rate_limit))
             .with("stateful_fuzz", json!(posture.stateful_fuzz))
             .with("binary_mutation", json!(posture.binary_mutation))
@@ -2986,10 +3091,7 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
                 "cross_protocol_escalation",
                 json!(posture.cross_protocol_escalation),
             )
-            .with(
-                "intelligence_artifacts",
-                intelligence_bus.export_json(),
-            )
+            .with("intelligence_artifacts", intelligence_bus.export_json())
             .with("js_discovered", json!(posture.js_discovered))
             .with("cleartext", posture.cleartext)
             .with("unauthenticated", json!(posture.unauthenticated))
@@ -3009,10 +3111,15 @@ pub async fn run_websocket_attack_result_ctx(target: &str, ctx: &EngineRunContex
                 1.0,
                 ev,
             ),
-            &[(
-                "category",
-                json!("posture_summary"),
-            ), ("score", json!(score)), ("grade", json!(grade)), ("posture_score", json!(score)), ("worst_severity", json!(worst)), ("weak_categories", json!(weak)), ("summary", json!(true))],
+            &[
+                ("category", json!("posture_summary")),
+                ("score", json!(score)),
+                ("grade", json!(grade)),
+                ("posture_score", json!(score)),
+                ("worst_severity", json!(worst)),
+                ("weak_categories", json!(weak)),
+                ("summary", json!(true)),
+            ],
         ));
     }
 
@@ -3051,7 +3158,10 @@ mod tests {
     #[test]
     fn ws_accept_matches_rfc6455_vector() {
         // The canonical RFC 6455 §1.3 example.
-        assert_eq!(ws_accept("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+        assert_eq!(
+            ws_accept("dGhlIHNhbXBsZSBub25jZQ=="),
+            "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+        );
     }
 
     #[test]
@@ -3065,7 +3175,10 @@ mod tests {
     fn framework_fingerprint() {
         assert_eq!(framework_of("/socket.io/?EIO=4", None), Some("Socket.IO"));
         assert_eq!(framework_of("/cable", None), Some("Rails Action Cable"));
-        assert_eq!(framework_of("/ws", Some("graphql-transport-ws")), Some("graphql-ws (GraphQL subscriptions)"));
+        assert_eq!(
+            framework_of("/ws", Some("graphql-transport-ws")),
+            Some("graphql-ws (GraphQL subscriptions)")
+        );
         assert!(framework_of("/ws", None).is_none());
     }
 
@@ -3154,7 +3267,8 @@ mod tests {
     #[test]
     fn graphql_introspection_detector() {
         assert!(graphql_introspection_leak(&[
-            r#"{"type":"next","payload":{"data":{"__schema":{"queryType":{"name":"Query"}}}}}"#.into()
+            r#"{"type":"next","payload":{"data":{"__schema":{"queryType":{"name":"Query"}}}}}"#
+                .into()
         ]));
     }
 

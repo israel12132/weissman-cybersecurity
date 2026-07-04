@@ -129,7 +129,13 @@ pub async fn run_pipeline_to_runtime_risk_result(
     if synthesis {
         let iac_public = has_signal(
             &merged,
-            &["public", "0.0.0.0/0", "internet", "s3 bucket", "security group"],
+            &[
+                "public",
+                "0.0.0.0/0",
+                "internet",
+                "s3 bucket",
+                "security group",
+            ],
         );
         let supply_vuln = has_signal(
             &merged,
@@ -200,9 +206,7 @@ pub async fn run_pipeline_to_runtime_risk_result(
 }
 
 pub async fn run_pipeline_to_runtime_risk(target: &str) {
-    print_result(
-        run_pipeline_to_runtime_risk_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_pipeline_to_runtime_risk_result(target, &EngineRunContext::default()).await);
 }
 
 #[cfg(test)]

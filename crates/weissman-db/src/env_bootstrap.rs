@@ -8,13 +8,24 @@ use std::path::Path;
 /// Load environment files so `DATABASE_URL` is set even when `WorkingDirectory` is not the repo root.
 /// Later sources override earlier ones (explicit production paths win).
 pub fn load_process_environment() {
-    let _ = dotenvy::dotenv();
+    // E2E / CI local stack: never load repo `.env` (often production) over explicit dev exports.
+    let e2e_stack = std::env::var("WEISSMAN_E2E_STACK")
+        .ok()
+        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes"));
+
+    if !e2e_stack {
+        let _ = dotenvy::dotenv();
+    }
 
     if let Ok(p) = std::env::var("WEISSMAN_ENV_FILE") {
         let path = Path::new(p.trim());
         if path.is_file() {
             let _ = dotenvy::from_path_override(path);
         }
+    }
+
+    if e2e_stack {
+        return;
     }
 
     if let Ok(cwd) = std::env::current_dir() {
@@ -37,6 +48,17 @@ pub fn load_process_environment() {
     let deploy = Path::new("/root/weissman-bot/.env");
     if deploy.is_file() {
         let _ = dotenvy::from_path_override(deploy);
+    }
+
+    // Dev-only: metrics endpoint is fail-closed without WEISSMAN_METRICS_TOKEN (see observability.rs).
+    if std::env::var("WEISSMAN_METRICS_TOKEN")
+        .map(|s| s.trim().is_empty())
+        .unwrap_or(true)
+    {
+        std::env::set_var(
+            "WEISSMAN_METRICS_TOKEN",
+            "dev-metrics-token-32-bytes-minimum-xx",
+        );
     }
 }
 

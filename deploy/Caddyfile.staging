@@ -1,0 +1,16 @@
+# Staging TLS — internal CA for localhost (COOKIE_SECURE=1 requires HTTPS).
+# Used by docker-compose.staging.yml profile `staging-tls`.
+#
+# Start:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     --profile staging --profile staging-tls up -d
+# Access: https://localhost (accept Caddy internal cert)
+
+localhost {
+	tls internal
+	encode zstd gzip
+
+	reverse_proxy gateway:80 {
+		flush_interval -1
+	}
+}

@@ -140,6 +140,11 @@ pub fn spawn_agent_registry_redis_sync(registry: Arc<crate::endpoint_agents::Age
             .ok()
             .map(|s| !s.trim().is_empty())
             .unwrap_or(false);
+        if crate::security_startup::production_distributed_state_required() {
+            panic!(
+                "REDIS_URL is required in production multi-replica mode but agent registry Redis client failed to initialize"
+            );
+        }
         if redis_configured {
             tracing::warn!(
                 target: "agent_registry_sync",

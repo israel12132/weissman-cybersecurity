@@ -34,13 +34,25 @@ design notes — every living doc is in the repo root or under `docs/`.
 
 ## Quick start (Docker, recommended)
 
+**One command — full production stack for customers:**
+
 ```bash
 git clone https://github.com/<your-fork>/weissman-cybersecurity
 cd weissman-cybersecurity
-cp PRODUCTION.env.template .env       # edit DATABASE_URL, WEISSMAN_JWT_SECRET, ...
-docker compose up -d                  # uses pgvector/pgvector:pg16 (drop-in for postgres:16)
-# wait ~30 s for migrations to apply, then:
-open http://localhost/command-center/login
+./start_weissman_live.sh --url https://your-company.example
+# → Postgres · Redis · API · Worker · Command Center · migrations · monitoring
+# → http://127.0.0.1/command-center/login
+```
+
+`start_weissman_live.sh` generates a hardened `.env` on first boot, builds images,
+runs `WEISSMAN_ENV=production` guards, and verifies `/api/health` before printing
+login credentials.
+
+**Manual compose (equivalent):**
+
+```bash
+cp PRODUCTION.env.template .env       # edit secrets + WEISSMAN_PUBLIC_BASE_URL
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monitoring up -d --build
 ```
 
 First-boot credentials are created by the migration. Change them immediately via

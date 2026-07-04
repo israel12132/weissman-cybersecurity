@@ -1,12 +1,17 @@
 //! IaC ↔ live drift detection — NotDeployed and ContradictsIac from reconcile matches.
 
 use super::graph_model::{InfraGraph, LiveReconcileMatch, LiveStatus, NodeKind};
-use super::policies::{finding_from_drift, finding_from_not_deployed, DRIFT_CONTRADICTS, NOT_DEPLOYED};
+use super::policies::{
+    finding_from_drift, finding_from_not_deployed, DRIFT_CONTRADICTS, NOT_DEPLOYED,
+};
 use crate::iac_misconfig_engine::model::Finding;
 
 /// Emit findings for drift states discovered during live reconciliation.
 #[must_use]
-pub fn findings_from_matches(graph: &mut InfraGraph, matches: &[LiveReconcileMatch]) -> Vec<Finding> {
+pub fn findings_from_matches(
+    graph: &mut InfraGraph,
+    matches: &[LiveReconcileMatch],
+) -> Vec<Finding> {
     let mut out = Vec::new();
     for m in matches {
         let file = graph
@@ -40,13 +45,12 @@ pub fn findings_from_matches(graph: &mut InfraGraph, matches: &[LiveReconcileMat
     out
 }
 
-fn detect_contradiction(
-    node: &super::graph_model::GraphNode,
-    evidence: &str,
-) -> bool {
+fn detect_contradiction(node: &super::graph_model::GraphNode, evidence: &str) -> bool {
     let ev = evidence.to_ascii_lowercase();
     if !node.internet_facing
-        && (ev.contains("0.0.0.0/0") || ev.contains("publicly_accessible=true") || ev.contains("weak pab"))
+        && (ev.contains("0.0.0.0/0")
+            || ev.contains("publicly_accessible=true")
+            || ev.contains("weak pab"))
     {
         return true;
     }

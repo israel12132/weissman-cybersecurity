@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   useReactTable,
@@ -71,29 +71,40 @@ export default function DataTable({
   tableClassName = '',
   id,
 }) {
+  const defaultPageSize = pageSizes?.[0] ?? 25
+  const [internalPagination, setInternalPagination] = useState({
+    pageIndex: 0,
+    pageSize: defaultPageSize,
+  })
+  const effectivePagination = pagination ?? internalPagination
+  const effectiveOnPaginationChange = onPaginationChange ?? setInternalPagination
+
   const table = useReactTable({
     data: data ?? [],
     columns,
     state: {
       sorting,
-      pagination,
+      pagination: effectivePagination,
       columnFilters,
       globalFilter,
     },
     onSortingChange,
-    onPaginationChange,
+    onPaginationChange: effectiveOnPaginationChange,
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: defaultPageSize },
+    },
   })
 
   const { rows } = table.getRowModel()
   const totalFiltered = table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
-  const pageIndex = pagination?.pageIndex ?? 0
-  const pageSize = pagination?.pageSize ?? pageSizes[0]
+  const pageIndex = effectivePagination.pageIndex ?? 0
+  const pageSize = effectivePagination.pageSize ?? defaultPageSize
 
   const emptyNode = useMemo(() => {
     if (emptyState == null) {
@@ -230,15 +241,14 @@ export default function DataTable({
       </div>
 
       {/* Pagination bar */}
-      {(pagination != null || onPaginationChange) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/5 bg-white/[0.01]">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono text-white/35">Rows:</span>
-            <select
-              value={pageSize}
-              onChange={(e) =>
-                onPaginationChange?.({ pageIndex: 0, pageSize: Number(e.target.value) })
-              }
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/5 bg-white/[0.01]">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-white/35">Rows:</span>
+          <select
+            value={pageSize}
+            onChange={(e) =>
+              effectiveOnPaginationChange({ pageIndex: 0, pageSize: Number(e.target.value) })
+            }
               className="bg-black/50 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono text-white/60 focus:outline-none focus:border-cyan-500/40"
             >
               {pageSizes.map((s) => (
@@ -322,7 +332,6 @@ export default function DataTable({
             </PaginationBtn>
           </div>
         </div>
-      )}
     </div>
   )
 }

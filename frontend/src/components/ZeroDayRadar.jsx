@@ -1,10 +1,13 @@
 /**
+ * @weissman-forensic-page — inline evidence + WASM-verified reality badge (no PageShell layout).
  * Module 7: Global Threat Radar — live intel feed, synthesis terminal, zero-day exposure banner.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from './ui/EvidenceNotice'
+import ForensicEngineRealityBadge from '../forensic/ForensicEngineRealityBadge'
 
 const NS = 'components.tools.zeroDayRadar'
 
@@ -101,7 +104,7 @@ export default function ZeroDayRadar() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-950 text-slate-200 p-6 outline-none">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -110,6 +113,15 @@ export default function ZeroDayRadar() {
           </div>
           <span className="text-slate-500 text-sm">{t(`${NS}.subtitle`)}</span>
         </div>
+
+        <EvidenceNotice className="mb-4">{t('pages.zeroDayRadar.evidence_notice')}</EvidenceNotice>
+        <ForensicEngineRealityBadge
+          engineId="zero_day_radar"
+          size="sm"
+          showRemote
+          showCanonical
+          className="mb-4"
+        />
 
         {exposure && (
           <div className="mb-6 rounded-xl border-2 border-red-500 bg-red-500/20 p-4 animate-pulse">
@@ -197,6 +209,6 @@ export default function ZeroDayRadar() {
           {t(`${NS}.footer`)}
         </p>
       </div>
-    </div>
+    </main>
   )
 }

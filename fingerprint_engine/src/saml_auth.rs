@@ -377,8 +377,9 @@ pub async fn saml_acs(
         .await;
         let _ = tx.commit().await;
     }
+    let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (_access_jwt, access_line, refresh_line) =
-        crate::auth_refresh::build_session_cookie_headers(auth, user_id, r.tenant_id)
+        crate::auth_refresh::build_session_cookie_headers(auth, user_id, r.tenant_id, &binding)
             .await
             .map_err(|e| {
                 (

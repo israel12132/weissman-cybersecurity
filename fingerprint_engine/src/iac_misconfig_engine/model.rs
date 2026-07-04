@@ -328,7 +328,9 @@ impl Framework {
             "backstage" | "bs" => Some(Framework::Backstage),
             "envoy_gateway" | "envoy-gateway" | "egw" => Some(Framework::EnvoyGateway),
             "sealed_secrets" | "sealed-secrets" | "ss" => Some(Framework::SealedSecrets),
-            "prometheus_operator" | "prometheus-operator" | "prm" => Some(Framework::PrometheusOperator),
+            "prometheus_operator" | "prometheus-operator" | "prm" => {
+                Some(Framework::PrometheusOperator)
+            }
             "argo_rollouts" | "argo-rollouts" | "aro" => Some(Framework::ArgoRollouts),
             _ => None,
         }

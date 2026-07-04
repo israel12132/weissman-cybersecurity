@@ -1,7 +1,7 @@
-//! Background scan cycle: reads clients from DB, runs ALL 5 engines per client, writes findings. Live only; no dummy.
-//! After each cycle, computes Audit Root Hash from live vulnerabilities and stores in report_runs.
-//! Pushes live "info" telemetry per engine so all Engine Cards show progress (no dead terminals).
-//! P0: Re-verification before insert; circuit breaker for LLM; attack chain persisted. No panic paths.
+//! Background scan cycle: reads clients from DB, runs engines per client, persists via
+//! [`crate::findings_persist`] only (evidence gate). **Execution happens exclusively in
+//! the worker** via `tenant_full_scan` jobs; [`dispatch`] enqueues — never runs scans
+//! on the server leader loop.
 
 use crate::ai_redteam_engine;
 use crate::archival_engine;
@@ -34,12 +34,68 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 
 mod discovery_ui_snapshot;
+pub mod dispatch;
 
 pub(crate) use weissman_core::{
     finding_description, finding_title_and_severity, infer_poc_exploit,
 };
 
 const MAX_CLIENT_WEB_TARGETS: usize = 64;
+
+/// Persist findings through the evidence gate and emit live telemetry + critical alerts.
+async fn persist_and_notify_findings(
+    app_pool: Arc<PgPool>,
+    tenant_id: i64,
+    client_id: i64,
+    cid: &str,
+    engine: &str,
+    target: &str,
+    findings: &[Value],
+    telemetry_tx: Option<&Arc<broadcast::Sender<String>>>,
+    wr: Option<&WarRoomMirror>,
+) -> usize {
+    if findings.is_empty() {
+        return 0;
+    }
+    let count = match crate::findings_persist::persist_engine_findings(
+        app_pool.as_ref(),
+        tenant_id,
+        Some(client_id),
+        engine,
+        target,
+        findings,
+    )
+    .await
+    {
+        Ok(n) => n as usize,
+        Err(e) => {
+            eprintln!("[Weissman][Orchestrator] findings_persist failed ({engine}): {e}");
+            0
+        }
+    };
+    for f in findings {
+        let Some(obj) = f.as_object() else {
+            continue;
+        };
+        let (title, severity) = finding_title_and_severity(obj);
+        let desc = finding_description(obj);
+        let poc = infer_poc_exploit(obj, target);
+        let fid = crate::findings_persist::build_finding_id(engine, target, f);
+        broadcast_finding_created(telemetry_tx, cid, &fid, &title, &severity, &desc, &poc, wr);
+        if matches!(severity.as_str(), "critical" | "high") {
+            notifications::spawn_critical_poe_alert(
+                Arc::clone(&app_pool),
+                tenant_id,
+                cid,
+                &fid,
+                &title,
+                &severity,
+                &poc,
+            );
+        }
+    }
+    count
+}
 
 fn target_schedule_interval_ms() -> u64 {
     std::env::var("WEISSMAN_TARGET_SCHEDULE_MS")
@@ -79,7 +135,11 @@ fn resolve_client_web_targets(
         }
     }
 
-    let hosts = crate::ot_ics_engine::resolve_scan_hosts("[]", ip_ranges_json, cap.saturating_sub(out.len()));
+    let hosts = crate::ot_ics_engine::resolve_scan_hosts(
+        "[]",
+        ip_ranges_json,
+        cap.saturating_sub(out.len()),
+    );
     for h in hosts {
         let url = if h.contains(':') && !h.starts_with('[') {
             format!("http://{}", h)
@@ -1202,10 +1262,8 @@ async fn run_cycle_for_tenant(
                 None,
                 wr,
             );
-            for i in 0..radar_result.findings.len() {
-                let f = radar_result.findings[i].clone();
+            for f in &radar_result.findings {
                 if let Some(obj) = f.as_object() {
-                    let (title, severity) = finding_title_and_severity(obj);
                     let radar_cid = obj.get("client_id").and_then(|v| v.as_i64()).or_else(|| {
                         obj.get("client_id")
                             .and_then(|v| v.as_str())
@@ -1214,37 +1272,23 @@ async fn run_cycle_for_tenant(
                     let Some(radar_cid) = radar_cid else {
                         continue;
                     };
-                    let fid = format!("zero_day_radar-{}-{}", run_id, i);
-                    let desc = finding_description(obj);
-                    let poc_z = infer_poc_exploit(obj, "");
-                    let cid_str = radar_cid.to_string();
-                    if sqlx::query(
-                        r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, discovered_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, 'zero_day_radar', $7, 'OPEN', $8, now())"#,
+                    let target_url = obj
+                        .get("target")
+                        .or_else(|| obj.get("url"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    total_findings += persist_and_notify_findings(
+                        Arc::clone(&app_pool),
+                        tenant_id,
+                        radar_cid,
+                        &radar_cid.to_string(),
+                        "zero_day_radar",
+                        target_url,
+                        std::slice::from_ref(f),
+                        telemetry_tx.as_ref(),
+                        wr,
                     )
-                    .bind(run_id)
-                    .bind(tenant_id)
-                    .bind(radar_cid)
-                    .bind(&fid)
-                    .bind(&title)
-                    .bind(&severity)
-                    .bind(&desc)
-                    .bind(&poc_z)
-                    .execute(&mut *tx)
-                    .await
-                    .is_ok()
-                    {
-                        total_findings += 1;
-                        notifications::spawn_critical_poe_alert(
-                            Arc::clone(&app_pool),
-                            tenant_id,
-                            &cid_str,
-                            &fid,
-                            &title,
-                            &severity,
-                            &poc_z,
-                        );
-                    }
+                    .await;
                 }
             }
         }
@@ -1269,8 +1313,12 @@ async fn run_cycle_for_tenant(
     let mut run_max_targets = 0usize;
     let mut run_max_paths = 0usize;
     for (db_client_id, name, domains_json, ip_ranges_json, client_configs) in clients.clone() {
-        let client_targets =
-            resolve_client_web_targets(&domains_json, &ip_ranges_json, &name, MAX_CLIENT_WEB_TARGETS);
+        let client_targets = resolve_client_web_targets(
+            &domains_json,
+            &ip_ranges_json,
+            &name,
+            MAX_CLIENT_WEB_TARGETS,
+        );
         if client_targets.is_empty() {
             continue;
         }
@@ -1589,50 +1637,19 @@ async fn run_cycle_for_tenant(
                                 broadcast_harvested_token(telemetry_tx.as_ref(), &cid, &h.role_name, ctx_id, wr);
                             }
                         }
-                        for i in 0..harvest_findings.len() {
-                            let f = harvest_findings[i].clone();
-                            let title: String = f
-                                .get("title")
-                                .and_then(Value::as_str)
-                                .unwrap_or("Zero-to-Admin Privilege Escalation")
-                                .to_string();
-                            let poc: String = f
-                                .get("poc_exploit")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_string();
-                            let desc: String = f
-                                .get("message")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_string();
-                            let fid = format!("identity_auto_harvest-{}-{}", run_id, i);
-                            if sqlx::query(
-                                r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, discovered_at)
-                                   VALUES ($1, $2, $3, $4, $5, 'critical', 'identity_auto_harvest', $6, 'OPEN', $7, now())"#,
+                        if !harvest_findings.is_empty() {
+                            total_findings += persist_and_notify_findings(
+                                Arc::clone(&app_pool),
+                                tenant_id,
+                                db_client_id,
+                                &cid,
+                                "identity_auto_harvest",
+                                &target,
+                                &harvest_findings,
+                                telemetry_tx.as_ref(),
+                                wr,
                             )
-                            .bind(run_id)
-                            .bind(tenant_id)
-                            .bind(db_client_id)
-                            .bind(&fid)
-                            .bind(&title)
-                            .bind(&desc)
-                            .bind(&poc)
-                            .execute(&mut *tx)
-                            .await
-                            .is_ok()
-                            {
-                                total_findings += 1;
-                                notifications::spawn_critical_poe_alert(
-                                    Arc::clone(&app_pool),
-                                    tenant_id,
-                                    &cid,
-                                    &fid,
-                                    title.as_str(),
-                                    "critical",
-                                    poc.as_str(),
-                                );
-                            }
+                            .await;
                         }
                         identity_contexts = load_identity_contexts(&mut tx, db_client_id).await;
                         if !harvested.is_empty() {
@@ -1945,61 +1962,33 @@ async fn run_cycle_for_tenant(
                 .execute(&mut *tx)
                 .await;
             }
-            for i in 0..result.findings.len() {
-                let f = result.findings[i].clone();
+            for f in &result.findings {
                 if let Some(obj) = f.as_object() {
-                    let (title, severity) = finding_title_and_severity(obj);
-                    let fid = format!("{}-{}-{}", source, run_id, i);
+                    let (title, _) = finding_title_and_severity(obj);
                     let desc = finding_description(obj);
-                    let poc = infer_poc_exploit(obj, &target);
                     client_findings_context.push(format!(
                         "[{}] {}: {}",
                         source,
                         title,
                         desc.chars().take(250).collect::<String>()
                     ));
-                    if sqlx::query(
-                        r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, discovered_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN', $9, now())"#,
-                    )
-                    .bind(run_id)
-                    .bind(tenant_id)
-                    .bind(db_client_id)
-                    .bind(&fid)
-                    .bind(&title)
-                    .bind(&severity)
-                    .bind(source.as_str())
-                    .bind(&desc)
-                    .bind(&poc)
-                    .execute(&mut *tx)
-                    .await
-                    .is_err()
-                    {
-                        eprintln!("[Weissman][Orchestrator] Insert vuln failed");
-                    } else {
-                        total_findings += 1;
-                        client_findings_count += 1;
-                        broadcast_finding_created(
-                            telemetry_tx.as_ref(),
-                            &cid,
-                            &fid,
-                            &title,
-                            &severity,
-                            &desc,
-                            &poc,
-                            wr,
-                        );
-                        notifications::spawn_critical_poe_alert(
-                            Arc::clone(&app_pool),
-                            tenant_id,
-                            &cid,
-                            &fid,
-                            &title,
-                            &severity,
-                            &poc,
-                        );
-                    }
                 }
+            }
+            if !result.findings.is_empty() {
+                let n = persist_and_notify_findings(
+                    Arc::clone(&app_pool),
+                    tenant_id,
+                    db_client_id,
+                    &cid,
+                    source.as_str(),
+                    &target,
+                    &result.findings,
+                    telemetry_tx.as_ref(),
+                    wr,
+                )
+                .await;
+                total_findings += n;
+                client_findings_count += n;
             }
             // Module 3: persist Attack Surface Graph nodes/edges for ASM
             if source == "asm" {
@@ -2204,117 +2193,19 @@ async fn run_cycle_for_tenant(
             )
             .await;
             tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
-            for i in 0..poe_result.findings.len() {
-                let f = poe_result.findings[i].clone();
-                if let Some(obj) = f.as_object() {
-                    let (title, severity) = finding_title_and_severity(obj);
-                    let fid = format!("poe_synthesis-{}-{}", run_id, i);
-                    let remediation_snippet = obj
-                        .get("remediation_snippet")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let generated_patch = obj
-                        .get("generated_patch")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let desc_json = serde_json::json!({
-                        "footprint": obj.get("footprint").and_then(Value::as_str).unwrap_or(""),
-                        "verified": obj.get("verified").and_then(Value::as_bool).unwrap_or(false),
-                        "expected_verification": obj.get("expected_verification").and_then(Value::as_str).unwrap_or(""),
-                        "weaponization_status": "SAFE (Proof of Exploitability Only)",
-                        "trigger_reason": obj.get("trigger_reason").and_then(Value::as_str).unwrap_or(""),
-                        "entropy_score": obj.get("entropy_score").and_then(Value::as_f64),
-                        "entropy_map": obj.get("entropy_map").cloned(),
-                        "bleed_start_offset": obj.get("bleed_start_offset").and_then(Value::as_u64),
-                        "response_bleed_preview": obj.get("response_bleed_preview").and_then(Value::as_str),
-                        "remediation_snippet": remediation_snippet.as_str(),
-                        "generated_patch": generated_patch.as_str(),
-                    });
-                    let desc = serde_json::to_string(&desc_json).unwrap_or_default();
-                    let poc_exploit = obj
-                        .get("poc_exploit")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    if sqlx::query(
-                        r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, generated_patch, discovered_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, 'poe_synthesis', $7, 'OPEN', $8, $9, now())"#,
-                    )
-                    .bind(run_id)
-                    .bind(tenant_id)
-                    .bind(db_client_id)
-                    .bind(&fid)
-                    .bind(&title)
-                    .bind(&severity)
-                    .bind(&desc)
-                    .bind(&poc_exploit)
-                    .bind(&generated_patch)
-                    .execute(&mut *tx)
-                    .await
-                    .is_err()
-                    {
-                        eprintln!("[Weissman][Orchestrator] Insert PoE vuln failed");
-                    } else {
-                        total_findings += 1;
-                        let mut broadcast_poc = poc_exploit.clone();
-                        if crate::exploit_crypto::should_seal_poc(poc_exploit.as_str(), &severity) {
-                            if let Some(key) = crate::exploit_crypto::master_key_bytes() {
-                                match crate::exploit_crypto::seal_poc(
-                                    poc_exploit.as_str(),
-                                    &key,
-                                    &fid,
-                                ) {
-                                    Ok(seal) => {
-                                        let redacted = "[SEALED — use Command Center «Decrypt Exploit Evidence»]";
-                                        if sqlx::query(
-                                            r#"UPDATE vulnerabilities SET poc_sealed = true, poc_ciphertext_b64 = $1, poc_nonce_b64 = $2, poc_commitment_sha256 = $3, poc_zkp_hmac = $4, poc_exploit = $5
-                                               WHERE run_id = $6 AND tenant_id = $7 AND client_id = $8 AND finding_id = $9"#,
-                                        )
-                                        .bind(&seal.ciphertext_b64)
-                                        .bind(&seal.nonce_b64)
-                                        .bind(&seal.commitment_sha256_hex)
-                                        .bind(&seal.zkp_hmac_hex)
-                                        .bind(redacted)
-                                        .bind(run_id)
-                                        .bind(tenant_id)
-                                        .bind(db_client_id)
-                                        .bind(&fid)
-                                        .execute(&mut *tx)
-                                        .await
-                                        .is_ok()
-                                        {
-                                            broadcast_poc = redacted.to_string();
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!("[Weissman][Orchestrator] seal_poc: {}", e);
-                                    }
-                                }
-                            }
-                        }
-                        broadcast_finding_created(
-                            telemetry_tx.as_ref(),
-                            &cid,
-                            &fid,
-                            &title,
-                            &severity,
-                            &desc,
-                            &broadcast_poc,
-                            wr,
-                        );
-                        notifications::spawn_critical_poe_alert(
-                            Arc::clone(&app_pool),
-                            tenant_id,
-                            &cid,
-                            &fid,
-                            &title,
-                            &severity,
-                            &broadcast_poc,
-                        );
-                    }
-                }
+            if !poe_result.findings.is_empty() {
+                total_findings += persist_and_notify_findings(
+                    Arc::clone(&app_pool),
+                    tenant_id,
+                    db_client_id,
+                    &cid,
+                    "poe_synthesis",
+                    &target,
+                    &poe_result.findings,
+                    telemetry_tx.as_ref(),
+                    wr,
+                )
+                .await;
             }
             broadcast_pipeline_stage(
                 telemetry_tx.as_ref(),
@@ -2454,9 +2345,9 @@ async fn run_cycle_for_tenant(
 /// telemetry_tx: when Some, progress for each engine is broadcast so all Engine Cards show live status.
 pub fn spawn_orchestrator(
     app_pool: Arc<PgPool>,
-    intel_pool: Arc<PgPool>,
+    _intel_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
-    telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
+    _telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
 ) {
     tokio::spawn(async move {
         let interval_secs: u64 = sqlx::query_scalar::<_, String>(
@@ -2476,84 +2367,39 @@ pub fn spawn_orchestrator(
         loop {
             interval.tick().await;
             if is_scanning_active() {
-                let Some(permit) = crate::scan_concurrency::try_acquire_full_scan_permit() else {
-                    metrics::counter!("weissman_orchestrator_tick_deferred_total", "reason" => "scan_slots_busy").increment(1);
-                    continue;
-                };
-                let _permit = permit;
                 let ap = app_pool.clone();
-                let ip = intel_pool.clone();
                 let au = auth_pool.clone();
-                let tt = telemetry_tx.clone();
-                match crate::panic_shield::catch_unwind_future(
-                    "scheduled_multi_tenant_cycle",
-                    async move {
-                        run_cycle_async(ap, ip, au, tt).await;
-                    },
+                match dispatch::dispatch_all_tenant_scans(
+                    ap.as_ref(),
+                    au.as_ref(),
+                    "orchestrator_tick",
                 )
                 .await
                 {
-                    crate::panic_shield::CatchOutcome::Completed(()) => {}
-                    crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
-                        eprintln!(
-                            "[Weissman][Orchestrator] Scheduled multi-tenant cycle panicked: {}",
-                            message
+                    Ok(n) if n > 0 => {
+                        tracing::info!(
+                            target: "orchestrator",
+                            enqueued = n,
+                            "dispatched tenant_full_scan jobs (worker-only execution)"
                         );
                     }
-                    crate::panic_shield::CatchOutcome::CircuitOpen {
-                        cooldown_remaining_secs,
-                    } => {
-                        eprintln!(
-                            "[Weissman][Orchestrator] Scheduled cycle skipped: panic circuit open ({}s)",
-                            cooldown_remaining_secs
-                        );
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("[Weissman][Orchestrator] Job dispatch failed: {}", e);
                     }
                 }
             }
         }
     });
-    eprintln!("[Weissman][Orchestrator] Pure async loop started (interval from system_configs, default 60s).");
+    eprintln!("[Weissman][Orchestrator] Dispatch-only loop started (interval from system_configs, default 60s). Worker executes all scans.");
 }
 
-/// API / UI: bounded concurrency + panic isolation around a single-tenant enterprise cycle.
+/// API / UI: enqueue a single-tenant full scan — worker is the sole executor.
 pub fn spawn_single_tenant_full_scan(
     app_pool: Arc<PgPool>,
-    intel_pool: Arc<PgPool>,
+    _intel_pool: Arc<PgPool>,
     tenant_id: i64,
-    telemetry: Option<Arc<broadcast::Sender<String>>>,
+    _telemetry: Option<Arc<broadcast::Sender<String>>>,
 ) {
-    tokio::spawn(async move {
-        let Ok(permit) = crate::scan_concurrency::acquire_full_scan_permit().await else {
-            metrics::counter!("weissman_scan_rejected_total", "reason" => "concurrency_timeout")
-                .increment(1);
-            return;
-        };
-        let _permit = permit;
-        let fut = async move {
-            run_single_tenant_scan_cycle(app_pool, intel_pool, tenant_id, telemetry, None).await
-        };
-        match crate::panic_shield::catch_unwind_future("single_tenant_full_scan", fut).await {
-            crate::panic_shield::CatchOutcome::Completed(Ok(())) => {}
-            crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
-                eprintln!(
-                    "[Weissman][ScanJob] tenant {} cycle db/sqlx error: {}",
-                    tenant_id, e
-                );
-            }
-            crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
-                eprintln!(
-                    "[Weissman][ScanJob] tenant {} cycle panicked: {}",
-                    tenant_id, message
-                );
-            }
-            crate::panic_shield::CatchOutcome::CircuitOpen {
-                cooldown_remaining_secs,
-            } => {
-                eprintln!(
-                    "[Weissman][ScanJob] tenant {} cycle skipped: panic circuit open ({}s)",
-                    tenant_id, cooldown_remaining_secs
-                );
-            }
-        }
-    });
+    dispatch::spawn_tenant_full_scan_job(app_pool, tenant_id, "api_single_tenant");
 }

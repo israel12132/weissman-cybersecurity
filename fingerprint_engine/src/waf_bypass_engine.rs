@@ -63,7 +63,8 @@ impl WafScanConfig {
         d.technique = cfg.string_or("technique", "all");
         d.check_fingerprint = cfg.bool_or("check_fingerprint", true);
         d.check_query_probes = cfg.bool_or("check_query_probes", true);
-        d.check_encoding = cfg.bool_or("check_encoding", true) && technique_allows(&d.technique, "encoding");
+        d.check_encoding =
+            cfg.bool_or("check_encoding", true) && technique_allows(&d.technique, "encoding");
         d.check_header_injection = cfg.bool_or("check_header_injection", true)
             && technique_allows(&d.technique, "header_injection");
         d.check_path_normalization = cfg.bool_or("check_path_normalization", true)
@@ -156,7 +157,9 @@ fn fingerprint_waf(headers: &[(String, String)], body: &str) -> Option<(&'static
         return Some(("AWS WAF / CloudFront", "aws-headers".to_string()));
     }
     if geth(&hm, "x-iinfo").is_some()
-        || geth(&hm, "x-cdn").map(|v| v.contains("incapsula")).unwrap_or(false)
+        || geth(&hm, "x-cdn")
+            .map(|v| v.contains("incapsula"))
+            .unwrap_or(false)
         || hm.keys().any(|k| k.starts_with("x-cdn"))
         || body_lc.contains("incapsula")
         || body_lc.contains("_incapsula_")
@@ -180,7 +183,9 @@ fn fingerprint_waf(headers: &[(String, String)], body: &str) -> Option<(&'static
     if geth(&hm, "x-sucuri-id").is_some() || geth(&hm, "x-sucuri-cache").is_some() {
         return Some(("Sucuri", "sucuri-headers".to_string()));
     }
-    if body_lc.contains("mod_security") || body_lc.contains("modsecurity") || body_lc.contains("noyb")
+    if body_lc.contains("mod_security")
+        || body_lc.contains("modsecurity")
+        || body_lc.contains("noyb")
     {
         return Some(("ModSecurity", "modsecurity-body".to_string()));
     }
@@ -208,7 +213,10 @@ fn fingerprint_waf(headers: &[(String, String)], body: &str) -> Option<(&'static
     if geth(&hm, "x-wallarm").is_some() {
         return Some(("Wallarm", "wallarm-headers".to_string()));
     }
-    if geth(&hm, "server").map(|s| s.contains("barracuda")).unwrap_or(false) {
+    if geth(&hm, "server")
+        .map(|s| s.contains("barracuda"))
+        .unwrap_or(false)
+    {
         return Some(("Barracuda WAF", "barracuda-server".to_string()));
     }
     None
@@ -262,7 +270,11 @@ const RAW_PROBES: &[(&str, &str)] = &[
 
 fn transform_variants(raw: &str, technique: &str) -> Vec<(&'static str, String)> {
     let mut out = Vec::new();
-    if technique == "all" || technique == "encoding" || technique == "case_variation" || technique == "comments" {
+    if technique == "all"
+        || technique == "encoding"
+        || technique == "case_variation"
+        || technique == "comments"
+    {
         if technique != "comments" {
             out.push(("case-mixed", mixed_case(raw)));
         }
@@ -285,7 +297,10 @@ fn transform_variants(raw: &str, technique: &str) -> Vec<(&'static str, String)>
     if technique == "all" || technique == "fragmentation" {
         if raw.len() > 4 {
             let mid = raw.len() / 2;
-            out.push(("fragment-split", format!("{}\r\n{}", &raw[..mid], &raw[mid..])));
+            out.push((
+                "fragment-split",
+                format!("{}\r\n{}", &raw[..mid], &raw[mid..]),
+            ));
         }
     }
     out
@@ -477,9 +492,7 @@ async fn run_waf_scan(target: &str, cfg: WafScanConfig) -> EngineResult {
                     ("X-Custom-IP-Authorization", "X-Custom-IP-Authorization"),
                     ("Referer", "Referer"),
                 ] {
-                    if let Some(h) =
-                        http_get_with_headers(&client, &base, &[(hdr, xss)]).await
-                    {
+                    if let Some(h) = http_get_with_headers(&client, &base, &[(hdr, xss)]).await {
                         metrics.probes_sent += 1;
                         let h_blocked = is_waf_block(h.status, &h.body, baseline_len);
                         if h_blocked {
@@ -672,7 +685,10 @@ async fn run_waf_scan(target: &str, cfg: WafScanConfig) -> EngineResult {
                     .with("probes_sent", metrics.probes_sent)
                     .with("blocks", metrics.blocks)
                     .with("bypass_surfaces", metrics.bypasses)
-                    .with("vendor", metrics.vendor.clone().unwrap_or_else(|| "unknown".into()))
+                    .with(
+                        "vendor",
+                        metrics.vendor.clone().unwrap_or_else(|| "unknown".into()),
+                    )
                     .check("bypass_free", metrics.bypasses == 0, metrics.bypasses),
             ),
         );
@@ -743,7 +759,9 @@ mod tests {
 
     #[test]
     fn config_reads_technique() {
-        let cfg = WafScanConfig::from_ctx(&ctx(json!({ "technique": "encoding", "check_header_injection": true })));
+        let cfg = WafScanConfig::from_ctx(&ctx(
+            json!({ "technique": "encoding", "check_header_injection": true }),
+        ));
         assert!(cfg.check_encoding);
         assert!(!cfg.check_header_injection);
     }

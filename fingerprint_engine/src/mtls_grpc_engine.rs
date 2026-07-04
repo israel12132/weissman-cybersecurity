@@ -53,9 +53,8 @@ use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
 use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    dns_caa, dns_tlsa, extract_host, header_value, http2_client, http_get,
-    http_get_with_headers, http_method_with_headers, http_post_bytes_with_headers, tcp_open,
-    tls_cert_details,
+    dns_caa, dns_tlsa, extract_host, header_value, http2_client, http_get, http_get_with_headers,
+    http_method_with_headers, http_post_bytes_with_headers, tcp_open, tls_cert_details,
 };
 use crate::engine_result::{print_result, EngineResult};
 use chrono::{NaiveDate, Utc};
@@ -736,7 +735,14 @@ async fn probe_port_tls(
 ) -> PortTlsObservation {
     let host = host.to_string();
     tokio::task::spawn_blocking(move || {
-        probe_port_tls_blocking(&host, port, timeout_ms, check_ocsp, check_legacy, check_mtls)
+        probe_port_tls_blocking(
+            &host,
+            port,
+            timeout_ms,
+            check_ocsp,
+            check_legacy,
+            check_mtls,
+        )
     })
     .await
     .unwrap_or_default()
@@ -756,14 +762,12 @@ fn cert_sha256_fp_blocking(host: &str, port: u16, sni: &str, timeout_ms: u64) ->
     let mut stream = SslStream::new(ssl, tcp).ok()?;
     stream.connect().ok()?;
     let cert = stream.ssl().peer_certificate()?;
-    cert.digest(MessageDigest::sha256())
-        .ok()
-        .map(|d| {
-            d.iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<Vec<_>>()
-                .join(":")
-        })
+    cert.digest(MessageDigest::sha256()).ok().map(|d| {
+        d.iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<Vec<_>>()
+            .join(":")
+    })
 }
 
 fn try_cipher_blocking(
@@ -789,10 +793,7 @@ fn try_cipher_blocking(
     let ssl = cfg.into_ssl(host).ok()?;
     let mut stream = SslStream::new(ssl, tcp).ok()?;
     stream.connect().ok()?;
-    stream
-        .ssl()
-        .current_cipher()
-        .map(|c| c.name().to_string())
+    stream.ssl().current_cipher().map(|c| c.name().to_string())
 }
 
 fn probe_http3_alpn_blocking(host: &str, port: u16, timeout_ms: u64) -> bool {
@@ -990,7 +991,11 @@ async fn probe_certificate(
 
     if cert.is_rsa && cert.public_key_bits > 0 && cert.public_key_bits < min_rsa_bits {
         posture.weak_key = true;
-        let sev = if cert.public_key_bits < 2048 { "critical" } else { "medium" };
+        let sev = if cert.public_key_bits < 2048 {
+            "critical"
+        } else {
+            "medium"
+        };
         findings.push(with_fields(
             finding_rich(
                 ENGINE_ID,
@@ -1085,7 +1090,9 @@ async fn probe_headers_and_cookies(
 
     // ── CSP ───────────────────────────────────────────────────────────────────
     let csp = header_value(&p.headers, "content-security-policy");
-    let has_frame_ancestors = csp.map(|c| c.to_ascii_lowercase().contains("frame-ancestors")).unwrap_or(false);
+    let has_frame_ancestors = csp
+        .map(|c| c.to_ascii_lowercase().contains("frame-ancestors"))
+        .unwrap_or(false);
     match csp {
         None => {
             posture.csp_missing = true;
@@ -1105,7 +1112,10 @@ async fn probe_headers_and_cookies(
         }
         Some(c) => {
             let lc = c.to_ascii_lowercase();
-            if lc.contains("unsafe-inline") || lc.contains("unsafe-eval") || lc.contains("default-src *") {
+            if lc.contains("unsafe-inline")
+                || lc.contains("unsafe-eval")
+                || lc.contains("default-src *")
+            {
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
@@ -1146,11 +1156,15 @@ async fn probe_headers_and_cookies(
         let coop = header_value(&p.headers, "cross-origin-opener-policy");
         let coep = header_value(&p.headers, "cross-origin-embedder-policy");
         let corp = header_value(&p.headers, "cross-origin-resource-policy");
-        let coop_ok = coop.map(|v| {
-            let lc = v.to_ascii_lowercase();
-            lc.contains("same-origin") || lc.contains("same-origin-allow-popups")
-        }).unwrap_or(false);
-        let coep_ok = coep.map(|v| v.to_ascii_lowercase().contains("require-corp")).unwrap_or(false);
+        let coop_ok = coop
+            .map(|v| {
+                let lc = v.to_ascii_lowercase();
+                lc.contains("same-origin") || lc.contains("same-origin-allow-popups")
+            })
+            .unwrap_or(false);
+        let coep_ok = coep
+            .map(|v| v.to_ascii_lowercase().contains("require-corp"))
+            .unwrap_or(false);
         let corp_ok = corp.is_some();
         if !coop_ok || !coep_ok || !corp_ok {
             posture.cross_origin_weak = true;
@@ -1188,9 +1202,21 @@ async fn probe_headers_and_cookies(
 
     // ── Low-severity hardening headers ─────────────────────────────────────────
     for (hdr, label, why) in [
-        ("x-content-type-options", "X-Content-Type-Options: nosniff", "Prevents MIME-sniffing that can turn uploads into script execution."),
-        ("referrer-policy", "Referrer-Policy", "Controls referrer leakage of sensitive URLs to third parties."),
-        ("permissions-policy", "Permissions-Policy", "Restricts powerful browser features (camera, geolocation, etc.)."),
+        (
+            "x-content-type-options",
+            "X-Content-Type-Options: nosniff",
+            "Prevents MIME-sniffing that can turn uploads into script execution.",
+        ),
+        (
+            "referrer-policy",
+            "Referrer-Policy",
+            "Controls referrer leakage of sensitive URLs to third parties.",
+        ),
+        (
+            "permissions-policy",
+            "Permissions-Policy",
+            "Restricts powerful browser features (camera, geolocation, etc.).",
+        ),
     ] {
         if header_value(&p.headers, hdr).is_none() {
             findings.push(with_fields(
@@ -1254,7 +1280,11 @@ async fn probe_headers_and_cookies(
         }
         if !issues.is_empty() {
             posture.insecure_cookies += 1;
-            let sev = if issues.contains(&"missing Secure") { "high" } else { "medium" };
+            let sev = if issues.contains(&"missing Secure") {
+                "high"
+            } else {
+                "medium"
+            };
             findings.push(with_fields(
                 finding_rich(
                     ENGINE_ID,
@@ -1280,7 +1310,9 @@ async fn probe_https_upgrade(
     posture: &mut TransportPosture,
 ) {
     posture.checks += 1;
-    let Some(p) = crate::engine_probes::http_get(client_no_redirect, &format!("http://{}/", host)).await else {
+    let Some(p) =
+        crate::engine_probes::http_get(client_no_redirect, &format!("http://{}/", host)).await
+    else {
         return;
     };
     let redirects_to_https = p
@@ -1331,7 +1363,8 @@ async fn probe_tls_session_matrix(
 ) {
     for &port in ports {
         posture.checks += 1;
-        let obs = probe_port_tls(host, port, timeout_ms, check_ocsp, check_legacy, check_mtls).await;
+        let obs =
+            probe_port_tls(host, port, timeout_ms, check_ocsp, check_legacy, check_mtls).await;
         if obs.tls_ok {
             posture.https_reachable = true;
         }
@@ -1442,8 +1475,14 @@ async fn probe_grpc_surface(
     let h2 = http2_client().await;
     let paths = [
         ("/grpc.health.v1.Health/Check", "health"),
-        ("/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo", "reflection_v1alpha"),
-        ("/grpc.reflection.v1.ServerReflection/ServerReflectionInfo", "reflection_v1"),
+        (
+            "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+            "reflection_v1alpha",
+        ),
+        (
+            "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+            "reflection_v1",
+        ),
     ];
 
     for &port in grpc_ports {
@@ -1486,10 +1525,7 @@ async fn probe_grpc_surface(
                 continue;
             }
             let url = format!("{base}{path}");
-            let headers = [
-                ("content-type", "application/grpc"),
-                ("te", "trailers"),
-            ];
+            let headers = [("content-type", "application/grpc"), ("te", "trailers")];
             let probe = http_post_bytes_with_headers(&h2, &url, GRPC_EMPTY_FRAME, &headers).await;
             let Some(p) = probe else { continue };
 
@@ -1588,7 +1624,11 @@ async fn probe_grpc_web_and_connect(
                     "connect_rpc" => format!("Connect-RPC surface reachable on port {port}"),
                     _ => format!("gRPC-Web health endpoint on port {port}"),
                 };
-                let sev = if (*kind).contains("reflection") { "high" } else { "medium" };
+                let sev = if (*kind).contains("reflection") {
+                    "high"
+                } else {
+                    "medium"
+                };
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
@@ -1624,10 +1664,30 @@ async fn probe_weak_crypto_matrix(
     posture: &mut TransportPosture,
 ) {
     let suites = [
-        ("RC4-SHA:RC4-MD5", "RC4", "critical", "RC4 stream cipher — biased keystream (CVE-2013-2566)"),
-        ("DES-CBC3-SHA", "3DES", "high", "64-bit block SWEET32 (CVE-2016-2183)"),
-        ("EXP", "EXPORT", "critical", "EXPORT-grade — FREAK/LOGJAM (CVE-2015-0204)"),
-        ("NULL-MD5:NULL-SHA", "NULL", "critical", "NULL cipher — no encryption"),
+        (
+            "RC4-SHA:RC4-MD5",
+            "RC4",
+            "critical",
+            "RC4 stream cipher — biased keystream (CVE-2013-2566)",
+        ),
+        (
+            "DES-CBC3-SHA",
+            "3DES",
+            "high",
+            "64-bit block SWEET32 (CVE-2016-2183)",
+        ),
+        (
+            "EXP",
+            "EXPORT",
+            "critical",
+            "EXPORT-grade — FREAK/LOGJAM (CVE-2015-0204)",
+        ),
+        (
+            "NULL-MD5:NULL-SHA",
+            "NULL",
+            "critical",
+            "NULL cipher — no encryption",
+        ),
         (
             "HIGH:!DHE:!ECDHE:!ECDH",
             "static-RSA",
@@ -1857,7 +1917,9 @@ async fn probe_cert_fingerprint_matrix(
                 "Baseline certificate fingerprint for drift detection on subsequent scans.",
                 target,
                 0.9,
-                Evidence::new().with("port", i64::from(*port)).with("sha256", fp.clone()),
+                Evidence::new()
+                    .with("port", i64::from(*port))
+                    .with("sha256", fp.clone()),
             ),
             &[("category", json!("cert_consistency"))],
         ));
@@ -2014,7 +2076,12 @@ fn resolve_redirect_url(base: &str, loc: &str) -> String {
     loc.to_string()
 }
 
-fn chain_trust_blocking(host: &str, port: u16, sni: &str, timeout_ms: u64) -> Option<(bool, String)> {
+fn chain_trust_blocking(
+    host: &str,
+    port: u16,
+    sni: &str,
+    timeout_ms: u64,
+) -> Option<(bool, String)> {
     let timeout = Duration::from_millis(timeout_ms.clamp(400, 30_000));
     let addr = resolve_addr(host, port)?;
     let mut b = SslConnector::builder(SslMethod::tls()).ok()?;
@@ -2047,10 +2114,7 @@ fn tcp_h2c_preface_blocking(host: &str, port: u16, timeout_ms: u64) -> bool {
     let _ = tcp.set_read_timeout(Some(timeout));
     let _ = tcp.set_write_timeout(Some(timeout));
     let mut tcp = tcp;
-    if tcp
-        .write_all(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
-        .is_err()
-    {
+    if tcp.write_all(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n").is_err() {
         return false;
     }
     let mut buf = [0u8; 128];
@@ -2093,8 +2157,7 @@ async fn probe_chain_trust(
     })
     .await
     .ok()
-    .flatten()
-    else {
+    .flatten() else {
         return;
     };
     if !ok {
@@ -2220,9 +2283,10 @@ async fn probe_grpc_h2c_preface(
             continue;
         }
         let host = host.to_string();
-        let live = tokio::task::spawn_blocking(move || tcp_h2c_preface_blocking(&host, port, timeout_ms))
-            .await
-            .unwrap_or(false);
+        let live =
+            tokio::task::spawn_blocking(move || tcp_h2c_preface_blocking(&host, port, timeout_ms))
+                .await
+                .unwrap_or(false);
         if live {
             posture.grpc_h2c_live = true;
             findings.push(with_fields(
@@ -2676,18 +2740,12 @@ async fn probe_upgrade_insecure_requests(
 ) {
     posture.checks += 1;
     let url = format!("http://{host}/");
-    let Some(p) = http_get_with_headers(
-        client,
-        &url,
-        &[("Upgrade-Insecure-Requests", "1")],
-    )
-    .await
+    let Some(p) = http_get_with_headers(client, &url, &[("Upgrade-Insecure-Requests", "1")]).await
     else {
         return;
     };
     let upgrades = (300..400).contains(&p.status)
-        && p
-            .headers
+        && p.headers
             .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case("location"))
             .map(|(_, v)| v.to_ascii_lowercase().starts_with("https://"))
@@ -2864,7 +2922,11 @@ fn emit_probe_coverage_manifest(
         .collect();
     let categories: HashSet<String> = findings
         .iter()
-        .filter_map(|f| f.get("category").and_then(Value::as_str).map(str::to_string))
+        .filter_map(|f| {
+            f.get("category")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .collect();
     findings.push(with_fields(
         finding_rich(
@@ -2901,7 +2963,9 @@ async fn probe_alt_svc_http3(
 ) {
     posture.checks += 1;
     let url = format!("https://{host}/");
-    let Some(p) = http_get(client, &url).await else { return };
+    let Some(p) = http_get(client, &url).await else {
+        return;
+    };
     if let Some(v) = header_value(&p.headers, "alt-svc") {
         let lc = v.to_ascii_lowercase();
         if lc.contains("h3") || lc.contains("quic") {
@@ -2933,7 +2997,9 @@ async fn probe_hsts_preload_readiness(
     findings: &mut Vec<Value>,
 ) {
     let url = format!("https://{host}/");
-    let Some(p) = http_get(client, &url).await else { return };
+    let Some(p) = http_get(client, &url).await else {
+        return;
+    };
     let Some(v) = header_value(&p.headers, "strict-transport-security") else {
         return;
     };
@@ -2943,9 +3009,8 @@ async fn probe_hsts_preload_readiness(
         .find_map(|p| p.trim().strip_prefix("max-age="))
         .and_then(|n| n.trim().parse::<u64>().ok())
         .unwrap_or(0);
-    let preload_ready = max_age >= min_hsts_age
-        && lc.contains("includesubdomains")
-        && lc.contains("preload");
+    let preload_ready =
+        max_age >= min_hsts_age && lc.contains("includesubdomains") && lc.contains("preload");
     if !preload_ready && max_age >= 31_536_000 {
         findings.push(with_fields(
             finding_rich(
@@ -3132,54 +3197,147 @@ fn edge(id: &str, from: &str, to: &str, kind: &str) -> GraphEdge {
 fn build_graph(target: &str, p: &TransportPosture) -> (Vec<GraphNode>, Vec<GraphEdge>) {
     let mut nodes = vec![node("root", target, p.has_exposure())];
     let mut edges = Vec::new();
-    let add = |nodes: &mut Vec<GraphNode>, edges: &mut Vec<GraphEdge>, id: &str, label: &str, kind: &str| {
+    let add = |nodes: &mut Vec<GraphNode>,
+               edges: &mut Vec<GraphEdge>,
+               id: &str,
+               label: &str,
+               kind: &str| {
         nodes.push(node(id, label, true));
         edges.push(edge(&format!("e_root_{id}"), "root", id, kind));
     };
     if p.cert_expired || p.weak_key || p.weak_sig || p.cert_self_signed || p.legacy_tls {
-        add(&mut nodes, &mut edges, "tls", "weak TLS / certificate", "WEAK_TLS");
+        add(
+            &mut nodes,
+            &mut edges,
+            "tls",
+            "weak TLS / certificate",
+            "WEAK_TLS",
+        );
     }
     if p.hsts_missing || p.no_https_upgrade {
-        add(&mut nodes, &mut edges, "downgrade", "TLS downgrade surface", "SSL_STRIP");
+        add(
+            &mut nodes,
+            &mut edges,
+            "downgrade",
+            "TLS downgrade surface",
+            "SSL_STRIP",
+        );
     }
     if p.insecure_cookies > 0 {
-        add(&mut nodes, &mut edges, "cookies", "insecure session cookies", "COOKIE_THEFT");
+        add(
+            &mut nodes,
+            &mut edges,
+            "cookies",
+            "insecure session cookies",
+            "COOKIE_THEFT",
+        );
     }
     if p.grpc_reflection {
-        add(&mut nodes, &mut edges, "grpc_refl", "gRPC reflection API", "GRPC_ENUM");
+        add(
+            &mut nodes,
+            &mut edges,
+            "grpc_refl",
+            "gRPC reflection API",
+            "GRPC_ENUM",
+        );
     }
     if p.mtls_not_enforced {
-        add(&mut nodes, &mut edges, "mtls", "anonymous TLS on API port", "NO_MTLS");
+        add(
+            &mut nodes,
+            &mut edges,
+            "mtls",
+            "anonymous TLS on API port",
+            "NO_MTLS",
+        );
     }
     if p.plaintext_grpc_port {
-        add(&mut nodes, &mut edges, "grpc_clear", "plaintext gRPC listener", "CLEARTEXT_GRPC");
+        add(
+            &mut nodes,
+            &mut edges,
+            "grpc_clear",
+            "plaintext gRPC listener",
+            "CLEARTEXT_GRPC",
+        );
     }
     if p.weak_ciphers || p.no_forward_secrecy {
-        add(&mut nodes, &mut edges, "weak_crypto", "weak cipher / no PFS", "WEAK_CIPHER");
+        add(
+            &mut nodes,
+            &mut edges,
+            "weak_crypto",
+            "weak cipher / no PFS",
+            "WEAK_CIPHER",
+        );
     }
     if p.h2c_upgrade {
-        add(&mut nodes, &mut edges, "h2c", "cleartext h2c upgrade", "H2C_UPGRADE");
+        add(
+            &mut nodes,
+            &mut edges,
+            "h2c",
+            "cleartext h2c upgrade",
+            "H2C_UPGRADE",
+        );
     }
     if p.cors_permissive {
-        add(&mut nodes, &mut edges, "cors", "permissive CORS", "CORS_ABUSE");
+        add(
+            &mut nodes,
+            &mut edges,
+            "cors",
+            "permissive CORS",
+            "CORS_ABUSE",
+        );
     }
     if p.grpc_web {
-        add(&mut nodes, &mut edges, "grpc_web", "gRPC-Web / Connect surface", "GRPC_WEB");
+        add(
+            &mut nodes,
+            &mut edges,
+            "grpc_web",
+            "gRPC-Web / Connect surface",
+            "GRPC_WEB",
+        );
     }
     if p.grpc_h2c_live {
-        add(&mut nodes, &mut edges, "grpc_h2c", "h2c prior-knowledge gRPC", "GRPC_H2C");
+        add(
+            &mut nodes,
+            &mut edges,
+            "grpc_h2c",
+            "h2c prior-knowledge gRPC",
+            "GRPC_H2C",
+        );
     }
     if p.chain_untrusted {
-        add(&mut nodes, &mut edges, "chain", "untrusted certificate chain", "BAD_CHAIN");
+        add(
+            &mut nodes,
+            &mut edges,
+            "chain",
+            "untrusted certificate chain",
+            "BAD_CHAIN",
+        );
     }
     if p.must_staple_violation {
-        add(&mut nodes, &mut edges, "must_staple", "Must-Staple violation", "MUST_STAPLE");
+        add(
+            &mut nodes,
+            &mut edges,
+            "must_staple",
+            "Must-Staple violation",
+            "MUST_STAPLE",
+        );
     }
     if p.mixed_passive {
-        add(&mut nodes, &mut edges, "mixed", "mixed passive content", "MIXED_CONTENT");
+        add(
+            &mut nodes,
+            &mut edges,
+            "mixed",
+            "mixed passive content",
+            "MIXED_CONTENT",
+        );
     }
     if (p.hsts_missing || p.no_https_upgrade) && p.insecure_cookies > 0 {
-        edges.push(edge("ap_strip_cookie", "downgrade", "cookies", "STRIP→STEAL_SESSION"));
+        edges.push(edge(
+            "ap_strip_cookie",
+            "downgrade",
+            "cookies",
+            "STRIP→STEAL_SESSION",
+        ));
     }
     if p.grpc_reflection && p.mtls_not_enforced {
         edges.push(edge("ap_grpc_mtls", "grpc_refl", "mtls", "ENUM→UNAUTH_RPC"));
@@ -3188,7 +3346,12 @@ fn build_graph(target: &str, p: &TransportPosture) -> (Vec<GraphNode>, Vec<Graph
         edges.push(edge("ap_sniff_grpc", "grpc_clear", "root", "SNIFF→CREDS"));
     }
     if p.weak_ciphers && (p.hsts_missing || p.no_https_upgrade) {
-        edges.push(edge("ap_weak_strip", "weak_crypto", "downgrade", "DECRYPT→STRIP"));
+        edges.push(edge(
+            "ap_weak_strip",
+            "weak_crypto",
+            "downgrade",
+            "DECRYPT→STRIP",
+        ));
     }
     if p.grpc_web && p.cors_permissive {
         edges.push(edge("ap_web_cors", "grpc_web", "cors", "BROWSER→RPC"));
@@ -3211,9 +3374,14 @@ fn synthesize_attack_paths(target: &str, p: &TransportPosture) -> Vec<Value> {
                 &format!("{impact} Chain: {}", steps.join("  →  ")),
                 target,
                 0.9,
-                Evidence::new().with("kind", "attack_path").with("steps", json!(steps)),
+                Evidence::new()
+                    .with("kind", "attack_path")
+                    .with("steps", json!(steps)),
             ),
-            &[("category", json!("attack_path")), ("kill_chain", json!(steps))],
+            &[
+                ("category", json!("attack_path")),
+                ("kill_chain", json!(steps)),
+            ],
         ));
     };
     if (p.hsts_missing || p.no_https_upgrade) && p.insecure_cookies > 0 {
@@ -3384,19 +3552,58 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     let grpc_ports = cfg.ports_or("grpc_ports", &[50051, 9090]);
 
     let preset = |name: &str| match profile.as_str() {
-        "tls_only" => matches!(name, "tls" | "session" | "ocsp" | "legacy" | "weak_crypto" | "sni" | "chain" | "compression" | "must_staple"),
-        "headers_only" => matches!(name, "headers" | "upgrade" | "api" | "security_txt" | "preload" | "cross_origin" | "reporting" | "uir" | "mixed"),
+        "tls_only" => matches!(
+            name,
+            "tls"
+                | "session"
+                | "ocsp"
+                | "legacy"
+                | "weak_crypto"
+                | "sni"
+                | "chain"
+                | "compression"
+                | "must_staple"
+        ),
+        "headers_only" => matches!(
+            name,
+            "headers"
+                | "upgrade"
+                | "api"
+                | "security_txt"
+                | "preload"
+                | "cross_origin"
+                | "reporting"
+                | "uir"
+                | "mixed"
+        ),
         "quick" => matches!(name, "tls" | "headers" | "upgrade"),
         "grpc_only" => matches!(name, "grpc" | "session" | "mtls" | "grpc_web"),
-        "mtls_audit" => matches!(name, "tls" | "session" | "mtls" | "ocsp" | "grpc" | "sni" | "weak_crypto" | "chain"),
-        "api_hardening" => matches!(name, "headers" | "api" | "cors" | "security_txt" | "preload" | "cross_origin" | "cache" | "ws"),
+        "mtls_audit" => matches!(
+            name,
+            "tls" | "session" | "mtls" | "ocsp" | "grpc" | "sni" | "weak_crypto" | "chain"
+        ),
+        "api_hardening" => matches!(
+            name,
+            "headers"
+                | "api"
+                | "cors"
+                | "security_txt"
+                | "preload"
+                | "cross_origin"
+                | "cache"
+                | "ws"
+        ),
         "grpc_deep" => matches!(name, "grpc" | "grpc_web" | "grpc_h2c" | "mtls" | "session"),
         _ => true,
     };
 
     let do_chain = tri(&cfg, "check_chain_trust", preset("chain"));
     let do_redirect_chain = tri(&cfg, "check_redirect_chain", preset("redirect"));
-    let do_grpc_h2c = tri(&cfg, "check_grpc_h2c", preset("grpc_h2c") && intensity != Intensity::Light);
+    let do_grpc_h2c = tri(
+        &cfg,
+        "check_grpc_h2c",
+        preset("grpc_h2c") && intensity != Intensity::Light,
+    );
     let do_websocket = tri(&cfg, "check_websocket", preset("ws"));
     let do_cache = tri(&cfg, "check_cache_policy", preset("cache"));
     let do_coverage = cfg.bool_or("emit_coverage_manifest", true);
@@ -3405,18 +3612,34 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     let do_tls = tri(&cfg, "check_tls_cert", preset("tls"));
     let do_headers = tri(&cfg, "check_headers", preset("headers"));
     let do_upgrade = tri(&cfg, "check_redirect", preset("upgrade"));
-    let do_http2 = tri(&cfg, "check_http2", intensity != Intensity::Light && preset("http2"));
+    let do_http2 = tri(
+        &cfg,
+        "check_http2",
+        intensity != Intensity::Light && preset("http2"),
+    );
     let do_grpc = tri(&cfg, "check_grpc_reflection", preset("grpc"));
     let do_mtls = tri(&cfg, "check_mtls", preset("mtls"));
     let do_ocsp = tri(&cfg, "check_ocsp", preset("ocsp"));
     let do_caa = tri(&cfg, "check_caa", preset("caa"));
     let do_ct = tri(&cfg, "check_ct", preset("ct"));
     let do_cross_origin = tri(&cfg, "check_cross_origin", preset("cross_origin"));
-    let do_legacy = tri(&cfg, "check_legacy_tls", preset("legacy") && intensity != Intensity::Light);
+    let do_legacy = tri(
+        &cfg,
+        "check_legacy_tls",
+        preset("legacy") && intensity != Intensity::Light,
+    );
     let do_session = tri(&cfg, "check_tls_session", preset("session"));
-    let do_weak_crypto = tri(&cfg, "check_weak_ciphers", preset("weak_crypto") && intensity != Intensity::Light);
+    let do_weak_crypto = tri(
+        &cfg,
+        "check_weak_ciphers",
+        preset("weak_crypto") && intensity != Intensity::Light,
+    );
     let do_api = tri(&cfg, "check_api_hardening", preset("api"));
-    let do_h2c = tri(&cfg, "check_h2c", preset("h2c") && intensity != Intensity::Light);
+    let do_h2c = tri(
+        &cfg,
+        "check_h2c",
+        preset("h2c") && intensity != Intensity::Light,
+    );
     let do_dane = tri(&cfg, "check_dane", preset("dane"));
     let do_cert_matrix = tri(&cfg, "check_cert_consistency", preset("cert_matrix"));
     let do_grpc_web = tri(&cfg, "check_grpc_web", preset("grpc_web"));
@@ -3427,7 +3650,11 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     let do_mixed = tri(&cfg, "check_mixed_passive", preset("mixed"));
     let do_mesh = tri(&cfg, "check_mesh_fingerprint", preset("mesh"));
     let do_must_staple = tri(&cfg, "check_must_staple", preset("must_staple"));
-    let do_tls_compression = tri(&cfg, "check_tls_compression", preset("compression") && intensity != Intensity::Light);
+    let do_tls_compression = tri(
+        &cfg,
+        "check_tls_compression",
+        preset("compression") && intensity != Intensity::Light,
+    );
     let do_reporting = tri(&cfg, "check_reporting_headers", preset("reporting"));
     let do_uir = tri(&cfg, "check_upgrade_insecure_requests", preset("uir"));
     let mut must_staple_required = false;
@@ -3453,7 +3680,14 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
         .await;
     }
     if do_upgrade {
-        probe_https_upgrade(&client_no_redirect, &host, target, &mut findings, &mut posture).await;
+        probe_https_upgrade(
+            &client_no_redirect,
+            &host,
+            target,
+            &mut findings,
+            &mut posture,
+        )
+        .await;
     }
     if do_http2 {
         probe_http2(&host, &mut posture).await;
@@ -3474,9 +3708,15 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     }
     if do_must_staple {
         let port = tls_ports.first().copied().unwrap_or(443);
-        must_staple_required =
-            probe_must_staple_extension(&host, target, port, timeout_ms, &mut findings, &mut posture)
-                .await;
+        must_staple_required = probe_must_staple_extension(
+            &host,
+            target,
+            port,
+            timeout_ms,
+            &mut findings,
+            &mut posture,
+        )
+        .await;
         correlate_must_staple_violation(target, must_staple_required, &mut posture, &mut findings);
     }
     if do_grpc || do_mtls {
@@ -3559,7 +3799,16 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     }
     if do_chain {
         let port = tls_ports.first().copied().unwrap_or(443);
-        probe_chain_trust(&host, target, port, &sni, timeout_ms, &mut findings, &mut posture).await;
+        probe_chain_trust(
+            &host,
+            target,
+            port,
+            &sni,
+            timeout_ms,
+            &mut findings,
+            &mut posture,
+        )
+        .await;
     }
     if do_redirect_chain {
         probe_redirect_chain_audit(
@@ -3573,7 +3822,15 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
         .await;
     }
     if do_grpc_h2c {
-        probe_grpc_h2c_preface(&host, target, &grpc_ports, timeout_ms, &mut findings, &mut posture).await;
+        probe_grpc_h2c_preface(
+            &host,
+            target,
+            &grpc_ports,
+            timeout_ms,
+            &mut findings,
+            &mut posture,
+        )
+        .await;
     }
     if do_websocket {
         probe_websocket_upgrade(&client, &host, target, &mut findings, &mut posture).await;
@@ -3595,8 +3852,14 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
         probe_reporting_headers(&client, &host, target, &mut findings, &mut posture).await;
     }
     if do_uir {
-        probe_upgrade_insecure_requests(&client_no_redirect, &host, target, &mut findings, &mut posture)
-            .await;
+        probe_upgrade_insecure_requests(
+            &client_no_redirect,
+            &host,
+            target,
+            &mut findings,
+            &mut posture,
+        )
+        .await;
     }
     if !grpc_extra_paths.is_empty() {
         probe_grpc_custom_paths(
@@ -3644,7 +3907,12 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     }
 
     if intensity == Intensity::Light {
-        findings.retain(|f| !matches!(f.get("severity").and_then(Value::as_str), Some("low") | Some("info")));
+        findings.retain(|f| {
+            !matches!(
+                f.get("severity").and_then(Value::as_str),
+                Some("low") | Some("info")
+            )
+        });
     }
 
     if do_paths {
@@ -3786,7 +4054,9 @@ mod tests {
         p.grpc_web = true;
         p.cors_permissive = true;
         let paths = synthesize_attack_paths("x.test", &p);
-        assert!(paths.iter().any(|f| f["title"].as_str().unwrap_or("").contains("gRPC-Web")));
+        assert!(paths
+            .iter()
+            .any(|f| f["title"].as_str().unwrap_or("").contains("gRPC-Web")));
     }
 
     #[test]
@@ -3805,7 +4075,10 @@ mod tests {
         p.grpc_reflection = true;
         p.mtls_not_enforced = true;
         let paths = synthesize_attack_paths("x.test", &p);
-        assert!(paths.iter().any(|f| f["title"].as_str().unwrap_or("").contains("gRPC reflection")));
+        assert!(paths.iter().any(|f| f["title"]
+            .as_str()
+            .unwrap_or("")
+            .contains("gRPC reflection")));
     }
 
     #[test]
@@ -3821,7 +4094,11 @@ mod tests {
 
     #[test]
     fn grpc_frame_detection() {
-        assert!(grpc_response_indicates_service(200, &[0, 0, 0, 0, 5, 1], &[]));
+        assert!(grpc_response_indicates_service(
+            200,
+            &[0, 0, 0, 0, 5, 1],
+            &[]
+        ));
         assert!(!grpc_response_indicates_service(404, &[], &[]));
         assert!(grpc_reflection_likely(
             200,
@@ -3841,10 +4118,7 @@ mod tests {
             resolve_redirect_url("http://host/a", "https://host/b"),
             "https://host/b"
         );
-        assert_eq!(
-            resolve_redirect_url("http://host/a", "/b"),
-            "http://host/b"
-        );
+        assert_eq!(resolve_redirect_url("http://host/a", "/b"), "http://host/b");
     }
 
     #[test]

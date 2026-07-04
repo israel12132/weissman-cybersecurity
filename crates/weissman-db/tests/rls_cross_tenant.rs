@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! TEST_DATABASE_URL='postgres://postgres:...@localhost:5432/weissman?sslmode=disable' \
-//!   cargo test -p weissman-db rls_cross_tenant -- --ignored --nocapture
+//!   cargo test -p weissman-db --test rls_cross_tenant -- --nocapture
 //! ```
 //!
 //! The URL should be a **superuser** (or any role granted `weissman_app`) so the test can
@@ -18,11 +18,36 @@ const T1_SLUG: &str = "__rls_contract_tenant_a__";
 const T2_SLUG: &str = "__rls_contract_tenant_b__";
 const PROBE_NAME: &str = "__rls_contract_probe_client__";
 
+fn require_test_database_url() -> String {
+    match std::env::var("TEST_DATABASE_URL") {
+        Ok(u) if !u.trim().is_empty() => u,
+        Ok(_) if std::env::var("CI").is_ok() => {
+            panic!("TEST_DATABASE_URL must be set in CI for RLS cross-tenant contract");
+        }
+        Ok(_) => {
+            eprintln!(
+                "SKIP rls_cross_tenant: TEST_DATABASE_URL empty (local dev without Postgres)"
+            );
+            String::new()
+        }
+        Err(_) if std::env::var("CI").is_ok() => {
+            panic!("TEST_DATABASE_URL must be set in CI for RLS cross-tenant contract");
+        }
+        Err(_) => {
+            eprintln!(
+                "SKIP rls_cross_tenant: TEST_DATABASE_URL not set (local dev without Postgres)"
+            );
+            String::new()
+        }
+    }
+}
+
 #[tokio::test]
-#[ignore = "requires TEST_DATABASE_URL (Postgres superuser or role that can SET ROLE weissman_app); DB must be migrated"]
 async fn weissman_app_cannot_read_other_tenant_clients() {
-    let url =
-        std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set for this test");
+    let url = require_test_database_url();
+    if url.is_empty() {
+        return;
+    }
     let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect(url.trim())

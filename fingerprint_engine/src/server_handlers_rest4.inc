@@ -609,7 +609,7 @@ fn poe_spawn_job(
     let reg = state.poe_job_registry.clone();
     let tenant_id = auth.tenant_id;
     tokio::spawn(async move {
-        let run_id: i64 = {
+        let _run_id: i64 = {
             let Ok(mut tx) = db::begin_tenant_tx(app.as_ref(), tenant_id).await else {
                 return;
             };
@@ -700,63 +700,47 @@ fn poe_spawn_job(
         .bind(&job_id)
         .execute(&mut *tx)
         .await;
-        if result.status == "ok" {
-            for (i, f) in result.findings.iter().enumerate() {
-                if let Some(obj) = f.as_object() {
-                    let title = obj
-                        .get("title")
-                        .and_then(Value::as_str)
-                        .unwrap_or("PoE finding")
-                        .to_string();
-                    let severity = obj
-                        .get("severity")
-                        .and_then(Value::as_str)
-                        .unwrap_or("high")
-                        .to_string();
-                    let fid = format!("poe_synthesis-{}-{}", run_id, i);
-                    let remediation_snippet = obj
-                        .get("remediation_snippet")
-                        .and_then(Value::as_str)
-                        .unwrap_or("");
-                    let generated_patch = obj
-                        .get("generated_patch")
-                        .and_then(Value::as_str)
-                        .unwrap_or("");
-                    let desc_json = serde_json::json!({
-                        "footprint": obj.get("footprint").and_then(Value::as_str).unwrap_or(""),
-                        "verified": obj.get("verified").and_then(Value::as_bool).unwrap_or(false),
-                        "expected_verification": obj.get("expected_verification").and_then(Value::as_str).unwrap_or(""),
-                        "weaponization_status": "SAFE (Proof of Exploitability Only)",
-                        "remediation_snippet": remediation_snippet,
-                        "generated_patch": generated_patch,
-                    });
-                    let desc = serde_json::to_string(&desc_json).unwrap_or_default();
-                    let poc_exploit = obj.get("poc_exploit").and_then(Value::as_str).unwrap_or("");
-                    if sqlx::query(
-                        r#"INSERT INTO vulnerabilities (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, poc_exploit, generated_patch, discovered_at)
-                           VALUES ($1, $2, $3, $4, $5, $6, 'poe_synthesis', $7, 'OPEN', $8, $9, now())"#,
-                    )
-                    .bind(run_id)
-                    .bind(tenant_id)
-                    .bind(client_id)
-                    .bind(&fid)
-                    .bind(&title)
-                    .bind(&severity)
-                    .bind(&desc)
-                    .bind(poc_exploit)
-                    .bind(generated_patch)
-                    .execute(&mut *tx)
-                    .await
-                    .is_ok()
-                    {
+        if result.status == "ok" && !result.findings.is_empty() {
+            if let Err(e) = crate::findings_persist::persist_engine_findings(
+                app.as_ref(),
+                tenant_id,
+                Some(client_id),
+                "poe_synthesis",
+                &target,
+                &result.findings,
+            )
+            .await
+            {
+                tracing::error!(
+                    target: "poe_synthesis",
+                    error = %e,
+                    "findings_persist failed for PoE job"
+                );
+            } else {
+                for f in &result.findings {
+                    if let Some(obj) = f.as_object() {
+                        let title = obj
+                            .get("title")
+                            .and_then(Value::as_str)
+                            .unwrap_or("PoE finding");
+                        let severity = obj
+                            .get("severity")
+                            .and_then(Value::as_str)
+                            .unwrap_or("high");
+                        let poc_exploit = obj.get("poc_exploit").and_then(Value::as_str).unwrap_or("");
+                        let fid = crate::findings_persist::build_finding_id(
+                            "poe_synthesis",
+                            &target,
+                            f,
+                        );
                         let cid_str = client_id.to_string();
                         crate::notifications::spawn_critical_poe_alert(
                             Arc::clone(&app),
                             tenant_id,
                             &cid_str,
                             &fid,
-                            &title,
-                            &severity,
+                            title,
+                            severity,
                             poc_exploit,
                         );
                     }
@@ -857,12 +841,7 @@ async fn api_poe_scan_stream(
         .entry(job_id.clone())
         .or_default()
         .push(tx);
-    let stream = stream! {
-        yield Ok::<Event, Infallible>(Event::default().data(initial));
-        while let Ok(msg) = rx.recv_async().await {
-            yield Ok(Event::default().data(msg));
-        }
-    };
+    let stream = crate::http::sse_bridge::bridge_channel_with_initial(initial, rx);
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(25)))
         .into_response()
@@ -1350,7 +1329,7 @@ async fn api_auto_heal(
     }
     let ip = extract_client_ip(&headers, addr);
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
-    if !crate::security_hardening::destructive_action_authorized(&headers) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
         if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
             let _ = audit_log::insert_audit(
                 &mut tx,
@@ -1358,20 +1337,13 @@ async fn api_auto_heal(
                 Some(auth.user_id),
                 &actor,
                 "destructive_confirm_denied",
-                "auto_heal: missing or invalid X-Weissman-Destructive-Confirm",
+                "auto_heal: missing admin/dual destructive approval headers",
                 &ip,
             )
             .await;
             let _ = tx.commit().await;
         }
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({
-                "error": "destructive_confirm_required",
-                "detail": "Set WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET on the server and send matching X-Weissman-Destructive-Confirm header."
-            })),
-        )
-            .into_response();
+        return r;
     }
     if let Err(detail) = crate::security_hardening::validate_finding_id_token(&body.finding_id) {
         return (
@@ -1637,17 +1609,21 @@ async fn api_deception_list(
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
+            let status = r.try_get::<String,_>("status").unwrap_or_default();
+            let simulation_mode = status == "simulation";
             json!({
                 "id": r.try_get::<i64,_>("id").unwrap_or(0),
                 "asset_type": r.try_get::<String,_>("asset_type").unwrap_or_default(),
                 "token_value": r.try_get::<String,_>("token_value").unwrap_or_default(),
+                "token_value_masked": mask_token_preview(r.try_get::<String,_>("token_value").unwrap_or_default().as_str()),
                 "deployment_location": r.try_get::<Option<String>,_>("deployment_location").ok().flatten(),
                 "cloud_injection_uri": r.try_get::<Option<String>,_>("cloud_injection_uri").ok().flatten(),
                 "canary_access_key_id": r.try_get::<String,_>("canary_access_key_id").unwrap_or_default(),
                 "oast_canary_hook": r.try_get::<String,_>("oast_canary_hook").unwrap_or_default(),
-                "status": r.try_get::<String,_>("status").unwrap_or_default(),
+                "status": status,
+                "simulation_mode": simulation_mode,
+                "live_aws_canary": !simulation_mode && !r.try_get::<String,_>("canary_access_key_id").unwrap_or_default().is_empty(),
                 "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-                "token_value_masked": mask_token_preview(r.try_get::<String,_>("token_value").unwrap_or_default().as_str()),
             })
         })
         .collect();
@@ -1722,6 +1698,7 @@ async fn api_deception_generate(
         canary: String,
         oast: String,
         iam_user: Option<String>,
+        status: &'static str,
     }
 
     let mut to_insert: Vec<RowInsert> = Vec::new();
@@ -1763,6 +1740,7 @@ async fn api_deception_generate(
                 canary: pair.access_key_id.clone(),
                 oast: oast_url,
                 iam_user: Some(pair.iam_user_name),
+                status: "active",
             });
         } else {
             let canary = crate::deception_deployment_engine::extract_canary_access_key_id(&token)
@@ -1774,6 +1752,7 @@ async fn api_deception_generate(
                 canary,
                 oast: String::new(),
                 iam_user: None,
+                status: "simulation",
             });
         }
     }
@@ -1786,13 +1765,14 @@ async fn api_deception_generate(
         let cleanup_iam = row.iam_user.clone();
         let q = sqlx::query(
             r#"INSERT INTO deception_assets (tenant_id, client_id, asset_type, token_value, deployment_location, status, canary_access_key_id, oast_canary_hook)
-               VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)"#,
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
         )
         .bind(auth.tenant_id)
         .bind(id)
         .bind(&row.atype)
         .bind(&row.token)
         .bind(&row.loc)
+        .bind(row.status)
         .bind(&row.canary)
         .bind(&row.oast)
         .execute(&mut *tx)

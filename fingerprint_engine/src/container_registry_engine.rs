@@ -153,14 +153,22 @@ fn parse_settings(ctx: &EngineRunContext, target: &str) -> Settings {
         dry_run: cfg.bool_or("dry_run", false),
         compliance_frameworks: cfg.string_list_or(
             "compliance_frameworks",
-            &["NIST-SA-12", "SOC2-CC8.1", "PCI-DSS-6.3.2", "MITRE-T1525", "CIS-5.1"],
+            &[
+                "NIST-SA-12",
+                "SOC2-CC8.1",
+                "PCI-DSS-6.3.2",
+                "MITRE-T1525",
+                "CIS-5.1",
+            ],
         ),
     }
 }
 
 fn registry_allowed(settings: &Settings, registry_id: &str) -> bool {
     settings.registry_filter.is_empty()
-        || settings.registry_filter.contains(&registry_id.to_ascii_lowercase())
+        || settings
+            .registry_filter
+            .contains(&registry_id.to_ascii_lowercase())
 }
 
 fn auth_headers(settings: &Settings) -> Vec<(String, String)> {
@@ -178,7 +186,11 @@ fn auth_headers(settings: &Settings) -> Vec<(String, String)> {
     }
     if let Some(bt) = &settings.bearer_token {
         let bt = bt.trim();
-        if !bt.is_empty() && !hs.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+        if !bt.is_empty()
+            && !hs
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+        {
             let val = if bt.to_ascii_lowercase().starts_with("bearer ") {
                 bt.to_string()
             } else {
@@ -257,7 +269,10 @@ fn push_if_severe(findings: &mut Vec<Value>, settings: &Settings, finding: Value
 }
 
 fn record_policy(posture: &mut Posture, policy_id: &str) {
-    *posture.policy_hits.entry(policy_id.to_string()).or_insert(0) += 1;
+    *posture
+        .policy_hits
+        .entry(policy_id.to_string())
+        .or_insert(0) += 1;
 }
 
 // ── Target helpers ────────────────────────────────────────────────────────────
@@ -328,16 +343,9 @@ fn detect_registry_platform(probe: &HttpProbe) -> Option<(&'static str, &'static
     None
 }
 
-async fn registry_get(
-    client: &Client,
-    url: &str,
-    settings: &Settings,
-) -> Option<HttpProbe> {
+async fn registry_get(client: &Client, url: &str, settings: &Settings) -> Option<HttpProbe> {
     let auth = auth_headers(settings);
-    let hs: Vec<(&str, &str)> = auth
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
+    let hs: Vec<(&str, &str)> = auth.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     http_get_with_headers(client, url, &hs).await
 }
 
@@ -473,7 +481,11 @@ async fn probe_self_hosted(
     }
 
     let paths: Vec<String> = if settings.intensity == Intensity::Light {
-        SELF_HOSTED_PATHS.iter().take(4).map(|s| s.to_string()).collect()
+        SELF_HOSTED_PATHS
+            .iter()
+            .take(4)
+            .map(|s| s.to_string())
+            .collect()
     } else {
         SELF_HOSTED_PATHS.iter().map(|s| s.to_string()).collect()
     };
@@ -521,16 +533,7 @@ async fn probe_self_hosted(
                     settings.repositories.clone()
                 };
                 for repo in repo_sample {
-                    probe_repo_tags(
-                        client,
-                        base,
-                        host,
-                        &repo,
-                        settings,
-                        posture,
-                        findings,
-                    )
-                    .await;
+                    probe_repo_tags(client, base, host, &repo, settings, posture, findings).await;
                 }
             }
         } else if probe.status == 401 {
@@ -543,7 +546,9 @@ async fn probe_self_hosted(
             if www.to_ascii_lowercase().contains("bearer")
                 || www.to_ascii_lowercase().contains("registry")
             {
-                posture.registries_detected.insert("docker_distribution".to_string());
+                posture
+                    .registries_detected
+                    .insert("docker_distribution".to_string());
                 push_if_severe(
                     findings,
                     settings,
@@ -800,9 +805,7 @@ async fn probe_repo_tags(
                 settings,
                 finding_rich(
                     ENGINE_ID,
-                    &format!(
-                        "Secrets in image config env: {repo}:{tag} (CR-WZ-008)",
-                    ),
+                    &format!("Secrets in image config env: {repo}:{tag} (CR-WZ-008)",),
                     "critical",
                     "T1552.004",
                     &format!(
@@ -942,7 +945,12 @@ async fn probe_ghcr(
         );
 
         if probe.status == 200 && settings.probe_tags {
-            for repo in settings.repositories.iter().take(settings.max_repos).cloned() {
+            for repo in settings
+                .repositories
+                .iter()
+                .take(settings.max_repos)
+                .cloned()
+            {
                 let full = if repo.contains('/') {
                     repo.clone()
                 } else {
@@ -1280,11 +1288,7 @@ fn security_graph(posture: &Posture, host: &str) -> Value {
     json!({ "nodes": nodes, "edges": edges })
 }
 
-fn posture_summary_finding(
-    posture: &Posture,
-    host: &str,
-    settings: &Settings,
-) -> Value {
+fn posture_summary_finding(posture: &Posture, host: &str, settings: &Settings) -> Value {
     let score = posture.compute_score();
     let grade = Posture::grade(score);
     let exposure = 1.0 - (f64::from(score) / 100.0);
@@ -1321,7 +1325,10 @@ fn posture_summary_finding(
             .with("posture_grade", grade)
             .with("dimensions", json!(dims))
             .with("policy_hits", json!(posture.policy_hits))
-            .with("compliance_frameworks", json!(settings.compliance_frameworks))
+            .with(
+                "compliance_frameworks",
+                json!(settings.compliance_frameworks),
+            )
             .with("category", "posture_summary"),
     )
 }
@@ -1378,7 +1385,15 @@ pub async fn run_container_registry_result_ctx(
     let mut posture = Posture::default();
     let mut findings: Vec<Value> = Vec::new();
 
-    probe_self_hosted(&client, &base, &host, &settings, &mut posture, &mut findings).await;
+    probe_self_hosted(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
     probe_cloud_registries(&client, &org, &host, &settings, &mut posture, &mut findings).await;
 
     if settings.attack_synth {
@@ -1411,10 +1426,7 @@ pub async fn run_container_registry_result_ctx(
         empty_ok(ENGINE_ID, target)
     } else {
         let n = findings.len();
-        EngineResult::ok(
-            findings,
-            format!("container_registry: {n} live finding(s)"),
-        )
+        EngineResult::ok(findings, format!("container_registry: {n} live finding(s)"))
     }
 }
 

@@ -1,8 +1,6 @@
 //! Supreme-tier OAuth/OIDC identity synthesis — toxic combos, security graph, agent guidance.
 
-use super::{
-    attack_path_finding, IdentitySignals, T_APP_TOKEN, T_FORGE_OIDC, T_STEAL_TOKEN,
-};
+use super::{attack_path_finding, IdentitySignals, T_APP_TOKEN, T_FORGE_OIDC, T_STEAL_TOKEN};
 use crate::arsenal_config::{finding_rich, Evidence};
 use crate::cloud_hunter::{GraphEdge, GraphNode};
 use serde_json::{json, Value};
@@ -22,13 +20,20 @@ pub struct OidcCategoryScores {
 
 impl OidcCategoryScores {
     fn from_signals(sig: &IdentitySignals) -> Self {
-        let bad = |b: bool, w: f64| -> f64 { if b { 100.0 - w } else { 100.0 } };
-        let count_penalty = |n: usize, w: f64| -> f64 {
-            (100.0 - (n.min(3) as f64) * w).clamp(0.0, 100.0)
+        let bad = |b: bool, w: f64| -> f64 {
+            if b {
+                100.0 - w
+            } else {
+                100.0
+            }
         };
+        let count_penalty =
+            |n: usize, w: f64| -> f64 { (100.0 - (n.min(3) as f64) * w).clamp(0.0, 100.0) };
         Self {
             flow_hygiene: bad(
-                sig.implicit_flow || sig.ropc_grant || sig.ropc_live_accepts
+                sig.implicit_flow
+                    || sig.ropc_grant
+                    || sig.ropc_live_accepts
                     || (sig.device_flow_advertised && sig.device_flow_reachable),
                 35.0,
             ),
@@ -177,7 +182,9 @@ pub fn emit_toxic_headline(target: &str, sig: &IdentitySignals, findings: &mut V
         combos.push("alg:none advertised ⇒ trivial unsigned ID-token forgery");
     }
     if sig.open_redirect_uri && sig.pkce_not_enforced_live && sig.public_clients_allowed {
-        combos.push("open redirect + public client + no PKCE ⇒ authorization-code interception chain");
+        combos.push(
+            "open redirect + public client + no PKCE ⇒ authorization-code interception chain",
+        );
     }
     if sig.ropc_live_accepts {
         combos.push("live ROPC acceptance ⇒ direct bearer token from password spray");
@@ -229,34 +236,89 @@ pub fn emit_remediation_roadmap(target: &str, sig: &IdentitySignals, findings: &
     };
 
     if sig.alg_none || sig.symmetric_alg {
-        push("P0", "Reject alg:none and symmetric ID-token algs", "RS256/ES256 only; rotate JWKS; pin kid", "hours");
+        push(
+            "P0",
+            "Reject alg:none and symmetric ID-token algs",
+            "RS256/ES256 only; rotate JWKS; pin kid",
+            "hours",
+        );
     }
     if sig.open_redirect_uri {
-        push("P0", "Exact redirect_uri allow-list", "Reject partial/wildcard matches; register every callback", "hours");
+        push(
+            "P0",
+            "Exact redirect_uri allow-list",
+            "Reject partial/wildcard matches; register every callback",
+            "hours",
+        );
     }
     if sig.implicit_flow {
-        push("P0", "Disable implicit/hybrid flows", "Authorization code + PKCE only per RFC9700", "days");
+        push(
+            "P0",
+            "Disable implicit/hybrid flows",
+            "Authorization code + PKCE only per RFC9700",
+            "days",
+        );
     }
     if sig.ropc_grant || sig.ropc_live_accepts {
-        push("P0", "Disable resource-owner password grant", "Block password grant at tenant policy", "hours");
+        push(
+            "P0",
+            "Disable resource-owner password grant",
+            "Block password grant at tenant policy",
+            "hours",
+        );
     }
     if sig.pkce_not_advertised || sig.pkce_not_enforced_live {
-        push("P0", "Enforce PKCE S256", "Reject authorize without code_challenge; plain disallowed", "days");
+        push(
+            "P0",
+            "Enforce PKCE S256",
+            "Reject authorize without code_challenge; plain disallowed",
+            "days",
+        );
     }
     if sig.weak_jwks_key || sig.jwks_http {
-        push("P1", "Harden JWKS transport and key size", "HTTPS-only jwks_uri; RSA ≥2048 or P-384", "days");
+        push(
+            "P1",
+            "Harden JWKS transport and key size",
+            "HTTPS-only jwks_uri; RSA ≥2048 or P-384",
+            "days",
+        );
     }
     if sig.dcr_open {
-        push("P1", "Lock dynamic client registration", "Admin approval + mTLS for DCR", "days");
+        push(
+            "P1",
+            "Lock dynamic client registration",
+            "Admin approval + mTLS for DCR",
+            "days",
+        );
     }
     if sig.subdomain_takeover_hits > 0 {
-        push("P0", "Remediate dangling identity subdomains", "Delete CNAME or claim host; audit redirect URIs", "hours");
+        push(
+            "P0",
+            "Remediate dangling identity subdomains",
+            "Delete CNAME or claim host; audit redirect URIs",
+            "hours",
+        );
     }
     if sig.cors_permissive_metadata {
-        push("P1", "Restrict CORS on metadata/JWKS", "No wildcard origins on discovery documents", "hours");
+        push(
+            "P1",
+            "Restrict CORS on metadata/JWKS",
+            "No wildcard origins on discovery documents",
+            "hours",
+        );
     }
-    push("P2", "Enable PAR + DPoP + back-channel logout", "RFC9126 PAR, RFC9449 DPoP, OIDC back-channel logout", "days");
-    push("P2", "Continuous token abuse detection", "Deploy Weissman agent for refresh-token reuse analytics", "days");
+    push(
+        "P2",
+        "Enable PAR + DPoP + back-channel logout",
+        "RFC9126 PAR, RFC9449 DPoP, OIDC back-channel logout",
+        "days",
+    );
+    push(
+        "P2",
+        "Continuous token abuse detection",
+        "Deploy Weissman agent for refresh-token reuse analytics",
+        "days",
+    );
 
     if steps.is_empty() {
         return;
@@ -281,12 +343,30 @@ pub fn emit_remediation_roadmap(target: &str, sig: &IdentitySignals, findings: &
 
 pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     let caps = [
-        ("refresh_token_reuse", "Refresh-token family reuse detection and impossible-travel correlation"),
-        ("auth_code_replay_lab", "Authorized authorization-code replay against token endpoint"),
-        ("client_secret_spray", "Client-credential brute-force against token endpoint (rate-limited lab)"),
-        ("session_cookie_theft", "Post-login session cookie capture on SP (host agent vantage)"),
-        ("entra_ca_simulation", "Conditional Access policy simulation per forged token claim set"),
-        ("federation_token_audit", "Cross-protocol SAML→OIDC token exchange audit on-DC"),
+        (
+            "refresh_token_reuse",
+            "Refresh-token family reuse detection and impossible-travel correlation",
+        ),
+        (
+            "auth_code_replay_lab",
+            "Authorized authorization-code replay against token endpoint",
+        ),
+        (
+            "client_secret_spray",
+            "Client-credential brute-force against token endpoint (rate-limited lab)",
+        ),
+        (
+            "session_cookie_theft",
+            "Post-login session cookie capture on SP (host agent vantage)",
+        ),
+        (
+            "entra_ca_simulation",
+            "Conditional Access policy simulation per forged token claim set",
+        ),
+        (
+            "federation_token_audit",
+            "Cross-protocol SAML→OIDC token exchange audit on-DC",
+        ),
     ];
     for (cap, desc) in caps {
         let mut f = finding_rich(

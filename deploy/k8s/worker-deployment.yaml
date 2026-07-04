@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: weissman-worker
+  namespace: weissman
 spec:
   replicas: 1
   selector:
@@ -17,6 +18,13 @@ spec:
           image: your-registry/weissman-backend:latest
           imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/weissman-worker"]
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
           envFrom:
             - configMapRef:
                 name: weissman-config
@@ -41,7 +49,11 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: redis_url
-                  optional: true
+            - name: WEISSMAN_JOB_ORCHESTRATOR_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: job_orchestrator_secret
           livenessProbe:
             exec:
               command:

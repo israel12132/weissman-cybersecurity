@@ -290,7 +290,15 @@ async fn api_integrations_list(
 
     let mut integrations: Vec<Value> = raw
         .and_then(|s| serde_json::from_str::<Vec<Value>>(&s).ok())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        .map(|mut item| {
+            if let Some(config) = item.get("config") {
+                item["config"] = crate::soar::integrations_vault::redact_config(config);
+            }
+            item
+        })
+        .collect();
 
     if integrations.is_empty() {
         if let Some(url) = webhook.filter(|u| !u.trim().is_empty()) {
@@ -305,7 +313,16 @@ async fn api_integrations_list(
         }
     }
 
-    (StatusCode::OK, Json(json!({ "ok": true, "integrations": integrations }))).into_response()
+    (StatusCode::OK, Json(json!({
+        "ok": true,
+        "integrations": integrations,
+        "soar_adapters": crate::soar::adapters::REGISTERED_ADAPTER_IDS,
+        "adapter_count": crate::soar::adapters::registered_adapter_count(),
+        "vault_enabled": std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+            || std::env::var("WEISSMAN_VAULT_KEY").map(|s| !s.trim().is_empty()).unwrap_or(false),
+    }))).into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -367,8 +384,9 @@ async fn api_integrations_post(
         "id": body.id,
         "name": body.name,
         "category": body.category,
+        "type": body.id,
         "status": "configured",
-        "config": body.config,
+        "config": crate::soar::integrations_vault::encrypt_config(&body.config),
         "last_test": null,
     });
     list.retain(|i| i.get("id").and_then(Value::as_str) != Some(body.id.as_str()));
@@ -421,52 +439,26 @@ async fn api_integrations_test(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
+    body: Option<Json<Value>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let dry_run = body
+        .as_ref()
+        .and_then(|b| b.get("dry_run"))
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
     let list_resp = api_integrations_list(
         State(state.clone()),
-        Extension(auth),
+        Extension(auth.clone()),
     )
     .await;
     if let Ok(bytes) = axum::body::to_bytes(list_resp.into_body(), 1_048_576).await {
         if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
-            let integrations = v.get("integrations").and_then(Value::as_array);
-            if let Some(list) = integrations {
+            if let Some(list) = v.get("integrations").and_then(Value::as_array) {
                 if let Some(item) = list.iter().find(|i| i.get("id").and_then(Value::as_str) == Some(id.as_str())) {
-                    if id == "alert_webhook" || item.get("category").and_then(Value::as_str) == Some("Communication") {
-                        if let Some(url) = item
-                            .get("config")
-                            .and_then(|c| c.get("url"))
-                            .and_then(Value::as_str)
-                            .or_else(|| {
-                                item.get("config")
-                                    .and_then(|c| c.get("webhook_url"))
-                                    .and_then(Value::as_str)
-                            })
-                        {
-                            let client = reqwest::Client::builder()
-                                .timeout(Duration::from_secs(8))
-                                .build()
-                                .unwrap_or_default();
-                            let probe = json!({"event": "integration_test", "integration_id": id});
-                            let ok = client
-                                .post(url)
-                                .json(&probe)
-                                .send()
-                                .await
-                                .map(|r| r.status().is_success())
-                                .unwrap_or(false);
-                            return (
-                                StatusCode::OK,
-                                Json(json!({"ok": true, "success": ok, "status": if ok { "connected" } else { "error" }})),
-                            )
-                                .into_response();
-                        }
-                    }
-                    return (
-                        StatusCode::OK,
-                        Json(json!({"ok": true, "success": true, "status": "configured"})),
-                    )
-                        .into_response();
+                    return integration_live_test(&state.app_pool, auth.tenant_id, id.as_str(), item, dry_run).await;
                 }
             }
         }
@@ -476,6 +468,113 @@ async fn api_integrations_test(
         Json(json!({"ok": false, "success": false, "detail": "Integration not found"})),
     )
         .into_response()
+}
+
+async fn integration_live_test(
+    pool: &PgPool,
+    tenant_id: i64,
+    id: &str,
+    item: &Value,
+    dry_run: bool,
+) -> Response {
+    let provider = item
+        .get("type")
+        .or_else(|| item.get("id"))
+        .and_then(Value::as_str)
+        .unwrap_or(id)
+        .to_ascii_lowercase();
+    let config_raw = item.get("config").cloned().unwrap_or(json!({}));
+    let integrations = crate::soar::integrations::load_integrations(pool, tenant_id).await;
+    let record = integrations
+        .into_iter()
+        .find(|i| i.id == id || i.provider_type == provider)
+        .unwrap_or_else(|| crate::soar::integrations::IntegrationRecord {
+            id: id.to_string(),
+            provider_type: provider.clone(),
+            config: crate::soar::integrations_vault::decrypt_config(&config_raw),
+        });
+
+    let evidence = crate::soar::types::ThreatEvidence {
+        finding_id: None,
+        title: "Integration connectivity test".into(),
+        severity: "info".into(),
+        source: "integration_test".into(),
+        target: "weissman-test".into(),
+        cve: None,
+        signature_hash: None,
+        cvss: None,
+        epss: None,
+        kev: false,
+        internet_exposed: false,
+        trigger_kind: "integration_test".into(),
+    };
+    let cmd = crate::soar::engine::build_command(
+        match provider.as_str() {
+            "slack" => "slack_notify",
+            "servicenow" => "create_incident",
+            "github" => "open_pr",
+            "aws_ec2" | "aws" => "isolate_host",
+            "azure_vm" | "azure" => "isolate_host",
+            "crowdstrike_falcon" | "crowdstrike" => "isolate_host",
+            "opsgenie" | "pagerduty" => "page_oncall",
+            _ => "page_oncall",
+        },
+        tenant_id,
+        None,
+        None,
+        "weissman-integration-test".into(),
+        json!({ "template": "Weissman integration test for {{title}}" }),
+        evidence,
+        dry_run,
+    );
+
+    if provider == "alert_webhook" || item.get("category").and_then(Value::as_str) == Some("Communication") {
+        if let Some(url) = record.config.get("url").and_then(Value::as_str) {
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(8))
+                .build()
+                .unwrap_or_default();
+            let probe = json!({"event": "integration_test", "integration_id": id});
+            let ok = client
+                .post(url)
+                .json(&probe)
+                .send()
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+            return (
+                StatusCode::OK,
+                Json(json!({"ok": true, "success": ok, "status": if ok { "connected" } else { "error" }, "provider": provider})),
+            )
+                .into_response();
+        }
+    }
+
+    match crate::soar::adapters::dispatch(&cmd, pool, &record).await {
+        Ok(outcome) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "success": true,
+                "status": "connected",
+                "provider": provider,
+                "detail": outcome.detail,
+                "dry_run": dry_run,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "success": false,
+                "status": "error",
+                "provider": provider,
+                "detail": e.to_string(),
+            })),
+        )
+            .into_response(),
+    }
 }
 
 fn ot_ics_infer_device_type(protocol: &str, vendor: &str) -> &'static str {
@@ -1545,6 +1644,31 @@ async fn api_soc_social_engineering_campaigns_post(
             .into_response();
     }
 
+    let scan_target: String = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(client_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .flatten()
+    .and_then(|d| {
+        serde_json::from_str::<Vec<String>>(&d)
+            .ok()
+            .and_then(|arr| arr.first().cloned())
+    })
+    .map(|d| {
+        let t = d.trim();
+        if t.starts_with("http://") || t.starts_with("https://") {
+            t.to_string()
+        } else {
+            format!("https://{}", t.trim_start_matches('/'))
+        }
+    })
+    .unwrap_or_else(|| name.to_string());
+
     let template = body.template.unwrap_or_else(|| "Password Reset".into());
     let campaign_type = body
         .campaign_type
@@ -1560,58 +1684,62 @@ async fn api_soc_social_engineering_campaigns_post(
         )
     };
 
-    let run_id: i64 = match sqlx::query_scalar(
-        "INSERT INTO report_runs (tenant_id, summary, findings_json) VALUES ($1, $2, '[]') RETURNING id",
+    let _ = tx.commit().await;
+
+    let campaign_finding = json!({
+        "title": name,
+        "severity": "medium",
+        "description": full_description,
+        "type": "social_engineering_phishing",
+        "evidence": {
+            "proof": format!(
+                "Phishing simulation campaign | template={} | type={} | campaign={}",
+                template, campaign_type, name
+            ),
+            "engine_id": "social_engineering_phishing",
+        }
+    });
+    let persist_result = crate::findings_persist::persist_engine_findings(
+        &state.app_pool,
+        auth.tenant_id,
+        Some(client_id),
+        "social_engineering_phishing",
+        &scan_target,
+        std::slice::from_ref(&campaign_finding),
     )
-    .bind(auth.tenant_id)
-    .bind(json!({"kind": "social_engineering_campaign", "template": template}).to_string())
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(id) => id,
+    .await;
+    let row_id: i64 = match persist_result {
+        Ok(n) if n > 0 => {
+            let fid = crate::findings_persist::build_finding_id(
+                "social_engineering_phishing",
+                &scan_target,
+                &campaign_finding,
+            );
+            sqlx::query_scalar(
+                "SELECT id FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2 AND finding_id = $3",
+            )
+            .bind(auth.tenant_id)
+            .bind(client_id)
+            .bind(&fid)
+            .fetch_optional(state.app_pool.as_ref())
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or(0)
+        }
+        Ok(_) => 0,
         Err(e) => {
-            let _ = tx.rollback().await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("report run insert failed: {}", e)})),
+                Json(json!({"ok": false, "detail": format!("campaign persist failed: {}", e)})),
             )
                 .into_response();
         }
     };
-
-    let finding_id = format!("soc-camp-{}", uuid::Uuid::new_v4());
-    let source = "social_engineering_phishing";
-    let row_id: i64 = match sqlx::query_scalar(
-        r#"INSERT INTO vulnerabilities
-             (run_id, tenant_id, client_id, finding_id, title, severity, source, description, status, discovered_at)
-           VALUES ($1, $2, $3, $4, $5, 'medium', $6, $7, 'OPEN', now())
-           RETURNING id"#,
-    )
-    .bind(run_id)
-    .bind(auth.tenant_id)
-    .bind(client_id)
-    .bind(&finding_id)
-    .bind(name)
-    .bind(source)
-    .bind(&full_description)
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            let _ = tx.rollback().await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("campaign insert failed: {}", e)})),
-            )
-                .into_response();
-        }
-    };
-
-    if tx.commit().await.is_err() {
+    if row_id == 0 {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": "commit failed"})),
+            Json(json!({"ok": false, "detail": "campaign finding not persisted (evidence gate)"})),
         )
             .into_response();
     }
@@ -3604,4 +3732,235 @@ async fn api_ceo_vault_secrets_copy(
 ) -> Response {
     api_ceo_vault_secrets_audit(state, auth, addr, headers, Path(id), "ceo_vault_secret_copy")
         .await
+}
+
+/// GET /api/security/posture-score — platform self-security posture (not tenant client score).
+async fn api_security_posture_score(
+    State(state): State<Arc<AppState>>,
+    Extension(_auth): Extension<AuthContext>,
+) -> Response {
+    let posture = crate::security_posture::compute_platform_posture(state.app_pool.as_ref()).await;
+    (
+        StatusCode::OK,
+        Json(crate::security_posture::posture_to_json(&posture)),
+    )
+        .into_response()
+}
+
+/// GET /api/engines/:engine_id/contract — engine contract metadata for UI drawers / SOAR.
+async fn api_engine_contract(Path(engine_id): Path<String>) -> Response {
+    if !weissman_core::models::engine::is_production_engine_id(&engine_id) {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "unknown engine" }))).into_response();
+    }
+    let meta = crate::engine_contract::contract_meta_for_engine(&engine_id);
+    (StatusCode::OK, Json(serde_json::to_value(meta).unwrap_or(json!({})))).into_response()
+}
+
+/// GET /api/compliance/control-mappings — live framework control → evidence mappings.
+async fn api_compliance_control_mappings(
+    State(state): State<Arc<AppState>>,
+    Extension(_auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let framework = q.get("framework").map(|s| s.trim().to_string());
+    match crate::compliance_engine::load_control_mappings(
+        state.app_pool.as_ref(),
+        framework.as_deref(),
+    )
+    .await
+    {
+        Ok(rows) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "mappings": rows,
+                "total": rows.len(),
+                "source": "compliance_control_mappings",
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "error": format!("db: {e}") })),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/compliance/evidence-pack/:client_id — live findings → auditor evidence pack.
+async fn api_compliance_evidence_pack(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let tid = auth.tenant_id;
+    let framework_filter = q.get("framework").map(|s| s.trim().to_string());
+    let rows: Vec<(String, String, String, Value)> = match sqlx::query_as(
+        r#"SELECT COALESCE(title,''), COALESCE(severity,'info'), COALESCE(source,''),
+                  COALESCE(raw_data, '{}'::jsonb)
+           FROM vulnerabilities
+           WHERE tenant_id = $1 AND client_id = $2 AND status NOT IN ('FALSE_POSITIVE','FIXED')
+           ORDER BY discovered_at DESC
+           LIMIT 500"#,
+    )
+    .bind(tid)
+    .bind(client_id)
+    .fetch_all(state.app_pool.as_ref())
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("db: {e}") })),
+            )
+                .into_response();
+        }
+    };
+
+    let mut by_framework: std::collections::BTreeMap<String, Vec<Value>> =
+        std::collections::BTreeMap::new();
+    for (title, severity, source, raw) in &rows {
+        let frameworks = raw
+            .get("compliance")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let entry = json!({
+            "title": title,
+            "severity": severity,
+            "source": source,
+            "mitre": raw.get("mitre_attack"),
+            "remediation": raw.get("remediation"),
+            "evidence": raw.get("evidence"),
+        });
+        if frameworks.is_empty() {
+            by_framework
+                .entry("UNMAPPED".to_string())
+                .or_default()
+                .push(entry);
+        } else {
+            for fw in frameworks {
+                let key = fw.as_str().unwrap_or("OTHER").to_string();
+                by_framework.entry(key).or_default().push(entry.clone());
+            }
+        }
+    }
+
+    let control_mappings = match crate::compliance_engine::load_control_mappings(
+        state.app_pool.as_ref(),
+        framework_filter.as_deref(),
+    )
+    .await
+    {
+        Ok(m) => m,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("control mappings: {e}") })),
+            )
+                .into_response();
+        }
+    };
+
+    let audit_chain_intact = match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Ok(mut tx) => {
+            let ok = crate::audit_log::export_for_tenant(&mut tx, tid, 1000, 0)
+                .await
+                .map(|(_, _, intact)| intact)
+                .unwrap_or(false);
+            let _ = tx.commit().await;
+            ok
+        }
+        Err(_) => false,
+    };
+
+    let soar_executions: Vec<Value> = match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Ok(mut tx) => {
+            let rows = sqlx::query(
+                r#"SELECT id::text, action_kind, status, COALESCE(target_id,'') AS target_id,
+                          COALESCE(result_detail,'') AS detail, updated_at
+                   FROM soar_action_executions
+                   WHERE tenant_id = $1
+                   ORDER BY updated_at DESC
+                   LIMIT 50"#,
+            )
+            .bind(tid)
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap_or_default();
+            let _ = tx.commit().await;
+            rows.into_iter()
+                .map(|r| {
+                    json!({
+                        "id": r.try_get::<String, _>("id").unwrap_or_default(),
+                        "action_kind": r.try_get::<String, _>("action_kind").unwrap_or_default(),
+                        "status": r.try_get::<String, _>("status").unwrap_or_default(),
+                        "target_id": r.try_get::<String, _>("target_id").unwrap_or_default(),
+                        "detail": r.try_get::<String, _>("detail").unwrap_or_default(),
+                        "updated_at": r.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at")
+                            .map(|d| d.to_rfc3339())
+                            .unwrap_or_default(),
+                    })
+                })
+                .collect()
+        }
+        Err(_) => Vec::new(),
+    };
+
+    let pack = json!({
+        "packet_type": "weissman-compliance-evidence-pack-v2",
+        "client_id": client_id,
+        "tenant_id": tid,
+        "framework_filter": framework_filter,
+        "findings_total": rows.len(),
+        "frameworks": by_framework,
+        "control_mappings": control_mappings,
+        "soar_executions": soar_executions,
+        "live_evidence": {
+            "audit_log_chain_intact": audit_chain_intact,
+            "distributed_redis_required": crate::security_startup::production_distributed_state_required(),
+            "zero_trust_job_bus": crate::http::rate_limit_redis::is_enabled()
+                && std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET")
+                    .map(|s| s.trim().len() >= 32)
+                    .unwrap_or(false),
+        },
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+        "audit_ready": !rows.is_empty()
+            && rows.iter().all(|(_, sev, _, _)| sev != "critical")
+            && audit_chain_intact,
+    });
+
+    let pack_canonical = serde_json::to_string(&pack).unwrap_or_default();
+    let pack_sha256 = crate::audit_log::digest_hex(&pack_canonical);
+    let snapshot_id: Option<i64> = match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Ok(mut tx) => {
+            let sid = sqlx::query_scalar::<_, i64>(
+                r#"INSERT INTO compliance_evidence_pack_snapshots
+                   (tenant_id, client_id, framework_filter, pack_json, pack_sha256)
+                   VALUES ($1, $2, $3, $4, $5)
+                   RETURNING id"#,
+            )
+            .bind(tid)
+            .bind(client_id)
+            .bind(framework_filter.as_deref())
+            .bind(&pack)
+            .bind(&pack_sha256)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten();
+            let _ = tx.commit().await;
+            sid
+        }
+        Err(_) => None,
+    };
+
+    let mut response = pack.as_object().cloned().unwrap_or_default();
+    response.insert("pack_sha256".into(), json!(pack_sha256));
+    if let Some(sid) = snapshot_id {
+        response.insert("snapshot_id".into(), json!(sid));
+    }
+    (StatusCode::OK, Json(Value::Object(response))).into_response()
 }

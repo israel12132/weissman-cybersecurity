@@ -89,3 +89,49 @@ groups:
         annotations:
           summary: "Prometheus config reload failed"
           description: "Prometheus failed to reload its configuration"
+
+  - name: soar_alerts
+    interval: 30s
+    rules:
+      - alert: SoarVerifyNoLeader
+        expr: weissman_soar_verify_leader == 0
+        for: 10m
+        labels:
+          severity: warning
+          category: soar
+        annotations:
+          summary: "SOAR verification worker has no leader"
+          description: "No pod holds SOAR verify leader lock for 10m — closed-loop verification may be stalled"
+
+      - alert: SoarVerifyCycleErrors
+        expr: sum(rate(weissman_soar_verify_cycles_total{outcome="error"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: soar
+        annotations:
+          summary: "SOAR verify cycle errors"
+          description: "SOAR verification cycles are failing — check worker logs and Redis connectivity"
+
+  - name: agent_alerts
+    interval: 30s
+    rules:
+      - alert: AgentFleetStale
+        expr: weissman_agents_registered > 0 and weissman_agents_online == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: agents
+        annotations:
+          summary: "All endpoint agents offline"
+          description: "{{ $value }} agents registered but none online in the last 90s"
+
+      - alert: AgentFleetHighStaleRatio
+        expr: weissman_agents_registered > 2 and (weissman_agents_stale / weissman_agents_registered) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          category: agents
+        annotations:
+          summary: "High stale agent ratio"
+          description: "More than 50% of registered agents are stale (>90s since last_seen)"

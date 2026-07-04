@@ -114,7 +114,16 @@ const DEFAULT_UPLOAD_PATHS: &[&str] = &[
 ];
 
 const DEFAULT_FIELD_NAMES: &[&str] = &[
-    "file", "upload", "document", "attachment", "image", "media", "photo", "avatar", "data", "blob",
+    "file",
+    "upload",
+    "document",
+    "attachment",
+    "image",
+    "media",
+    "photo",
+    "avatar",
+    "data",
+    "blob",
 ];
 
 const OPENAPI_HINTS: &[&str] = &[
@@ -489,7 +498,8 @@ async fn post_graphql_upload(
     timeout_ms: u64,
 ) -> Option<HttpProbe> {
     let boundary = "----WZGraphQLUpload";
-    let operations = r#"{"query":"mutation($file: Upload!){ __typename }","variables":{"file":null}}"#;
+    let operations =
+        r#"{"query":"mutation($file: Upload!){ __typename }","variables":{"file":null}}"#;
     let map = r#"{"0":["variables.file"]}"#;
     let body = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n{operations}\r\n\
@@ -667,12 +677,7 @@ async fn post_multipart_hpp(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\nContent-Type: text/plain\r\n\r\n{content}\r\n"
         )
     };
-    let body = format!(
-        "{}{}{}--{boundary}--\r\n",
-        part(field_a),
-        part(field_b),
-        ""
-    );
+    let body = format!("{}{}{}--{boundary}--\r\n", part(field_a), part(field_b), "");
     let mut req = client
         .post(url)
         .header(
@@ -704,7 +709,10 @@ async fn put_content_range(
     let mut req = client
         .put(&target)
         .header("Content-Type", "text/plain")
-        .header("Content-Range", format!("bytes 0-{}/{len}", len.saturating_sub(1)))
+        .header(
+            "Content-Range",
+            format!("bytes 0-{}/{len}", len.saturating_sub(1)),
+        )
         .body(content.to_string())
         .timeout(Duration::from_millis(timeout_ms));
     for (k, v) in extra_headers {
@@ -718,7 +726,13 @@ fn extract_numeric_ids(body: &str) -> Vec<u64> {
     if let Ok(v) = serde_json::from_str::<Value>(body) {
         collect_json_ids(&v, &mut ids);
     }
-    for key in ["\"id\":", "\"fileId\":", "\"file_id\":", "\"assetId\":", "\"mediaId\":"] {
+    for key in [
+        "\"id\":",
+        "\"fileId\":",
+        "\"file_id\":",
+        "\"assetId\":",
+        "\"mediaId\":",
+    ] {
         let mut from = 0;
         while let Some(idx) = body[from..].find(key) {
             let rest = &body[from + idx + key.len()..];
@@ -782,7 +796,9 @@ fn extract_presigned_urls(body: &str) -> Vec<String> {
         if !body.contains(marker) {
             continue;
         }
-        for tok in body.split(|c: char| !c.is_ascii_graphic() && c != '/' && c != ':' && c != '?' && c != '&' && c != '=') {
+        for tok in body.split(|c: char| {
+            !c.is_ascii_graphic() && c != '/' && c != ':' && c != '?' && c != '&' && c != '='
+        }) {
             if tok.starts_with("http")
                 && (tok.contains("amazonaws")
                     || tok.contains("blob.core")
@@ -871,7 +887,10 @@ async fn probe_upload_idor(
                                 return Some(make_finding(
                                     "Upload IDOR — adjacent object URL serves canary",
                                     "critical",
-                                    &format!("URL pattern from upload response suggests IDOR at {}.", alt),
+                                    &format!(
+                                        "URL pattern from upload response suggests IDOR at {}.",
+                                        alt
+                                    ),
                                     target,
                                     "upload_idor",
                                     0.94,
@@ -936,19 +955,34 @@ fn compute_blast_radius(exposures: &[UploadExposure], endpoints: usize) -> u32 {
     if exposures.iter().any(|e| e.retrieved && e.execution_hint) {
         score += 40;
     }
-    if exposures.iter().any(|e| e.category == "config_upload" && e.retrieved) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "config_upload" && e.retrieved)
+    {
         score += 35;
     }
-    if exposures.iter().any(|e| e.category == "upload_idor" && e.retrieved) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "upload_idor" && e.retrieved)
+    {
         score += 30;
     }
-    if exposures.iter().any(|e| e.category == "unauth_retrieval" && e.retrieved) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "unauth_retrieval" && e.retrieved)
+    {
         score += 28;
     }
-    if exposures.iter().any(|e| e.category == "svg_xss" && e.retrieved) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "svg_xss" && e.retrieved)
+    {
         score += 25;
     }
-    if exposures.iter().any(|e| e.nosniff_missing && e.inline_served) {
+    if exposures
+        .iter()
+        .any(|e| e.nosniff_missing && e.inline_served)
+    {
         score += 15;
     }
     if exposures.iter().any(|e| e.category == "cdn_cache_exposure") {
@@ -960,10 +994,16 @@ fn compute_blast_radius(exposures: &[UploadExposure], endpoints: usize) -> u32 {
     if exposures.iter().filter(|e| e.accepted).count() > 8 {
         score += 10;
     }
-    if exposures.iter().any(|e| e.category == "eicar_surface" && e.accepted) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "eicar_surface" && e.accepted)
+    {
         score += 18;
     }
-    if exposures.iter().any(|e| e.category == "batch_upload" && e.accepted) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "batch_upload" && e.accepted)
+    {
         score += 8;
     }
     score.min(100)
@@ -993,19 +1033,19 @@ fn minimal_docx_bytes(canary: &str) -> Vec<u8> {
 
 fn minimal_png() -> Vec<u8> {
     vec![
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ]
 }
 
 fn minimal_webp() -> Vec<u8> {
     vec![
-        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
-        0x18, 0x00, 0x00, 0x00, 0x30, 0x01, 0x00, 0x9D, 0x01, 0x2A, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00,
-        0x34, 0x25, 0xA4, 0x00, 0x03, 0x70, 0x00, 0xFE, 0xFB, 0xFD, 0x50, 0x00,
+        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38,
+        0x20, 0x18, 0x00, 0x00, 0x00, 0x30, 0x01, 0x00, 0x9D, 0x01, 0x2A, 0x01, 0x00, 0x01, 0x00,
+        0x02, 0x00, 0x34, 0x25, 0xA4, 0x00, 0x03, 0x70, 0x00, 0xFE, 0xFB, 0xFD, 0x50, 0x00,
     ]
 }
 
@@ -1086,7 +1126,8 @@ async fn post_multipart_filename_mismatch(
     let mut body = Vec::new();
     body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(
-        format!("Content-Disposition: form-data; name=\"filename\"\r\n\r\n{declared_name}\r\n").as_bytes(),
+        format!("Content-Disposition: form-data; name=\"filename\"\r\n\r\n{declared_name}\r\n")
+            .as_bytes(),
     );
     body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(
@@ -1659,7 +1700,9 @@ async fn probe_unauth_retrieval(
 }
 
 fn probe_cdn_cache_headers(headers: &[(String, String)]) -> Option<String> {
-    let cc = header_value(headers, "cache-control").unwrap_or_default().to_ascii_lowercase();
+    let cc = header_value(headers, "cache-control")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if cc.contains("public") && (cc.contains("max-age") || cc.contains("s-maxage")) {
         if !cc.contains("private") && !cc.contains("no-store") {
             return Some(cc);
@@ -1695,11 +1738,19 @@ async fn discover_robots_upload_paths(client: &Client, base: &str) -> Vec<String
 fn synthesize_toxic_combinations(exposures: &[UploadExposure]) -> Vec<Value> {
     let mut toxic = Vec::new();
     let has_exec = exposures.iter().any(|e| e.retrieved && e.execution_hint);
-    let has_config = exposures.iter().any(|e| e.category == "config_upload" && e.retrieved);
-    let has_idor = exposures.iter().any(|e| e.category == "upload_idor" && e.retrieved);
+    let has_config = exposures
+        .iter()
+        .any(|e| e.category == "config_upload" && e.retrieved);
+    let has_idor = exposures
+        .iter()
+        .any(|e| e.category == "upload_idor" && e.retrieved);
     let has_unauth = exposures.iter().any(|e| e.category == "unauth_retrieval");
-    let has_svg = exposures.iter().any(|e| e.category == "svg_xss" && e.retrieved);
-    let has_nosniff = exposures.iter().any(|e| e.nosniff_missing && e.inline_served && e.retrieved);
+    let has_svg = exposures
+        .iter()
+        .any(|e| e.category == "svg_xss" && e.retrieved);
+    let has_nosniff = exposures
+        .iter()
+        .any(|e| e.nosniff_missing && e.inline_served && e.retrieved);
 
     if has_exec && has_config {
         toxic.push(json!({
@@ -1729,8 +1780,12 @@ fn synthesize_toxic_combinations(exposures: &[UploadExposure]) -> Vec<Value> {
             "rationale": "Extension bypass succeeds and object IDs are enumerable — weaponized payload can spread across tenants.",
         }));
     }
-    let has_eicar = exposures.iter().any(|e| e.category == "eicar_surface" && e.accepted);
-    let has_batch = exposures.iter().any(|e| e.category == "batch_upload" && e.accepted);
+    let has_eicar = exposures
+        .iter()
+        .any(|e| e.category == "eicar_surface" && e.accepted);
+    let has_batch = exposures
+        .iter()
+        .any(|e| e.category == "batch_upload" && e.accepted);
     if has_eicar && has_exec {
         toxic.push(json!({
             "name": "AV pipeline bypass + executable retrieval",
@@ -1871,7 +1926,10 @@ async fn discover_sitemap_upload_paths(client: &Client, base: &str) -> Vec<Strin
             continue;
         }
         let mut out = Vec::new();
-        for tok in p.body.split(|c: char| c == '"' || c == '\'' || c.is_whitespace()) {
+        for tok in p
+            .body
+            .split(|c: char| c == '"' || c == '\'' || c.is_whitespace())
+        {
             if tok.contains("/upload") || tok.contains("/files/") || tok.contains("/media/") {
                 if tok.starts_with("http") {
                     out.push(tok.to_string());
@@ -2058,9 +2116,7 @@ async fn probe_delete_without_auth(
     target: &str,
     ep: &Endpoint,
 ) -> Option<Value> {
-    let req = client
-        .delete(url)
-        .timeout(Duration::from_millis(8000));
+    let req = client.delete(url).timeout(Duration::from_millis(8000));
     let resp = send_probe(req).await?;
     if matches!(resp.status, 200 | 204) {
         let exposure = UploadExposure {
@@ -2259,7 +2315,9 @@ fn parse_openapi_upload_endpoints(spec: &Value, base: &str) -> Vec<Endpoint> {
 
 fn fingerprint_stack(page_headers: &[(String, String)], body: &str) -> StackHint {
     let mut s = StackHint::default();
-    let server = header_value(page_headers, "server").unwrap_or_default().to_ascii_lowercase();
+    let server = header_value(page_headers, "server")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     let powered = header_value(page_headers, "x-powered-by")
         .unwrap_or_default()
         .to_ascii_lowercase();
@@ -2301,10 +2359,7 @@ fn fingerprint_stack(page_headers: &[(String, String)], body: &str) -> StackHint
 fn stack_paths(stack: &StackHint) -> Vec<&'static str> {
     let mut paths = Vec::new();
     if stack.wordpress {
-        paths.extend([
-            "/wp-admin/async-upload.php",
-            "/wp-json/wp/v2/media",
-        ]);
+        paths.extend(["/wp-admin/async-upload.php", "/wp-json/wp/v2/media"]);
     }
     if stack.php {
         paths.extend(["/index.php/upload", "/upload.php"]);
@@ -2355,7 +2410,15 @@ fn collect_json_urls(v: &Value, base: &str, out: &mut HashSet<String>) {
             for (k, val) in map {
                 if matches!(
                     k.as_str(),
-                    "url" | "path" | "location" | "fileUrl" | "downloadUrl" | "src" | "href" | "key" | "uri"
+                    "url"
+                        | "path"
+                        | "location"
+                        | "fileUrl"
+                        | "downloadUrl"
+                        | "src"
+                        | "href"
+                        | "key"
+                        | "uri"
                 ) {
                     if let Some(s) = val.as_str() {
                         if s.starts_with("http") || s.starts_with('/') {
@@ -2402,7 +2465,9 @@ fn storage_path_oracle(base: &str, filename: &str) -> Vec<String> {
 fn minimal_zip(name: &str, content: &str) -> Vec<u8> {
     let name_bytes = name.as_bytes();
     let content_bytes = content.as_bytes();
-    let crc: u32 = content_bytes.iter().fold(0u32, |a, &b| a.wrapping_add(u32::from(b)));
+    let crc: u32 = content_bytes
+        .iter()
+        .fold(0u32, |a, &b| a.wrapping_add(u32::from(b)));
     let mut out = Vec::new();
     // Local file header
     out.extend_from_slice(b"PK\x03\x04");
@@ -2453,52 +2518,421 @@ fn minimal_zip(name: &str, content: &str) -> Vec<u8> {
 
 fn bypass_matrix(canary: &str, stack: &StackHint, pack: &str, max_tier: u8) -> Vec<BypassCombo> {
     let gif = benign_gif_str().to_string();
-    let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>/*{canary}*/</script></svg>"
-    );
+    let svg =
+        format!("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>/*{canary}*/</script></svg>");
     let htaccess = format!("# Weissman benign marker\n# {canary}\n");
     let webconfig = format!("<!-- {canary} -->\n<configuration></configuration>");
     let pdf = format!("%PDF-1.4\n% {canary}\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF");
     let html_poly = format!("<!-- {canary} -->\n<html><body>WZ</body></html>");
 
     let mut combos = vec![
-        combo("test.jpg", "image/jpeg", &gif, "gif-as-jpeg", "mime_spoof", "high", "medium", 1, DispositionMode::Standard),
-        combo("x.php.jpg", "image/jpeg", &gif, "double-extension-php", "double_extension", "critical", "high", 1, DispositionMode::Standard),
-        combo("x.asp.jpg", "image/jpeg", &gif, "double-extension-asp", "double_extension", "critical", "high", 2, DispositionMode::Standard),
-        combo("x.phtml", "image/jpeg", &gif, "phtml-mime-spoof", "mime_spoof", "critical", "high", 2, DispositionMode::Standard),
-        combo("x.html", "image/gif", &gif, "html-mime-spoof", "mime_spoof", "high", "medium", 1, DispositionMode::Standard),
-        combo("x.svg", "image/svg+xml", &svg, "svg-stored-xss-surface", "svg_xss", "critical", "high", 1, DispositionMode::Standard),
-        combo("../../wztest.txt", "text/plain", canary, "path-traversal", "path_traversal", "high", "medium", 1, DispositionMode::Standard),
-        combo("....//....//wztest.txt", "text/plain", canary, "path-traversal-encoded", "path_traversal", "high", "medium", 2, DispositionMode::Standard),
-        combo("x.PhP", "application/octet-stream", &gif, "case-extension", "case_bypass", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.php%00.jpg", "image/jpeg", &gif, "null-byte-legacy", "null_byte", "critical", "high", 3, DispositionMode::Standard),
-        combo("test.php.", "image/jpeg", &gif, "trailing-dot-windows", "trailing_dot", "critical", "high", 3, DispositionMode::Standard),
-        combo("test.php ", "image/jpeg", &gif, "trailing-space-windows", "trailing_dot", "critical", "high", 3, DispositionMode::Standard),
-        combo(".htaccess", "text/plain", &htaccess, "htaccess-config", "config_upload", "critical", "high", 2, DispositionMode::Standard),
-        combo("web.config", "text/xml", &webconfig, "webconfig-upload", "config_upload", "critical", "high", 2, DispositionMode::Standard),
-        combo(".env", "text/plain", canary, "dotenv-upload", "config_upload", "critical", "high", 2, DispositionMode::Standard),
-        combo("polyglot.gif", "image/gif", &gif, "polyglot-gif", "polyglot", "high", "medium", 2, DispositionMode::Standard),
-        combo("doc.pdf", "application/pdf", &pdf, "pdf-polyglot", "polyglot", "high", "medium", 2, DispositionMode::Standard),
-        combo("page.html", "text/html", &html_poly, "html-upload", "polyglot", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.php", "image/jpeg", &gif, "rfc5987-filename-star", "disposition_bypass", "high", "medium", 2, DispositionMode::Rfc5987Utf8),
-        combo("x.php.jpg", "", &gif, "empty-content-type", "disposition_bypass", "high", "medium", 2, DispositionMode::EmptyMime),
-        combo("x.php.jpg", "application/octet-stream", &gif, "octet-stream-mime", "mime_spoof", "high", "medium", 2, DispositionMode::OctetStream),
-        combo(".user.ini", "text/plain", &format!("; {canary}\nauto_prepend_file=\n"), "user-ini-php-fpm", "config_upload", "critical", "high", 2, DispositionMode::Standard),
-        combo("crossdomain.xml", "text/xml", &format!("<cross-domain-policy><!-- {canary} --></cross-domain-policy>"), "crossdomain-policy", "config_upload", "high", "medium", 2, DispositionMode::Standard),
-        combo("shell.p\u{0430}hp", "image/jpeg", &gif, "unicode-homoglyph-cyrillic", "unicode_homoglyph", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.%70hp", "image/jpeg", &gif, "url-encoded-extension-p", "url_encoded_ext", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.p%68p", "image/jpeg", &gif, "url-encoded-extension-h", "url_encoded_ext", "critical", "high", 2, DispositionMode::Standard),
-        combo(&format!("{}.php.jpg", "a".repeat(180)), "image/jpeg", &gif, "long-filename-parser", "long_filename", "high", "medium", 2, DispositionMode::Standard),
-        combo("photo.jpg.php", "image/jpeg", &gif, "reverse-double-ext-jpg-php", "reverse_double_extension", "critical", "high", 2, DispositionMode::Standard),
-        combo("image.gif.php", "image/gif", &gif, "reverse-double-ext-gif-php", "reverse_double_extension", "critical", "high", 2, DispositionMode::Standard),
-        combo("....%252f....%252fwztest.txt", "text/plain", canary, "double-url-encoding-traversal", "path_traversal", "high", "medium", 2, DispositionMode::Standard),
-        combo(".htpasswd", "text/plain", &format!("wzuser:$apr1$benign${canary}\n"), "htpasswd-credential-file", "config_upload", "critical", "high", 2, DispositionMode::Standard),
-        combo("{{7*7}}.txt", "text/plain", canary, "ssti-filename-oracle", "template_injection", "high", "medium", 2, DispositionMode::Standard),
-        combo("shell.php;.jpg", "image/jpeg", &gif, "semicolon-mid-extension", "semicolon_bypass", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.php.foo", "image/jpeg", &gif, "apache-php-foo-suffix", "apache_multisuffix", "critical", "high", 2, DispositionMode::Standard),
-        combo(&format!("shell\u{202E}gpj.php"), "image/jpeg", &gif, "rtlo-filename-bidi", "rtlo_bypass", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.ｐｈｐ", "image/jpeg", &gif, "nfkc-fullwidth-php", "nfkc_bypass", "critical", "high", 2, DispositionMode::Standard),
-        combo("shell.php%0a.jpg", "image/jpeg", &gif, "newline-in-extension", "newline_extension", "high", "medium", 3, DispositionMode::Standard),
+        combo(
+            "test.jpg",
+            "image/jpeg",
+            &gif,
+            "gif-as-jpeg",
+            "mime_spoof",
+            "high",
+            "medium",
+            1,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.php.jpg",
+            "image/jpeg",
+            &gif,
+            "double-extension-php",
+            "double_extension",
+            "critical",
+            "high",
+            1,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.asp.jpg",
+            "image/jpeg",
+            &gif,
+            "double-extension-asp",
+            "double_extension",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.phtml",
+            "image/jpeg",
+            &gif,
+            "phtml-mime-spoof",
+            "mime_spoof",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.html",
+            "image/gif",
+            &gif,
+            "html-mime-spoof",
+            "mime_spoof",
+            "high",
+            "medium",
+            1,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.svg",
+            "image/svg+xml",
+            &svg,
+            "svg-stored-xss-surface",
+            "svg_xss",
+            "critical",
+            "high",
+            1,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "../../wztest.txt",
+            "text/plain",
+            canary,
+            "path-traversal",
+            "path_traversal",
+            "high",
+            "medium",
+            1,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "....//....//wztest.txt",
+            "text/plain",
+            canary,
+            "path-traversal-encoded",
+            "path_traversal",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "x.PhP",
+            "application/octet-stream",
+            &gif,
+            "case-extension",
+            "case_bypass",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.php%00.jpg",
+            "image/jpeg",
+            &gif,
+            "null-byte-legacy",
+            "null_byte",
+            "critical",
+            "high",
+            3,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "test.php.",
+            "image/jpeg",
+            &gif,
+            "trailing-dot-windows",
+            "trailing_dot",
+            "critical",
+            "high",
+            3,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "test.php ",
+            "image/jpeg",
+            &gif,
+            "trailing-space-windows",
+            "trailing_dot",
+            "critical",
+            "high",
+            3,
+            DispositionMode::Standard,
+        ),
+        combo(
+            ".htaccess",
+            "text/plain",
+            &htaccess,
+            "htaccess-config",
+            "config_upload",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "web.config",
+            "text/xml",
+            &webconfig,
+            "webconfig-upload",
+            "config_upload",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            ".env",
+            "text/plain",
+            canary,
+            "dotenv-upload",
+            "config_upload",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "polyglot.gif",
+            "image/gif",
+            &gif,
+            "polyglot-gif",
+            "polyglot",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "doc.pdf",
+            "application/pdf",
+            &pdf,
+            "pdf-polyglot",
+            "polyglot",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "page.html",
+            "text/html",
+            &html_poly,
+            "html-upload",
+            "polyglot",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.php",
+            "image/jpeg",
+            &gif,
+            "rfc5987-filename-star",
+            "disposition_bypass",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Rfc5987Utf8,
+        ),
+        combo(
+            "x.php.jpg",
+            "",
+            &gif,
+            "empty-content-type",
+            "disposition_bypass",
+            "high",
+            "medium",
+            2,
+            DispositionMode::EmptyMime,
+        ),
+        combo(
+            "x.php.jpg",
+            "application/octet-stream",
+            &gif,
+            "octet-stream-mime",
+            "mime_spoof",
+            "high",
+            "medium",
+            2,
+            DispositionMode::OctetStream,
+        ),
+        combo(
+            ".user.ini",
+            "text/plain",
+            &format!("; {canary}\nauto_prepend_file=\n"),
+            "user-ini-php-fpm",
+            "config_upload",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "crossdomain.xml",
+            "text/xml",
+            &format!("<cross-domain-policy><!-- {canary} --></cross-domain-policy>"),
+            "crossdomain-policy",
+            "config_upload",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.p\u{0430}hp",
+            "image/jpeg",
+            &gif,
+            "unicode-homoglyph-cyrillic",
+            "unicode_homoglyph",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.%70hp",
+            "image/jpeg",
+            &gif,
+            "url-encoded-extension-p",
+            "url_encoded_ext",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.p%68p",
+            "image/jpeg",
+            &gif,
+            "url-encoded-extension-h",
+            "url_encoded_ext",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            &format!("{}.php.jpg", "a".repeat(180)),
+            "image/jpeg",
+            &gif,
+            "long-filename-parser",
+            "long_filename",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "photo.jpg.php",
+            "image/jpeg",
+            &gif,
+            "reverse-double-ext-jpg-php",
+            "reverse_double_extension",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "image.gif.php",
+            "image/gif",
+            &gif,
+            "reverse-double-ext-gif-php",
+            "reverse_double_extension",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "....%252f....%252fwztest.txt",
+            "text/plain",
+            canary,
+            "double-url-encoding-traversal",
+            "path_traversal",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            ".htpasswd",
+            "text/plain",
+            &format!("wzuser:$apr1$benign${canary}\n"),
+            "htpasswd-credential-file",
+            "config_upload",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "{{7*7}}.txt",
+            "text/plain",
+            canary,
+            "ssti-filename-oracle",
+            "template_injection",
+            "high",
+            "medium",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.php;.jpg",
+            "image/jpeg",
+            &gif,
+            "semicolon-mid-extension",
+            "semicolon_bypass",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.php.foo",
+            "image/jpeg",
+            &gif,
+            "apache-php-foo-suffix",
+            "apache_multisuffix",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            &format!("shell\u{202E}gpj.php"),
+            "image/jpeg",
+            &gif,
+            "rtlo-filename-bidi",
+            "rtlo_bypass",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.ｐｈｐ",
+            "image/jpeg",
+            &gif,
+            "nfkc-fullwidth-php",
+            "nfkc_bypass",
+            "critical",
+            "high",
+            2,
+            DispositionMode::Standard,
+        ),
+        combo(
+            "shell.php%0a.jpg",
+            "image/jpeg",
+            &gif,
+            "newline-in-extension",
+            "newline_extension",
+            "high",
+            "medium",
+            3,
+            DispositionMode::Standard,
+        ),
     ];
 
     let use_php = pack == "all" || pack == "php" || (pack == "auto" && stack.php);
@@ -2509,36 +2943,176 @@ fn bypass_matrix(canary: &str, stack: &StackHint, pack: &str, max_tier: u8) -> V
 
     if use_php {
         combos.extend([
-            combo("shell.php5", "image/jpeg", &gif, "php5-extension", "platform_php", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.phar", "application/octet-stream", &gif, "phar-extension", "platform_php", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.php7", "image/jpeg", &gif, "php7-extension", "platform_php", "critical", "high", 2, DispositionMode::Standard),
+            combo(
+                "shell.php5",
+                "image/jpeg",
+                &gif,
+                "php5-extension",
+                "platform_php",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.phar",
+                "application/octet-stream",
+                &gif,
+                "phar-extension",
+                "platform_php",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.php7",
+                "image/jpeg",
+                &gif,
+                "php7-extension",
+                "platform_php",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
         ]);
     }
     if use_iis {
         combos.extend([
-            combo("shell.aspx;.jpg", "image/jpeg", &gif, "iis-semicolon-aspx", "platform_iis", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.asp;.gif", "image/gif", &gif, "iis-semicolon-asp", "platform_iis", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.ashx", "image/jpeg", &gif, "iis-ashx-handler", "iis_handlers", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.asmx", "text/xml", &format!("<!-- {canary} -->\n"), "iis-asmx-handler", "iis_handlers", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.shtml", "text/html", &format!("<!-- {canary} -->\n"), "iis-shtml-handler", "iis_handlers", "critical", "high", 2, DispositionMode::Standard),
+            combo(
+                "shell.aspx;.jpg",
+                "image/jpeg",
+                &gif,
+                "iis-semicolon-aspx",
+                "platform_iis",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.asp;.gif",
+                "image/gif",
+                &gif,
+                "iis-semicolon-asp",
+                "platform_iis",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.ashx",
+                "image/jpeg",
+                &gif,
+                "iis-ashx-handler",
+                "iis_handlers",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.asmx",
+                "text/xml",
+                &format!("<!-- {canary} -->\n"),
+                "iis-asmx-handler",
+                "iis_handlers",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.shtml",
+                "text/html",
+                &format!("<!-- {canary} -->\n"),
+                "iis-shtml-handler",
+                "iis_handlers",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
         ]);
     }
     if use_dotnet {
         combos.extend([
-            combo("shell.aspx", "image/jpeg", &gif, "aspx-mime-spoof", "platform_dotnet", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.cer", "application/pkix-cert", &gif, "cer-extension", "platform_dotnet", "critical", "high", 3, DispositionMode::Standard),
+            combo(
+                "shell.aspx",
+                "image/jpeg",
+                &gif,
+                "aspx-mime-spoof",
+                "platform_dotnet",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.cer",
+                "application/pkix-cert",
+                &gif,
+                "cer-extension",
+                "platform_dotnet",
+                "critical",
+                "high",
+                3,
+                DispositionMode::Standard,
+            ),
         ]);
     }
     if use_java {
         combos.extend([
-            combo("shell.jsp", "image/jpeg", &gif, "jsp-mime-spoof", "platform_java", "critical", "high", 2, DispositionMode::Standard),
-            combo("shell.jspx", "image/jpeg", &gif, "jspx-mime-spoof", "platform_java", "critical", "high", 2, DispositionMode::Standard),
+            combo(
+                "shell.jsp",
+                "image/jpeg",
+                &gif,
+                "jsp-mime-spoof",
+                "platform_java",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.jspx",
+                "image/jpeg",
+                &gif,
+                "jspx-mime-spoof",
+                "platform_java",
+                "critical",
+                "high",
+                2,
+                DispositionMode::Standard,
+            ),
         ]);
     }
     if use_node {
         combos.extend([
-            combo("shell.js", "image/jpeg", &gif, "js-static-exec-surface", "platform_node", "high", "medium", 2, DispositionMode::Standard),
-            combo("shell.mjs", "application/javascript", &gif, "mjs-module-surface", "platform_node", "high", "medium", 2, DispositionMode::Standard),
+            combo(
+                "shell.js",
+                "image/jpeg",
+                &gif,
+                "js-static-exec-surface",
+                "platform_node",
+                "high",
+                "medium",
+                2,
+                DispositionMode::Standard,
+            ),
+            combo(
+                "shell.mjs",
+                "application/javascript",
+                &gif,
+                "mjs-module-surface",
+                "platform_node",
+                "high",
+                "medium",
+                2,
+                DispositionMode::Standard,
+            ),
         ]);
     }
     if max_tier >= 3 {
@@ -2617,14 +3191,7 @@ async fn verify_retrieval(
                     || url.to_ascii_lowercase().ends_with(".phtml")
                     || url.to_ascii_lowercase().ends_with(".aspx")
                     || url.to_ascii_lowercase().ends_with(".jsp");
-                return Some((
-                    stored.final_url,
-                    ct,
-                    exec_hint,
-                    !nosniff,
-                    cors,
-                    inline,
-                ));
+                return Some((stored.final_url, ct, exec_hint, !nosniff, cors, inline));
             }
         }
     }
@@ -2717,7 +3284,10 @@ fn synthesize_attack_paths(exposures: &[UploadExposure]) -> Vec<Value> {
             "mitre": ["T1190", "T1505"],
         }));
     }
-    if exposures.iter().any(|e| e.retrieved && e.category == "svg_xss") {
+    if exposures
+        .iter()
+        .any(|e| e.retrieved && e.category == "svg_xss")
+    {
         paths.push(json!({
             "title": "SVG upload → stored cross-site scripting",
             "severity": "critical",
@@ -2725,7 +3295,10 @@ fn synthesize_attack_paths(exposures: &[UploadExposure]) -> Vec<Value> {
             "mitre": ["T1189", "T1059.007"],
         }));
     }
-    if exposures.iter().any(|e| e.retrieved && e.nosniff_missing && e.inline_served) {
+    if exposures
+        .iter()
+        .any(|e| e.retrieved && e.nosniff_missing && e.inline_served)
+    {
         paths.push(json!({
             "title": "MIME sniffing + inline disposition → browser execution",
             "severity": "high",
@@ -2733,7 +3306,10 @@ fn synthesize_attack_paths(exposures: &[UploadExposure]) -> Vec<Value> {
             "mitre": ["T1189"],
         }));
     }
-    if exposures.iter().any(|e| e.category == "upload_idor" && e.retrieved) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "upload_idor" && e.retrieved)
+    {
         paths.push(json!({
             "title": "Upload IDOR → cross-user file access",
             "severity": "critical",
@@ -2741,7 +3317,10 @@ fn synthesize_attack_paths(exposures: &[UploadExposure]) -> Vec<Value> {
             "mitre": ["T1190", "T1530"],
         }));
     }
-    if exposures.iter().any(|e| e.category == "eicar_surface" && e.accepted) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "eicar_surface" && e.accepted)
+    {
         paths.push(json!({
             "title": "AV pipeline absent → malware staging",
             "severity": "high",
@@ -2749,7 +3328,10 @@ fn synthesize_attack_paths(exposures: &[UploadExposure]) -> Vec<Value> {
             "mitre": ["T1204.002", "T1105"],
         }));
     }
-    if exposures.iter().any(|e| e.category == "batch_upload" && e.accepted) {
+    if exposures
+        .iter()
+        .any(|e| e.category == "batch_upload" && e.accepted)
+    {
         paths.push(json!({
             "title": "Batch upload → spray payloads at scale",
             "severity": "high",
@@ -2819,10 +3401,16 @@ fn build_hardening_roadmap(findings: &[Value], stack: &StackHint) -> Vec<String>
         .filter(|c| *c != "posture_summary" && *c != "endpoint_discovery")
         .map(str::to_string)
         .collect();
-    if cats.iter().any(|c| c.contains("platform_") || c == "double_extension") {
+    if cats
+        .iter()
+        .any(|c| c.contains("platform_") || c == "double_extension")
+    {
         steps.push("Server-side allow-list extensions; strip trailing dots/spaces/null bytes; reject multi-dot executable suffixes.".into());
     }
-    if cats.contains("mime_spoof") || cats.contains("polyglot") || cats.contains("disposition_bypass") {
+    if cats.contains("mime_spoof")
+        || cats.contains("polyglot")
+        || cats.contains("disposition_bypass")
+    {
         steps.push("Validate magic bytes; re-encode images server-side; ignore client Content-Type and RFC5987 filename* unless strictly validated.".into());
     }
     if cats.contains("svg_xss") || cats.contains("polyglot") {
@@ -2844,7 +3432,10 @@ fn build_hardening_roadmap(findings: &[Value], stack: &StackHint) -> Vec<String>
         steps.push("If using Tus/resumable uploads, require auth on creation + PATCH; bind Upload-Metadata to session.".into());
     }
     if cats.contains("directory_listing") {
-        steps.push("Disable directory listing on all storage roots; use opaque object keys in CDN URLs.".into());
+        steps.push(
+            "Disable directory listing on all storage roots; use opaque object keys in CDN URLs."
+                .into(),
+        );
     }
     if cats.contains("upload_cors") {
         steps.push("Never echo Access-Control-Allow-Origin on upload routes; block cross-origin POST without explicit allow-list.".into());
@@ -2855,19 +3446,34 @@ fn build_hardening_roadmap(findings: &[Value], stack: &StackHint) -> Vec<String>
     if cats.contains("error_disclosure") {
         steps.push("Return generic upload errors; log stack traces server-side only.".into());
     }
-    if cats.contains("template_injection") || cats.contains("iis_handlers") || cats.contains("reverse_double_extension") {
+    if cats.contains("template_injection")
+        || cats.contains("iis_handlers")
+        || cats.contains("reverse_double_extension")
+    {
         steps.push("Reject template-like filenames and reverse double-extensions; normalize to server-generated keys.".into());
     }
     if cats.contains("delete_without_auth") {
-        steps.push("Require authorization on DELETE for all stored objects; audit object lifecycle APIs.".into());
+        steps.push(
+            "Require authorization on DELETE for all stored objects; audit object lifecycle APIs."
+                .into(),
+        );
     }
     if cats.contains("eicar_surface") {
-        steps.push("Integrate AV/AMSI scanning on upload; block EICAR and quarantine before persistence.".into());
+        steps.push(
+            "Integrate AV/AMSI scanning on upload; block EICAR and quarantine before persistence."
+                .into(),
+        );
     }
     if cats.contains("batch_upload") || cats.contains("json_multi_file") {
-        steps.push("Allow only one file per request; cap JSON files[] array length and total bytes.".into());
+        steps.push(
+            "Allow only one file per request; cap JSON files[] array length and total bytes."
+                .into(),
+        );
     }
-    if cats.contains("filename_mismatch") || cats.contains("double_disposition") || cats.contains("boundary_smuggling") {
+    if cats.contains("filename_mismatch")
+        || cats.contains("double_disposition")
+        || cats.contains("boundary_smuggling")
+    {
         steps.push("Use strict multipart parser; reject duplicate Content-Disposition and metadata/body filename conflicts.".into());
     }
     if findings.iter().any(|f| {
@@ -2922,7 +3528,9 @@ fn build_summary(
         }
     }
     let penalty = crit * 30 + high * 13 + med * 5 + low * 2;
-    let score = 100u32.saturating_sub(penalty).max(if crit > 0 { 0 } else { 5 });
+    let score = 100u32
+        .saturating_sub(penalty)
+        .max(if crit > 0 { 0 } else { 5 });
     let grade = match score {
         92..=100 => "A",
         80..=91 => "B",
@@ -3017,7 +3625,10 @@ fn build_summary(
         obj.insert("blast_radius_score".to_string(), json!(blast_radius));
         obj.insert("enterprise_risk_tier".to_string(), json!(enterprise_tier));
         obj.insert("path_entropy_score".to_string(), json!(path_entropy));
-        obj.insert("remediation_urgency".to_string(), json!(remediation_urgency));
+        obj.insert(
+            "remediation_urgency".to_string(),
+            json!(remediation_urgency),
+        );
         obj.insert("toxic_combinations".to_string(), json!(toxic));
         obj.insert("probe_coverage".to_string(), coverage);
         obj.insert("stack_fingerprint".to_string(), json!(stack.labels));
@@ -3173,7 +3784,10 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                     "File upload form discovered in HTML",
                     "info",
                     MITRE,
-                    &format!("HTML at {} exposes multipart upload → {}", page.final_url, url),
+                    &format!(
+                        "HTML at {} exposes multipart upload → {}",
+                        page.final_url, url
+                    ),
                     target,
                     0.95,
                     Evidence::new().with("url", url).with("source", "html_form"),
@@ -3217,7 +3831,9 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                 }
             }
         }
-        if page.body.to_ascii_lowercase().contains("presigned") || page.body.contains("X-Amz-Signature") {
+        if page.body.to_ascii_lowercase().contains("presigned")
+            || page.body.contains("X-Amz-Signature")
+        {
             if include_info {
                 findings.push(finding_rich(
                     ENGINE_ID,
@@ -3378,44 +3994,47 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
             let canary = canary.clone();
             async move {
                 let accepted = match ep.protocol {
-                    EndpointProtocol::GraphqlUpload => {
-                        post_graphql_upload(&client, &ep.url, &canary, "probe.txt", &headers, timeout_ms)
-                            .await
-                            .map(|p| matches!(p.status, 200 | 201 | 202 | 400))
-                            .unwrap_or(false)
-                    }
-                    EndpointProtocol::Base64Json => {
-                        post_base64_json_upload(
-                            &client,
-                            &ep.url,
-                            &ep.field,
-                            "probe.txt",
-                            &canary,
-                            &headers,
-                            timeout_ms,
-                        )
-                        .await
-                        .map(|p| matches!(p.status, 200 | 201 | 202 | 400))
-                        .unwrap_or(false)
-                    }
-                    EndpointProtocol::Put | EndpointProtocol::Multipart => {
-                        post_multipart(
-                            &client,
-                            &ep.url,
-                            &ep.field,
-                            "probe.txt",
-                            "text/plain",
-                            &canary,
-                            &headers,
-                            timeout_ms,
-                            DispositionMode::Standard,
-                        )
-                        .await
-                        .map(|p| {
-                            matches!(p.status, 200 | 201 | 202 | 400 | 422 | 415) && p.status != 404 && p.status != 405
-                        })
-                        .unwrap_or(false)
-                    }
+                    EndpointProtocol::GraphqlUpload => post_graphql_upload(
+                        &client,
+                        &ep.url,
+                        &canary,
+                        "probe.txt",
+                        &headers,
+                        timeout_ms,
+                    )
+                    .await
+                    .map(|p| matches!(p.status, 200 | 201 | 202 | 400))
+                    .unwrap_or(false),
+                    EndpointProtocol::Base64Json => post_base64_json_upload(
+                        &client,
+                        &ep.url,
+                        &ep.field,
+                        "probe.txt",
+                        &canary,
+                        &headers,
+                        timeout_ms,
+                    )
+                    .await
+                    .map(|p| matches!(p.status, 200 | 201 | 202 | 400))
+                    .unwrap_or(false),
+                    EndpointProtocol::Put | EndpointProtocol::Multipart => post_multipart(
+                        &client,
+                        &ep.url,
+                        &ep.field,
+                        "probe.txt",
+                        "text/plain",
+                        &canary,
+                        &headers,
+                        timeout_ms,
+                        DispositionMode::Standard,
+                    )
+                    .await
+                    .map(|p| {
+                        matches!(p.status, 200 | 201 | 202 | 400 | 422 | 415)
+                            && p.status != 404
+                            && p.status != 405
+                    })
+                    .unwrap_or(false),
                 };
                 if accepted {
                     let mut alive = ep;
@@ -3492,7 +4111,8 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                 } else {
                     format!("{}{}", base.trim_end_matches('/'), suffix)
                 };
-                if let Some(t) = post_tus_create(&client, &tus_url, &canary, &extra_headers, timeout_ms).await
+                if let Some(t) =
+                    post_tus_create(&client, &tus_url, &canary, &extra_headers, timeout_ms).await
                 {
                     if matches!(t.status, 201 | 204 | 412) {
                         let exposure = UploadExposure {
@@ -3753,9 +4373,15 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                 ("batch-b.txt", "text/plain", canary.as_bytes()),
                 ("batch-c.txt", "text/plain", canary.as_bytes()),
             ];
-            if let Some(b) =
-                post_multipart_batch(&client, &ep.url, &ep.field, &files, &extra_headers, timeout_ms)
-                    .await
+            if let Some(b) = post_multipart_batch(
+                &client,
+                &ep.url,
+                &ep.field,
+                &files,
+                &extra_headers,
+                timeout_ms,
+            )
+            .await
             {
                 if matches!(b.status, 200 | 201 | 202) {
                     let exposure = UploadExposure {
@@ -3838,7 +4464,10 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                     findings.push(make_finding(
                         "PNG upload surface accepted",
                         "info",
-                        &format!("Endpoint {} accepted minimal PNG (HTTP {}).", p.final_url, p.status),
+                        &format!(
+                            "Endpoint {} accepted minimal PNG (HTTP {}).",
+                            p.final_url, p.status
+                        ),
                         target,
                         "png_surface",
                         0.78,
@@ -4693,13 +5322,8 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                 urls.sort_unstable();
                 urls.dedup();
                 if let Some((retrieve_url, ct, exec_hint, nosniff_missing, cors, inline)) =
-                    verify_retrieval(
-                        &client,
-                        &urls,
-                        &canary,
-                        combo.content.contains("GIF89a"),
-                    )
-                    .await
+                    verify_retrieval(&client, &urls, &canary, combo.content.contains("GIF89a"))
+                        .await
                 {
                     exposure.retrieved = true;
                     exposure.retrieve_url = Some(retrieve_url.clone());
@@ -4780,7 +5404,8 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                     }
                     if check_unauth_retrieval && !extra_headers.is_empty() {
                         if let Some(uf) =
-                            probe_unauth_retrieval(&client, &retrieve_url, &canary, target, ep).await
+                            probe_unauth_retrieval(&client, &retrieve_url, &canary, target, ep)
+                                .await
                         {
                             all_exposures.push(UploadExposure {
                                 combo: "unauth-retrieval".into(),
@@ -4807,14 +5432,8 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                         }
                     }
                     if check_range_retrieval {
-                        if let Some(rf) = probe_range_retrieval(
-                            &client,
-                            &retrieve_url,
-                            &canary,
-                            target,
-                            ep,
-                        )
-                        .await
+                        if let Some(rf) =
+                            probe_range_retrieval(&client, &retrieve_url, &canary, target, ep).await
                         {
                             all_exposures.push(UploadExposure {
                                 combo: "range-leak".into(),
@@ -4912,7 +5531,10 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                     findings.push(make_finding(
                         "PUT upload accepted",
                         "high",
-                        &format!("PUT {} → HTTP {} (direct write bypass).", put_resp.final_url, put_resp.status),
+                        &format!(
+                            "PUT {} → HTTP {} (direct write bypass).",
+                            put_resp.final_url, put_resp.status
+                        ),
                         target,
                         "put_method",
                         0.87,
@@ -4946,7 +5568,10 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
                     findings.push(make_finding(
                         "PATCH upload accepted",
                         "high",
-                        &format!("PATCH {} → HTTP {}.", patch_resp.final_url, patch_resp.status),
+                        &format!(
+                            "PATCH {} → HTTP {}.",
+                            patch_resp.final_url, patch_resp.status
+                        ),
                         target,
                         "patch_method",
                         0.84,
@@ -4972,7 +5597,10 @@ pub async fn run_file_upload_result_ctx(target: &str, ctx: &EngineRunContext) ->
             .collect();
         findings.push(finding_rich(
             ENGINE_ID,
-            &format!("Toxic upload combination detected ({} chain(s))", toxic_list.len()),
+            &format!(
+                "Toxic upload combination detected ({} chain(s))",
+                toxic_list.len()
+            ),
             "critical",
             MITRE,
             &format!(
@@ -5159,9 +5787,10 @@ mod tests {
     #[test]
     fn path_entropy_scores_sequential_low() {
         assert!(score_storage_path_entropy("https://x.test/uploads/42") < 40);
-        assert!(score_storage_path_entropy(
-            "https://x.test/files/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        ) > 80);
+        assert!(
+            score_storage_path_entropy("https://x.test/files/a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+                > 80
+        );
     }
 
     #[test]
@@ -5172,6 +5801,8 @@ mod tests {
 
     #[test]
     fn remediation_urgency_escalates() {
-        assert!(compute_remediation_urgency(80, 2, 3, 30) > compute_remediation_urgency(10, 0, 0, 95));
+        assert!(
+            compute_remediation_urgency(80, 2, 3, 30) > compute_remediation_urgency(10, 0, 0, 95)
+        );
     }
 }

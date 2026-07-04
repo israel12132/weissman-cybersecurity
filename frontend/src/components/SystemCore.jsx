@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
+import AppShell from './layout/AppShell'
+import LabForensicEvidence from './ui/LabForensicEvidence'
 
 export default function SystemCore() {
   const { t } = useTranslation()
@@ -391,18 +393,15 @@ export default function SystemCore() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
-        <p className="text-cyan-400">{t('components.systemCore.loading')}</p>
-      </div>
+      <AppShell title={t('components.systemCore.title')}>
+        <p className="text-cyan-400" role="status">{t('components.systemCore.loading')}</p>
+      </AppShell>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
-      <header className="flex items-center justify-between border-b border-slate-700 pb-4 mb-6">
-        <h1 className="text-xl font-bold text-cyan-400">{t('components.systemCore.title')}</h1>
-        <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t('components.systemCore.back_war_room')}</Link>
-      </header>
+    <AppShell title={t('components.systemCore.title')}>
+      <LabForensicEvidence />
 
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
@@ -593,39 +592,39 @@ export default function SystemCore() {
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-violet-600/40 bg-violet-950/20 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-violet-200 mb-4">{t('components.systemCore.oast_heading', { defaultValue: 'OAST — Out-of-Band Callbacks' })}</h2>
+        <h2 className="text-lg font-semibold text-violet-200 mb-4">{t('components.systemCore.oast_heading')}</h2>
         <p className="text-sm text-slate-400 mb-6">
-          {t('components.systemCore.oast_body', { defaultValue: 'Configure blind SSRF, XXE, and Log4Shell callback correlation. Required for oast_blind module engines.' })}
+          {t('components.systemCore.oast_body')}
         </p>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_listener_label', { defaultValue: 'Listener URL' })}</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_listener_label')}</label>
             <input type="url" value={oastListenerUrl} onChange={(e) => setOastListenerUrl(e.target.value)}
               placeholder="https://oast.your-domain.example:9090"
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_domain_label', { defaultValue: 'DNS domain (wildcard)' })}</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_domain_label')}</label>
             <input type="text" value={oastDomain} onChange={(e) => setOastDomain(e.target.value)}
               placeholder="oast.your-domain.example"
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_api_key_label', { defaultValue: 'API key (optional)' })}</label>
+            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_api_key_label')}</label>
             <input type="password" autoComplete="off" value={oastApiKey} onChange={(e) => setOastApiKey(e.target.value)}
               className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
           </div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={saveOastConfig} disabled={saving}
               className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium">
-              {saving ? t('components.systemCore.saving') : t('components.systemCore.save_oast', { defaultValue: 'Save OAST' })}
+              {saving ? t('components.systemCore.saving') : t('components.systemCore.save_oast')}
             </button>
             <button type="button" onClick={testOastConnection} disabled={oastTesting || !oastListenerUrl.trim()}
               className="px-4 py-2 rounded-lg border border-violet-500/40 text-violet-200 text-sm hover:bg-violet-500/10 disabled:opacity-50">
-              {oastTesting ? t('components.systemCore.oast_testing', { defaultValue: 'Testing…' }) : t('components.systemCore.oast_test', { defaultValue: 'Test connectivity' })}
+              {oastTesting ? t('components.systemCore.oast_testing') : t('components.systemCore.oast_test')}
             </button>
             <Link to="/oast" className="px-4 py-2 text-sm text-violet-300 hover:text-violet-200 self-center">
-              {t('components.systemCore.oast_dashboard', { defaultValue: 'OAST Dashboard →' })}
+              {t('components.systemCore.oast_dashboard')}
             </Link>
           </div>
           {oastTestResult && (
@@ -637,12 +636,12 @@ export default function SystemCore() {
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-pink-600/30 bg-pink-950/15 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-pink-200 mb-4">{t('components.systemCore.ai_entitlement_heading', { defaultValue: 'AI-Heavy Entitlement' })}</h2>
+        <h2 className="text-lg font-semibold text-pink-200 mb-4">{t('components.systemCore.ai_entitlement_heading')}</h2>
         <p className="text-sm text-slate-400 mb-4">
-          {t('components.systemCore.ai_entitlement_body', { defaultValue: 'Gates 48 AI red-team / semantic fuzz engines. Disable for tenants without AI workload authorization.' })}
+          {t('components.systemCore.ai_entitlement_body')}
         </p>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">{t('components.systemCore.ai_entitlement_label', { defaultValue: 'Allow AI-heavy engines' })}</span>
+          <span className="text-sm text-slate-300">{t('components.systemCore.ai_entitlement_label')}</span>
           <button type="button" role="switch" aria-checked={aiHeavyEntitled}
             onClick={() => handleAiEntitlementToggle(!aiHeavyEntitled)}
             className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${aiHeavyEntitled ? 'bg-pink-500/80 border-pink-400' : 'bg-slate-600 border-slate-500'}`}>
@@ -971,6 +970,6 @@ export default function SystemCore() {
           {t('components.systemCore.poe_footer')}
         </p>
       </section>
-    </div>
+    </AppShell>
   )
 }

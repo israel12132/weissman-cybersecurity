@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from 'react'
+import React, { useState, useEffect, useRef, useId, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Loader2, AlertCircle, Shield, CheckCircle2, Globe2 } from 'lucide-react'
@@ -237,15 +237,21 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
   const [mfaToken, setMfaToken] = useState(null)
   const [mfaCode, setMfaCode] = useState('')
-  const { login, verifyMfa, isAuthenticated } = useAuth()
+  const { login, verifyMfa, isAuthenticated, isCeo } = useAuth()
   const navigate = useNavigate()
   const mfaInputRef = useRef(null)
   const emailInputRef = useRef(null)
   const errorRegionId = useId()
 
+  const postLoginPath = useCallback((result) => {
+    if (result?.is_superadmin === true) return '/'
+    const role = String(result?.role || '').trim().toLowerCase()
+    return role === 'ceo' ? '/' : '/operations'
+  }, [])
+
   useEffect(() => {
-    if (isAuthenticated) navigate('/', { replace: true })
-  }, [isAuthenticated, navigate])
+    if (isAuthenticated) navigate(isCeo ? '/' : '/operations', { replace: true })
+  }, [isAuthenticated, isCeo, navigate])
 
   useEffect(() => {
     if (mfaToken && mfaInputRef.current) {
@@ -263,7 +269,7 @@ export default function Login() {
     try {
       const result = await login(email, password, tenantSlug)
       if (result.ok) {
-        navigate('/', { replace: true })
+        navigate(postLoginPath(result), { replace: true })
         return
       }
       if (result.mfa_required && result.mfa_token) {
@@ -291,7 +297,7 @@ export default function Login() {
     try {
       const result = await verifyMfa(mfaToken, mfaCode)
       if (result.ok) {
-        navigate('/', { replace: true })
+        navigate(postLoginPath(result), { replace: true })
         return
       }
       setError(result.detail || t('auth.mfa_invalid_code'))

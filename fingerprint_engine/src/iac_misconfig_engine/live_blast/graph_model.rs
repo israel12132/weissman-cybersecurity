@@ -171,7 +171,9 @@ impl InfraGraph {
 
         while let Some(path) = queue.pop_front() {
             let current = path.last().map(String::as_str).unwrap_or("");
-            let Some(node) = self.nodes.get(current) else { continue };
+            let Some(node) = self.nodes.get(current) else {
+                continue;
+            };
 
             if node.sensitive && path.len() > 1 {
                 let key = path.join("->");
@@ -200,13 +202,10 @@ impl InfraGraph {
 
     #[must_use]
     pub fn summary_json(&self) -> Value {
-        let by_kind: HashMap<String, u64> = self
-            .nodes
-            .values()
-            .fold(HashMap::new(), |mut m, n| {
-                *m.entry(n.kind.as_str().to_string()).or_insert(0) += 1;
-                m
-            });
+        let by_kind: HashMap<String, u64> = self.nodes.values().fold(HashMap::new(), |mut m, n| {
+            *m.entry(n.kind.as_str().to_string()).or_insert(0) += 1;
+            m
+        });
         json!({
             "node_count": self.nodes.len(),
             "edge_count": self.edges.len(),
@@ -271,7 +270,10 @@ impl ProvenAttackPath {
                 let edge = if i == 0 {
                     None
                 } else {
-                    graph.edges.iter().find(|e| e.to == *id && e.from == path[i - 1])
+                    graph
+                        .edges
+                        .iter()
+                        .find(|e| e.to == *id && e.from == path[i - 1])
                 };
                 Some(PathHop {
                     node_id: id.clone(),
@@ -283,7 +285,10 @@ impl ProvenAttackPath {
                 })
             })
             .collect();
-        let live_confirmed = hops.iter().filter(|h| h.live_status == "confirmed_live").count() as u64;
+        let live_confirmed = hops
+            .iter()
+            .filter(|h| h.live_status == "confirmed_live")
+            .count() as u64;
         let permission_proven_hops = hops
             .windows(2)
             .filter(|w| {
@@ -297,7 +302,12 @@ impl ProvenAttackPath {
         let toxic_class = classify_toxic(&hops);
         let end = graph.nodes.get(path.last().unwrap_or(&String::new()));
         let title = if let Some(n) = end {
-            format!("Proven path [{}]: Internet → {} ({})", toxic_class, n.label, n.kind.as_str())
+            format!(
+                "Proven path [{}]: Internet → {} ({})",
+                toxic_class,
+                n.label,
+                n.kind.as_str()
+            )
         } else {
             "Proven infrastructure attack path".to_string()
         };
@@ -329,7 +339,10 @@ impl ProvenAttackPath {
             "DATA_BREACH" => 15,
             _ => 0,
         };
-        base + toxic + self.live_confirmed_hops * 15 + self.permission_proven_hops * 20 + self.hops.len() as u64 * 3
+        base + toxic
+            + self.live_confirmed_hops * 15
+            + self.permission_proven_hops * 20
+            + self.hops.len() as u64 * 3
     }
 
     #[must_use]
@@ -392,15 +405,26 @@ fn classify_toxic(hops: &[PathHop]) -> String {
     let has = |k: &str| kinds.iter().any(|x| *x == k);
     if has("k8s_ingress")
         && has("k8s_service_account")
-        && (has("iam_role") || hops.iter().any(|h| h.edge_kind.as_deref() == Some("cross_plane_trust")))
+        && (has("iam_role")
+            || hops
+                .iter()
+                .any(|h| h.edge_kind.as_deref() == Some("cross_plane_trust")))
         && has("s3_bucket")
     {
         return "CROSS_PLANE_EXFIL".to_string();
     }
-    if hops.iter().any(|h| h.edge_kind.as_deref() == Some("iam_proven")) && has("s3_bucket") {
+    if hops
+        .iter()
+        .any(|h| h.edge_kind.as_deref() == Some("iam_proven"))
+        && has("s3_bucket")
+    {
         return "IAM_PROVEN_EXFIL".to_string();
     }
-    if hops.iter().any(|h| h.edge_kind.as_deref() == Some("rbac_proven")) && has("k8s_secret") {
+    if hops
+        .iter()
+        .any(|h| h.edge_kind.as_deref() == Some("rbac_proven"))
+        && has("k8s_secret")
+    {
         return "RBAC_PROVEN_SECRET".to_string();
     }
     if has("k8s_ingress") && has("k8s_secret") {
@@ -416,7 +440,9 @@ fn classify_toxic(hops: &[PathHop]) -> String {
 }
 
 fn stable_hash(s: &str) -> u32 {
-    s.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(u32::from(b)))
+    s.bytes().fold(0u32, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(u32::from(b))
+    })
 }
 
 #[cfg(test)]
@@ -465,8 +491,18 @@ mod tests {
             iac_address: Some("aws_s3_bucket.assets".into()),
             cloud_arn: None,
         });
-        g.add_edge("internet", "sg:web", EdgeKind::NetworkReachable, "0.0.0.0/0 ingress");
-        g.add_edge("sg:web", "s3:assets", EdgeKind::IamAllows, "IAM s3:* on bucket");
+        g.add_edge(
+            "internet",
+            "sg:web",
+            EdgeKind::NetworkReachable,
+            "0.0.0.0/0 ingress",
+        );
+        g.add_edge(
+            "sg:web",
+            "s3:assets",
+            EdgeKind::IamAllows,
+            "IAM s3:* on bucket",
+        );
         let paths = g.proven_paths_to_sensitive();
         assert!(!paths.is_empty());
         assert!(paths[0].hops.len() >= 3);

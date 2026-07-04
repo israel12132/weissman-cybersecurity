@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "gateway_api", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "gateway_api",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const CROSS_NS_REF: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![HTTP_LISTENER, WILDCARD_HOST, NO_TLS_TERMINATION, ADMIN_PATH_EXPOSED, CROSS_NS_REF]
+    vec![
+        HTTP_LISTENER,
+        WILDCARD_HOST,
+        NO_TLS_TERMINATION,
+        ADMIN_PATH_EXPOSED,
+        CROSS_NS_REF,
+    ]
 }
 
 fn is_gateway_api(name: &str, content: &str) -> bool {
@@ -98,12 +113,20 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("hostnames:") && (lc.contains("- '*'") || lc.contains("- \"*\"")) {
         out.push(Finding::new(WILDCARD_HOST, file, file).observed("wildcard hostname"));
     }
-    if lc.contains("protocol: https") && !lc.contains("certificaterefs") && !lc.contains("mode: terminate") {
-        out.push(Finding::new(NO_TLS_TERMINATION, file, file).observed("HTTPS without certificateRefs"));
+    if lc.contains("protocol: https")
+        && !lc.contains("certificaterefs")
+        && !lc.contains("mode: terminate")
+    {
+        out.push(
+            Finding::new(NO_TLS_TERMINATION, file, file).observed("HTTPS without certificateRefs"),
+        );
     }
     for path in ["/admin", "/debug", "/actuator", "/metrics"] {
         if lc.contains(path) && lc.contains("kind: httproute") {
-            out.push(Finding::new(ADMIN_PATH_EXPOSED, file, file).observed(format!("sensitive path {path}")));
+            out.push(
+                Finding::new(ADMIN_PATH_EXPOSED, file, file)
+                    .observed(format!("sensitive path {path}")),
+            );
             break;
         }
     }

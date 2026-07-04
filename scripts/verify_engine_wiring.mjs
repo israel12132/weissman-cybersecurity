@@ -14,8 +14,9 @@ const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
 const aliasRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/alias_engine_runner.rs'), 'utf8')
+const criticalInfraRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/critical_infra/mod.rs'), 'utf8')
 
-const SPECIAL_RUNNABLE_IDS = new Set(['poe_synthesis'])
+const SPECIAL_RUNNABLE_IDS = new Set([])
 
 function extractArray(name, text) {
   const match = text.match(new RegExp(`pub const ${name}: &\\[&str\\] = &\\[(.*?)\\];`, 's'))
@@ -55,6 +56,12 @@ function extractDispatchIds(text) {
   return new Set(ids)
 }
 
+function extractCriticalInfraIds(text) {
+  const match = text.match(/pub const ENGINE_IDS: &\[&str\] = &\[(.*?)\];/s)
+  if (!match) return new Set()
+  return new Set([...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]))
+}
+
 function extractAliasRunnerIds(text) {
   const start = text.indexOf('match engine_id.trim() {')
   // Match the top-level wildcard arm at 8-space indent, tolerant of both the inline
@@ -80,6 +87,7 @@ const frontendIds = frontendModule.ENGINES_REGISTRY.map((engine) => engine.id)
 const productionIds = new Set(extractArray('PRODUCTION_ENGINE_IDS', engineRs))
 const resolveMap = extractResolveMap(engineRs)
 const dispatchIds = extractDispatchIds(dispatchRs)
+const criticalInfraIds = extractCriticalInfraIds(criticalInfraRs)
 const aliasRunnerIds = extractAliasRunnerIds(aliasRs)
 
 const missingFromProduction = frontendIds.filter((id) => !productionIds.has(id))
@@ -108,6 +116,7 @@ for (const id of frontendIds) {
 const productionWithoutExecutionPath = []
 for (const id of productionIds) {
   if (SPECIAL_RUNNABLE_IDS.has(id)) continue
+  if (criticalInfraIds.has(id)) continue
   if (dispatchIds.has(id)) continue
   if (isAliasEngine(id, resolveMap) && aliasRunnerIds.has(id)) continue
   productionWithoutExecutionPath.push(id)

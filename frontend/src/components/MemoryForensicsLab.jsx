@@ -3,10 +3,12 @@
  * Entropy Gauge (Richter scale), Deception Badge, Hex Heatmap (Memory X-Ray).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { FixedSizeList as List } from 'react-window'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const NS = 'components.tools.memoryForensicsLab'
 const ENTROPY_MAX = 8
@@ -162,7 +164,7 @@ export default function MemoryForensicsLab() {
         setJobStatus({ status: 'running', message: data?.message || 'Queued.' })
         // Zero-latency SSE (Bearer via query when cookies are blocked)
         const path = `/api/poe-scan/stream/${encodeURIComponent(id)}`
-        const es = new EventSource(apiEventSourceUrl(path), { withCredentials: true })
+        const es = openSseStream(path)
         es.onmessage = (e) => {
           try {
             const s = JSON.parse(e.data)
@@ -329,18 +331,10 @@ export default function MemoryForensicsLab() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
-          </div>
-          {clientId && client && (
-            <span className="text-slate-500 text-sm">{t(`${NS}.client_meta`, { name: client.name, id: clientId })}</span>
-          )}
-        </div>
-
+    <StandaloneLabShell
+      title={t(`${NS}.title`)}
+      subtitle={clientId && client ? t(`${NS}.client_meta`, { name: client.name, id: clientId }) : undefined}
+    >
         <div className="mb-6 flex flex-wrap gap-2 items-center">
           <input
             type="text"
@@ -549,7 +543,6 @@ export default function MemoryForensicsLab() {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </StandaloneLabShell>
   )
 }

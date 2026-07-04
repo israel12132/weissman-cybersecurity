@@ -17,11 +17,12 @@ function extractArray(name, text) {
 
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
+const agentDispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch_agent.rs'), 'utf8')
 const scanRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/scan_routing.rs'), 'utf8')
 const { ENGINES_REGISTRY } = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
 
 const productionIds = extractArray('PRODUCTION_ENGINE_IDS', engineRs)
-const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', dispatchRs))
+const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentDispatchRs))
 
 const AI_HEAVY = new Set([
   'semantic_ai_fuzz', 'ai_adversarial_redteam', 'llm_path_fuzz', 'ollama_fuzz',

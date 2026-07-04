@@ -182,7 +182,8 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
         engine,
         &format!(
             "CHRONOS delta monitor — {} samples @ {}ms, no shell spawn",
-            ring.len(), sample_ms
+            ring.len(),
+            sample_ms
         ),
         "info",
         "T1057",

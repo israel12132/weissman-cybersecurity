@@ -91,6 +91,32 @@
     "go_system_config": "עבור להגדרות מערכת",
     "close_dialogs": "סגור חלונות / מגירות"
   },
+  "battlespace": {
+    "title": "מרחב קוגניטיבי רב-ממדי",
+    "topology_live": "טופולוגיה חיה",
+    "commander_intent": "כוונת המפקד",
+    "path_highlight": "נתיבי תקיפה מהפרימטר → נכס מודגש",
+    "shadow_wargame": "תצוגת STRIPS shadow",
+    "clear_focus": "נקה מיקוד",
+    "select_asset": "לחץ על נכס בעל ערך גבוה כדי לעקוב אחר נתיבי תקיפה מהפרימטר.",
+    "loading": "טוען טופולוגיית battlespace…",
+    "offline": "קישור טלמטריה אבד",
+    "forensic_provenance": "מקור פורנזי",
+    "linked_findings": "ממצאים מקושרים",
+    "shadow_node": "צומת shadow — מצב STRIPS עתידי. טרם נצפה ב-recon חי.",
+    "nodes": "צמתים",
+    "edges": "קשתות"
+  },
+  "engineC2": {
+    "kill_switch_region": "מתג חירום",
+    "c2_armed": "C2 חמוש",
+    "killed": "ביצוע הופסק",
+    "reset_kill": "איפוס",
+    "emergency_stop": "⏹ עצירת חירום",
+    "telemetry_strip": "טלמטריית מנוע חיה",
+    "memory_telemetry": "טלמטריית זיכרון / AST",
+    "live_telemetry": "טלמטריה חיה"
+  },
   "nav": {
     "cockpit": "תא הפיקוד",
     "dashboard": "לוח בקרה",
@@ -210,6 +236,7 @@
     "engine_management": "Engine Management",
     "metrics": "מדדים",
     "ceo_vault": "CEO Vault",
+    "supreme_nerve_center": "מרכז עצבים עליון",
     "system_core": "System Core",
     "operations_view": "Operations"
   },
@@ -607,7 +634,23 @@
     "toast_status_rejected": "עדכון סטטוס נדחה: {{detail}}",
     "toast_status_failed": "עדכון סטטוס נכשל: {{detail}}",
     "toast_export_ok": "הורד {{filename}}",
-    "toast_export_failed": "ייצוא CSV נכשל: {{detail}}"
+    "toast_export_failed": "ייצוא CSV נכשל: {{detail}}",
+    "col_live_verify": "אימות live",
+    "liveVerify": {
+      "button": "אמת ממצא",
+      "button_short": "אמת",
+      "button_deep": "Re-scan עמוק",
+      "confidence_pct": "{{pct}}% ביטחון",
+      "pass": "עבר",
+      "fail": "נכשל",
+      "failed": "האימות נכשל",
+      "reproduced": "שוחזר ב-re-scan live",
+      "verdict_CONFIRMED": "מאושר",
+      "verdict_LIKELY_VALID": "כנראה תקף",
+      "verdict_INCONCLUSIVE": "לא חד משמעי",
+      "verdict_NOISE": "רעש",
+      "verdict_FALSE_POSITIVE": "False positive"
+    }
   },
   "vuln_intel": {
     "title": "מודיעין חולשות",
@@ -3989,6 +4032,7 @@
       "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי."
     },
     "websocketSecurity": {
+      "evidence_notice": "DAST WebSocket דרך POST /api/command-center/scan (websocket_attack). אימות handshake RFC6455, CSWSH דיפרנציאלי וממצאי fuzz מוזרמים ב-GET /api/telemetry/stream?job_id=… — בדיקות מורשות בלבד, ללא תוצאות WS מדומות.",
       "title": "מרכז פיקוד אבטחת WebSocket",
       "badge": "WEISSMAN · REAL-TIME API",
       "subtitle": "DAST WebSocket ללא סוכן — handshake מאומת RFC6455, CSWSH דיפרנציאלי, fuzzing שיחתי stateful, מוטציית protobuf בינארית, race execution מסונכרן, Intelligence Bus חוצה-פרוטוקולים.",
@@ -4181,6 +4225,39 @@
       "hint": "אינטגרציות חסרות ייטענו בשרת כשהוגדרו; השלם הגדרת לקוח לכיסוי לייב מלא."
     },
     "cockpitWidgets": {
+      "protectedRoute": {
+        "verifying": "מאמת סשן"
+      },
+      "engineRoomTab": {
+        "connecting": "מתחבר ל-Submarine…",
+        "select_client": "בחר לקוח מהסרגל הצדדי כדי להגדיר את חדר המנועים.",
+        "loading": "טוען נתונים מ-Submarine…"
+      },
+      "clientCockpit": {
+        "loading_mission": "טוען בקרת משימה…",
+        "loading_tab": "טוען לשונית תא פיקוד…"
+      },
+      "globalNexus": {
+        "ceo_integrated": "תא פיקוד · בקרת משימה",
+        "ceo_home": "דף בית CEO",
+        "enter_client_name": "הזן שם לקוח",
+        "login_again": "התחבר מחדש",
+        "network_error": "שגיאת רשת",
+        "network_error_api": "שגיאת רשת — לא ניתן להגיע ל-API.",
+        "client_added": "לקוח \"{{name}}\" נוסף",
+        "advanced_scope": "היקף מתקדם",
+        "auto_detect_tech": "זיהוי אוטומטי של tech stack",
+        "adding": "מוסיף…",
+        "add_client": "הוסף לקוח",
+        "placeholder_name": "שם לקוח *",
+        "placeholder_domains": "דומיינים: a.com, b.com",
+        "placeholder_contact_email": "אימייל איש קשר",
+        "placeholder_ip_ranges": "טווחי IP",
+        "placeholder_tech_stack": "רמזי tech stack",
+        "placeholder_aws_arn": "AWS role ARN",
+        "placeholder_aws_external_id": "AWS external ID",
+        "placeholder_gcp_project": "GCP project ID"
+      },
       "liveActivityFeed": {
         "ariaLabel": "זרם פעילות חי",
         "connected": "טלמטריה מחוברת",
@@ -4838,6 +4915,7 @@
       "aiModelRisk": {
         "selectClient": "בחר לקוח לצפייה בטelemetry סיכון מודל AI.",
         "title": "סיכון מודל AI (AI-SecOps)",
+        "descriptionSecure": "הגדר endpoints מורשים של LLM/chat ללקוח. סודות מוסווים במנוחה ונשלחים רק לבדיקות חיות.",
         "descriptionBefore": "בדיקות adversarial נגד endpoints שהוגדרו ב-config לקוח תחת ",
         "descriptionAfter": ". מניח JSON chat בסגנון OpenAI; ציוני leakage והallucination-under-duress הם heuristic.",
         "runningProbes": "מריץ probes…",
@@ -4973,6 +5051,7 @@
       }
     },
     "reportView": {
+      "evidence_notice": "שורות דוח executive מ-GET /api/clients/:id/report וחותמות קryptografיות מ-GET /api/clients/:id/audit-trail — ללא ממצאי placeholder.",
       "loading": "טוען דוח…",
       "title": "דוח — {{name}}",
       "download_pdf": "הורד PDF (HTML)",
@@ -5002,6 +5081,7 @@
     },
     "tools": {
       "memoryForensicsLab": {
+        "evidence_notice": "ממצאי PoE ותצוגות hex מ-POST /api/command-center/scan (exploit_research) עם טלמטריה חיה ב-GET /api/telemetry/stream?job_id=… — ללא crash dumps סינתטיים.",
         "back_war_room": "← חדר מלחמה",
         "title": "סינתזת ניצול ומעבדת זיכרון",
         "client_meta": "{{name}} (ID: {{id}})",
@@ -5054,6 +5134,7 @@
         "entropy_critical": "קריטי"
       },
       "aiRedteamArena": {
+        "evidence_notice": "סבבי LLM אדוורסריים מ-POST /api/command-center/scan (ai_adversarial_redteam) עם סטטוס שופט חי ב-WebSocket — ממצאים נשמרים ב-GET /api/findings.",
         "back_war_room": "← חדר מלחמה",
         "title": "זירת AI Red Teaming",
         "subtitle": "AI מול AI • OWASP LLM01",
@@ -5077,6 +5158,7 @@
         "footer": "ממצאים נשמרים עם source ai_adversarial_redteam ומופיעים בדוח Executive PDF."
       },
       "quantumTimingProfiler": {
+        "evidence_notice": "דגימות latency במיקרו-שניות מ-POST /api/command-center/scan (timing_side_channel) — חריגות Z-score מחושבות מ-round-trips HTTP חיים, לא גרפים מסקריפט.",
         "back_war_room": "← חדר מלחמה",
         "title": "Quantum Timing Profiler",
         "subtitle": "Latency מיקרו-שנייה • זיהוי חריגות Z-Score",
@@ -5121,6 +5203,7 @@
         "footer": "Probes לזיהוי בטוח בלבד (ללא exploits הרסניים). ממצאים עם source zero_day_radar."
       },
       "attackSurfaceGraph": {
+        "evidence_notice": "צמתים וקשתות גרף מ-GET /api/risk/graph?client_id=… וצילומי attack-path מ-GET /api/attack-paths/:clientId — ללא טופולוגיה מוכנה מראש.",
         "loading": "טוען Attack Surface Graph…",
         "title": "Attack Surface Graph",
         "run_id": "Run ID: {{id}}",
@@ -5139,6 +5222,7 @@
         "remediation_secure": "אין ממצא קריטי. ודא שיעד CNAME תקף ושאחסון לא חשוף."
       },
       "semanticLogicEngine": {
+        "evidence_notice": "מכונות מצב מ-OpenAPI ולוגי reasoning של LLM מ-POST /api/command-center/scan (semantic_logic) — טקסט reasoning הוא פלט חי לפי tenant.",
         "loading": "טוען Semantic Logic Engine…",
         "title": "Semantic Logic Engine",
         "target_label": "יעד: {{target}}",
@@ -5151,6 +5235,7 @@
         "no_reasoning": "אין לוג היגיון עדיין. הפעל סריקה עם Semantic Logic Engine."
       },
       "cicdThreatMatrix": {
+        "evidence_notice": "ממצאי pipeline מ-POST /api/command-center/scan (cicd_pipeline) מול URL של repo GitHub חי — קטעי PoC נשמרים כממצאים, לעולם לא נפרסים אוטומטית.",
         "back_war_room": "← חדר מלחמה",
         "title": "Phantom Pipeline / מטריצת CI/CD",
         "client_meta": "{{name}} (ID: {{id}})",
@@ -5173,6 +5258,7 @@
         }
       },
       "attackChainView": {
+        "evidence_notice": "שלבי kill-chain מ-GET /api/clients/:clientId/attack-chain — מסונתזים רק מממצאים מאומתים ב-tenant שלך.",
         "no_client": "לא נבחר לקוח.",
         "loading": "טוען שרשרת תקיפה…",
         "back_war_room": "← חזרה לחדר מלחמה",
@@ -5218,6 +5304,18 @@
       "max_depth_current": "מקסימום API endpoints ליעד: {{value}}",
       "save_semantic": "שמור הגדרות Semantic Logic",
       "semantic_hint": "ממצאים נשמרים עם מקור semantic_ai_fuzz ומופיעים ב-PDF מנהלים עם תיקון AI.",
+      "oast_heading": "OAST — קריאות Out-of-Band",
+      "oast_body": "הגדרת מתאם ל-blind SSRF, XXE ו-Log4Shell. נדרש למנועי oast_blind.",
+      "oast_listener_label": "כתובת Listener",
+      "oast_domain_label": "דומיין DNS (wildcard)",
+      "oast_api_key_label": "מפתח API (אופציונלי)",
+      "save_oast": "שמור OAST",
+      "oast_testing": "בודק…",
+      "oast_test": "בדיקת קישוריות",
+      "oast_dashboard": "לוח OAST →",
+      "ai_entitlement_heading": "הרשאת AI-Heavy",
+      "ai_entitlement_body": "שולט ב-48 מנועי red-team / semantic fuzz. השבת לדיירים ללא הרשאת AI.",
+      "ai_entitlement_label": "אפשר מנועי AI-heavy",
       "timing_heading": "Quantum Timing Profiler (מודול 5)",
       "timing_body": "התקפות תזמון מיקרו-שנייה: גודל מדגם בסיס ורגישות Z-Score לזיהוי הזרקה עיוורת.",
       "timing_sample_label": "גודל מדגם תזמון (בסיס + בקשות payload)",
@@ -5458,6 +5556,7 @@
       "defaultTitle": "ממצא",
       "copyCve": "העתק CVE",
       "status": "סטטוס",
+      "attestationValid": "עדות שלמה",
       "description": "תיאור",
       "remediation": "תיקון",
       "technicalDetails": "פרטים טכניים",
@@ -5540,5 +5639,59 @@
       "min_abbr": "דק׳",
       "close": "סגור"
     }
+  },
+  "supremeNerveCenter": {
+    "title": "מרכז עצבים עליון",
+    "ceoOnly": "מנכ\"ל / superadmin בלבד",
+    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 558 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+    "refresh": "רענון",
+    "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
+    "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",
+    "sections": {
+      "overview": "סקירה",
+      "engines": "מנועים",
+      "modules": "מודולי מערכת",
+      "jobs": "משימות חיות",
+      "controls": "פרמטרי בקרה"
+    },
+    "metrics": {
+      "enginesTotal": "מנועי production",
+      "running": "רצים עכשיו",
+      "stuck": "תקועים",
+      "liveJobs": "תור (pending+running)",
+      "inFlight": "הרצות in-flight",
+      "modules": "תת-מערכות"
+    },
+    "activeRuns": "הרצות מנוע פעילות",
+    "noActiveRuns": "אין מנועים רצים בתהליך זה כרגע.",
+    "clientBoot": "טעינת דפדפן (סשן זה)",
+    "documentReady": "document.readyState",
+    "domMs": "DOM ready",
+    "chunksLoaded": "chunks JS נטענו",
+    "searchEngines": "חיפוש engine id, phase, target…",
+    "filterAll": "כל מחזורי החיים",
+    "filterRunning": "רצים",
+    "filterStuck": "תקועים",
+    "filterIdle": "ממתינים",
+    "filterFailed": "הרצה אחרונה נכשלה",
+    "colEngine": "מנוע",
+    "colLifecycle": "מחזור חיים",
+    "colPhase": "Phase (התחלה → עכשיו)",
+    "colElapsed": "זמן שחלף",
+    "colTarget": "יעד",
+    "colLastStatus": "סטטוס אחרון",
+    "colRuns": "הרצות",
+    "colKind": "סוג",
+    "colStatus": "סטטוס",
+    "colWorker": "Worker",
+    "engineCount": "מוצגים {{shown}} מתוך {{total}} מנועי production",
+    "moduleLoaded": "נטען",
+    "modulePhase": "Phase",
+    "yes": "כן",
+    "no": "לא",
+    "frontendChunks": "chunks JS בפרונט (Performance API)",
+    "noJobs": "אין משימות pending או running לטננט זה.",
+    "controlParams": "פרמטרי בקרה ב-runtime",
+    "ceoTelemetry": "טלמטריית CEO (גולמי)"
   }
 }

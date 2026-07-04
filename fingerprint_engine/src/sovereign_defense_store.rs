@@ -49,9 +49,18 @@ pub fn routing_code(secret_b32: &str, step_secs: u64) -> Result<String, String> 
     totp.generate_current().map_err(|e| e.to_string())
 }
 
-fn derive_internal_mapping(client_id: i64, epoch: i64, port_min: i32, port_max: i32) -> (String, i32, String) {
+fn derive_internal_mapping(
+    client_id: i64,
+    epoch: i64,
+    port_min: i32,
+    port_max: i32,
+) -> (String, i32, String) {
     let octet = ((client_id.wrapping_mul(17) ^ epoch.wrapping_mul(31)) % 200 + 10) as u8;
-    let ip = format!("10.{octet}.{}.{}", (epoch % 250) as u8, ((epoch >> 8) % 250) as u8);
+    let ip = format!(
+        "10.{octet}.{}.{}",
+        (epoch % 250) as u8,
+        ((epoch >> 8) % 250) as u8
+    );
     let span = (port_max - port_min).max(1);
     let port = port_min + ((epoch as i32).abs() % span);
     let fingerprints = [
@@ -61,7 +70,8 @@ fn derive_internal_mapping(client_id: i64, epoch: i64, port_min: i32, port_max: 
         "Microsoft-IIS/10.0",
         "envoy/1.29.0",
     ];
-    let fp = fingerprints[((epoch as i64).unsigned_abs() as usize) % fingerprints.len()].to_string();
+    let fp =
+        fingerprints[((epoch as i64).unsigned_abs() as usize) % fingerprints.len()].to_string();
     (ip, port, fp)
 }
 
@@ -87,7 +97,8 @@ pub async fn ensure_routing_token(
     let (secret_b32, step) = if let Some(r) = row {
         (
             r.try_get::<String, _>("secret_b32").unwrap_or_default(),
-            r.try_get::<i32, _>("rotation_step_secs").unwrap_or(rotation_step_secs),
+            r.try_get::<i32, _>("rotation_step_secs")
+                .unwrap_or(rotation_step_secs),
         )
     } else {
         let secret = generate_routing_secret();
@@ -115,7 +126,8 @@ pub async fn rotate_liquid_matrix(
     client_id: i64,
     rotation_step_secs: i32,
 ) -> Result<LiquidRotation, String> {
-    let (secret_b32, step) = ensure_routing_token(pool, tenant_id, client_id, rotation_step_secs).await?;
+    let (secret_b32, step) =
+        ensure_routing_token(pool, tenant_id, client_id, rotation_step_secs).await?;
     let step_u = step as u64;
     let epoch = current_epoch(step_u);
     let code = routing_code(&secret_b32, step_u)?;
@@ -334,7 +346,9 @@ pub async fn dashboard_snapshot(
 
     let _ = tx.commit().await;
 
-    let liquid = rotate_liquid_matrix(pool, tenant_id, client_id, 3).await.ok();
+    let liquid = rotate_liquid_matrix(pool, tenant_id, client_id, 3)
+        .await
+        .ok();
 
     Ok(json!({
         "client_id": client_id,

@@ -156,9 +156,9 @@ const MGMT_PORTS: &[(u16, &str, &str)] = &[
 ];
 
 const SNMP_PUBLIC_GET: &[u8] = &[
-    0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0, 0x19,
-    0x02, 0x04, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x0c, 0x30,
-    0x0a, 0x06, 0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
+    0x30, 0x26, 0x02, 0x01, 0x01, 0x04, 0x06, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0xa0, 0x19, 0x02,
+    0x04, 0x00, 0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x0c, 0x30, 0x0a, 0x06,
+    0x06, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x00, 0x05, 0x00,
 ];
 
 const SSDP_MSEARCH: &[u8] = b"\
@@ -279,7 +279,9 @@ fn snmp_public_sysdescr_response(resp: &[u8]) -> bool {
         return false;
     }
     resp.iter().any(|b| b.is_ascii_graphic() && *b != b' ')
-        && String::from_utf8_lossy(resp).chars().any(|c| c.is_alphabetic())
+        && String::from_utf8_lossy(resp)
+            .chars()
+            .any(|c| c.is_alphabetic())
 }
 
 #[must_use]
@@ -356,7 +358,10 @@ fn extract_server_version(server: &str) -> Option<String> {
     None
 }
 
-async fn http_head_probe(client: &Client, url: &str) -> Option<(u16, Vec<(String, String)>, String)> {
+async fn http_head_probe(
+    client: &Client,
+    url: &str,
+) -> Option<(u16, Vec<(String, String)>, String)> {
     let resp = client.head(url).send().await.ok()?;
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
@@ -570,16 +575,18 @@ async fn probe_firmware_artifacts(
     }
 }
 
-async fn probe_udp_services(host: &str, target: &str, findings: &mut Vec<Value>, ledger: &mut ExposureLedger) {
+async fn probe_udp_services(
+    host: &str,
+    target: &str,
+    findings: &mut Vec<Value>,
+    ledger: &mut ExposureLedger,
+) {
     if let Some(resp) = udp_probe_response(host, 1900, SSDP_MSEARCH).await {
         if ssdp_response_valid(&resp) {
             ledger.upnp = true;
             let sev = "medium";
             ledger.bump_sev(sev);
-            let snip: String = String::from_utf8_lossy(&resp)
-                .chars()
-                .take(200)
-                .collect();
+            let snip: String = String::from_utf8_lossy(&resp).chars().take(200).collect();
             findings.push(iot_finding(
                 &format!("UPnP SSDP responder on {}:1900/udp", host),
                 sev,
@@ -633,7 +640,12 @@ async fn probe_udp_services(host: &str, target: &str, findings: &mut Vec<Value>,
     }
 }
 
-async fn probe_mgmt_ports(host: &str, target: &str, findings: &mut Vec<Value>, ledger: &mut ExposureLedger) {
+async fn probe_mgmt_ports(
+    host: &str,
+    target: &str,
+    findings: &mut Vec<Value>,
+    ledger: &mut ExposureLedger,
+) {
     let ports: Vec<u16> = MGMT_PORTS.iter().map(|&(p, ..)| p).collect();
     for port in tcp_scan(host, &ports, 12).await {
         if port == 69 {
@@ -764,11 +776,16 @@ pub async fn run_iot_firmware_result(target: &str) -> EngineResult {
             continue;
         }
         let haystack = probe_haystack(p);
-        let camera_markers = ["rtsp", "streaming", "onvif", "hikvision", "dahua", "mjpg", "video.cgi"];
-        if camera_markers
-            .iter()
-            .any(|m| haystack.contains(m))
-        {
+        let camera_markers = [
+            "rtsp",
+            "streaming",
+            "onvif",
+            "hikvision",
+            "dahua",
+            "mjpg",
+            "video.cgi",
+        ];
+        if camera_markers.iter().any(|m| haystack.contains(m)) {
             let sev = "medium";
             ledger.bump_sev(sev);
             findings.push(iot_finding(
@@ -880,7 +897,9 @@ mod tests {
         let mut resp = vec![0x30, 0x20, 0x2b, 0x06, 0x01, 0x02, 0x01, 0x01, 0x04, 0x0a];
         resp.extend_from_slice(b"RouterOS 7");
         assert!(snmp_public_sysdescr_response(&resp));
-        assert!(!snmp_public_sysdescr_response(&[0x30, 0x03, 0x01, 0x01, 0x00]));
+        assert!(!snmp_public_sysdescr_response(&[
+            0x30, 0x03, 0x01, 0x01, 0x00
+        ]));
     }
 
     #[test]
@@ -895,7 +914,9 @@ mod tests {
         assert!(factory_default_cred_hint(
             "Default login is admin/admin for first setup"
         ));
-        assert!(!factory_default_cred_hint("<form><input type=password></form>"));
+        assert!(!factory_default_cred_hint(
+            "<form><input type=password></form>"
+        ));
     }
 
     #[test]

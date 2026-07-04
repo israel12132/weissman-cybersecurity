@@ -3,12 +3,14 @@ import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { ENGINES_BY_ID, ENGINE_GROUPS } from '../lib/enginesRegistry'
-import { apiFetch, resolveEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 import { downloadBytes } from '../lib/pdfExport'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
@@ -19,6 +21,8 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
+import { useClient } from '../context/ClientContext'
+import { useRegisterHubClient } from '../context/EngineHubContext'
 
 const MAX_LINES_REAL = 1000
 const DEDICATED_ENGINE_IDS = new Set(strategicEnginesNeedingDedicatedPage().map((e) => e.id))
@@ -340,11 +344,17 @@ export default function EngineDetail() {
   const [jobId, setJobId]                 = useState(null)
   const [lastRunStatus, setLastRunStatus] = useState(null)
   const esRef = useRef(null)
+  const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients]             = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const { extraParams, setParam: setExtraParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
+  useRegisterHubClient(selectedClientId)
+
+  useEffect(() => {
+    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
+  }, [cockpitClientId])
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [toast, setToast]                 = useState(null)
   const [activeTab, setActiveTab]         = useState('output')
@@ -447,9 +457,8 @@ export default function EngineDetail() {
         const streamPath = engineId === 'poe_synthesis'
           ? `/api/poe-scan/stream/${encodeURIComponent(jid)}`
           : `/api/telemetry/stream?job_id=${encodeURIComponent(jid)}`
-        const url = await resolveEventSourceUrl(streamPath)
         if (esRef.current) esRef.current.close()
-        const es = new EventSource(url, { withCredentials: true })
+        const es = openSseStream(streamPath)
         esRef.current = es
         es.onmessage = (e) => {
           try {
@@ -628,7 +637,10 @@ export default function EngineDetail() {
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <AgentRequiredGate engineId={engineId}>
-        <EvidenceNotice>{t('pages.engineDetail.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader
+          evidence={t('pages.engineDetail.evidence_notice')}
+          engineId={engineId}
+        />
 
         {/* ── Hero header ─────────────────────────────────────────────────── */}
         <motion.section

@@ -27,8 +27,14 @@ pub fn build(
     live_blast: Option<&Value>,
     real_live_risk_score: Option<u64>,
 ) -> Value {
-    let crit = findings.iter().filter(|f| f.policy.severity == super::model::Severity::Critical).count();
-    let high = findings.iter().filter(|f| f.policy.severity == super::model::Severity::High).count();
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == super::model::Severity::Critical)
+        .count();
+    let high = findings
+        .iter()
+        .filter(|f| f.policy.severity == super::model::Severity::High)
+        .count();
 
     let compliance_matrix: Vec<Value> = compliance
         .iter()
@@ -48,11 +54,26 @@ pub fn build(
 
     let audit_ready = gate_passed
         && crit == 0
-        && soc2_report.get("audit_ready").and_then(Value::as_bool).unwrap_or(false)
-        && pci_report.get("cde_ready").and_then(Value::as_bool).unwrap_or(true)
-        && hipaa_report.get("baa_ready").and_then(Value::as_bool).unwrap_or(true)
-        && iso27001_report.get("certification_ready").and_then(Value::as_bool).unwrap_or(true)
-        && fedramp_report.get("ato_ready").and_then(Value::as_bool).unwrap_or(true);
+        && soc2_report
+            .get("audit_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        && pci_report
+            .get("cde_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        && hipaa_report
+            .get("baa_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        && iso27001_report
+            .get("certification_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        && fedramp_report
+            .get("ato_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
 
     json!({
         "target": target,

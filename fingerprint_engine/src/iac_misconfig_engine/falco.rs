@@ -7,8 +7,17 @@ use Severity::{High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "falco", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "falco",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -60,14 +69,22 @@ pub const SENSITIVE_PATH_EXCL: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![RULE_DISABLED, CATCH_ALL, FILE_ONLY_OUTPUT, SENSITIVE_PATH_EXCL]
+    vec![
+        RULE_DISABLED,
+        CATCH_ALL,
+        FILE_ONLY_OUTPUT,
+        SENSITIVE_PATH_EXCL,
+    ]
 }
 
 fn is_falco(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n.contains("falco") || lc.contains("- rule:") || lc.contains("condition:") && lc.contains("container")
-        || lc.contains("falco.yaml") || lc.contains("falco_rules")
+    n.contains("falco")
+        || lc.contains("- rule:")
+        || lc.contains("condition:") && lc.contains("container")
+        || lc.contains("falco.yaml")
+        || lc.contains("falco_rules")
 }
 
 #[must_use]
@@ -84,11 +101,17 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("condition: true") || lc.contains("evt.type=*") {
         out.push(Finding::new(CATCH_ALL, file, file).observed("catch-all condition"));
     }
-    if lc.contains("program_output:") && !lc.contains("grpc") && !lc.contains("http_output") && !lc.contains("syslog") {
+    if lc.contains("program_output:")
+        && !lc.contains("grpc")
+        && !lc.contains("http_output")
+        && !lc.contains("syslog")
+    {
         out.push(Finding::new(FILE_ONLY_OUTPUT, file, file).observed("file-only output"));
     }
     if lc.contains("not fd.name") && (lc.contains("/etc/shadow") || lc.contains("docker.sock")) {
-        out.push(Finding::new(SENSITIVE_PATH_EXCL, file, file).observed("excludes sensitive paths"));
+        out.push(
+            Finding::new(SENSITIVE_PATH_EXCL, file, file).observed("excludes sensitive paths"),
+        );
     }
 
     out
@@ -100,7 +123,8 @@ mod tests {
 
     #[test]
     fn flags_disabled_rule() {
-        let r = "- rule: Terminal shell in container\n  enabled: false\n  condition: spawned_process";
+        let r =
+            "- rule: Terminal shell in container\n  enabled: false\n  condition: spawned_process";
         let f = evaluate("falco/custom.yaml", r);
         assert!(f.iter().any(|x| x.policy.id == RULE_DISABLED.id));
     }

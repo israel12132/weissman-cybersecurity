@@ -49,7 +49,10 @@ pub fn mitre_rollup(findings: &[Finding], chains: &[SynthesizedChain]) -> Vec<Va
         let sa = a["max_severity"].as_str().unwrap_or("");
         let sb = b["max_severity"].as_str().unwrap_or("");
         severity_rank(sb).cmp(&severity_rank(sa)).then_with(|| {
-            b["findings"].as_u64().unwrap_or(0).cmp(&a["findings"].as_u64().unwrap_or(0))
+            b["findings"]
+                .as_u64()
+                .unwrap_or(0)
+                .cmp(&a["findings"].as_u64().unwrap_or(0))
         })
     });
     rows.truncate(25);
@@ -64,15 +67,25 @@ pub fn executive_summary(
     grade: &str,
     gate_passed: bool,
 ) -> Value {
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count();
-    let high = findings.iter().filter(|f| f.policy.severity == Severity::High).count();
-    let top_frameworks: BTreeMap<String, u64> = findings.iter().fold(BTreeMap::new(), |mut m, f| {
-        *m.entry(f.policy.framework.to_string()).or_insert(0) += 1;
-        m
-    });
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count();
+    let high = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::High)
+        .count();
+    let top_frameworks: BTreeMap<String, u64> =
+        findings.iter().fold(BTreeMap::new(), |mut m, f| {
+            *m.entry(f.policy.framework.to_string()).or_insert(0) += 1;
+            m
+        });
     let mut fw_sorted: Vec<_> = top_frameworks.into_iter().collect();
     fw_sorted.sort_by(|a, b| b.1.cmp(&a.1));
-    let dominant = fw_sorted.first().map(|(k, v)| format!("{k} ({v})")).unwrap_or_else(|| "none".to_string());
+    let dominant = fw_sorted
+        .first()
+        .map(|(k, v)| format!("{k} ({v})"))
+        .unwrap_or_else(|| "none".to_string());
 
     let narrative = if !gate_passed && !chains.is_empty() {
         format!(

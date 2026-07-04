@@ -1,35 +1,73 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const E2E_PORT = process.env.PLAYWRIGHT_PORT || '5199'
-const E2E_BASE = `http://localhost:${E2E_PORT}`
+const MOCK_BASE = `http://localhost:${E2E_PORT}`
+const LIVE_BASE = (process.env.WEISSMAN_E2E_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '')
+const UI_DEV_BASE = (process.env.PLAYWRIGHT_UI_DEV === '1' ? 'http://127.0.0.1:5173' : LIVE_BASE).replace(/\/$/, '')
+const IS_LIVE = process.env.PLAYWRIGHT_LIVE === '1'
+const AUTH_FILE = path.join(__dirname, 'tests-e2e', '.auth', 'admin.json')
 
 /**
- * Command Center E2E — UI smoke only (Vite dev server + API mocks).
- * NOT a live-stack contract: real API/browser E2E runs in CI via
- * scripts/audit_ui_button_scan_paths.mjs against weissman-server.
- * Mocks live under tests-e2e/ only; they are never imported by the production SPA bundle.
+ * Two projects:
+ *  - chromium-mock: Vite dev server + API mocks (fast UI smoke)
+ *  - chromium-live: real backend at WEISSMAN_E2E_BASE (Docker / run_e2e_stack.sh)
  */
 export default defineConfig({
   testDir: './tests-e2e',
-  timeout: 120_000,
-  expect: { timeout: 20_000 },
+  timeout: 180_000,
+  expect: { timeout: 30_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: {
-    baseURL: E2E_BASE,
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    ...devices['Desktop Chrome'],
-  },
-  webServer: {
-    command: `npm run dev -- --port ${E2E_PORT} --strictPort`,
-    url: `${E2E_BASE}/command-center/operations`,
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
-  projects: [{ name: 'chromium', use: {} }],
+  projects: IS_LIVE
+    ? [
+        {
+          name: 'live-setup',
+          testMatch: /auth\.setup\.ts/,
+          use: {
+            baseURL: UI_DEV_BASE,
+            ...devices['Desktop Chrome'],
+          },
+        },
+        {
+          name: 'chromium-live',
+          testMatch: /live-(journey|ui-crawl)\.spec\.ts/,
+          dependencies: ['live-setup'],
+          use: {
+            baseURL: UI_DEV_BASE,
+            storageState: AUTH_FILE,
+            trace: 'on-first-retry',
+            screenshot: 'only-on-failure',
+            video: 'retain-on-failure',
+            ...devices['Desktop Chrome'],
+          },
+        },
+      ]
+    : [
+        {
+          name: 'chromium-mock',
+          testIgnore: /live-journey\.spec\.ts/,
+          use: {
+            baseURL: MOCK_BASE,
+            trace: 'on-first-retry',
+            screenshot: 'only-on-failure',
+            video: 'retain-on-failure',
+            ...devices['Desktop Chrome'],
+          },
+        },
+      ],
+  webServer: IS_LIVE
+    ? undefined
+    : {
+        command: `npm run dev -- --port ${E2E_PORT} --strictPort`,
+        url: `${MOCK_BASE}/command-center/operations`,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      },
 })

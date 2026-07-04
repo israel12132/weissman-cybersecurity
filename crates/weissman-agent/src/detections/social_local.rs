@@ -6,11 +6,23 @@ use serde_json::{json, Map, Value};
 
 pub async fn run_deepfake_voice(engine: &str) -> anyhow::Result<Vec<Value>> {
     let tts = any_process_matches(&[
-        "elevenlabs", "coqui", "bark", "tortoise", "realtime-voice", "so-vits", "piper",
-        "ffmpeg", "obs", "voicemod", "clownfish",
+        "elevenlabs",
+        "coqui",
+        "bark",
+        "tortoise",
+        "realtime-voice",
+        "so-vits",
+        "piper",
+        "ffmpeg",
+        "obs",
+        "voicemod",
+        "clownfish",
     ]);
     let mut model_paths: Vec<String> = Vec::new();
-    if let Some(home) = std::env::var("HOME").ok().or_else(|| std::env::var("USERPROFILE").ok()) {
+    if let Some(home) = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok())
+    {
         for sub in [".cache/torch", ".local/share/tts", "Documents/voice"] {
             let p = format!("{home}/{sub}");
             if tokio::fs::metadata(&p).await.is_ok() {
@@ -39,7 +51,12 @@ pub async fn run_deepfake_voice(engine: &str) -> anyhow::Result<Vec<Value>> {
 pub async fn run_pretexting(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = Vec::new();
     let mail_clients = any_process_matches(&[
-        "outlook", "thunderbird", "mail", "evolution", "mutt", "geary",
+        "outlook",
+        "thunderbird",
+        "mail",
+        "evolution",
+        "mutt",
+        "geary",
     ]);
     let rules_hint = false;
 
@@ -72,7 +89,13 @@ pub async fn run_pretexting(engine: &str) -> anyhow::Result<Vec<Value>> {
 pub async fn run_insider_threat(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = Vec::new();
     let sync_tools = any_process_matches(&[
-        "dropbox", "onedrive", "googledrivesync", "rclone", "syncthing", "mega", "box",
+        "dropbox",
+        "onedrive",
+        "googledrivesync",
+        "rclone",
+        "syncthing",
+        "mega",
+        "box",
     ]);
     let archive_tools = any_process_matches(&["7z", "7zfm", "winrar", "rar", "tar", "zip"]);
     let usb_tools = any_process_matches(&["usb", "mass storage"]);
@@ -131,7 +154,8 @@ pub async fn run_physical_social(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     #[cfg(target_os = "linux")]
     {
-        if run_cmd_lossy("loginctl", &["show-session", "self", "-p", "LockedHint"]).await
+        if run_cmd_lossy("loginctl", &["show-session", "self", "-p", "LockedHint"])
+            .await
             .is_some_and(|s| s.contains("no"))
         {
             screen_locked = false;
@@ -141,7 +165,10 @@ pub async fn run_physical_social(engine: &str) -> anyhow::Result<Vec<Value>> {
     {
         if run_cmd_lossy(
             "python3",
-            &["-c", "import Quartz; print(Quartz.CGSessionCopyCurrentSessionDictionary())"],
+            &[
+                "-c",
+                "import Quartz; print(Quartz.CGSessionCopyCurrentSessionDictionary())",
+            ],
         )
         .await
         .is_none()
@@ -153,7 +180,11 @@ pub async fn run_physical_social(engine: &str) -> anyhow::Result<Vec<Value>> {
     {
         if run_cmd_lossy(
             "powershell",
-            &["-NoProfile", "-Command", "(Get-Process logonui -ErrorAction SilentlyContinue) -eq $null"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "(Get-Process logonui -ErrorAction SilentlyContinue) -eq $null",
+            ],
         )
         .await
         .is_some_and(|s| s.trim().eq_ignore_ascii_case("true"))
@@ -162,7 +193,8 @@ pub async fn run_physical_social(engine: &str) -> anyhow::Result<Vec<Value>> {
         }
     }
 
-    let smartcard = dir_entry_names("/dev").await
+    let smartcard = dir_entry_names("/dev")
+        .await
         .into_iter()
         .any(|n| n.starts_with("usb") || n.contains("sc"));
     let hid_badusb = any_process_matches(&["rubber", "ducky", "badusb", "arduino"]);

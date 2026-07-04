@@ -22,7 +22,12 @@ pub async fn run_wifi(engine: &str) -> anyhow::Result<Vec<Value>> {
                 }
             }
         }
-        if let Some(out) = run_cmd_lossy("nmcli", &["-t", "-f", "SSID,SECURITY,SIGNAL,BSSID", "dev", "wifi"]).await {
+        if let Some(out) = run_cmd_lossy(
+            "nmcli",
+            &["-t", "-f", "SSID,SECURITY,SIGNAL,BSSID", "dev", "wifi"],
+        )
+        .await
+        {
             for line in out.lines().take(40) {
                 let cols: Vec<&str> = line.split(':').collect();
                 if cols.len() >= 3 {
@@ -62,9 +67,13 @@ pub async fn run_wifi(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     #[cfg(target_os = "windows")]
     {
-        if let Some(out) = run_cmd_lossy("netsh", &["wlan", "show", "networks", "mode=bssid"]).await {
+        if let Some(out) = run_cmd_lossy("netsh", &["wlan", "show", "networks", "mode=bssid"]).await
+        {
             for line in out.lines().take(50) {
-                if line.contains("SSID") || line.contains("Authentication") || line.contains("Signal") {
+                if line.contains("SSID")
+                    || line.contains("Authentication")
+                    || line.contains("Signal")
+                {
                     networks.push(json!({"line": line.trim()}));
                 }
             }
@@ -83,7 +92,10 @@ pub async fn run_wifi(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut extras = Map::new();
     extras.insert("wireless_interfaces".into(), json!(interfaces));
     extras.insert("visible_networks".into(), json!(networks.len()));
-    extras.insert("network_sample".into(), json!(networks.iter().take(15).collect::<Vec<_>>()));
+    extras.insert(
+        "network_sample".into(),
+        json!(networks.iter().take(15).collect::<Vec<_>>()),
+    );
     findings.push(finding(
         engine,
         &format!(
@@ -124,7 +136,8 @@ pub async fn run_wpa3(engine: &str) -> anyhow::Result<Vec<Value>> {
     }
     #[cfg(target_os = "windows")]
     {
-        if let Some(out) = run_cmd_lossy("netsh", &["wlan", "show", "networks", "mode=bssid"]).await {
+        if let Some(out) = run_cmd_lossy("netsh", &["wlan", "show", "networks", "mode=bssid"]).await
+        {
             wpa3_capable = out.to_ascii_uppercase().contains("WPA3");
             wpa2_only = out.to_ascii_uppercase().contains("WPA2") && !wpa3_capable;
         }
@@ -175,7 +188,10 @@ pub async fn run_bluetooth(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut extras = Map::new();
     extras.insert("adapter_up".into(), json!(adapter_up));
     extras.insert("paired_devices".into(), json!(devices.len()));
-    extras.insert("device_sample".into(), json!(devices.iter().take(10).collect::<Vec<_>>()));
+    extras.insert(
+        "device_sample".into(),
+        json!(devices.iter().take(10).collect::<Vec<_>>()),
+    );
     findings.push(finding(
         engine,
         &format!(
@@ -220,10 +236,15 @@ pub async fn run_dhcp(engine: &str) -> anyhow::Result<Vec<Value>> {
                 }
             }
         }
-        for path in ["/var/lib/dhcp/dhclient.leases", "/var/lib/NetworkManager/internal-dhcp4.leases"] {
+        for path in [
+            "/var/lib/dhcp/dhclient.leases",
+            "/var/lib/NetworkManager/internal-dhcp4.leases",
+        ] {
             if let Ok(text) = tokio::fs::read_to_string(path).await {
                 for line in text.lines() {
-                    if line.contains("dhcp-server-identifier") || line.contains("option dhcp-server-identifier") {
+                    if line.contains("dhcp-server-identifier")
+                        || line.contains("option dhcp-server-identifier")
+                    {
                         lease_server = line
                             .split_whitespace()
                             .last()
@@ -255,7 +276,10 @@ pub async fn run_dhcp(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     let unique_gw: std::collections::HashSet<_> = gateways.iter().cloned().collect();
     let mut extras = Map::new();
-    extras.insert("default_gateways".into(), json!(unique_gw.iter().collect::<Vec<_>>()));
+    extras.insert(
+        "default_gateways".into(),
+        json!(unique_gw.iter().collect::<Vec<_>>()),
+    );
     extras.insert("dhcp_server".into(), json!(lease_server));
     findings.push(finding(
         engine,
@@ -296,9 +320,20 @@ pub async fn run_vlan(engine: &str) -> anyhow::Result<Vec<Value>> {
     }
     #[cfg(target_os = "windows")]
     {
-        if let Some(out) = run_cmd_lossy("powershell", &["-NoProfile", "-Command", "Get-NetAdapter | Select-Object Name, InterfaceDescription, Status | Format-List"]).await {
+        if let Some(out) = run_cmd_lossy(
+            "powershell",
+            &[
+                "-NoProfile",
+                "-Command",
+                "Get-NetAdapter | Select-Object Name, InterfaceDescription, Status | Format-List",
+            ],
+        )
+        .await
+        {
             for line in out.lines().take(30) {
-                if line.to_ascii_lowercase().contains("vlan") || line.to_ascii_lowercase().contains("trunk") {
+                if line.to_ascii_lowercase().contains("vlan")
+                    || line.to_ascii_lowercase().contains("trunk")
+                {
                     vlans.push(line.trim().to_string());
                 }
             }
@@ -338,7 +373,13 @@ pub async fn run_lte_5g(engine: &str) -> anyhow::Result<Vec<Value>> {
     #[cfg(target_os = "windows")]
     {
         if let Some(out) = run_cmd_lossy("netsh", &["mbn", "show", "interfaces"]).await {
-            modems.extend(out.lines().map(str::trim).filter(|l| !l.is_empty()).take(20).map(str::to_string));
+            modems.extend(
+                out.lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .take(20)
+                    .map(str::to_string),
+            );
         }
     }
 
@@ -379,7 +420,10 @@ pub async fn run_multicast(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     let mut extras = Map::new();
     extras.insert("multicast_groups".into(), json!(groups.len()));
-    extras.insert("sample".into(), json!(groups.iter().take(15).collect::<Vec<_>>()));
+    extras.insert(
+        "sample".into(),
+        json!(groups.iter().take(15).collect::<Vec<_>>()),
+    );
     findings.push(finding(
         engine,
         &format!("Multicast membership: {} group(s)", groups.len()),
@@ -400,7 +444,11 @@ pub async fn run_nat_traversal(engine: &str) -> anyhow::Result<Vec<Value>> {
     {
         if let Ok(text) = tokio::fs::read_to_string("/proc/net/tcp").await {
             for line in text.lines().skip(1) {
-                if let Some(port_hex) = line.split_whitespace().nth(1).and_then(|s| s.split(':').nth(1)) {
+                if let Some(port_hex) = line
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.split(':').nth(1))
+                {
                     if let Ok(port) = u16::from_str_radix(port_hex, 16) {
                         if matches!(port, 1900 | 5351 | 3478 | 5349) {
                             listening.push(port);
@@ -427,13 +475,22 @@ pub async fn run_nat_traversal(engine: &str) -> anyhow::Result<Vec<Value>> {
 
 pub async fn run_packet_injection(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = Vec::new();
-    let capture_tools = any_process_matches(&["tcpdump", "wireshark", "dumpcap", "tshark", "npcap", "scapy"]);
+    let capture_tools = any_process_matches(&[
+        "tcpdump",
+        "wireshark",
+        "dumpcap",
+        "tshark",
+        "npcap",
+        "scapy",
+    ]);
     let mut promisc: Vec<String> = Vec::new();
 
     #[cfg(target_os = "linux")]
     {
         for iface in dir_entry_names("/sys/class/net").await {
-            if let Ok(flags) = tokio::fs::read_to_string(format!("/sys/class/net/{iface}/flags")).await {
+            if let Ok(flags) =
+                tokio::fs::read_to_string(format!("/sys/class/net/{iface}/flags")).await
+            {
                 if let Ok(f) = flags.trim().parse::<u32>() {
                     // IFF_PROMISC = 0x100
                     if f & 0x100 != 0 {
@@ -474,7 +531,8 @@ pub async fn run_network_tap(engine: &str) -> anyhow::Result<Vec<Value>> {
             }
         }
     }
-    let bridge_tools = any_process_matches(&["tcpdump", "dumpcap", "netsniff-ng", "dsniff", "ettercap"]);
+    let bridge_tools =
+        any_process_matches(&["tcpdump", "dumpcap", "netsniff-ng", "dsniff", "ettercap"]);
 
     let mut extras = Map::new();
     extras.insert("tap_tun_interfaces".into(), json!(taps));

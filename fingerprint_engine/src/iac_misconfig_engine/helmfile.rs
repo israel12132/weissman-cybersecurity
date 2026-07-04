@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "helmfile", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "helmfile",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const INSECURE_REPO: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![SETVALUES_SECRET, CHART_VERSION_WILDCARD, WAIT_FALSE_PROD, MISSING_ATOMIC, INSECURE_REPO]
+    vec![
+        SETVALUES_SECRET,
+        CHART_VERSION_WILDCARD,
+        WAIT_FALSE_PROD,
+        MISSING_ATOMIC,
+        INSECURE_REPO,
+    ]
 }
 
 fn is_helmfile(name: &str, content: &str) -> bool {
@@ -95,12 +110,21 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
 
     for key in ["password", "apikey", "token", "secret"] {
         if (lc.contains("setvalues") || lc.contains("values:")) && lc.contains(key) {
-            out.push(Finding::new(SETVALUES_SECRET, file, file).observed(format!("setValues literal {key}")));
+            out.push(
+                Finding::new(SETVALUES_SECRET, file, file)
+                    .observed(format!("setValues literal {key}")),
+            );
             break;
         }
     }
-    if lc.contains("version: '*'") || lc.contains("version: \"*\"") || (lc.contains("chart:") && !lc.contains("version:")) {
-        out.push(Finding::new(CHART_VERSION_WILDCARD, file, file).observed("mutable/missing chart version"));
+    if lc.contains("version: '*'")
+        || lc.contains("version: \"*\"")
+        || (lc.contains("chart:") && !lc.contains("version:"))
+    {
+        out.push(
+            Finding::new(CHART_VERSION_WILDCARD, file, file)
+                .observed("mutable/missing chart version"),
+        );
     }
     if lc.contains("wait: false") {
         out.push(Finding::new(WAIT_FALSE_PROD, file, file).observed("wait: false"));

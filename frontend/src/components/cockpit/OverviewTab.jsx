@@ -333,7 +333,7 @@ export default function OverviewTab() {
           <SparklineOrEmpty
             data={trendSpark}
             color="#fbbf24"
-            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
+            emptyLabel={t('components.cockpitTabs.overview.no_trend')}
           />
         </div>
         <div className={GLASS_CARD}>
@@ -349,7 +349,7 @@ export default function OverviewTab() {
           <SparklineOrEmpty
             data={trendSpark}
             color="#22d3ee"
-            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
+            emptyLabel={t('components.cockpitTabs.overview.no_trend')}
           />
         </div>
         <div className={GLASS_CARD}>
@@ -365,7 +365,7 @@ export default function OverviewTab() {
           <SparklineOrEmpty
             data={zeroDayCount > 0 ? [{ v: zeroDayCount }, { v: zeroDayCount }] : []}
             color="#a855f7"
-            emptyLabel={t('components.cockpitTabs.overview.no_zero_day', { defaultValue: 'No zero-day signals' })}
+            emptyLabel={t('components.cockpitTabs.overview.no_zero_day')}
           />
         </div>
         <div className={GLASS_CARD}>
@@ -383,7 +383,7 @@ export default function OverviewTab() {
           <SparklineOrEmpty
             data={resolvedSpark}
             color={score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#ef4444'}
-            emptyLabel={t('components.cockpitTabs.overview.no_trend', { defaultValue: 'No 24h trend yet' })}
+            emptyLabel={t('components.cockpitTabs.overview.no_trend')}
           />
         </div>
       </div>
@@ -438,7 +438,7 @@ export default function OverviewTab() {
         <div className="space-y-5">
           {attackSurfaceData.length === 0 && !loading && (
             <p className="text-sm text-white/30 text-center py-4">
-              {t('components.cockpitTabs.overview.no_attack_surface', { defaultValue: 'No attack surface metrics from last scan yet.' })}
+              {t('components.cockpitTabs.overview.no_attack_surface')}
             </p>
           )}
           {attackSurfaceData.map(({ labelKey, label, value, color }) => (

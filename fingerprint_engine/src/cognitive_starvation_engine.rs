@@ -125,10 +125,7 @@ fn score_response(status: u16, body: &str, ua: &str) -> (f64, Vec<String>) {
     (score.clamp(0.0, 1.0), signals)
 }
 
-pub async fn run_cognitive_starvation_result(
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
+pub async fn run_cognitive_starvation_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
     let cfg = CognitiveConfig::from_params(&ctx.job_params);
     let host = extract_host(target);
     if host.is_empty() {
@@ -141,11 +138,7 @@ pub async fn run_cognitive_starvation_result(
         format!("https://{host}")
     };
 
-    let (pool, tenant_id, client_id) = match (
-        ctx.app_pool.as_ref(),
-        ctx.tenant_id,
-        ctx.client_id,
-    ) {
+    let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.clone(), t, c),
         _ => {
             return EngineResult::error(
@@ -169,8 +162,7 @@ pub async fn run_cognitive_starvation_result(
         .collect();
 
     if cfg.deploy_shadow {
-        let (shadow_path, _) =
-            deception_engine::generate_honeytoken(TYPE_SHADOW_ENDPOINT, &host);
+        let (shadow_path, _) = deception_engine::generate_honeytoken(TYPE_SHADOW_ENDPOINT, &host);
         let shadow_url = join_url(&base_url, &shadow_path);
         let mut ev = serde_json::Map::new();
         ev.insert("shadow_path".into(), json!(shadow_path));
@@ -182,16 +174,19 @@ pub async fn run_cognitive_starvation_result(
     let mut findings: Vec<Value> = Vec::new();
     let mut sessions = 0i64;
 
-    for (i, ua) in BOT_USER_AGENTS.iter().enumerate().take(cfg.probe_rate as usize) {
+    for (i, ua) in BOT_USER_AGENTS
+        .iter()
+        .enumerate()
+        .take(cfg.probe_rate as usize)
+    {
         let headers = bot_header_pairs(ua);
-        let (status, body_preview) = if let Some(r) =
-            http_get_with_headers(&client, &base_url, &headers).await
-        {
-            let preview: String = r.body.chars().take(400).collect();
-            (r.status, preview)
-        } else {
-            (0, String::new())
-        };
+        let (status, body_preview) =
+            if let Some(r) = http_get_with_headers(&client, &base_url, &headers).await {
+                let preview: String = r.body.chars().take(400).collect();
+                (r.status, preview)
+            } else {
+                (0, String::new())
+            };
 
         let (bot_score, signals) = score_response(status, &body_preview, ua);
         if bot_score < cfg.min_bot_score {
@@ -279,7 +274,10 @@ pub async fn run_cognitive_starvation_result(
     if findings.is_empty() {
         return empty_ok(
             COGNITIVE_STARVATION_ENGINE_ID,
-            &format!("COGNITIVE STARVATION: no bot score ≥ {:.0}% observed", cfg.min_bot_score * 100.0),
+            &format!(
+                "COGNITIVE STARVATION: no bot score ≥ {:.0}% observed",
+                cfg.min_bot_score * 100.0
+            ),
         );
     }
     EngineResult::ok(
@@ -289,9 +287,7 @@ pub async fn run_cognitive_starvation_result(
 }
 
 pub async fn run_cognitive_starvation(target: &str) {
-    print_result(
-        run_cognitive_starvation_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_cognitive_starvation_result(target, &EngineRunContext::default()).await);
 }
 
 #[cfg(test)]

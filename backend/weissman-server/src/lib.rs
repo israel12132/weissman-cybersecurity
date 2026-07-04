@@ -40,6 +40,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Err(msg) = fingerprint_engine::security_startup::enforce_production_security_policy() {
         return Err(format!("[startup] security policy refusal: {msg}").into());
     }
+    if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
+        return Err(format!("[startup] Redis distributed state refusal: {msg}").into());
+    }
     fingerprint_engine::auth_jwt::init_jwt_secret_from_env()
         .map_err(|msg| std::io::Error::new(std::io::ErrorKind::InvalidInput, msg))?;
     let database_url = std::env::var("DATABASE_URL").unwrap_or_default();
@@ -61,6 +64,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 )
             })?;
             fingerprint_engine::db::run_migrations(u).await?;
+            weissman_db::auth_rotation::sync_role_passwords_from_env_on_boot()
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
         }
     }
     let pools = database::connect_pools().await?;

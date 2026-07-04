@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
-import { apiEventSourceUrl } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 
 const TelemetryContext = createContext(null)
 
@@ -17,7 +17,7 @@ export function TelemetryProvider({ children }) {
   const esRef = useRef(null)
   const eventSeqRef = useRef(0)
   // Fan-out registry so additional consumers (e.g. WarRoomContext) can react to every
-  // raw telemetry event WITHOUT opening a second EventSource to the same endpoint.
+  // raw telemetry event WITHOUT opening a second stream to the same endpoint.
   const listenersRef = useRef(new Set())
 
   const subscribe = useCallback((fn) => {
@@ -60,19 +60,12 @@ export function TelemetryProvider({ children }) {
 
   useEffect(() => {
     let isMounted = true
-    let retryTimer = null
-    let retryDelay = 2000
+    const es = openSseStream('/api/telemetry/stream')
+    esRef.current = es
 
-    function connect() {
-      if (!isMounted) return
-      const url = apiEventSourceUrl('/api/telemetry/stream')
-      const es = new EventSource(url, { withCredentials: true })
-      esRef.current = es
+    es.onopen = () => { if (isMounted) setConnected(true) }
 
-      es.onopen = () => { if (isMounted) setConnected(true) }
-
-      es.onmessage = (e) => {
-        retryDelay = 2000 // reset backoff on successful message
+    es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data || '{}')
           // Fan the raw event out to any registered consumers first.
@@ -108,30 +101,18 @@ export function TelemetryProvider({ children }) {
         }
       }
 
-      es.onerror = () => {
-        es.close()
-        esRef.current = null
-        if (isMounted) setConnected(false)
-        if (!isMounted) return
-        // Exponential backoff reconnect (max 30 s)
-        retryTimer = setTimeout(() => {
-          retryDelay = Math.min(retryDelay * 1.5, 30_000)
-          connect()
-        }, retryDelay)
-      }
+    es.onerror = () => {
+      if (isMounted) setConnected(false)
     }
-
-    connect()
 
     return () => {
       isMounted = false
-      if (retryTimer) clearTimeout(retryTimer)
       if (esRef.current) {
         esRef.current.close()
         esRef.current = null
       }
     }
-  }, [addToast, addProgress])
+  }, [addToast, addProgress, pushActivity])
 
   const clearActivity = useCallback(() => setActivity([]), [])
 

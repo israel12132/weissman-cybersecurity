@@ -127,7 +127,9 @@ impl AwsScanConfig {
     }
 
     fn has_role(&self) -> bool {
-        self.role_arn.as_ref().is_some_and(|r| r.starts_with("arn:aws:iam::"))
+        self.role_arn
+            .as_ref()
+            .is_some_and(|r| r.starts_with("arn:aws:iam::"))
     }
 
     fn credentialed_ready(&self) -> bool {
@@ -387,7 +389,10 @@ pub async fn run_aws_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
     out.push(summary);
     out.extend(findings);
 
-    let actionable = out.iter().filter(|f| finding_domain(f) != "posture").count();
+    let actionable = out
+        .iter()
+        .filter(|f| finding_domain(f) != "posture")
+        .count();
     EngineResult::ok(
         out,
         format!(
@@ -674,7 +679,12 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
         let max_age = i64::try_from(cfg.access_key_max_age_days).unwrap_or(90);
         for u in users.iter().take(cfg.max_users_scanned) {
             let name = u.user_name().to_string();
-            let has_console = iam.get_login_profile().user_name(&name).send().await.is_ok();
+            let has_console = iam
+                .get_login_profile()
+                .user_name(&name)
+                .send()
+                .await
+                .is_ok();
             if has_console {
                 let mfa_empty = iam
                     .list_mfa_devices()
@@ -742,7 +752,12 @@ async fn scan_iam(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
                     ));
                 }
             }
-            if let Ok(att) = iam.list_attached_user_policies().user_name(&name).send().await {
+            if let Ok(att) = iam
+                .list_attached_user_policies()
+                .user_name(&name)
+                .send()
+                .await
+            {
                 for p in att.attached_policies() {
                     let arn = p.policy_arn().unwrap_or("");
                     if arn.ends_with(":policy/AdministratorAccess") {
@@ -829,7 +844,10 @@ async fn scan_s3(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str) 
                         (pab.block_public_acls(), "block_public_acls=false"),
                         (pab.ignore_public_acls(), "ignore_public_acls=false"),
                         (pab.block_public_policy(), "block_public_policy=false"),
-                        (pab.restrict_public_buckets(), "restrict_public_buckets=false"),
+                        (
+                            pab.restrict_public_buckets(),
+                            "restrict_public_buckets=false",
+                        ),
                     ];
                     for (flag, label) in weak {
                         if flag == Some(false) {
@@ -898,7 +916,10 @@ async fn scan_s3(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str) 
 
         // Default encryption (CIS 2.1.1).
         if let Err(e) = rs3.get_bucket_encryption().bucket(&name).send().await {
-            let code = e.as_service_error().and_then(|se| se.meta().code()).unwrap_or("");
+            let code = e
+                .as_service_error()
+                .and_then(|se| se.meta().code())
+                .unwrap_or("");
             if code == "ServerSideEncryptionConfigurationNotFoundError" {
                 f.push(aws_finding(
                     Domain::Data,
@@ -1093,9 +1114,30 @@ async fn scan_ec2(sdk: &aws_types::SdkConfig, cfg: &AwsScanConfig, target: &str)
 
 /// Common S3 bucket name suffixes used for permutation enumeration.
 const BUCKET_SUFFIXES: &[&str] = &[
-    "-backup", "-backups", "-prod", "-production", "-dev", "-staging", "-stage", "-test",
-    "-assets", "-static", "-media", "-uploads", "-logs", "-data", "-public", "-private",
-    "-archive", "-cdn", "-files", "-images", "-config", "-secrets", "-db", "-dump",
+    "-backup",
+    "-backups",
+    "-prod",
+    "-production",
+    "-dev",
+    "-staging",
+    "-stage",
+    "-test",
+    "-assets",
+    "-static",
+    "-media",
+    "-uploads",
+    "-logs",
+    "-data",
+    "-public",
+    "-private",
+    "-archive",
+    "-cdn",
+    "-files",
+    "-images",
+    "-config",
+    "-secrets",
+    "-db",
+    "-dump",
 ];
 
 /// Derive candidate S3 bucket names from the target host + operator-supplied lists.
@@ -1156,7 +1198,8 @@ async fn scan_external_surface(target: &str, cfg: &AwsScanConfig) -> Vec<Value> 
     for (name, probe) in probes {
         let Some(p) = probe else { continue };
         let body_l = p.body.to_ascii_lowercase();
-        if p.status == 200 && (body_l.contains("<listbucketresult") || body_l.contains("<contents>"))
+        if p.status == 200
+            && (body_l.contains("<listbucketresult") || body_l.contains("<contents>"))
         {
             f.push(aws_finding(
                 Domain::Exposure,
@@ -1340,12 +1383,16 @@ fn attack_path(
 }
 
 /// Correlate individual findings into end-to-end breach chains (Wiz-style toxic combinations).
-fn synthesize_attack_paths(findings: &[Value], target: &str, account_id: Option<&str>) -> Vec<Value> {
+fn synthesize_attack_paths(
+    findings: &[Value],
+    target: &str,
+    account_id: Option<&str>,
+) -> Vec<Value> {
     let mut paths: Vec<Value> = Vec::new();
     let acct = account_id.unwrap_or("the account");
 
-    let public_bucket =
-        has_title_contains(findings, "Public S3 bucket") || has_title_contains(findings, "world-readable");
+    let public_bucket = has_title_contains(findings, "Public S3 bucket")
+        || has_title_contains(findings, "world-readable");
     let leaked_key = has_title_contains(findings, "Exposed AWS credential");
     if public_bucket && leaked_key {
         paths.push(attack_path(

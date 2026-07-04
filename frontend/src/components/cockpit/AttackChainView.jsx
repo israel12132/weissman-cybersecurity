@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { ShieldAlert, ListOrdered } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import StandaloneLabShell from '../ui/StandaloneLabShell'
 
 const NS = 'components.tools.attackChainView'
 
@@ -100,24 +101,10 @@ export default function AttackChainView() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-8">
-          <Link
-            to="/"
-            className="text-sm text-cyan-400/90 hover:text-cyan-300 transition-colors"
-          >
-            {t(`${NS}.back_war_room`)}
-          </Link>
-          <div className="flex items-center gap-2 text-white/90">
-            <ShieldAlert className="w-5 h-5 text-amber-500" />
-            <h1 className="text-xl font-semibold tracking-wide">{t(`${NS}.title`)}</h1>
-          </div>
-          {runId != null && runId !== '' && (
-            <span className="text-xs text-white/50 ml-auto">{t(`${NS}.run_label`, { id: String(runId) })}</span>
-          )}
-        </div>
-
+    <StandaloneLabShell
+      title={t(`${NS}.title`)}
+      subtitle={runId != null && runId !== '' ? t(`${NS}.run_label`, { id: String(runId) }) : undefined}
+    >
         {steps.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -174,7 +161,6 @@ export default function AttackChainView() {
             })}
           </div>
         )}
-      </div>
-    </div>
+    </StandaloneLabShell>
   )
 }

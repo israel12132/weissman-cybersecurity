@@ -1,5 +1,5 @@
 /**
- * Master registry of all 551 attack engines.
+ * Master registry of all 558 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -10,27 +10,11 @@
  *   requiresTarget — whether a domain/URL is required to run this engine
  */
 
-export const ENGINE_GROUP_DEFS = [
-  { id: 'recon',        label: 'Recon & OSINT',       color: '#06b6d4' },
-  { id: 'web',          label: 'Web / API',            color: '#8b5cf6' },
-  { id: 'ai',           label: 'AI / LLM',             color: '#ec4899' },
-  { id: 'cloud',        label: 'Cloud / Infra',        color: '#3b82f6' },
-  { id: 'ot',           label: 'OT / ICS / IoT',       color: '#f59e0b' },
-  { id: 'stealth',      label: 'Stealth / Evasion',    color: '#6366f1' },
-  { id: 'crypto',       label: 'Crypto / Identity',    color: '#10b981' },
-  { id: 'network',      label: 'Network / Protocol',   color: '#f97316' },
-  { id: 'supply_chain', label: 'Supply Chain',         color: '#84cc16' },
-  { id: 'apt',          label: 'APT / Top-Tier',       color: '#ef4444' },
-  { id: 'malware',      label: 'Malware & Ransomware', color: '#dc2626' },
-  { id: 'social',       label: 'Social Engineering',   color: '#d97706' },
-  { id: 'mobile',       label: 'Mobile / Apps',        color: '#7c3aed' },
-  { id: 'data',         label: 'Data Exfiltration',    color: '#0891b2' },
-]
+import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
-/** Flat map of groupId → group definition for quick lookup */
-export const ENGINE_GROUPS = Object.fromEntries(ENGINE_GROUP_DEFS.map((g) => [g.id, g]))
+export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 551 engines in registry order */
+/** All 558 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -321,6 +305,70 @@ export const ENGINES_REGISTRY = [
     group: 'ot',
     mitre: 'T1011',
     description: 'Agentless wireless/IoT perimeter assessment — IoT cloud hubs (AWS/Azure/GCP/Home Assistant), BLE/GATT APIs, Zigbee/Z-Wave/Matter, MQTT/CoAP/LoRaWAN brokers, WLAN controllers, mDNS & RF bridge ports; Wiz-style toxic-combination attack paths, 0–100 posture grade & agent BLE validation',
+    requiresTarget: true,
+  },
+  {
+    id: 'avionics_adsb_attack',
+    label: 'Aviation ADS-B / ACARS Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Live ADS-B feeder, Beast input, SBS BaseStation, and ACARS port exposure — RoE-gated critical infrastructure probe with SDR agent guidance for RF-layer attacks',
+    requiresTarget: true,
+  },
+  {
+    id: 'maritime_ais_attack',
+    label: 'Maritime AIS / NMEA Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Live AIS/NMEA feed and gpsd socket detection — maritime navigation data integrity and ghost-vessel spoofing surface mapping',
+    requiresTarget: true,
+  },
+  {
+    id: 'ev_charging_ocpp_attack',
+    label: 'EV Charging OCPP Attack',
+    group: 'ot',
+    mitre: 'T0886',
+    description: 'Live OCPP WebSocket upgrade probes and SteVe management UI fingerprinting on EV charging central systems',
+    requiresTarget: true,
+  },
+  {
+    id: 'smart_grid_dlms_attack',
+    label: 'Smart Grid DLMS / IEC-104 Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Live IEC 60870-5-104 STARTDT handshake and DLMS/COSEM smart-meter port reachability — grid telecontrol exposure',
+    requiresTarget: true,
+  },
+  {
+    id: 'rail_signaling_attack',
+    label: 'Rail Signaling Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Rail SCADA telecontrol protocol surface mapping — IEC-104, Modbus, DNP3, OPC-UA, and signalling HMI fingerprints',
+    requiresTarget: true,
+  },
+  {
+    id: 'building_automation_attack',
+    label: 'Building Automation Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Live KNXnet/IP SEARCH_REQUEST, Tridium Niagara Fox, and LonWorks/IP building bus detection',
+    requiresTarget: true,
+  },
+  {
+    id: 'robotics_ros2_attack',
+    label: 'Robotics / ROS2 Attack',
+    group: 'ot',
+    mitre: 'T0855',
+    description: 'Unauthenticated ROS1 master XML-RPC, Universal Robots dashboard, and ROS2 DDS/RTPS discovery probes',
+    requiresTarget: true,
+  },
+  {
+    id: 'ot_sis_triton_attack',
+    label: 'OT SIS / Triconex TriStation',
+    group: 'ot',
+    mitre: 'T0853',
+    description: 'Triconex TriStation safety-instrumented-system reachability — TRITON-class life-safety exposure mapping under RoE',
     requiresTarget: true,
   },
 
@@ -3901,15 +3949,6 @@ export const ENGINES_REGISTRY = [
       '5ms process-delta ring buffer on endpoint agent + eBPF syscall ingest; autonomous SIGSTOP on web-server→shell spawn with live rollback evidence',
     requiresTarget: true,
     requiresAgent: true,
-  },
-  {
-    id: 'liquid_matrix',
-    label: 'LIQUID-MATRIX MTD',
-    group: 'defense',
-    mitre: 'T1599',
-    description:
-      'TOTP-synchronized routing tokens rotate internal IP/port/OS fingerprint every 3s — moving target defense for gateway and DNS layers',
-    requiresTarget: true,
   },
   {
     id: 'cognitive_starvation',

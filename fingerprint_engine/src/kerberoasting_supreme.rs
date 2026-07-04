@@ -4,7 +4,8 @@ use super::{
     ad_finding, attack_path_finding, extract_ldap_strings, extract_naming_context,
     extract_sam_accounts, extract_spns, filter_and, filter_equality, filter_extensible_match,
     filter_present, ldap_bind_result_code, ldap_exchange, ldap_search_request, AdSignals,
-    KerberosConfig, LDAP_ANON_BIND, T_ASREP, T_DELEGATION, T_DOMAIN_DISC, T_KERBEROAST, T_NTLM_RELAY,
+    KerberosConfig, LDAP_ANON_BIND, T_ASREP, T_DELEGATION, T_DOMAIN_DISC, T_KERBEROAST,
+    T_NTLM_RELAY,
 };
 use crate::arsenal_config::{finding_rich, Evidence, Intensity};
 use crate::cloud_hunter::{GraphEdge, GraphNode};
@@ -27,9 +28,8 @@ const ADCS_HTTP_PATHS: &[&str] = &[
 ];
 
 const STARTTLS_OID: &[u8] = &[
-    0x30, 0x1c, 0x02, 0x01, 0x03, 0x77, 0x17, 0x80, 0x15, 0x31, 0x2e, 0x33, 0x2e, 0x36, 0x2e,
-    0x31, 0x2e, 0x34, 0x2e, 0x31, 0x2e, 0x31, 0x34, 0x36, 0x36, 0x2e, 0x32, 0x30, 0x30, 0x33,
-    0x37,
+    0x30, 0x1c, 0x02, 0x01, 0x03, 0x77, 0x17, 0x80, 0x15, 0x31, 0x2e, 0x33, 0x2e, 0x36, 0x2e, 0x31,
+    0x2e, 0x34, 0x2e, 0x31, 0x2e, 0x31, 0x34, 0x36, 0x36, 0x2e, 0x32, 0x30, 0x30, 0x33, 0x37,
 ];
 
 fn build_resolver(choice: &str) -> Option<TokioResolver> {
@@ -110,12 +110,14 @@ pub async fn scan_smb_signing(
     if let Some(resp) = ldap_exchange(host, 445, &[&payload], cfg.timeout_ms).await {
         if let Some((enabled, required)) = parse_smb2_security_mode(&resp) {
             sig.smb_signing_required = Some(required);
-            sig.scores.smb_hardening = if required { 100.0 } else if enabled { 40.0 } else { 0.0 };
-            let sev = if required {
-                "info"
+            sig.scores.smb_hardening = if required {
+                100.0
+            } else if enabled {
+                40.0
             } else {
-                "high"
+                0.0
             };
+            let sev = if required { "info" } else { "high" };
             findings.push(ad_finding(
                 if required {
                     "SMB signing REQUIRED (relay-resistant)"
@@ -380,7 +382,13 @@ pub async fn scan_delegation_and_machines(
             &filter_equality("objectCategory", "person"),
             &filter_extensible_match("userAccountControl", "1.2.840.113556.1.4.803", "524288"),
         ]);
-        let search = ldap_search_request(5, &nc, 2, &uac_filter, &["sAMAccountName", "userAccountControl"]);
+        let search = ldap_search_request(
+            5,
+            &nc,
+            2,
+            &uac_filter,
+            &["sAMAccountName", "userAccountControl"],
+        );
         let msgs: Vec<&[u8]> = if sig.ldap_anon_ok {
             vec![LDAP_ANON_BIND, &search]
         } else {
@@ -535,13 +543,20 @@ pub async fn scan_msdcs_dns(
 pub fn emit_toxic_headline(target: &str, sig: &AdSignals, findings: &mut Vec<Value>) {
     let mut combos: Vec<String> = Vec::new();
     if sig.ldap_anon_ok && !sig.kerberoast_spns.is_empty() {
-        combos.push("anonymous LDAP + harvestable SPNs ⇒ credential-free Kerberoast setup".to_string());
+        combos.push(
+            "anonymous LDAP + harvestable SPNs ⇒ credential-free Kerberoast setup".to_string(),
+        );
     }
     if sig.kdc_live && sig.ldap_reachable && sig.smb_signing_required == Some(false) {
-        combos.push("internet KDC + LDAP + SMB signing not required ⇒ spray → relay → roast chain".to_string());
+        combos.push(
+            "internet KDC + LDAP + SMB signing not required ⇒ spray → relay → roast chain"
+                .to_string(),
+        );
     }
     if sig.adcs_exposed && sig.ldap_reachable {
-        combos.push("AD CS web enrollment + LDAP ⇒ ESC1–ESC8 certificate domain escalation".to_string());
+        combos.push(
+            "AD CS web enrollment + LDAP ⇒ ESC1–ESC8 certificate domain escalation".to_string(),
+        );
     }
     if !sig.unconstrained_delegation.is_empty() && !sig.spnego_urls.is_empty() {
         combos.push("unconstrained delegation + internet SPNEGO ⇒ TGT theft path".to_string());
@@ -591,31 +606,71 @@ pub fn emit_remediation_roadmap(target: &str, sig: &AdSignals, findings: &mut Ve
     };
 
     if sig.open_ports.contains(&88) || sig.kdc_live {
-        push("P0", "Block Kerberos 88/tcp from internet — VPN/ZTNA only", "hours");
+        push(
+            "P0",
+            "Block Kerberos 88/tcp from internet — VPN/ZTNA only",
+            "hours",
+        );
     }
     if sig.ldap_anon_ok {
-        push("P0", "Disable anonymous LDAP binds (dsHeuristics bit 2) + require LDAP signing", "hours");
+        push(
+            "P0",
+            "Disable anonymous LDAP binds (dsHeuristics bit 2) + require LDAP signing",
+            "hours",
+        );
     }
     if sig.smb_signing_required == Some(false) {
-        push("P0", "Enforce SMB signing required on all DCs (GPO)", "hours");
+        push(
+            "P0",
+            "Enforce SMB signing required on all DCs (GPO)",
+            "hours",
+        );
     }
     if !sig.kerberoast_spns.is_empty() {
-        push("P1", "Rotate service-account passwords to 25+ char random; deploy gMSA", "days");
+        push(
+            "P1",
+            "Rotate service-account passwords to 25+ char random; deploy gMSA",
+            "days",
+        );
     }
     if !sig.asrep_accounts.is_empty() {
-        push("P1", "Enable Kerberos pre-auth on all user accounts; audit UAC 0x400000", "hours");
+        push(
+            "P1",
+            "Enable Kerberos pre-auth on all user accounts; audit UAC 0x400000",
+            "hours",
+        );
     }
     if sig.adcs_exposed {
-        push("P0", "Disable AD CS web enrollment; audit certificate templates (ESC1–ESC8)", "days");
+        push(
+            "P0",
+            "Disable AD CS web enrollment; audit certificate templates (ESC1–ESC8)",
+            "days",
+        );
     }
     if !sig.unconstrained_delegation.is_empty() {
-        push("P0", "Remove unconstrained delegation from tier-0/tier-1 accounts", "days");
+        push(
+            "P0",
+            "Remove unconstrained delegation from tier-0/tier-1 accounts",
+            "days",
+        );
     }
     if !sig.rbcd_accounts.is_empty() {
-        push("P1", "Audit RBCD msDS-AllowedToActOnBehalfOfOtherIdentity ACLs", "days");
+        push(
+            "P1",
+            "Audit RBCD msDS-AllowedToActOnBehalfOfOtherIdentity ACLs",
+            "days",
+        );
     }
-    push("P2", "Deploy honeypot SPN + monitor Event 4769 RC4-HMAC TGS-REQ volume", "days");
-    push("P2", "Enable LDAP channel binding + EPA on ADFS/OWA", "days");
+    push(
+        "P2",
+        "Deploy honeypot SPN + monitor Event 4769 RC4-HMAC TGS-REQ volume",
+        "days",
+    );
+    push(
+        "P2",
+        "Enable LDAP channel binding + EPA on ADFS/OWA",
+        "days",
+    );
 
     if steps.is_empty() {
         return;
@@ -641,11 +696,23 @@ pub fn emit_agent_guidance(target: &str, cfg: &KerberosConfig, findings: &mut Ve
         return;
     }
     let capabilities = [
-        ("credentialed_tgs_kerberoast", "Authenticated TGS-REQ / RC4 ticket capture for offline crack"),
-        ("bloodhound_acl_graph", "Full BloodHound ACE/ACL attack-path graph"),
-        ("gpo_laps_audit", "GPO, LAPS, and adminCount tier-0 policy audit on-DC"),
+        (
+            "credentialed_tgs_kerberoast",
+            "Authenticated TGS-REQ / RC4 ticket capture for offline crack",
+        ),
+        (
+            "bloodhound_acl_graph",
+            "Full BloodHound ACE/ACL attack-path graph",
+        ),
+        (
+            "gpo_laps_audit",
+            "GPO, LAPS, and adminCount tier-0 policy audit on-DC",
+        ),
         ("dcsync_surface", "DRSUAPI / DCSync permission enumeration"),
-        ("internal_krbtgt", "KRBTGT hash rotation age + Golden Ticket indicators"),
+        (
+            "internal_krbtgt",
+            "KRBTGT hash rotation age + Golden Ticket indicators",
+        ),
     ];
     for (cap, desc) in capabilities {
         findings.push(finding_rich(
@@ -659,7 +726,9 @@ pub fn emit_agent_guidance(target: &str, cfg: &KerberosConfig, findings: &mut Ve
             ),
             target,
             1.0,
-            Evidence::new().with("capability", cap).with("requires_agent", true),
+            Evidence::new()
+                .with("capability", cap)
+                .with("requires_agent", true),
         ));
     }
 }
@@ -711,14 +780,20 @@ pub fn finalize_category_scores(sig: &mut AdSignals, findings: &[Value]) {
 
 pub fn enrich_posture_evidence(ev: Evidence, sig: &AdSignals) -> Evidence {
     ev.with("category_scores", json!(sig.scores.to_json()))
-        .with("unconstrained_delegation_count", sig.unconstrained_delegation.len())
+        .with(
+            "unconstrained_delegation_count",
+            sig.unconstrained_delegation.len(),
+        )
         .with("rbcd_count", sig.rbcd_accounts.len())
         .with("machine_spn_count", sig.machine_spns.len())
         .with("adcs_exposed", sig.adcs_exposed)
         .with("user_enum_oracle", sig.user_enum_oracle)
         .with("smb_signing_required", json!(sig.smb_signing_required))
         .with("tier0_spn_count", sig.tier0_spns.len())
-        .with("constrained_delegation_count", sig.constrained_delegation.len())
+        .with(
+            "constrained_delegation_count",
+            sig.constrained_delegation.len(),
+        )
         .with(
             "hybrid_entra_realm",
             sig.hybrid_entra_realm.as_deref().unwrap_or(""),
@@ -729,11 +804,7 @@ pub fn enrich_posture_evidence(ev: Evidence, sig: &AdSignals) -> Evidence {
         )
 }
 
-pub fn extend_graph(
-    nodes: &mut Vec<GraphNode>,
-    edges: &mut Vec<GraphEdge>,
-    sig: &AdSignals,
-) {
+pub fn extend_graph(nodes: &mut Vec<GraphNode>, edges: &mut Vec<GraphEdge>, sig: &AdSignals) {
     let mut add = |id: &str, label: &str, kind: &str| {
         nodes.push(GraphNode {
             id: id.to_string(),
@@ -863,7 +934,11 @@ pub async fn scan_hybrid_entra(
                 "Unknown"
             };
             sig.hybrid_entra_realm = Some(ns_type.to_string());
-            let sev = if ns_type == "Federated" { "medium" } else { "info" };
+            let sev = if ns_type == "Federated" {
+                "medium"
+            } else {
+                "info"
+            };
             findings.push(ad_finding(
                 &format!("Microsoft Entra hybrid realm: {ns_type} ({})", cfg.domain),
                 sev,
@@ -886,7 +961,10 @@ pub async fn scan_hybrid_entra(
         }
     }
     // Autodiscover — Exchange/AD hybrid signal
-    let auto_url = format!("{}/autodiscover/autodiscover.xml", url.trim_end_matches('/'));
+    let auto_url = format!(
+        "{}/autodiscover/autodiscover.xml",
+        url.trim_end_matches('/')
+    );
     if let Ok(resp) = client.get(&auto_url).send().await {
         let status = resp.status().as_u16();
         if status == 200 || status == 401 {
@@ -947,13 +1025,19 @@ pub async fn scan_ldap_rootdse_meta(
         return;
     };
     let root_filter = filter_present("objectClass");
-    let root_search = ldap_search_request(8, "", 0, &root_filter, &[
-        "defaultNamingContext",
-        "domainFunctionality",
-        "forestFunctionality",
-        "dnsHostName",
-        "dsServiceName",
-    ]);
+    let root_search = ldap_search_request(
+        8,
+        "",
+        0,
+        &root_filter,
+        &[
+            "defaultNamingContext",
+            "domainFunctionality",
+            "forestFunctionality",
+            "dnsHostName",
+            "dsServiceName",
+        ],
+    );
     let msgs: Vec<&[u8]> = if sig.ldap_anon_ok {
         vec![LDAP_ANON_BIND, &root_search]
     } else if cfg.intensity == Intensity::Aggressive {
@@ -1028,7 +1112,13 @@ pub async fn scan_tier0_kerberoast_spns(
         &filter_equality("adminCount", "1"),
         &filter_present("servicePrincipalName"),
     ]);
-    let search = ldap_search_request(9, &nc, 2, &filter, &["sAMAccountName", "servicePrincipalName", "adminCount"]);
+    let search = ldap_search_request(
+        9,
+        &nc,
+        2,
+        &filter,
+        &["sAMAccountName", "servicePrincipalName", "adminCount"],
+    );
     let msgs: Vec<&[u8]> = if sig.ldap_anon_ok {
         vec![LDAP_ANON_BIND, &search]
     } else {

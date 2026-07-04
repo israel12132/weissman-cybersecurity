@@ -9,6 +9,9 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
+import { useClient } from '../context/ClientContext'
+import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 
 const NS = 'pages.templateEngineWorkbench'
 
@@ -25,6 +28,23 @@ function CodeBlock({ label, value }) {
 
 export default function TemplateEngineWorkbench() {
   const { t } = useTranslation()
+  return (
+    <PageShell
+      title={t(`${NS}.title`)}
+      badge={t(`${NS}.badge`)}
+      badgeColor="#60a5fa"
+      subtitle={t(`${NS}.subtitle`)}
+    >
+      <TemplateEngineWorkbenchBody />
+    </PageShell>
+  )
+}
+
+function TemplateEngineWorkbenchBody() {
+  useInsideEngineC2()
+  const { signal, killed } = useC2AbortSignal()
+  const { t } = useTranslation()
+  const { selectedClient } = useClient()
   const [templates, setTemplates] = useState([])
   const [selectedId, setSelectedId] = useState('http_baseline')
   const [targetUrl, setTargetUrl] = useState('')
@@ -49,7 +69,11 @@ export default function TemplateEngineWorkbench() {
   }, [])
 
   useEffect(() => {
-    if (!selectedId) return
+    const url = clientPrimaryTargetUrl(selectedClient)
+    if (url) setTargetUrl((prev) => prev || url)
+  }, [selectedClient])
+
+  useEffect(() => {
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
@@ -63,7 +87,7 @@ export default function TemplateEngineWorkbench() {
   }, [selectedId, t])
 
   const run = useCallback(async () => {
-    if (!canRun) return
+    if (!canRun || killed) return
     setRunning(true)
     setError('')
     setRunResult(null)
@@ -76,6 +100,7 @@ export default function TemplateEngineWorkbench() {
           template_yaml: yaml,
           max_body_bytes: 200000,
         }),
+        signal,
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d?.error || d?.detail || t(`${NS}.run_failed`))
@@ -85,7 +110,7 @@ export default function TemplateEngineWorkbench() {
     } finally {
       setRunning(false)
     }
-  }, [canRun, targetUrl, yaml, t])
+  }, [canRun, targetUrl, yaml, t, signal, killed])
 
   const loadTemplates = useCallback(() => {
     apiFetch('/api/template-engine/templates')
@@ -135,20 +160,15 @@ export default function TemplateEngineWorkbench() {
   }, [runResult, filteredFindings, searchQuery])
 
   return (
-    <PageShell
-      title={t(`${NS}.title`)}
-      badge={t(`${NS}.badge`)}
-      badgeColor="#60a5fa"
-      subtitle={t(`${NS}.subtitle`)}
-      actions={(
+    <>
+      <div className="flex justify-end mb-4">
         <ShellScanActions
           onRefresh={loadTemplates}
           onExport={exportCsv}
           refreshLoading={loadingYaml}
           exportDisabled={!filteredFindings.length}
         />
-      )}
-    >
+      </div>
       <div className="mb-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
       </div>
@@ -314,6 +334,6 @@ export default function TemplateEngineWorkbench() {
           </div>
         </div>
       </div>
-    </PageShell>
+    </>
   )
 }

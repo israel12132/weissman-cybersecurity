@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import CinematicBackground from './components/CinematicBackground'
 import EmergencyAlert from './components/EmergencyAlert'
-import Globe from './components/Globe'
+import BattlespaceTopology from './battlespace/BattlespaceTopology'
 import SecurityScoreGauge from './components/SecurityScoreGauge'
 import LiveIntelTerminal from './components/LiveIntelTerminal'
 import KillChainVisualizer from './components/KillChainVisualizer'
@@ -14,103 +14,33 @@ import CommandBar from './components/CommandBar'
 import { apiUrl } from './lib/apiBase'
 import { useWeissmanSocket } from './hooks/useWeissmanSocket'
 import { useAuth } from './context/AuthContext'
+import LabForensicEvidence from './components/ui/LabForensicEvidence'
 
 const HIGHLIGHT_DURATION_MS = 4000
-const ARC_MAX_AGE_MS = 4000
-
-function resolveTargetToLatLon(globeData, targetName) {
-  const name = (targetName || '').toString().trim().toLowerCase()
-  if (!name || !globeData) return null
-  for (const p of globeData.scanPulses || []) {
-    if ((p.name || '').toString().toLowerCase() === name) return { lat: p.lat, lon: p.lon }
-  }
-  for (const v of globeData.criticalVulns || []) {
-    if ((v.client_name || '').toString().toLowerCase() === name) return { lat: v.lat, lon: v.lon }
-  }
-  return null
-}
 
 export default function App() {
   const { t } = useTranslation()
   const { logout } = useAuth()
-  // Use the robust WebSocket hook
   const {
     events: tickerEvents,
     scoreData,
-    globeData,
     connectionStatus,
     emergencyMessage,
     setEmergencyMessage,
-    arcEventKinds: ARC_EVENT_KINDS,
   } = useWeissmanSocket()
 
-  const [realtimeArcs, setRealtimeArcs] = useState([])
-  const [realtimePulses, setRealtimePulses] = useState([])
   const [highlightedEventId, setHighlightedEventId] = useState(null)
   const [commandBarError, setCommandBarError] = useState('')
-  const arcTimeoutsRef = useRef([])
   const [now, setNow] = useState(() => new Date())
-  const globeDataRef = useRef(null)
-  globeDataRef.current = globeData
 
-  // Handle arc creation for new events
   useEffect(() => {
     if (tickerEvents.length === 0) return
-
     const latestEvent = tickerEvents[tickerEvents.length - 1]
-    const { kind, id: eventId, target, message, severity } = latestEvent
-
-    // Check if this event type should create an arc
-    if (!ARC_EVENT_KINDS.has(kind) || !globeData) return
-
-    const to = resolveTargetToLatLon(globeData, target)
-    if (!to) return
-
-    const intelNodes = globeData.intelNodes || [{ lat: 37.77, lon: -122.42 }, { lat: 52.52, lon: 13.4 }]
-    const from = intelNodes[0] || { lat: 37.77, lon: -122.42 }
-
-    // Create arc
-    const arcId = `arc-${eventId}`
-    setRealtimeArcs((prev) => [
-      ...prev,
-      {
-        id: arcId,
-        from,
-        to,
-        label: (message || '').slice(0, 12),
-        severity: severity === 'critical' ? 'critical' : 'high',
-        eventId,
-      },
-    ])
-
-    // Remove arc after ARC_MAX_AGE_MS
-    const arcTimer = setTimeout(() => {
-      setRealtimeArcs((a) => a.filter((x) => x.id !== arcId))
-    }, ARC_MAX_AGE_MS)
-    arcTimeoutsRef.current = [...arcTimeoutsRef.current.slice(-100), arcTimer]
-
-    // Create red pulse for emergency alerts
-    if (kind === 'emergency_alert') {
-      const pulseId = `pulse-${eventId}`
-      setRealtimePulses((prev) => [...prev, { id: pulseId, lat: to.lat, lon: to.lon }])
-      setTimeout(() => setRealtimePulses((p) => p.filter((x) => x.id !== pulseId)), 3500)
-    }
-
-    // Highlight the event row
+    const eventId = latestEvent.id
     setHighlightedEventId(eventId)
-    setTimeout(() => setHighlightedEventId((h) => (h === eventId ? null : h)), HIGHLIGHT_DURATION_MS)
-  }, [tickerEvents, globeData, ARC_EVENT_KINDS])
-
-  // Cleanup arc timeouts on unmount
-  useEffect(() => {
-    return () => {
-      arcTimeoutsRef.current.forEach(clearTimeout)
-      arcTimeoutsRef.current = []
-    }
-  }, [])
-
-  // The WebSocket hook handles initial ticker hydration via the server's
-  // on-connect burst; no separate REST fetch is needed here.
+    const timer = setTimeout(() => setHighlightedEventId((h) => (h === eventId ? null : h)), HIGHLIGHT_DURATION_MS)
+    return () => clearTimeout(timer)
+  }, [tickerEvents])
 
   useEffect(() => {
     if (connectionStatus !== 'online') return
@@ -155,6 +85,10 @@ export default function App() {
         </nav>
       </header>
 
+      <div className="soc-evidence-banner px-4 py-2 max-w-[1600px] mx-auto w-full">
+        <LabForensicEvidence />
+      </div>
+
       <CommandBar
         onError={(msg) => setCommandBarError(msg)}
         onScanLaunched={() => setCommandBarError('')}
@@ -174,10 +108,12 @@ export default function App() {
           {connectionStatus === 'online' ? now.toISOString().slice(11, 23) : t('components.intelMap.connection_lost')}
         </span>
         <span className="soc-branding-status soc-branding-status-tr">
-          {connectionStatus === 'online' ? t('components.intelMap.scanning') : '—'}
+          {connectionStatus === 'online' ? t('battlespace.topology_live') : '—'}
         </span>
-        <h1 className="soc-title soc-title-ultimate">{t('components.intelMap.title')}</h1>
-        <GlobalThreatTicker scoreData={scoreData} globeData={globeData} intelCount={tickerEvents.length} />
+        <h1 className="soc-title soc-title-ultimate">
+          {t('battlespace.title')}
+        </h1>
+        <GlobalThreatTicker scoreData={scoreData} intelCount={tickerEvents.length} />
       </div>
 
       <div className="soc-grid">
@@ -193,8 +129,8 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="soc-center">
-          <Globe data={globeData} realtimeArcs={realtimeArcs} realtimePulses={realtimePulses} connectionStatus={connectionStatus} />
+        <main className="soc-center battlespace-center">
+          <BattlespaceTopology connectionStatus={connectionStatus} />
         </main>
 
         <aside className="soc-right">

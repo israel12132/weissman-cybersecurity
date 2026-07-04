@@ -1,14 +1,22 @@
 # Staging / go-live overlay — use with base compose:
-#   docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile staging --profile oast up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     --profile staging --profile staging-tls up -d --build
+#
+# HTTPS (required for WEISSMAN_COOKIE_SECURE=1):
+#   --profile staging-tls  → Caddy on https://localhost (internal CA)
 #
 # Adds:
 #   - Mailpit (SMTP capture for self-serve signup testing)
 #   - OAST listener (optional profile `oast`)
+#   - TLS termination via Caddy (profile `staging-tls`)
 #   - Backend env wiring for SMTP, OAST, LLM URL passthrough
 
 services:
   backend:
     environment:
+      WEISSMAN_ENV: ${WEISSMAN_ENV:-staging}
+      WEISSMAN_COOKIE_SECURE: "1"
+      WEISSMAN_PUBLIC_BASE_URL: ${WEISSMAN_PUBLIC_BASE_URL:-https://localhost}
       WEISSMAN_AGENT_BIN_DIR: /srv/bin/agents
       # Self-serve signup + SMTP (Mailpit when profile staging is active)
       WEISSMAN_SELF_SERVE_SIGNUP: ${WEISSMAN_SELF_SERVE_SIGNUP:-1}
@@ -33,9 +41,24 @@ services:
 
   worker:
     environment:
+      WEISSMAN_ENV: ${WEISSMAN_ENV:-staging}
       WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
       WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
       WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+      WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
+
+  # TLS reverse proxy — https://localhost with Caddy internal CA (profile staging-tls)
+  caddy-staging:
+    image: caddy:2-alpine
+    profiles: [staging-tls]
+    ports:
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - weissman_caddy_staging:/data
+    depends_on:
+      - gateway
+    restart: unless-stopped
 
   # SMTP capture for signup verification emails — UI at http://localhost:8025
   mailpit:
@@ -68,3 +91,6 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+
+volumes:
+  weissman_caddy_staging:

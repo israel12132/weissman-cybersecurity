@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
-import { apiEventSourceUrl, apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 
 function badgeClass(kind) {
@@ -63,8 +64,7 @@ export default function TopTierEngineHub() {
 
   useEffect(() => {
     if (!probeJobId) return undefined
-    const url = apiEventSourceUrl(`/api/telemetry/stream?job_id=${encodeURIComponent(probeJobId)}`)
-    const es = new EventSource(url, { withCredentials: true })
+    const es = openSseStream(`/api/telemetry/stream?job_id=${encodeURIComponent(probeJobId)}`)
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data || '{}')
@@ -223,7 +223,7 @@ export default function TopTierEngineHub() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <EvidenceNotice>{t('pages.topTierEngineHub.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader evidence={t('pages.topTierEngineHub.evidence_notice')} />
 
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5">
           <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>

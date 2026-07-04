@@ -965,6 +965,12 @@ async fn api_findings(
             "confidence_multiplier": conf_mult,
             "attested": attested,
             "attestation_valid": attestation_valid,
+            "live_verification": raw_data.get("live_verification").cloned().unwrap_or(Value::Null),
+            "live_verdict": raw_data
+                .get("live_verification")
+                .and_then(|v| v.get("verdict"))
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "mitre_attack": mitre,
             "remediation": remediation,
             "target": target,
@@ -1036,6 +1042,43 @@ async fn api_engines_accounting() -> Response {
 /// catalog "indication on each engine" badge.
 async fn api_engines_capabilities() -> Response {
     (StatusCode::OK, Json(crate::engine_capabilities::to_json())).into_response()
+}
+
+/// Capability-based UI manifests for morphing engine C2 chrome (signed provenance envelope).
+async fn api_engines_ui_manifests() -> Response {
+    (StatusCode::OK, Json(crate::engine_ui_manifest::to_json())).into_response()
+}
+
+/// Resolve a single route manifest (query: `path=/ast-fuzzing`).
+async fn api_engines_ui_manifest_by_route(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let path = params.get("path").map(String::as_str).unwrap_or("/");
+    (StatusCode::OK, Json(crate::engine_ui_manifest::to_json_by_route(path))).into_response()
+}
+
+/// Ephemeral HMAC verify material for authenticated forensic UI (WASM provenance layer).
+async fn api_forensic_provenance_key(Extension(auth): Extension<AuthContext>) -> Response {
+    let _ = auth;
+    match crate::engine_capabilities::provenance_signing_secret() {
+        Some(key) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "ok": true,
+                "verify_key": key,
+                "algorithm": "HMAC-SHA256",
+            })),
+        )
+            .into_response(),
+        None => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "ok": false,
+                "detail": "UI provenance signing not configured"
+            })),
+        )
+            .into_response(),
+    }
 }
 
 /// Full engine + module onboarding requirements catalog (generated from live source).
@@ -1808,6 +1851,102 @@ async fn collect_engine_history_json(
     }))
 }
 
+async fn api_engine_history_summary(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    match collect_engine_history_summary_json(&state, auth.tenant_id).await {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
+    }
+}
+
+async fn collect_engine_history_summary_json(
+    state: &Arc<AppState>,
+    tenant_id: i64,
+) -> Result<Value, String> {
+    let mut tx = db::begin_tenant_tx(state.app_pool.as_ref(), tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx: {}", e))?;
+
+    let rows = sqlx::query(
+        r#"SELECT DISTINCT ON (engine_key)
+              engine_key,
+              id,
+              status,
+              result_json,
+              created_at,
+              updated_at
+           FROM (
+             SELECT
+               COALESCE(payload->>'engine', kind) AS engine_key,
+               id,
+               status,
+               result_json,
+               created_at,
+               updated_at
+             FROM weissman_async_jobs
+             WHERE tenant_id = $1
+               AND (
+                 (kind = 'command_center_engine' AND payload->>'engine' IS NOT NULL)
+                 OR kind = 'poe_synthesis_run'
+               )
+           ) jobs
+           ORDER BY engine_key, created_at DESC"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("history summary query: {}", e))?;
+
+    let _ = tx.commit().await;
+
+    let mut engines = serde_json::Map::new();
+    for r in rows {
+        let engine_id = r
+            .try_get::<String, _>("engine_key")
+            .unwrap_or_default();
+        if engine_id.is_empty() {
+            continue;
+        }
+        let result_json = r
+            .try_get::<Option<serde_json::Value>, _>("result_json")
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| json!({}));
+        let mut findings_count = result_json
+            .get("findings")
+            .and_then(Value::as_array)
+            .map(|a| a.len())
+            .unwrap_or(0);
+        if findings_count == 0 {
+            if let Some(n) = result_json.get("findings_count").and_then(Value::as_u64) {
+                findings_count = n as usize;
+            }
+        }
+        engines.insert(
+            engine_id,
+            json!({
+                "job_id": r.try_get::<uuid::Uuid,_>("id").map(|v| v.to_string()).unwrap_or_default(),
+                "status": r.try_get::<String,_>("status").unwrap_or_default(),
+                "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").ok().map(|d| d.to_rfc3339()),
+                "updated_at": r.try_get::<chrono::DateTime<Utc>,_>("updated_at").ok().map(|d| d.to_rfc3339()),
+                "findings_count": findings_count,
+            }),
+        );
+    }
+
+    Ok(json!({
+        "ok": true,
+        "engines": engines,
+        "count": engines.len(),
+    }))
+}
+
 async fn api_engine_history(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1999,7 +2138,13 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             }
         },
     };
-    if let Some(retry_after) = crate::http::check_lockout(tenant_key, email).await {
+    if let Some(retry_after) = match crate::http::check_lockout_status(tenant_key, email).await {
+        crate::http::LockoutStatus::Locked(secs) => Some(secs),
+        crate::http::LockoutStatus::DistributedStoreUnavailable => {
+            return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+        }
+        crate::http::LockoutStatus::Allowed => None,
+    } {
         return crate::http::locked_response(retry_after);
     }
     if let Err(e) = weissman_db::auth_access::record_auth_access(
@@ -2072,11 +2217,27 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
         ),
         None => {
+            crate::audit_log::record_login_failure_audit(
+                state.app_pool.as_ref(),
+                tenant_key,
+                email,
+                &ip,
+                "unknown user",
+            )
+            .await;
             crate::http::record_failure(tenant_key, email).await;
             return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
         }
     };
     if hash.is_empty() {
+        crate::audit_log::record_login_failure_audit(
+            state.app_pool.as_ref(),
+            tenant_key,
+            email,
+            &ip,
+            "empty password hash",
+        )
+        .await;
         crate::http::record_failure(tenant_key, email).await;
         return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
     }
@@ -2173,7 +2334,8 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             let mut tx = match db::begin_tenant_tx(&state.app_pool, tenant_id).await { Ok(t) => t, Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response() };
             let _ = audit_log::insert_audit(&mut tx, tenant_id, Some(user_id), email, "login", "session created", &ip).await;
             let _ = tx.commit().await;
-            let (access_jwt, access_cookie, refresh_cookie) = match crate::auth_refresh::build_session_cookie_headers(state.auth_pool.as_ref(), user_id, tenant_id).await {
+            let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
+            let (access_jwt, access_cookie, refresh_cookie) = match crate::auth_refresh::build_session_cookie_headers(state.auth_pool.as_ref(), user_id, tenant_id, &binding).await {
                 Ok(p) => p,
                 Err(e) => {
                     tracing::error!(target: "auth", error = %e, "login session cookie build failed");
@@ -2198,6 +2360,14 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             append_set_cookie(response.headers_mut(), &refresh_cookie);
             response
         } else {
+            crate::audit_log::record_login_failure_audit(
+                state.app_pool.as_ref(),
+                tenant_key,
+                email,
+                &ip,
+                "invalid password",
+            )
+            .await;
             crate::http::record_failure(tenant_key, email).await;
             (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response()
         }

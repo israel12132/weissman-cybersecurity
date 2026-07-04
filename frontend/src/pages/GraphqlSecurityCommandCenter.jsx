@@ -8,7 +8,8 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 
@@ -931,7 +932,7 @@ export default function GraphqlSecurityCommandCenter() {
       const jobId = data.job_id
       appendLine(`[GraphQL] Job queued: ${jobId}`)
       if (esRef.current) esRef.current.close()
-      const es = new EventSource(apiEventSourceUrl(`/api/telemetry/stream?job_id=${jobId}`))
+      const es = openSseStream(`/api/telemetry/stream?job_id=${jobId}`)
       esRef.current = es
       es.onmessage = (ev) => {
         try {

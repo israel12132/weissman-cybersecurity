@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "packer", provider: "generic",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "packer",
+            provider: "generic",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const PUBLIC_AMI: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![HARDCODED_CREDS, UNENCRYPTED_VOLUME, ROOT_SSH_PASSWORD, CURL_PROVISIONER, PUBLIC_AMI]
+    vec![
+        HARDCODED_CREDS,
+        UNENCRYPTED_VOLUME,
+        ROOT_SSH_PASSWORD,
+        CURL_PROVISIONER,
+        PUBLIC_AMI,
+    ]
 }
 
 fn is_packer(name: &str, content: &str) -> bool {
@@ -82,8 +97,7 @@ fn is_packer(name: &str, content: &str) -> bool {
         || n.ends_with(".pkr.json")
         || n.contains("packer")
         || lc.contains("packer {")
-        || lc.contains("\"builders\"")
-            && lc.contains("amazon-ebs")
+        || lc.contains("\"builders\"") && lc.contains("amazon-ebs")
 }
 
 #[must_use]
@@ -96,19 +110,30 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
 
     if lc.contains("access_key") || lc.contains("secret_key") {
         if lc.contains("akia") || lc.contains("example") || lc.contains("secret") {
-            out.push(Finding::new(HARDCODED_CREDS, file, file).observed("embedded builder credentials"));
+            out.push(
+                Finding::new(HARDCODED_CREDS, file, file).observed("embedded builder credentials"),
+            );
         }
     }
-    if lc.contains("encrypted: false") || lc.contains("\"encrypted\": false") || lc.contains("encrypted = false") {
-        out.push(Finding::new(UNENCRYPTED_VOLUME, file, file).observed("block device encryption disabled"));
+    if lc.contains("encrypted: false")
+        || lc.contains("\"encrypted\": false")
+        || lc.contains("encrypted = false")
+    {
+        out.push(
+            Finding::new(UNENCRYPTED_VOLUME, file, file)
+                .observed("block device encryption disabled"),
+        );
     }
     if lc.contains("ssh_password") || lc.contains("communicator_password") {
         out.push(Finding::new(ROOT_SSH_PASSWORD, file, file).observed("SSH password auth"));
     }
-    if lc.contains("curl ") && lc.contains("| bash") || lc.contains("wget ") && lc.contains("| sh") {
+    if lc.contains("curl ") && lc.contains("| bash") || lc.contains("wget ") && lc.contains("| sh")
+    {
         out.push(Finding::new(CURL_PROVISIONER, file, file).observed("curl|bash provisioner"));
     }
-    if lc.contains("ami_groups") && lc.contains("all") || lc.contains("snapshot_users") && lc.contains("*") {
+    if lc.contains("ami_groups") && lc.contains("all")
+        || lc.contains("snapshot_users") && lc.contains("*")
+    {
         out.push(Finding::new(PUBLIC_AMI, file, file).observed("public AMI/snapshot sharing"));
     }
 

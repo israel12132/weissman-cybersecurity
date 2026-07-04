@@ -14,6 +14,7 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "process_inventory",
     "av_bypass_engine",
     "log_tampering_engine",
+    "timestomping",
     "anti_debug_evasion",
     "rootkit_simulation",
     "memory_forensics_evasion",
@@ -135,9 +136,11 @@ pub(crate) fn merge_agent_hybrid(
             graph_edges: agent.graph_edges,
         };
     }
-    let has_agent_guidance = findings
-        .iter()
-        .any(|f| f.get("agent_required").and_then(|v| v.as_bool()).unwrap_or(false));
+    let has_agent_guidance = findings.iter().any(|f| {
+        f.get("agent_required")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    });
     let msg = if has_agent_guidance {
         format!(
             "{}: {} finding(s) — remote surface probed; endpoint agent recommended for host-resident validation",

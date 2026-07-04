@@ -14,24 +14,46 @@ pub mod kube_auth;
 pub mod policies;
 
 use crate::iac_misconfig_engine::model::{Finding, IacFile};
-use auto_pilot::{bundle_json, findings_from_autopilot, run as run_autopilot, AutoPilotConfig, AutoPilotResult};
+use auto_pilot::{
+    bundle_json, findings_from_autopilot, run as run_autopilot, AutoPilotConfig, AutoPilotResult,
+};
 use aws_reconciler::{matches_json, reconcile_graph as reconcile_aws, AwsReconcileConfig};
 use blast_quantifier::quantify;
 use cross_plane::wire_cross_plane;
 use drift_engine::{findings_from_matches, status_counts};
 use graph_builder::build;
-use graph_model::{BlastRadiusReport, InfraGraph, K8sRbacProof, LiveReconcileMatch, LiveStatus, PermissionProof, ProvenAttackPath};
+use graph_model::{
+    BlastRadiusReport, InfraGraph, K8sRbacProof, LiveReconcileMatch, LiveStatus, PermissionProof,
+    ProvenAttackPath,
+};
 use iam_proof::{
-    apply_static_proofs, extract_static_proofs, prove_live_permissions, resolve_account_id, IamProofConfig,
+    apply_static_proofs, extract_static_proofs, prove_live_permissions, resolve_account_id,
+    IamProofConfig,
 };
 use k8s_rbac_proof::prove_k8s_rbac;
 use k8s_reconciler::{reconcile_graph as reconcile_k8s, K8sReconcileConfig};
 use kube_auth::resolve_k8s_auth;
 use policies::{
-    finding_from_iam_proof, finding_from_k8s_rbac, finding_from_live_match, finding_from_proven_path,
-    real_live_risk_score,
+    finding_from_iam_proof, finding_from_k8s_rbac, finding_from_live_match,
+    finding_from_proven_path, real_live_risk_score,
 };
 use serde_json::{json, Value};
+
+/// Runtime kill-switch for live AWS API calls (compile-time `live-aws` feature must also be enabled).
+#[must_use]
+pub fn live_aws_runtime_enabled() -> bool {
+    #[cfg(not(feature = "live-aws"))]
+    {
+        return false;
+    }
+    #[cfg(feature = "live-aws")]
+    {
+        match std::env::var("WEISSMAN_IAC_LIVE_AWS").as_deref() {
+            Ok("0") | Ok("false") | Ok("no") | Ok("off") => false,
+            _ => true,
+        }
+    }
+}
 
 pub struct LiveBlastConfig {
     pub enabled: bool,
@@ -84,9 +106,14 @@ impl LiveBlastResult {
             .values()
             .filter(|n| n.live_status == LiveStatus::ContradictsIac)
             .count();
+        let tier = if self.autopilot.is_some() {
+            "sovereign-autopilot-complete"
+        } else {
+            "sovereign-autopilot"
+        };
         json!({
             "engine": "weissman-live-blast",
-            "engine_tier": "sovereign-autopilot-complete",
+            "engine_tier": tier,
             "deterministic": true,
             "verification_status": if self.live_confirmed_count > 0 || !self.permission_proofs.is_empty() {
                 "live_verified"
@@ -164,7 +191,9 @@ pub async fn analyze(files: &[IacFile], cfg: &LiveBlastConfig, base_risk: u64) -
     let bridges = wire_cross_plane(files, &mut graph);
     let cross_plane_bridges = bridges.len() as u64;
     if cross_plane_bridges > 0 {
-        notes.push(format!("cross-plane IRSA bridges wired: {cross_plane_bridges}"));
+        notes.push(format!(
+            "cross-plane IRSA bridges wired: {cross_plane_bridges}"
+        ));
     }
 
     let static_proofs = extract_static_proofs(files, &graph);
@@ -176,7 +205,7 @@ pub async fn analyze(files: &[IacFile], cfg: &LiveBlastConfig, base_risk: u64) -
         ));
     }
 
-    if cfg.enabled && !cfg.aws_role_arn.trim().is_empty() {
+    if cfg.enabled && live_aws_runtime_enabled() && !cfg.aws_role_arn.trim().is_empty() {
         let aws_cfg = AwsReconcileConfig {
             role_arn: cfg.aws_role_arn.clone(),
             external_id: cfg.aws_external_id.clone(),
@@ -190,14 +219,21 @@ pub async fn analyze(files: &[IacFile], cfg: &LiveBlastConfig, base_risk: u64) -
     }
 
     let mut permission_proofs = static_proofs;
-    if cfg.enabled && cfg.iam_simulate && !cfg.aws_role_arn.trim().is_empty() {
+    if cfg.enabled
+        && live_aws_runtime_enabled()
+        && cfg.iam_simulate
+        && !cfg.aws_role_arn.trim().is_empty()
+    {
         let iam_cfg = IamProofConfig {
             role_arn: cfg.aws_role_arn.clone(),
             external_id: cfg.aws_external_id.clone(),
             enabled: true,
         };
-        let account_id = resolve_account_id(&iam_cfg).await.unwrap_or_else(|| "000000000000".into());
-        let (live_proofs, iam_notes) = prove_live_permissions(&mut graph, &iam_cfg, &account_id).await;
+        let account_id = resolve_account_id(&iam_cfg)
+            .await
+            .unwrap_or_else(|| "000000000000".into());
+        let (live_proofs, iam_notes) =
+            prove_live_permissions(&mut graph, &iam_cfg, &account_id).await;
         permission_proofs.extend(live_proofs);
         notes.extend(iam_notes);
     }
@@ -229,7 +265,9 @@ pub async fn analyze(files: &[IacFile], cfg: &LiveBlastConfig, base_risk: u64) -
                 notes.extend(rbac_notes);
             }
         } else {
-            notes.push("live blast: no K8s credentials (explicit/kubeconfig/in-cluster)".to_string());
+            notes.push(
+                "live blast: no K8s credentials (explicit/kubeconfig/in-cluster)".to_string(),
+            );
         }
     }
 
@@ -289,8 +327,12 @@ pub async fn analyze(files: &[IacFile], cfg: &LiveBlastConfig, base_risk: u64) -
         findings.extend(findings_from_autopilot(&ap.patches));
     }
 
-    let real_live_risk_score =
-        real_live_risk_score(base_risk, live_confirmed_count, &proven_paths, &blast_radius);
+    let real_live_risk_score = real_live_risk_score(
+        base_risk,
+        live_confirmed_count,
+        &proven_paths,
+        &blast_radius,
+    );
 
     LiveBlastResult {
         graph,
@@ -353,6 +395,11 @@ resource "aws_s3_bucket" "data" { bucket = "corp" acl = "public-read" }
         };
         let r = analyze(&files, &cfg, 10).await;
         assert!(r.proven_paths.len() >= 1 || r.graph.nodes.len() >= 3);
-        assert_eq!(r.summary_json(10).get("engine_tier").and_then(Value::as_str), Some("sovereign-autopilot-complete"));
+        assert_eq!(
+            r.summary_json(10)
+                .get("engine_tier")
+                .and_then(Value::as_str),
+            Some("sovereign-autopilot-complete")
+        );
     }
 }

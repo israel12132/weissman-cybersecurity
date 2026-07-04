@@ -1,6 +1,8 @@
 //! Blast radius quantification — deterministic metrics over proven paths and permission proofs.
 
-use super::graph_model::{BlastRadiusReport, EdgeKind, InfraGraph, NodeKind, PermissionProof, ProvenAttackPath};
+use super::graph_model::{
+    BlastRadiusReport, EdgeKind, InfraGraph, NodeKind, PermissionProof, ProvenAttackPath,
+};
 
 #[must_use]
 pub fn quantify(
@@ -20,7 +22,10 @@ pub fn quantify(
         .collect::<std::collections::HashSet<_>>()
         .len() as u64;
     let max_path_depth = paths.iter().map(|p| p.hops.len() as u64).max().unwrap_or(0);
-    let permission_proven_paths = paths.iter().filter(|p| p.permission_proven_hops > 0).count() as u64;
+    let permission_proven_paths = paths
+        .iter()
+        .filter(|p| p.permission_proven_hops > 0)
+        .count() as u64;
     let cross_plane_paths = paths
         .iter()
         .filter(|p| p.toxic_class == "CROSS_PLANE_EXFIL")

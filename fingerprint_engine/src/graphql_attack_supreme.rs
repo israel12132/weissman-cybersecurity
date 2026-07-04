@@ -29,7 +29,11 @@ pub fn collect_signals(findings: &[Value], endpoints_found: usize) -> GraphqlSig
         ..Default::default()
     };
     for f in findings {
-        let title = f.get("title").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+        let title = f
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_ascii_lowercase();
         let vuln = f
             .get("vuln_class")
             .and_then(Value::as_str)
@@ -52,7 +56,11 @@ pub fn collect_signals(findings: &[Value], endpoints_found: usize) -> GraphqlSig
         if vuln.contains("auth_differential") || title.contains("auth differential") {
             sig.auth_differential = true;
         }
-        if vuln.contains("alias") || vuln.contains("batch") || vuln.contains("depth") || title.contains("dos") {
+        if vuln.contains("alias")
+            || vuln.contains("batch")
+            || vuln.contains("depth")
+            || title.contains("dos")
+        {
             sig.dos_unbounded = true;
         }
         if vuln.contains("csrf") || title.contains("csrf") || title.contains("get query") {
@@ -64,7 +72,10 @@ pub fn collect_signals(findings: &[Value], endpoints_found: usize) -> GraphqlSig
         if vuln.contains("graphiql") || vuln.contains("playground") || title.contains("graphiql") {
             sig.ide_exposed = true;
         }
-        if vuln.contains("error") || title.contains("stack trace") || title.contains("verbose error") {
+        if vuln.contains("error")
+            || title.contains("stack trace")
+            || title.contains("verbose error")
+        {
             sig.error_verbose = true;
         }
         if vuln.contains("federation") || title.contains("federation sdl") {
@@ -90,12 +101,21 @@ pub struct GraphqlCategoryScores {
 
 impl GraphqlCategoryScores {
     fn from_signals(sig: &GraphqlSignals) -> Self {
-        let bad = |b: bool, w: f64| -> f64 { if b { 100.0 - w } else { 100.0 } };
+        let bad = |b: bool, w: f64| -> f64 {
+            if b {
+                100.0 - w
+            } else {
+                100.0
+            }
+        };
         Self {
             authorization: bad(sig.bola_surface || sig.auth_differential, 40.0),
             authentication: bad(sig.auth_differential && sig.live_data_leak, 35.0),
             resource_limits: bad(sig.dos_unbounded, 30.0),
-            schema_exposure: bad(sig.introspection_enabled || sig.sensitive_fields || sig.federation_sdl, 45.0),
+            schema_exposure: bad(
+                sig.introspection_enabled || sig.sensitive_fields || sig.federation_sdl,
+                45.0,
+            ),
             transport_hygiene: bad(sig.csrf_get || sig.cors_permissive, 25.0),
             error_disclosure: bad(sig.error_verbose, 20.0),
             inventory_management: bad(sig.ide_exposed, 15.0),
@@ -169,7 +189,14 @@ pub fn extend_attack_paths(target: &str, sig: &GraphqlSignals, findings: &mut Ve
     }
 }
 
-fn push_path(findings: &mut Vec<Value>, title: &str, sev: &str, steps: &[&str], target: &str, conf: f64) {
+fn push_path(
+    findings: &mut Vec<Value>,
+    title: &str,
+    sev: &str,
+    steps: &[&str],
+    target: &str,
+    conf: f64,
+) {
     let mut f = finding_rich(
         ENGINE_ID,
         title,
@@ -238,24 +265,52 @@ pub fn emit_remediation_roadmap(target: &str, sig: &GraphqlSignals, findings: &m
         n += 1;
     };
     if sig.introspection_enabled {
-        push("P0", "Disable introspection in production", "Allow only persisted/allowlisted operations");
+        push(
+            "P0",
+            "Disable introspection in production",
+            "Allow only persisted/allowlisted operations",
+        );
     }
     if sig.bola_surface || sig.auth_differential {
-        push("P0", "Enforce object-level authorization", "Server-side ID ownership checks on every resolver");
+        push(
+            "P0",
+            "Enforce object-level authorization",
+            "Server-side ID ownership checks on every resolver",
+        );
     }
     if sig.dos_unbounded {
-        push("P0", "Deploy query cost limits", "Alias/depth/batch caps + rate limiting per client IP");
+        push(
+            "P0",
+            "Deploy query cost limits",
+            "Alias/depth/batch caps + rate limiting per client IP",
+        );
     }
     if sig.csrf_get || sig.cors_permissive {
-        push("P1", "Block GET mutations & tighten CORS", "POST-only + strict origin allow-list");
+        push(
+            "P1",
+            "Block GET mutations & tighten CORS",
+            "POST-only + strict origin allow-list",
+        );
     }
     if sig.ide_exposed {
-        push("P1", "Remove GraphiQL/Playground from prod", "Dev consoles only on internal networks");
+        push(
+            "P1",
+            "Remove GraphiQL/Playground from prod",
+            "Dev consoles only on internal networks",
+        );
     }
     if sig.error_verbose {
-        push("P1", "Sanitize GraphQL errors", "Generic errors to clients; log details server-side only");
+        push(
+            "P1",
+            "Sanitize GraphQL errors",
+            "Generic errors to clients; log details server-side only",
+        );
     }
-    push("P2", "Deploy Weissman agent for resolver authZ telemetry", "Detect runtime BOLA across microservices");
+    push(
+        "P2",
+        "Deploy Weissman agent for resolver authZ telemetry",
+        "Detect runtime BOLA across microservices",
+    );
     if steps.is_empty() {
         return;
     }
@@ -279,10 +334,22 @@ pub fn emit_remediation_roadmap(target: &str, sig: &GraphqlSignals, findings: &m
 
 pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     for (cap, desc) in [
-        ("resolver_authz_mesh", "Per-resolver authorization enforcement telemetry across services"),
-        ("query_cost_runtime", "Live query-cost and complexity enforcement at the gateway"),
-        ("subscription_session_audit", "WebSocket subscription session binding and replay detection"),
-        ("api_inventory_agent", "Shadow GraphQL endpoint discovery on internal meshes"),
+        (
+            "resolver_authz_mesh",
+            "Per-resolver authorization enforcement telemetry across services",
+        ),
+        (
+            "query_cost_runtime",
+            "Live query-cost and complexity enforcement at the gateway",
+        ),
+        (
+            "subscription_session_audit",
+            "WebSocket subscription session binding and replay detection",
+        ),
+        (
+            "api_inventory_agent",
+            "Shadow GraphQL endpoint discovery on internal meshes",
+        ),
     ] {
         let mut f = finding_rich(
             ENGINE_ID,
@@ -301,14 +368,28 @@ pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     }
 }
 
-pub fn build_security_graph(target: &str, sig: &GraphqlSignals, host: &str) -> (Vec<GraphNode>, Vec<GraphEdge>) {
+pub fn build_security_graph(
+    target: &str,
+    sig: &GraphqlSignals,
+    host: &str,
+) -> (Vec<GraphNode>, Vec<GraphEdge>) {
     let score = finalize_category_scores(sig);
     let avg = (score.authorization + score.schema_exposure + score.resource_limits) / 3.0;
     let mut nodes = vec![GraphNode {
         id: "root".to_string(),
-        label: if host.is_empty() { target.to_string() } else { host.to_string() },
+        label: if host.is_empty() {
+            target.to_string()
+        } else {
+            host.to_string()
+        },
         node_type: "root".to_string(),
-        status: if avg >= 80.0 { "secure".into() } else if avg >= 50.0 { "degraded".into() } else { "exposed".into() },
+        status: if avg >= 80.0 {
+            "secure".into()
+        } else if avg >= 50.0 {
+            "degraded".into()
+        } else {
+            "exposed".into()
+        },
         cname_target: None,
         raw_finding: None,
     }];
@@ -330,7 +411,11 @@ pub fn build_security_graph(target: &str, sig: &GraphqlSignals, host: &str) -> (
         });
     };
     if sig.endpoints_found > 0 {
-        add("gql", &format!("{} GraphQL endpoint(s)", sig.endpoints_found), "ENDPOINT");
+        add(
+            "gql",
+            &format!("{} GraphQL endpoint(s)", sig.endpoints_found),
+            "ENDPOINT",
+        );
     }
     if sig.introspection_enabled {
         add("intro", "Introspection enabled", "INTROSPECTION");

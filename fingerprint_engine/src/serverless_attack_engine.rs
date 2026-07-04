@@ -64,55 +64,135 @@ fn platform_signatures() -> &'static [PlatformSig] {
 
 const DEFAULT_FUNCTION_PATHS: &[&str] = &[
     // AWS Lambda / API Gateway
-    "/api/", "/prod/", "/dev/", "/stage/", "/v1/", "/v2/",
-    "/lambda/", "/fn/", "/functions/", "/.aws/lambda/",
+    "/api/",
+    "/prod/",
+    "/dev/",
+    "/stage/",
+    "/v1/",
+    "/v2/",
+    "/lambda/",
+    "/fn/",
+    "/functions/",
+    "/.aws/lambda/",
     // Vercel
-    "/api/hello", "/api/auth", "/api/users", "/api/webhook", "/api/health",
+    "/api/hello",
+    "/api/auth",
+    "/api/users",
+    "/api/webhook",
+    "/api/health",
     // Netlify
-    "/.netlify/functions/", "/.netlify/functions/hello", "/.netlify/functions/api",
+    "/.netlify/functions/",
+    "/.netlify/functions/hello",
+    "/.netlify/functions/api",
     // Azure Functions
-    "/api/HttpTrigger", "/api/health", "/api/status",
+    "/api/HttpTrigger",
+    "/api/health",
+    "/api/status",
     // GCP
-    "/_ah/", "/cloudfunctions/",
+    "/_ah/",
+    "/cloudfunctions/",
     // Generic
-    "/serverless/", "/.functions/", "/.api/", "/.well-known/serverless",
-    "/webhook", "/hooks/", "/trigger/", "/invoke/",
+    "/serverless/",
+    "/.functions/",
+    "/.api/",
+    "/.well-known/serverless",
+    "/webhook",
+    "/hooks/",
+    "/trigger/",
+    "/invoke/",
 ];
 
 const DEFAULT_CONFIG_PATHS: &[&str] = &[
-    "/serverless.yml", "/serverless.yaml", "/serverless.json",
-    "/template.yaml", "/template.yml", "/samconfig.toml",
-    "/vercel.json", "/.vercel/project.json",
-    "/netlify.toml", "/firebase.json", "/.firebaserc",
-    "/now.json", "/wrangler.toml", "/worker.js",
-    "/serverless.ts", "/serverless.js",
-    "/.env", "/.env.local", "/.env.production",
-    "/package.json", "/pnpm-lock.yaml",
+    "/serverless.yml",
+    "/serverless.yaml",
+    "/serverless.json",
+    "/template.yaml",
+    "/template.yml",
+    "/samconfig.toml",
+    "/vercel.json",
+    "/.vercel/project.json",
+    "/netlify.toml",
+    "/firebase.json",
+    "/.firebaserc",
+    "/now.json",
+    "/wrangler.toml",
+    "/worker.js",
+    "/serverless.ts",
+    "/serverless.js",
+    "/.env",
+    "/.env.local",
+    "/.env.production",
+    "/package.json",
+    "/pnpm-lock.yaml",
 ];
 
 const DEFAULT_DEBUG_PATHS: &[&str] = &[
-    "/api/env", "/api/config", "/api/settings", "/api/debug", "/api/health",
-    "/api/status", "/api/info", "/api/metrics", "/api/admin", "/api/internal",
-    "/debug/env", "/debug/vars", "/debug/config", "/debug/pprof",
-    "/.well-known/env", "/config.json", "/settings.json",
-    "/_admin", "/__admin", "/admin/debug", "/actuator/env", "/actuator/health",
-    "/.aws/lambda/env", "/runtime/env",
+    "/api/env",
+    "/api/config",
+    "/api/settings",
+    "/api/debug",
+    "/api/health",
+    "/api/status",
+    "/api/info",
+    "/api/metrics",
+    "/api/admin",
+    "/api/internal",
+    "/debug/env",
+    "/debug/vars",
+    "/debug/config",
+    "/debug/pprof",
+    "/.well-known/env",
+    "/config.json",
+    "/settings.json",
+    "/_admin",
+    "/__admin",
+    "/admin/debug",
+    "/actuator/env",
+    "/actuator/health",
+    "/.aws/lambda/env",
+    "/runtime/env",
 ];
 
 const ENV_KEY_INDICATORS: &[&str] = &[
-    "SECRET", "PASSWORD", "TOKEN", "API_KEY", "DATABASE_URL", "REDIS_URL",
-    "AWS_ACCESS", "AWS_SECRET", "PRIVATE_KEY", "CLIENT_SECRET", "AUTH_TOKEN",
-    "DB_PASS", "MONGO_URI", "SENDGRID", "STRIPE_", "TWILIO_", "OPENAI_",
-    "SLACK_", "GITHUB_TOKEN", "NPM_TOKEN", "JWT_SECRET", "ENCRYPTION_KEY",
+    "SECRET",
+    "PASSWORD",
+    "TOKEN",
+    "API_KEY",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "AWS_ACCESS",
+    "AWS_SECRET",
+    "PRIVATE_KEY",
+    "CLIENT_SECRET",
+    "AUTH_TOKEN",
+    "DB_PASS",
+    "MONGO_URI",
+    "SENDGRID",
+    "STRIPE_",
+    "TWILIO_",
+    "OPENAI_",
+    "SLACK_",
+    "GITHUB_TOKEN",
+    "NPM_TOKEN",
+    "JWT_SECRET",
+    "ENCRYPTION_KEY",
 ];
 
 const STACK_TRACE_MARKERS: &[&str] = &[
     "Traceback (most recent call last)",
-    "at Object.", "at Module.", "at exports.",
-    "SyntaxError:", "ReferenceError:", "TypeError:",
-    "Runtime.ImportModuleError", "UnhandledPromiseRejection",
-    "Internal Server Error", "stack trace",
-    "File \"", "line ", "Exception in thread",
+    "at Object.",
+    "at Module.",
+    "at exports.",
+    "SyntaxError:",
+    "ReferenceError:",
+    "TypeError:",
+    "Runtime.ImportModuleError",
+    "UnhandledPromiseRejection",
+    "Internal Server Error",
+    "stack trace",
+    "File \"",
+    "line ",
+    "Exception in thread",
 ];
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -165,7 +245,11 @@ fn parse_auth_headers(cfg: &ArsenalConfig) -> Vec<(String, String)> {
     }
     if let Some(bt) = cfg.string("bearer_token") {
         let bt = bt.trim();
-        if !bt.is_empty() && !hs.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+        if !bt.is_empty()
+            && !hs
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+        {
             let val = if bt.to_ascii_lowercase().starts_with("bearer ") {
                 bt.to_string()
             } else {
@@ -239,7 +323,9 @@ fn parse_settings(ctx: &EngineRunContext) -> Settings {
 
 fn platform_allowed(settings: &Settings, platform_id: &str) -> bool {
     settings.platform_filter.is_empty()
-        || settings.platform_filter.contains(&platform_id.to_ascii_lowercase())
+        || settings
+            .platform_filter
+            .contains(&platform_id.to_ascii_lowercase())
 }
 
 async fn build_client(timeout_ms: u64, user_agent: Option<&str>) -> Client {
@@ -284,8 +370,14 @@ fn detect_platforms(probe: &HttpProbe) -> Vec<(&'static str, &'static str)> {
     let body_l = probe.body.to_ascii_lowercase();
     let mut hits = Vec::new();
     for sig in platform_signatures() {
-        let header_hit = sig.header_tokens.iter().any(|t| hb.contains(&t.to_ascii_lowercase()));
-        let body_hit = sig.body_tokens.iter().any(|t| body_l.contains(&t.to_ascii_lowercase()));
+        let header_hit = sig
+            .header_tokens
+            .iter()
+            .any(|t| hb.contains(&t.to_ascii_lowercase()));
+        let body_hit = sig
+            .body_tokens
+            .iter()
+            .any(|t| body_l.contains(&t.to_ascii_lowercase()));
         if header_hit || body_hit {
             hits.push((sig.id, sig.label));
         }
@@ -336,11 +428,7 @@ impl Posture {
     }
 }
 
-fn push_if_severe(
-    findings: &mut Vec<Value>,
-    settings: &Settings,
-    finding: Value,
-) {
+fn push_if_severe(findings: &mut Vec<Value>, settings: &Settings, finding: Value) {
     let sev = finding
         .get("severity")
         .and_then(Value::as_str)
@@ -445,7 +533,11 @@ async fn probe_fingerprint(
             .with("platform", id)
             .with("url", &probe.final_url)
             .with("status", probe.status)
-            .check("response_headers", true, headers_blob(&probe).chars().take(512).collect::<String>());
+            .check(
+                "response_headers",
+                true,
+                headers_blob(&probe).chars().take(512).collect::<String>(),
+            );
         push_if_severe(
             findings,
             settings,
@@ -486,7 +578,11 @@ async fn probe_function_paths(
             continue;
         }
         posture.functions_exposed += 1;
-        let sev = if probe.status == 200 { "high" } else { "medium" };
+        let sev = if probe.status == 200 {
+            "high"
+        } else {
+            "medium"
+        };
         let platforms = detect_platforms(&probe);
         let platform_note = platforms
             .first()
@@ -553,7 +649,11 @@ async fn probe_config_exposure(
         }
         posture.config_exposed += 1;
         let secrets = detect_secrets(&probe.body);
-        let sev = if secrets.is_empty() { "high" } else { "critical" };
+        let sev = if secrets.is_empty() {
+            "high"
+        } else {
+            "critical"
+        };
         let mut ev = Evidence::new()
             .with("url", &probe.final_url)
             .with("status", 200)
@@ -566,7 +666,10 @@ async fn probe_config_exposure(
             settings,
             finding_rich(
                 ENGINE_ID,
-                &format!("Serverless IaC/config artifact exposed: {}", probe.final_url),
+                &format!(
+                    "Serverless IaC/config artifact exposed: {}",
+                    probe.final_url
+                ),
                 sev,
                 "T1195.002",
                 &format!(
@@ -616,7 +719,10 @@ async fn probe_env_leak(
             let mut ev = Evidence::new()
                 .with("url", &probe.final_url)
                 .with("env_keys", json!(env_keys))
-                .with("body_excerpt", probe.body.chars().take(256).collect::<String>());
+                .with(
+                    "body_excerpt",
+                    probe.body.chars().take(256).collect::<String>(),
+                );
             if !secrets.is_empty() {
                 ev = ev.with("secret_types", json!(secrets));
             }
@@ -690,7 +796,10 @@ async fn probe_cors(
             .request(reqwest::Method::OPTIONS, &url)
             .header("Origin", origin)
             .header("Access-Control-Request-Method", "POST")
-            .header("Access-Control-Request-Headers", "content-type,authorization")
+            .header(
+                "Access-Control-Request-Headers",
+                "content-type,authorization",
+            )
             .send()
             .await;
         let Ok(resp) = resp else { continue };
@@ -890,8 +999,14 @@ async fn probe_admin_surface(
         return;
     }
     let admin_paths = [
-        "/_admin", "/__admin", "/admin", "/api/admin", "/api/internal",
-        "/api/manage", "/api/console", "/.netlify/admin",
+        "/_admin",
+        "/__admin",
+        "/admin",
+        "/api/admin",
+        "/api/internal",
+        "/api/manage",
+        "/api/console",
+        "/.netlify/admin",
     ];
     let probes = probe_paths_concurrent(client, base, &admin_paths, settings.concurrency).await;
     for probe in probes {
@@ -1039,14 +1154,78 @@ pub async fn run_serverless_attack_result_ctx(
     let mut posture = Posture::default();
     let mut findings: Vec<Value> = Vec::new();
 
-    probe_fingerprint(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_function_paths(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_config_exposure(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_env_leak(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_cors(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_event_injection(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_cold_start(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_admin_surface(&client, &base, &host, &settings, &mut posture, &mut findings).await;
+    probe_fingerprint(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_function_paths(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_config_exposure(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_env_leak(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_cors(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_event_injection(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_cold_start(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_admin_surface(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
 
     if settings.attack_synth {
         for ap in attack_paths(&posture, &host) {
@@ -1141,12 +1320,13 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_returns_plan() {
-        let r = run_serverless_attack_result_ctx(
-            "https://example.com",
-            &ctx(json!({"dry_run": true})),
-        )
-        .await;
+        let r =
+            run_serverless_attack_result_ctx("https://example.com", &ctx(json!({"dry_run": true})))
+                .await;
         assert!(r.success);
-        assert!(r.findings.iter().any(|f| f.get("category") == Some(&json!("dry_run"))));
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f.get("category") == Some(&json!("dry_run"))));
     }
 }

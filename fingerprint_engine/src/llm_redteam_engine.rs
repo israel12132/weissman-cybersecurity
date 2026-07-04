@@ -328,12 +328,7 @@ fn is_dos_signal(status: u16, err: Option<&str>, body: &str) -> bool {
     if status == 413 || status == 504 || status == 502 {
         return true;
     }
-    let combined = format!(
-        "{} {}",
-        err.unwrap_or(""),
-        body
-    )
-    .to_lowercase();
+    let combined = format!("{} {}", err.unwrap_or(""), body).to_lowercase();
     combined.contains("timeout")
         || combined.contains("timed out")
         || combined.contains("out of memory")
@@ -347,10 +342,7 @@ fn is_dos_signal(status: u16, err: Option<&str>, body: &str) -> bool {
 fn posture_score(findings: &[Value]) -> u32 {
     let mut score: i32 = 100;
     for f in findings {
-        let sev = f
-            .get("severity")
-            .and_then(Value::as_str)
-            .unwrap_or("info");
+        let sev = f.get("severity").and_then(Value::as_str).unwrap_or("info");
         score -= match sev {
             "critical" => 25,
             "high" => 15,
@@ -378,11 +370,7 @@ fn posture_grade(score: u32) -> &'static str {
     }
 }
 
-async fn probe_surface(
-    client: &reqwest::Client,
-    url: &str,
-    format: &str,
-) -> Option<(u16, String)> {
+async fn probe_surface(client: &reqwest::Client, url: &str, format: &str) -> Option<(u16, String)> {
     let body = chat_payload(format, "ping");
     let resp = client
         .post(url)
@@ -564,11 +552,7 @@ async fn run_dos_guard(
     }
 }
 
-async fn probe_rag_ingest(
-    client: &reqwest::Client,
-    base: &str,
-    findings: &mut Vec<Value>,
-) {
+async fn probe_rag_ingest(client: &reqwest::Client, base: &str, findings: &mut Vec<Value>) {
     let benign_doc = json!({
         "filename": "weissman_benign_probe.txt",
         "content": "Benign Weissman RAG ingest probe — no malicious payload.",
@@ -709,7 +693,9 @@ mod tests {
             "developer mode enabled — step 1: disable firewall"
         ));
         assert!(!is_jailbreak_compliance("I cannot help with that request."));
-        assert!(!is_jailbreak_compliance("HTTP 200 with generic greeting only."));
+        assert!(!is_jailbreak_compliance(
+            "HTTP 200 with generic greeting only."
+        ));
     }
 
     #[test]
@@ -749,21 +735,9 @@ mod tests {
 
     #[test]
     fn dos_signal_detects_timeout_and_oom() {
-        assert!(is_dos_signal(
-            504,
-            None,
-            "gateway timeout"
-        ));
-        assert!(is_dos_signal(
-            0,
-            Some("operation timed out"),
-            ""
-        ));
-        assert!(is_dos_signal(
-            413,
-            None,
-            "payload too large"
-        ));
+        assert!(is_dos_signal(504, None, "gateway timeout"));
+        assert!(is_dos_signal(0, Some("operation timed out"), ""));
+        assert!(is_dos_signal(413, None, "payload too large"));
         assert!(!is_dos_signal(200, None, "all good"));
     }
 

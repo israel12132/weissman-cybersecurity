@@ -93,6 +93,27 @@ async fn cfg_string_tx(
     .filter(|s| !s.is_empty())
 }
 
+/// Reject jobs whose payload carries a conflicting tenant_id (async_jobs table has no RLS).
+fn enforce_job_tenant_consistency(job_tenant_id: i64, payload: &Value) -> Result<(), String> {
+    if let Some(pt) = payload.get("tenant_id").and_then(|v| {
+        v.as_i64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    }) {
+        if pt != job_tenant_id {
+            tracing::error!(
+                target: "async_jobs",
+                job_tenant_id,
+                payload_tenant_id = pt,
+                "async job tenant_id mismatch — rejected"
+            );
+            return Err(format!(
+                "payload tenant_id {pt} does not match job tenant {job_tenant_id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 async fn enforce_payload_scope_pin_if_present(payload: &Value) -> Result<(), String> {
     let Some(scope) = payload.get("validated_scope") else {
         return Ok(());
@@ -210,8 +231,34 @@ pub async fn execute_job(
     channels: &AsyncJobChannels,
     job: weissman_db::job_queue::AsyncJob,
 ) -> Result<Value, String> {
+    let scope = crate::fleet_shaping::ProbeScope {
+        tenant_id: Some(job.tenant_id),
+        shaping_enabled: std::env::var("WEISSMAN_FLEET_SHAPING")
+            .ok()
+            .map(|v| {
+                let l = v.trim().to_ascii_lowercase();
+                l != "0" && l != "false" && l != "off"
+            })
+            .unwrap_or(true),
+    };
+    let channels = channels.clone();
+    crate::fleet_shaping::with_scope(
+        scope,
+        execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
+    )
+    .await
+}
+
+async fn execute_job_unscoped(
+    app_pool: Arc<PgPool>,
+    intel_pool: Arc<PgPool>,
+    auth_pool: Arc<PgPool>,
+    channels: AsyncJobChannels,
+    job: weissman_db::job_queue::AsyncJob,
+) -> Result<Value, String> {
     let tid = job.tenant_id;
     let p = &job.payload;
+    enforce_job_tenant_consistency(tid, p)?;
     enforce_payload_scope_pin_if_present(p).await?;
     match job.kind.as_str() {
         "remediation_verify" => {
@@ -280,9 +327,12 @@ pub async fn execute_job(
                 crate::engine_dispatch::load_tenant_oast_configs(app_pool.as_ref(), tid).await;
             let _ = tx.commit().await;
             let mut job_payload = p.clone();
-            if let Err(e) =
-                crate::scan_routing::hydrate_stored_job_payload(app_pool.as_ref(), tid, &mut job_payload)
-                    .await
+            if let Err(e) = crate::scan_routing::hydrate_stored_job_payload(
+                app_pool.as_ref(),
+                tid,
+                &mut job_payload,
+            )
+            .await
             {
                 tracing::warn!(
                     target: "async_jobs",
@@ -325,6 +375,15 @@ pub async fn execute_job(
             if !weissman_core::models::engine::is_production_engine_id(engine) {
                 return Err(format!("engine '{}' is catalog-only or unknown", engine));
             }
+            let _nerve_guard = crate::supreme_nerve_center::RunGuard::start(
+                &job.id.to_string(),
+                engine,
+                target,
+                tid,
+                client_id_opt,
+                "context_hydrate",
+                "Tenant config, OAST, stored payload",
+            );
             // poe_synthesis has no engine_dispatch runner; route through exploit_synthesis like
             // poe_synthesis_run jobs (scan_routing already uses that kind for direct enqueue).
             let mut last_engine_telemetry: Option<crate::engine_resilience::EngineExecTelemetry> =
@@ -347,6 +406,11 @@ pub async fn execute_job(
                     .and_then(|v| v.as_str())
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
+                crate::supreme_nerve_center::run_phase(
+                    &job.id.to_string(),
+                    "executing",
+                    Some("poe_synthesis → exploit_synthesis"),
+                );
                 match tokio::time::timeout(
                     Duration::from_secs(wall_secs),
                     crate::exploit_synthesis_engine::run_exploit_synthesis_async(
@@ -373,6 +437,11 @@ pub async fn execute_job(
                 let tgt = target.to_string();
                 let ctx_owned = ctx.clone();
                 let eng_label = eng.clone();
+                crate::supreme_nerve_center::run_phase(
+                    &job.id.to_string(),
+                    "executing",
+                    Some(&format!("dispatch: {engine}")),
+                );
                 let (res, telem) = crate::engine_stack_runtime::run_on_large_stack(move || {
                     let eng_outer = eng.clone();
                     let tgt = tgt.clone();
@@ -413,6 +482,11 @@ pub async fn execute_job(
                 res
             };
 
+            crate::supreme_nerve_center::run_phase(
+                &job.id.to_string(),
+                "persisting",
+                Some("findings → report_runs + vulnerabilities"),
+            );
             // Persist findings into report_runs + vulnerabilities so the Findings Command
             // Center / Vuln Intel / dashboard / CSV export / PDF report all see them. Without
             // this step results live only inside weissman_async_jobs.result_json (effectively
@@ -426,6 +500,26 @@ pub async fn execute_job(
                 &result.findings,
             )
             .await;
+
+            if crate::engine_resilience::should_retry_status(&result.status) {
+                let failure_ctx = json!({
+                    "engine": engine,
+                    "target": target,
+                    "status": result.status,
+                    "message": result.message,
+                    "telemetry": last_engine_telemetry.as_ref().map(|t| t.to_json()),
+                });
+                if let Err(e) = crate::sovereign_evolution::maybe_enqueue_learning_on_failure(
+                    app_pool.as_ref(),
+                    tid,
+                    target,
+                    &failure_ctx,
+                )
+                .await
+                {
+                    tracing::warn!(target: "sovereign_evolution", error = %e, "learning feedback enqueue failed");
+                }
+            }
 
             Ok(json!({
                 "engine": engine,
@@ -712,7 +806,10 @@ pub async fn execute_job(
                     job.id, engine_id
                 ));
 
-                crate::ws_intelligence_bus::merge_params_artifacts(&mut cross_job_params, &intelligence_bus);
+                crate::ws_intelligence_bus::merge_params_artifacts(
+                    &mut cross_job_params,
+                    &intelligence_bus,
+                );
                 let ctx = crate::engine_dispatch::EngineRunContext {
                     tenant_id: Some(tid),
                     target_list: vec![target.clone()],
@@ -738,7 +835,10 @@ pub async fn execute_job(
                 )
                 .await;
                 crate::engine_telemetry::record(eid, &telem);
-                crate::ws_intelligence_bus::merge_params_artifacts(&mut cross_job_params, &intelligence_bus);
+                crate::ws_intelligence_bus::merge_params_artifacts(
+                    &mut cross_job_params,
+                    &intelligence_bus,
+                );
 
                 if result.success {
                     succeeded += 1;

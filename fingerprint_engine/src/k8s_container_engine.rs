@@ -243,7 +243,16 @@ fn known_k8s_cves(v: Ver) -> Vec<KnownCve> {
             fixed_in: "1.22.16 / 1.23.14 / 1.24.8 / 1.25.4",
         });
     }
-    if vulnerable_before(v, &[(1, 24, 17), (1, 25, 16), (1, 26, 11), (1, 27, 8), (1, 28, 4)]) {
+    if vulnerable_before(
+        v,
+        &[
+            (1, 24, 17),
+            (1, 25, 16),
+            (1, 26, 11),
+            (1, 27, 8),
+            (1, 28, 4),
+        ],
+    ) {
         out.push(KnownCve {
             id: "CVE-2023-3676",
             cvss: 8.8,
@@ -252,7 +261,16 @@ fn known_k8s_cves(v: Ver) -> Vec<KnownCve> {
             fixed_in: "1.24.17 / 1.25.16 / 1.26.11 / 1.27.8 / 1.28.4",
         });
     }
-    if vulnerable_before(v, &[(1, 24, 17), (1, 25, 16), (1, 26, 11), (1, 27, 8), (1, 28, 4)]) {
+    if vulnerable_before(
+        v,
+        &[
+            (1, 24, 17),
+            (1, 25, 16),
+            (1, 26, 11),
+            (1, 27, 8),
+            (1, 28, 4),
+        ],
+    ) {
         out.push(KnownCve {
             id: "CVE-2023-3955",
             cvss: 8.8,
@@ -261,7 +279,16 @@ fn known_k8s_cves(v: Ver) -> Vec<KnownCve> {
             fixed_in: "1.24.17 / 1.25.16 / 1.26.11 / 1.27.8 / 1.28.4",
         });
     }
-    if vulnerable_before(v, &[(1, 24, 17), (1, 25, 16), (1, 26, 11), (1, 27, 8), (1, 28, 4)]) {
+    if vulnerable_before(
+        v,
+        &[
+            (1, 24, 17),
+            (1, 25, 16),
+            (1, 26, 11),
+            (1, 27, 8),
+            (1, 28, 4),
+        ],
+    ) {
         out.push(KnownCve {
             id: "CVE-2023-5528",
             cvss: 8.8,
@@ -309,8 +336,7 @@ struct PodDangerStats {
     automount_token: u32,
 }
 
-#[derive(Default)]
-#[derive(Clone)]
+#[derive(Default, Clone)]
 struct Signals {
     anon_api: bool,
     api_secrets_anon: bool,
@@ -1015,12 +1041,7 @@ impl Collector {
                 "critical",
                 "T1552.007",
             ),
-            (
-                "/api/v1/pods".to_string(),
-                "Pods",
-                "critical",
-                "T1613",
-            ),
+            ("/api/v1/pods".to_string(), "Pods", "critical", "T1613"),
         ];
         let ns = self.target_namespace.trim();
         if !ns.is_empty() {
@@ -1051,12 +1072,7 @@ impl Collector {
                     "high",
                     "T1552",
                 ),
-                (
-                    "/api/v1/nodes".to_string(),
-                    "Nodes",
-                    "high",
-                    "T1613",
-                ),
+                ("/api/v1/nodes".to_string(), "Nodes", "high", "T1613"),
             ]);
         }
         for (path, label, sev, mitre) in targets {
@@ -1317,7 +1333,11 @@ impl Collector {
                     let ev = Evidence::new()
                         .with("endpoint", format!("{}://{}:{}", scheme, host, port))
                         .with("mutating_webhook_callbacks", json!(urls))
-                        .check("mutating_webhooks_anonymous", true, json!({ "callbacks": urls.len() }));
+                        .check(
+                            "mutating_webhooks_anonymous",
+                            true,
+                            json!({ "callbacks": urls.len() }),
+                        );
                     self.push(finding_rich(
                         ENGINE_ID,
                         &format!(
@@ -1345,7 +1365,11 @@ impl Collector {
                         .with("endpoint", format!("{}://{}:{}", scheme, host, port))
                         .with("events_readable", n)
                         .with("secret_patterns", json!(secret_types))
-                        .check("events_contain_secret_patterns", true, "live pattern match in event messages")
+                        .check(
+                            "events_contain_secret_patterns",
+                            true,
+                            "live pattern match in event messages",
+                        )
                         .raw_excerpt(p.body.as_bytes());
                     self.push(finding_rich(
                         ENGINE_ID,
@@ -1397,7 +1421,11 @@ impl Collector {
                     let ev = Evidence::new()
                         .with("endpoint", format!("{}://{}:{}", scheme, host, port))
                         .with("dangerous_clusterroles", json!(dangerous))
-                        .check("clusterroles_anonymous", true, json!({ "dangerous": dangerous.len() }));
+                        .check(
+                            "clusterroles_anonymous",
+                            true,
+                            json!({ "dangerous": dangerous.len() }),
+                        );
                     self.push(finding_rich(
                         ENGINE_ID,
                         &format!(
@@ -1417,7 +1445,12 @@ impl Collector {
         }
         // NetworkPolicy coverage gap — namespaces exist but zero policies cluster-wide.
         if let (Some(ns_p), Some(np_p)) = (
-            get(client, &url(scheme, host, port, "/api/v1/namespaces"), token).await,
+            get(
+                client,
+                &url(scheme, host, port, "/api/v1/namespaces"),
+                token,
+            )
+            .await,
             get(
                 client,
                 &url(
@@ -1443,7 +1476,11 @@ impl Collector {
                         .with("endpoint", format!("{}://{}:{}", scheme, host, port))
                         .with("namespaces", ns_count)
                         .with("networkpolicies", np_count)
-                        .check("zero_networkpolicies", true, "cluster has namespaces but no NetworkPolicies");
+                        .check(
+                            "zero_networkpolicies",
+                            true,
+                            "cluster has namespaces but no NetworkPolicies",
+                        );
                     self.push(finding_rich(
                         ENGINE_ID,
                         &format!(
@@ -1463,12 +1500,7 @@ impl Collector {
         // cert-manager certificates — often readable and reveal TLS material metadata.
         if let Some(p) = get(
             client,
-            &url(
-                scheme,
-                host,
-                port,
-                "/apis/cert-manager.io/v1/certificates",
-            ),
+            &url(scheme, host, port, "/apis/cert-manager.io/v1/certificates"),
             token,
         )
         .await
@@ -1477,7 +1509,10 @@ impl Collector {
                 let n = count_items(&p.body).unwrap_or(0);
                 if n > 0 {
                     self.sig.cert_manager_exposed = true;
-                    if !self.cluster_meta.platform_tools.contains(&"cert-manager".to_string())
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"cert-manager".to_string())
                     {
                         self.cluster_meta
                             .platform_tools
@@ -1539,7 +1574,11 @@ impl Collector {
                             let ev = Evidence::new()
                                 .with("endpoint", format!("{}://{}:{}", scheme, host, port))
                                 .with("token_username", username)
-                                .check("tokenreview_authenticated", true, json!({ "username": username }));
+                                .check(
+                                    "tokenreview_authenticated",
+                                    true,
+                                    json!({ "username": username }),
+                                );
                             self.push(finding_rich(
                                 ENGINE_ID,
                                 &format!("Supplied bearer token is VALID (TokenReview → {})", username),
@@ -2364,11 +2403,18 @@ impl Collector {
             if let Some(h) = get(client, &url(scheme, host, port, "/api/v2.0/health"), token).await
             {
                 if h.status == 200 && h.body.to_ascii_lowercase().contains("harbor") {
-                    if !self.cluster_meta.platform_tools.contains(&"Harbor".to_string()) {
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"Harbor".to_string())
+                    {
                         self.cluster_meta.platform_tools.push("Harbor".to_string());
                     }
                     let ev = Evidence::new()
-                        .with("endpoint", format!("{}://{}:{}/api/v2.0/health", scheme, host, port))
+                        .with(
+                            "endpoint",
+                            format!("{}://{}:{}/api/v2.0/health", scheme, host, port),
+                        )
                         .check("harbor_health", true, json!({ "status": h.status }));
                     self.push(finding_rich(
                         ENGINE_ID,
@@ -2383,14 +2429,26 @@ impl Collector {
                 }
             }
             // MinIO S3-compatible object store (often used for artifacts/backups).
-            if let Some(m) = get(client, &url(scheme, host, port, "/minio/health/live"), token).await
+            if let Some(m) = get(
+                client,
+                &url(scheme, host, port, "/minio/health/live"),
+                token,
+            )
+            .await
             {
                 if m.status == 200 {
-                    if !self.cluster_meta.platform_tools.contains(&"MinIO".to_string()) {
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"MinIO".to_string())
+                    {
                         self.cluster_meta.platform_tools.push("MinIO".to_string());
                     }
                     let ev = Evidence::new()
-                        .with("endpoint", format!("{}://{}:{}/minio/health/live", scheme, host, port))
+                        .with(
+                            "endpoint",
+                            format!("{}://{}:{}/minio/health/live", scheme, host, port),
+                        )
                         .check("minio_health", true, json!({ "status": m.status }));
                     self.push(finding_rich(
                         ENGINE_ID,
@@ -2932,7 +2990,11 @@ impl Collector {
                         "observability",
                         "exposed",
                     );
-                    if !self.cluster_meta.platform_tools.contains(&"Jaeger".to_string()) {
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"Jaeger".to_string())
+                    {
                         self.cluster_meta.platform_tools.push("Jaeger".to_string());
                     }
                     let ev = Evidence::new()
@@ -2953,14 +3015,21 @@ impl Collector {
             }
             // Loki (log aggregation)
             if let Some(p) = get(client, &url("http", host, port, "/ready"), None).await {
-                if p.status == 200 && header_value(&p.headers, "server").is_some_and(|s| s.to_ascii_lowercase().contains("loki")) {
+                if p.status == 200
+                    && header_value(&p.headers, "server")
+                        .is_some_and(|s| s.to_ascii_lowercase().contains("loki"))
+                {
                     self.add_node(
                         &format!("loki:{}", port),
                         &format!("Loki :{}", port),
                         "observability",
                         "exposed",
                     );
-                    if !self.cluster_meta.platform_tools.contains(&"Loki".to_string()) {
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"Loki".to_string())
+                    {
                         self.cluster_meta.platform_tools.push("Loki".to_string());
                     }
                     let ev = Evidence::new()
@@ -2988,7 +3057,11 @@ impl Collector {
                         "observability",
                         "exposed",
                     );
-                    if !self.cluster_meta.platform_tools.contains(&"Tempo".to_string()) {
+                    if !self
+                        .cluster_meta
+                        .platform_tools
+                        .contains(&"Tempo".to_string())
+                    {
                         self.cluster_meta.platform_tools.push("Tempo".to_string());
                     }
                     let ev = Evidence::new()
@@ -3773,7 +3846,8 @@ impl Collector {
                     ),
                     (
                         "Credential Access",
-                        "Extract API keys / tokens embedded in controller error messages".to_string(),
+                        "Extract API keys / tokens embedded in controller error messages"
+                            .to_string(),
                     ),
                     (
                         "Privilege Escalation",
@@ -3781,7 +3855,8 @@ impl Collector {
                     ),
                     (
                         "Impact",
-                        "Lateral movement into cloud control plane and persistent cluster access".to_string(),
+                        "Lateral movement into cloud control plane and persistent cluster access"
+                            .to_string(),
                     ),
                 ],
                 &[
@@ -3802,19 +3877,23 @@ impl Collector {
                 &[
                     (
                         "Discovery",
-                        "Enumerate Validating/MutatingWebhookConfiguration clientConfig URLs".to_string(),
+                        "Enumerate Validating/MutatingWebhookConfiguration clientConfig URLs"
+                            .to_string(),
                     ),
                     (
                         "Initial Access",
-                        "Reach webhook endpoints from scan origin if network path exists".to_string(),
+                        "Reach webhook endpoints from scan origin if network path exists"
+                            .to_string(),
                     ),
                     (
                         "Collection",
-                        "Webhook receives full Kubernetes object payloads on create/update".to_string(),
+                        "Webhook receives full Kubernetes object payloads on create/update"
+                            .to_string(),
                     ),
                     (
                         "Impact",
-                        "SSRF into internal services or credential theft from webhook handlers".to_string(),
+                        "SSRF into internal services or credential theft from webhook handlers"
+                            .to_string(),
                     ),
                 ],
                 &["Discovery", "Initial Access", "Collection", "Impact"],
@@ -4097,7 +4176,7 @@ mod tests {
     fn cve_table_matches_old_and_clears_new() {
         let old = known_k8s_cves((1, 9, 0));
         assert!(old.iter().any(|c| c.id == "CVE-2018-1002105"));
-        let new = known_k8s_cves((1, 30, 0));
+        let new = known_k8s_cves((1, 31, 0));
         assert!(
             new.is_empty(),
             "a current release should match no historical control-plane CVEs"

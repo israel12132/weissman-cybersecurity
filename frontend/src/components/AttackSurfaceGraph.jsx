@@ -3,11 +3,12 @@
  * Central root domain, subdomains radiating out, cloud targets; secure = green/slate, exposed/takeover = crimson + pulse.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../lib/apiBase'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const CENTER_X = 500
 const CENTER_Y = 350
@@ -148,16 +149,11 @@ export default function AttackSurfaceGraph() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col">
-      <header className="flex items-center justify-between border-b border-slate-700 px-6 py-3">
-        <h1 className="text-lg font-bold text-cyan-400">{t(`${NS}.title`)}</h1>
-        <div className="flex items-center gap-4">
-          {graph.run_id != null && (
-            <span className="text-xs text-slate-500">{t(`${NS}.run_id`, { id: graph.run_id })}</span>
-          )}
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.back_war_room`)}</Link>
-        </div>
-      </header>
+    <StandaloneLabShell
+      title={t(`${NS}.title`)}
+      subtitle={graph.run_id != null ? t(`${NS}.run_id`, { id: graph.run_id }) : undefined}
+      contentClassName="p-0"
+    >
       {error && (
         <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
           {error}
@@ -235,6 +231,6 @@ export default function AttackSurfaceGraph() {
         @keyframes asm-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); } 50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); } }
         .asm-node-type { font-size: 10px; opacity: 0.8; margin-top: 2px; }
       `}</style>
-    </div>
+    </StandaloneLabShell>
   )
 }

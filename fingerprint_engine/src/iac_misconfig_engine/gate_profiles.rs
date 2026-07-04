@@ -76,10 +76,16 @@ pub fn apply_profile(params: &mut Value, profile: &str) {
     }
     let obj = obj.unwrap();
     if !obj.contains_key("fail_severity") {
-        obj.insert("fail_severity".to_string(), Value::String(p.fail_severity.as_str().to_string()));
+        obj.insert(
+            "fail_severity".to_string(),
+            Value::String(p.fail_severity.as_str().to_string()),
+        );
     }
     if !obj.contains_key("min_severity") {
-        obj.insert("min_severity".to_string(), Value::String(p.min_severity.as_str().to_string()));
+        obj.insert(
+            "min_severity".to_string(),
+            Value::String(p.min_severity.as_str().to_string()),
+        );
     }
     for (k, v) in [
         ("secret_scan", p.secret_scan),
@@ -94,7 +100,10 @@ pub fn apply_profile(params: &mut Value, profile: &str) {
             obj.insert(k.to_string(), Value::Bool(v));
         }
     }
-    obj.insert("gate_profile_applied".to_string(), Value::String(profile.to_string()));
+    obj.insert(
+        "gate_profile_applied".to_string(),
+        Value::String(profile.to_string()),
+    );
 }
 
 #[must_use]

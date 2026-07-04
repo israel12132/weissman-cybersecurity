@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "prometheus_operator", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "prometheus_operator",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -67,7 +76,9 @@ pub fn policies() -> Vec<PolicyMeta> {
 fn is_prometheus_stack(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n.contains("prometheus") || n.contains("grafana") || n.contains("alertmanager")
+    n.contains("prometheus")
+        || n.contains("grafana")
+        || n.contains("alertmanager")
         || lc.contains("monitoring.coreos.com")
         || lc.contains("kind: servicemonitor")
         || lc.contains("kind: podmonitor")
@@ -86,13 +97,23 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("insecureskipverify: true") {
         out.push(Finding::new(TLS_SKIP, file, file).observed("insecureSkipVerify on scrape"));
     }
-    if lc.contains("adminpassword:") || lc.contains("admin_password:") || lc.contains("gf_security_admin_password") {
-        out.push(Finding::new(GRAFANA_ADMIN_PASS, file, file).observed("Grafana admin password literal"));
+    if lc.contains("adminpassword:")
+        || lc.contains("admin_password:")
+        || lc.contains("gf_security_admin_password")
+    {
+        out.push(
+            Finding::new(GRAFANA_ADMIN_PASS, file, file).observed("Grafana admin password literal"),
+        );
     }
-    if lc.contains("servicemonitornamespaceselector: {}") || lc.contains("podmonitornamespaceselector: {}") {
-        out.push(Finding::new(ANY_NAMESPACE, file, file).observed("any-namespace monitor selector"));
+    if lc.contains("servicemonitornamespaceselector: {}")
+        || lc.contains("podmonitornamespaceselector: {}")
+    {
+        out.push(
+            Finding::new(ANY_NAMESPACE, file, file).observed("any-namespace monitor selector"),
+        );
     }
-    if lc.contains("webhook_configs:") && !lc.contains("bearer_token") && !lc.contains("basic_auth") {
+    if lc.contains("webhook_configs:") && !lc.contains("bearer_token") && !lc.contains("basic_auth")
+    {
         out.push(Finding::new(WEBHOOK_NO_AUTH, file, file).observed("webhook without auth"));
     }
 

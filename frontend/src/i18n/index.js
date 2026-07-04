@@ -1,16 +1,14 @@
-// i18n bootstrap: English + Hebrew with localStorage persistence + browser auto-detect.
-// HTML <html dir> + <html lang> are flipped automatically when the user switches language.
+// i18n bootstrap: locales loaded as micro-chunks (see localeLoader.js).
+// HTML <html dir> + <html lang> flip automatically on language switch.
 
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
-
-import en from './locales/en.json'
-import he from './locales/he.json'
+import { loadLocale, prefetchLocale } from './localeLoader'
 
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English', dir: 'ltr', flag: '🇺🇸' },
-  { code: 'he', label: 'עברית',   dir: 'rtl', flag: '🇮🇱' },
+  { code: 'he', label: 'עברית', dir: 'rtl', flag: '🇮🇱' },
 ]
 
 const RTL_LANGS = new Set(SUPPORTED_LANGUAGES.filter((l) => l.dir === 'rtl').map((l) => l.code))
@@ -27,14 +25,11 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources: {
-      en: { translation: en },
-      he: { translation: he },
-    },
+    resources: {},
     fallbackLng: 'en',
     supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
     nonExplicitSupportedLngs: true,
-    interpolation: { escapeValue: false }, // React already escapes
+    interpolation: { escapeValue: false },
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
       caches: ['localStorage'],
@@ -42,6 +37,12 @@ i18n
     },
     returnNull: false,
   })
+
+i18n.on('languageChanged', (lng) => {
+  applyDir(lng)
+  const code = (lng || 'en').split('-')[0]
+  if (code !== 'en') prefetchLocale(code)
+})
 
 i18n.on('languageChanged', applyDir)
 applyDir(i18n.language || 'en')

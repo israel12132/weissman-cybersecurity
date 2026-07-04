@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Sign-off checklist before customer handoff or production go-live. Validates engine wiring, UI completeness, security guards, and end-to-end scan workflows using repository verification scripts and manual smoke tests.
+Sign-off checklist before customer handoff or production go-live. Validates engine wiring, UI completeness, security guards, end-to-end scan workflows, and **audit evidence** using repository verification scripts and manual smoke tests.
 
 ---
 
@@ -10,9 +10,29 @@ Sign-off checklist before customer handoff or production go-live. Validates engi
 
 - Staging environment mirroring production config
 - `WEISSMAN_ENV=production` on staging (recommended)
-- Strong secrets (not dev defaults)
+- Strong secrets: JWT **≥48 characters**; metrics / destructive / job-orchestrator **≥32 characters**
 - Docker Compose, systemd, or K8s deployment complete
 - Operator admin account with MFA tested
+
+---
+
+## Master gate — run first
+
+```bash
+bash scripts/full_audit_gate.sh
+```
+
+**Pass criteria:** Exit code 0, message `GLOBAL PASS`. Aggregates G1–G7:
+
+| Gate | Command | Criterion |
+|------|---------|-----------|
+| G1 Build | `cargo build --workspace && cd frontend && npm run build` | Exit 0 |
+| G2 Tests | `cargo test --workspace && cd frontend && npm run test:coverage` | 0 failures; ≥60% critical-path coverage |
+| G3 Lint | `cargo clippy --workspace && cargo fmt --check` | 0 errors |
+| G4 Wiring | `node scripts/verify_engine_wiring.mjs` | 0 gaps |
+| G5 Reality | `node scripts/engine_reality_audit.mjs` | 0 `no_path` |
+| G6 Migrations | `bash scripts/check-migration-sync.sh` | PASS |
+| G7 Live + evidence | UI audit, evidence pack, go-live check, optional live E2E | All pass |
 
 ---
 
@@ -34,7 +54,7 @@ Validates:
 - Every production engine has dispatch or alias runner path
 - No orphan frontend IDs
 
-Expected: **545 production engines**, 0 wiring wiring gaps.
+Expected: **558 production engines**, 0 wiring gaps.
 
 ### 2. Engine reality audit
 
@@ -44,7 +64,7 @@ node scripts/engine_reality_audit.mjs
 
 **Pass criteria:** Zero `no_path` engines.
 
-Reports counts by kind: `real_probe`, `agent_required`, `alias`, `special`.
+Reports counts by kind: **300** `real_probe`, **213** `alias`, **45** `agent_required`, **0** `special`.
 
 ### 3. UI compliance audit
 
@@ -54,23 +74,49 @@ node scripts/weissman-ui-audit.mjs
 
 **Pass criteria:** All Command Center pages pass evidence, refresh, export, and search rules.
 
-Expected: **94/94 pages** compliant (per sales readiness audit).
+Expected: **95/95 pages**, **112/112 routes** compliant.
 
 ### 4. Rust build and tests
 
 ```bash
 cargo build --workspace
-cargo test --workspace
-cargo clippy --workspace
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
 ```
 
-### 5. Frontend build
+### 5. Frontend build and tests
 
 ```bash
 cd frontend && npm ci && npm run build
+cd frontend && npm run test:coverage
 ```
 
-### 6. Staging QA (one command)
+Expected: **67+** unit test files; coverage gate on critical lib/hooks paths.
+
+### 6. Playwright live E2E (Phase 6)
+
+```bash
+./scripts/run_playwright_live_e2e.sh
+```
+
+Journey: login → client → scan → findings with evidence → PDF export. Requires live stack (`run_e2e_stack.sh`) and `WEISSMAN_ADMIN_PASSWORD`.
+
+### 7. Audit evidence pack (Phase 6)
+
+```bash
+./scripts/generate_audit_evidence_pack.sh
+```
+
+Outputs `evidence-pack/*/evidence-pack.json` + PDF (wiring, SBOM hash, NIST/SOC2 mapping).
+
+### 8. Go-live readiness
+
+```bash
+./scripts/go_live_check.sh
+./scripts/go_live_check.sh --live https://staging.example.com
+```
+
+### 9. Staging QA (one command)
 
 ```bash
 chmod +x scripts/staging-qa.sh
@@ -86,7 +132,7 @@ See manual **19** for Paddle, SMTP, LLM, OAST, agent binaries, and Docker stagin
 
 | Check | Procedure | Pass |
 |-------|-----------|------|
-| Production guards | Start with weak JWT → must refuse boot | Boot blocked |
+| Production guards | Start with JWT < 48 chars → must refuse boot | Boot blocked |
 | Secure cookies | `WEISSMAN_COOKIE_SECURE=1` + HTTPS login | Cookie flags Secure |
 | Metrics protected | `GET /api/metrics` without token → 401 | 401 |
 | Destructive gate | Action without confirm header → 403 | 403 |
@@ -123,7 +169,7 @@ Reference manual **05**.
 
 Test engines:
 
-1. One `real_probe` (e.g., `dns_recon`)
+1. One `real_probe` (e.g., `osint`, `dns_recon`)
 2. One `agent_required` — confirm honest empty before agent, findings after agent online
 
 ### Agent (if in scope)
@@ -136,6 +182,7 @@ Test engines:
 
 - [ ] CSV export downloads with data
 - [ ] PDF report generates
+- [ ] `GET /api/compliance/evidence-pack/:client_id` returns v2 pack
 
 ### Integrations (if sold)
 
@@ -196,11 +243,13 @@ Date: _______________
 Engineered by: _______________
 
 Automated:
-  [ ] verify_engine_wiring.mjs — 0 gaps
+  [ ] full_audit_gate.sh — GLOBAL PASS
+  [ ] verify_engine_wiring.mjs — 558 engines, 0 gaps
   [ ] engine_reality_audit.mjs — 0 no_path
-  [ ] weissman-ui-audit.mjs — all pages pass
+  [ ] weissman-ui-audit.mjs — 95 pages, 112 routes
+  [ ] generate_audit_evidence_pack.sh — JSON + PDF
   [ ] cargo test — pass
-  [ ] frontend build — pass
+  [ ] frontend test:coverage — pass
 
 Manual smoke:
   [ ] Login + MFA
@@ -221,7 +270,7 @@ Archive sign-off with engagement records.
 After every production upgrade:
 
 1. `git pull` + rebuild
-2. Run scripts 1–3 above
+2. `bash scripts/full_audit_gate.sh`
 3. Health check + one smoke scan
 4. Review migration logs
 
@@ -235,3 +284,4 @@ After every production upgrade:
 - [10-scans-engines-jobs](10-scans-engines-jobs.md)
 - [16-operations-monitoring](16-operations-monitoring.md)
 - [17-troubleshooting](17-troubleshooting.md)
+- [Inspection Day Runbook](../../operations/INSPECTION-DAY-RUNBOOK.md)

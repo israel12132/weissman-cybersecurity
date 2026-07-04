@@ -84,11 +84,11 @@ const DEFAULT_DKIM_SELECTORS: &[&str] = &[
     "zendesk1",
     "zendesk2",
     "everlytickey1",
-    "litesrv", // MailerLite alt
+    "litesrv",  // MailerLite alt
     "scph0122", // SendCloud
     "scph0123",
-    "smtpapi", // SendGrid legacy
-    "pic", // Mailgun alt
+    "smtpapi",  // SendGrid legacy
+    "pic",      // Mailgun alt
     "20230601", // rotating date selectors (common pattern)
     "20240101",
     "20250101",
@@ -167,8 +167,20 @@ struct PostureConfig {
 }
 
 const DEFAULT_MAIL_SUBDOMAINS: &[&str] = &[
-    "mail", "smtp", "autodiscover", "webmail", "mx", "email", "owa", "imap", "pop", "send",
-    "outbound", "m", "mobile", "exchange",
+    "mail",
+    "smtp",
+    "autodiscover",
+    "webmail",
+    "mx",
+    "email",
+    "owa",
+    "imap",
+    "pop",
+    "send",
+    "outbound",
+    "m",
+    "mobile",
+    "exchange",
 ];
 
 impl PostureConfig {
@@ -230,7 +242,10 @@ impl PostureConfig {
                     .filter(|s| !s.is_empty())
                     .collect();
                 if subs.is_empty() {
-                    subs = DEFAULT_MAIL_SUBDOMAINS.iter().map(|s| (*s).to_string()).collect();
+                    subs = DEFAULT_MAIL_SUBDOMAINS
+                        .iter()
+                        .map(|s| (*s).to_string())
+                        .collect();
                 }
                 subs.truncate(16);
                 subs
@@ -1245,10 +1260,7 @@ async fn analyze_dmarc(
         .unwrap_or(100);
     let rua = tags.get("rua").map(|s| !s.is_empty()).unwrap_or(false);
     let ruf = tags.get("ruf").map(|s| !s.is_empty()).unwrap_or(false);
-    let fo = tags
-        .get("fo")
-        .cloned()
-        .unwrap_or_else(|| "0".to_string());
+    let fo = tags.get("fo").cloned().unwrap_or_else(|| "0".to_string());
     let adkim = tags
         .get("adkim")
         .cloned()
@@ -2154,10 +2166,12 @@ async fn analyze_bimi(
             }
         } else {
             findings.push(mk(
-                "bimi", "BIMI",
+                "bimi",
+                "BIMI",
                 "BIMI record missing `l=` logo URL",
                 "low",
-                "T1656", "",
+                "T1656",
+                "",
                 format!("`{domain}` publishes BIMI without an `l=` logo location tag."),
                 &record,
                 "Add `l=https://<domain>/path/logo.svg` pointing to an SVG Tiny-PS asset.",
@@ -2469,7 +2483,12 @@ async fn analyze_smtp_tls(
         }
     }
 
-    (smtp_reachable, starttls_ok, dane_present, json!({ "probes": smtp_audit }))
+    (
+        smtp_reachable,
+        starttls_ok,
+        dane_present,
+        json!({ "probes": smtp_audit }),
+    )
 }
 
 struct SmtpResult {
@@ -2585,14 +2604,20 @@ fn smtp_starttls_cert_blocking(host: &str, port: u16, timeout_ms: u64) -> Option
             Ok(s) => s.to_string(),
             Err(_) => "?".to_string(),
         };
-        format!(
-            "{}={}",
-            e.object().nid().short_name().unwrap_or("?"),
-            val
-        )
+        format!("{}={}", e.object().nid().short_name().unwrap_or("?"), val)
     };
-    let issuer = x509.issuer_name().entries().map(fmt_dn).collect::<Vec<_>>().join(", ");
-    let subject = x509.subject_name().entries().map(fmt_dn).collect::<Vec<_>>().join(", ");
+    let issuer = x509
+        .issuer_name()
+        .entries()
+        .map(fmt_dn)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let subject = x509
+        .subject_name()
+        .entries()
+        .map(fmt_dn)
+        .collect::<Vec<_>>()
+        .join(", ");
     let self_signed = issuer == subject;
     let not_after = x509.not_after().to_owned();
     let now = openssl::asn1::Asn1Time::days_from_now(0).ok();
@@ -2647,10 +2672,11 @@ async fn analyze_mx_tls_certs(
         for &port in &[25u16, 587u16] {
             let h = host.clone();
             let timeout = cfg.timeout_ms;
-            let info = tokio::task::spawn_blocking(move || smtp_starttls_cert_blocking(&h, port, timeout))
-                .await
-                .ok()
-                .flatten();
+            let info =
+                tokio::task::spawn_blocking(move || smtp_starttls_cert_blocking(&h, port, timeout))
+                    .await
+                    .ok()
+                    .flatten();
             let Some(info) = info else { continue };
 
             if info.expired {
@@ -2710,11 +2736,16 @@ async fn analyze_mx_tls_certs(
             }
             if info.public_key_bits > 0 && info.public_key_bits < 2048 {
                 findings.push(mk(
-                    "smtp_tls", "SMTP",
+                    "smtp_tls",
+                    "SMTP",
                     &format!("MX STARTTLS key is weak ({}-bit)", info.public_key_bits),
                     escalate("medium", cfg.strict_mode),
-                    "T1557", "CWE-327",
-                    format!("`{}:{}` uses a {}-bit public key — below modern baselines for SMTP TLS.", info.host, port, info.public_key_bits),
+                    "T1557",
+                    "CWE-327",
+                    format!(
+                        "`{}:{}` uses a {}-bit public key — below modern baselines for SMTP TLS.",
+                        info.host, port, info.public_key_bits
+                    ),
                     &format!("{} bits", info.public_key_bits),
                     "Re-key to ≥2048-bit RSA or prefer ECDSA P-256.",
                     "",
@@ -2804,12 +2835,7 @@ async fn analyze_soa_posture(
                 minimum_ttl = Some(soa.minimum);
                 raw = format!(
                     "mname={}; serial={}; refresh={}; retry={}; expire={}; minimum={}",
-                    soa.mname,
-                    soa.serial,
-                    soa.refresh,
-                    soa.retry,
-                    soa.expire,
-                    soa.minimum
+                    soa.mname, soa.serial, soa.refresh, soa.retry, soa.expire, soa.minimum
                 );
                 break;
             }
@@ -3332,8 +3358,16 @@ async fn analyze_autodiscover(
     let ms_probe = crate::engine_probes::http_get(&client, &ms_url).await;
     let moz_probe = crate::engine_probes::http_get(&client, &moz_url).await;
 
-    let ms_exposed = ms_probe.as_ref().map(|p| p.status == 200 && (p.body.contains("Autodiscover") || p.body.contains("autodiscover"))).unwrap_or(false);
-    let moz_exposed = moz_probe.as_ref().map(|p| p.status == 200 && p.body.contains("clientConfig")).unwrap_or(false);
+    let ms_exposed = ms_probe
+        .as_ref()
+        .map(|p| {
+            p.status == 200 && (p.body.contains("Autodiscover") || p.body.contains("autodiscover"))
+        })
+        .unwrap_or(false);
+    let moz_exposed = moz_probe
+        .as_ref()
+        .map(|p| p.status == 200 && p.body.contains("clientConfig"))
+        .unwrap_or(false);
 
     let mut surface = Vec::new();
     if cname.is_some() {
@@ -3372,8 +3406,9 @@ async fn analyze_autodiscover(
             domain,
         ));
 
-        if cname.as_deref().is_some_and(|t| t.contains("outlook") || t.contains("microsoft") || t.contains("office365"))
-            && ms_exposed
+        if cname.as_deref().is_some_and(|t| {
+            t.contains("outlook") || t.contains("microsoft") || t.contains("office365")
+        }) && ms_exposed
         {
             findings.push(mk(
                 "autodiscover", "Autodiscover",
@@ -3581,7 +3616,12 @@ fn build_toxic_combinations(
 ) -> Vec<Value> {
     let mut combos: Vec<Value> = Vec::new();
 
-    let push = |combos: &mut Vec<Value>, id: &str, severity: &str, title: &str, path: &str, impact: &str| {
+    let push = |combos: &mut Vec<Value>,
+                id: &str,
+                severity: &str,
+                title: &str,
+                path: &str,
+                impact: &str| {
         combos.push(json!({
             "id": id,
             "severity": severity,
@@ -3674,8 +3714,7 @@ fn build_toxic_combinations(
             "Subdomain impersonation and OAuth/phishing lures",
         );
     }
-    if matches!(spf.qualifier, Some('~' | '?') | None)
-        && (!dmarc.present || dmarc.policy == "none")
+    if matches!(spf.qualifier, Some('~' | '?') | None) && (!dmarc.present || dmarc.policy == "none")
     {
         push(
             &mut combos,
@@ -3959,7 +3998,11 @@ fn build_coverage_manifest(
         "Mail subdomain blast-radius",
         "Best practice",
         cfg.check_mail_subdomains,
-        if subdomain_gap_count == 0 { "pass" } else { "fail" },
+        if subdomain_gap_count == 0 {
+            "pass"
+        } else {
+            "fail"
+        },
     );
     push(
         "ns_redundancy",
@@ -4007,6 +4050,19 @@ fn build_coverage_manifest(
         "RFC 7489 §7.1",
         cfg.check_dmarc_external_reports,
         if dmarc.rua { "pass" } else { "warn" },
+    );
+    push(
+        "bimi_logo",
+        "BIMI logo reachability",
+        "BIMI draft",
+        cfg.check_bimi_logo_fetch,
+        if bimi.logo_reachable == Some(true) {
+            "pass"
+        } else if bimi.present {
+            "warn"
+        } else {
+            "fail"
+        },
     );
 
     let enabled_count = probes
@@ -4102,7 +4158,8 @@ pub async fn run_email_dns_posture_result(target: &str, ctx: &EngineRunContext) 
     let mx_present = analyze_mx(&domain, &mx, provider, &mut findings).await;
 
     // Transport security.
-    let mta_sts = analyze_mta_sts(&resolver, &domain, &cfg, &mut findings, &mut cat_transport).await;
+    let mta_sts =
+        analyze_mta_sts(&resolver, &domain, &cfg, &mut findings, &mut cat_transport).await;
     let mta_sts_mx_drift = analyze_mta_sts_mx_drift(&domain, &mx, &mta_sts, &cfg, &mut findings);
     let tls_rpt =
         analyze_tls_rpt(&resolver, &domain, &cfg, &mut findings, &mut cat_transport).await;
@@ -4122,22 +4179,15 @@ pub async fn run_email_dns_posture_result(target: &str, ctx: &EngineRunContext) 
 
     let mx_diversity = analyze_mx_diversity(&domain, &mx, &cfg, &mut findings);
     let autodiscover = analyze_autodiscover(&resolver, &domain, &cfg, &mut findings).await;
-    let dmarc_external = analyze_dmarc_external_reports(
-        &resolver,
-        &domain,
-        &dmarc,
-        &cfg,
-        &mut findings,
-    )
-    .await;
+    let dmarc_external =
+        analyze_dmarc_external_reports(&resolver, &domain, &dmarc, &cfg, &mut findings).await;
     let forwarding = analyze_forwarding_resilience(&domain, &dmarc, &mut findings);
 
     // Advanced: SPF blast radius, resolver consensus, mail subdomains, MX rDNS.
     let spf_blast = analyze_spf_blast_radius(&resolver, &domain, &spf, &cfg, &mut findings).await;
     let resolver_consensus =
         analyze_resolver_consensus(&domain, &resolver, &cfg, &mut findings).await;
-    let mail_subdomains =
-        analyze_mail_subdomains(&resolver, &domain, &cfg, &mut findings).await;
+    let mail_subdomains = analyze_mail_subdomains(&resolver, &domain, &cfg, &mut findings).await;
     let mx_ptr = analyze_mx_ptr(&resolver, &domain, &mx, &mut findings).await;
     let consensus_ok = resolver_consensus
         .get("consensus")
@@ -4584,8 +4634,22 @@ mod tests {
             smtp_starttls_ok: false,
             dane_present: None,
         };
-        let combos = build_toxic_combinations("example.com", &spf, &dmarc, &dkim, &transport, Some(false), true, 0, false, false, false);
-        assert!(combos.iter().any(|c| c.get("id").and_then(|v| v.as_str()) == Some("soft_spf_no_dmarc")));
+        let combos = build_toxic_combinations(
+            "example.com",
+            &spf,
+            &dmarc,
+            &dkim,
+            &transport,
+            Some(false),
+            true,
+            0,
+            false,
+            false,
+            false,
+        );
+        assert!(combos
+            .iter()
+            .any(|c| c.get("id").and_then(|v| v.as_str()) == Some("soft_spf_no_dmarc")));
     }
 
     #[test]
@@ -4799,11 +4863,34 @@ mod tests {
         };
         let ns = json!({ "checked": true, "count": 2 });
         let manifest = build_coverage_manifest(
-            &cfg, &spf, &dmarc, &dkim, &transport, Some(true), true, &bimi, &tls_rpt, true, 0, &ns,
+            &cfg,
+            &spf,
+            &dmarc,
+            &dkim,
+            &transport,
+            Some(true),
+            true,
+            &bimi,
+            &tls_rpt,
+            true,
+            0,
+            &ns,
             true,
         );
-        assert!(manifest.get("probe_count").and_then(|v| v.as_u64()).unwrap_or(0) >= 20);
-        assert!(manifest.get("completeness_pct").and_then(|v| v.as_u64()).unwrap_or(0) >= 80);
+        assert!(
+            manifest
+                .get("probe_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                >= 20
+        );
+        assert!(
+            manifest
+                .get("completeness_pct")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                >= 80
+        );
     }
 
     #[test]
@@ -4811,6 +4898,9 @@ mod tests {
         let cat = static_probe_catalog();
         assert_eq!(cat.get("engine").and_then(|v| v.as_str()), Some(ENGINE_ID));
         assert_eq!(cat.get("live_only").and_then(|v| v.as_bool()), Some(true));
-        assert!(cat.get("categories").and_then(|v| v.as_array()).is_some_and(|a| a.len() >= 12));
+        assert!(cat
+            .get("categories")
+            .and_then(|v| v.as_array())
+            .is_some_and(|a| a.len() >= 12));
     }
 }

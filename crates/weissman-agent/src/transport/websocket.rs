@@ -166,8 +166,7 @@ async fn handle_text(
     };
     match msg {
         ServerToAgent::Welcome {
-            scan_concurrency,
-            ..
+            scan_concurrency, ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);

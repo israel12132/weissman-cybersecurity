@@ -197,6 +197,86 @@ async fn api_audit_logs(
         .into_response()
 }
 
+/// GET /api/audit/export — tamper-evident audit export with hash-chain verification.
+async fn api_audit_export(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(5000)
+        .clamp(1, 50_000);
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+    let format = q
+        .get("format")
+        .map(|s| s.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "json".to_string());
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable"})),
+        )
+            .into_response();
+    };
+
+    let export = crate::audit_log::export_for_tenant(&mut tx, auth.tenant_id, limit, offset).await;
+    let _ = tx.commit().await;
+
+    let Ok((entries, total, chain_intact)) = export else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": "Audit export failed"})),
+        )
+            .into_response();
+    };
+
+    if format == "ndjson" {
+        let mut body = String::new();
+        for entry in &entries {
+            if let Ok(line) = serde_json::to_string(entry) {
+                body.push_str(&line);
+                body.push('\n');
+            }
+        }
+        let mut resp = (StatusCode::OK, body).into_response();
+        resp.headers_mut().insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/x-ndjson"),
+        );
+        resp.headers_mut().insert(
+            "X-Audit-Chain-Intact",
+            axum::http::HeaderValue::from_str(if chain_intact { "true" } else { "false" })
+                .unwrap_or_else(|_| axum::http::HeaderValue::from_static("false")),
+        );
+        return resp;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "packet_type": "weissman-audit-export-v1",
+            "tenant_id": auth.tenant_id,
+            "entries": entries,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "chain_intact": chain_intact,
+            "hash_algorithm": "SHA-256",
+            "chain_version": "v1",
+            "exported_at": chrono::Utc::now().to_rfc3339(),
+        })),
+    )
+        .into_response()
+}
+
 async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"global_safe_mode": false, "alert_webhook_url": ""}))).into_response();
@@ -913,7 +993,7 @@ async fn api_client_config_patch(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Path(id): Path<i64>,
-    body: axum::extract::Json<ClientConfigBody>,
+    Json(body): Json<ClientConfigBody>,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
@@ -1072,6 +1152,18 @@ async fn api_client_config_patch(
     if let Some(b) = body.industrial_ot_enabled {
         config.insert("industrial_ot_enabled".to_string(), Value::Bool(b));
     }
+    if let Some(b) = body.critical_infra_probe_authorized {
+        config.insert(
+            "critical_infra_probe_authorized".to_string(),
+            Value::Bool(b),
+        );
+    }
+    if let Some(targets) = &body.critical_infra_targets {
+        config.insert(
+            "critical_infra_targets".to_string(),
+            Value::Array(targets.iter().cloned().map(Value::String).collect()),
+        );
+    }
     let new_json = Value::Object(config);
     let new_str = match serde_json::to_string(&new_json) {
         Ok(s) => s,
@@ -1121,6 +1213,12 @@ async fn api_client_config_patch(
     }
     if body.industrial_ot_enabled.is_some() {
         changed.push("industrial_ot_enabled");
+    }
+    if body.critical_infra_probe_authorized.is_some() {
+        changed.push("critical_infra_probe_authorized");
+    }
+    if body.critical_infra_targets.is_some() {
+        changed.push("critical_infra_targets");
     }
     if !changed.is_empty() {
         let _ = audit_log::insert_audit(
@@ -1371,29 +1469,28 @@ async fn api_telemetry_stream(
     State(state): State<Arc<AppState>>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    // Optional `job_id` query param scopes the stream so each client only sees its own job.
-    // Without a filter the SSE was leaking every tenant's telemetry to every connection.
     let want_job: Option<String> = q
         .get("job_id")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let mut rx = state.telemetry_broadcast_tx.subscribe();
-    let event_stream = stream! {
-        while let Ok(payload) = rx.recv().await {
-            if let Some(want) = want_job.as_deref() {
-                let matches = serde_json::from_str::<serde_json::Value>(&payload)
-                    .ok()
-                    .and_then(|v| v.get("job_id").and_then(|x| x.as_str()).map(|s| s.to_string()))
-                    .map(|jid| jid == want)
-                    .unwrap_or_else(|| payload.contains(want));
-                if !matches {
-                    continue;
-                }
-            }
-            yield Ok::<Event, Infallible>(Event::default().data(payload));
+    let filter_job = want_job.clone();
+    let rx = state.telemetry_broadcast_tx.subscribe();
+    let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
+        if let Some(ref want) = filter_job {
+            let matches = serde_json::from_str::<serde_json::Value>(payload)
+                .ok()
+                .and_then(|v| {
+                    v.get("job_id")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string())
+                })
+                .map(|jid| jid == *want)
+                .unwrap_or_else(|| payload.contains(want));
+            return matches;
         }
-    };
-    Sse::new(event_stream)
+        true
+    });
+    Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(20)))
         .into_response()
 }

@@ -36,8 +36,8 @@ use std::time::Duration;
 const ENGINE_ID: &str = "digital_twin";
 
 const DEFAULT_PROBE_PARAMS: &[&str] = &[
-    "q", "search", "query", "id", "name", "page", "input", "msg", "message", "text", "value", "term",
-    "keyword", "email", "user", "username", "filter", "sort", "order", "cat", "category",
+    "q", "search", "query", "id", "name", "page", "input", "msg", "message", "text", "value",
+    "term", "keyword", "email", "user", "username", "filter", "sort", "order", "cat", "category",
 ];
 
 const DEFAULT_PROBE_PATHS: &[&str] = &[
@@ -272,13 +272,11 @@ async fn build_client(timeout_ms: u64) -> reqwest::Client {
 
 fn parse_hsts(raw: &str) -> (Option<u64>, bool, bool) {
     let lc = raw.to_ascii_lowercase();
-    let max_age = lc
-        .split(';')
-        .find_map(|part| {
-            let p = part.trim();
-            p.strip_prefix("max-age=")
-                .and_then(|v| v.trim().parse::<u64>().ok())
-        });
+    let max_age = lc.split(';').find_map(|part| {
+        let p = part.trim();
+        p.strip_prefix("max-age=")
+            .and_then(|v| v.trim().parse::<u64>().ok())
+    });
     let include_sub = lc.contains("includesubdomains");
     let preload = lc.contains("preload");
     (max_age, include_sub, preload)
@@ -397,14 +395,12 @@ async fn build_twin_profile(
             .unwrap_or("")
             .to_string();
         profile.has_referrer_policy = has_header(&p.headers, "referrer-policy");
-        profile.has_permissions_policy =
-            has_header(&p.headers, "permissions-policy")
-                || has_header(&p.headers, "feature-policy");
+        profile.has_permissions_policy = has_header(&p.headers, "permissions-policy")
+            || has_header(&p.headers, "feature-policy");
         if let Some(acao) = header_value(&p.headers, "access-control-allow-origin") {
             profile.cors_header_present = true;
             profile.cors_acao = acao.to_string();
-            profile.cors_credentials =
-                has_header(&p.headers, "access-control-allow-credentials");
+            profile.cors_credentials = has_header(&p.headers, "access-control-allow-credentials");
         }
         profile.cookies = parse_set_cookies(&p.headers);
         profile.waf_hint = waf_from_headers_and_body(&p.headers, &p.body);
@@ -481,11 +477,7 @@ fn attack_path_finding(
             "mitm" => "T1557",
             _ => "T1185",
         },
-        &format!(
-            "Attack path ({} steps): {}",
-            chain.len(),
-            chain.join(" → ")
-        ),
+        &format!("Attack path ({} steps): {}", chain.len(), chain.join(" → ")),
         target,
         json!({
             "attack_chain": chain,
@@ -533,11 +525,7 @@ fn build_probe_urls(base: &str, cfg: &TwinConfig, profile: &TwinProfile) -> Vec<
 
     let mut urls = Vec::new();
     'outer: for path in paths.into_iter().take(path_cap) {
-        let path = if path.starts_with('/') {
-            path
-        } else {
-            "/"
-        };
+        let path = if path.starts_with('/') { path } else { "/" };
         let url_base = if path == "/" {
             base.to_string()
         } else {
@@ -878,11 +866,7 @@ fn cors_misconfiguration_signal(
     if acao == "*" {
         return Some((
             "CORS Allow-Origin: * — cross-origin read of API responses",
-            if allow_credentials {
-                "high"
-            } else {
-                "medium"
-            },
+            if allow_credentials { "high" } else { "medium" },
             "Wildcard ACAO",
         ));
     }
@@ -969,7 +953,11 @@ async fn probe_cors(client: &reqwest::Client, base: &str, cfg: &TwinConfig) -> V
 
 // ─── Attack-path synthesis (Wiz-style toxic combinations) ──────────────────────
 
-fn synthesize_attack_paths(profile: &TwinProfile, scenario_findings: &[Value], base: &str) -> Vec<Value> {
+fn synthesize_attack_paths(
+    profile: &TwinProfile,
+    scenario_findings: &[Value],
+    base: &str,
+) -> Vec<Value> {
     let mut paths = Vec::new();
 
     let has_xss = scenario_findings.iter().any(|f| {
@@ -998,10 +986,7 @@ fn synthesize_attack_paths(profile: &TwinProfile, scenario_findings: &[Value], b
             )
     });
 
-    if has_mitm
-        && profile.http_cleartext_available
-        && profile.cookies.iter().any(|c| !c.secure)
-    {
+    if has_mitm && profile.http_cleartext_available && profile.cookies.iter().any(|c| !c.secure) {
         paths.push(attack_path_finding(
             "mitm",
             &[
@@ -1151,9 +1136,9 @@ fn assess_exploitability(
     }
 
     if high_findings == 1
-        || paths.iter().any(|p| {
-            p.get("severity").and_then(|v| v.as_str()) == Some("high")
-        })
+        || paths
+            .iter()
+            .any(|p| p.get("severity").and_then(|v| v.as_str()) == Some("high"))
     {
         return ExploitabilityVerdict {
             verdict: "partial",
@@ -1181,7 +1166,11 @@ fn assess_exploitability(
     }
 }
 
-fn toxic_headline(profile: &TwinProfile, exploit: &ExploitabilityVerdict, paths: &[Value]) -> String {
+fn toxic_headline(
+    profile: &TwinProfile,
+    exploit: &ExploitabilityVerdict,
+    paths: &[Value],
+) -> String {
     if let Some(p) = paths.first() {
         if let Some(t) = p.get("title").and_then(|v| v.as_str()) {
             return t.to_string();
@@ -1196,7 +1185,10 @@ fn toxic_headline(profile: &TwinProfile, exploit: &ExploitabilityVerdict, paths:
     exploit.reason.clone()
 }
 
-fn compute_subscores(profile: &TwinProfile, scenario_findings: &[Value]) -> (CategoryScore, CategoryScore, CategoryScore, CategoryScore) {
+fn compute_subscores(
+    profile: &TwinProfile,
+    scenario_findings: &[Value],
+) -> (CategoryScore, CategoryScore, CategoryScore, CategoryScore) {
     let mut transport = CategoryScore::new();
     let mut headers = CategoryScore::new();
     let mut cors = CategoryScore::new();
@@ -1290,7 +1282,10 @@ fn build_roadmap(profile: &TwinProfile, scenario_findings: &[Value]) -> Vec<Stri
         if !c.secure {
             steps.push((
                 2,
-                format!("Add `Secure` (and `HttpOnly`) to session cookie `{}`", c.name),
+                format!(
+                    "Add `Secure` (and `HttpOnly`) to session cookie `{}`",
+                    c.name
+                ),
             ));
         }
     }
@@ -1305,13 +1300,19 @@ fn build_roadmap(profile: &TwinProfile, scenario_findings: &[Value]) -> Vec<Stri
             "Remove 'unsafe-inline' from CSP; migrate to nonce-based script loading".into(),
         ));
     }
-    if scenario_findings.iter().any(|f| f.get("scenario") == Some(&json!("xss"))) {
+    if scenario_findings
+        .iter()
+        .any(|f| f.get("scenario") == Some(&json!("xss")))
+    {
         steps.push((
             1,
             "Encode all user-controlled output in HTML contexts; add regression tests for reflected XSS".into(),
         ));
     }
-    if scenario_findings.iter().any(|f| f.get("scenario") == Some(&json!("sqli"))) {
+    if scenario_findings
+        .iter()
+        .any(|f| f.get("scenario") == Some(&json!("sqli")))
+    {
         steps.push((
             1,
             "Parameterize all SQL queries (prepared statements); disable verbose DB errors in production".into(),
@@ -1324,7 +1325,10 @@ fn build_roadmap(profile: &TwinProfile, scenario_findings: &[Value]) -> Vec<Stri
         ));
     }
     if profile.tls_expired || profile.tls_days_until_expiry.is_some_and(|d| d <= 14) {
-        steps.push((2, "Renew TLS certificate and automate ACME/Let's Encrypt renewal".into()));
+        steps.push((
+            2,
+            "Renew TLS certificate and automate ACME/Let's Encrypt renewal".into(),
+        ));
     }
 
     steps.sort_by_key(|(p, _)| *p);
@@ -1549,18 +1553,9 @@ mod tests {
 
     #[test]
     fn scenario_mode_parses_ui_values() {
-        assert_eq!(
-            ScenarioMode::parse("xss".into()),
-            ScenarioMode::Xss
-        );
-        assert_eq!(
-            ScenarioMode::parse("mitm".into()),
-            ScenarioMode::Mitm
-        );
-        assert_eq!(
-            ScenarioMode::parse("".into()),
-            ScenarioMode::Profile
-        );
+        assert_eq!(ScenarioMode::parse("xss".into()), ScenarioMode::Xss);
+        assert_eq!(ScenarioMode::parse("mitm".into()), ScenarioMode::Mitm);
+        assert_eq!(ScenarioMode::parse("".into()), ScenarioMode::Profile);
     }
 
     #[test]

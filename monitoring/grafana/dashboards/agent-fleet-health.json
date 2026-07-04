@@ -1,0 +1,95 @@
+{
+  "title": "Weissman Agent Fleet Health",
+  "uid": "weissman-agents",
+  "tags": ["weissman", "agents", "endpoint"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Agents Online",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "weissman_agents_online",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 1 }, { "color": "green", "value": 3 }] }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Agents Registered",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "weissman_agents_registered",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Agents Stale (>90s)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "weissman_agents_stale",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Online vs Stale (time series)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "weissman_agents_online",
+          "legendFormat": "online",
+          "refId": "A"
+        },
+        {
+          "expr": "weissman_agents_stale",
+          "legendFormat": "stale",
+          "refId": "B"
+        },
+        {
+          "expr": "weissman_agents_registered",
+          "legendFormat": "registered",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pending Async Jobs",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "expr": "weissman_async_jobs_pending",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

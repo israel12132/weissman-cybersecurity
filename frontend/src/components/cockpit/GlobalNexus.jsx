@@ -31,12 +31,14 @@ import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
 import { apiFetch } from '../../lib/apiBase'
 import { useProductionEngines } from '../../lib/useProductionEngines'
+import TacticalNavLink from '../nav/TacticalNavLink'
 import Logo from '../Logo'
 import ProfileMenu from '../ui/ProfileMenu'
 import LanguageSwitcher from '../LanguageSwitcher'
 import { useToast } from '../ui/Toaster'
 
 const STORAGE_KEY = 'weissman.nav.sections'
+const GN = 'components.cockpit.globalNexus'
 
 function readSectionState() {
   try {
@@ -66,7 +68,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
   const active = isRouteActive(pathname, to, matchPaths)
 
   return (
-    <Link
+    <TacticalNavLink
       id={id}
       to={to}
       className={`group relative flex items-center gap-2.5 pl-3 pr-2.5 py-[7px] rounded-lg text-[11px] font-medium tracking-wide transition-all duration-200 ${
@@ -98,7 +100,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
           {badge}
         </span>
       )}
-    </Link>
+    </TacticalNavLink>
   )
 }
 
@@ -166,7 +168,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       platform: saved.platform ?? false,
     }
   })
-  const { productionCount, catalogCount } = useProductionEngines()
+  const { productionCount, catalogCount } = useProductionEngines({ prefetch: true })
   const engineCountLabel = productionCount > 0 ? productionCount : catalogCount
 
   const toggleSection = (id) => {
@@ -236,7 +238,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         defaultOpen: true,
         items: [
           { to: '/agents', label: t('nav.agent_management'), icon: Server, id: 'nav-agents' },
-          { to: '/nexus-swarm', label: t('nav.nexus_swarm', 'Nexus Sovereign Swarm'), icon: Zap, id: 'nav-nexus-swarm' },
+          { to: '/nexus-swarm', label: t('nav.nexus_swarm'), icon: Zap, id: 'nav-nexus-swarm' },
         ],
       },
       {
@@ -256,7 +258,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     if (e) e.preventDefault()
     const name = addName.trim()
     if (!name) {
-      setAddMessage({ error: 'Enter client name' })
+      setAddMessage({ error: t(`${GN}.enter_client_name`) })
       return
     }
     setAddMessage(null)
@@ -301,16 +303,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         setAddAwsExt('')
         setAddGcp('')
         await refreshClients()
-        toast.success(`Client "${name}" added`)
+        toast.success(t(`${GN}.client_added`, { name }))
         setTimeout(() => setAddMessage(null), 2000)
       } else {
-        const errMsg = r.status === 401 ? 'Please log in again' : formatApiErrorFromBody(d, r.status)
+        const errMsg = r.status === 401 ? t(`${GN}.login_again`) : formatApiErrorFromBody(d, r.status)
         setAddMessage({ error: errMsg })
         toast.error(errMsg)
       }
     } catch (_) {
-      setAddMessage({ error: 'Network error' })
-      toast.error('Network error — could not reach API.')
+      setAddMessage({ error: t(`${GN}.network_error`) })
+      toast.error(t(`${GN}.network_error_api`))
     }
     setAddSubmitting(false)
   }
@@ -349,7 +351,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             to="/"
             className="mb-3 block text-center text-[9px] font-mono uppercase tracking-[0.2em] py-1.5 rounded-md border border-amber-500/30 text-amber-200/90 hover:bg-amber-950/30 transition-colors"
           >
-            {ceoIntegrated ? 'Cockpit · mission control' : 'CEO cockpit home'}
+            {ceoIntegrated ? t(`${GN}.ceo_integrated`) : t(`${GN}.ceo_home`)}
           </Link>
         )}
         <Link to="/" aria-label={t('a11y.home')} className="block group">
@@ -475,7 +477,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                           setAddMessage({ error: await formatApiErrorResponse(r) })
                         }
                       } catch (err) {
-                        setAddMessage({ error: err?.message || 'Network error' })
+                        setAddMessage({ error: err?.message || t(`${GN}.network_error`) })
                       }
                       setDeletingId(null)
                     }}
@@ -506,40 +508,45 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             type="text"
             value={addName}
             onChange={(e) => setAddName(e.target.value)}
-            placeholder="Client name *"
+            placeholder={t(`${GN}.placeholder_name`)}
+            aria-label={t(`${GN}.placeholder_name`)}
             className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
           <input
             type="text"
             value={addDomains}
             onChange={(e) => setAddDomains(e.target.value)}
-            placeholder="Domains: a.com, b.com"
+            placeholder={t(`${GN}.placeholder_domains`)}
+            aria-label={t(`${GN}.placeholder_domains`)}
             className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
           <details className="text-[10px] text-white/45">
             <summary className="cursor-pointer text-cyan-400/70 hover:text-cyan-300 py-0.5">
-              Advanced scope
+              {t(`${GN}.advanced_scope`)}
             </summary>
             <div className="space-y-2 pt-2">
               <input
                 type="email"
                 value={addContactEmail}
                 onChange={(e) => setAddContactEmail(e.target.value)}
-                placeholder="Contact email"
+                placeholder={t(`${GN}.placeholder_contact_email`)}
+                aria-label={t(`${GN}.placeholder_contact_email`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addIpRanges}
                 onChange={(e) => setAddIpRanges(e.target.value)}
-                placeholder="IP ranges"
+                placeholder={t(`${GN}.placeholder_ip_ranges`)}
+                aria-label={t(`${GN}.placeholder_ip_ranges`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addTechStack}
                 onChange={(e) => setAddTechStack(e.target.value)}
-                placeholder="Tech stack hints"
+                placeholder={t(`${GN}.placeholder_tech_stack`)}
+                aria-label={t(`${GN}.placeholder_tech_stack`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <label className="flex items-center gap-2 text-[10px] text-white/55 cursor-pointer">
@@ -549,27 +556,30 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                   onChange={(e) => setAddAutoDetectTech(e.target.checked)}
                   className="rounded border-white/20"
                 />
-                Auto-detect tech stack
+                {t(`${GN}.auto_detect_tech`)}
               </label>
               <input
                 type="text"
                 value={addAwsArn}
                 onChange={(e) => setAddAwsArn(e.target.value)}
-                placeholder="AWS role ARN"
+                placeholder={t(`${GN}.placeholder_aws_arn`)}
+                aria-label={t(`${GN}.placeholder_aws_arn`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addAwsExt}
                 onChange={(e) => setAddAwsExt(e.target.value)}
-                placeholder="AWS external ID"
+                placeholder={t(`${GN}.placeholder_aws_external_id`)}
+                aria-label={t(`${GN}.placeholder_aws_external_id`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
                 value={addGcp}
                 onChange={(e) => setAddGcp(e.target.value)}
-                placeholder="GCP project ID"
+                placeholder={t(`${GN}.placeholder_gcp_project`)}
+                aria-label={t(`${GN}.placeholder_gcp_project`)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
@@ -587,7 +597,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             onClick={() => handleAddClient()}
             className="w-full py-2 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 hover:border-cyan-400/50 disabled:opacity-50 transition-all"
           >
-            {addSubmitting ? 'Adding…' : 'Add Client'}
+            {addSubmitting ? t(`${GN}.adding`) : t(`${GN}.add_client`)}
           </button>
         </div>
       </div>

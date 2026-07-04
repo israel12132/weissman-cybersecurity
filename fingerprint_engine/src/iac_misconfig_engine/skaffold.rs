@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "skaffold", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "skaffold",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -61,13 +70,21 @@ pub const INSECURE_REGISTRY: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![LATEST_TAG, BUILD_SECRET, PORT_FORWARD_PROD, INSECURE_REGISTRY]
+    vec![
+        LATEST_TAG,
+        BUILD_SECRET,
+        PORT_FORWARD_PROD,
+        INSECURE_REGISTRY,
+    ]
 }
 
 fn is_skaffold(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n == "skaffold.yaml" || n == "skaffold.yml" || n.ends_with(".skaffold.yaml") || lc.contains("apiversion: skaffold")
+    n == "skaffold.yaml"
+        || n == "skaffold.yml"
+        || n.ends_with(".skaffold.yaml")
+        || lc.contains("apiversion: skaffold")
 }
 
 #[must_use]
@@ -78,17 +95,23 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     }
     let lc = content.to_ascii_lowercase();
 
-    if lc.contains(":latest") || (lc.contains("image:") && !lc.contains("digest:") && !lc.contains("@sha256")) {
+    if lc.contains(":latest")
+        || (lc.contains("image:") && !lc.contains("digest:") && !lc.contains("@sha256"))
+    {
         out.push(Finding::new(LATEST_TAG, file, file).observed("mutable latest tag"));
     }
     for key in ["password", "apikey", "token", "secret"] {
         if (lc.contains("buildargs") || lc.contains("env:")) && lc.contains(key) {
-            out.push(Finding::new(BUILD_SECRET, file, file).observed(format!("build secret {key}")));
+            out.push(
+                Finding::new(BUILD_SECRET, file, file).observed(format!("build secret {key}")),
+            );
             break;
         }
     }
     if lc.contains("portforward:") && (lc.contains("prod") || lc.contains("production")) {
-        out.push(Finding::new(PORT_FORWARD_PROD, file, file).observed("portForward in prod profile"));
+        out.push(
+            Finding::new(PORT_FORWARD_PROD, file, file).observed("portForward in prod profile"),
+        );
     }
     if lc.contains("http://") && (lc.contains("push") || lc.contains("registry")) {
         out.push(Finding::new(INSECURE_REGISTRY, file, file).observed("http registry push"));

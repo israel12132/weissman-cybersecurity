@@ -1,7 +1,8 @@
 //! **LIQUID-MATRIX** — Moving Target Defense via TOTP-synchronized routing tokens.
 //!
-//! Internal IP, port, and service fingerprint rotate every N seconds (default 3). Legitimate
-//! agents receive a time-synced routing code; external scanners map a port that no longer exists.
+//! **Catalog-only / simulation:** not in `PRODUCTION_ENGINE_IDS`. Findings are tagged
+//! `simulation_mode: true` — routing rotation is persisted in DB; SDN dataplane injection is
+//! operator-configured separately via Sovereign Defense Matrix.
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get};
@@ -19,7 +20,14 @@ fn finding_evidence(
     target: &str,
     evidence: Map<String, Value>,
 ) -> Value {
-    let mut f = finding(LIQUID_MATRIX_ENGINE_ID, title, severity, mitre, description, target);
+    let mut f = finding(
+        LIQUID_MATRIX_ENGINE_ID,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+    );
     if let Some(obj) = f.as_object_mut() {
         obj.insert("evidence".into(), Value::Object(evidence));
     }
@@ -57,11 +65,7 @@ pub async fn run_liquid_matrix_result(target: &str, ctx: &EngineRunContext) -> E
     let cfg = LiquidMatrixConfig::from_params(&ctx.job_params);
     let host = extract_host(target);
 
-    let (pool, tenant_id, client_id) = match (
-        ctx.app_pool.as_ref(),
-        ctx.tenant_id,
-        ctx.client_id,
-    ) {
+    let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.clone(), t, c),
         _ => {
             return EngineResult::error(
@@ -86,22 +90,28 @@ pub async fn run_liquid_matrix_result(target: &str, ctx: &EngineRunContext) -> E
     ev.insert("epoch".into(), json!(rotation.epoch));
     ev.insert("internal_ip".into(), json!(rotation.internal_ip));
     ev.insert("internal_port".into(), json!(rotation.internal_port));
-    ev.insert("service_fingerprint".into(), json!(rotation.service_fingerprint));
-    ev.insert("routing_code".into(), json!(rotation.routing_code));
-    ev.insert("rotation_step_secs".into(), json!(rotation.rotation_step_secs));
-    ev.insert("expires_at".into(), json!(rotation.expires_at.to_rfc3339()));
     ev.insert(
-        "simulation_mode".into(),
-        json!(true),
+        "service_fingerprint".into(),
+        json!(rotation.service_fingerprint),
     );
+    ev.insert("routing_code".into(), json!(rotation.routing_code));
+    ev.insert(
+        "rotation_step_secs".into(),
+        json!(rotation.rotation_step_secs),
+    );
+    ev.insert("expires_at".into(), json!(rotation.expires_at.to_rfc3339()));
+    ev.insert("simulation_mode".into(), json!(true));
     ev.insert(
         "simulation_note".into(),
         json!("Routing epoch is persisted in DB; network MTD enforcement requires gateway/SDN integration — not yet applied to live infrastructure."),
     );
-    ev.insert("legitimate_route".into(), json!(format!(
-        "http://{}:{}/?rt={}",
-        rotation.internal_ip, rotation.internal_port, rotation.routing_code
-    )));
+    ev.insert(
+        "legitimate_route".into(),
+        json!(format!(
+            "http://{}:{}/?rt={}",
+            rotation.internal_ip, rotation.internal_port, rotation.routing_code
+        )),
+    );
 
     let mut findings = vec![finding_evidence(
         &format!(
@@ -163,9 +173,7 @@ pub async fn run_liquid_matrix_result(target: &str, ctx: &EngineRunContext) -> E
 }
 
 pub async fn run_liquid_matrix(target: &str) {
-    print_result(
-        run_liquid_matrix_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_liquid_matrix_result(target, &EngineRunContext::default()).await);
 }
 
 #[cfg(test)]

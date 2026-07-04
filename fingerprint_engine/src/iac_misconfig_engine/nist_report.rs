@@ -24,21 +24,33 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         for tag in f.policy.compliance {
             if let Some(fam) = nist_family_of(tag) {
                 *fam_failed.entry(fam.to_string()).or_insert(0) += 1;
-                fam_controls.entry(fam.to_string()).or_default().push(tag.to_string());
+                fam_controls
+                    .entry(fam.to_string())
+                    .or_default()
+                    .push(tag.to_string());
             }
         }
     }
 
-    let nist_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("NIST"));
-    let total_controls = nist_row.and_then(|r| r.get("controls_covered").and_then(Value::as_u64)).unwrap_or(0);
-    let failed_controls = nist_row.and_then(|r| r.get("controls_failed").and_then(Value::as_u64)).unwrap_or(0);
+    let nist_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("NIST"));
+    let total_controls = nist_row
+        .and_then(|r| r.get("controls_covered").and_then(Value::as_u64))
+        .unwrap_or(0);
+    let failed_controls = nist_row
+        .and_then(|r| r.get("controls_failed").and_then(Value::as_u64))
+        .unwrap_or(0);
     let pass_pct = if total_controls > 0 {
         ((total_controls.saturating_sub(failed_controls)) * 100 / total_controls.max(1)) as u64
     } else {
         100
     };
 
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
 
     let families: Vec<Value> = NIST_FAMILIES
         .iter()
@@ -84,7 +96,10 @@ fn nist_family_of(tag: &str) -> Option<&'static str> {
         return None;
     }
     let rest = t.strip_prefix("NIST-")?;
-    let fam: String = rest.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+    let fam: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect();
     match fam.as_str() {
         "AC" => Some("AC"),
         "AU" => Some("AU"),
@@ -106,7 +121,8 @@ mod tests {
     #[test]
     fn maps_nist_families() {
         let findings = vec![Finding::new(S3_PUBLIC_ACL, "main.tf", "b")];
-        let compliance = vec![json!({"pack": "NIST", "controls_covered": 30, "controls_failed": 2})];
+        let compliance =
+            vec![json!({"pack": "NIST", "controls_covered": 30, "controls_failed": 2})];
         let r = build(&findings, &compliance);
         assert_eq!(r["framework"], "NIST");
     }

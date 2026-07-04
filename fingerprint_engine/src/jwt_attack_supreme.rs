@@ -22,9 +22,16 @@ pub struct JwtSignals {
 }
 
 pub fn collect_signals(findings: &[Value], token_count: usize) -> JwtSignals {
-    let mut sig = JwtSignals { token_count, ..Default::default() };
+    let mut sig = JwtSignals {
+        token_count,
+        ..Default::default()
+    };
     for f in findings {
-        let title = f.get("title").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+        let title = f
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_ascii_lowercase();
         let ev_attack = f
             .get("evidence")
             .and_then(|e| e.get("attack"))
@@ -39,7 +46,8 @@ pub fn collect_signals(findings: &[Value], token_count: usize) -> JwtSignals {
         if title.contains("algorithm-confusion") || ev_attack == "rs256_to_hs256_confusion" {
             sig.confusion_accepted = true;
         }
-        if title.contains("weak hmac") || title.contains("hmac secret") || title.contains("cracked") {
+        if title.contains("weak hmac") || title.contains("hmac secret") || title.contains("cracked")
+        {
             sig.weak_hmac_cracked = true;
         }
         if title.contains("'kid'") || title.contains("kid header") {
@@ -74,9 +82,18 @@ pub struct JwtCategoryScores {
 
 impl JwtCategoryScores {
     fn from_signals(sig: &JwtSignals) -> Self {
-        let bad = |b: bool, w: f64| -> f64 { if b { 100.0 - w } else { 100.0 } };
+        let bad = |b: bool, w: f64| -> f64 {
+            if b {
+                100.0 - w
+            } else {
+                100.0
+            }
+        };
         Self {
-            signature_integrity: bad(sig.alg_none_accepted || sig.confusion_accepted || sig.weak_hmac_cracked, 45.0),
+            signature_integrity: bad(
+                sig.alg_none_accepted || sig.confusion_accepted || sig.weak_hmac_cracked,
+                45.0,
+            ),
             algorithm_policy: bad(sig.alg_none_in_use || sig.alg_none_accepted, 50.0),
             key_hygiene: bad(sig.weak_jwks || sig.weak_hmac_cracked, 40.0),
             header_injection: bad(sig.kid_surface || sig.jku_x5u_surface, 35.0),
@@ -153,7 +170,14 @@ pub fn extend_attack_paths(target: &str, sig: &JwtSignals, findings: &mut Vec<Va
     }
 }
 
-fn push_path(findings: &mut Vec<Value>, title: &str, sev: &str, steps: &[&str], target: &str, conf: f64) {
+fn push_path(
+    findings: &mut Vec<Value>,
+    title: &str,
+    sev: &str,
+    steps: &[&str],
+    target: &str,
+    conf: f64,
+) {
     let mut f = finding_rich(
         ENGINE_ID,
         title,
@@ -222,24 +246,52 @@ pub fn emit_remediation_roadmap(target: &str, sig: &JwtSignals, findings: &mut V
         n += 1;
     };
     if sig.alg_none_accepted || sig.alg_none_in_use {
-        push("P0", "Reject alg=none", "Hard-deny unsigned JWTs; allow-list RS256/ES256 only");
+        push(
+            "P0",
+            "Reject alg=none",
+            "Hard-deny unsigned JWTs; allow-list RS256/ES256 only",
+        );
     }
     if sig.confusion_accepted {
-        push("P0", "Pin expected algorithm", "Verify alg matches key type; never use key bytes as HMAC secret");
+        push(
+            "P0",
+            "Pin expected algorithm",
+            "Verify alg matches key type; never use key bytes as HMAC secret",
+        );
     }
     if sig.weak_hmac_cracked {
-        push("P0", "Rotate HMAC secret", "Deploy 256+ bit random secret; invalidate all outstanding tokens");
+        push(
+            "P0",
+            "Rotate HMAC secret",
+            "Deploy 256+ bit random secret; invalidate all outstanding tokens",
+        );
     }
     if sig.kid_surface || sig.jku_x5u_surface {
-        push("P0", "Allow-list kid/jku", "Never fetch keys from jku/x5u; map kid to internal key store only");
+        push(
+            "P0",
+            "Allow-list kid/jku",
+            "Never fetch keys from jku/x5u; map kid to internal key store only",
+        );
     }
     if sig.weak_jwks {
-        push("P1", "Harden JWKS", "RSA ≥2048; never expose private keys; rotate kid on schedule");
+        push(
+            "P1",
+            "Harden JWKS",
+            "RSA ≥2048; never expose private keys; rotate kid on schedule",
+        );
     }
     if sig.long_lifetime {
-        push("P1", "Shorten token TTL", "Access tokens ≤15m; refresh rotation; enforce exp server-side");
+        push(
+            "P1",
+            "Shorten token TTL",
+            "Access tokens ≤15m; refresh rotation; enforce exp server-side",
+        );
     }
-    push("P2", "Deploy Weissman agent for token replay analytics", "Detect forged-token usage across microservices");
+    push(
+        "P2",
+        "Deploy Weissman agent for token replay analytics",
+        "Detect forged-token usage across microservices",
+    );
     if steps.is_empty() {
         return;
     }
@@ -263,10 +315,22 @@ pub fn emit_remediation_roadmap(target: &str, sig: &JwtSignals, findings: &mut V
 
 pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     for (cap, desc) in [
-        ("token_replay_mesh", "Cross-service JWT replay detection across internal APIs"),
-        ("refresh_token_rotation", "Refresh-token family binding and reuse detection"),
-        ("asymmetric_key_dpapi", "On-host private key storage audit (DPAPI/HSM)"),
-        ("claim_level_authz", "Server-side authorization matrix vs token claims diff"),
+        (
+            "token_replay_mesh",
+            "Cross-service JWT replay detection across internal APIs",
+        ),
+        (
+            "refresh_token_rotation",
+            "Refresh-token family binding and reuse detection",
+        ),
+        (
+            "asymmetric_key_dpapi",
+            "On-host private key storage audit (DPAPI/HSM)",
+        ),
+        (
+            "claim_level_authz",
+            "Server-side authorization matrix vs token claims diff",
+        ),
     ] {
         let mut f = finding_rich(
             ENGINE_ID,
@@ -285,14 +349,28 @@ pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     }
 }
 
-pub fn build_security_graph(target: &str, sig: &JwtSignals, host: &str) -> (Vec<GraphNode>, Vec<GraphEdge>) {
+pub fn build_security_graph(
+    target: &str,
+    sig: &JwtSignals,
+    host: &str,
+) -> (Vec<GraphNode>, Vec<GraphEdge>) {
     let score = finalize_category_scores(sig);
     let avg = (score.signature_integrity + score.algorithm_policy + score.key_hygiene) / 3.0;
     let mut nodes = vec![GraphNode {
         id: "root".to_string(),
-        label: if host.is_empty() { target.to_string() } else { host.to_string() },
+        label: if host.is_empty() {
+            target.to_string()
+        } else {
+            host.to_string()
+        },
         node_type: "root".to_string(),
-        status: if avg >= 80.0 { "secure".into() } else if avg >= 50.0 { "degraded".into() } else { "exposed".into() },
+        status: if avg >= 80.0 {
+            "secure".into()
+        } else if avg >= 50.0 {
+            "degraded".into()
+        } else {
+            "exposed".into()
+        },
         cname_target: None,
         raw_finding: None,
     }];
@@ -314,7 +392,11 @@ pub fn build_security_graph(target: &str, sig: &JwtSignals, host: &str) -> (Vec<
         });
     };
     if sig.token_count > 0 {
-        add("tokens", &format!("{} JWT(s) harvested", sig.token_count), "TOKEN_HARVEST");
+        add(
+            "tokens",
+            &format!("{} JWT(s) harvested", sig.token_count),
+            "TOKEN_HARVEST",
+        );
     }
     if sig.alg_none_accepted {
         add("none", "alg=none accepted", "ALG_NONE");

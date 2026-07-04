@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "linkerd", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "linkerd",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const TAP_EXPOSED: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![SA_ALLOW_ALL, MESH_TLS_OFF, SERVER_NO_AUTH, INJECT_DISABLED, TAP_EXPOSED]
+    vec![
+        SA_ALLOW_ALL,
+        MESH_TLS_OFF,
+        SERVER_NO_AUTH,
+        INJECT_DISABLED,
+        TAP_EXPOSED,
+    ]
 }
 
 fn is_linkerd(name: &str, content: &str) -> bool {
@@ -82,8 +97,7 @@ fn is_linkerd(name: &str, content: &str) -> bool {
         || lc.contains("linkerd.io/inject")
         || n.contains("linkerd")
         || lc.contains("kind: serverauthorization")
-        || lc.contains("kind: server")
-            && lc.contains("policy.linkerd.io")
+        || lc.contains("kind: server") && lc.contains("policy.linkerd.io")
 }
 
 #[must_use]
@@ -99,19 +113,33 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
             || !lc.contains("requireauthentication")
             || lc.contains("unauthenticated: true"))
     {
-        out.push(Finding::new(SA_ALLOW_ALL, file, file).observed("ServerAuthorization unauthenticated"));
+        out.push(
+            Finding::new(SA_ALLOW_ALL, file, file).observed("ServerAuthorization unauthenticated"),
+        );
     }
-    if lc.contains("meshtlsauthentication") && (lc.contains("identity: '*'") || lc.contains("identity: \"*\"")) {
+    if lc.contains("meshtlsauthentication")
+        && (lc.contains("identity: '*'") || lc.contains("identity: \"*\""))
+    {
         out.push(Finding::new(MESH_TLS_OFF, file, file).observed("MeshTLS identity wildcard"));
     }
-    if lc.contains("kind: server") && lc.contains("policy.linkerd.io") && !lc.contains("serverauthorization") {
-        out.push(Finding::new(SERVER_NO_AUTH, file, file).observed("Server without ServerAuthorization"));
+    if lc.contains("kind: server")
+        && lc.contains("policy.linkerd.io")
+        && !lc.contains("serverauthorization")
+    {
+        out.push(
+            Finding::new(SERVER_NO_AUTH, file, file).observed("Server without ServerAuthorization"),
+        );
     }
-    if lc.contains("linkerd.io/inject: disabled") || lc.contains("linkerd.io/inject: \"disabled\"") {
+    if lc.contains("linkerd.io/inject: disabled") || lc.contains("linkerd.io/inject: \"disabled\"")
+    {
         out.push(Finding::new(INJECT_DISABLED, file, file).observed("proxy injection disabled"));
     }
-    if (lc.contains("kind: authorizationpolicy") && lc.contains("tap")) || lc.contains("external-workload") {
-        out.push(Finding::new(TAP_EXPOSED, file, file).observed("tap or external-workload exposure"));
+    if (lc.contains("kind: authorizationpolicy") && lc.contains("tap"))
+        || lc.contains("external-workload")
+    {
+        out.push(
+            Finding::new(TAP_EXPOSED, file, file).observed("tap or external-workload exposure"),
+        );
     }
 
     out

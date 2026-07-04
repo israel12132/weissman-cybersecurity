@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { apiFetch, apiEventSourceUrl, formatHttpApiError } from '../../lib/apiBase'
+import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
+import { openSseStream } from '../../lib/sseStream'
 
 function phaseStyle(phase) {
   const p = (phase || '').toLowerCase()
@@ -122,7 +123,13 @@ export default function CeoWarRoomDock() {
       setStreamStatus('connecting')
       const path =
         '/api/ceo/council/sessions/' + encodeURIComponent(id) + '/stream?since=0'
-      const es = new EventSource(apiEventSourceUrl(path), { withCredentials: true })
+      const es = openSseStream(path, {
+        getReconnectUrl: () =>
+          '/api/ceo/council/sessions/' +
+          encodeURIComponent(id) +
+          '/stream?since=' +
+          String(sinceRef.current),
+      })
       esRef.current = es
 
       es.addEventListener('war_room', (ev) => {

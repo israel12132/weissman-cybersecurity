@@ -51,40 +51,63 @@ pub async fn api_rate_limit_middleware(
     let limit = per_sec().get() as u64;
 
     if super::rate_limit_redis::is_enabled() {
-        if let Some(count) = super::rate_limit_redis::incr_api_ip(&ip).await {
-            if count > limit {
-                rate_limit_metrics::record_api_denied(&ip);
-                let retry_after_secs = 1u64;
-                tracing::warn!(
+        match super::rate_limit_redis::incr_api_ip_strict(&ip).await {
+            super::rate_limit_redis::StrictOp::Ok(count) => {
+                if count > limit {
+                    rate_limit_metrics::record_api_denied(&ip);
+                    let retry_after_secs = 1u64;
+                    tracing::warn!(
+                        target: "rate_limit",
+                        client_ip = %ip,
+                        path = %path,
+                        count,
+                        limit,
+                        "API rate limit exceeded (redis)"
+                    );
+                    let mut resp = (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        axum::Json(serde_json::json!({
+                            "ok": false,
+                            "code": "rate_limited",
+                            "detail": format!(
+                                "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
+                            ),
+                            "retry_after_seconds": retry_after_secs,
+                            "limit_per_second": limit,
+                            "source": "redis",
+                        })),
+                    )
+                        .into_response();
+                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string())
+                    {
+                        resp.headers_mut().insert("Retry-After", v);
+                    }
+                    return resp;
+                }
+                rate_limit_metrics::record_api_allowed(&ip);
+                return next.run(request).await;
+            }
+            super::rate_limit_redis::StrictOp::Unavailable
+                if super::rate_limit_redis::distributed_state_required() =>
+            {
+                tracing::error!(
                     target: "rate_limit",
                     client_ip = %ip,
                     path = %path,
-                    count,
-                    limit,
-                    "API rate limit exceeded (redis)"
+                    "Redis unavailable for required API rate limit (fail-closed)"
                 );
-                let mut resp = (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    axum::Json(serde_json::json!({
-                        "ok": false,
-                        "code": "rate_limited",
-                        "detail": format!(
-                            "API rate limit hit ({limit} per second per IP). Retry in {retry_after_secs}s."
-                        ),
-                        "retry_after_seconds": retry_after_secs,
-                        "limit_per_second": limit,
-                        "source": "redis",
-                    })),
-                )
-                    .into_response();
-                if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
-                    resp.headers_mut().insert("Retry-After", v);
-                }
-                return resp;
+                return super::rate_limit_redis::distributed_store_unavailable_response();
             }
-            rate_limit_metrics::record_api_allowed(&ip);
-            return next.run(request).await;
+            super::rate_limit_redis::StrictOp::Unavailable => {}
         }
+    } else if super::rate_limit_redis::distributed_state_required() {
+        tracing::error!(
+            target: "rate_limit",
+            client_ip = %ip,
+            path = %path,
+            "REDIS_URL required but Redis API rate limiter not initialized (fail-closed)"
+        );
+        return super::rate_limit_redis::distributed_store_unavailable_response();
     }
 
     if let Err(neg) = limiter().check_key(&ip) {

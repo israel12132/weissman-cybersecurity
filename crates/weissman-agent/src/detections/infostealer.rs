@@ -84,7 +84,11 @@ impl Config {
             check_cloud_tokens: bool_or(params, "check_cloud_tokens", true),
             max_sample_bytes: params
                 .get("max_sample_bytes")
-                .or_else(|| params.get("options").and_then(|o| o.get("max_sample_bytes")))
+                .or_else(|| {
+                    params
+                        .get("options")
+                        .and_then(|o| o.get("max_sample_bytes"))
+                })
                 .and_then(Value::as_u64)
                 .unwrap_or(4096),
             intensity: str_or(params, "intensity", "normal"),
@@ -223,7 +227,10 @@ fn collect_candidate_paths(cfg: &Config) -> Vec<StoreHit> {
                 for (browser, sub) in [
                     ("Chrome", "Library/Application Support/Google/Chrome"),
                     ("Edge", "Library/Application Support/Microsoft Edge"),
-                    ("Brave", "Library/Application Support/BraveSoftware/Brave-Browser"),
+                    (
+                        "Brave",
+                        "Library/Application Support/BraveSoftware/Brave-Browser",
+                    ),
                 ] {
                     push_chromium_family(
                         &mut hits,
@@ -498,7 +505,11 @@ fn grade_from_score(score: u32) -> &'static str {
     }
 }
 
-pub async fn run(engine: &str, _target: Option<&str>, params: &Value) -> anyhow::Result<Vec<Value>> {
+pub async fn run(
+    engine: &str,
+    _target: Option<&str>,
+    params: &Value,
+) -> anyhow::Result<Vec<Value>> {
     let cfg = Config::from_params(params);
     let candidates = collect_candidate_paths(&cfg);
     let mut probed: Vec<StoreHit> = Vec::new();
@@ -532,11 +543,7 @@ pub async fn run(engine: &str, _target: Option<&str>, params: &Value) -> anyhow:
                             if !p.is_dir() {
                                 continue;
                             }
-                            let candidate = p.join(
-                                hit.path
-                                    .file_name()
-                                    .unwrap_or_default(),
-                            );
+                            let candidate = p.join(hit.path.file_name().unwrap_or_default());
                             if candidate.exists() {
                                 let (size, readable) =
                                     probe_path(&candidate, cfg.max_sample_bytes).await;

@@ -8,7 +8,8 @@ import { Search, Download, RefreshCw } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
 import { prefillParamsForEngine } from '../lib/engineClientPrefill'
@@ -1760,7 +1761,7 @@ export default function IacSecurityCenter() {
       const jobId = data.job_id
       appendLine(`[IaC] Job queued: ${jobId}`)
       if (esRef.current) esRef.current.close()
-      const es = new EventSource(apiEventSourceUrl(`/api/telemetry/stream?job_id=${jobId}`))
+      const es = openSseStream(`/api/telemetry/stream?job_id=${jobId}`)
       esRef.current = es
       es.onmessage = (ev) => {
         try {

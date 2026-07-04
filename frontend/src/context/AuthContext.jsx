@@ -82,7 +82,11 @@ export function AuthProvider({ children }) {
           })
           setIsAuthenticated(true)
           await refreshSession()
-          return { ok: true }
+          return {
+            ok: true,
+            role: data.role,
+            is_superadmin: data.is_superadmin === true,
+          }
         }
         // BLOCKER #3 — server returns 403 + code=mfa_enrollment_required when tenant
         // policy demands MFA but user hasn't enrolled.
@@ -127,7 +131,11 @@ export function AuthProvider({ children }) {
           })
           setIsAuthenticated(true)
           await refreshSession()
-          return { ok: true }
+          return {
+            ok: true,
+            role: data.role,
+            is_superadmin: data.is_superadmin === true,
+          }
         }
         return { ok: false, detail: data.detail || 'Invalid code' }
       } catch (_) {

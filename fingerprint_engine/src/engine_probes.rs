@@ -166,11 +166,24 @@ pub async fn http_get_with_headers(
     url: &str,
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
+    crate::fleet_shaping::acquire_for_url(url).await;
+    let started = std::time::Instant::now();
     let mut req = client.get(url);
     for (k, v) in extra {
         req = req.header(*k, *v);
     }
-    let resp = req.send().await.ok()?;
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(_) => {
+            crate::fleet_shaping::report_outcome(
+                url,
+                0,
+                Some(started.elapsed().as_millis() as u64),
+                false,
+            );
+            return None;
+        }
+    };
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
     let headers: Vec<(String, String)> = resp
@@ -184,6 +197,12 @@ pub async fn http_get_with_headers(
     } else {
         body
     };
+    crate::fleet_shaping::report_outcome(
+        url,
+        status,
+        Some(started.elapsed().as_millis() as u64),
+        false,
+    );
     Some(HttpProbe {
         status,
         headers,
@@ -204,11 +223,24 @@ pub async fn http_post_json_with_headers(
     payload: &Value,
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
+    crate::fleet_shaping::acquire_for_url(url).await;
+    let started = std::time::Instant::now();
     let mut req = client.post(url).json(payload);
     for (k, v) in extra {
         req = req.header(*k, *v);
     }
-    let resp = req.send().await.ok()?;
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(_) => {
+            crate::fleet_shaping::report_outcome(
+                url,
+                0,
+                Some(started.elapsed().as_millis() as u64),
+                false,
+            );
+            return None;
+        }
+    };
     let status = resp.status().as_u16();
     let final_url = resp.url().to_string();
     let headers: Vec<(String, String)> = resp
@@ -222,6 +254,12 @@ pub async fn http_post_json_with_headers(
     } else {
         body
     };
+    crate::fleet_shaping::report_outcome(
+        url,
+        status,
+        Some(started.elapsed().as_millis() as u64),
+        false,
+    );
     Some(HttpProbe {
         status,
         headers,

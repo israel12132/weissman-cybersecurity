@@ -183,11 +183,7 @@ fn cors_misconfiguration_signal(
     if acao == "*" {
         return Some((
             "CORS Allow-Origin: * observed",
-            if allow_credentials {
-                "high"
-            } else {
-                "medium"
-            },
+            if allow_credentials { "high" } else { "medium" },
             "Wildcard ACAO — any origin may read responses",
         ));
     }
@@ -981,7 +977,14 @@ fn nosql_bypass_signal(
         return false;
     }
     let body_low = operator_body.to_ascii_lowercase();
-    let auth_markers = ["token", "access_token", "jwt", "session", "success", "authenticated"];
+    let auth_markers = [
+        "token",
+        "access_token",
+        "jwt",
+        "session",
+        "success",
+        "authenticated",
+    ];
     auth_markers
         .iter()
         .any(|m| body_low.contains(m) && !baseline_body.to_ascii_lowercase().contains(m))

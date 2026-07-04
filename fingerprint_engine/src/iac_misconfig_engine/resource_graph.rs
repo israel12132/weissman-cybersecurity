@@ -9,8 +9,17 @@ use Severity::Critical;
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "graph", provider: "multi",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "graph",
+            provider: "multi",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -45,15 +54,38 @@ pub fn policies() -> Vec<PolicyMeta> {
 }
 
 const PUB_MARKERS: &[&str] = &[
-    "0.0.0.0/0", "public-read", "publicly_accessible = true", "publiclyaccessible: true",
-    "type: loadbalancer", "peer.anyipv4", "allusers", "principal \"*\"",
+    "0.0.0.0/0",
+    "public-read",
+    "publicly_accessible = true",
+    "publiclyaccessible: true",
+    "type: loadbalancer",
+    "peer.anyipv4",
+    "allusers",
+    "principal \"*\"",
 ];
 const DATA_MARKERS: &[&str] = &[
-    "aws_db_instance", "aws_rds", "google_sql", "azurerm_postgresql", "aws_redshift",
-    "aws_dynamodb", "kind: secret", "password", "storage_encrypted = false",
+    "aws_db_instance",
+    "aws_rds",
+    "google_sql",
+    "azurerm_postgresql",
+    "aws_redshift",
+    "aws_dynamodb",
+    "kind: secret",
+    "password",
+    "storage_encrypted = false",
 ];
-const STORAGE_PUB: &[&str] = &["public-read", "block_public_acls = false", "allusers", "publicreadaccess"];
-const IAM_ADMIN: &[&str] = &["action \"*\"", "actions: ['*']", "action: \"*\"", "resource \"*\""];
+const STORAGE_PUB: &[&str] = &[
+    "public-read",
+    "block_public_acls = false",
+    "allusers",
+    "publicreadaccess",
+];
+const IAM_ADMIN: &[&str] = &[
+    "action \"*\"",
+    "actions: ['*']",
+    "action: \"*\"",
+    "resource \"*\"",
+];
 
 #[must_use]
 pub fn analyze(files: &[IacFile]) -> Vec<Finding> {
@@ -71,30 +103,41 @@ pub fn analyze(files: &[IacFile]) -> Vec<Finding> {
 
     for f in files {
         let lc = f.content.to_ascii_lowercase();
-        if PUB_MARKERS.iter().any(|m| lc.contains(&m.to_ascii_lowercase())) {
+        if PUB_MARKERS
+            .iter()
+            .any(|m| lc.contains(&m.to_ascii_lowercase()))
+        {
             has_pub = true;
             pub_files.push(f.name.as_str());
         }
-        if DATA_MARKERS.iter().any(|m| lc.contains(&m.to_ascii_lowercase())) {
+        if DATA_MARKERS
+            .iter()
+            .any(|m| lc.contains(&m.to_ascii_lowercase()))
+        {
             has_data = true;
             data_files.push(f.name.as_str());
         }
-        if STORAGE_PUB.iter().any(|m| lc.contains(&m.to_ascii_lowercase())) {
+        if STORAGE_PUB
+            .iter()
+            .any(|m| lc.contains(&m.to_ascii_lowercase()))
+        {
             has_storage_pub = true;
         }
-        if IAM_ADMIN.iter().any(|m| lc.contains(&m.to_ascii_lowercase())) {
+        if IAM_ADMIN
+            .iter()
+            .any(|m| lc.contains(&m.to_ascii_lowercase()))
+        {
             has_iam_admin = true;
         }
     }
 
     if has_pub && has_data {
         out.push(
-            Finding::new(PUB_AND_DATA, "infrastructure-graph", "resource-graph")
-                .observed(format!(
-                    "public exposure in [{}] + sensitive datastore in [{}]",
-                    pub_files.join(", "),
-                    data_files.join(", ")
-                )),
+            Finding::new(PUB_AND_DATA, "infrastructure-graph", "resource-graph").observed(format!(
+                "public exposure in [{}] + sensitive datastore in [{}]",
+                pub_files.join(", "),
+                data_files.join(", ")
+            )),
         );
     }
     if has_storage_pub && has_iam_admin {

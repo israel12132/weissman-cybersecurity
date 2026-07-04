@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useId, cloneElement, isValidElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import {
@@ -24,13 +24,15 @@ const STEPS = ['legal', 'basic', 'scope', 'modules', 'integrations', 'review']
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 
 function Field({ label, required, hint, children }) {
+  const autoId = useId()
+  const fieldId = isValidElement(children) && children.props.id ? children.props.id : autoId
   return (
     <div>
-      <label className="block text-sm font-medium text-white/70 mb-2">
+      <label htmlFor={fieldId} className="block text-sm font-medium text-white/70 mb-2">
         {label}
         {required && <span className="text-red-400 ms-1">*</span>}
       </label>
-      {children}
+      {isValidElement(children) ? cloneElement(children, { id: fieldId }) : children}
       {hint && <p className="mt-1 text-xs text-white/35">{hint}</p>}
     </div>
   )
@@ -402,7 +404,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 <StatusRow ok={tenantStatus.oast_configured} label={label(catalog?.requirements?.tenant_oast)} />
                 <StatusRow ok={tenantStatus.ai_heavy_entitled !== false} label={label(catalog?.requirements?.tenant_ai_entitlement)} />
                 <Link to="/system-core" className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">
-                  {t('pages.clientOnboarding.configure_tenant', { defaultValue: 'Configure tenant prerequisites → System Core' })}
+                  {t('pages.clientOnboarding.configure_tenant')}
                 </Link>
               </div>
             )}

@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "external_secrets", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "external_secrets",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const NO_CREATION_POLICY: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![CLUSTER_STORE_CREDS, REFRESH_TOO_SLOW, LITERAL_TARGET, WILDCARD_STORE, NO_CREATION_POLICY]
+    vec![
+        CLUSTER_STORE_CREDS,
+        REFRESH_TOO_SLOW,
+        LITERAL_TARGET,
+        WILDCARD_STORE,
+        NO_CREATION_POLICY,
+    ]
 }
 
 fn is_eso(name: &str, content: &str) -> bool {
@@ -92,17 +107,28 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     }
     let lc = content.to_ascii_lowercase();
 
-    if lc.contains("accesskeyid") || lc.contains("secretaccesskey") || lc.contains("serviceaccountkey") {
-        out.push(Finding::new(CLUSTER_STORE_CREDS, file, file).observed("inline cloud credentials in store"));
+    if lc.contains("accesskeyid")
+        || lc.contains("secretaccesskey")
+        || lc.contains("serviceaccountkey")
+    {
+        out.push(
+            Finding::new(CLUSTER_STORE_CREDS, file, file)
+                .observed("inline cloud credentials in store"),
+        );
     }
-    if lc.contains("refreshinterval: 24h") || lc.contains("refreshinterval: 12h") || lc.contains("refreshinterval: 6h") {
+    if lc.contains("refreshinterval: 24h")
+        || lc.contains("refreshinterval: 12h")
+        || lc.contains("refreshinterval: 6h")
+    {
         out.push(Finding::new(REFRESH_TOO_SLOW, file, file).observed("slow refreshInterval"));
     }
     if (lc.contains("data:") || lc.contains("datafrom:"))
         && (lc.contains("password:") || lc.contains("token:") || lc.contains("apikey:"))
         && !lc.contains("remoteref:")
     {
-        out.push(Finding::new(LITERAL_TARGET, file, file).observed("literal in ExternalSecret data"));
+        out.push(
+            Finding::new(LITERAL_TARGET, file, file).observed("literal in ExternalSecret data"),
+        );
     }
     if lc.contains("path: \"*\"") || lc.contains("path: '*'") || lc.contains("role: \"*\"") {
         out.push(Finding::new(WILDCARD_STORE, file, file).observed("wildcard secret path/role"));

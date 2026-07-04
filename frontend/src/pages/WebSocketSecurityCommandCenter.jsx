@@ -194,7 +194,6 @@ const CATEGORY_META = {
   cross_protocol_escalation: { label: 'Cross-Protocol Escalation', icon: '⇄', color: '#fb7185', order: 24 },
   missing_origin_cswsh: { label: 'Missing Origin CSWSH', icon: '∅', color: '#f97316', order: 25 },
   ws_cleartext: { label: 'Cleartext ws://', icon: '↓', color: '#eab308', order: 26 },
-  ws_version_downgrade: { label: 'WS Version Downgrade', icon: '8', color: '#6366f1', order: 27 },
   ws_message_silent: { label: 'Silent Session', icon: '…', color: '#64748b', order: 28 },
   ws_verbose_error: { label: 'Verbose Errors', icon: '!', color: '#94a3b8', order: 29 },
   ws_endpoint: { label: 'Endpoints', icon: '●', color: '#94a3b8', order: 30 },

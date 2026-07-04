@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "live_blast", provider: "multi",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "live_blast",
+            provider: "multi",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -139,8 +148,17 @@ pub const DRIFT_CONTRADICTS: PolicyMeta = pol!(
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
     vec![
-        LIVE_CONFIRMED, PROVEN_PATH, LIVE_PATH, IAM_PROVEN, IAM_DATA_PROVEN, CROSS_PLANE, TOXIC_PATH,
-        K8S_RBAC_PROVEN, AUTOPILOT_FIX, NOT_DEPLOYED, DRIFT_CONTRADICTS,
+        LIVE_CONFIRMED,
+        PROVEN_PATH,
+        LIVE_PATH,
+        IAM_PROVEN,
+        IAM_DATA_PROVEN,
+        CROSS_PLANE,
+        TOXIC_PATH,
+        K8S_RBAC_PROVEN,
+        AUTOPILOT_FIX,
+        NOT_DEPLOYED,
+        DRIFT_CONTRADICTS,
     ]
 }
 
@@ -182,13 +200,21 @@ pub fn finding_from_not_deployed(node_id: &str, evidence: &str, file: &str) -> F
 }
 
 #[must_use]
-pub fn finding_from_drift(policy: PolicyMeta, node_id: &str, evidence: &str, file: &str) -> Finding {
+pub fn finding_from_drift(
+    policy: PolicyMeta,
+    node_id: &str,
+    evidence: &str,
+    file: &str,
+) -> Finding {
     Finding::new(policy, node_id, file).observed(evidence)
 }
 
 #[must_use]
 pub fn finding_from_iam_proof(p: &PermissionProof) -> Finding {
-    let pol = if p.action.contains("rds") || p.action.contains("secretsmanager") || p.action.contains("kms") {
+    let pol = if p.action.contains("rds")
+        || p.action.contains("secretsmanager")
+        || p.action.contains("kms")
+    {
         IAM_DATA_PROVEN
     } else {
         IAM_PROVEN
@@ -198,8 +224,7 @@ pub fn finding_from_iam_proof(p: &PermissionProof) -> Finding {
 
 #[must_use]
 pub fn finding_from_k8s_rbac(p: &super::graph_model::K8sRbacProof) -> Finding {
-    Finding::new(K8S_RBAC_PROVEN, &p.subject_id, "live-k8s-sar")
-        .observed(p.evidence.clone())
+    Finding::new(K8S_RBAC_PROVEN, &p.subject_id, "live-k8s-sar").observed(p.evidence.clone())
 }
 
 /// Real Live Risk Score — static base + live confirmation + proven paths + blast quantification.

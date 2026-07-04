@@ -10,11 +10,18 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Vec<Value> {
     let mut by_pack: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for row in compliance_rows {
-        let pack = row.get("pack").and_then(Value::as_str).unwrap_or("").to_string();
+        let pack = row
+            .get("pack")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         if let Some(failed) = row.get("failed_controls").and_then(Value::as_array) {
             for c in failed {
                 if let Some(tag) = c.as_str() {
-                    by_pack.entry(pack.clone()).or_default().insert(tag.to_string());
+                    by_pack
+                        .entry(pack.clone())
+                        .or_default()
+                        .insert(tag.to_string());
                 }
             }
         }
@@ -23,7 +30,10 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Vec<Value> {
     let mut policy_by_control: BTreeMap<String, Vec<&Finding>> = BTreeMap::new();
     for f in findings {
         for tag in f.policy.compliance {
-            policy_by_control.entry((*tag).to_string()).or_default().push(f);
+            policy_by_control
+                .entry((*tag).to_string())
+                .or_default()
+                .push(f);
         }
     }
 
@@ -37,7 +47,12 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Vec<Value> {
                 related
                     .iter()
                     .take(5)
-                    .map(|f| format!("[{}] {} — {}", f.policy.id, f.resource, f.policy.remediation))
+                    .map(|f| {
+                        format!(
+                            "[{}] {} — {}",
+                            f.policy.id, f.resource, f.policy.remediation
+                        )
+                    })
                     .collect()
             };
             let severity = related

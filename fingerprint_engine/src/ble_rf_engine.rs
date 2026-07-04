@@ -218,7 +218,8 @@ const MQTT_CONFIRMED: PolicyMeta = PolicyMeta {
 const COAP_EXPOSED: PolicyMeta = PolicyMeta {
     id: "WZ-BLE-009",
     category: "coap",
-    remediation: "Block CoAP from the internet; use DTLS-PSK or OSCORE; segment constrained-device networks.",
+    remediation:
+        "Block CoAP from the internet; use DTLS-PSK or OSCORE; segment constrained-device networks.",
     controls: &["RFC-7252", "MITRE-T0809"],
 };
 const LORAWAN_GATEWAY: PolicyMeta = PolicyMeta {
@@ -230,13 +231,15 @@ const LORAWAN_GATEWAY: PolicyMeta = PolicyMeta {
 const MDNS_WIRELESS: PolicyMeta = PolicyMeta {
     id: "WZ-BLE-011",
     category: "mdns",
-    remediation: "Disable mDNS on internet-facing interfaces; use DNS-SD only on trusted LAN segments.",
+    remediation:
+        "Disable mDNS on internet-facing interfaces; use DNS-SD only on trusted LAN segments.",
     controls: &["RFC-6762", "NIST-SC-7"],
 };
 const RF_PORT_EXPOSED: PolicyMeta = PolicyMeta {
     id: "WZ-BLE-012",
     category: "rf_port",
-    remediation: "Block IoT/RF bridge ports at the perimeter; patch firmware; change factory credentials.",
+    remediation:
+        "Block IoT/RF bridge ports at the perimeter; patch firmware; change factory credentials.",
     controls: &["CIS-IoT-1.2", "MITRE-T1133"],
 };
 const ATTACK_PATH: PolicyMeta = PolicyMeta {
@@ -301,7 +304,12 @@ const IOT_HUB_SIGS: &[HubSig] = &[
     HubSig {
         name: "Azure IoT Hub",
         paths: &["/devices", "/api/devices", "/iothub/explorer"],
-        tokens: &["azure-iothub", "microsoft.azure", "iothub", "sharedaccesskey"],
+        tokens: &[
+            "azure-iothub",
+            "microsoft.azure",
+            "iothub",
+            "sharedaccesskey",
+        ],
         severity: "critical",
         mitre: "T1190",
     },
@@ -554,8 +562,12 @@ async fn probe_http_signatures(
             continue;
         }
         let hs = haystack(&p);
-        let token_hit = probe_matched_token(&p, tokens)
-            .or_else(|| tokens.iter().find(|t| hs.contains(&t.to_ascii_lowercase())).map(|s| (*s).to_string()));
+        let token_hit = probe_matched_token(&p, tokens).or_else(|| {
+            tokens
+                .iter()
+                .find(|t| hs.contains(&t.to_ascii_lowercase()))
+                .map(|s| (*s).to_string())
+        });
         if token_hit.is_none() && p.status != 200 {
             continue;
         }
@@ -734,7 +746,10 @@ async fn probe_lorawan(host: &str, target: &str) -> Vec<Value> {
         ));
     }
     // Semtech UDP push probe
-    if udp_probe_response(host, 1700, b"\x01\x04\x00\x01").await.is_some() {
+    if udp_probe_response(host, 1700, b"\x01\x04\x00\x01")
+        .await
+        .is_some()
+    {
         out.push(wfinding(
             &LORAWAN_GATEWAY,
             &format!("LoRaWAN gateway UDP/1700 responded on {host}"),
@@ -844,7 +859,10 @@ fn collect_facts(findings: &[Value]) -> PostureFacts {
         high_count: 0,
     };
     for finding in findings {
-        let cat = finding.get("category").and_then(|v| v.as_str()).unwrap_or("");
+        let cat = finding
+            .get("category")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let sev = finding
             .get("severity")
             .and_then(|v| v.as_str())
@@ -917,12 +935,21 @@ fn wireless_verdict(facts: &PostureFacts) -> (&'static str, &'static str) {
         return ("high_risk", "Critical wireless/IoT exposure observed");
     }
     if facts.high_count > 2 || facts.iot_hub || facts.ble_api {
-        return ("elevated", "Multiple high-severity wireless surfaces detected");
+        return (
+            "elevated",
+            "Multiple high-severity wireless surfaces detected",
+        );
     }
     if facts.high_count > 0 || facts.mqtt_exposed || facts.rf_ports > 2 {
-        return ("moderate", "Some wireless/IoT exposure — review perimeter controls");
+        return (
+            "moderate",
+            "Some wireless/IoT exposure — review perimeter controls",
+        );
     }
-    ("hardened", "No critical wireless/IoT perimeter gaps observed")
+    (
+        "hardened",
+        "No critical wireless/IoT perimeter gaps observed",
+    )
 }
 
 fn compute_score(facts: &PostureFacts, strict: bool) -> u32 {
@@ -1280,7 +1307,8 @@ pub async fn run_ble_rf_result_ctx(target: &str, ctx: &EngineRunContext) -> Engi
     if !cfg.extra_paths.is_empty() {
         let client = http_client().await;
         let path_refs: Vec<&str> = cfg.extra_paths.iter().map(String::as_str).collect();
-        let probes = probe_paths_concurrent(&client, &base, &path_refs, DEFAULT_PROBE_CONCURRENCY).await;
+        let probes =
+            probe_paths_concurrent(&client, &base, &path_refs, DEFAULT_PROBE_CONCURRENCY).await;
         for p in probes {
             if status_indicates_presence(p.status) {
                 findings.push(wfinding(
@@ -1288,7 +1316,10 @@ pub async fn run_ble_rf_result_ctx(target: &str, ctx: &EngineRunContext) -> Engi
                     &format!("Custom wireless path exposed: {}", p.final_url),
                     "medium",
                     "T1190",
-                    &format!("{} returned HTTP {} — operator-supplied wireless/IoT path is reachable.", p.final_url, p.status),
+                    &format!(
+                        "{} returned HTTP {} — operator-supplied wireless/IoT path is reachable.",
+                        p.final_url, p.status
+                    ),
                     target,
                     json!({ "url": p.final_url, "status": p.status }),
                 ));

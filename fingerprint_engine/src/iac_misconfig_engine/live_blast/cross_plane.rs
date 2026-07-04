@@ -28,7 +28,12 @@ pub fn wire_cross_plane(files: &[IacFile], graph: &mut InfraGraph) -> Vec<CrossP
     }
 
     for b in &bridges {
-        graph.add_edge(&b.k8s_sa_id, &b.iam_id, EdgeKind::CrossPlaneTrust, b.evidence.clone());
+        graph.add_edge(
+            &b.k8s_sa_id,
+            &b.iam_id,
+            EdgeKind::CrossPlaneTrust,
+            b.evidence.clone(),
+        );
         if let Some(iam) = graph.nodes.get_mut(&b.iam_id) {
             iam.cloud_arn = Some(b.role_arn.clone());
         }
@@ -47,7 +52,9 @@ fn wire_terraform_irsa(f: &IacFile, graph: &mut InfraGraph) -> Vec<CrossPlaneBri
             continue;
         }
         let rtype = b.labels.first().map(String::as_str).unwrap_or("");
-        if rtype != "aws_iam_role_for_service_account" && rtype != "aws_eks_pod_identity_association" {
+        if rtype != "aws_iam_role_for_service_account"
+            && rtype != "aws_eks_pod_identity_association"
+        {
             continue;
         }
         let rname = b.labels.get(1).map(String::as_str).unwrap_or("?");
@@ -75,7 +82,9 @@ fn wire_terraform_irsa(f: &IacFile, graph: &mut InfraGraph) -> Vec<CrossPlaneBri
 fn wire_k8s_sa_annotations(f: &IacFile, graph: &mut InfraGraph) -> Vec<CrossPlaneBridge> {
     let mut out = Vec::new();
     for doc in f.content.split("\n---\n") {
-        let Ok(v) = serde_yaml::from_str::<Value>(doc.trim()) else { continue };
+        let Ok(v) = serde_yaml::from_str::<Value>(doc.trim()) else {
+            continue;
+        };
         if v.get("kind").and_then(Value::as_str) != Some("ServiceAccount") {
             continue;
         }
@@ -109,7 +118,9 @@ fn wire_k8s_sa_annotations(f: &IacFile, graph: &mut InfraGraph) -> Vec<CrossPlan
     out
 }
 
-fn extract_role_arn_from_nested(b: &crate::iac_misconfig_engine::terraform::HclBlock) -> Option<String> {
+fn extract_role_arn_from_nested(
+    b: &crate::iac_misconfig_engine::terraform::HclBlock,
+) -> Option<String> {
     for key in ["role_arn", "target_role_arn"] {
         if let Some(HclValue::Str(s) | HclValue::Raw(s)) = b.attr(key) {
             if s.starts_with("arn:aws:iam::") {

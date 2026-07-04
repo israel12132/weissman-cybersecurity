@@ -75,7 +75,11 @@ async fn race_worker(
 }
 
 /// Establish N simultaneous WebSocket connections and release transactional frames on a barrier.
-pub async fn execute_race_burst(http_url: &str, opts: &WsConnectOpts, cfg: &RaceConfig) -> Option<RaceOutcome> {
+pub async fn execute_race_burst(
+    http_url: &str,
+    opts: &WsConnectOpts,
+    cfg: &RaceConfig,
+) -> Option<RaceOutcome> {
     let n = cfg.connections.clamp(2, 16);
     let barrier = Arc::new(Barrier::new(n));
     let mut handles = Vec::with_capacity(n);

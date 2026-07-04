@@ -67,6 +67,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         // evasion / hardening
         "av_bypass_engine",
         "log_tampering_engine",
+        "timestomping",
         // mobile / social
         "sim_swap_engine",
         "bluetooth_mobile_attack",
@@ -106,9 +107,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "bootkit_uefi" => scheduled_tasks::run_uefi(&engine).await,
             "polymorphic_engine" => malware_local::run_polymorphic(&engine).await,
             "ransomware_emulation" => malware_local::run_ransomware(&engine).await,
-            "arp_spoofing_engine" => {
-                arp_table::run(&engine, target.as_deref(), &params).await
-            }
+            "arp_spoofing_engine" => arp_table::run(&engine, target.as_deref(), &params).await,
             "dns_tunneling_c2" => arp_table::run_dns_anomaly(&engine).await,
             "icmp_covert" => network_local::run_icmp_covert(&engine).await,
             "vlan_hopping_attack" => network_local::run_vlan(&engine).await,
@@ -137,6 +136,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
                 findings.extend(timestomp::run(&engine).await?);
                 Ok(findings)
             }
+            "timestomping" => timestomp::run(&engine).await,
             "anti_debug_evasion" | "rootkit_simulation" | "memory_forensics_evasion" => {
                 process_modules::run_unusual_runtime(&engine).await
             }
@@ -151,9 +151,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "voltage_glitch_attack" => hardware_local::run_voltage_glitch(&engine).await,
             "tpm_firmware_attack" => hardware_local::run_tpm(&engine).await,
             "cold_boot_attack" => hardware_local::run_cold_boot(&engine).await,
-            "infostealer_emulation" => {
-                infostealer::run(&engine, target.as_deref(), &params).await
-            }
+            "infostealer_emulation" => infostealer::run(&engine, target.as_deref(), &params).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
             other => Err(anyhow::anyhow!(
@@ -195,18 +193,54 @@ mod tests {
 
     /// Every engine in fingerprint_engine::AGENT_REQUIRED_ENGINES must have an agent implementation.
     const REQUIRED: &[&str] = &[
-        "process_hollowing", "dll_hijacking_engine", "process_inventory", "av_bypass_engine",
-        "log_tampering_engine", "anti_debug_evasion", "rootkit_simulation",
-        "memory_forensics_evasion", "usb_enumeration", "dns_tunneling_c2", "icmp_covert",
-        "bootkit_uefi", "persistence_mechanism", "polymorphic_engine", "ransomware_emulation",
-        "acoustic_exfil", "em_exfil_engine", "optical_exfil", "keyboard_acoustic",
-        "screen_capture_exfil", "clipboard_hijack", "insider_exfil", "storage_covert_channel",
-        "arp_spoofing_engine", "vlan_hopping_attack", "dhcp_attack_engine", "wifi_attack_engine",
-        "bluetooth_attack_engine", "lte_5g_attack", "wpa3_attack_engine", "packet_injection_engine",
-        "network_tap_advanced", "multicast_attack", "nat_traversal_attack", "sim_swap_engine",
-        "bluetooth_mobile_attack", "nfc_relay_attack", "deepfake_voice_engine", "pretexting_engine",
-        "insider_threat_engine", "physical_social_eng", "lorawan_attack", "lora_attack",
-        "voltage_glitch_attack", "tpm_firmware_attack", "cold_boot_attack", "infostealer_emulation",
+        "process_hollowing",
+        "dll_hijacking_engine",
+        "process_inventory",
+        "av_bypass_engine",
+        "log_tampering_engine",
+        "timestomping",
+        "anti_debug_evasion",
+        "rootkit_simulation",
+        "memory_forensics_evasion",
+        "usb_enumeration",
+        "dns_tunneling_c2",
+        "icmp_covert",
+        "bootkit_uefi",
+        "persistence_mechanism",
+        "polymorphic_engine",
+        "ransomware_emulation",
+        "acoustic_exfil",
+        "em_exfil_engine",
+        "optical_exfil",
+        "keyboard_acoustic",
+        "screen_capture_exfil",
+        "clipboard_hijack",
+        "insider_exfil",
+        "storage_covert_channel",
+        "arp_spoofing_engine",
+        "vlan_hopping_attack",
+        "dhcp_attack_engine",
+        "wifi_attack_engine",
+        "bluetooth_attack_engine",
+        "lte_5g_attack",
+        "wpa3_attack_engine",
+        "packet_injection_engine",
+        "network_tap_advanced",
+        "multicast_attack",
+        "nat_traversal_attack",
+        "sim_swap_engine",
+        "bluetooth_mobile_attack",
+        "nfc_relay_attack",
+        "deepfake_voice_engine",
+        "pretexting_engine",
+        "insider_threat_engine",
+        "physical_social_eng",
+        "lorawan_attack",
+        "lora_attack",
+        "voltage_glitch_attack",
+        "tpm_firmware_attack",
+        "cold_boot_attack",
+        "infostealer_emulation",
         "chronos",
     ];
 

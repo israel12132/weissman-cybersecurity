@@ -1142,7 +1142,11 @@ mod tests {
 
     #[test]
     fn substitute_path_params_replaces_braced_names() {
-        let out = substitute_path_params("/api/users/{userId}/orders/{orderId}", &["userId".into(), "orderId".into()], "42");
+        let out = substitute_path_params(
+            "/api/users/{userId}/orders/{orderId}",
+            &["userId".into(), "orderId".into()],
+            "42",
+        );
         assert_eq!(out, "/api/users/42/orders/42");
     }
 
@@ -1161,7 +1165,10 @@ mod tests {
 
     #[test]
     fn api_reachable_requires_json_with_resource_markers() {
-        assert!(api_reachable_signal(200, r#"{"userId":1,"email":"a@b.com"}"#));
+        assert!(api_reachable_signal(
+            200,
+            r#"{"userId":1,"email":"a@b.com"}"#
+        ));
         assert!(!api_reachable_signal(200, "<html><body>ok</body></html>"));
         assert!(!api_reachable_signal(404, r#"{"id":1}"#));
     }

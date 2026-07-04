@@ -55,7 +55,11 @@ async fn api_logout(
     res
 }
 
-async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+async fn api_auth_refresh(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Response {
     let raw = extract_refresh_cookie(&headers);
     let Some(raw) = raw else {
         return (
@@ -86,11 +90,13 @@ async fn api_auth_refresh(State(state): State<Arc<AppState>>, headers: HeaderMap
                             .into_response();
                     }
                 };
+            let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let minted = match crate::auth_jwt::create_access_token(
                 user_id,
                 tenant_id,
                 role.as_str(),
                 is_superadmin,
+                &binding,
             ) {
                 Ok(t) => t,
                 Err(e) => {
@@ -167,41 +173,6 @@ async fn api_auth_me(Extension(auth): Extension<AuthContext>) -> Response {
         })),
     )
         .into_response()
-}
-
-async fn api_auth_sse_ticket(Extension(auth): Extension<AuthContext>) -> Response {
-    match crate::auth_jwt::create_sse_ticket(
-        auth.user_id,
-        auth.tenant_id,
-        auth.role.as_str(),
-        auth.is_superadmin,
-    ) {
-        Ok(ticket) => {
-            let ttl = std::env::var("WEISSMAN_SSE_TICKET_MINUTES")
-                .ok()
-                .and_then(|s| s.parse::<i64>().ok())
-                .unwrap_or(15)
-                .clamp(5, 60)
-                * 60;
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "ok": true,
-                    "ticket": ticket,
-                    "expires_in": ttl,
-                })),
-            )
-                .into_response()
-        }
-        Err(e) => {
-            tracing::error!(target: "auth", error = %e, "sse ticket mint failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": "ticket mint failed"})),
-            )
-                .into_response()
-        }
-    }
 }
 
 fn extract_access_cookie(headers: &HeaderMap) -> Option<String> {

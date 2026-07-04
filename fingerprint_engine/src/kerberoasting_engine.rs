@@ -188,7 +188,9 @@ impl KerberosConfig {
             timeout_ms: cfg.timeout_ms(5000),
             concurrency: cfg.concurrency(),
             strict_mode: cfg.bool_or("strict_mode", false),
-            resolver: cfg.string("resolver").unwrap_or_else(|| "system".to_string()),
+            resolver: cfg
+                .string("resolver")
+                .unwrap_or_else(|| "system".to_string()),
         }
     }
 
@@ -511,15 +513,17 @@ pub(crate) fn ldap_bind_result_code(resp: &[u8]) -> Option<u8> {
     None
 }
 
-pub(crate) async fn ldap_exchange(host: &str, port: u16, messages: &[&[u8]], timeout_ms: u64) -> Option<Vec<u8>> {
+pub(crate) async fn ldap_exchange(
+    host: &str,
+    port: u16,
+    messages: &[&[u8]],
+    timeout_ms: u64,
+) -> Option<Vec<u8>> {
     let addr = format!("{host}:{port}");
-    let stream = timeout(
-        Duration::from_millis(timeout_ms),
-        TcpStream::connect(&addr),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let stream = timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&addr))
+        .await
+        .ok()?
+        .ok()?;
     let mut stream = stream;
     let mut combined = Vec::new();
     for msg in messages {
@@ -569,12 +573,7 @@ pub(crate) fn extract_naming_context(strings: &[String]) -> Option<String> {
         .iter()
         .find(|s| s.contains("DC=") && !s.contains("servicePrincipalName"))
         .cloned()
-        .or_else(|| {
-            strings
-                .iter()
-                .find(|s| s.starts_with("DC="))
-                .cloned()
-        })
+        .or_else(|| strings.iter().find(|s| s.starts_with("DC=")).cloned())
 }
 
 pub(crate) fn extract_spns(strings: &[String]) -> Vec<String> {
@@ -600,7 +599,8 @@ pub(crate) fn extract_sam_accounts(strings: &[String]) -> Vec<String> {
         .filter(|s| {
             s.len() >= 2
                 && s.len() <= 32
-                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
                 && !s.contains('/')
                 && !s.contains('=')
                 && !s.contains('@')
@@ -654,7 +654,10 @@ async fn discover_ad_srv(domain: &str, resolver_choice: &str) -> Vec<(String, u1
         ("_ldap._tcp", format!("_ldap._tcp.{d}")),
         ("_kerberos._tcp", format!("_kerberos._tcp.{d}")),
         ("_ldap._tcp.dc._msdcs", format!("_ldap._tcp.dc._msdcs.{d}")),
-        ("_kerberos._tcp.dc._msdcs", format!("_kerberos._tcp.dc._msdcs.{d}")),
+        (
+            "_kerberos._tcp.dc._msdcs",
+            format!("_kerberos._tcp.dc._msdcs.{d}"),
+        ),
         ("_gc._tcp", format!("_gc._tcp.{d}")),
         ("_gc._tcp._msdcs", format!("_gc._tcp._msdcs.{d}")),
         ("_kpasswd._tcp", format!("_kpasswd._tcp.{d}")),
@@ -774,17 +777,28 @@ fn posture_summary(target: &str, findings: &[Value], sig: &AdSignals) -> Value {
     };
     let ev = supreme::enrich_posture_evidence(
         Evidence::new()
-        .with("score", score)
-        .with("grade", grade)
-        .with("counts", json!(counts))
-        .with("verdict", verdict)
-        .with("domain", &sig.domain)
-        .with("open_ports", json!(sig.open_ports.iter().copied().collect::<Vec<_>>()))
-        .with("kerberoast_spn_count", sig.kerberoast_spns.len())
-        .with("asrep_account_count", sig.asrep_accounts.len())
-        .check("kdc_live", sig.kdc_live, "Kerberos KDC responded on 88/tcp")
-        .check("ldap_anon", sig.ldap_anon_ok, "Anonymous LDAP bind accepted")
-        .check("ldap_reachable", sig.ldap_reachable, "LDAP service reachable"),
+            .with("score", score)
+            .with("grade", grade)
+            .with("counts", json!(counts))
+            .with("verdict", verdict)
+            .with("domain", &sig.domain)
+            .with(
+                "open_ports",
+                json!(sig.open_ports.iter().copied().collect::<Vec<_>>()),
+            )
+            .with("kerberoast_spn_count", sig.kerberoast_spns.len())
+            .with("asrep_account_count", sig.asrep_accounts.len())
+            .check("kdc_live", sig.kdc_live, "Kerberos KDC responded on 88/tcp")
+            .check(
+                "ldap_anon",
+                sig.ldap_anon_ok,
+                "Anonymous LDAP bind accepted",
+            )
+            .check(
+                "ldap_reachable",
+                sig.ldap_reachable,
+                "LDAP service reachable",
+            ),
         sig,
     );
 
@@ -836,7 +850,12 @@ fn synthesize_attack_paths(target: &str, sig: &AdSignals, findings: &mut Vec<Val
     }
 
     if sig.ldap_anon_ok && !sig.kerberoast_spns.is_empty() {
-        let sample = sig.kerberoast_spns.iter().take(3).cloned().collect::<Vec<_>>();
+        let sample = sig
+            .kerberoast_spns
+            .iter()
+            .take(3)
+            .cloned()
+            .collect::<Vec<_>>();
         findings.push(attack_path_finding(
             "Anonymous LDAP → SPN harvest → offline Kerberoasting (no creds)",
             "critical",
@@ -1011,7 +1030,13 @@ fn is_adfs_exchange_url(url: &str) -> bool {
 
 // ─── Core scan orchestration ─────────────────────────────────────────────────────
 
-async fn scan_ad_ports(host: &str, cfg: &KerberosConfig, sig: &mut AdSignals, findings: &mut Vec<Value>, target: &str) {
+async fn scan_ad_ports(
+    host: &str,
+    cfg: &KerberosConfig,
+    sig: &mut AdSignals,
+    findings: &mut Vec<Value>,
+    target: &str,
+) {
     let open = tcp_scan(host, &cfg.ad_ports, cfg.concurrency).await;
     for port in open {
         sig.open_ports.insert(port);
@@ -1046,7 +1071,12 @@ async fn scan_ad_ports(host: &str, cfg: &KerberosConfig, sig: &mut AdSignals, fi
     sig.kdc_live = sig.open_ports.contains(&88);
 }
 
-async fn scan_srv_records(cfg: &KerberosConfig, sig: &mut AdSignals, findings: &mut Vec<Value>, target: &str) {
+async fn scan_srv_records(
+    cfg: &KerberosConfig,
+    sig: &mut AdSignals,
+    findings: &mut Vec<Value>,
+    target: &str,
+) {
     if cfg.domain.is_empty() {
         return;
     }
@@ -1094,7 +1124,8 @@ async fn scan_ldap(
     };
 
     if cfg.check_ldap_anon {
-        if let Some(resp) = ldap_exchange(host, ldap_port, &[LDAP_ANON_BIND], cfg.timeout_ms).await {
+        if let Some(resp) = ldap_exchange(host, ldap_port, &[LDAP_ANON_BIND], cfg.timeout_ms).await
+        {
             match ldap_bind_result_code(&resp) {
                 Some(0) => {
                     sig.ldap_anon_ok = true;
@@ -1148,7 +1179,8 @@ async fn scan_ldap(
                 } else {
                     vec![&root_search]
                 };
-                if let Some(enum_resp) = ldap_exchange(host, ldap_port, &msgs, cfg.timeout_ms).await {
+                if let Some(enum_resp) = ldap_exchange(host, ldap_port, &msgs, cfg.timeout_ms).await
+                {
                     let strings = extract_ldap_strings(&enum_resp);
                     let base_dn = if !cfg.ldap_base_dn.is_empty() {
                         Some(cfg.ldap_base_dn.clone())
@@ -1164,9 +1196,11 @@ async fn scan_ldap(
                             &format!("Active Directory naming context: {nc}"),
                             target,
                             0.88,
-                            Evidence::new()
-                                .with("defaultNamingContext", nc)
-                                .check("rootdse", true, "naming context extracted"),
+                            Evidence::new().with("defaultNamingContext", nc).check(
+                                "rootdse",
+                                true,
+                                "naming context extracted",
+                            ),
                             "ldap_enum",
                             &[],
                             None,
@@ -1194,13 +1228,10 @@ async fn scan_ldap(
                         {
                             let spn_strings = extract_ldap_strings(&spn_resp);
                             let spns = extract_spns(&spn_strings);
-                            sig.kerberoast_spns = spns.iter().take(cfg.max_ldap_entries).cloned().collect();
+                            sig.kerberoast_spns =
+                                spns.iter().take(cfg.max_ldap_entries).cloned().collect();
                             if !sig.kerberoast_spns.is_empty() {
-                                let sev = if sig.ldap_anon_ok {
-                                    "critical"
-                                } else {
-                                    "high"
-                                };
+                                let sev = if sig.ldap_anon_ok { "critical" } else { "high" };
                                 findings.push(ad_finding(
                                     &format!(
                                         "{} Kerberoastable SPN(s) enumerated via LDAP",
@@ -1285,7 +1316,13 @@ async fn scan_ldap(
     }
 }
 
-async fn scan_kdc(host: &str, cfg: &KerberosConfig, sig: &mut AdSignals, findings: &mut Vec<Value>, target: &str) {
+async fn scan_kdc(
+    host: &str,
+    cfg: &KerberosConfig,
+    sig: &mut AdSignals,
+    findings: &mut Vec<Value>,
+    target: &str,
+) {
     if !cfg.check_kdc_probe || !sig.open_ports.contains(&88) {
         return;
     }
@@ -1444,7 +1481,9 @@ async fn assess_host(
 /// World-class AD/Kerberos external posture engine (reads all knobs from `job_params`).
 pub async fn run_kerberoasting_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
     if target.trim().is_empty() {
-        return EngineResult::error("kerberoasting: target required (DC hostname, ADFS URL, or domain)");
+        return EngineResult::error(
+            "kerberoasting: target required (DC hostname, ADFS URL, or domain)",
+        );
     }
     let cfg = KerberosConfig::from_arsenal(&ArsenalConfig::from_ctx(ctx), target);
     let host = extract_host(target);
@@ -1512,7 +1551,8 @@ pub async fn run_kerberoasting_result_ctx(target: &str, ctx: &EngineRunContext) 
         .iter()
         .filter(|f| f.get("category").and_then(Value::as_str) == Some("toxic_combination"))
         .count();
-    let message = format!(
+    let message =
+        format!(
         "kerberoasting: {} finding(s), posture {score}/100 ({grade}){}{}{}{}{} ({} critical{}{})",
         findings.len(),
         if !cfg.domain.is_empty() {
@@ -1602,6 +1642,9 @@ mod tests {
 
     #[test]
     fn infer_domain_from_host() {
-        assert_eq!(infer_domain_from_target("https://adfs.corp.example.com"), "example.com");
+        assert_eq!(
+            infer_domain_from_target("https://adfs.corp.example.com"),
+            "example.com"
+        );
     }
 }

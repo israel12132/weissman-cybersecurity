@@ -279,3 +279,44 @@ pub fn compute_control_statuses(
     out.sort_by(|a, b| a.control_id.cmp(&b.control_id));
     out
 }
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ComplianceControlMappingRow {
+    pub id: i64,
+    pub framework: String,
+    pub control_id: String,
+    pub control_title: String,
+    pub control_family: String,
+    pub engine_id: Option<String>,
+    pub evidence_type: String,
+    pub evidence_source: String,
+    pub live_only: bool,
+    pub mapping_notes: String,
+}
+
+pub async fn load_control_mappings(
+    pool: &sqlx::PgPool,
+    framework: Option<&str>,
+) -> Result<Vec<ComplianceControlMappingRow>, sqlx::Error> {
+    if let Some(fw) = framework.filter(|s| !s.trim().is_empty()) {
+        sqlx::query_as::<_, ComplianceControlMappingRow>(
+            r#"SELECT id, framework, control_id, control_title, control_family,
+                      engine_id, evidence_type, evidence_source, live_only, mapping_notes
+                 FROM compliance_control_mappings
+                WHERE framework = $1
+                ORDER BY framework, control_id, evidence_type"#,
+        )
+        .bind(fw)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, ComplianceControlMappingRow>(
+            r#"SELECT id, framework, control_id, control_title, control_family,
+                      engine_id, evidence_type, evidence_source, live_only, mapping_notes
+                 FROM compliance_control_mappings
+                ORDER BY framework, control_id, evidence_type"#,
+        )
+        .fetch_all(pool)
+        .await
+    }
+}

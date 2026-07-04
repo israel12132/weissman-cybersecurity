@@ -108,8 +108,22 @@ const SAS_INDICATORS: &[&str] = &[
 
 /// Common blob container names to test for public anonymous listing.
 const COMMON_CONTAINERS: &[&str] = &[
-    "backup", "backups", "data", "public", "files", "uploads", "images", "media", "logs", "$web",
-    "documents", "config", "assets", "static", "db", "dump",
+    "backup",
+    "backups",
+    "data",
+    "public",
+    "files",
+    "uploads",
+    "images",
+    "media",
+    "logs",
+    "$web",
+    "documents",
+    "config",
+    "assets",
+    "static",
+    "db",
+    "dump",
 ];
 
 /// Azure-specific dangling-CNAME takeover fingerprints (external scan).
@@ -353,13 +367,16 @@ struct SecurityGraph {
 
 impl SecurityGraph {
     fn upsert(&mut self, id: &str, kind: &str, scope: &str, exposure: &str, tags: &[&str]) {
-        let node = self.nodes.entry(id.to_string()).or_insert_with(|| GraphNode {
-            id: id.to_string(),
-            kind: kind.to_string(),
-            region: scope.to_string(),
-            exposure: exposure.to_string(),
-            risk_tags: Vec::new(),
-        });
+        let node = self
+            .nodes
+            .entry(id.to_string())
+            .or_insert_with(|| GraphNode {
+                id: id.to_string(),
+                kind: kind.to_string(),
+                region: scope.to_string(),
+                exposure: exposure.to_string(),
+                risk_tags: Vec::new(),
+            });
         for t in tags {
             if !node.risk_tags.iter().any(|x| x == t) {
                 node.risk_tags.push((*t).to_string());
@@ -435,7 +452,11 @@ fn correlate_attack_paths(f: &AzureFacts, target: &str) -> Vec<Value> {
             .filter(|s| f.insecure_transport_storage.contains(*s))
             .cloned()
             .collect();
-        let sev = if unprotected.is_empty() { "high" } else { "critical" };
+        let sev = if unprotected.is_empty() {
+            "high"
+        } else {
+            "critical"
+        };
         let ev = Evidence::new()
             .with("public_storage_accounts", json!(f.public_storage))
             .with("public_and_cleartext", json!(unprotected));
@@ -637,7 +658,10 @@ fn posture_summary(
         .with("tenant_id", f.tenant_id.clone().unwrap_or_default())
         .with("subscriptions_scanned", json!(f.subscriptions))
         .with("public_storage_accounts", f.public_storage.len() as u64)
-        .with("insecure_transport_storage", f.insecure_transport_storage.len() as u64)
+        .with(
+            "insecure_transport_storage",
+            f.insecure_transport_storage.len() as u64,
+        )
         .with("open_network_storage", f.open_storage_networks.len() as u64)
         .with("world_open_nsgs", f.world_open_admin_nsgs.len() as u64)
         .with("public_ips", f.public_ips as u64)
@@ -799,7 +823,10 @@ impl ArmClient {
             if let Some(data) = v.get("data").and_then(Value::as_array) {
                 out.extend(data.iter().cloned());
             }
-            skip = v.get("$skipToken").and_then(Value::as_str).map(str::to_string);
+            skip = v
+                .get("$skipToken")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             if skip.is_none() {
                 break;
             }
@@ -817,7 +844,11 @@ async fn acquire_token(
     client_secret: &str,
     scope: &str,
 ) -> Result<String, String> {
-    let url = format!("{}/{}/oauth2/v2.0/token", login.trim_end_matches('/'), tenant);
+    let url = format!(
+        "{}/{}/oauth2/v2.0/token",
+        login.trim_end_matches('/'),
+        tenant
+    );
     let resp = http
         .post(&url)
         .form(&[
@@ -836,7 +867,11 @@ async fn acquire_token(
         let code = v
             .get("error")
             .and_then(Value::as_str)
-            .or_else(|| v.get("error").and_then(|e| e.get("code")).and_then(Value::as_str))
+            .or_else(|| {
+                v.get("error")
+                    .and_then(|e| e.get("code"))
+                    .and_then(Value::as_str)
+            })
             .unwrap_or("token_error");
         let desc = v
             .get("error_description")
@@ -898,7 +933,13 @@ fn arm_err_finding(target: &str, op: &str, status: u16, body: &str) -> Value {
 // Per-subscription scanners
 // ─────────────────────────────────────────────────────────────────────────────
 
-async fn scan_storage(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts, out: &mut Vec<Value>) {
+async fn scan_storage(
+    arm: &ArmClient,
+    sub: &str,
+    target: &str,
+    f: &mut AzureFacts,
+    out: &mut Vec<Value>,
+) {
     let url = format!(
         "{}/subscriptions/{}/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01",
         arm.arm, sub
@@ -906,7 +947,11 @@ async fn scan_storage(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFac
     match arm.get_all(&url, 10).await {
         Ok(accounts) => {
             for a in accounts {
-                let name = a.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+                let name = a
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 let props = a.get("properties").cloned().unwrap_or(Value::Null);
                 let allow_public = props
                     .get("allowBlobPublicAccess")
@@ -932,7 +977,11 @@ async fn scan_storage(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFac
                     let ev = Evidence::new()
                         .with("subscription", sub.to_string())
                         .with("storage_account", name.clone())
-                        .check("allow_blob_public_access", true, "allowBlobPublicAccess = true");
+                        .check(
+                            "allow_blob_public_access",
+                            true,
+                            "allowBlobPublicAccess = true",
+                        );
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!("Storage account '{name}' allows anonymous blob public access"),
@@ -951,7 +1000,11 @@ async fn scan_storage(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFac
                     let ev = Evidence::new()
                         .with("subscription", sub.to_string())
                         .with("storage_account", name.clone())
-                        .check("network_default_action", false, "networkAcls.defaultAction = Allow");
+                        .check(
+                            "network_default_action",
+                            false,
+                            "networkAcls.defaultAction = Allow",
+                        );
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!("Storage account '{name}' accepts traffic from all networks"),
@@ -989,7 +1042,11 @@ async fn scan_storage(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFac
                         .with("subscription", sub.to_string())
                         .with("storage_account", name.clone())
                         .with("minimum_tls", min_tls.to_string())
-                        .check("min_tls_1_2", false, format!("minimumTlsVersion = {min_tls}"));
+                        .check(
+                            "min_tls_1_2",
+                            false,
+                            format!("minimumTlsVersion = {min_tls}"),
+                        );
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!("Storage account '{name}' allows TLS below 1.2"),
@@ -1042,7 +1099,11 @@ async fn scan_network(
     match arm.get_all(&nsg_url, 10).await {
         Ok(nsgs) => {
             for nsg in nsgs {
-                let nsg_name = nsg.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+                let nsg_name = nsg
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 let rules = nsg
                     .get("properties")
                     .and_then(|p| p.get("securityRules"))
@@ -1058,7 +1119,9 @@ async fn scan_network(
                     if !inbound || !allow {
                         continue;
                     }
-                    let public = rule_source_prefixes(&rp).iter().any(|p| is_internet_source(p));
+                    let public = rule_source_prefixes(&rp)
+                        .iter()
+                        .any(|p| is_internet_source(p));
                     if !public {
                         continue;
                     }
@@ -1084,7 +1147,11 @@ async fn scan_network(
                         .with("subscription", sub.to_string())
                         .with("network_security_group", nsg_name.clone())
                         .with("exposed_ports", json!(exposed))
-                        .check("ingress_restricted", false, "Internet/* source on sensitive port(s)");
+                        .check(
+                            "ingress_restricted",
+                            false,
+                            "Internet/* source on sensitive port(s)",
+                        );
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!(
@@ -1127,8 +1194,16 @@ async fn scan_sql(
         }
     };
     for s in servers.iter().take(50) {
-        let name = s.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-        let id = s.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let name = s
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let id = s
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let public = s
             .get("properties")
             .and_then(|p| p.get("publicNetworkAccess"))
@@ -1151,8 +1226,16 @@ async fn scan_sql(
             let ev = Evidence::new()
                 .with("subscription", sub.to_string())
                 .with("sql_server", name.clone())
-                .check("public_network_access", public, "publicNetworkAccess = Enabled")
-                .check("open_firewall_0_0_0_0", open_firewall, "0.0.0.0–255.255.255.255 firewall rule");
+                .check(
+                    "public_network_access",
+                    public,
+                    "publicNetworkAccess = Enabled",
+                )
+                .check(
+                    "open_firewall_0_0_0_0",
+                    open_firewall,
+                    "0.0.0.0–255.255.255.255 firewall rule",
+                );
             out.push(finding_rich(
                 ENGINE_ID,
                 &format!("Azure SQL server '{name}' is reachable from the public internet"),
@@ -1169,7 +1252,13 @@ async fn scan_sql(
     }
 }
 
-async fn scan_keyvault(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts, out: &mut Vec<Value>) {
+async fn scan_keyvault(
+    arm: &ArmClient,
+    sub: &str,
+    target: &str,
+    f: &mut AzureFacts,
+    out: &mut Vec<Value>,
+) {
     let url = format!(
         "{}/subscriptions/{}/providers/Microsoft.KeyVault/vaults?api-version=2023-07-01",
         arm.arm, sub
@@ -1182,7 +1271,11 @@ async fn scan_keyvault(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFa
         }
     };
     for v in vaults {
-        let name = v.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+        let name = v
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let props = v.get("properties").cloned().unwrap_or(Value::Null);
         let public = props
             .get("publicNetworkAccess")
@@ -1213,7 +1306,11 @@ async fn scan_keyvault(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFa
             let ev = Evidence::new()
                 .with("subscription", sub.to_string())
                 .with("key_vault", name.clone())
-                .check("public_network_access", public, "reachable from all networks")
+                .check(
+                    "public_network_access",
+                    public,
+                    "reachable from all networks",
+                )
                 .check("purge_protection", purge, "enablePurgeProtection")
                 .check("soft_delete", soft_delete, "enableSoftDelete");
             out.push(finding_rich(
@@ -1232,7 +1329,13 @@ async fn scan_keyvault(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFa
     }
 }
 
-async fn scan_rbac(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts, out: &mut Vec<Value>) {
+async fn scan_rbac(
+    arm: &ArmClient,
+    sub: &str,
+    target: &str,
+    f: &mut AzureFacts,
+    out: &mut Vec<Value>,
+) {
     let url = format!(
         "{}/subscriptions/{}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01",
         arm.arm, sub
@@ -1252,7 +1355,11 @@ async fn scan_rbac(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts,
             let ev = Evidence::new()
                 .with("subscription", sub.to_string())
                 .with("owner_or_uaa_assignments", high_priv as u64)
-                .check("standing_high_privilege", true, format!("{high_priv} Owner/UAA assignments"));
+                .check(
+                    "standing_high_privilege",
+                    true,
+                    format!("{high_priv} Owner/UAA assignments"),
+                );
             let sev = if high_priv >= 5 { "high" } else { "medium" };
             out.push(finding_rich(
                 ENGINE_ID,
@@ -1270,7 +1377,13 @@ async fn scan_rbac(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts,
     }
 }
 
-async fn scan_defender(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFacts, out: &mut Vec<Value>) {
+async fn scan_defender(
+    arm: &ArmClient,
+    sub: &str,
+    target: &str,
+    f: &mut AzureFacts,
+    out: &mut Vec<Value>,
+) {
     let url = format!(
         "{}/subscriptions/{}/providers/Microsoft.Security/pricings?api-version=2023-01-01",
         arm.arm, sub
@@ -1292,7 +1405,11 @@ async fn scan_defender(arm: &ArmClient, sub: &str, target: &str, f: &mut AzureFa
             let ev = Evidence::new()
                 .with("subscription", sub.to_string())
                 .with("free_tier_plans", json!(shown))
-                .check("defender_enabled", false, format!("{} plan(s) on Free tier", free.len()));
+                .check(
+                    "defender_enabled",
+                    false,
+                    format!("{} plan(s) on Free tier", free.len()),
+                );
             out.push(finding_rich(
                 ENGINE_ID,
                 &format!("Microsoft Defender for Cloud is not fully enabled in subscription {sub}"),
@@ -1428,7 +1545,11 @@ async fn scan_acr(
     );
     if let Ok(registries) = arm.get_all(&url, 10).await {
         for r in registries {
-            let name = r.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let name = r
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let props = r.get("properties").cloned().unwrap_or(Value::Null);
             let admin = props
                 .get("adminUserEnabled")
@@ -1442,7 +1563,13 @@ async fn scan_acr(
             let qualified = format!("{sub}:{name}");
             if admin {
                 f.acr_admin_enabled.push(qualified.clone());
-                graph.upsert(&format!("acr:{name}"), "container_registry", sub, "internal", &["admin_user"]);
+                graph.upsert(
+                    &format!("acr:{name}"),
+                    "container_registry",
+                    sub,
+                    "internal",
+                    &["admin_user"],
+                );
                 let ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("registry", name.clone())
@@ -1460,11 +1587,21 @@ async fn scan_acr(
                 ));
             }
             if public_net {
-                graph.upsert(&format!("acr:{name}"), "container_registry", sub, "internet", &["public_network"]);
+                graph.upsert(
+                    &format!("acr:{name}"),
+                    "container_registry",
+                    sub,
+                    "internet",
+                    &["public_network"],
+                );
                 let ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("registry", name.clone())
-                    .check("public_network_access", true, "publicNetworkAccess = Enabled");
+                    .check(
+                        "public_network_access",
+                        true,
+                        "publicNetworkAccess = Enabled",
+                    );
                 out.push(finding_rich(
                     ENGINE_ID,
                     &format!("ACR '{name}' accepts traffic from public networks"),
@@ -1495,9 +1632,16 @@ async fn scan_aks(
     );
     if let Ok(clusters) = arm.get_all(&url, 10).await {
         for c in clusters {
-            let name = c.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let name = c
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let props = c.get("properties").cloned().unwrap_or(Value::Null);
-            let api = props.get("apiServerAccessProfile").cloned().unwrap_or(Value::Null);
+            let api = props
+                .get("apiServerAccessProfile")
+                .cloned()
+                .unwrap_or(Value::Null);
             let private = api
                 .get("enablePrivateCluster")
                 .and_then(Value::as_bool)
@@ -1510,13 +1654,23 @@ async fn scan_aks(
             if !private && !authorized {
                 let qualified = format!("{sub}:{name}");
                 f.public_aks.push(qualified);
-                graph.upsert(&format!("aks:{name}"), "kubernetes", sub, "internet", &["public_api"]);
+                graph.upsert(
+                    &format!("aks:{name}"),
+                    "kubernetes",
+                    sub,
+                    "internet",
+                    &["public_api"],
+                );
                 graph.link("internet", &format!("aks:{name}"), "k8s_api_access");
                 let ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("cluster", name.clone())
                     .check("private_cluster", false, "enablePrivateCluster = false")
-                    .check("authorized_ip_ranges", false, "no authorizedIPRanges configured");
+                    .check(
+                        "authorized_ip_ranges",
+                        false,
+                        "no authorizedIPRanges configured",
+                    );
                 out.push(finding_rich(
                     ENGINE_ID,
                     &format!("AKS cluster '{name}' exposes a public Kubernetes API server"),
@@ -1548,13 +1702,14 @@ async fn scan_appservice(
     );
     if let Ok(sites) = arm.get_all(&url, 10).await {
         for s in sites.iter().take(80) {
-            let name = s.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let name = s
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let props = s.get("properties").cloned().unwrap_or(Value::Null);
             let cfg = props.get("siteConfig").cloned().unwrap_or(Value::Null);
-            let ftps = cfg
-                .get("ftpsState")
-                .and_then(Value::as_str)
-                .unwrap_or("");
+            let ftps = cfg.get("ftpsState").and_then(Value::as_str).unwrap_or("");
             let remote_dbg = cfg
                 .get("remoteDebuggingEnabled")
                 .and_then(Value::as_bool)
@@ -1571,7 +1726,13 @@ async fn scan_appservice(
             if risky_ftps || remote_dbg || !https_only {
                 let qualified = format!("{sub}:{name}");
                 f.risky_appservice.push(qualified);
-                graph.upsert(&format!("app:{name}"), "app_service", sub, "internet", &["web_app"]);
+                graph.upsert(
+                    &format!("app:{name}"),
+                    "app_service",
+                    sub,
+                    "internet",
+                    &["web_app"],
+                );
                 let mut ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("app_service", name.clone());
@@ -1638,7 +1799,11 @@ async fn scan_cosmos(
     );
     if let Ok(accounts) = arm.get_all(&url, 10).await {
         for a in accounts {
-            let name = a.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let name = a
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let props = a.get("properties").cloned().unwrap_or(Value::Null);
             let public = props
                 .get("publicNetworkAccess")
@@ -1648,12 +1813,22 @@ async fn scan_cosmos(
             if public {
                 let qualified = format!("{sub}:{name}");
                 f.public_cosmos.push(qualified);
-                graph.upsert(&format!("cosmos:{name}"), "cosmos_db", sub, "internet", &["public_network"]);
+                graph.upsert(
+                    &format!("cosmos:{name}"),
+                    "cosmos_db",
+                    sub,
+                    "internet",
+                    &["public_network"],
+                );
                 graph.link("internet", &format!("cosmos:{name}"), "nosql_access");
                 let ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("cosmos_account", name.clone())
-                    .check("public_network_access", true, "publicNetworkAccess = Enabled");
+                    .check(
+                        "public_network_access",
+                        true,
+                        "publicNetworkAccess = Enabled",
+                    );
                 out.push(finding_rich(
                     ENGINE_ID,
                     &format!("Cosmos DB '{name}' allows public network access"),
@@ -1684,7 +1859,11 @@ async fn scan_compute(
     );
     if let Ok(disks) = arm.get_all(&url, 10).await {
         for d in disks.iter().take(100) {
-            let name = d.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+            let name = d
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             let props = d.get("properties").cloned().unwrap_or(Value::Null);
             let enc = props.get("encryption").cloned().unwrap_or(Value::Null);
             let enc_type = enc.get("type").and_then(Value::as_str).unwrap_or("");
@@ -1692,11 +1871,21 @@ async fn scan_compute(
             if !encrypted {
                 let qualified = format!("{sub}:{name}");
                 f.unencrypted_disks.push(qualified);
-                graph.upsert(&format!("disk:{name}"), "managed_disk", sub, "internal", &["no_encryption"]);
+                graph.upsert(
+                    &format!("disk:{name}"),
+                    "managed_disk",
+                    sub,
+                    "internal",
+                    &["no_encryption"],
+                );
                 let ev = Evidence::new()
                     .with("subscription", sub.to_string())
                     .with("disk", name.clone())
-                    .check("encryption_at_rest", false, format!("encryption.type = {enc_type}"));
+                    .check(
+                        "encryption_at_rest",
+                        false,
+                        format!("encryption.type = {enc_type}"),
+                    );
                 out.push(finding_rich(
                     ENGINE_ID,
                     &format!("Managed disk '{name}' lacks encryption at rest"),
@@ -1766,7 +1955,11 @@ async fn run_posture_scan(
                      (or management-group) scope, then re-run.",
                     target,
                     1.0,
-                    Evidence::new().check("subscription_enumeration", false, "no subscriptions visible"),
+                    Evidence::new().check(
+                        "subscription_enumeration",
+                        false,
+                        "no subscriptions visible",
+                    ),
                 ));
                 return result;
             }
@@ -1784,7 +1977,13 @@ async fn run_posture_scan(
     let posture_scoring = cfg.bool_or("posture_scoring", true);
     let arg_max_rows = cfg.usize_or("arg_max_rows", 200).clamp(10, 2000);
     let mut graph = SecurityGraph::default();
-    graph.upsert("internet", "attack_surface", "global", "internet", &["ingress"]);
+    graph.upsert(
+        "internet",
+        "attack_surface",
+        "global",
+        "internet",
+        &["ingress"],
+    );
     let mut sensitive = cfg.ports("sensitive_ports");
     if sensitive.is_empty() {
         sensitive = SENSITIVE_PORTS.iter().map(|(p, _, _)| *p).collect();
@@ -1794,29 +1993,61 @@ async fn run_posture_scan(
     if run("arg") {
         let _ = tokio::time::timeout(
             budget,
-            scan_arg_bulk(&arm, &subs, target, &mut facts, &mut findings, &mut graph, arg_max_rows),
+            scan_arg_bulk(
+                &arm,
+                &subs,
+                target,
+                &mut facts,
+                &mut findings,
+                &mut graph,
+                arg_max_rows,
+            ),
         )
         .await;
     }
 
     for sub in &subs {
         if run("storage") {
-            let _ = tokio::time::timeout(budget, scan_storage(&arm, sub, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_storage(&arm, sub, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("network") {
-            let _ = tokio::time::timeout(budget, scan_network(&arm, sub, &sensitive, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_network(&arm, sub, &sensitive, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("sql") {
-            let _ = tokio::time::timeout(budget, scan_sql(&arm, sub, aggressive, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_sql(&arm, sub, aggressive, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("keyvault") {
-            let _ = tokio::time::timeout(budget, scan_keyvault(&arm, sub, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_keyvault(&arm, sub, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("rbac") {
-            let _ = tokio::time::timeout(budget, scan_rbac(&arm, sub, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_rbac(&arm, sub, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("defender") && aggressive {
-            let _ = tokio::time::timeout(budget, scan_defender(&arm, sub, target, &mut facts, &mut findings)).await;
+            let _ = tokio::time::timeout(
+                budget,
+                scan_defender(&arm, sub, target, &mut facts, &mut findings),
+            )
+            .await;
         }
         if run("acr") {
             let _ = tokio::time::timeout(
@@ -1968,8 +2199,9 @@ async fn scan_azure_subdomain_takeover(
         let cnames = dns_cname(&name).await;
         for cn in cnames {
             let cl = cn.trim_end_matches('.').to_ascii_lowercase();
-            if let Some((suffix, service)) =
-                AZURE_TAKEOVER_SUFFIXES.iter().find(|(suf, _)| cl.ends_with(*suf))
+            if let Some((suffix, service)) = AZURE_TAKEOVER_SUFFIXES
+                .iter()
+                .find(|(suf, _)| cl.ends_with(*suf))
             {
                 let target_host = cn.trim_end_matches('.');
                 let resolves = !dns_a(target_host).await.is_empty();
@@ -2025,14 +2257,14 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
         DEFAULT_LOGIN, host
     );
     if let Some(p) = http_get(&client, &oidc).await {
-        if p.status == 200 && (p.body.contains("authorization_endpoint") || p.body.contains("issuer")) {
-            let tenant = serde_json::from_str::<Value>(&p.body)
-                .ok()
-                .and_then(|v| {
-                    v.get("issuer")
-                        .and_then(Value::as_str)
-                        .and_then(|iss| iss.split('/').nth(3).map(str::to_string))
-                });
+        if p.status == 200
+            && (p.body.contains("authorization_endpoint") || p.body.contains("issuer"))
+        {
+            let tenant = serde_json::from_str::<Value>(&p.body).ok().and_then(|v| {
+                v.get("issuer")
+                    .and_then(Value::as_str)
+                    .and_then(|iss| iss.split('/').nth(3).map(str::to_string))
+            });
             let ev = Evidence::new()
                 .with("domain", host.clone())
                 .with("tenant_id", tenant.clone().unwrap_or_default())
@@ -2055,7 +2287,10 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
     // 2. Public Blob container enumeration.
     let mut accounts: Vec<String> = vec![domain_label.clone(), host.replace('.', "")];
     accounts.extend(cfg.string_list("storage_accounts"));
-    let suffixes = cfg.string_list_or("account_suffixes", &["", "prod", "dev", "backup", "data", "storage", "assets"]);
+    let suffixes = cfg.string_list_or(
+        "account_suffixes",
+        &["", "prod", "dev", "backup", "data", "storage", "assets"],
+    );
     let mut candidates: Vec<String> = Vec::new();
     for a in &accounts {
         let a = a.to_ascii_lowercase();
@@ -2101,7 +2336,11 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
                         .with("storage_account", acct.clone())
                         .with("container", c.clone())
                         .with("url", u.clone())
-                        .check("public_container_listing", true, "EnumerationResults returned (HTTP 200)");
+                        .check(
+                            "public_container_listing",
+                            true,
+                            "EnumerationResults returned (HTTP 200)",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("Public Azure Blob container '{c}' on account '{acct}'"),
@@ -2131,7 +2370,11 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
                         .with("url", p.final_url.clone())
                         .with("sas_or_connection_string", sas)
                         .with("secret_types", json!(secrets))
-                        .check("azure_secret_material", true, json!({ "sas": sas, "secrets": secrets }));
+                        .check(
+                            "azure_secret_material",
+                            true,
+                            json!({ "sas": sas, "secrets": secrets }),
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("Azure credential / SAS material exposed at {path}"),
@@ -2151,8 +2394,12 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
 
     // 4. Azure edge / service fingerprint.
     if let Some(p) = http_get(&client, &base).await {
-        let server = header_value(&p.headers, "server").unwrap_or("").to_ascii_lowercase();
-        let xpb = header_value(&p.headers, "x-powered-by").unwrap_or("").to_ascii_lowercase();
+        let server = header_value(&p.headers, "server")
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let xpb = header_value(&p.headers, "x-powered-by")
+            .unwrap_or("")
+            .to_ascii_lowercase();
         if server.contains("microsoft-iis")
             || server.contains("windows-azure")
             || header_value(&p.headers, "x-azure-ref").is_some()
@@ -2161,7 +2408,11 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
             let ev = Evidence::new()
                 .with("url", p.final_url.clone())
                 .with("server", server.clone())
-                .check("azure_edge_headers", true, "Azure / IIS / Front Door fingerprint");
+                .check(
+                    "azure_edge_headers",
+                    true,
+                    "Azure / IIS / Front Door fingerprint",
+                );
             findings.push(finding_rich(
                 ENGINE_ID,
                 "Azure-hosted surface detected",
@@ -2220,8 +2471,12 @@ pub async fn run_azure_attack_result_ctx(target: &str, ctx: &EngineRunContext) -
     }
     let cfg = ArsenalConfig::from_ctx(ctx);
 
-    let tenant = cfg.string("tenant_id").or_else(|| cfg.string("azure_tenant_id"));
-    let client_id = cfg.string("client_id").or_else(|| cfg.string("azure_client_id"));
+    let tenant = cfg
+        .string("tenant_id")
+        .or_else(|| cfg.string("azure_tenant_id"));
+    let client_id = cfg
+        .string("client_id")
+        .or_else(|| cfg.string("azure_client_id"));
     let secret = cfg
         .string("client_secret")
         .or_else(|| cfg.string("azure_client_secret"));
@@ -2229,7 +2484,10 @@ pub async fn run_azure_attack_result_ctx(target: &str, ctx: &EngineRunContext) -
     if let (Some(tenant), Some(client_id), Some(secret)) = (tenant, client_id, secret) {
         let login = cfg.string_or("login_endpoint", DEFAULT_LOGIN);
         let arm_endpoint = cfg.string_or("arm_endpoint", DEFAULT_ARM);
-        let scope = cfg.string_or("scope", &format!("{}/.default", arm_endpoint.trim_end_matches('/')));
+        let scope = cfg.string_or(
+            "scope",
+            &format!("{}/.default", arm_endpoint.trim_end_matches('/')),
+        );
         let http = http_client().await;
         match acquire_token(&http, &login, &tenant, &client_id, &secret, &scope).await {
             Ok(token) => {
@@ -2322,9 +2580,12 @@ mod tests {
 
     #[test]
     fn high_priv_role_detection() {
-        let owner = format!("/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/{ROLE_OWNER}");
-        let contributor =
-            format!("/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/{ROLE_CONTRIBUTOR}");
+        let owner = format!(
+            "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/{ROLE_OWNER}"
+        );
+        let contributor = format!(
+            "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/{ROLE_CONTRIBUTOR}"
+        );
         assert!(is_high_priv_role(&owner));
         assert!(!is_high_priv_role(&contributor));
     }
@@ -2341,7 +2602,9 @@ mod tests {
             }
         });
         let props = rule.get("properties").unwrap();
-        assert!(rule_source_prefixes(props).iter().any(|p| is_internet_source(p)));
+        assert!(rule_source_prefixes(props)
+            .iter()
+            .any(|p| is_internet_source(p)));
         let toks = rule_port_tokens(props);
         let mut ports = sensitive_ports_for_rule(&toks, "Tcp", &[22, 3389, 1433]);
         ports.sort_unstable();
@@ -2394,10 +2657,10 @@ mod tests {
             ..AzureFacts::default()
         };
         let paths = correlate_attack_paths(&facts, "https://example.com");
-        assert!(paths.iter().any(|p| p
-            .get("toxic_combination")
-            .and_then(Value::as_str)
-            == Some("public_aks_acr_admin")));
+        assert!(paths
+            .iter()
+            .any(|p| p.get("toxic_combination").and_then(Value::as_str)
+                == Some("public_aks_acr_admin")));
     }
 
     #[tokio::test]

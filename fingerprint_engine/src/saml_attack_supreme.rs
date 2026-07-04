@@ -164,7 +164,11 @@ pub async fn probe_ws_federation(
     findings: &mut Vec<Value>,
 ) {
     for path in WS_FED_PATHS {
-        let url = format!("{}/{}", base.trim_end_matches('/'), path.trim_start_matches('/'));
+        let url = format!(
+            "{}/{}",
+            base.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        );
         if let Some(p) = http_get(client, &url).await {
             let bl = p.body.to_ascii_lowercase();
             if bl.contains("federationmetadata")
@@ -207,7 +211,8 @@ pub struct SamlCategoryScores {
 
 impl SamlCategoryScores {
     fn from_signals(sig: &Signals) -> Self {
-        let penalize = |gaps: usize, w: f64| -> f64 { (100.0 - (gaps.min(4) as f64) * w).clamp(0.0, 100.0) };
+        let penalize =
+            |gaps: usize, w: f64| -> f64 { (100.0 - (gaps.min(4) as f64) * w).clamp(0.0, 100.0) };
         Self {
             signing_trust: penalize(
                 (sig.weak_sha1 as usize)
@@ -230,7 +235,11 @@ impl SamlCategoryScores {
                 (sig.http_redirect_binding as usize) + sig.http_acs_urls.len().min(2),
                 22.0,
             ),
-            redirect_relay: if sig.open_redirect.is_some() { 30.0 } else { 100.0 },
+            redirect_relay: if sig.open_redirect.is_some() {
+                30.0
+            } else {
+                100.0
+            },
             parser_disclosure: if sig.error_disclosure { 40.0 } else { 100.0 },
             slo_surface: if sig.slo_exposed { 75.0 } else { 100.0 },
             xsw_surface: if sig.xsw_preconditions > 2 {
@@ -344,7 +353,9 @@ pub fn emit_toxic_headline(target: &str, sig: &Signals, findings: &mut Vec<Value
         combos.push("multi-ACS XSW surface + HTTP-Redirect binding ⇒ assertion smuggling chain");
     }
     if sig.authn_requests_unsigned && sig.unsigned_assertions {
-        combos.push("unsigned AuthnRequests + unsigned assertions ⇒ bidirectional SAML trust collapse");
+        combos.push(
+            "unsigned AuthnRequests + unsigned assertions ⇒ bidirectional SAML trust collapse",
+        );
     }
     if combos.is_empty() {
         return;
@@ -391,31 +402,81 @@ pub fn emit_remediation_roadmap(target: &str, sig: &Signals, findings: &mut Vec<
     };
 
     if sig.unsigned_assertions {
-        push("P0", "Require signed assertions", "Set WantAssertionsSigned=true on all SPs; reject unsigned SAMLResponse at ACS", "hours");
+        push(
+            "P0",
+            "Require signed assertions",
+            "Set WantAssertionsSigned=true on all SPs; reject unsigned SAMLResponse at ACS",
+            "hours",
+        );
     }
     if sig.weak_sha1 {
-        push("P0", "Migrate off SHA-1", "Reissue metadata + signing certs with rsa-sha256; disable SHA-1 at XMLSec/ADFS", "days");
+        push(
+            "P0",
+            "Migrate off SHA-1",
+            "Reissue metadata + signing certs with rsa-sha256; disable SHA-1 at XMLSec/ADFS",
+            "days",
+        );
     }
     if sig.expired_cert || sig.weak_key_cert {
-        push("P0", "Rotate SAML signing certificates", "Deploy 4096-bit RSA or P-384 ECDSA keys; automate metadata refresh", "days");
+        push(
+            "P0",
+            "Rotate SAML signing certificates",
+            "Deploy 4096-bit RSA or P-384 ECDSA keys; automate metadata refresh",
+            "days",
+        );
     }
     if sig.open_redirect.is_some() {
-        push("P0", "Validate RelayState allow-list", "Reject RelayState not matching registered SP redirect URIs", "hours");
+        push(
+            "P0",
+            "Validate RelayState allow-list",
+            "Reject RelayState not matching registered SP redirect URIs",
+            "hours",
+        );
     }
     if !sig.http_acs_urls.is_empty() {
-        push("P0", "HTTPS-only ACS", "Remove http:// ACS URLs from metadata; enforce TLS 1.2+ at load balancer", "hours");
+        push(
+            "P0",
+            "HTTPS-only ACS",
+            "Remove http:// ACS URLs from metadata; enforce TLS 1.2+ at load balancer",
+            "hours",
+        );
     }
     if sig.xsw_preconditions > 2 {
-        push("P1", "Pin ACS + signature placement", "Single ACS per SP; validate signature covers Assertion element only", "days");
+        push(
+            "P1",
+            "Pin ACS + signature placement",
+            "Single ACS per SP; validate signature covers Assertion element only",
+            "days",
+        );
     }
     if sig.authn_requests_unsigned {
-        push("P1", "Require signed AuthnRequests", "AuthnRequestsSigned=true on IdP metadata", "days");
+        push(
+            "P1",
+            "Require signed AuthnRequests",
+            "AuthnRequestsSigned=true on IdP metadata",
+            "days",
+        );
     }
     if sig.error_disclosure {
-        push("P1", "Suppress SAML parser errors", "Return generic auth failure; log details server-side only", "hours");
+        push(
+            "P1",
+            "Suppress SAML parser errors",
+            "Return generic auth failure; log details server-side only",
+            "hours",
+        );
     }
-    push("P2", "Monitor Event 4769 / SAML audit logs", "Alert on anomalous assertion issuers and SLO volume", "days");
-    push("P2", "Deploy honeypot SAML SP", "Detect forged assertion attempts against canary ACS", "days");
+    push(
+        "P2",
+        "Monitor Event 4769 / SAML audit logs",
+        "Alert on anomalous assertion issuers and SLO volume",
+        "days",
+    );
+    push(
+        "P2",
+        "Deploy honeypot SAML SP",
+        "Detect forged assertion attempts against canary ACS",
+        "days",
+    );
 
     if steps.is_empty() {
         return;
@@ -442,12 +503,30 @@ pub fn emit_remediation_roadmap(target: &str, sig: &Signals, findings: &mut Vec<
 
 pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     let caps = [
-        ("saml_response_replay", "Live SAMLResponse replay against ACS with signed assertion capture"),
-        ("xsw_variant_testing", "Authorized XML Signature Wrapping variant lab (XSW #1–#8)"),
-        ("adfs_token_signing_audit", "On-DC ADFS token-signing + decryption cert DPAPI audit"),
-        ("bloodhound_federation_acl", "Federation trust ACL graph (SP ↔ IdP) from internal AD"),
-        ("saml_assertion_decrypt", "Decrypt encrypted assertions with SP private key (host agent)"),
-        ("golden_saml_hunt", "KRBTGT-adjacent DCSync + ADFS farm persistence indicators"),
+        (
+            "saml_response_replay",
+            "Live SAMLResponse replay against ACS with signed assertion capture",
+        ),
+        (
+            "xsw_variant_testing",
+            "Authorized XML Signature Wrapping variant lab (XSW #1–#8)",
+        ),
+        (
+            "adfs_token_signing_audit",
+            "On-DC ADFS token-signing + decryption cert DPAPI audit",
+        ),
+        (
+            "bloodhound_federation_acl",
+            "Federation trust ACL graph (SP ↔ IdP) from internal AD",
+        ),
+        (
+            "saml_assertion_decrypt",
+            "Decrypt encrypted assertions with SP private key (host agent)",
+        ),
+        (
+            "golden_saml_hunt",
+            "KRBTGT-adjacent DCSync + ADFS farm persistence indicators",
+        ),
     ];
     for (cap, desc) in caps {
         let mut f = finding_rich(
@@ -471,7 +550,11 @@ pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
 
 // ─── Security graph ──────────────────────────────────────────────────────────────
 
-pub fn build_security_graph(target: &str, sig: &Signals, host: &str) -> (Vec<GraphNode>, Vec<GraphEdge>) {
+pub fn build_security_graph(
+    target: &str,
+    sig: &Signals,
+    host: &str,
+) -> (Vec<GraphNode>, Vec<GraphEdge>) {
     let score = sig.score();
     let mut nodes = vec![GraphNode {
         id: "root".to_string(),
@@ -509,7 +592,11 @@ pub fn build_security_graph(target: &str, sig: &Signals, host: &str) -> (Vec<Gra
         add("idp_meta", "IdP metadata exposed", "IDP_METADATA");
     }
     if sig.unsigned_assertions {
-        add("unsigned", "Unsigned assertions accepted", "UNSIGNED_ASSERTION");
+        add(
+            "unsigned",
+            "Unsigned assertions accepted",
+            "UNSIGNED_ASSERTION",
+        );
     }
     if sig.weak_sha1 || sig.weak_key_cert {
         add("weak_sign", "Weak signing trust", "WEAK_SIGNING");

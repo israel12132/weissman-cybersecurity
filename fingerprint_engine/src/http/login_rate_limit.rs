@@ -101,46 +101,71 @@ pub async fn login_rate_limit_middleware(
 
     if super::rate_limit_redis::is_enabled() {
         let redis_count = match kind {
-            UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip(&ip).await,
-            UnauthPostKind::Enroll => super::rate_limit_redis::incr_enroll_ip(&ip).await,
+            UnauthPostKind::Login => super::rate_limit_redis::incr_login_ip_strict(&ip).await,
+            UnauthPostKind::Enroll => super::rate_limit_redis::incr_enroll_ip_strict(&ip).await,
         };
-        if let Some(count) = redis_count {
-            let max = limit.get() as u64;
-            if count > max {
-                rate_limit_metrics::record_login_denied(&ip, &path);
-                let retry_after_secs = 60u64;
-                tracing::warn!(
+        match redis_count {
+            super::rate_limit_redis::StrictOp::Ok(count) => {
+                let max = limit.get() as u64;
+                if count > max {
+                    rate_limit_metrics::record_login_denied(&ip, &path);
+                    let retry_after_secs = 60u64;
+                    tracing::warn!(
+                        target: "rate_limit",
+                        client_ip = %ip,
+                        path = %path,
+                        count,
+                        limit = max,
+                        kind = label,
+                        "unauthenticated POST rate limit exceeded (redis)"
+                    );
+                    let mut resp = (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        axum::Json(serde_json::json!({
+                            "ok": false,
+                            "code": "rate_limited",
+                            "detail": format!(
+                                "{label} rate limit hit ({burst} burst / {limit} per minute per IP). Retry in {retry_after_secs}s."
+                            ),
+                            "retry_after_seconds": retry_after_secs,
+                            "limit_per_minute": limit.get(),
+                            "burst": burst.get(),
+                            "source": "redis",
+                        })),
+                    )
+                        .into_response();
+                    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string())
+                    {
+                        resp.headers_mut().insert("Retry-After", v);
+                    }
+                    return resp;
+                }
+                rate_limit_metrics::record_login_allowed(&ip);
+                return next.run(request).await;
+            }
+            super::rate_limit_redis::StrictOp::Unavailable
+                if super::rate_limit_redis::distributed_state_required() =>
+            {
+                tracing::error!(
                     target: "rate_limit",
                     client_ip = %ip,
                     path = %path,
-                    count,
-                    limit = max,
                     kind = label,
-                    "unauthenticated POST rate limit exceeded (redis)"
+                    "Redis unavailable for required distributed rate limit (fail-closed)"
                 );
-                let mut resp = (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    axum::Json(serde_json::json!({
-                        "ok": false,
-                        "code": "rate_limited",
-                        "detail": format!(
-                            "{label} rate limit hit ({burst} burst / {limit} per minute per IP). Retry in {retry_after_secs}s."
-                        ),
-                        "retry_after_seconds": retry_after_secs,
-                        "limit_per_minute": limit.get(),
-                        "burst": burst.get(),
-                        "source": "redis",
-                    })),
-                )
-                    .into_response();
-                if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
-                    resp.headers_mut().insert("Retry-After", v);
-                }
-                return resp;
+                return super::rate_limit_redis::distributed_store_unavailable_response();
             }
-            rate_limit_metrics::record_login_allowed(&ip);
-            return next.run(request).await;
+            super::rate_limit_redis::StrictOp::Unavailable => {}
         }
+    } else if super::rate_limit_redis::distributed_state_required() {
+        tracing::error!(
+            target: "rate_limit",
+            client_ip = %ip,
+            path = %path,
+            kind = label,
+            "REDIS_URL required but Redis rate limiter not initialized (fail-closed)"
+        );
+        return super::rate_limit_redis::distributed_store_unavailable_response();
     }
 
     if let Err(neg) = limiter.check_key(&ip) {

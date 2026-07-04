@@ -34,7 +34,12 @@ pub fn parse(p: &Value) -> Vec<Waiver> {
                         files: None,
                     });
                 }
-                let id = item.get("policy_id").or_else(|| item.get("id"))?.as_str()?.trim().to_string();
+                let id = item
+                    .get("policy_id")
+                    .or_else(|| item.get("id"))?
+                    .as_str()?
+                    .trim()
+                    .to_string();
                 if id.is_empty() {
                     return None;
                 }
@@ -43,19 +48,44 @@ pub fn parse(p: &Value) -> Vec<Waiver> {
                     .and_then(Value::as_str)
                     .unwrap_or("approved exception")
                     .to_string();
-                let expiry = item.get("expiry").and_then(Value::as_str).map(str::to_string);
+                let expiry = item
+                    .get("expiry")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
                 let files = item.get("files").and_then(|f| match f {
                     Value::Array(a) => {
-                        let s: HashSet<String> = a.iter().filter_map(|v| v.as_str()).map(str::to_string).collect();
-                        if s.is_empty() { None } else { Some(s) }
+                        let s: HashSet<String> = a
+                            .iter()
+                            .filter_map(|v| v.as_str())
+                            .map(str::to_string)
+                            .collect();
+                        if s.is_empty() {
+                            None
+                        } else {
+                            Some(s)
+                        }
                     }
                     Value::String(s) => {
-                        let set: HashSet<String> = s.split([',', '\n']).map(str::trim).filter(|x| !x.is_empty()).map(str::to_string).collect();
-                        if set.is_empty() { None } else { Some(set) }
+                        let set: HashSet<String> = s
+                            .split([',', '\n'])
+                            .map(str::trim)
+                            .filter(|x| !x.is_empty())
+                            .map(str::to_string)
+                            .collect();
+                        if set.is_empty() {
+                            None
+                        } else {
+                            Some(set)
+                        }
                     }
                     _ => None,
                 });
-                Some(Waiver { policy_id: id, reason, expiry, files })
+                Some(Waiver {
+                    policy_id: id,
+                    reason,
+                    expiry,
+                    files,
+                })
             })
             .collect(),
         Value::String(s) => s
@@ -114,13 +144,15 @@ pub fn apply(findings: Vec<Finding>, waivers: &[Waiver]) -> (Vec<Finding>, Vec<V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::iac_misconfig_engine::policies::EXPOSED_ENV;
     use crate::iac_misconfig_engine::model::Finding;
+    use crate::iac_misconfig_engine::policies::EXPOSED_ENV;
 
     #[test]
     fn waives_matching_policy() {
         let f = Finding::new(EXPOSED_ENV, "host", ".env");
-        let waivers = parse(&json!({"policy_waivers": [{"policy_id": "WZ-EXP-002", "reason": "legacy staging"}]}));
+        let waivers = parse(
+            &json!({"policy_waivers": [{"policy_id": "WZ-EXP-002", "reason": "legacy staging"}]}),
+        );
         let (active, waived) = apply(vec![f], &waivers);
         assert!(active.is_empty());
         assert_eq!(waived.len(), 1);

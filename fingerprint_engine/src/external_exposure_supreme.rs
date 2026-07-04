@@ -253,9 +253,7 @@ pub async fn run_external_exposure_supreme_result(
 }
 
 pub async fn run_external_exposure_supreme(target: &str) {
-    print_result(
-        run_external_exposure_supreme_result(target, &EngineRunContext::default()).await,
-    );
+    print_result(run_external_exposure_supreme_result(target, &EngineRunContext::default()).await);
 }
 
 #[cfg(test)]
@@ -271,15 +269,18 @@ mod tests {
 
     #[test]
     fn toxic_synthesis_detects_combo() {
-        let findings = vec![json!({
-            "title": "DMARC policy p=none",
-            "description": "domain is spoofable",
-            "severity": "high"
-        }), json!({
-            "title": "Public S3 bucket listable",
-            "description": "anonymous list allowed",
-            "severity": "critical"
-        })];
+        let findings = vec![
+            json!({
+                "title": "DMARC policy p=none",
+                "description": "domain is spoofable",
+                "severity": "high"
+            }),
+            json!({
+                "title": "Public S3 bucket listable",
+                "description": "anonymous list allowed",
+                "severity": "critical"
+            }),
+        ];
         assert!(has_signal(&findings, &["dmarc", "spoof"]));
         assert!(has_signal(&findings, &["public", "s3"]));
     }

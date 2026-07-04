@@ -8,8 +8,10 @@ use serde_json::json;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-const MAX_FAILURES: u32 = 10;
-const LOCKOUT_DURATION: Duration = Duration::from_secs(15 * 60);
+/// Shared with Redis distributed lockout (`rate_limit_redis.rs`).
+pub const LOCKOUT_MAX_FAILURES: u64 = 10;
+pub const LOCKOUT_SECS: u64 = 15 * 60;
+const LOCKOUT_DURATION: Duration = Duration::from_secs(LOCKOUT_SECS);
 
 /// POST paths subject to per-email lockout (shared with [`super::login_rate_limit`]).
 pub const ACCOUNT_LOCKOUT_PATHS: &[&str] = &["/api/login", "/api/auth/mfa/verify"];
@@ -61,7 +63,7 @@ fn record_failure_mem(tenant_id: i64, email: &str) {
     let cell = store().entry(k).or_default();
     let mut entry = cell.lock().expect("login lockout lock");
     entry.failures = entry.failures.saturating_add(1);
-    if entry.failures >= MAX_FAILURES {
+    if u64::from(entry.failures) >= LOCKOUT_MAX_FAILURES {
         entry.locked_until = Some(Instant::now() + LOCKOUT_DURATION);
     }
 }
@@ -72,13 +74,44 @@ fn clear_failures_mem(tenant_id: i64, email: &str) {
 
 // ── Public API: distributed via Redis when REDIS_URL is set, else in-memory ────
 
+/// Outcome of a lockout probe (fail-closed when Redis is required but down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockoutStatus {
+    Allowed,
+    Locked(u64),
+    DistributedStoreUnavailable,
+}
+
+/// Full lockout status including Redis outage detection.
+pub async fn check_lockout_status(tenant_id: i64, email: &str) -> LockoutStatus {
+    if crate::http::rate_limit_redis::is_enabled() {
+        match crate::http::rate_limit_redis::lockout_check_strict(tenant_id, email).await {
+            crate::http::rate_limit_redis::StrictOp::Ok(Some(secs)) => LockoutStatus::Locked(secs),
+            crate::http::rate_limit_redis::StrictOp::Ok(None) => LockoutStatus::Allowed,
+            crate::http::rate_limit_redis::StrictOp::Unavailable => {
+                if crate::http::rate_limit_redis::distributed_state_required() {
+                    LockoutStatus::DistributedStoreUnavailable
+                } else {
+                    LockoutStatus::Allowed
+                }
+            }
+        }
+    } else if crate::http::rate_limit_redis::distributed_state_required() {
+        LockoutStatus::DistributedStoreUnavailable
+    } else if let Some(secs) = check_lockout_mem(tenant_id, email) {
+        LockoutStatus::Locked(secs)
+    } else {
+        LockoutStatus::Allowed
+    }
+}
+
 /// Returns seconds until retry when locked, or `None` if login may proceed.
 /// Distributed across replicas via Redis when `REDIS_URL` is configured.
 pub async fn check_lockout(tenant_id: i64, email: &str) -> Option<u64> {
-    if crate::http::rate_limit_redis::is_enabled() {
-        return crate::http::rate_limit_redis::lockout_check(tenant_id, email).await;
+    match check_lockout_status(tenant_id, email).await {
+        LockoutStatus::Locked(secs) => Some(secs),
+        LockoutStatus::Allowed | LockoutStatus::DistributedStoreUnavailable => None,
     }
-    check_lockout_mem(tenant_id, email)
 }
 
 pub async fn record_failure(tenant_id: i64, email: &str) {
@@ -129,7 +162,7 @@ mod tests {
         let email = "lockout-test@example.com";
         // In-memory path is exercised directly (no REDIS_URL in unit tests).
         clear_failures_mem(tenant, email);
-        for _ in 0..MAX_FAILURES {
+        for _ in 0..LOCKOUT_MAX_FAILURES as u32 {
             record_failure_mem(tenant, email);
         }
         let retry = check_lockout_mem(tenant, email);

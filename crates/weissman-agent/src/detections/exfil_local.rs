@@ -7,7 +7,13 @@ use serde_json::{json, Map, Value};
 pub async fn run_acoustic(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = Vec::new();
     let audio_procs = any_process_matches(&[
-        "pulseaudio", "pipewire", "arecord", "ffmpeg", "sox", "audacity", "parec",
+        "pulseaudio",
+        "pipewire",
+        "arecord",
+        "ffmpeg",
+        "sox",
+        "audacity",
+        "parec",
     ]);
     let mut devices: Vec<String> = Vec::new();
 
@@ -64,13 +70,20 @@ pub async fn run_em_exfil(engine: &str) -> anyhow::Result<Vec<Value>> {
 pub async fn run_optical(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = Vec::new();
     let capture = any_process_matches(&[
-        "ffmpeg", "obs", "screencapture", "snippingtool", "greenshot", "flameshot", "scrot",
+        "ffmpeg",
+        "obs",
+        "screencapture",
+        "snippingtool",
+        "greenshot",
+        "flameshot",
+        "scrot",
     ]);
     let mut cameras: Vec<String> = Vec::new();
 
     #[cfg(target_os = "linux")]
     {
-        cameras = dir_entry_names("/dev").await
+        cameras = dir_entry_names("/dev")
+            .await
             .into_iter()
             .filter(|n| n.starts_with("video"))
             .collect();
@@ -93,7 +106,12 @@ pub async fn run_optical(engine: &str) -> anyhow::Result<Vec<Value>> {
 pub async fn run_keyboard_acoustic(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings = run_acoustic(engine).await?;
     let keyloggers = any_process_matches(&[
-        "keylogger", "logkeys", "lkl", "kidlogger", "refog", "ardamax",
+        "keylogger",
+        "logkeys",
+        "lkl",
+        "kidlogger",
+        "refog",
+        "ardamax",
     ]);
     if !keyloggers.is_empty() {
         let mut extras = Map::new();

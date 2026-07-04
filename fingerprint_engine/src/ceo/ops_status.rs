@@ -147,6 +147,7 @@ pub async fn build_ceo_telemetry_json(
         "distinct_worker_ids_on_tenant_jobs": distinct_workers,
         "queue_global_pending": global_pending,
         "queue_global_running": global_running,
+        "fleet_shaping": crate::fleet_shaping::telemetry_snapshot(tenant_id).await,
         "note": "distinct_worker_ids counts unique worker_id strings on running rows for this tenant (proxy for parallel worker processes claiming jobs).",
     })
 }

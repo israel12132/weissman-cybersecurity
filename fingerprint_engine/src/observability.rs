@@ -287,6 +287,24 @@ pub fn spawn_pool_metrics_loop(
                 metrics::gauge!("weissman_async_jobs_pending").set(n as f64);
             }
 
+            if let Ok(registered) =
+                sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM endpoint_agents")
+                    .fetch_one(app_pool.as_ref())
+                    .await
+            {
+                metrics::gauge!("weissman_agents_registered").set(registered as f64);
+                if let Ok(online) = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE last_seen_at > now() - interval '90 seconds'",
+                )
+                .fetch_one(app_pool.as_ref())
+                .await
+                {
+                    metrics::gauge!("weissman_agents_online").set(online as f64);
+                    metrics::gauge!("weissman_agents_stale")
+                        .set((registered - online).max(0) as f64);
+                }
+            }
+
             metrics::gauge!("weissman_orchestrator_active_tenant_cycles")
                 .set(crate::orchestrator::active_tenant_scan_count() as f64);
             metrics::gauge!("weissman_scanning_flag_active").set(
@@ -420,12 +438,12 @@ fn emit_critical_edge_region_alert(
 }
 
 pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
-    let Ok(token) = std::env::var("WEISSMAN_METRICS_TOKEN") else {
-        return true;
-    };
-    let token = token.trim();
-    if token.is_empty() {
-        return true;
+    let token = std::env::var("WEISSMAN_METRICS_TOKEN")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if token.len() < 32 {
+        return false;
     }
     if let Some(auth) = headers
         .get(header::AUTHORIZATION)

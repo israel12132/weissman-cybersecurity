@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'
@@ -8,12 +8,42 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { SkeletonBar } from '../components/ui/Skeleton'
+import { apiFetch } from '../lib/apiBase'
 
 export default function CeoCommandCenter() {
   const { t } = useTranslation()
   const [jobId, setJobId] = useState('')
   const [booting, setBooting] = useState(true)
   const [sectionSearch, setSectionSearch] = useState('')
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const [telemetry, snapshot, buffer, vault] = await Promise.all([
+        apiFetch('/api/ceo/telemetry').then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/api/ceo/god-mode/snapshot').then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/api/ceo/sovereign/buffer?limit=200').then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/api/ceo/vault?limit=100&offset=0').then((r) => (r.ok ? r.json() : null)),
+      ])
+      const bundle = {
+        exported_at: new Date().toISOString(),
+        telemetry,
+        god_mode_snapshot: snapshot,
+        sovereign_buffer: buffer,
+        vaccine_vault: vault,
+      }
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-ceo-export-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }, [])
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => setBooting(false))
@@ -43,8 +73,8 @@ export default function CeoCommandCenter() {
           </div>
           <ShellScanActions
             onRefresh={() => window.location.reload()}
-            onExport={() => {}}
-            exportDisabled
+            onExport={handleExport}
+            exportDisabled={exporting}
           />
         </div>
       </header>
