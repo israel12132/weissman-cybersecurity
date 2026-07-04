@@ -1,0 +1,1114 @@
+{
+  "version": 1,
+  "manifests": [
+    {
+      "engine_id": "asm",
+      "route_paths": [
+        "/attack-surface"
+      ],
+      "evidence_i18n_key": "pages.attackSurfaceManagement.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "cache_poisoning",
+      "route_paths": [
+        "/cache-posture"
+      ],
+      "evidence_i18n_key": "pages.webCachePosture.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "cicd_pipeline",
+      "route_paths": [
+        "/cicd-security"
+      ],
+      "evidence_i18n_key": "pages.cicdPipelineSecurityCommandCenter.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "cloud_posture",
+      "route_paths": [
+        "/cloud-posture"
+      ],
+      "evidence_i18n_key": "pages.cloudPostureCommandCenter.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "edr_evasion",
+      "route_paths": [
+        "/detection-surface"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "digital_twin",
+      "route_paths": [
+        "/digital-twin"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "bgp_dns_hijacking",
+      "route_paths": [
+        "/dns-posture"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "email_dns_posture",
+      "route_paths": [
+        "/email-posture"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "file_upload",
+      "route_paths": [
+        "/file-upload-lab"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "graphql_attack",
+      "route_paths": [
+        "/graphql-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "http_smuggling",
+      "route_paths": [
+        "/http-smuggling"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "iac_misconfig",
+      "route_paths": [
+        "/iac-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "oauth_oidc",
+      "route_paths": [
+        "/identity-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "jwt_attack",
+      "route_paths": [
+        "/jwt-lab"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "kerberoasting",
+      "route_paths": [
+        "/kerberos-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "mobile_attack",
+      "route_paths": [
+        "/mobile-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "nexus_sovereign_swarm",
+      "route_paths": [
+        "/nexus-swarm"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "risk_superposition_collapse",
+      "route_paths": [
+        "/superposition-collapse"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "chronos",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "scada_ics",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "password_spray",
+      "route_paths": [
+        "/password-spray"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "pqc_scanner",
+      "route_paths": [
+        "/pqc-radar"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "saml_attack",
+      "route_paths": [
+        "/saml-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "serverless_attack",
+      "route_paths": [
+        "/serverless-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "smb_netbios",
+      "route_paths": [
+        "/smb-netbios"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "pki_tls",
+      "route_paths": [
+        "/tls-posture"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "mtls_grpc",
+      "route_paths": [
+        "/transport-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "waf_bypass",
+      "route_paths": [
+        "/waf-bypass"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "websocket_attack",
+      "route_paths": [
+        "/websocket-security"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "osint",
+      "route_paths": [
+        "/engines/osint"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "threat_emulation",
+      "route_paths": [
+        "/threat-emulation"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "supply_chain",
+      "route_paths": [
+        "/supply-chain"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "spear_phishing",
+      "route_paths": [
+        "/social-engineering"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "oast_oob",
+      "route_paths": [
+        "/oast"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "exploit_lab",
+      "route_paths": [
+        "/exploit-lab"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "aws_attack",
+      "route_paths": [
+        "/cloud"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "feedback_fuzz",
+      "route_paths": [
+        "/feedback-loop"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "zero_day_radar",
+      "route_paths": [
+        "/zero-day-radar"
+      ],
+      "evidence_i18n_key": null,
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
+      "engine_id": "template_engine",
+      "route_paths": [
+        "/template-engine"
+      ],
+      "evidence_i18n_key": "pages.templateEngineWorkbench.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_template_runner": true,
+        "requires_payload_tuning": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true,
+        "requires_scan_dispatch": false,
+        "requires_agent_gate": false
+      },
+      "chrome": {
+        "badge_color": "#60a5fa"
+      }
+    },
+    {
+      "engine_id": "semantic_ai_fuzz",
+      "route_paths": [
+        "/ast-fuzzing"
+      ],
+      "evidence_i18n_key": "pages.astFuzzingStudio.evidence_notice",
+      "capabilities": {
+        "requires_ast_viewer": true,
+        "requires_payload_tuning": true,
+        "requires_kill_switch": true,
+        "needs_memory_telemetry": true,
+        "max_ast_nodes": 50000,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "avionics_adsb_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "maritime_ais_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "ev_charging_ocpp_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "smart_grid_dlms_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "rail_signaling_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "building_automation_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "robotics_ros2_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "ot_sis_triton_attack",
+      "route_paths": [
+        "/ot-ics"
+      ],
+      "evidence_i18n_key": "pages.otIcsSecurity.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#f59e0b"
+      }
+    },
+    {
+      "engine_id": "kill_chain",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "deception_honeypot",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "zero_day_prediction",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "poe_synthesis",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "satellite_recon",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "darkweb_intel",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "financial_osint",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "blockchain_trace",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "metadata_harvest",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "patent_recon",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "telecom_osint",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "iot_shodan_scan",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "job_posting_osint",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "github_secret_scan",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "graphql_deep_attack",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "grpc_reflection_attack",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    },
+    {
+      "engine_id": "http2_attack",
+      "route_paths": [
+        "/engines/top-tier"
+      ],
+      "evidence_i18n_key": "pages.topTierEngineHub.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#a78bfa"
+      }
+    }
+  ]
+}

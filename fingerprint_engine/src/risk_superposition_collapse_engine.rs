@@ -150,10 +150,7 @@ pub fn noisy_or_belief(probs: &[f64]) -> f64 {
     if probs.is_empty() {
         return 0.0;
     }
-    let product: f64 = probs
-        .iter()
-        .map(|p| 1.0 - p.clamp(0.0, 1.0))
-        .product();
+    let product: f64 = probs.iter().map(|p| 1.0 - p.clamp(0.0, 1.0)).product();
     (1.0 - product).clamp(0.0, 1.0)
 }
 
@@ -219,10 +216,7 @@ fn pbool(params: &Value, key: &str, default: bool) -> bool {
 }
 
 fn pf64(params: &Value, key: &str, default: f64) -> f64 {
-    params
-        .get(key)
-        .and_then(|v| v.as_f64())
-        .unwrap_or(default)
+    params.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
 }
 
 fn pi64(params: &Value, key: &str, default: i64) -> i64 {
@@ -420,7 +414,10 @@ fn fact_belief_map(
         }
     }
     for rf in findings {
-        let er = rf.get("effective_risk").and_then(Value::as_f64).unwrap_or(3.0);
+        let er = rf
+            .get("effective_risk")
+            .and_then(Value::as_f64)
+            .unwrap_or(3.0);
         let cm = rf
             .get("confidence_multiplier")
             .and_then(Value::as_f64)
@@ -444,10 +441,7 @@ fn fact_belief_map(
                 })
                 .or_insert((b, w));
         }
-        *entries = by_id
-            .into_iter()
-            .map(|(id, (b, w))| (id, b, w))
-            .collect();
+        *entries = by_id.into_iter().map(|(id, (b, w))| (id, b, w)).collect();
     }
     map
 }
@@ -561,7 +555,11 @@ fn emit_toxic_combinations(
             .check("toxic_pair_observed", true, pair.label);
         out.push(finding_rich(
             ENGINE_ID,
-            &format!("Toxic collapse: {} (belief {:.0}%)", pair.label, fused * 100.0),
+            &format!(
+                "Toxic collapse: {} (belief {:.0}%)",
+                pair.label,
+                fused * 100.0
+            ),
             belief_to_severity(fused),
             pair.mitre,
             &format!(
@@ -714,9 +712,13 @@ fn emit_collapse_finding(
     )
 }
 
-fn compute_posture_grade(collapse_count: usize, max_belief: f64, penalty_per: u32) -> (u32, &'static str) {
-    let penalty = (collapse_count as u32).saturating_mul(penalty_per)
-        + ((max_belief * 40.0) as u32).min(40);
+fn compute_posture_grade(
+    collapse_count: usize,
+    max_belief: f64,
+    penalty_per: u32,
+) -> (u32, &'static str) {
+    let penalty =
+        (collapse_count as u32).saturating_mul(penalty_per) + ((max_belief * 40.0) as u32).min(40);
     let score = 100u32.saturating_sub(penalty);
     let grade = match score {
         0..=10 => "F",
@@ -752,13 +754,7 @@ fn findings_to_corr_events(findings: &[Value]) -> Vec<CorrEvent> {
                 .get("severity")
                 .and_then(Value::as_str)
                 .unwrap_or("medium");
-            Some(CorrEvent::new(
-                ts,
-                target,
-                &finding_category(f),
-                sig,
-                sev,
-            ))
+            Some(CorrEvent::new(ts, target, &finding_category(f), sig, sev))
         })
         .collect()
 }
@@ -772,8 +768,14 @@ fn default_temporal_rules() -> Vec<CorrelationRule> {
             window_secs: 86_400 * 30,
             stages: vec![
                 correlation_rules::StageMatch::new("recon", &["recon"]),
-                correlation_rules::StageMatch::new("initial_access", &["initial_access", "execution"]),
-                correlation_rules::StageMatch::new("impact", &["exfiltration", "privilege_escalation"]),
+                correlation_rules::StageMatch::new(
+                    "initial_access",
+                    &["initial_access", "execution"],
+                ),
+                correlation_rules::StageMatch::new(
+                    "impact",
+                    &["exfiltration", "privilege_escalation"],
+                ),
             ],
         },
         CorrelationRule {
@@ -873,17 +875,11 @@ pub async fn run_risk_superposition_collapse_result(
                 let fused = cfg.fuse(&probs);
                 max_belief = max_belief.max(fused);
                 let weak_ids = weak_clusters_in_chain(&clusters, &fact_map, &initial_facts);
-                let weak_ok = !cfg.require_weak_for_collapse
-                    || weak_ids.len() >= cfg.min_weak_clusters;
+                let weak_ok =
+                    !cfg.require_weak_for_collapse || weak_ids.len() >= cfg.min_weak_clusters;
                 if weak_ok && (fused >= cfg.collapsed_belief_threshold || !weak_ids.is_empty()) {
                     findings.push(emit_collapse_finding(
-                        target,
-                        goal,
-                        &chain,
-                        fused,
-                        &weak_ids,
-                        &clusters,
-                        &cfg,
+                        target, goal, &chain, fused, &weak_ids, &clusters, &cfg,
                     ));
                     collapse_count += 1;
                 }
@@ -1017,11 +1013,8 @@ pub async fn run_risk_superposition_collapse_result(
         }
     }
 
-    let (score, grade) = compute_posture_grade(
-        collapse_count,
-        max_belief,
-        cfg.posture_penalty_per_chain,
-    );
+    let (score, grade) =
+        compute_posture_grade(collapse_count, max_belief, cfg.posture_penalty_per_chain);
     let posture_conf = (max_belief.max(1.0 - score as f64 / 100.0)).clamp(0.0, 1.0);
     let ev = Evidence::new()
         .with("posture_score", score)
@@ -1151,7 +1144,8 @@ mod tests {
             "collapsed_belief_threshold": 0.35,
             "min_corroboration_engines": 2
         }));
-        let findings = vec![json!({"type":"ssrf","title":"SSRF","severity":"medium","target":"https://app"})];
+        let findings =
+            vec![json!({"type":"ssrf","title":"SSRF","severity":"medium","target":"https://app"})];
         let fact_map = fact_belief_map(&clusters, &findings, &cfg);
         let initial = build_initial_facts(&fact_map, &cfg, &clusters);
         assert!(initial.contains("service:web"));

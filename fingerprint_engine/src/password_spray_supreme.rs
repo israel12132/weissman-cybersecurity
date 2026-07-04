@@ -21,11 +21,7 @@ const WEBAUTHN_MARKERS: &[&str] = &[
 
 // ─── Transport / hardening probes (real HTTP observations) ───────────────────────
 
-pub async fn probe_hsts_auth_surface(
-    client: &Client,
-    url: &str,
-    target: &str,
-) -> Option<Value> {
+pub async fn probe_hsts_auth_surface(client: &Client, url: &str, target: &str) -> Option<Value> {
     let resp = http_get(client, url).await?;
     let hsts = resp
         .headers
@@ -53,11 +49,7 @@ pub async fn probe_hsts_auth_surface(
     ))
 }
 
-pub async fn probe_webauthn_surface(
-    client: &Client,
-    url: &str,
-    target: &str,
-) -> Option<Value> {
+pub async fn probe_webauthn_surface(client: &Client, url: &str, target: &str) -> Option<Value> {
     let resp = http_get(client, url).await?;
     let bl = resp.body.to_ascii_lowercase();
     let hits: Vec<&str> = WEBAUTHN_MARKERS
@@ -88,11 +80,7 @@ pub async fn probe_webauthn_surface(
     ))
 }
 
-pub async fn probe_oidc_pkce_posture(
-    client: &Client,
-    base: &str,
-    target: &str,
-) -> Option<Value> {
+pub async fn probe_oidc_pkce_posture(client: &Client, base: &str, target: &str) -> Option<Value> {
     let well_known = join_url(base, "/.well-known/openid-configuration");
     let resp = http_get(client, &well_known).await?;
     if resp.status != 200 {
@@ -267,13 +255,11 @@ pub struct SprayCategoryScores {
 
 impl SprayCategoryScores {
     fn from_posture(p: &SprayPosture) -> Self {
-        let penalize = |gaps: usize, w: f64| -> f64 { (100.0 - (gaps.min(4) as f64) * w).clamp(0.0, 100.0) };
+        let penalize =
+            |gaps: usize, w: f64| -> f64 { (100.0 - (gaps.min(4) as f64) * w).clamp(0.0, 100.0) };
         Self {
             rate_limiting: penalize(p.no_rate_limit.len(), 22.0),
-            lockout_policy: penalize(
-                p.no_lockout.len() + p.short_lockout_decay.len(),
-                18.0,
-            ),
+            lockout_policy: penalize(p.no_lockout.len() + p.short_lockout_decay.len(), 18.0),
             mfa_captcha: penalize(p.mfa_absent.len() + p.captcha_absent.len(), 15.0),
             enumeration_resistance: penalize(
                 p.user_enum.len()
@@ -288,18 +274,12 @@ impl SprayCategoryScores {
                     + if p.m365_federated { 1 } else { 0 },
                 14.0,
             ),
-            oidc_token_hygiene: penalize(
-                p.ropc_enabled.len() + p.device_code_enabled.len(),
-                25.0,
-            ),
+            oidc_token_hygiene: penalize(p.ropc_enabled.len() + p.device_code_enabled.len(), 25.0),
             automation_resistance: penalize(
                 p.browser_waf_gaps.len() + p.xff_bypassable.len() + p.cors_permissive.len(),
                 16.0,
             ),
-            transport_session: penalize(
-                p.transport_gaps.len() + p.cookie_gaps.len(),
-                20.0,
-            ),
+            transport_session: penalize(p.transport_gaps.len() + p.cookie_gaps.len(), 20.0),
         }
     }
 
@@ -455,14 +435,23 @@ pub fn extend_attack_paths(
 
 pub fn emit_toxic_headline(target: &str, posture: &SprayPosture, findings: &mut Vec<Value>) {
     let mut combos = Vec::new();
-    if !posture.no_rate_limit.is_empty() && !posture.user_enum.is_empty() && !posture.mfa_absent.is_empty() {
-        combos.push("no rate-limit + user enumeration + no MFA ⇒ targeted spray → valid account in hours");
+    if !posture.no_rate_limit.is_empty()
+        && !posture.user_enum.is_empty()
+        && !posture.mfa_absent.is_empty()
+    {
+        combos.push(
+            "no rate-limit + user enumeration + no MFA ⇒ targeted spray → valid account in hours",
+        );
     }
     if !posture.ropc_enabled.is_empty() && !posture.no_lockout.is_empty() {
-        combos.push("OIDC ROPC grant + no lockout ⇒ direct bearer token from spray (bypasses browser MFA)");
+        combos.push(
+            "OIDC ROPC grant + no lockout ⇒ direct bearer token from spray (bypasses browser MFA)",
+        );
     }
     if !posture.xff_bypassable.is_empty() && !posture.no_rate_limit.is_empty() {
-        combos.push("X-Forwarded-For IP rotation + no rate-limit ⇒ distributed spray behind single egress");
+        combos.push(
+            "X-Forwarded-For IP rotation + no rate-limit ⇒ distributed spray behind single egress",
+        );
     }
     if !posture.browser_waf_gaps.is_empty() && !posture.no_lockout.is_empty() {
         combos.push("script UA bypasses WAF + no lockout ⇒ automated stuffing at API scale");
@@ -471,10 +460,17 @@ pub fn emit_toxic_headline(target: &str, posture: &SprayPosture, findings: &mut 
         combos.push("timing enumeration + federated SSO ⇒ precision spray against upstream IdP");
     }
     if !posture.device_code_enabled.is_empty() && !posture.captcha_absent.is_empty() {
-        combos.push("device-code grant + no CAPTCHA ⇒ token phishing chain parallel to password spray");
+        combos.push(
+            "device-code grant + no CAPTCHA ⇒ token phishing chain parallel to password spray",
+        );
     }
-    if posture.m365_federated && !posture.no_rate_limit.is_empty() && !posture.saml_exposed.is_empty() {
-        combos.push("M365 federated + SAML metadata + unthrottled login ⇒ IdP spray with federation intel");
+    if posture.m365_federated
+        && !posture.no_rate_limit.is_empty()
+        && !posture.saml_exposed.is_empty()
+    {
+        combos.push(
+            "M365 federated + SAML metadata + unthrottled login ⇒ IdP spray with federation intel",
+        );
     }
     if combos.is_empty() {
         return;
@@ -518,34 +514,84 @@ pub fn emit_remediation_roadmap(target: &str, posture: &SprayPosture, findings: 
     };
 
     if !posture.ropc_enabled.is_empty() {
-        push("P0", "Disable OIDC ROPC grant", "Block password grant on all app registrations; migrate to auth-code + PKCE", "hours");
+        push(
+            "P0",
+            "Disable OIDC ROPC grant",
+            "Block password grant on all app registrations; migrate to auth-code + PKCE",
+            "hours",
+        );
     }
     if !posture.no_rate_limit.is_empty() {
-        push("P0", "Enforce per-username rate limiting", "HTTP 429 on login/token endpoints; align CDN/WAF with origin counters", "hours");
+        push(
+            "P0",
+            "Enforce per-username rate limiting",
+            "HTTP 429 on login/token endpoints; align CDN/WAF with origin counters",
+            "hours",
+        );
     }
     if !posture.user_enum.is_empty() || !posture.timing_enum_surfaces.is_empty() {
         push("P0", "Normalize auth failure responses", "Identical status/body/timing for valid vs invalid users; strip AADSTS distinctions at edge", "days");
     }
     if !posture.xff_bypassable.is_empty() {
-        push("P0", "Rate-limit on account identity not IP alone", "Ignore X-Forwarded-For for auth throttling unless from trusted proxy list", "hours");
+        push(
+            "P0",
+            "Rate-limit on account identity not IP alone",
+            "Ignore X-Forwarded-For for auth throttling unless from trusted proxy list",
+            "hours",
+        );
     }
     if !posture.mfa_absent.is_empty() {
-        push("P1", "Phishing-resistant MFA everywhere", "FIDO2/WHfB on all spray-viable surfaces including federated IdP", "days");
+        push(
+            "P1",
+            "Phishing-resistant MFA everywhere",
+            "FIDO2/WHfB on all spray-viable surfaces including federated IdP",
+            "days",
+        );
     }
     if !posture.device_code_enabled.is_empty() {
-        push("P1", "Restrict device-code flow", "Limit to native clients; require admin consent; monitor device-code grants", "days");
+        push(
+            "P1",
+            "Restrict device-code flow",
+            "Limit to native clients; require admin consent; monitor device-code grants",
+            "days",
+        );
     }
     if !posture.short_lockout_decay.is_empty() {
-        push("P1", "Extend lockout duration + progressive backoff", "Smart lockout ≥15min; CAPTCHA after N failures", "days");
+        push(
+            "P1",
+            "Extend lockout duration + progressive backoff",
+            "Smart lockout ≥15min; CAPTCHA after N failures",
+            "days",
+        );
     }
     if !posture.cors_permissive.is_empty() {
-        push("P1", "Tighten CORS on auth APIs", "Reject wildcard origins on login/token endpoints", "hours");
+        push(
+            "P1",
+            "Tighten CORS on auth APIs",
+            "Reject wildcard origins on login/token endpoints",
+            "hours",
+        );
     }
     if !posture.browser_waf_gaps.is_empty() {
-        push("P1", "Block unregistered script clients", "Require registered OAuth clients; block curl/python UA on auth unless API", "days");
+        push(
+            "P1",
+            "Block unregistered script clients",
+            "Require registered OAuth clients; block curl/python UA on auth unless API",
+            "days",
+        );
     }
-    push("P2", "Deploy Entra Password Protection + banned-password list", "Block spray wordlists at directory level", "days");
-    push("P2", "Honeypot accounts + spray detection analytics", "Alert on weissman_probe-style synthetic username patterns", "days");
+    push(
+        "P2",
+        "Deploy Entra Password Protection + banned-password list",
+        "Block spray wordlists at directory level",
+        "days",
+    );
+    push(
+        "P2",
+        "Honeypot accounts + spray detection analytics",
+        "Alert on weissman_probe-style synthetic username patterns",
+        "days",
+    );
 
     if steps.is_empty() {
         return;
@@ -571,12 +617,30 @@ pub fn emit_remediation_roadmap(target: &str, posture: &SprayPosture, findings: 
 
 pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
     let capabilities = [
-        ("entra_signin_risk_logs", "Entra ID Sign-in risk logs + impossible-travel correlation for spray campaigns"),
-        ("defender_identity_lockout", "Microsoft Defender for Identity lockout source IP attribution on-DC"),
-        ("okta_threatinsight_feed", "Okta ThreatInsight / behavior analytics with live session revocation"),
-        ("password_spray_honeypots", "AD honeypot accounts with instant SOC alert on TGS/SAML auth"),
-        ("kerberos_preauth_audit", "Kerberos pre-auth failure volume per source IP (internal vantage)"),
-        ("conditional_access_eval", "Full Conditional Access policy simulation per sprayed account"),
+        (
+            "entra_signin_risk_logs",
+            "Entra ID Sign-in risk logs + impossible-travel correlation for spray campaigns",
+        ),
+        (
+            "defender_identity_lockout",
+            "Microsoft Defender for Identity lockout source IP attribution on-DC",
+        ),
+        (
+            "okta_threatinsight_feed",
+            "Okta ThreatInsight / behavior analytics with live session revocation",
+        ),
+        (
+            "password_spray_honeypots",
+            "AD honeypot accounts with instant SOC alert on TGS/SAML auth",
+        ),
+        (
+            "kerberos_preauth_audit",
+            "Kerberos pre-auth failure volume per source IP (internal vantage)",
+        ),
+        (
+            "conditional_access_eval",
+            "Full Conditional Access policy simulation per sprayed account",
+        ),
     ];
     for (cap, desc) in capabilities {
         findings.push(with_fields(
@@ -591,7 +655,9 @@ pub fn emit_agent_guidance(target: &str, findings: &mut Vec<Value>) {
                 ),
                 target,
                 1.0,
-                Evidence::new().with("capability", cap).with("requires_agent", true),
+                Evidence::new()
+                    .with("capability", cap)
+                    .with("requires_agent", true),
             ),
             &[("category", json!("agent_guidance"))],
         ));

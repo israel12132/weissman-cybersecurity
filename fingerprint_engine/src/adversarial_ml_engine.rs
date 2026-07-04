@@ -2,7 +2,7 @@
 //! MITRE: T1059 (Command and Scripting Interpreter).
 
 use crate::engine_result::{print_result, EngineResult};
-use reqwest::header::{CONTENT_DISPOSITION, CONTENT_TYPE, HeaderMap};
+use reqwest::header::{HeaderMap, CONTENT_DISPOSITION, CONTENT_TYPE};
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
@@ -232,9 +232,10 @@ fn json_has_prediction_fields(v: &Value) -> bool {
         }
     }
     if let Some(data) = v.get("data").and_then(Value::as_array) {
-        if data.first().is_some_and(|item| {
-            item.get("label").is_some() || item.get("embedding").is_some()
-        }) {
+        if data
+            .first()
+            .is_some_and(|item| item.get("label").is_some() || item.get("embedding").is_some())
+        {
             return true;
         }
     }
@@ -331,11 +332,10 @@ fn discovery_body_indicates_ml(body: &str, kind: ProbeKind) -> bool {
         return false;
     };
     match kind {
-        ProbeKind::ModelList => {
-            v.get("data")
-                .and_then(Value::as_array)
-                .is_some_and(|arr| !arr.is_empty() && arr[0].get("id").is_some())
-        }
+        ProbeKind::ModelList => v
+            .get("data")
+            .and_then(Value::as_array)
+            .is_some_and(|arr| !arr.is_empty() && arr[0].get("id").is_some()),
         ProbeKind::DiscoveryGet => {
             json_has_model_metadata(&v)
                 || v.get("routes").is_some()
@@ -371,9 +371,10 @@ fn positive_ml_evidence(body: &str, headers: &HeaderMap, kind: ProbeKind) -> Opt
             return Some("OpenAI-compatible model listing".to_string());
         }
     }
-    if kind == ProbeKind::OpenApiGet && body.contains("\"openapi\"") && openapi_indicates_ml(
-        &serde_json::from_str(body).unwrap_or(Value::Null),
-    ) {
+    if kind == ProbeKind::OpenApiGet
+        && body.contains("\"openapi\"")
+        && openapi_indicates_ml(&serde_json::from_str(body).unwrap_or(Value::Null))
+    {
         return Some("OpenAPI schema references ML/inference".to_string());
     }
     if discovery_body_indicates_ml(body, kind) {
@@ -478,9 +479,17 @@ fn differential_label_changed(baseline_body: &str, perturbed_body: &str) -> bool
 
 fn is_framework_stack_trace(body: &str) -> bool {
     let lower = body.to_lowercase();
-    let has_framework = ["tensorflow", "pytorch", "sklearn", "scikit-learn", "keras"]
-        .iter()
-        .any(|fw| lower.contains(fw));
+    let has_framework = [
+        "tensorflow",
+        "pytorch",
+        "torch/",
+        "site-packages/torch",
+        "sklearn",
+        "scikit-learn",
+        "keras",
+    ]
+    .iter()
+    .any(|fw| lower.contains(fw));
     if !has_framework {
         return false;
     }
@@ -488,13 +497,18 @@ fn is_framework_stack_trace(body: &str) -> bool {
         || lower.contains("stack trace")
         || lower.contains("file \"")
         || lower.contains("at line")
+        || lower.contains(" line ")
         || lower.contains(".py\", line")
         || lower.contains("site-packages");
     has_framework && has_trace
 }
 
 fn content_disposition_leaks_model(headers: &HeaderMap) -> Option<String> {
-    let cd = headers.get(CONTENT_DISPOSITION)?.to_str().ok()?.to_lowercase();
+    let cd = headers
+        .get(CONTENT_DISPOSITION)?
+        .to_str()
+        .ok()?
+        .to_lowercase();
     if !cd.contains("attachment") {
         return None;
     }
@@ -506,7 +520,11 @@ fn content_disposition_leaks_model(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-fn model_extraction_evidence(status: StatusCode, headers: &HeaderMap, body: &str) -> Option<String> {
+fn model_extraction_evidence(
+    status: StatusCode,
+    headers: &HeaderMap,
+    body: &str,
+) -> Option<String> {
     if status != StatusCode::OK {
         return None;
     }
@@ -547,15 +565,12 @@ fn oversized_payload() -> String {
 fn compute_posture_score(findings: &[Value]) -> u8 {
     let mut score: i32 = 100;
     for f in findings {
-        let severity = f
-            .get("severity")
-            .and_then(Value::as_str)
-            .unwrap_or("info");
+        let severity = f.get("severity").and_then(Value::as_str).unwrap_or("info");
         let deduction = match severity {
             "critical" => 30,
-            "high" => 20,
-            "medium" => 10,
-            "low" => 5,
+            "high" => 15,
+            "medium" => 5,
+            "low" => 2,
             _ => 0,
         };
         score -= deduction;
@@ -619,23 +634,19 @@ async fn probe_endpoint(
 ) -> Option<DiscoveredEndpoint> {
     let url = format!("{}{}", base, probe.path);
     let resp = match probe.kind {
-        ProbeKind::InferencePost | ProbeKind::ChatCompletions => {
-            client
-                .post(&url)
-                .header(CONTENT_TYPE, "application/json")
-                .body(baseline_payload(probe.kind))
-                .send()
-                .await
-                .ok()?
-        }
-        _ => {
-            client
-                .get(&url)
-                .header("Accept", "application/json")
-                .send()
-                .await
-                .ok()?
-        }
+        ProbeKind::InferencePost | ProbeKind::ChatCompletions => client
+            .post(&url)
+            .header(CONTENT_TYPE, "application/json")
+            .body(baseline_payload(probe.kind))
+            .send()
+            .await
+            .ok()?,
+        _ => client
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .ok()?,
     };
 
     let status = resp.status();
@@ -657,10 +668,7 @@ async fn probe_endpoint(
     })
 }
 
-async fn test_model_extraction(
-    client: &reqwest::Client,
-    base: &str,
-) -> Vec<Value> {
+async fn test_model_extraction(client: &reqwest::Client, base: &str) -> Vec<Value> {
     let mut findings = Vec::new();
     for path in MODEL_EXTRACTION_PATHS {
         let url = format!("{}{}", base, path);
@@ -776,7 +784,10 @@ async fn test_architecture_leakage(
     findings
 }
 
-async fn test_prompt_injection(client: &reqwest::Client, endpoint: &DiscoveredEndpoint) -> Vec<Value> {
+async fn test_prompt_injection(
+    client: &reqwest::Client,
+    endpoint: &DiscoveredEndpoint,
+) -> Vec<Value> {
     let mut findings = Vec::new();
     if endpoint.kind != ProbeKind::ChatCompletions {
         return findings;
@@ -889,7 +900,12 @@ pub async fn run_adversarial_ml_result(target: &str) -> EngineResult {
         findings.extend(test_architecture_leakage(&client, ep).await);
         findings.extend(test_prompt_injection(&client, ep).await);
 
-        if !dos_tested && matches!(ep.kind, ProbeKind::InferencePost | ProbeKind::ChatCompletions) {
+        if !dos_tested
+            && matches!(
+                ep.kind,
+                ProbeKind::InferencePost | ProbeKind::ChatCompletions
+            )
+        {
             if let Some(f) = test_model_dos(&client, ep).await {
                 findings.push(f);
             }
@@ -935,7 +951,10 @@ mod tests {
     #[test]
     fn differential_label_change_detector() {
         let baseline = r#"{"label":"cat","confidence":0.95}"#;
-        assert!(!differential_label_changed(baseline, r#"{"error":"bad input"}"#));
+        assert!(!differential_label_changed(
+            baseline,
+            r#"{"error":"bad input"}"#
+        ));
         assert!(!differential_label_changed(baseline, baseline));
         assert!(differential_label_changed(
             baseline,
@@ -954,16 +973,16 @@ mod tests {
     #[test]
     fn framework_leak_detector() {
         assert!(!is_framework_stack_trace("model not found"));
-        assert!(!is_framework_stack_trace("generic 500 internal server error"));
+        assert!(!is_framework_stack_trace(
+            "generic 500 internal server error"
+        ));
         assert!(is_framework_stack_trace(
             "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.10/site-packages/torch/nn/modules/linear.py\", line 114"
         ));
         assert!(is_framework_stack_trace(
             "tensorflow.python.framework.errors.InvalidArgumentError\n  at sklearn/utils/validation.py line 42"
         ));
-        assert!(!is_framework_stack_trace(
-            "ValueError: invalid input shape"
-        ));
+        assert!(!is_framework_stack_trace("ValueError: invalid input shape"));
     }
 
     #[test]

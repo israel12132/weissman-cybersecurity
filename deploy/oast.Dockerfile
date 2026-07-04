@@ -1,4 +1,5 @@
 # Weissman OAST listener (out-of-band interaction correlation).
+# Workspace members must all exist even when building a single crate.
 FROM rust:1.91-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev libsqlite3-dev \
@@ -9,6 +10,7 @@ COPY fuzz_core ./fuzz_core
 COPY fingerprint_engine ./fingerprint_engine
 COPY backend ./backend
 COPY crates ./crates
+COPY shared ./shared
 RUN cargo build -p weissman-oast-server --release --locked
 
 FROM debian:bookworm-slim AS runtime

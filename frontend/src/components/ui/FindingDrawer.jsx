@@ -6,6 +6,7 @@ import SeverityBadge, { getSeverityMeta } from './SeverityBadge'
 import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
+import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
 
 const REACH_META = {
   client_runtime: { color: '#fb7185', key: 'client_runtime' },
@@ -108,6 +109,7 @@ export default function FindingDrawer({
   finding,
   onClose,
   onStatusUpdate,
+  onVerifyComplete,
   statusOptions,
   headerExtra,
   actions = [],
@@ -115,6 +117,19 @@ export default function FindingDrawer({
 }) {
   const { t } = useTranslation()
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const [activeTab, setActiveTab] = useState('evidence')
+
+  const drawerTabs = useMemo(
+    () => [
+      { id: 'evidence', label: 'Evidence' },
+      { id: 'mitre', label: 'MITRE' },
+      { id: 'remediation', label: 'Remediation' },
+      { id: 'playbook', label: 'Playbook' },
+      { id: 'compliance', label: 'Compliance' },
+      { id: 'financial', label: 'Financial' },
+    ],
+    [],
+  )
 
   const defaultStatusOptions = useMemo(
     () => [
@@ -259,6 +274,15 @@ export default function FindingDrawer({
                         Cluster #{clusterId}
                       </span>
                     )}
+                    <LiveVerdictBadge
+                      verification={finding.live_verification || finding.raw?.live_verification}
+                      verdict={finding.live_verdict}
+                    />
+                    {finding.attestation_valid && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300/90">
+                        {t('components.findingDrawer.attestationValid')}
+                      </span>
+                    )}
                     {headerExtra}
                   </div>
 
@@ -319,8 +343,7 @@ export default function FindingDrawer({
               </div>
 
               {/* Action bar */}
-              {(onStatusUpdate || actions.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-white/[0.06]">
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-white/[0.06]">
                   {onStatusUpdate && (
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">
@@ -343,6 +366,11 @@ export default function FindingDrawer({
                       )}
                     </div>
                   )}
+                  <FindingVerifyButton
+                    finding={finding}
+                    onVerified={(rawId, verification) => onVerifyComplete?.(rawId, verification)}
+                    variant="primary"
+                  />
                   {actions.map((action) => (
                     <button
                       key={action.label}
@@ -358,11 +386,29 @@ export default function FindingDrawer({
                     </button>
                   ))}
                 </div>
-              )}
             </div>
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6 custom-scroll text-sm">
+              <div className="flex flex-wrap gap-1 border-b border-white/[0.06] pb-3 -mt-1">
+                {drawerTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-md border transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
+                        : 'border-white/10 text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {activeTab === 'evidence' && (
+              <>
               {finding.description && (
                 <Section title={t('components.findingDrawer.description')}>
                   <p className="text-[13px] text-white/72 leading-relaxed whitespace-pre-wrap">
@@ -591,6 +637,74 @@ export default function FindingDrawer({
                   evidenceLabel={t('components.findingDrawer.evidence')}
                   copyLabel={t('components.findingDrawer.copy')}
                 />
+              )}
+              </>
+              )}
+
+              {activeTab === 'mitre' && (
+                <Section title="MITRE ATT&CK">
+                  <MetaRow label="Technique" value={finding.mitre_attack ?? finding.raw?.mitre_attack} copyable />
+                  <MetaRow label="CWE" value={finding.cwe_id ?? finding.cwe} copyable />
+                  {finding.mitre_attack && (
+                    <a
+                      href={`https://attack.mitre.org/techniques/${String(finding.mitre_attack).replace('.', '/')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-cyan-300/80 hover:underline inline-flex items-center gap-1 mt-2"
+                    >
+                      Open MITRE technique <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </Section>
+              )}
+
+              {activeTab === 'remediation' && (
+                <Section title={t('components.findingDrawer.remediation')}>
+                  <p className="text-[13px] text-white/72 whitespace-pre-wrap">
+                    {finding.remediation || finding.raw?.remediation || t('components.findingDrawer.noRemediation')}
+                  </p>
+                </Section>
+              )}
+
+              {activeTab === 'playbook' && (
+                <Section title="SOAR / Playbook">
+                  <MetaRow label="Engine" value={finding.source ?? finding.engine} />
+                  <MetaRow label="Playbook hint" value={finding.raw?.playbook_id ?? finding.playbook_id} />
+                  <p className="text-[11px] text-white/45 mt-2">
+                    Fire from Playbooks hub or POST /api/playbooks/fire with this finding id.
+                  </p>
+                </Section>
+              )}
+
+              {activeTab === 'compliance' && (
+                <Section title={t('components.findingDrawer.complianceImpact')}>
+                  {compliance.length === 0 ? (
+                    <p className="text-white/45 text-[12px]">No compliance tags on this finding.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {compliance.map((tag, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded border border-violet-500/25 text-violet-200/80 bg-violet-500/5"
+                        >
+                          {typeof tag === 'string' ? tag : JSON.stringify(tag)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </Section>
+              )}
+
+              {activeTab === 'financial' && (
+                <Section title="Financial impact">
+                  <MetaRow label="Priority score" value={priorityScore} />
+                  <MetaRow label="CVSS" value={finding.cvss_score ?? finding.score} />
+                  <MetaRow label="EPSS" value={epss} />
+                  <MetaRow
+                    label="Blast radius"
+                    value={finding.raw?.financial_blast_radius ?? finding.financial_blast_radius}
+                  />
+                </Section>
               )}
             </div>
           </motion.aside>

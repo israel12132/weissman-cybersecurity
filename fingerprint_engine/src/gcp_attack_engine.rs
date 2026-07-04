@@ -137,7 +137,9 @@ impl GcpScanConfig {
             check_dns: c.bool_or("check_dns", true),
             enable_attack_paths: c.bool_or("synthesize_attack_paths", true),
             enable_privesc: c.bool_or("enable_privesc", true),
-            access_token: c.string("gcp_access_token").or_else(|| c.string("access_token")),
+            access_token: c
+                .string("gcp_access_token")
+                .or_else(|| c.string("access_token")),
             service_account_key,
             project_ids: {
                 let mut p = c.string_list("gcp_project_ids");
@@ -169,7 +171,10 @@ impl GcpScanConfig {
             min_confidence: {
                 let v = c.raw();
                 v.get("min_confidence")
-                    .and_then(|x| x.as_f64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
+                    .and_then(|x| {
+                        x.as_f64()
+                            .or_else(|| x.as_str().and_then(|s| s.parse().ok()))
+                    })
                     .unwrap_or(0.0)
                     .clamp(0.0, 1.0)
             },
@@ -337,7 +342,7 @@ fn grade_for(score: f64) -> &'static str {
         "A"
     } else if score >= 80.0 {
         "B"
-    } else if score >= 70.0 {
+    } else if score >= 65.0 {
         "C"
     } else if score >= 55.0 {
         "D"
@@ -387,7 +392,10 @@ enum GcpErr {
 impl GcpErr {
     fn classify(status: u16, body: &str) -> &'static str {
         let b = body.to_ascii_lowercase();
-        if b.contains("service_disabled") || b.contains("has not been used") || b.contains("it is disabled") {
+        if b.contains("service_disabled")
+            || b.contains("has not been used")
+            || b.contains("it is disabled")
+        {
             "api_disabled"
         } else if status == 401 {
             "unauthenticated"
@@ -421,7 +429,11 @@ impl GcpClient {
             serde_json::from_str(&body).map_err(|e| GcpErr::Parse(e.to_string()))
         } else {
             let reason = GcpErr::classify(status, &body);
-            Err(GcpErr::Http(status, reason, body.chars().take(240).collect()))
+            Err(GcpErr::Http(
+                status,
+                reason,
+                body.chars().take(240).collect(),
+            ))
         }
     }
 
@@ -489,7 +501,10 @@ async fn token_from_sa_key(key: &Value, http: &reqwest::Client) -> Result<String
         .get("token_uri")
         .and_then(Value::as_str)
         .unwrap_or("https://oauth2.googleapis.com/token");
-    let kid = key.get("private_key_id").and_then(Value::as_str).unwrap_or("");
+    let kid = key
+        .get("private_key_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
 
     let now = now_secs();
     let claims = JwtClaims {
@@ -580,7 +595,11 @@ impl<'a> Collector<'a> {
     }
 
     fn add_node(&mut self, id: &str, label: &str, kind: &str, status: &str) {
-        if self.nodes.iter().any(|n| n.get("id").and_then(Value::as_str) == Some(id)) {
+        if self
+            .nodes
+            .iter()
+            .any(|n| n.get("id").and_then(Value::as_str) == Some(id))
+        {
             return;
         }
         self.nodes
@@ -605,7 +624,14 @@ impl<'a> Collector<'a> {
         evidence: Evidence,
     ) {
         let mut f = finding_rich(
-            ENGINE_ID, title, severity, mitre, description, target, confidence, evidence,
+            ENGINE_ID,
+            title,
+            severity,
+            mitre,
+            description,
+            target,
+            confidence,
+            evidence,
         );
         if let Some(obj) = f.as_object_mut() {
             obj.insert("domain".to_string(), json!(domain.as_str()));
@@ -710,11 +736,19 @@ pub async fn run_gcp_attack_result_ctx(target: &str, ctx: &EngineRunContext) -> 
     // ── Posture summary (always emitted first when enabled) ──────────────────
     let mut out: Vec<Value> = Vec::with_capacity(col.findings.len() + 1);
     if cfg.include_posture_summary {
-        out.push(build_posture_summary(&col, target, &scanned_projects, authed));
+        out.push(build_posture_summary(
+            &col,
+            target,
+            &scanned_projects,
+            authed,
+        ));
     }
     out.append(&mut col.findings);
 
-    let actionable = out.iter().filter(|f| finding_domain(f) != "posture").count();
+    let actionable = out
+        .iter()
+        .filter(|f| finding_domain(f) != "posture")
+        .count();
     EngineResult::ok(
         out,
         format!(
@@ -754,7 +788,11 @@ async fn resolve_projects(
         Ok(items) => {
             let ids: Vec<String> = items
                 .iter()
-                .filter_map(|p| p.get("projectId").and_then(Value::as_str).map(str::to_string))
+                .filter_map(|p| {
+                    p.get("projectId")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
                 .collect();
             if ids.is_empty() {
                 col.push(
@@ -927,9 +965,17 @@ async fn scan_project_iam(
             }
         }
         Err(e) => {
-            col.push(Domain::Posture, "IAM policy read failed", "info", "", "", target, 1.0,
+            col.push(
+                Domain::Posture,
+                "IAM policy read failed",
+                "info",
+                "",
+                "",
+                target,
+                1.0,
                 &format!("getIamPolicy network error on {project}: {e}"),
-                Evidence::new().check("projects.getIamPolicy", false, "network"));
+                Evidence::new().check("projects.getIamPolicy", false, "network"),
+            );
             return;
         }
     };
@@ -1027,7 +1073,11 @@ async fn scan_project_iam(
                         0.8,
                         &format!(
                             "Project '{project}' grants '{role}' to {}. {technique}",
-                            risky.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                            risky
+                                .iter()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         ),
                         Evidence::new()
                             .with("project", project)
@@ -1100,12 +1150,19 @@ async fn scan_service_account_keys(
             "https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{email}/keys?keyTypes=USER_MANAGED"
         );
         let keys = match client.get(&keys_url).await {
-            Ok(v) => v.get("keys").and_then(Value::as_array).cloned().unwrap_or_default(),
+            Ok(v) => v
+                .get("keys")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
             Err(_) => continue,
         };
         for k in &keys {
             let name = k.get("name").and_then(Value::as_str).unwrap_or("");
-            let valid_after = k.get("validAfterTime").and_then(Value::as_str).unwrap_or("");
+            let valid_after = k
+                .get("validAfterTime")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             let age_days = key_age_days(valid_after);
             // Any user-managed key is a finding (CIS 1.4); aged keys escalate (CIS 1.7).
             let (sev, conf, extra) = if age_days > cfg.sa_key_max_age_days {
@@ -1189,14 +1246,11 @@ async fn scan_compute_instances(
     }
 }
 
-fn assess_instance(
-    col: &mut Collector<'_>,
-    project: &str,
-    target: &str,
-    root: &str,
-    inst: &Value,
-) {
-    let name = inst.get("name").and_then(Value::as_str).unwrap_or("instance");
+fn assess_instance(col: &mut Collector<'_>, project: &str, target: &str, root: &str, inst: &Value) {
+    let name = inst
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("instance");
     let zone = inst
         .get("zone")
         .and_then(Value::as_str)
@@ -1242,20 +1296,36 @@ fn assess_instance(
 
     // Metadata flags
     let meta = instance_metadata_map(inst);
-    let oslogin = meta.get("enable-oslogin").map(|v| is_truthy(v)).unwrap_or(false);
-    let serial_enabled = meta.get("serial-port-enable").map(|v| is_truthy(v)).unwrap_or(false);
+    let oslogin = meta
+        .get("enable-oslogin")
+        .map(|v| is_truthy(v))
+        .unwrap_or(false);
+    let serial_enabled = meta
+        .get("serial-port-enable")
+        .map(|v| is_truthy(v))
+        .unwrap_or(false);
     let legacy_endpoints_disabled = meta
         .get("disable-legacy-endpoints")
         .map(|v| is_truthy(v))
         .unwrap_or(false);
-    let block_project_ssh = meta.get("block-project-ssh-keys").map(|v| is_truthy(v)).unwrap_or(false);
+    let block_project_ssh = meta
+        .get("block-project-ssh-keys")
+        .map(|v| is_truthy(v))
+        .unwrap_or(false);
 
-    let can_ip_forward = inst.get("canIpForward").and_then(Value::as_bool).unwrap_or(false);
+    let can_ip_forward = inst
+        .get("canIpForward")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let shielded = inst
         .get("shieldedInstanceConfig")
         .map(|s| {
-            s.get("enableVtpm").and_then(Value::as_bool).unwrap_or(false)
-                && s.get("enableIntegrityMonitoring").and_then(Value::as_bool).unwrap_or(false)
+            s.get("enableVtpm")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                && s.get("enableIntegrityMonitoring")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
         })
         .unwrap_or(false);
 
@@ -1404,7 +1474,10 @@ fn instance_metadata_map(inst: &Value) -> std::collections::HashMap<String, Stri
 }
 
 fn is_truthy(v: &str) -> bool {
-    matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1" | "yes" | "on" | "enabled")
+    matches!(
+        v.trim().to_ascii_lowercase().as_str(),
+        "true" | "1" | "yes" | "on" | "enabled"
+    )
 }
 
 // ── CWPP — VPC firewalls (0.0.0.0/0 ingress on sensitive ports) ──────────────────────────────────
@@ -1431,7 +1504,10 @@ async fn scan_firewalls(
     for fw in &rules {
         let name = fw.get("name").and_then(Value::as_str).unwrap_or("firewall");
         let disabled = fw.get("disabled").and_then(Value::as_bool).unwrap_or(false);
-        let direction = fw.get("direction").and_then(Value::as_str).unwrap_or("INGRESS");
+        let direction = fw
+            .get("direction")
+            .and_then(Value::as_str)
+            .unwrap_or("INGRESS");
         if disabled || direction != "INGRESS" {
             continue;
         }
@@ -1452,7 +1528,12 @@ async fn scan_firewalls(
             let ports: Vec<u32> = rule
                 .get("ports")
                 .and_then(Value::as_array)
-                .map(|p| p.iter().filter_map(Value::as_str).flat_map(parse_port_spec).collect())
+                .map(|p| {
+                    p.iter()
+                        .filter_map(Value::as_str)
+                        .flat_map(parse_port_spec)
+                        .collect()
+                })
                 .unwrap_or_default();
 
             if (proto == "all" || proto.is_empty()) && ports_all {
@@ -1544,7 +1625,11 @@ async fn scan_project_metadata(
         for it in items {
             match it.get("key").and_then(Value::as_str) {
                 Some("enable-oslogin") => {
-                    oslogin = it.get("value").and_then(Value::as_str).map(is_truthy).unwrap_or(false);
+                    oslogin = it
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .map(is_truthy)
+                        .unwrap_or(false);
                 }
                 Some("ssh-keys") | Some("sshKeys") => project_ssh_keys = true,
                 _ => {}
@@ -1589,7 +1674,8 @@ async fn scan_storage(
     target: &str,
     root: &str,
 ) {
-    let url = format!("https://storage.googleapis.com/storage/v1/b?project={project}&maxResults=200");
+    let url =
+        format!("https://storage.googleapis.com/storage/v1/b?project={project}&maxResults=200");
     let buckets = match client.list_all(&url, "items", cfg.max_buckets).await {
         Ok(b) => b,
         Err(e) => {
@@ -1709,9 +1795,14 @@ async fn scan_gke(
     target: &str,
     root: &str,
 ) {
-    let url = format!("https://container.googleapis.com/v1/projects/{project}/locations/-/clusters");
+    let url =
+        format!("https://container.googleapis.com/v1/projects/{project}/locations/-/clusters");
     let clusters = match client.get(&url).await {
-        Ok(v) => v.get("clusters").and_then(Value::as_array).cloned().unwrap_or_default(),
+        Ok(v) => v
+            .get("clusters")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
         Err(e) => {
             note_api_gap(col, target, "Kubernetes Engine (GKE)", project, &e);
             return;
@@ -1770,7 +1861,11 @@ async fn scan_gke(
             .and_then(Value::as_str)
             .map(|p| !p.is_empty())
             .unwrap_or(false);
-        let public_endpoint = c.get("endpoint").and_then(Value::as_str).map(|e| !e.is_empty()).unwrap_or(false)
+        let public_endpoint = c
+            .get("endpoint")
+            .and_then(Value::as_str)
+            .map(|e| !e.is_empty())
+            .unwrap_or(false)
             && !private_endpoint;
 
         let weak = legacy_abac || basic_auth || client_cert;
@@ -1778,7 +1873,12 @@ async fn scan_gke(
             col.sig.gke_weak_auth = true;
         }
         let exposed = public_endpoint && (weak || !authorized_networks);
-        col.add_node(&node, name, "gke", if exposed { "takeover" } else { "secure" });
+        col.add_node(
+            &node,
+            name,
+            "gke",
+            if exposed { "takeover" } else { "secure" },
+        );
         col.add_edge(root, &node);
 
         if legacy_abac {
@@ -1845,7 +1945,10 @@ async fn scan_cloudsql(
     };
 
     for inst in &instances {
-        let name = inst.get("name").and_then(Value::as_str).unwrap_or("instance");
+        let name = inst
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("instance");
         let ipcfg = inst.get("settings").and_then(|s| s.get("ipConfiguration"));
         let ipv4 = ipcfg
             .and_then(|c| c.get("ipv4Enabled"))
@@ -1879,7 +1982,18 @@ async fn scan_cloudsql(
 
         let node = format!("sql:{project}:{name}");
         let exposed = ipv4 && world_authorized;
-        col.add_node(&node, name, "sql", if exposed { "takeover" } else if ipv4 { "exposed" } else { "secure" });
+        col.add_node(
+            &node,
+            name,
+            "sql",
+            if exposed {
+                "takeover"
+            } else if ipv4 {
+                "exposed"
+            } else {
+                "secure"
+            },
+        );
         col.add_edge(root, &node);
 
         if ipv4 && world_authorized {
@@ -1916,8 +2030,9 @@ async fn scan_bigquery(
     target: &str,
     root: &str,
 ) {
-    let url =
-        format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets?maxResults=200");
+    let url = format!(
+        "https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets?maxResults=200"
+    );
     let datasets = match client.list_all(&url, "datasets", cfg.max_resources).await {
         Ok(d) => d,
         Err(e) => {
@@ -1935,9 +2050,8 @@ async fn scan_bigquery(
         if id.is_empty() {
             continue;
         }
-        let detail_url = format!(
-            "https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{id}"
-        );
+        let detail_url =
+            format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{id}");
         let Ok(detail) = client.get(&detail_url).await else {
             continue;
         };
@@ -1999,7 +2113,9 @@ async fn scan_functions(
             continue;
         }
         let iam_url = format!("https://cloudfunctions.googleapis.com/v1/{name}:getIamPolicy");
-        let Ok(iam) = client.get(&iam_url).await else { continue };
+        let Ok(iam) = client.get(&iam_url).await else {
+            continue;
+        };
         if iam_has_public_member(&iam) {
             col.sig.public_function = true;
             let short = name.rsplit('/').next().unwrap_or(name);
@@ -2035,7 +2151,9 @@ async fn scan_cloud_run(
             continue;
         }
         let iam_url = format!("https://run.googleapis.com/v2/{name}:getIamPolicy");
-        let Ok(iam) = client.get(&iam_url).await else { continue };
+        let Ok(iam) = client.get(&iam_url).await else {
+            continue;
+        };
         if iam_has_public_member(&iam) {
             col.sig.public_run = true;
             let short = name.rsplit('/').next().unwrap_or(name);
@@ -2072,7 +2190,10 @@ async fn scan_dns(
     target: &str,
 ) {
     let url = format!("https://dns.googleapis.com/dns/v1/projects/{project}/managedZones");
-    let zones = match client.list_all(&url, "managedZones", cfg.max_resources).await {
+    let zones = match client
+        .list_all(&url, "managedZones", cfg.max_resources)
+        .await
+    {
         Ok(z) => z,
         Err(e) => {
             note_api_gap(col, target, "Cloud DNS", project, &e);
@@ -2081,7 +2202,10 @@ async fn scan_dns(
     };
     for z in zones.iter().take(cfg.max_resources) {
         let name = z.get("name").and_then(Value::as_str).unwrap_or("zone");
-        let visibility = z.get("visibility").and_then(Value::as_str).unwrap_or("public");
+        let visibility = z
+            .get("visibility")
+            .and_then(Value::as_str)
+            .unwrap_or("public");
         if visibility != "public" {
             continue;
         }
@@ -2138,7 +2262,8 @@ async fn scan_external_surface(cfg: &GcpScanConfig, col: &mut Collector<'_>, tar
         .map(|bucket| {
             let c = client.clone();
             async move {
-                let url = format!("https://storage.googleapis.com/storage/v1/b/{bucket}/o?maxResults=1");
+                let url =
+                    format!("https://storage.googleapis.com/storage/v1/b/{bucket}/o?maxResults=1");
                 match c.get(&url).send().await {
                     Ok(r) => {
                         let status = r.status().as_u16();
@@ -2214,10 +2339,37 @@ fn gcs_bucket_candidates(cfg: &GcpScanConfig, host: &str) -> Vec<String> {
     }
 
     let mut suffixes: Vec<String> = [
-        "", "-prod", "-dev", "-staging", "-stage", "-test", "-backup", "-backups", "-data",
-        "-assets", "-static", "-public", "-private", "-uploads", "-media", "-logs", "-bucket",
-        "-storage", "-files", "-images", "-config", "-secret", "-secrets", "-tf", "-terraform",
-        "-artifacts", "-build", "-cdn", "-www", "-app", "-internal",
+        "",
+        "-prod",
+        "-dev",
+        "-staging",
+        "-stage",
+        "-test",
+        "-backup",
+        "-backups",
+        "-data",
+        "-assets",
+        "-static",
+        "-public",
+        "-private",
+        "-uploads",
+        "-media",
+        "-logs",
+        "-bucket",
+        "-storage",
+        "-files",
+        "-images",
+        "-config",
+        "-secret",
+        "-secrets",
+        "-tf",
+        "-terraform",
+        "-artifacts",
+        "-build",
+        "-cdn",
+        "-www",
+        "-app",
+        "-internal",
     ]
     .iter()
     .map(|s| (*s).to_string())
@@ -2336,15 +2488,40 @@ fn synthesize_attack_paths(col: &mut Collector<'_>, target: &str) {
             &["Initial Access", "Execution", "Credential Access", "Privilege Escalation", "Impact"]);
     }
     if public_bucket && leaked_key {
-        push_attack_path(col, target, "public_bucket_key_chain",
-            "Public storage → leaked service-account key → authenticated project access", "T1530", 0.88,
+        push_attack_path(
+            col,
+            target,
+            "public_bucket_key_chain",
+            "Public storage → leaked service-account key → authenticated project access",
+            "T1530",
+            0.88,
             &[
-                ("Collection", "Enumerate the publicly-listable Cloud Storage bucket".to_string()),
-                ("Credential Access", "Download the service-account JSON key found in the public bucket / web asset".to_string()),
-                ("Privilege Escalation", "Authenticate with the key to obtain the SA's project permissions".to_string()),
-                ("Impact", "Pivot from anonymous read to authenticated control of the SA's resources".to_string()),
+                (
+                    "Collection",
+                    "Enumerate the publicly-listable Cloud Storage bucket".to_string(),
+                ),
+                (
+                    "Credential Access",
+                    "Download the service-account JSON key found in the public bucket / web asset"
+                        .to_string(),
+                ),
+                (
+                    "Privilege Escalation",
+                    "Authenticate with the key to obtain the SA's project permissions".to_string(),
+                ),
+                (
+                    "Impact",
+                    "Pivot from anonymous read to authenticated control of the SA's resources"
+                        .to_string(),
+                ),
             ],
-            &["Collection", "Credential Access", "Privilege Escalation", "Impact"]);
+            &[
+                "Collection",
+                "Credential Access",
+                "Privilege Escalation",
+                "Impact",
+            ],
+        );
     }
     if public_gke && gke_weak {
         push_attack_path(col, target, "gke_public_takeover",
@@ -2358,7 +2535,11 @@ fn synthesize_attack_paths(col: &mut Collector<'_>, target: &str) {
             &["Initial Access", "Privilege Escalation", "Credential Access", "Impact"]);
     }
     if public_sql {
-        let extra = if sql_no_ssl { " over an unencrypted channel (credentials sniffable)" } else { "" };
+        let extra = if sql_no_ssl {
+            " over an unencrypted channel (credentials sniffable)"
+        } else {
+            ""
+        };
         push_attack_path(col, target, "public_sql_breach",
             "Internet-exposed Cloud SQL → direct database breach", "T1190", 0.86,
             &[
@@ -2370,14 +2551,31 @@ fn synthesize_attack_paths(col: &mut Collector<'_>, target: &str) {
             &["Initial Access", "Credential Access", "Collection", "Impact"]);
     }
     if project_public {
-        push_attack_path(col, target, "project_public_iam_takeover",
-            "Public IAM binding → anyone obtains project-level access", "T1078.004", 0.95,
+        push_attack_path(
+            col,
+            target,
+            "project_public_iam_takeover",
+            "Public IAM binding → anyone obtains project-level access",
+            "T1078.004",
+            0.95,
             &[
-                ("Initial Access", "Authenticate as any (or any Google) account".to_string()),
-                ("Privilege Escalation", "Inherit the role granted to allUsers/allAuthenticatedUsers on the project".to_string()),
-                ("Impact", "Operate within the project at the granted role with no targeting required".to_string()),
+                (
+                    "Initial Access",
+                    "Authenticate as any (or any Google) account".to_string(),
+                ),
+                (
+                    "Privilege Escalation",
+                    "Inherit the role granted to allUsers/allAuthenticatedUsers on the project"
+                        .to_string(),
+                ),
+                (
+                    "Impact",
+                    "Operate within the project at the granted role with no targeting required"
+                        .to_string(),
+                ),
             ],
-            &["Initial Access", "Privilege Escalation", "Impact"]);
+            &["Initial Access", "Privilege Escalation", "Impact"],
+        );
     }
     if impersonation {
         push_attack_path(col, target, "sa_impersonation_chain",
@@ -2390,25 +2588,62 @@ fn synthesize_attack_paths(col: &mut Collector<'_>, target: &str) {
             &["Discovery", "Privilege Escalation", "Impact"]);
     }
     if (public_fn || public_run) && impersonation {
-        push_attack_path(col, target, "public_serverless_pivot",
-            "Public serverless endpoint + impersonation → run code as a privileged SA", "T1190", 0.8,
+        push_attack_path(
+            col,
+            target,
+            "public_serverless_pivot",
+            "Public serverless endpoint + impersonation → run code as a privileged SA",
+            "T1190",
+            0.8,
             &[
-                ("Initial Access", "Invoke the unauthenticated Cloud Function / Cloud Run service".to_string()),
-                ("Execution", "Abuse the endpoint (SSRF/injection) to act from inside the project network".to_string()),
-                ("Privilege Escalation", "Leverage actAs / token-creator rights to assume a privileged service account".to_string()),
-                ("Impact", "Broad project access from an initially-anonymous entry point".to_string()),
+                (
+                    "Initial Access",
+                    "Invoke the unauthenticated Cloud Function / Cloud Run service".to_string(),
+                ),
+                (
+                    "Execution",
+                    "Abuse the endpoint (SSRF/injection) to act from inside the project network"
+                        .to_string(),
+                ),
+                (
+                    "Privilege Escalation",
+                    "Leverage actAs / token-creator rights to assume a privileged service account"
+                        .to_string(),
+                ),
+                (
+                    "Impact",
+                    "Broad project access from an initially-anonymous entry point".to_string(),
+                ),
             ],
-            &["Initial Access", "Execution", "Privilege Escalation", "Impact"]);
+            &[
+                "Initial Access",
+                "Execution",
+                "Privilege Escalation",
+                "Impact",
+            ],
+        );
     }
     if public_ds {
-        push_attack_path(col, target, "public_bigquery_exfil",
-            "Public BigQuery dataset → analytics data exfiltration", "T1530", 0.8,
+        push_attack_path(
+            col,
+            target,
+            "public_bigquery_exfil",
+            "Public BigQuery dataset → analytics data exfiltration",
+            "T1530",
+            0.8,
             &[
-                ("Discovery", "Query the publicly-accessible BigQuery dataset".to_string()),
-                ("Collection", "Export tables containing potentially sensitive analytics / PII".to_string()),
+                (
+                    "Discovery",
+                    "Query the publicly-accessible BigQuery dataset".to_string(),
+                ),
+                (
+                    "Collection",
+                    "Export tables containing potentially sensitive analytics / PII".to_string(),
+                ),
                 ("Impact", "Confidential data exposure".to_string()),
             ],
-            &["Discovery", "Collection", "Impact"]);
+            &["Discovery", "Collection", "Impact"],
+        );
     }
 }
 
@@ -2429,7 +2664,10 @@ fn build_posture_summary(
     let mut low = 0u32;
     let mut attack_paths = 0u32;
     for f in findings {
-        if f.get("attack_path").and_then(Value::as_bool).unwrap_or(false) {
+        if f.get("attack_path")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
             attack_paths += 1;
             continue;
         }
@@ -2544,7 +2782,9 @@ mod tests {
 
     #[test]
     fn privesc_role_table_covers_impersonation_and_owner() {
-        assert!(PRIVESC_ROLES.iter().any(|(r, _, s)| *r == "roles/owner" && *s == "critical"));
+        assert!(PRIVESC_ROLES
+            .iter()
+            .any(|(r, _, s)| *r == "roles/owner" && *s == "critical"));
         assert!(PRIVESC_ROLES
             .iter()
             .any(|(r, _, _)| *r == "roles/iam.serviceAccountTokenCreator"));
@@ -2601,7 +2841,8 @@ mod tests {
 
     #[test]
     fn iam_public_member_detection() {
-        let iam = json!({"bindings":[{"role":"roles/cloudfunctions.invoker","members":["allUsers"]}]});
+        let iam =
+            json!({"bindings":[{"role":"roles/cloudfunctions.invoker","members":["allUsers"]}]});
         assert!(iam_has_public_member(&iam));
         let priv_iam = json!({"bindings":[{"role":"roles/x","members":["user:a@b.com"]}]});
         assert!(!iam_has_public_member(&priv_iam));
@@ -2610,7 +2851,10 @@ mod tests {
     #[test]
     fn bucket_candidates_respect_overrides_and_bounds() {
         let c = cfg_from(json!({ "bucket_candidates": ["only-this-one"] }));
-        assert_eq!(gcs_bucket_candidates(&c, "example.com"), vec!["only-this-one".to_string()]);
+        assert_eq!(
+            gcs_bucket_candidates(&c, "example.com"),
+            vec!["only-this-one".to_string()]
+        );
 
         let c2 = cfg_from(json!({ "intensity": "light" }));
         let cands = gcs_bucket_candidates(&c2, "example.com");

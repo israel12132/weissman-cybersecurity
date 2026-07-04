@@ -65,7 +65,9 @@ fn classify_stage(signal: &str) -> KillChainStage {
         || s.contains("beacon")
     {
         KillChainStage::CommandAndControl
-    } else if s.contains("upload") && (s.contains("no csp") || s.contains("httponly") || s.contains("prerequisite")) {
+    } else if s.contains("upload")
+        && (s.contains("no csp") || s.contains("httponly") || s.contains("prerequisite"))
+    {
         KillChainStage::Exploitation
     } else if s.contains("login")
         || s.contains("auth")
@@ -199,7 +201,9 @@ fn detect_cdn_waf(headers: &[(String, String)]) -> Vec<String> {
                 }
             } else if hdr.ends_with('-') {
                 if header_value(headers, hdr.trim_end_matches('-')).is_some()
-                    || headers.iter().any(|(k, _)| k.to_ascii_lowercase().starts_with(hdr))
+                    || headers
+                        .iter()
+                        .any(|(k, _)| k.to_ascii_lowercase().starts_with(hdr))
                 {
                     out.push(label.to_string());
                 }
@@ -246,20 +250,16 @@ fn analyze_cookie_flags(set_cookie: &str) -> String {
     flags.join(", ")
 }
 
-fn weaponization_from_stack(server: Option<&str>, powered_by: Option<&str>) -> Vec<(String, String, String)> {
+fn weaponization_from_stack(
+    server: Option<&str>,
+    powered_by: Option<&str>,
+) -> Vec<(String, String, String)> {
     let mut hints = Vec::new();
-    let combined = format!(
-        "{} {}",
-        server.unwrap_or(""),
-        powered_by.unwrap_or("")
-    )
-    .to_ascii_lowercase();
+    let combined =
+        format!("{} {}", server.unwrap_or(""), powered_by.unwrap_or("")).to_ascii_lowercase();
 
     if combined.contains("php") {
-        let ver = powered_by
-            .or(server)
-            .unwrap_or("")
-            .to_string();
+        let ver = powered_by.or(server).unwrap_or("").to_string();
         hints.push((
             "PHP".into(),
             "Observed PHP runtime — historical attack classes include file inclusion, unsafe deserialization, and session fixation against legacy modules.".into(),
@@ -330,7 +330,10 @@ fn parse_html_entry_points(base: &str, body: &str) -> Vec<(String, String)> {
         ("soap", "/soap"),
     ] {
         if body_l.contains(pattern.0) {
-            out.push((pattern.1.to_string(), format!("HTML/JS references '{}'", pattern.0)));
+            out.push((
+                pattern.1.to_string(),
+                format!("HTML/JS references '{}'", pattern.0),
+            ));
         }
     }
 
@@ -341,7 +344,12 @@ fn parse_html_entry_points(base: &str, body: &str) -> Vec<(String, String)> {
         let action = fragment
             .split("action=")
             .nth(1)
-            .map(|s| s.trim_matches(['"', '\'', ' ']).split(['"', '\'', ' ']).next().unwrap_or(""))
+            .map(|s| {
+                s.trim_matches(['"', '\'', ' '])
+                    .split(['"', '\'', ' '])
+                    .next()
+                    .unwrap_or("")
+            })
             .unwrap_or("");
         let kind = if frag_l.contains("multipart") || frag_l.contains("type=\"file\"") {
             "upload"
@@ -361,7 +369,14 @@ fn parse_html_entry_points(base: &str, body: &str) -> Vec<(String, String)> {
     }
 
     // JS fetch/axios/graphql endpoints
-    for token in ["fetch(\"", "fetch('", "/graphql", "/api/", "webhook", "callback="] {
+    for token in [
+        "fetch(\"",
+        "fetch('",
+        "/graphql",
+        "/api/",
+        "webhook",
+        "callback=",
+    ] {
         if body_l.contains(&token.to_ascii_lowercase()) {
             out.push((
                 join_url(base, "/api/"),
@@ -394,11 +409,20 @@ const COMMON_PATHS: &[(&str, &str)] = &[
     ("/.well-known/security.txt", "security_txt"),
 ];
 
-fn c2_exfil_from_headers_and_body(headers: &[(String, String)], body: &str) -> Vec<(String, String)> {
+fn c2_exfil_from_headers_and_body(
+    headers: &[(String, String)],
+    body: &str,
+) -> Vec<(String, String)> {
     let mut hints = Vec::new();
     let body_l = body.to_ascii_lowercase();
 
-    for param in ["webhook", "callback", "hook_url", "notify_url", "redirect_uri"] {
+    for param in [
+        "webhook",
+        "callback",
+        "hook_url",
+        "notify_url",
+        "redirect_uri",
+    ] {
         if body_l.contains(param) {
             hints.push((
                 format!("Outbound {} parameter surface", param),
@@ -443,7 +467,10 @@ fn exploitation_prerequisites(obs: &TargetObservations) -> Vec<(String, String)>
         .as_ref()
         .map(|c| c.is_empty() || !c.contains("default-src"))
         .unwrap_or(true);
-    let session_no_httponly = obs.cookie_flags.iter().any(|f| f.contains("missing-HttpOnly"));
+    let session_no_httponly = obs
+        .cookie_flags
+        .iter()
+        .any(|f| f.contains("missing-HttpOnly"));
 
     if has_upload && weak_csp {
         combos.push((
@@ -505,12 +532,11 @@ fn synthesize_attack_paths(obs: &TargetObservations) -> Vec<AttackPath> {
         .weaponization_hints
         .iter()
         .any(|(s, _, _)| s.contains("PHP"));
-    let weak_session = obs.cookie_flags.iter().any(|f| f.contains("missing-HttpOnly"));
-    let weak_csp = obs
-        .csp
-        .as_ref()
-        .map(|c| c.is_empty())
-        .unwrap_or(true);
+    let weak_session = obs
+        .cookie_flags
+        .iter()
+        .any(|f| f.contains("missing-HttpOnly"));
+    let weak_csp = obs.csp.as_ref().map(|c| c.is_empty()).unwrap_or(true);
 
     if has_login && weak_session {
         let login_url = obs
@@ -739,7 +765,8 @@ async fn gather_observations(client: &reqwest::Client, target: &str) -> TargetOb
                     obs.auth_endpoints.push(url.clone());
                 }
                 if kind == &"api" && p.body.contains("version") {
-                    obs.api_versions.push(format!("{} → HTTP {}", url, p.status));
+                    obs.api_versions
+                        .push(format!("{} → HTTP {}", url, p.status));
                 }
                 let already = obs.entry_points.iter().any(|e| e.url == url);
                 if !already {
@@ -1003,16 +1030,10 @@ mod tests {
                     status: 200,
                 },
             ],
-            c2_exfil_hints: vec![(
-                "webhook param".into(),
-                "callback= in HTML".into(),
-            )],
+            c2_exfil_hints: vec![("webhook param".into(), "callback= in HTML".into())],
             auth_endpoints: vec!["https://app.example.com/login".into()],
             api_versions: vec!["/api/v1".into()],
-            exploitation_prereqs: vec![(
-                "upload + weak/absent CSP".into(),
-                "observed".into(),
-            )],
+            exploitation_prereqs: vec![("upload + weak/absent CSP".into(), "observed".into())],
             ..Default::default()
         };
 

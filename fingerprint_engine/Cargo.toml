@@ -8,12 +8,17 @@ description = "Active tech stack fingerprinting for threat intel correlation"
 [features]
 default = ["live-aws"]
 live-aws = []
+# Compile critical OT/ICS attack engines into this binary. Omit for standard recon workers.
+high_risk_engines = []
 numa = ["dep:hwlocality"]
 
 [dependencies]
 fuzz_core = { path = "../fuzz_core" }
 weissman-core = { path = "../backend/weissman-core" }
+weissman-ui-provenance = { path = "../crates/weissman-ui-provenance" }
 weissman-db = { path = "../crates/weissman-db" }
+weissman-job-bus = { path = "../crates/weissman-job-bus" }
+weissman-fleet-shaping = { path = "../crates/weissman-fleet-shaping" }
 weissman-engines = { path = "../backend/weissman-engines" }
 ml-kem = "0.2.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking", "http2"] }
@@ -21,6 +26,7 @@ tokio = { version = "1", features = ["full", "sync"] }
 regex = "1.10"
 futures = "0.3"
 async-stream = "0.3"
+async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"

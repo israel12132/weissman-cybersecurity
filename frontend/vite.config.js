@@ -1,48 +1,93 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import forensicRouteCompliancePlugin from './plugins/vite-forensic-route-compliance.mjs'
 
-// base: '/command-center/' must match Rust static nest at /command-center (ServeDir).
-// Production: run `npm run build` (or ../deploy/build-frontend.sh); Rust serves frontend/dist — no Vite in prod.
-// The production bundle is traced only from index.html → src/**. Playwright-only mocks live under tests-e2e/ and must never be imported from src/.
+const VENDOR_REACT = ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler']
+const VENDOR_I18N = ['i18next', 'react-i18next', 'i18next-browser-languagedetector']
+
+function matchVendor(id, needles) {
+  return needles.some((n) => id.includes(`/node_modules/${n}`))
+}
+
+function manualChunkForId(id) {
+  if (!id.includes('node_modules')) {
+    // Single shared chunk for React contexts — prevents duplicate createContext instances
+    // when cockpit-shell and lazy route chunks both import the same provider module.
+    if (id.includes('/src/context/') || id.includes('/src/providers/')) {
+      return 'app-context'
+    }
+    if (id.includes('/engineC2/EngineManifestContext') || id.includes('/engineC2/EngineC2Boundary')) {
+      return 'app-context'
+    }
+    if (id.includes('enginesRegistry.js')) return 'data-engines-registry'
+    if (id.includes('engineParamDefs.generated')) return 'data-engine-params'
+    if (id.includes('engineUiManifests.seed')) return 'data-ui-manifests'
+    if (id.includes('/locales/en.json')) return 'locale-en'
+    if (id.includes('/locales/he.json')) return 'locale-he'
+    if (id.includes('AstTreeViewer')) return 'widget-ast-tree'
+    if (id.includes('battlespace/')) return 'widget-battlespace'
+    if (id.includes('/Cockpit.jsx')) return 'cockpit-shell'
+    if (id.includes('/TacticalApp.jsx')) return 'tactical-app'
+    if (id.includes('/routing/routeChunks') || id.includes('/routing/routePrefetchMap')) {
+      return 'route-registry'
+    }
+    return undefined
+  }
+
+  if (matchVendor(id, VENDOR_REACT)) return 'vendor-react'
+  if (matchVendor(id, VENDOR_I18N)) return 'vendor-i18n'
+  if (id.includes('three')) return 'vendor-three'
+  if (id.includes('recharts')) return 'vendor-recharts'
+  if (id.includes('@xyflow')) return 'vendor-xyflow'
+  if (id.includes('framer-motion')) return 'vendor-motion'
+  if (id.includes('lucide-react')) return 'vendor-lucide'
+  if (id.includes('@tanstack/react-table')) return 'vendor-table'
+  if (id.includes('react-window')) return 'vendor-window'
+  if (id.includes('react-simple-maps')) return 'vendor-maps'
+
+  return undefined
+}
+
 export default defineConfig({
   base: '/command-center/',
-  plugins: [react()],
+  plugins: [forensicRouteCompliancePlugin(), react()],
+  worker: { format: 'es' },
   build: {
+    target: 'es2020',
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
-        manualChunks: {
-          // React core
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          // Animation
-          'vendor-motion': ['framer-motion'],
-          // Charts
-          'vendor-recharts': ['recharts'],
-          // 3D globe
-          'vendor-three': ['three'],
-          // Flow graph
-          'vendor-xyflow': ['@xyflow/react'],
-          // Icons
-          'vendor-lucide': ['lucide-react'],
-          // Table
-          'vendor-table': ['@tanstack/react-table'],
+        manualChunks(id) {
+          return manualChunkForId(id)
         },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
       },
     },
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 500,
   },
   server: {
     port: 5173,
-    // Dev-only: API lives on the Rust process. Do not use for production access.
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        cookieDomainRewrite: '',
+        cookiePathRewrite: '/',
+      },
       '/ws': { target: 'ws://127.0.0.1:8000', ws: true, changeOrigin: true },
     },
   },
   preview: {
     port: 4173,
-    // Optional: test production build locally with `npm run build && npm run preview`
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        cookieDomainRewrite: '',
+        cookiePathRewrite: '/',
+      },
       '/ws': { target: 'ws://127.0.0.1:8000', ws: true, changeOrigin: true },
     },
   },

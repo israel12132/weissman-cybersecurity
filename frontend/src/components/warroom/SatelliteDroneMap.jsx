@@ -14,8 +14,14 @@ const US_CENTER = [37.09, -95.71]
 const PATROL_IDLE_MS = 30000
 const PATROL_PAN_SPEED = 0.08
 
+/** stableGeoFromLabel returns [lat, lng]; react-simple-maps expects [lng, lat]. */
 function geoForTarget(domainOrName) {
-  return stableGeoFromLabel(domainOrName)
+  const [lat, lng] = stableGeoFromLabel(domainOrName)
+  return [lng, lat]
+}
+
+function mapCenterFromLatLng([lat, lng]) {
+  return [lng, lat]
 }
 
 export default function SatelliteDroneMap() {
@@ -23,7 +29,8 @@ export default function SatelliteDroneMap() {
   const { selectedClient, selectedClientId } = useClient()
   const { vulnMarkers, setVulnMarkers, mapZoomComplete, setMapZoomComplete, lastNewTarget, setLastNewTarget, discoveredTargets, lastLatencyMs, US_CENTER: usCenter } = useWarRoom()
   const { playZoom } = useWarRoomSound()
-  const [center, setCenter] = useState(US_CENTER)
+  const usMapCenter = mapCenterFromLatLng(usCenter || US_CENTER)
+  const [center, setCenter] = useState(usMapCenter)
   const [zoom, setZoom] = useState(1)
   const [targetCoord, setTargetCoord] = useState(null)
   const [zoomPhase, setZoomPhase] = useState('idle')
@@ -80,7 +87,7 @@ export default function SatelliteDroneMap() {
     const id = setInterval(() => {
       patrolOffsetRef.current += PATROL_PAN_SPEED
       const angle = patrolOffsetRef.current
-      setCenter([37.09 + Math.sin(angle) * 25, -95.71 + Math.cos(angle * 0.7) * 15])
+      setCenter([-95.71 + Math.cos(angle * 0.7) * 15, 37.09 + Math.sin(angle) * 25])
       setZoom(1.2)
     }, 200)
     return () => clearInterval(id)
@@ -99,7 +106,7 @@ export default function SatelliteDroneMap() {
         const arr = Array.isArray(list) ? list : []
         const count = Math.min(arr.length, 8)
         setVulnMarkers(Array.from({ length: count }, (_, i) => ({
-          coord: [targetCoord[0] + (i - count / 2) * 0.08, targetCoord[1]],
+          coord: [targetCoord[0] + (i - count / 2) * 0.08, targetCoord[1]], // [lng, lat]
         })))
       })
       .catch(() => {})
@@ -154,7 +161,7 @@ export default function SatelliteDroneMap() {
                 fill="none"
               />
             )}
-            <Marker coordinates={usCenter || US_CENTER}>
+            <Marker coordinates={usMapCenter}>
               <motion.circle
                 r={4}
                 fill="#22d3ee"

@@ -20,7 +20,14 @@ fn finding_evidence(
     target: &str,
     evidence: Map<String, Value>,
 ) -> Value {
-    let mut f = finding(CHRONOS_ENGINE_ID, title, severity, mitre, description, target);
+    let mut f = finding(
+        CHRONOS_ENGINE_ID,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+    );
     if let Some(obj) = f.as_object_mut() {
         obj.insert("evidence".into(), Value::Object(evidence));
     }
@@ -74,11 +81,9 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
     let host = extract_host(target);
     let mut findings: Vec<Value> = Vec::new();
 
-    if let (Some(pool), Some(tenant_id), Some(client_id)) = (
-        ctx.app_pool.as_ref(),
-        ctx.tenant_id,
-        ctx.client_id,
-    ) {
+    if let (Some(pool), Some(tenant_id), Some(client_id)) =
+        (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id)
+    {
         let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
             Ok(t) => t,
             Err(e) => return EngineResult::error(format!("db: {e}")),
@@ -101,20 +106,32 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
                 continue;
             }
             let mut ev = serde_json::Map::new();
-            ev.insert("event_id".into(), json!(r.try_get::<i64, _>("id").unwrap_or(0)));
+            ev.insert(
+                "event_id".into(),
+                json!(r.try_get::<i64, _>("id").unwrap_or(0)),
+            );
             ev.insert("event_type".into(), json!(et));
-            ev.insert("pid".into(), json!(r.try_get::<Option<i32>, _>("pid").ok().flatten()));
+            ev.insert(
+                "pid".into(),
+                json!(r.try_get::<Option<i32>, _>("pid").ok().flatten()),
+            );
             ev.insert(
                 "parent_pid".into(),
                 json!(r.try_get::<Option<i32>, _>("parent_pid").ok().flatten()),
             );
             ev.insert(
                 "process_name".into(),
-                json!(r.try_get::<Option<String>, _>("process_name").ok().flatten()),
+                json!(r
+                    .try_get::<Option<String>, _>("process_name")
+                    .ok()
+                    .flatten()),
             );
             ev.insert(
                 "action_taken".into(),
-                json!(r.try_get::<Option<String>, _>("action_taken").ok().flatten()),
+                json!(r
+                    .try_get::<Option<String>, _>("action_taken")
+                    .ok()
+                    .flatten()),
             );
             findings.push(finding_evidence(
                 &format!("CHRONOS {} on host {}", et, host),
@@ -233,21 +250,26 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
     let mut agent_ctx = ctx.clone();
     agent_ctx.job_params = agent_params;
     let agent_result =
-        crate::engine_dispatch::run_agent_required_engine(CHRONOS_ENGINE_ID, target, &agent_ctx).await;
+        crate::engine_dispatch::run_agent_required_engine(CHRONOS_ENGINE_ID, target, &agent_ctx)
+            .await;
 
     for f in &agent_result.findings {
         findings.push(f.clone());
-        if let (Some(pool), Some(tenant_id), Some(client_id)) = (
-            ctx.app_pool.as_ref(),
-            ctx.tenant_id,
-            ctx.client_id,
-        ) {
+        if let (Some(pool), Some(tenant_id), Some(client_id)) =
+            (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id)
+        {
             if let Some(obj) = f.as_object() {
                 let title = obj.get("title").and_then(Value::as_str).unwrap_or("");
-                if title.contains("freeze") || title.contains("anomaly") || title.contains("shell spawn") {
+                if title.contains("freeze")
+                    || title.contains("anomaly")
+                    || title.contains("shell spawn")
+                {
                     let ev = obj.get("evidence").cloned().unwrap_or(json!({}));
                     let pid = ev.get("pid").and_then(Value::as_i64).map(|p| p as i32);
-                    let ppid = ev.get("parent_pid").and_then(Value::as_i64).map(|p| p as i32);
+                    let ppid = ev
+                        .get("parent_pid")
+                        .and_then(Value::as_i64)
+                        .map(|p| p as i32);
                     let pname = ev
                         .get("process_name")
                         .and_then(Value::as_str)
@@ -293,7 +315,10 @@ pub async fn run_chronos_result(target: &str, ctx: &EngineRunContext) -> EngineR
 
     let count = findings.len();
     if count == 0 {
-        return empty_ok(CHRONOS_ENGINE_ID, "CHRONOS: no anomalies in observation window");
+        return empty_ok(
+            CHRONOS_ENGINE_ID,
+            "CHRONOS: no anomalies in observation window",
+        );
     }
     EngineResult::ok(findings, format!("CHRONOS: {count} live signal(s)"))
 }

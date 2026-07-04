@@ -1,6 +1,6 @@
 # Weissman Cybersecurity — SIG / CAIQ Preparation Q&A
 
-Last updated: 2026-06-09
+Last updated: 2026-07-03 (558 engines, JWT ≥48 chars production minimum)
 
 This is a practical response bank for SIG / CAIQ-style customer security
 questionnaires. Answers reflect repository-implemented controls; finalise with
@@ -18,7 +18,16 @@ these technical controls.
 ### Q2. Do you provide third-party certifications (SOC 2, ISO 27001)?
 **Answer:** This repository documents the technical control implementation. It
 does not constitute a certification report; certification status is declared
-by the operating entity.
+by the operating entity. Automated evidence for auditors is produced by
+`scripts/generate_audit_evidence_pack.sh` (wiring audits, SBOM hash, NIST/SOC2
+framework mapping) and validated by `bash scripts/full_audit_gate.sh`.
+
+### Q2b. How many security engines are production-wired?
+**Answer:** **558** engines in `PRODUCTION_ENGINE_IDS`, mirrored in the frontend
+catalog (`enginesRegistry.js`). CI gate `verify_engine_wiring.mjs` enforces
+zero gaps; `engine_reality_audit.mjs` reports **0 no_path**. Breakdown: 300
+real_probe, 213 alias, 45 agent_required. Command Center exposes **112 routes**
+with live API evidence banners (`weissman-ui-audit.mjs`).
 
 ## Data security & privacy
 
@@ -69,7 +78,9 @@ per tenant.
 ### Q10. How are passwords handled?
 **Answer:** Stored as bcrypt (cost-12) hashes. Self-serve signup enforces a
 12-char minimum with character-class diversity. No plaintext at rest. No
-password retrieval — only reset via verified email.
+password retrieval — only reset via verified email. Production JWT signing
+requires `WEISSMAN_JWT_SECRET` of **at least 48 characters**; weak known values
+are refused at boot (`security_startup.rs`).
 
 ### Q11. How is read-only access enforced for NL queries?
 **Answer:** A dedicated Postgres role `weissman_ro` has SELECT-only grants on
@@ -212,4 +223,6 @@ rather than silently re-applying a modified file
 | Data retention | `fingerprint_engine/src/data_retention.rs` |
 | Webhook HMAC verify | `fingerprint_engine/src/billing/webhook.rs` |
 | No-transaction migration runner | `crates/weissman-db/src/no_tx_migrations.rs` |
+| Full audit gate | `scripts/full_audit_gate.sh` |
+| Evidence pack generator | `scripts/generate_audit_evidence_pack.sh` |
 | Production .env template | `PRODUCTION.env.template` |

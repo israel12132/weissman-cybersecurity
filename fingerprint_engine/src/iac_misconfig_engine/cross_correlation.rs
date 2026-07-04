@@ -11,8 +11,17 @@ use Severity::High;
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "correlation", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "correlation",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -68,10 +77,21 @@ pub fn correlate(files: &[IacFile], per_file_findings: &[Finding]) -> Vec<Findin
             continue;
         }
         for de in serde_yaml::Deserializer::from_str(&file.content) {
-            let Ok(doc) = serde_yaml::Value::deserialize(de) else { continue };
+            let Ok(doc) = serde_yaml::Value::deserialize(de) else {
+                continue;
+            };
             let kind = doc.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-            let name = doc.get("metadata").and_then(|m| m.get("name")).and_then(|n| n.as_str()).unwrap_or("unnamed");
-            let ns = doc.get("metadata").and_then(|m| m.get("namespace")).and_then(|n| n.as_str()).unwrap_or("default").to_string();
+            let name = doc
+                .get("metadata")
+                .and_then(|m| m.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
+            let ns = doc
+                .get("metadata")
+                .and_then(|m| m.get("namespace"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("default")
+                .to_string();
 
             match kind {
                 "NetworkPolicy" => {
@@ -85,7 +105,11 @@ pub fn correlate(files: &[IacFile], per_file_findings: &[Finding]) -> Vec<Findin
                     }
                 }
                 "Deployment" | "StatefulSet" | "DaemonSet" | "Job" | "CronJob" | "Pod" => {
-                    ns_map.entry(ns.clone()).or_default().workloads.push(format!("{kind}/{name}"));
+                    ns_map
+                        .entry(ns.clone())
+                        .or_default()
+                        .workloads
+                        .push(format!("{kind}/{name}"));
                 }
                 _ => {}
             }
@@ -110,18 +134,29 @@ pub fn correlate(files: &[IacFile], per_file_findings: &[Finding]) -> Vec<Findin
     }
 
     // Secret + public cloud in same repo
-    let has_secret = per_file_findings.iter().any(|f| f.policy.framework == "secrets");
+    let has_secret = per_file_findings
+        .iter()
+        .any(|f| f.policy.framework == "secrets");
     let public_cloud = per_file_findings.iter().any(|f| {
         matches!(
             f.policy.id,
-            "WZ-TF-AWS-S3-001" | "WZ-TF-AWS-S3-002" | "WZ-TF-AWS-RDS-001" | "WZ-TF-AWS-SG-001"
-                | "WZ-TF-GCP-GCS-001" | "WZ-CFN-S3-001" | "WZ-CFN-RDS-001"
+            "WZ-TF-AWS-S3-001"
+                | "WZ-TF-AWS-S3-002"
+                | "WZ-TF-AWS-RDS-001"
+                | "WZ-TF-AWS-SG-001"
+                | "WZ-TF-GCP-GCS-001"
+                | "WZ-CFN-S3-001"
+                | "WZ-CFN-RDS-001"
         )
     });
     if has_secret && public_cloud {
         out.push(
-            Finding::new(REPO_SECRET_AND_PUBLIC, "repository", "cross-file-correlation")
-                .observed("secret scanner + public cloud misconfiguration in same repository scan"),
+            Finding::new(
+                REPO_SECRET_AND_PUBLIC,
+                "repository",
+                "cross-file-correlation",
+            )
+            .observed("secret scanner + public cloud misconfiguration in same repository scan"),
         );
     }
 
@@ -130,7 +165,11 @@ pub fn correlate(files: &[IacFile], per_file_findings: &[Finding]) -> Vec<Findin
 
 fn netpol_namespaces(doc: &serde_yaml::Value) -> Vec<String> {
     let mut out = Vec::new();
-    if let Some(ns) = doc.get("metadata").and_then(|m| m.get("namespace")).and_then(|n| n.as_str()) {
+    if let Some(ns) = doc
+        .get("metadata")
+        .and_then(|m| m.get("namespace"))
+        .and_then(|n| n.as_str())
+    {
         out.push(ns.to_string());
     }
     if doc.get("spec").and_then(|s| s.get("podSelector")).is_some() {

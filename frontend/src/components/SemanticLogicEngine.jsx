@@ -3,11 +3,12 @@
  * Fetches state machine from OpenAPI and last reasoning log from backend.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../lib/apiBase'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const CENTER_X = 400
 const CENTER_Y = 280
@@ -99,15 +100,16 @@ export default function SemanticLogicEngine() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col">
-      <header className="flex items-center justify-between border-b border-slate-700 px-6 py-3">
-        <h1 className="text-lg font-bold text-cyan-400">{t(`${NS}.title`)}</h1>
-        <div className="flex items-center gap-4">
-          {stateMachine.target && <span className="text-xs text-slate-500">{t(`${NS}.target_label`, { target: stateMachine.target })}</span>}
-          <button type="button" onClick={load} className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.refresh`)}</button>
-          <Link to="/" className="text-sm text-slate-400 hover:text-cyan-400">{t(`${NS}.back_war_room`)}</Link>
-        </div>
-      </header>
+    <StandaloneLabShell
+      title={t(`${NS}.title`)}
+      subtitle={stateMachine.target ? t(`${NS}.target_label`, { target: stateMachine.target }) : undefined}
+      actions={(
+        <button type="button" onClick={load} className="text-sm text-slate-400 hover:text-cyan-400">
+          {t(`${NS}.refresh`)}
+        </button>
+      )}
+      contentClassName="p-0"
+    >
       {error && (
         <div className="mx-6 mt-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
           {error}
@@ -158,6 +160,6 @@ export default function SemanticLogicEngine() {
         .semantic-node-method { font-size: 11px; color: #5eead4; font-weight: 600; }
         .semantic-node-path { font-size: 10px; color: #94a3b8; margin-top: 4px; word-break: break-all; }
       `}</style>
-    </div>
+    </StandaloneLabShell>
   )
 }

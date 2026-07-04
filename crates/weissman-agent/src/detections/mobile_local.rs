@@ -20,14 +20,31 @@ pub async fn run_sim_swap(engine: &str) -> anyhow::Result<Vec<Value>> {
     }
     #[cfg(target_os = "windows")]
     {
-        if let Some(out) = run_cmd_lossy("powershell", &["-NoProfile", "-Command", "Get-CimInstance -ClassName Win32_SerialPort | Select-Object Name, DeviceID"]).await {
-            profiles.extend(out.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string));
+        if let Some(out) = run_cmd_lossy(
+            "powershell",
+            &[
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance -ClassName Win32_SerialPort | Select-Object Name, DeviceID",
+            ],
+        )
+        .await
+        {
+            profiles.extend(
+                out.lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .map(str::to_string),
+            );
         }
     }
 
     let mut extras = Map::new();
     extras.insert("cellular_profile_lines".into(), json!(profiles.len()));
-    extras.insert("sample".into(), json!(profiles.iter().take(8).collect::<Vec<_>>()));
+    extras.insert(
+        "sample".into(),
+        json!(profiles.iter().take(8).collect::<Vec<_>>()),
+    );
     findings.push(finding(
         engine,
         "Cellular/SIM profile inventory for swap-risk assessment",
@@ -43,10 +60,22 @@ pub async fn run_nfc(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut readers: Vec<String> = Vec::new();
 
     if let Some(out) = run_cmd_lossy("pcsc_scan", &[]).await {
-        readers.extend(out.lines().map(str::trim).filter(|l| !l.is_empty()).take(15).map(str::to_string));
+        readers.extend(
+            out.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .take(15)
+                .map(str::to_string),
+        );
     }
     if let Some(out) = run_cmd("nfc-list", &[]).await {
-        readers.extend(out.lines().map(str::trim).filter(|l| !l.is_empty()).take(15).map(str::to_string));
+        readers.extend(
+            out.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .take(15)
+                .map(str::to_string),
+        );
     }
     #[cfg(target_os = "linux")]
     {

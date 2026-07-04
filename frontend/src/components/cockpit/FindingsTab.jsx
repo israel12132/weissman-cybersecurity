@@ -5,6 +5,7 @@ import { useClient } from '../../context/ClientContext'
 import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
+import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
 import { apiFetch } from '../../lib/apiBase'
 import SeverityBadge from '../ui/SeverityBadge'
 import { SkeletonTable } from '../ui/Skeleton'
@@ -72,7 +73,7 @@ function CopyableBlock({ label, value }) {
 }
 
 /** Forensic / PoE text is rendered as plain React children (escaped) — never HTML. */
-function ExpandedRow({ finding, onClose }) {
+function ExpandedRow({ finding, onClose, onVerified }) {
   const { t } = useTranslation()
   const desc = parseDescription(finding.description, finding.source)
   const proofText = finding.poc_exploit?.trim()
@@ -101,7 +102,7 @@ function ExpandedRow({ finding, onClose }) {
 
   return (
     <tr className="bg-[#0a0a0a]">
-      <td colSpan={4} className="p-0 border-b border-[#1a1a1a] align-top">
+      <td colSpan={5} className="p-0 border-b border-[#1a1a1a] align-top">
         <div className="relative p-4">
           <button
             type="button"
@@ -158,6 +159,12 @@ function ExpandedRow({ finding, onClose }) {
             value={proofText}
           />
         </div>
+        <div className="px-4 pb-4 border-t border-white/10 pt-4">
+          <h4 className="text-xs font-semibold text-violet-300 mb-3 uppercase tracking-wider">
+            {t('findings.col_live_verify')}
+          </h4>
+          <FindingVerifyButton finding={finding} onVerified={onVerified} />
+        </div>
       </td>
     </tr>
   )
@@ -171,6 +178,20 @@ export default function FindingsTab() {
   const [findingsError, setFindingsError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
   const [evidenceFinding, setEvidenceFinding] = useState(null)
+
+  const handleVerifyComplete = useCallback((rawId, verification) => {
+    const patch = (f) => (
+      Number(f.id) === Number(rawId) || Number(f.raw_id) === Number(rawId)
+        ? { ...f, live_verification: verification, live_verdict: verification?.verdict }
+        : f
+    )
+    setFindings((prev) => prev.map(patch))
+    setEvidenceFinding((prev) => {
+      if (!prev) return prev
+      if (Number(prev.id) !== Number(rawId) && Number(prev.raw_id) !== Number(rawId)) return prev
+      return { ...prev, live_verification: verification, live_verdict: verification?.verdict }
+    })
+  }, [])
 
   const fetchFindings = useCallback(async () => {
     if (!selectedClientId) {
@@ -295,19 +316,22 @@ export default function FindingsTab() {
                 <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-40">
                   {t('components.cockpitTabs.findings.table.engine_source')}
                 </th>
+                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-32">
+                  {t('findings.col_live_verify')}
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="py-4 px-4">
-                    <SkeletonTable rows={6} cols={4} />
+                  <td colSpan={5} className="py-4 px-4">
+                    <SkeletonTable rows={6} cols={5} />
                   </td>
                 </tr>
               )}
               {!loading && !findingsError && findings.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-0 border-0">
+                  <td colSpan={5} className="p-0 border-0">
                     <EmptyState
                       icon="search-x"
                       title={t('components.cockpitTabs.findings.empty.title')}
@@ -336,9 +360,20 @@ export default function FindingsTab() {
                     <td className="py-2.5 px-4 text-[#22d3ee] font-mono text-xs">
                       {f.source || '—'}
                     </td>
+                    <td
+                      className="py-2.5 px-4"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      role="presentation"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <LiveVerdictBadge verification={f.live_verification} verdict={f.live_verdict} compact />
+                        <FindingVerifyButton compact finding={f} onVerified={handleVerifyComplete} />
+                      </div>
+                    </td>
                   </tr>
                   {expandedId === f.id && (
-                    <ExpandedRow finding={f} onClose={() => setExpandedId(null)} />
+                    <ExpandedRow finding={f} onClose={() => setExpandedId(null)} onVerified={handleVerifyComplete} />
                   )}
                 </React.Fragment>
               ))}
@@ -347,7 +382,12 @@ export default function FindingsTab() {
         </div>
       </div>
 
-      <DigitalEvidenceHUD clientId={selectedClientId} finding={evidenceFinding} onClose={() => setEvidenceFinding(null)} />
+      <DigitalEvidenceHUD
+        clientId={selectedClientId}
+        finding={evidenceFinding}
+        onClose={() => setEvidenceFinding(null)}
+        onVerified={handleVerifyComplete}
+      />
     </div>
   )
 }

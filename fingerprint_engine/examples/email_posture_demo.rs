@@ -8,14 +8,21 @@ async fn main() {
     let mut ctx = EngineRunContext::default();
     ctx.job_params = serde_json::json!({ "check_smtp_tls": "false", "check_dane": "false" });
 
-    for target in ["https://paypal.com", "https://github.com", "https://example.com"] {
+    for target in [
+        "https://paypal.com",
+        "https://github.com",
+        "https://example.com",
+    ] {
         let r = run_email_dns_posture_result(target, &ctx).await;
         println!("\n================ {target} ================");
         println!("status={} | {}", r.status, r.message);
         if let Some(s) = r.findings.first() {
             let g = s.get("grade").and_then(|v| v.as_str()).unwrap_or("?");
             let score = s.get("score").and_then(|v| v.as_i64()).unwrap_or(-1);
-            let spoof = s.get("spoofability").and_then(|v| v.as_str()).unwrap_or("?");
+            let spoof = s
+                .get("spoofability")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             let sub = s.get("subscores").cloned().unwrap_or_default();
             let provider = s.get("provider").and_then(|v| v.as_str()).unwrap_or("n/a");
             println!("GRADE {g} ({score}/100) | spoofability={spoof} | provider={provider}");

@@ -280,7 +280,12 @@ impl TlsScanConfig {
             cfg.test_tls12 = false;
             cfg.test_tls13 = false;
             for tok in list.split([',', ' ', ';']) {
-                match tok.trim().to_ascii_lowercase().replace(['.', '_'], "").as_str() {
+                match tok
+                    .trim()
+                    .to_ascii_lowercase()
+                    .replace(['.', '_'], "")
+                    .as_str()
+                {
                     "ssl3" | "sslv3" => cfg.test_ssl3 = true,
                     "tls1" | "tls10" => cfg.test_tls10 = true,
                     "tls11" => cfg.test_tls11 = true,
@@ -300,7 +305,8 @@ impl TlsScanConfig {
         cfg.check_vulnerabilities = c.bool_or("check_vulnerabilities", cfg.check_vulnerabilities);
         cfg.check_ocsp = c.bool_or("check_ocsp", cfg.check_ocsp);
         cfg.check_http_headers = c.bool_or("check_http_headers", cfg.check_http_headers);
-        cfg.check_security_headers = c.bool_or("check_security_headers", cfg.check_security_headers);
+        cfg.check_security_headers =
+            c.bool_or("check_security_headers", cfg.check_security_headers);
         cfg.check_ct_logs = c.bool_or("check_ct_logs", cfg.check_ct_logs);
         cfg.check_caa = c.bool_or("check_caa", cfg.check_caa);
         cfg.check_dane = c.bool_or("check_dane", cfg.check_dane);
@@ -412,8 +418,10 @@ fn build_connector(
 ) -> Result<SslConnector, String> {
     let mut b = SslConnector::builder(SslMethod::tls()).map_err(|e| e.to_string())?;
     b.set_verify(SslVerifyMode::NONE);
-    b.set_min_proto_version(Some(ver)).map_err(|e| e.to_string())?;
-    b.set_max_proto_version(Some(ver)).map_err(|e| e.to_string())?;
+    b.set_min_proto_version(Some(ver))
+        .map_err(|e| e.to_string())?;
+    b.set_max_proto_version(Some(ver))
+        .map_err(|e| e.to_string())?;
     if let Some(cl) = cipher_list {
         let _ = b.set_cipher_list(cl);
     }
@@ -495,7 +503,11 @@ fn parse_cert(cert: &X509Ref) -> CertInfo {
         name.entries()
             .map(|e| {
                 let key = e.object().nid().short_name().unwrap_or("?");
-                let val = e.data().as_utf8().map(|s| s.to_string()).unwrap_or_default();
+                let val = e
+                    .data()
+                    .as_utf8()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
                 format!("{key}={val}")
             })
             .collect::<Vec<_>>()
@@ -901,7 +913,12 @@ struct GradeOutcome {
 fn grade_port(report: &PortReport, host: &str, hsts_ok: bool, cfg: &TlsScanConfig) -> GradeOutcome {
     let mut cap = "A+";
     let mut reasons: Vec<String> = Vec::new();
-    let supported = |v: &str| report.protocols.iter().any(|p| p.version == v && p.supported);
+    let supported = |v: &str| {
+        report
+            .protocols
+            .iter()
+            .any(|p| p.version == v && p.supported)
+    };
 
     if supported("SSLv3") {
         cap = worse(cap, "F");
@@ -959,7 +976,10 @@ fn grade_port(report: &PortReport, host: &str, hsts_ok: bool, cfg: &TlsScanConfi
         }
         if leaf.sig_weak {
             cap = worse(cap, "C");
-            reasons.push(format!("Weak signature algorithm {} → cap C", leaf.sig_algo));
+            reasons.push(format!(
+                "Weak signature algorithm {} → cap C",
+                leaf.sig_algo
+            ));
         }
         if leaf.expired {
             trust_issue = true;
@@ -1213,7 +1233,10 @@ fn findings_for_port(
             Evidence::new()
                 .with("host", host)
                 .with("port", i64::from(report.port))
-                .with("starttls", StartTls::parse(&cfg.starttls_raw, report.port).as_str()),
+                .with(
+                    "starttls",
+                    StartTls::parse(&cfg.starttls_raw, report.port).as_str(),
+                ),
         ));
         return out;
     }
@@ -1226,7 +1249,10 @@ fn findings_for_port(
         .with("grade", grade.grade.clone())
         .with("grade_reasons", json!(grade.reasons))
         .with("protocols", protocol_evidence(report))
-        .with("cipher_count", i64::try_from(report.ciphers.len()).unwrap_or(0))
+        .with(
+            "cipher_count",
+            i64::try_from(report.ciphers.len()).unwrap_or(0),
+        )
         .with("ciphers", cipher_evidence(report))
         .with("forward_secrecy", report.ciphers.iter().any(|c| c.pfs))
         .with("chain_length", i64::try_from(report.chain_len).unwrap_or(0))
@@ -1792,7 +1818,10 @@ fn pci_nist_tags(posture: &TlsPosture, reports: &[PortReport]) -> Value {
         }
         for c in &report.ciphers {
             let up = c.name.to_ascii_uppercase();
-            if up.contains("RC4") || up.contains("3DES") || up.contains("NULL") || up.contains("EXPORT")
+            if up.contains("RC4")
+                || up.contains("3DES")
+                || up.contains("NULL")
+                || up.contains("EXPORT")
             {
                 pci_fail.push(format!("{}:{}", report.port, c.name));
             }
@@ -1851,7 +1880,10 @@ fn build_posture_summary(
         .with("grade", grade.clone())
         .with("best_grade", posture.best_grade.clone())
         .with("worst_grade", posture.worst_grade.clone())
-        .with("ports_scanned", i64::try_from(posture.ports_scanned).unwrap_or(0))
+        .with(
+            "ports_scanned",
+            i64::try_from(posture.ports_scanned).unwrap_or(0),
+        )
         .with("ports_tls", i64::try_from(posture.ports_tls).unwrap_or(0))
         .with("hsts_ok", posture.hsts_ok)
         .with("dane_checked", posture.dane_checked)
@@ -1944,12 +1976,13 @@ async fn run_pki_tls_scan(target: &str, mut cfg: TlsScanConfig) -> EngineResult 
         let host_c = host.clone();
         let sni_c = sni.clone();
         let cfg_c = cfg.clone();
-        let report = tokio::task::spawn_blocking(move || probe_port_blocking(host_c, sni_c, port, cfg_c))
-            .await
-            .unwrap_or(PortReport {
-                port,
-                ..PortReport::default()
-            });
+        let report =
+            tokio::task::spawn_blocking(move || probe_port_blocking(host_c, sni_c, port, cfg_c))
+                .await
+                .unwrap_or(PortReport {
+                    port,
+                    ..PortReport::default()
+                });
         if report.reachable {
             reachable_any = true;
         }
@@ -1958,13 +1991,7 @@ async fn run_pki_tls_scan(target: &str, mut cfg: TlsScanConfig) -> EngineResult 
             graded.push(format!("{}:{}={}", host, report.port, g.grade));
             posture.record_port_grade(report.port, &g);
         }
-        let port_findings = findings_for_port(
-            &report,
-            target,
-            &host,
-            hardening.hsts_ok,
-            &cfg,
-        );
+        let port_findings = findings_for_port(&report, target, &host, hardening.hsts_ok, &cfg);
         for f in &port_findings {
             if let Some(sev) = f.get("severity").and_then(Value::as_str) {
                 posture.worst_severity = bump_worst(&posture.worst_severity, sev);
@@ -1990,13 +2017,7 @@ async fn run_pki_tls_scan(target: &str, mut cfg: TlsScanConfig) -> EngineResult 
     if cfg.check_posture_score && reachable_any && !posture.grades_by_port.is_empty() {
         findings.insert(
             0,
-            build_posture_summary(
-                target,
-                &host,
-                &posture,
-                &port_reports,
-                findings.len(),
-            ),
+            build_posture_summary(target, &host, &posture, &port_reports, findings.len()),
         );
     }
 
@@ -2108,7 +2129,9 @@ mod tests {
 
         let (_, weak) = classify_cipher("EXP-DES-CBC-SHA", 40);
         assert!(weak.iter().any(|w| w.contains("EXPORT")));
-        assert!(weak.iter().any(|w| w.contains("128-bit") || w.contains("< 128")));
+        assert!(weak
+            .iter()
+            .any(|w| w.contains("128-bit") || w.contains("< 128")));
 
         let (_, weak) = classify_cipher("DES-CBC3-SHA", 112);
         assert!(weak.iter().any(|w| w.contains("3DES")));

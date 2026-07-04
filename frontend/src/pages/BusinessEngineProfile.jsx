@@ -11,6 +11,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { buildScanPayload, normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
@@ -309,7 +310,10 @@ export default function BusinessEngineProfile() {
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         <AgentRequiredGate engineId={engineId}>
-        <EvidenceNotice>{t('pages.businessEngineProfile.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader
+          evidence={t('pages.businessEngineProfile.evidence_notice')}
+          engineId={engineId}
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_jobs')} value={kpi.jobs.toLocaleString()} accent="#22d3ee" />

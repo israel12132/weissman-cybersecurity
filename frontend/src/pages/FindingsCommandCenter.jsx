@@ -20,6 +20,7 @@ import FilterPills from '../components/ui/FilterPills'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
+import FindingVerifyButton, { LiveVerdictBadge } from '../components/findings/FindingLiveVerify'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import SeverityBadge, {
   SEVERITY_META,
@@ -162,7 +163,7 @@ function ScoreBadge({ score }) {
 
 const columnHelper = createColumnHelper()
 
-function buildColumns(t) {
+function buildColumns(t, onVerifyRow) {
   return [
     columnHelper.accessor('severity', {
       id: 'severity',
@@ -346,6 +347,22 @@ function buildColumns(t) {
       filterFn: (row, _id, filterValue) =>
         !filterValue || (row.original.status || '').toUpperCase() === filterValue,
     }),
+    columnHelper.display({
+      id: 'live_verify',
+      header: t('findings.col_live_verify'),
+      size: 130,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
+          <LiveVerdictBadge
+            verification={row.original.live_verification || row.original.raw?.live_verification}
+            verdict={row.original.live_verdict}
+            compact
+          />
+          <FindingVerifyButton compact finding={row.original} onVerified={onVerifyRow} />
+        </div>
+      ),
+    }),
     columnHelper.accessor('verified', {
       id: 'verified',
       header: t('findings.col_verified'),
@@ -488,7 +505,25 @@ export default function FindingsCommandCenter() {
       .catch((e) => toast.error(t('findings.toast_export_failed', { detail: e?.message || t('findings.network_error') })))
   }, [toast, t])
 
-  const columns = useMemo(() => buildColumns(t), [t])
+  const handleVerifyComplete = useCallback((rawId, verification) => {
+    const patch = (f) => (
+      Number(f.raw_id) === Number(rawId) || Number(f.id) === Number(rawId)
+        ? {
+            ...f,
+            live_verification: verification,
+            live_verdict: verification?.verdict,
+          }
+        : f
+    )
+    setRawFindings((prev) => prev.map(patch))
+    setSelectedFinding((prev) => {
+      if (!prev) return prev
+      if (Number(prev.raw_id) !== Number(rawId) && Number(prev.id) !== Number(rawId)) return prev
+      return { ...prev, live_verification: verification, live_verdict: verification?.verdict }
+    })
+  }, [])
+
+  const columns = useMemo(() => buildColumns(t, handleVerifyComplete), [t, handleVerifyComplete])
 
   const tableData = useMemo(() => {
     if (!kevFilter) return rawFindings
@@ -611,7 +646,7 @@ export default function FindingsCommandCenter() {
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
+      <main id="main-content" tabIndex={-1} className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5 outline-none">
         <EvidenceNotice>{t('findings.evidence_notice')}</EvidenceNotice>
 
         <PremiumPageHeader
@@ -797,6 +832,7 @@ export default function FindingsCommandCenter() {
         finding={selectedFinding}
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
+        onVerifyComplete={handleVerifyComplete}
         statusOptions={FINDING_STATUSES.map(({ value, label }) => ({ value, label }))}
         headerExtra={drawerEngineMeta.headerExtra}
         subtitle={drawerEngineMeta.subtitle}

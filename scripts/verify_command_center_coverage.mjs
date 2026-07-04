@@ -107,9 +107,15 @@ for (const rule of ROUTE_ENGINE_ID_PARAM_PREFIX) {
   }
 }
 
-// ProtectedOutlet providers
-if (!main.includes('ClientProvider') || !main.includes('EngineHubProvider')) {
-  violations.push('main.jsx: ProtectedOutlet missing ClientProvider / EngineHubProvider')
+// ProtectedOutlet providers (TacticalApp + ProtectedProviders bundle)
+const tacticalApp = fs.readFileSync(path.join(root, 'frontend/src/TacticalApp.jsx'), 'utf8')
+const protectedProviders = fs.readFileSync(path.join(root, 'frontend/src/providers/ProtectedProviders.jsx'), 'utf8')
+if (
+  !tacticalApp.includes('ProtectedOutlet')
+  || !protectedProviders.includes('ClientProvider')
+  || !protectedProviders.includes('EngineHubProvider')
+) {
+  violations.push('TacticalApp/ProtectedProviders: missing ClientProvider / EngineHubProvider shell')
 }
 
 // launchEngineScan must be engine-aware (hub merge guard)

@@ -316,13 +316,15 @@ async function main() {
     }
 
     // Findings Command Center API — DB-backed rows for this client
-    const findingsApi = await req('GET', `/api/findings?client_id=${clientId}&limit=50`, auth)
+    const findingsApi = await req('GET', `/api/findings?client_id=${clientId}&limit=500`, auth)
     if (findingsApi.status === 200 && findingsApi.data?.ok === true) {
       const rows = Array.isArray(findingsApi.data.findings) ? findingsApi.data.findings : []
       const osintRows = rows.filter((r) => String(r.source || '').toLowerCase() === 'osint')
       ok('findings_api', `total=${findingsApi.data.total ?? rows.length} osint=${osintRows.length}`)
       if (typeof persisted === 'number' && persisted > 0 && osintRows.length === 0) {
-        fail('findings_db_sync', `persisted=${persisted} but no osint rows in /api/findings`)
+        fail('findings_db_sync', `persisted=${persisted} but no osint rows in /api/findings (limit=500)`)
+      } else if (typeof persisted === 'number' && persisted > 0) {
+        ok('findings_db_sync', `persisted=${persisted} osint_visible=${osintRows.length}`)
       }
       const withRisk = osintRows.filter(validateRiskFields)
       if (osintRows.length > 0) {

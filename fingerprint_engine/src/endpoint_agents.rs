@@ -454,18 +454,13 @@ pub async fn enqueue_and_dispatch_fleet(
     params: &Value,
 ) -> Result<(Uuid, bool), sqlx::Error> {
     let task_uuid = enqueue_task(pool, tenant_id, client_id, engine, target, params).await?;
-    let agents = match agent_uuids_capable_for_client(
-        pool,
-        tenant_id,
-        client_id,
-        engine,
-        FLEET_MAX_AGENTS,
-    )
-    .await
-    {
-        Ok(capable) if !capable.is_empty() => capable,
-        _ => agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?,
-    };
+    let agents =
+        match agent_uuids_capable_for_client(pool, tenant_id, client_id, engine, FLEET_MAX_AGENTS)
+            .await
+        {
+            Ok(capable) if !capable.is_empty() => capable,
+            _ => agent_uuids_for_client(pool, tenant_id, client_id, FLEET_MAX_AGENTS).await?,
+        };
     let start = registry.dispatch_cursor.fetch_add(1, Ordering::Relaxed);
     let mut live = false;
     for (offset, _uuid) in agents.iter().enumerate() {
@@ -808,15 +803,12 @@ pub async fn store_finding_for_task(
     };
     let mut enriched = finding.clone();
     if let Some(obj) = enriched.as_object_mut() {
-        obj.entry("source")
-            .or_insert_with(|| json!("agent"));
+        obj.entry("source").or_insert_with(|| json!("agent"));
         if let Some(ref jid) = scan_job_id {
-            obj.entry("scan_job_id")
-                .or_insert_with(|| json!(jid));
+            obj.entry("scan_job_id").or_insert_with(|| json!(jid));
         }
         if let Some(tid) = task_id {
-            obj.entry("agent_task_id")
-                .or_insert_with(|| json!(tid));
+            obj.entry("agent_task_id").or_insert_with(|| json!(tid));
         }
     }
     let target = enriched
@@ -863,16 +855,14 @@ pub async fn store_finding_for_task(
 }
 
 /// Resolve the parent scan job id stored on an agent task (if any).
-pub async fn task_scan_job_id(
-    pool: &PgPool,
-    tenant_id: i64,
-    task_uuid: &str,
-) -> Option<String> {
+pub async fn task_scan_job_id(pool: &PgPool, tenant_id: i64, task_uuid: &str) -> Option<String> {
     let Ok(uuid) = Uuid::parse_str(task_uuid) else {
         return None;
     };
     let mut conn = pool.acquire().await.ok()?;
-    crate::db::set_tenant_conn(&mut *conn, tenant_id).await.ok()?;
+    crate::db::set_tenant_conn(&mut *conn, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_scalar::<_, Option<String>>(
         r#"SELECT params->>'scan_job_id' FROM endpoint_agent_tasks
             WHERE task_uuid = $1 AND tenant_id = $2"#,
@@ -926,11 +916,11 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
                 let _ = tx.commit().await;
                 for (client_id,) in clients {
                     let recent = {
-                        let mut tx = match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await
-                        {
-                            Ok(t) => t,
-                            Err(_) => continue,
-                        };
+                        let mut tx =
+                            match crate::db::begin_tenant_tx(pool.as_ref(), tenant_id).await {
+                                Ok(t) => t,
+                                Err(_) => continue,
+                            };
                         let ok = sqlx::query_scalar::<_, bool>(
                             r#"SELECT EXISTS(
                                 SELECT 1 FROM endpoint_agent_tasks

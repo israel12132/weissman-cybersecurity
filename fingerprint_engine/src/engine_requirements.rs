@@ -43,9 +43,13 @@ fn non_empty_str(v: Option<&Value>) -> bool {
 }
 
 fn non_empty_array(v: Option<&Value>) -> bool {
-    v.and_then(Value::as_array).map(|a| {
-        !a.is_empty() && a.iter().any(|x| x.as_str().is_some_and(|s| !s.trim().is_empty()))
-    }).unwrap_or(false)
+    v.and_then(Value::as_array)
+        .map(|a| {
+            !a.is_empty()
+                && a.iter()
+                    .any(|x| x.as_str().is_some_and(|s| !s.trim().is_empty()))
+        })
+        .unwrap_or(false)
 }
 
 fn get_path<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {

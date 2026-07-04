@@ -1,4 +1,3 @@
-import { firstClientTarget } from '../lib/clientTarget'
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,14 +10,18 @@ import {
 } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { firstClientTarget } from '../lib/clientTarget'
 import { useRegisterHubClient } from '../context/EngineHubContext'
+import { useClient } from '../context/ClientContext'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import { fetchEngineHistorySummary, invalidateEngineHistorySummary } from '../lib/engineHistorySummary'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -169,11 +172,11 @@ function EngineMatrixCard({
   loading,
   groupColor,
   tier,
+  realityKind,
   t,
 }) {
   const navigate = useNavigate()
   const [runBusy, setRunBusy] = useState(false)
-  const { kindById } = useEngineCapabilities()
 
   const handleRun = useCallback(async (e) => {
     e.stopPropagation()
@@ -192,15 +195,13 @@ function EngineMatrixCard({
   }, [onToggle, engine.id, enabled])
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ duration: 0.2 }}
-      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-white/[0.08] p-4 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/25 hover:shadow-[0_12px_40px_rgba(0,0,0,0.45),0_0_24px_rgba(34,211,238,0.08)]"
+    <div
+      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-white/[0.08] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25"
       style={enabled ? { boxShadow: `inset 0 1px 0 ${groupColor}18` } : {}}
-      onClick={() => navigate(`/engines/${engine.id}`)}
+      onClick={(e) => {
+        if (e.target.closest('button')) return
+        navigate(`/engines/${engine.id}`)
+      }}
     >
       <div
         className="absolute inset-x-0 top-0 h-px rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -253,7 +254,7 @@ function EngineMatrixCard({
       <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
         <CategoryBadge groupId={engine.group} />
         <TierBadge tier={tier} t={t} />
-        <RealityBadge kind={kindById[engine.id]} />
+        <RealityBadge kind={realityKind} />
       </div>
 
       <p className="text-[11px] text-white/50 leading-relaxed line-clamp-2 min-h-[2.5rem]">
@@ -273,7 +274,7 @@ function EngineMatrixCard({
           </span>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -289,6 +290,7 @@ function GroupSection({
   onDisableAll,
   onRunGroup,
   isProduction,
+  kindById,
   t,
 }) {
   const enabledCount = engines.filter((e) => enabledSet.has(e.id)).length
@@ -345,8 +347,7 @@ function GroupSection({
           </button>
         </div>
       </div>
-      <AnimatePresence mode="popLayout">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {engines.map((engine) => {
             const state = engineStates[engine.id] ?? {}
             return (
@@ -363,12 +364,12 @@ function GroupSection({
                 loading={loading}
                 groupColor={groupDef.color}
                 tier={getEngineTier(engine.id, isProduction)}
+                realityKind={kindById[engine.id]}
                 t={t}
               />
             )
           })}
         </div>
-      </AnimatePresence>
     </section>
   )
 }
@@ -377,6 +378,7 @@ function GroupSection({
 
 export default function EngineMatrix() {
   const { t } = useTranslation()
+  const { kindById } = useEngineCapabilities()
   const [searchParams] = useSearchParams()
   const {
     engines: productionEngines,
@@ -397,6 +399,7 @@ export default function EngineMatrix() {
   })
   const [search, setSearch] = useState('')
   const [clients, setClients] = useState([])
+  const { selectedClientId: cockpitClientId } = useClient()
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [clientConfig, setClientConfig] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
@@ -407,6 +410,10 @@ export default function EngineMatrix() {
 
   useRegisterHubClient(selectedClientId)
   const launchScan = useLaunchEngineScan(selectedClientId)
+
+  useEffect(() => {
+    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
+  }, [cockpitClientId])
 
   useEffect(() => {
     const tier = searchParams.get('tier')
@@ -592,6 +599,7 @@ export default function EngineMatrix() {
         if (Array.isArray(d)) setClients(d)
       }
       setEngineStates({})
+      invalidateEngineHistorySummary()
       setHistoryReloadKey((k) => k + 1)
       setLastMatrixSync(new Date())
     } finally {
@@ -614,41 +622,32 @@ export default function EngineMatrix() {
   }, [filteredEngines, isProduction, selectedClientId, enabledSet])
 
   useEffect(() => {
-    if (productionLoading || filteredEngines.length === 0) return undefined
+    if (productionLoading) return undefined
     let cancelled = false
-    const ids = filteredEngines.map((e) => e.id)
 
-    async function loadHistories() {
-      const results = await Promise.allSettled(
-        ids.map(async (id) => {
-          const r = await apiFetch(`/api/engines/history/${encodeURIComponent(id)}?limit=1`)
-          const data = await r.json().catch(() => null)
-          if (!r.ok || !Array.isArray(data?.jobs) || data.jobs.length === 0) return [id, null]
-          const job = data.jobs[0]
-          return [id, {
+    async function loadHistorySummary() {
+      const summary = await fetchEngineHistorySummary({ force: historyReloadKey > 0 })
+      if (cancelled || !summary) return
+      setEngineStates((prev) => {
+        const next = { ...prev }
+        for (const [id, job] of Object.entries(summary)) {
+          if (!job || typeof job !== 'object') continue
+          const existing = prev[id]
+          if (existing?.status === 'running' || existing?.lastRun === 'just now') continue
+          next[id] = {
+            ...existing,
             lastRun: formatHistoryTimestamp(job.created_at ?? job.updated_at),
             status: jobStatusToEngineStatus(job.status),
             findingsDelta: job.findings_count ?? 0,
-          }]
-        }),
-      )
-      if (cancelled) return
-      setEngineStates((prev) => {
-        const next = { ...prev }
-        for (const result of results) {
-          if (result.status !== 'fulfilled' || !result.value?.[1]) continue
-          const [id, hist] = result.value
-          const existing = prev[id]
-          if (existing?.status === 'running' || existing?.lastRun === 'just now') continue
-          next[id] = { ...existing, ...hist }
+          }
         }
         return next
       })
     }
 
-    loadHistories()
+    loadHistorySummary()
     return () => { cancelled = true }
-  }, [filteredEngines, productionLoading, historyReloadKey])
+  }, [productionLoading, historyReloadKey])
 
   const handleRunAllEngines = useCallback(async () => {
     if (selectedClientId == null) {
@@ -794,7 +793,7 @@ export default function EngineMatrix() {
       </AnimatePresence>
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
-        <EvidenceNotice>{t('engines.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader evidence={t('engines.evidence_notice')} />
         {lastMatrixSync && (
           <p className="text-[10px] font-mono text-white/35 -mt-3">
             {t('weissmanFindings.last_updated', { time: lastMatrixSync.toLocaleString() })}
@@ -910,6 +909,7 @@ export default function EngineMatrix() {
                   onDisableAll={handleDisableAll}
                   onRunGroup={handleRunGroup}
                   isProduction={isProduction}
+                  kindById={kindById}
                   t={t}
                 />
               )

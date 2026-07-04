@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { apiFetch } from '../lib/apiBase';
@@ -28,30 +28,30 @@ export default function RateLimitStatus({ compact = false }) {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLimits();
-    const interval = setInterval(fetchLimits, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchLimits = async () => {
+  const fetchLimits = useCallback(async () => {
     try {
       const response = await apiFetch('/api/rate-limits/status');
       if (response.ok) {
         const data = await response.json();
         const next = data.limits || {};
-        setLimits({
-          scans: next.scans || limits.scans,
-          logins: next.logins || limits.logins,
-          api: next.api || limits.api,
-        });
+        setLimits((prev) => ({
+          scans: next.scans || prev.scans,
+          logins: next.logins || prev.logins,
+          api: next.api || prev.api,
+        }));
       }
     } catch (error) {
       console.warn('Failed to fetch rate limits:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLimits();
+    const interval = setInterval(fetchLimits, compact ? 30000 : 15000);
+    return () => clearInterval(interval);
+  }, [compact, fetchLimits]);
 
   const getStatus = (current, max) => {
     const percentage = (current / max) * 100;

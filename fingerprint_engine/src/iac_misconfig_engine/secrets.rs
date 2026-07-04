@@ -22,19 +22,70 @@ macro_rules! pol {
 }
 
 pub const AWS_KEY: PolicyMeta = pol!("WZ-SEC-AWS-001", "AWS access key id committed in source", Critical, "An AWS access key id (AKIA…) is hard-coded, granting programmatic access if paired with its secret.");
-pub const PRIVATE_KEY: PolicyMeta = pol!("WZ-SEC-PK-001", "Private key material committed in source", Critical, "A PEM private key block is embedded in source, exposing TLS/SSH/signing identities.");
-pub const GITHUB_PAT: PolicyMeta = pol!("WZ-SEC-GH-001", "GitHub token committed in source", Critical, "A GitHub personal-access/app token is hard-coded, allowing repo and CI compromise.");
-pub const GCP_SA: PolicyMeta = pol!("WZ-SEC-GCP-001", "GCP service-account key committed in source", Critical, "A Google Cloud service-account JSON key is embedded, granting cloud access.");
-pub const GOOGLE_API: PolicyMeta = pol!("WZ-SEC-GOOG-001", "Google API key committed in source", High, "A Google API key (AIza…) is hard-coded.");
-pub const SLACK: PolicyMeta = pol!("WZ-SEC-SLACK-001", "Slack token committed in source", High, "A Slack token (xox…) is hard-coded.");
-pub const STRIPE: PolicyMeta = pol!("WZ-SEC-STRIPE-001", "Stripe live secret key committed in source", Critical, "A Stripe live secret key (sk_live_…) is hard-coded.");
-pub const NPM: PolicyMeta = pol!("WZ-SEC-NPM-001", "npm token committed in source", High, "An npm automation token (npm_…) is hard-coded.");
-pub const JWT: PolicyMeta = pol!("WZ-SEC-JWT-001", "JWT committed in source", Medium, "A JSON Web Token is embedded; it may carry valid claims/credentials.");
+pub const PRIVATE_KEY: PolicyMeta = pol!(
+    "WZ-SEC-PK-001",
+    "Private key material committed in source",
+    Critical,
+    "A PEM private key block is embedded in source, exposing TLS/SSH/signing identities."
+);
+pub const GITHUB_PAT: PolicyMeta = pol!(
+    "WZ-SEC-GH-001",
+    "GitHub token committed in source",
+    Critical,
+    "A GitHub personal-access/app token is hard-coded, allowing repo and CI compromise."
+);
+pub const GCP_SA: PolicyMeta = pol!(
+    "WZ-SEC-GCP-001",
+    "GCP service-account key committed in source",
+    Critical,
+    "A Google Cloud service-account JSON key is embedded, granting cloud access."
+);
+pub const GOOGLE_API: PolicyMeta = pol!(
+    "WZ-SEC-GOOG-001",
+    "Google API key committed in source",
+    High,
+    "A Google API key (AIza…) is hard-coded."
+);
+pub const SLACK: PolicyMeta = pol!(
+    "WZ-SEC-SLACK-001",
+    "Slack token committed in source",
+    High,
+    "A Slack token (xox…) is hard-coded."
+);
+pub const STRIPE: PolicyMeta = pol!(
+    "WZ-SEC-STRIPE-001",
+    "Stripe live secret key committed in source",
+    Critical,
+    "A Stripe live secret key (sk_live_…) is hard-coded."
+);
+pub const NPM: PolicyMeta = pol!(
+    "WZ-SEC-NPM-001",
+    "npm token committed in source",
+    High,
+    "An npm automation token (npm_…) is hard-coded."
+);
+pub const JWT: PolicyMeta = pol!(
+    "WZ-SEC-JWT-001",
+    "JWT committed in source",
+    Medium,
+    "A JSON Web Token is embedded; it may carry valid claims/credentials."
+);
 pub const GENERIC: PolicyMeta = pol!("WZ-SEC-GEN-001", "Hard-coded credential (generic high-entropy)", High, "A password/secret/token assignment holds a high-entropy literal value rather than a reference.");
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![AWS_KEY, PRIVATE_KEY, GITHUB_PAT, GCP_SA, GOOGLE_API, SLACK, STRIPE, NPM, JWT, GENERIC]
+    vec![
+        AWS_KEY,
+        PRIVATE_KEY,
+        GITHUB_PAT,
+        GCP_SA,
+        GOOGLE_API,
+        SLACK,
+        STRIPE,
+        NPM,
+        JWT,
+        GENERIC,
+    ]
 }
 
 struct Rule {
@@ -101,9 +152,27 @@ fn placeholderish(v: &str) -> bool {
         return true;
     }
     const MARKERS: &[&str] = &[
-        "example", "changeme", "change_me", "placeholder", "your_", "your-", "yourname", "dummy",
-        "redacted", "xxxxx", "<", "secrets.", "vault:", "{{", "test", "sample", "todo", "fixme",
-        "password", "123456", "********",
+        "example",
+        "changeme",
+        "change_me",
+        "placeholder",
+        "your_",
+        "your-",
+        "yourname",
+        "dummy",
+        "redacted",
+        "xxxxx",
+        "<",
+        "secrets.",
+        "vault:",
+        "{{",
+        "test",
+        "sample",
+        "todo",
+        "fixme",
+        "password",
+        "123456",
+        "********",
     ];
     MARKERS.iter().any(|m| lv.contains(m)) || v.chars().all(|c| c == '*' || c == 'x' || c == 'X')
 }
@@ -114,12 +183,23 @@ fn mask(v: &str) -> String {
         return "******".to_string();
     }
     let head: String = v.chars().take(3).collect();
-    let tail: String = v.chars().rev().take(2).collect::<String>().chars().rev().collect();
+    let tail: String = v
+        .chars()
+        .rev()
+        .take(2)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
     format!("{}…{}({} chars)", head, tail, n)
 }
 
 fn line_at(content: &str, byte: usize) -> usize {
-    content[..byte.min(content.len())].bytes().filter(|&b| b == b'\n').count() + 1
+    content[..byte.min(content.len())]
+        .bytes()
+        .filter(|&b| b == b'\n')
+        .count()
+        + 1
 }
 
 #[must_use]
@@ -128,7 +208,9 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     let mut seen = std::collections::HashSet::new();
     for rule in rules() {
         for caps in rule.re.captures_iter(content) {
-            let Some(m) = caps.get(rule.grp) else { continue };
+            let Some(m) = caps.get(rule.grp) else {
+                continue;
+            };
             let val = m.as_str();
             if rule.generic {
                 if placeholderish(val) || shannon_entropy(val) < 3.0 || val.len() < 10 {
@@ -149,9 +231,17 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
             } else if rule.pol.id == GCP_SA.id {
                 "service_account JSON key".to_string()
             } else {
-                format!("{} = {}", caps.get(1).map(|g| g.as_str()).unwrap_or("secret"), mask(val))
+                format!(
+                    "{} = {}",
+                    caps.get(1).map(|g| g.as_str()).unwrap_or("secret"),
+                    mask(val)
+                )
             };
-            out.push(Finding::new(rule.pol, "secret", file).at(line).observed(observed));
+            out.push(
+                Finding::new(rule.pol, "secret", file)
+                    .at(line)
+                    .observed(observed),
+            );
         }
     }
     out
@@ -164,7 +254,8 @@ mod tests {
     #[test]
     fn flags_aws_key_and_private_key() {
         // Realistic-looking (non-"EXAMPLE", no "123456") key so the anti-FP filter keeps it.
-        let c = "aws_access_key_id = AKIAZ7Q2LP4RW8TB1YC3\n-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n";
+        let c =
+            "aws_access_key_id = AKIAZ7Q2LP4RW8TB1YC3\n-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n";
         let f = evaluate("main.tf", c);
         assert!(f.iter().any(|x| x.policy.id == AWS_KEY.id));
         assert!(f.iter().any(|x| x.policy.id == PRIVATE_KEY.id));

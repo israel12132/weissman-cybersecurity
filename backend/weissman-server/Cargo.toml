@@ -10,7 +10,7 @@ name = "weissman-server"
 path = "src/main.rs"
 
 [dependencies]
-fingerprint_engine = { path = "../../fingerprint_engine" }
+fingerprint_engine = { path = "../../fingerprint_engine", features = ["high_risk_engines"] }
 weissman-core = { path = "../weissman-core" }
 weissman-db = { path = "../../crates/weissman-db" }
 axum = { version = "0.7", features = ["json", "ws"] }

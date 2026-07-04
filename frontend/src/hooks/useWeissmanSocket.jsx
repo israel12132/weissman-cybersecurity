@@ -4,14 +4,12 @@
  * Robust WebSocket hook that replaces the raw WebSocket usage in App.jsx.
  *
  * Compatible with:
- *   - Existing backend WebSocket route: /ws/command-center  (server.rs / app.py)
- *   - Redis PubSub events published by src/events_pub.py:
- *       publish_command_center_event(kind, payload)
- *     Event JSON shape: { kind: string, payload: object, ts: number }
+ *   - Rust backend WebSocket: GET /ws/command-center (weissman-server / fingerprint_engine::http)
+ *   - Redis telemetry bus when REDIS_URL is set (cross-replica fan-out)
+ *   - Event JSON shape: { kind: string, payload: object, ts: number }
  *   - App.jsx: replaces the useEffect WebSocket block; import and call this hook.
  *   - LiveIntelTerminal.jsx: receives `events` array (no other changes needed).
  *   - SecurityScoreGauge.jsx: receives `score` number.
- *   - Globe.jsx: receives `globeData` object.
  *
  * Features added vs original:
  *   1. Auto-reconnect with exponential back-off (1s → 30s cap).
@@ -24,7 +22,7 @@
  *   import { useWeissmanSocket } from './hooks/useWeissmanSocket';
  *
  *   function App() {
- *     const { events, scoreData, globeData, connectionStatus } = useWeissmanSocket();
+ *     const { events, scoreData, connectionStatus } = useWeissmanSocket();
  *     ...
  *   }
  */
@@ -65,7 +63,6 @@ function buildWsUrl() {
 export function useWeissmanSocket() {
   const [events, setEvents] = useState([]);
   const [scoreData, setScoreData] = useState(null);
-  const [globeData, setGlobeData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('offline');
   const [emergencyMessage, setEmergencyMessage] = useState('');
 
@@ -90,7 +87,6 @@ export function useWeissmanSocket() {
 
     // --- Initial handshake (sent by server on connect) ---
     if (data.type === 'init' || data.type === 'refresh') {
-      if (data.globe) setGlobeData(data.globe);
       if (data.score) setScoreData(data.score);
       setConnectionStatus('online');
       return;
@@ -246,7 +242,6 @@ export function useWeissmanSocket() {
   return {
     events,
     scoreData,
-    globeData,
     connectionStatus,
     emergencyMessage,
     setEmergencyMessage,

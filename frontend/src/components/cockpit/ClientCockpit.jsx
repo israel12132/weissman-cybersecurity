@@ -196,7 +196,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
             </p>
           </header>
           <div className="flex-1 min-h-0 overflow-auto z-10">
-            <Suspense fallback={<div className="p-6 text-white/60 text-sm">Loading mission control...</div>}>
+            <Suspense fallback={<div className="p-6 text-white/60 text-sm">{t('components.cockpitWidgets.clientCockpit.loading_mission')}</div>}>
               <CeoMissionControlTab />
             </Suspense>
           </div>
@@ -333,9 +333,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           transition={{ duration: 0.3 }}
         >
           {showWarRoomVisuals ? (
-            <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
-              <SatelliteDroneMap />
-            </Suspense>
+            <CockpitTabErrorBoundary tabId="warroom-map" tabLabel={t('components.cockpitWidgets.satelliteDroneMap.title', { defaultValue: 'Satellite map' })}>
+              <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+                <SatelliteDroneMap />
+              </Suspense>
+            </CockpitTabErrorBoundary>
           ) : (
             <div className="h-full w-full bg-slate-950/80" />
           )}
@@ -348,9 +350,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
           transition={{ duration: 0.3, delay: 0.05 }}
         >
           {showWarRoomVisuals ? (
-            <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
-              <NeuralEngineWeb width={neuralSize.width} height={neuralSize.height} />
-            </Suspense>
+            <CockpitTabErrorBoundary tabId="warroom-neural" tabLabel={t('components.neuralEngineWeb.title', { defaultValue: 'Neural engine web' })}>
+              <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+                <NeuralEngineWeb width={neuralSize.width} height={neuralSize.height} />
+              </Suspense>
+            </CockpitTabErrorBoundary>
           ) : (
             <div className="h-full w-full bg-slate-950/80" />
           )}
@@ -368,9 +372,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
       {/* System Pulse EKG */}
       <div className="shrink-0 px-4 py-2.5 border-t border-white/[0.06] relative z-10">
-        <Suspense fallback={<div className="h-16 w-full bg-slate-950/70 rounded-lg" />}>
-          <SystemPulseEKG />
-        </Suspense>
+        <CockpitTabErrorBoundary tabId="warroom-ekg" tabLabel={t('components.cockpitWidgets.systemPulseEkg.title', { defaultValue: 'System pulse' })}>
+          <Suspense fallback={<div className="h-16 w-full bg-slate-950/70 rounded-lg" />}>
+            <SystemPulseEKG />
+          </Suspense>
+        </CockpitTabErrorBoundary>
       </div>
     </main>
   )

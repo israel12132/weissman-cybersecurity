@@ -606,3 +606,27 @@ async fn api_ceo_tenant_engines_put(
             .into_response(),
     }
 }
+
+async fn api_ceo_supreme_nerve_center_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let uptime = state.started_at.elapsed().as_secs();
+    match crate::supreme_nerve_center::build_snapshot(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        uptime,
+    )
+    .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "ok": false,
+                "detail": format!("nerve center snapshot failed: {e}"),
+            })),
+        )
+            .into_response(),
+    }
+}

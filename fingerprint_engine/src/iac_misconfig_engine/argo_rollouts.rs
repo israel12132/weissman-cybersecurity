@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "argo_rollouts", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "argo_rollouts",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -61,13 +70,19 @@ pub const HEADER_TRAFFIC_NO_AUTH: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![CANARY_NO_ANALYSIS, ROLLBACK_DISABLED, PRIV_ANALYSIS, HEADER_TRAFFIC_NO_AUTH]
+    vec![
+        CANARY_NO_ANALYSIS,
+        ROLLBACK_DISABLED,
+        PRIV_ANALYSIS,
+        HEADER_TRAFFIC_NO_AUTH,
+    ]
 }
 
 fn is_argo_rollout(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n.contains("rollout") || lc.contains("argoproj.io") && lc.contains("kind: rollout")
+    n.contains("rollout")
+        || lc.contains("argoproj.io") && lc.contains("kind: rollout")
         || lc.contains("kind: analysistemplate")
         || lc.contains("kind: clusteranalysistemplate")
 }
@@ -80,17 +95,27 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     }
     let lc = content.to_ascii_lowercase();
 
-    if lc.contains("strategy:") && lc.contains("canary:") && lc.contains("steps:") && !lc.contains("analysis:") {
+    if lc.contains("strategy:")
+        && lc.contains("canary:")
+        && lc.contains("steps:")
+        && !lc.contains("analysis:")
+    {
         out.push(Finding::new(CANARY_NO_ANALYSIS, file, file).observed("canary without analysis"));
     }
     if lc.contains("abortscaledowndelayseconds: 0") && !lc.contains("autorollback: true") {
         out.push(Finding::new(ROLLBACK_DISABLED, file, file).observed("rollback policy weak"));
     }
-    if lc.contains("privileged: true") || lc.contains("hostpid: true") || lc.contains("hostnetwork: true") {
+    if lc.contains("privileged: true")
+        || lc.contains("hostpid: true")
+        || lc.contains("hostnetwork: true")
+    {
         out.push(Finding::new(PRIV_ANALYSIS, file, file).observed("privileged analysis pod"));
     }
     if lc.contains("trafficrouting:") && lc.contains("header") && !lc.contains("authentication") {
-        out.push(Finding::new(HEADER_TRAFFIC_NO_AUTH, file, file).observed("header traffic without auth"));
+        out.push(
+            Finding::new(HEADER_TRAFFIC_NO_AUTH, file, file)
+                .observed("header traffic without auth"),
+        );
     }
 
     out

@@ -8,8 +8,8 @@ use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, has_header,
     header_value, http_client, http_get, http_get_with_headers, join_url, normalize_url,
-    probe_matched_token, probe_paths_concurrent, status_indicates_presence, tcp_open,
-    tcp_scan, tls_cert_details, DEFAULT_PROBE_CONCURRENCY,
+    probe_matched_token, probe_paths_concurrent, status_indicates_presence, tcp_open, tcp_scan,
+    tls_cert_details, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::EngineResult;
 use regex::Regex;
@@ -43,12 +43,7 @@ fn alias_finding(
     f
 }
 
-fn collect(
-    engine_id: &str,
-    target: &str,
-    canonical: &str,
-    findings: Vec<Value>,
-) -> EngineResult {
+fn collect(engine_id: &str, target: &str, canonical: &str, findings: Vec<Value>) -> EngineResult {
     if findings.is_empty() {
         empty_ok(engine_id, target)
     } else {
@@ -57,9 +52,7 @@ fn collect(
             findings,
             format!(
                 "{}: {} specialized finding(s) (canonical: {})",
-                engine_id,
-                count,
-                canonical
+                engine_id, count, canonical
             ),
         )
     }
@@ -69,8 +62,7 @@ static EMAIL_RE: OnceLock<Regex> = OnceLock::new();
 
 fn email_re() -> &'static Regex {
     EMAIL_RE.get_or_init(|| {
-        Regex::new(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
-            .expect("email regex")
+        Regex::new(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}").expect("email regex")
     })
 }
 
@@ -93,9 +85,7 @@ pub async fn run_specialized_probe(
         "geoint" => probe_geoint(engine_id, canonical, target).await,
         "employee_profiling" => probe_employee_profiling(engine_id, canonical, target).await,
         "data_deanonymization" => probe_data_deanonymization(engine_id, canonical, target).await,
-        "location_pattern_analysis" => {
-            probe_location_pattern(engine_id, canonical, target).await
-        }
+        "location_pattern_analysis" => probe_location_pattern(engine_id, canonical, target).await,
 
         // ── Recon aliases ────────────────────────────────────────────────────
         "shodan_mass_scan" => probe_shodan_mass_scan(engine_id, canonical, target).await,
@@ -120,7 +110,10 @@ pub async fn run_specialized_probe(
         }
 
         // ── Kill chain aliases ───────────────────────────────────────────────
-        "rce_chain" | "vuln_chaining" | "mobile_backend_chain" | "ai_cloud_escalation_chain"
+        "rce_chain"
+        | "vuln_chaining"
+        | "mobile_backend_chain"
+        | "ai_cloud_escalation_chain"
         | "tactic_chain_synthesizer" => probe_kill_chain_alias(engine_id, canonical, target).await,
 
         // ── Cloud aliases ────────────────────────────────────────────────────
@@ -139,35 +132,44 @@ pub async fn run_specialized_probe(
             probe_cache_poison_alias(engine_id, canonical, target).await
         }
         "jwt_attacks" => probe_jwt_alias(engine_id, canonical, target).await,
-        "oauth_pkce_attack" | "oauth_abuse" => probe_oauth_alias(engine_id, canonical, target).await,
+        "oauth_pkce_attack" | "oauth_abuse" => {
+            probe_oauth_alias(engine_id, canonical, target).await
+        }
 
         // ── AI / LLM aliases ─────────────────────────────────────────────────
         "llm_system_prompt_leak" => probe_llm_prompt_leak(engine_id, canonical, target).await,
         "llm_guardrail_bypass" => probe_llm_jailbreak_alias(engine_id, canonical, target).await,
         "agentic_ai_escape" => probe_agentic_escape(engine_id, canonical, target).await,
-        "llm_function_call_hijack" | "agentic_framework_attack" | "mcp_server_exploit"
+        "llm_function_call_hijack"
+        | "agentic_framework_attack"
+        | "mcp_server_exploit"
         | "multi_agent_subversion" => probe_llm_agent_alias(engine_id, canonical, target).await,
 
         // ── IoT / firmware aliases ───────────────────────────────────────────
-        "firmware_exploit" | "firmware_emulation" | "medical_device_exploit"
-        | "implantable_device_hack" | "jtag_swd_exploitation" | "hardware_implant" => {
-            probe_firmware_alias(engine_id, canonical, target).await
-        }
+        "firmware_exploit"
+        | "firmware_emulation"
+        | "medical_device_exploit"
+        | "implantable_device_hack"
+        | "jtag_swd_exploitation"
+        | "hardware_implant" => probe_firmware_alias(engine_id, canonical, target).await,
 
         // ── EDR / stealth aliases ────────────────────────────────────────────
-        "amsi_bypass" | "deception_evasion" | "syscall_evasion" | "detection_gap_exploiter"
-        | "opsec_intelligence_engine" | "dll_hijacking" => {
-            probe_edr_evasion_alias(engine_id, canonical, target).await
-        }
+        "amsi_bypass"
+        | "deception_evasion"
+        | "syscall_evasion"
+        | "detection_gap_exploiter"
+        | "opsec_intelligence_engine"
+        | "dll_hijacking" => probe_edr_evasion_alias(engine_id, canonical, target).await,
         "siem_evasion" | "log_wiping" | "timestomping" | "wasm_reverse" => {
             probe_antiforensics_alias(engine_id, canonical, target).await
         }
 
         // ── MFA aliases ──────────────────────────────────────────────────────
-        "biometric_spoofing" | "totp_bruteforce" | "webauthn_fido2_bypass"
-        | "continuous_auth_evasion" | "behavioral_biometric_attack" => {
-            probe_mfa_alias(engine_id, canonical, target).await
-        }
+        "biometric_spoofing"
+        | "totp_bruteforce"
+        | "webauthn_fido2_bypass"
+        | "continuous_auth_evasion"
+        | "behavioral_biometric_attack" => probe_mfa_alias(engine_id, canonical, target).await,
 
         // ── Network aliases ──────────────────────────────────────────────────
         "wifi_attack" | "wireless_attack" => probe_wifi_alias(engine_id, canonical, target).await,
@@ -183,7 +185,9 @@ pub async fn run_specialized_probe(
         "watering_hole" => probe_watering_hole(engine_id, canonical, target).await,
 
         // ── Crypto / quantum aliases ─────────────────────────────────────────
-        "quantum_attack" | "harvest_now_decrypt_later" | "pqc_implementation_attack"
+        "quantum_attack"
+        | "harvest_now_decrypt_later"
+        | "pqc_implementation_attack"
         | "lattice_crypto_attack" => probe_quantum_alias(engine_id, canonical, target).await,
         "tls_downgrade" => probe_tls_downgrade(engine_id, canonical, target).await,
 
@@ -208,11 +212,7 @@ pub async fn run_specialized_probe(
 
 // ── OSINT specialized probes ──────────────────────────────────────────────────
 
-async fn probe_social_media_recon(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_social_media_recon(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings = Vec::new();
@@ -250,7 +250,10 @@ async fn probe_social_media_recon(
                     &format!("OpenGraph social metadata: {}", key),
                     "info",
                     "T1593",
-                    &format!("{}={} on {} — social media recon pivot.", key, v, p.final_url),
+                    &format!(
+                        "{}={} on {} — social media recon pivot.",
+                        key, v, p.final_url
+                    ),
                     target,
                     canonical,
                 ));
@@ -270,7 +273,10 @@ async fn probe_github_recon(engine_id: &str, canonical: &str, target: &str) -> E
     if let Some(p) = http_get_with_headers(
         &client,
         &gh_url,
-        &[("Accept", "application/vnd.github+json"), ("User-Agent", "Weissman-OSINT-Probe")],
+        &[
+            ("Accept", "application/vnd.github+json"),
+            ("User-Agent", "Weissman-OSINT-Probe"),
+        ],
     )
     .await
     {
@@ -298,7 +304,10 @@ async fn probe_github_recon(engine_id: &str, canonical: &str, target: &str) -> E
                 "GitHub repository links on target site",
                 "low",
                 "T1593",
-                &format!("{} embeds github.com links — enumerate linked repos for credential leaks.", p.final_url),
+                &format!(
+                    "{} embeds github.com links — enumerate linked repos for credential leaks.",
+                    p.final_url
+                ),
                 target,
                 canonical,
             ));
@@ -339,7 +348,10 @@ async fn probe_email_harvest(engine_id: &str, canonical: &str, target: &str) -> 
                 "mailto: links present (email harvest surface)",
                 "info",
                 "T1589",
-                &format!("{} contains mailto: links — harvest for phishing campaigns.", p.final_url),
+                &format!(
+                    "{} contains mailto: links — harvest for phishing campaigns.",
+                    p.final_url
+                ),
                 target,
                 canonical,
             ));
@@ -354,7 +366,13 @@ async fn probe_geoint(engine_id: &str, canonical: &str, target: &str) -> EngineR
     let mut findings = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let body = p.body.to_ascii_lowercase();
-        for sig in ["geo.position", "latitude", "longitude", "maps.google", "openstreetmap"] {
+        for sig in [
+            "geo.position",
+            "latitude",
+            "longitude",
+            "maps.google",
+            "openstreetmap",
+        ] {
             if body.contains(sig) {
                 findings.push(alias_finding(
                     engine_id,
@@ -375,14 +393,17 @@ async fn probe_geoint(engine_id: &str, canonical: &str, target: &str) -> EngineR
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_employee_profiling(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_employee_profiling(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/team", "/about", "/people", "/leadership", "/company", "/staff"];
+    let paths = &[
+        "/team",
+        "/about",
+        "/people",
+        "/leadership",
+        "/company",
+        "/staff",
+    ];
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
@@ -418,7 +439,13 @@ async fn probe_data_deanonymization(
     let mut findings = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let body = &p.body;
-        for pattern in ["ssn", "social security", "date of birth", "passport", "national id"] {
+        for pattern in [
+            "ssn",
+            "social security",
+            "date of birth",
+            "passport",
+            "national id",
+        ] {
             if body.to_ascii_lowercase().contains(pattern) {
                 findings.push(alias_finding(
                     engine_id,
@@ -439,11 +466,7 @@ async fn probe_data_deanonymization(
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_location_pattern(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_location_pattern(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
     if let Some(cert) = tls_cert_details(&host).await {
@@ -472,7 +495,9 @@ async fn probe_location_pattern(
 
 async fn probe_shodan_mass_scan(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
-    let common = &[21, 22, 23, 25, 80, 443, 445, 3306, 5432, 6379, 8080, 8443, 27017];
+    let common = &[
+        21, 22, 23, 25, 80, 443, 445, 3306, 5432, 6379, 8080, 8443, 27017,
+    ];
     let open = tcp_scan(&host, common, 16).await;
     let mut findings = Vec::new();
     if !open.is_empty() {
@@ -546,7 +571,9 @@ async fn probe_cert_transparency(engine_id: &str, canonical: &str, target: &str)
 async fn probe_dns_enum(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
-    let labels = ["www", "mail", "api", "dev", "staging", "vpn", "admin", "internal"];
+    let labels = [
+        "www", "mail", "api", "dev", "staging", "vpn", "admin", "internal",
+    ];
     let mut found = Vec::new();
     for label in labels {
         let sub = format!("{label}.{host}");
@@ -560,7 +587,10 @@ async fn probe_dns_enum(engine_id: &str, canonical: &str, target: &str) -> Engin
             &format!("DNS enum: {} subdomains resolve", found.len()),
             "info",
             "T1590",
-            &format!("Resolved: {:?} — passive DNS enumeration for {}.", found, host),
+            &format!(
+                "Resolved: {:?} — passive DNS enumeration for {}.",
+                found, host
+            ),
             target,
             canonical,
         ));
@@ -579,7 +609,10 @@ async fn probe_deepweb_intel(engine_id: &str, canonical: &str, target: &str) -> 
                 &format!("Suspicious subdomain resolves: {}", fqdn),
                 "medium",
                 "T1595",
-                &format!("{} has A records — review dark-web/leak correlation for {}.", fqdn, host),
+                &format!(
+                    "{} has A records — review dark-web/leak correlation for {}.",
+                    fqdn, host
+                ),
                 target,
                 canonical,
             ));
@@ -590,11 +623,7 @@ async fn probe_deepweb_intel(engine_id: &str, canonical: &str, target: &str) -> 
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 
-async fn probe_active_directory(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_active_directory(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
     let ad_ports = tcp_scan(&host, &[88, 389, 636, 3268, 3269, 445, 5985, 9389], 12).await;
@@ -654,7 +683,10 @@ async fn probe_golden_ticket(engine_id: &str, canonical: &str, target: &str) -> 
         empty_ok(engine_id, target)
     } else {
         let count = base.findings.len();
-        EngineResult::ok(base.findings, format!("{}: {} finding(s)", engine_id, count))
+        EngineResult::ok(
+            base.findings,
+            format!("{}: {} finding(s)", engine_id, count),
+        )
     }
 }
 
@@ -681,7 +713,10 @@ async fn probe_ntlm_relay(engine_id: &str, canonical: &str, target: &str) -> Eng
             "WinRM exposed — NTLM relay to WS-Management",
             "high",
             "T1557",
-            &format!("Host {} exposes WinRM — relay target for privilege escalation.", host),
+            &format!(
+                "Host {} exposes WinRM — relay target for privilege escalation.",
+                host
+            ),
             target,
             canonical,
         ));
@@ -702,7 +737,11 @@ async fn probe_c2_emulation(engine_id: &str, canonical: &str, target: &str) -> E
                 "Long DNS TXT (C2 beacon channel candidate)",
                 "medium",
                 "T1071.004",
-                &format!("TXT on {} ({} chars) — DNS TXT is a common C2 fallback channel.", host, r.len()),
+                &format!(
+                    "TXT on {} ({} chars) — DNS TXT is a common C2 fallback channel.",
+                    host,
+                    r.len()
+                ),
                 target,
                 canonical,
             ));
@@ -718,7 +757,10 @@ async fn probe_c2_emulation(engine_id: &str, canonical: &str, target: &str) -> E
                     &format!("C2 artifact keyword in response: {}", sig),
                     "medium",
                     "T1071",
-                    &format!("{} contains '{}' — review for C2 infrastructure artifacts.", p.final_url, sig),
+                    &format!(
+                        "{} contains '{}' — review for C2 infrastructure artifacts.",
+                        p.final_url, sig
+                    ),
                     target,
                     canonical,
                 ));
@@ -757,11 +799,7 @@ async fn probe_ransomware_sim(engine_id: &str, canonical: &str, target: &str) ->
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_kill_chain_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_kill_chain_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
     let perimeter = tcp_scan(&host, &[80, 443, 22, 445, 3389, 8080], 8).await;
@@ -802,7 +840,12 @@ async fn probe_aws_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
             ));
         }
     }
-    for bucket in [host.split('.').next().unwrap_or(&host), "backup", "logs", "assets"] {
+    for bucket in [
+        host.split('.').next().unwrap_or(&host),
+        "backup",
+        "logs",
+        "assets",
+    ] {
         let s3_url = format!("https://{bucket}.s3.amazonaws.com/");
         if let Some(p) = http_get(&client, &s3_url).await {
             if p.status == 200 || p.status == 403 {
@@ -811,7 +854,10 @@ async fn probe_aws_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
                     &format!("S3 bucket responds: {}", bucket),
                     if p.status == 200 { "high" } else { "medium" },
                     "T1530",
-                    &format!("{} returned {} — enumerate bucket ACL and IAM policy.", s3_url, p.status),
+                    &format!(
+                        "{} returned {} — enumerate bucket ACL and IAM policy.",
+                        s3_url, p.status
+                    ),
                     target,
                     canonical,
                 ));
@@ -828,7 +874,11 @@ async fn probe_ssrf_chain(engine_id: &str, canonical: &str, target: &str) -> Eng
     let params = ["url", "uri", "path", "dest", "redirect", "target", "fetch"];
     let mut findings = Vec::new();
     for param in params {
-        let test_url = format!("{}?{}=http://169.254.169.254/latest/meta-data/", base.trim_end_matches('/'), param);
+        let test_url = format!(
+            "{}?{}=http://169.254.169.254/latest/meta-data/",
+            base.trim_end_matches('/'),
+            param
+        );
         if let Some(p) = http_get(&client, &test_url).await {
             if p.body.contains("ami-") || p.body.contains("instance-id") {
                 findings.push(alias_finding(
@@ -923,7 +973,11 @@ async fn probe_host_header(engine_id: &str, canonical: &str, target: &str) -> En
     let baseline = http_get(&client, &url).await;
     let foreign = http_get_with_headers(&client, &url, &[("Host", "evil.invalid")]).await;
     if let (Some(b), Some(f)) = (baseline, foreign) {
-        if f.status >= 200 && f.status < 400 && f.body.len() > 32 && (b.status >= 400 || f.status != b.status) {
+        if f.status >= 200
+            && f.status < 400
+            && f.body.len() > 32
+            && (b.status >= 400 || f.status != b.status)
+        {
             findings.push(alias_finding(
                 engine_id,
                 "Host header injection / cache deception signal",
@@ -941,18 +995,17 @@ async fn probe_host_header(engine_id: &str, canonical: &str, target: &str) -> En
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_cache_poison_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_cache_poison_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings = Vec::new();
     if let Some(p) = http_get_with_headers(
         &client,
         &url,
-        &[("X-Forwarded-Host", "evil.cache.invalid"), ("X-Original-URL", "/admin")],
+        &[
+            ("X-Forwarded-Host", "evil.cache.invalid"),
+            ("X-Original-URL", "/admin"),
+        ],
     )
     .await
     {
@@ -981,7 +1034,10 @@ async fn probe_jwt_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
     if let Some(p) = http_get_with_headers(
         &client,
         &url,
-        &[("Authorization", "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.")],
+        &[(
+            "Authorization",
+            "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0.",
+        )],
     )
     .await
     {
@@ -1006,7 +1062,11 @@ async fn probe_jwt_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
 async fn probe_oauth_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/.well-known/openid-configuration", "/oauth/authorize", "/oauth2/authorize"];
+    let paths = &[
+        "/.well-known/openid-configuration",
+        "/oauth/authorize",
+        "/oauth2/authorize",
+    ];
     let mut findings = Vec::new();
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
@@ -1030,7 +1090,10 @@ async fn probe_oauth_alias(engine_id: &str, canonical: &str, target: &str) -> En
                     "OAuth/OIDC authorization endpoint exposed",
                     "medium",
                     "T1550",
-                    &format!("{} — OAuth abuse and redirect_uri bypass testing surface.", p.final_url),
+                    &format!(
+                        "{} — OAuth abuse and redirect_uri bypass testing surface.",
+                        p.final_url
+                    ),
                     target,
                     canonical,
                 ));
@@ -1075,11 +1138,7 @@ async fn probe_llm_prompt_leak(engine_id: &str, canonical: &str, target: &str) -
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_llm_jailbreak_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_llm_jailbreak_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     probe_llm_prompt_leak(engine_id, canonical, target).await
 }
 
@@ -1136,7 +1195,12 @@ async fn probe_firmware_alias(engine_id: &str, canonical: &str, target: &str) ->
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let paths = &["/firmware", "/update.bin", "/cgi-bin/upgrade", "/api/device/info"];
+    let paths = &[
+        "/firmware",
+        "/update.bin",
+        "/cgi-bin/upgrade",
+        "/api/device/info",
+    ];
     let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
         if status_indicates_presence(p.status) {
@@ -1145,7 +1209,10 @@ async fn probe_firmware_alias(engine_id: &str, canonical: &str, target: &str) ->
                 "Firmware/update endpoint exposed",
                 "high",
                 "T1195",
-                &format!("{} ({}) — firmware extraction/update abuse surface.", p.final_url, p.status),
+                &format!(
+                    "{} ({}) — firmware extraction/update abuse surface.",
+                    p.final_url, p.status
+                ),
                 target,
                 canonical,
             ));
@@ -1157,18 +1224,17 @@ async fn probe_firmware_alias(engine_id: &str, canonical: &str, target: &str) ->
 
 // ── EDR / antiforensics ───────────────────────────────────────────────────────
 
-async fn probe_edr_evasion_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_edr_evasion_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
         let blob = format!(
             "{:?}",
-            p.headers.iter().map(|(k, v)| format!("{k}:{v}")).collect::<Vec<_>>()
+            p.headers
+                .iter()
+                .map(|(k, v)| format!("{k}:{v}"))
+                .collect::<Vec<_>>()
         )
         .to_ascii_lowercase();
         for sig in ["x-cdn", "cloudflare", "akamai", "imperva", "sucuri"] {
@@ -1192,11 +1258,7 @@ async fn probe_edr_evasion_alias(
     collect(engine_id, target, canonical, findings)
 }
 
-async fn probe_antiforensics_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_antiforensics_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     probe_edr_evasion_alias(engine_id, canonical, target).await
 }
 
@@ -1211,7 +1273,11 @@ async fn probe_mfa_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
     for p in probes {
         if p.status == 200 {
             let body = p.body.to_ascii_lowercase();
-            if body.contains("mfa") || body.contains("otp") || body.contains("webauthn") || body.contains("totp") {
+            if body.contains("mfa")
+                || body.contains("otp")
+                || body.contains("webauthn")
+                || body.contains("totp")
+            {
                 findings.push(alias_finding(
                     engine_id,
                     "MFA enrollment/login surface exposed",
@@ -1234,8 +1300,13 @@ async fn probe_mfa_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
 // ── Network ───────────────────────────────────────────────────────────────────
 
 async fn probe_wifi_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    crate::agent_remote_surface::run_remote_surface_probe("wifi_attack_engine", target, &Default::default()).await
-        .map_findings_to_alias(engine_id, canonical)
+    crate::agent_remote_surface::run_remote_surface_probe(
+        "wifi_attack_engine",
+        target,
+        &Default::default(),
+    )
+    .await
+    .map_findings_to_alias(engine_id, canonical)
 }
 
 async fn probe_dns_rebinding(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
@@ -1286,7 +1357,10 @@ async fn probe_bgp_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
             "BGP (179/TCP) reachable",
             "critical",
             "T1498",
-            &format!("Host {} accepts BGP — route hijacking/prefix leak surface.", host),
+            &format!(
+                "Host {} accepts BGP — route hijacking/prefix leak surface.",
+                host
+            ),
             target,
             canonical,
         ));
@@ -1295,8 +1369,13 @@ async fn probe_bgp_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
 }
 
 async fn probe_5g_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
-    crate::agent_remote_surface::run_remote_surface_probe("lte_5g_attack", target, &Default::default()).await
-        .map_findings_to_alias(engine_id, canonical)
+    crate::agent_remote_surface::run_remote_surface_probe(
+        "lte_5g_attack",
+        target,
+        &Default::default(),
+    )
+    .await
+    .map_findings_to_alias(engine_id, canonical)
 }
 
 // ── Social ────────────────────────────────────────────────────────────────────
@@ -1467,11 +1546,7 @@ async fn probe_cicd_poison(engine_id: &str, canonical: &str, target: &str) -> En
 
 // ── APT ───────────────────────────────────────────────────────────────────────
 
-async fn probe_nation_state_alias(
-    engine_id: &str,
-    canonical: &str,
-    target: &str,
-) -> EngineResult {
+async fn probe_nation_state_alias(engine_id: &str, canonical: &str, target: &str) -> EngineResult {
     probe_shodan_mass_scan(engine_id, canonical, target).await
 }
 

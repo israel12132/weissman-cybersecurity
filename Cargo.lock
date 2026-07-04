@@ -2673,6 +2673,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "async-stream",
+ "async-trait",
  "aws-config",
  "aws-credential-types",
  "aws-sdk-accessanalyzer",
@@ -2782,6 +2783,9 @@ dependencies = [
  "weissman-core",
  "weissman-db",
  "weissman-engines",
+ "weissman-fleet-shaping",
+ "weissman-job-bus",
+ "weissman-ui-provenance",
 ]
 
 [[package]]
@@ -5144,6 +5148,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "ryu",
+ "sha1_smol",
  "tokio",
  "tokio-util",
  "url",
@@ -7342,6 +7347,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "weissman-ast-cap"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "weissman-core"
 version = "0.1.0"
 dependencies = [
@@ -7392,6 +7405,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "weissman-fleet-shaping"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dashmap 6.2.1",
+ "governor",
+ "redis",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "weissman-job-bus"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hmac 0.12.1",
+ "rand 0.8.6",
+ "redis",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "weissman-oast-server"
 version = "0.1.0"
 dependencies = [
@@ -7431,6 +7477,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "weissman-ui-provenance"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "hmac 0.12.1",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "weissman-worker"
 version = "0.1.0"
 dependencies = [
@@ -7443,6 +7502,8 @@ dependencies = [
  "tracing-subscriber",
  "weissman-core",
  "weissman-db",
+ "weissman-fleet-shaping",
+ "weissman-job-bus",
 ]
 
 [[package]]

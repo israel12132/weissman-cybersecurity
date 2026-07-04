@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "terragrunt", provider: "generic",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "terragrunt",
+            provider: "generic",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -94,7 +103,15 @@ pub const LOCAL_STATE: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![REMOTE_STATE_HTTP, REMOTE_STATE_NO_LOCK, DEP_UNPINNED, INPUTS_SECRET, IAM_ASSUME_ALL, SKIP_OUTPUTS, LOCAL_STATE]
+    vec![
+        REMOTE_STATE_HTTP,
+        REMOTE_STATE_NO_LOCK,
+        DEP_UNPINNED,
+        INPUTS_SECRET,
+        IAM_ASSUME_ALL,
+        SKIP_OUTPUTS,
+        LOCAL_STATE,
+    ]
 }
 
 fn is_terragrunt(name: &str, content: &str) -> bool {
@@ -117,31 +134,52 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     let lc = content.to_ascii_lowercase();
 
     if lc.contains("remote_state") && lc.contains("http://") {
-        out.push(Finding::new(REMOTE_STATE_HTTP, file, file).observed("remote_state http:// backend"));
+        out.push(
+            Finding::new(REMOTE_STATE_HTTP, file, file).observed("remote_state http:// backend"),
+        );
     }
-    if lc.contains("remote_state") && lc.contains("backend = \"s3\"") && !lc.contains("dynamodb_table") {
-        out.push(Finding::new(REMOTE_STATE_NO_LOCK, file, file).observed("S3 backend without dynamodb_table"));
+    if lc.contains("remote_state")
+        && lc.contains("backend = \"s3\"")
+        && !lc.contains("dynamodb_table")
+    {
+        out.push(
+            Finding::new(REMOTE_STATE_NO_LOCK, file, file)
+                .observed("S3 backend without dynamodb_table"),
+        );
     }
     if lc.contains("dependency \"") && !lc.contains("?ref=") && !lc.contains("version =") {
-        out.push(Finding::new(DEP_UNPINNED, file, file).observed("dependency without immutable ref"));
+        out.push(
+            Finding::new(DEP_UNPINNED, file, file).observed("dependency without immutable ref"),
+        );
     }
     for key in ["password", "api_key", "secret", "token", "private_key"] {
         if lc.contains(&format!("{key} =")) || lc.contains(&format!("{key}=")) {
-            let has_placeholder = lc.contains("get_env") || lc.contains("sops") || lc.contains("vault");
+            let has_placeholder =
+                lc.contains("get_env") || lc.contains("sops") || lc.contains("vault");
             if !has_placeholder {
-                out.push(Finding::new(INPUTS_SECRET, file, file).observed(format!("inputs {key} literal")));
+                out.push(
+                    Finding::new(INPUTS_SECRET, file, file)
+                        .observed(format!("inputs {key} literal")),
+                );
                 break;
             }
         }
     }
-    if lc.contains("iam_role") && (lc.contains("arn:aws:iam::*:role/admin") || lc.contains("organizationaccessrole")) {
+    if lc.contains("iam_role")
+        && (lc.contains("arn:aws:iam::*:role/admin") || lc.contains("organizationaccessrole"))
+    {
         out.push(Finding::new(IAM_ASSUME_ALL, file, file).observed("broad iam_role ARN"));
     }
     if lc.contains("skip_outputs = true") || lc.contains("skip_outputs=true") {
         out.push(Finding::new(SKIP_OUTPUTS, file, file).observed("skip_outputs = true"));
     }
-    if lc.contains("disable_backend_init") || lc.contains("disable_init") && lc.contains("remote_state") {
-        out.push(Finding::new(LOCAL_STATE, file, file).observed("remote state init disabled / local workflow"));
+    if lc.contains("disable_backend_init")
+        || lc.contains("disable_init") && lc.contains("remote_state")
+    {
+        out.push(
+            Finding::new(LOCAL_STATE, file, file)
+                .observed("remote state init disabled / local workflow"),
+        );
     }
 
     out
@@ -154,6 +192,8 @@ mod tests {
     #[test]
     fn flags_http_remote_state() {
         let h = "remote_state {\n  backend = \"s3\"\n  config = { endpoint = \"http://state.local\" }\n}\n";
-        assert!(evaluate("terragrunt.hcl", h).iter().any(|f| f.policy.id == REMOTE_STATE_HTTP.id));
+        assert!(evaluate("terragrunt.hcl", h)
+            .iter()
+            .any(|f| f.policy.id == REMOTE_STATE_HTTP.id));
     }
 }

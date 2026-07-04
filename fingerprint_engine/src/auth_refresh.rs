@@ -43,12 +43,18 @@ pub async fn build_session_cookie_headers(
     pool: &PgPool,
     user_id: i64,
     tenant_id: i64,
+    binding: &crate::auth_jwt::StreamBinding,
 ) -> Result<(String, String, String), SessionCookieError> {
     let (role, is_superadmin) = user_rbac_snapshot(pool, user_id)
         .await?
         .ok_or(SessionCookieError::InactiveUser)?;
-    let minted =
-        crate::auth_jwt::create_access_token(user_id, tenant_id, role.as_str(), is_superadmin)?;
+    let minted = crate::auth_jwt::create_access_token(
+        user_id,
+        tenant_id,
+        role.as_str(),
+        is_superadmin,
+        binding,
+    )?;
     let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
     let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
     Ok((minted.token, access_line, refresh_cookie_value(&refresh)))
@@ -69,6 +75,8 @@ pub async fn revalidate_auth_context(
         is_superadmin,
         agent_id: auth.agent_id.clone(),
         jti: auth.jti.clone(),
+        bind_ip: auth.bind_ip.clone(),
+        bind_tls_fp: auth.bind_tls_fp.clone(),
     }))
 }
 

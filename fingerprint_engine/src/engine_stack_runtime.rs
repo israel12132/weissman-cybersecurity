@@ -3,7 +3,7 @@
 //! Tokio worker threads use a modest default stack (~2 MiB). The monolithic
 //! `dispatch_engine_match` future for production engines can overflow that stack
 //! even when the engine logic itself is shallow. Spawning a named thread with
-//! `WEISSMAN_ENGINE_STACK_BYTES` (default 16 MiB) keeps workers alive without
+//! `WEISSMAN_ENGINE_STACK_BYTES` (default 32 MiB) keeps workers alive without
 //! relying on process-wide `RUST_MIN_STACK`.
 
 use std::future::Future;
@@ -17,7 +17,7 @@ fn large_stack_bytes() -> usize {
             .ok()
             .and_then(|s| s.parse().ok())
             .filter(|&n| n >= 2 * 1024 * 1024)
-            .unwrap_or(16 * 1024 * 1024)
+            .unwrap_or(32 * 1024 * 1024)
     })
 }
 

@@ -59,18 +59,35 @@ function parseRetryAfter(retryAfterHeader) {
 export function getStoredAccessToken() {
   if (typeof sessionStorage === 'undefined') return null
   const t = sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  return t && String(t).trim() ? String(t).trim() : null
+  if (t && String(t).trim()) return String(t).trim()
+  // Survives Playwright context resets and tab restores when HttpOnly cookie isn't visible to JS.
+  if (typeof localStorage !== 'undefined') {
+    const legacy = localStorage.getItem(ACCESS_TOKEN_KEY)
+    if (legacy && String(legacy).trim()) {
+      const v = String(legacy).trim()
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
+      return v
+    }
+  }
+  return null
 }
 
 export function setStoredAccessToken(token) {
   if (typeof sessionStorage === 'undefined') return
-  if (token && String(token).trim()) sessionStorage.setItem(ACCESS_TOKEN_KEY, String(token).trim())
-  else sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+  if (token && String(token).trim()) {
+    const v = String(token).trim()
+    sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
+    if (typeof localStorage !== 'undefined') localStorage.setItem(ACCESS_TOKEN_KEY, v)
+  } else {
+    sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
+  }
 }
 
 export function clearStoredAccessToken() {
   if (typeof sessionStorage === 'undefined') return
   sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+  if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
 }
 
 /** Merge Bearer token for APIs when cookies are blocked (e.g. legacy Secure cookies on http://127.0.0.1). */
@@ -150,43 +167,10 @@ export async function apiFetch(pathOrUrl, init = {}) {
   return response
 }
 
-/** Prefer HttpOnly cookie auth for EventSource (`withCredentials: true`). */
-export function apiEventSourceUrl(pathWithQuery) {
+/** Clean SSE path — auth is header/cookie only, never query-string tokens. */
+export function apiSseUrl(pathWithQuery) {
   const p = pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`
   return apiUrl(p)
-}
-
-/** Short-lived SSE ticket when cookies cannot be sent (cross-origin / legacy Bearer fallback). */
-export async function fetchSseTicket() {
-  try {
-    const r = await apiFetch('/api/auth/sse-ticket')
-    if (!r.ok) return null
-    const data = await r.json().catch(() => ({}))
-    const ticket = data.ticket
-    return ticket && String(ticket).trim() ? String(ticket).trim() : null
-  } catch {
-    return null
-  }
-}
-
-/** Append scoped SSE ticket query param (fallback only — prefer cookie-only URLs). */
-export function apiEventSourceUrlWithTicket(pathWithQuery, ticket) {
-  const base = apiEventSourceUrl(pathWithQuery)
-  if (!ticket) return base
-  const sep = base.includes('?') ? '&' : '?'
-  return `${base}${sep}sse_ticket=${encodeURIComponent(ticket)}`
-}
-
-/**
- * Resolve EventSource URL: cookie-only by default; fetch sse_ticket when Bearer fallback is needed.
- */
-export async function resolveEventSourceUrl(pathWithQuery) {
-  const base = apiEventSourceUrl(pathWithQuery)
-  if (getStoredAccessToken()) {
-    const ticket = await fetchSseTicket()
-    if (ticket) return apiEventSourceUrlWithTicket(pathWithQuery, ticket)
-  }
-  return base
 }
 
 /**

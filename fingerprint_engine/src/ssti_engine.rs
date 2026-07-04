@@ -218,7 +218,8 @@ impl ScanConfig {
             check_path_segment: cfg.bool_or("check_path_segment", intensity != Intensity::Light),
             check_graphql: cfg.bool_or("check_graphql", intensity == Intensity::Aggressive),
             check_error_based: cfg.bool_or("check_error_based", true),
-            check_bypass_transforms: cfg.bool_or("check_bypass_transforms", intensity != Intensity::Light),
+            check_bypass_transforms: cfg
+                .bool_or("check_bypass_transforms", intensity != Intensity::Light),
             check_stack_fingerprint: cfg.bool_or("check_stack_fingerprint", true),
             include_info: cfg.bool_or("include_info_findings", true),
             attack_paths: cfg.bool_or("check_attack_paths", true),
@@ -304,7 +305,10 @@ const MEMORY_PAYLOAD_SPEC: PayloadSpec = PayloadSpec {
 };
 
 fn jinja_mul(m: &ScanMath) -> (String, String) {
-    (format!("{{{{{a}*{b}}}}}", a = m.a, b = m.b), m.product.clone())
+    (
+        format!("{{{{{a}*{b}}}}}", a = m.a, b = m.b),
+        m.product.clone(),
+    )
 }
 
 fn jinja_str_mul(m: &ScanMath) -> (String, String) {
@@ -333,14 +337,14 @@ fn velocity_mul(m: &ScanMath) -> (String, String) {
 }
 
 fn velocity_alt(m: &ScanMath) -> (String, String) {
-    (
-        format!("${{{a}*{b}}}", a = m.a, b = m.b),
-        m.product.clone(),
-    )
+    (format!("${{{a}*{b}}}", a = m.a, b = m.b), m.product.clone())
 }
 
 fn erb_mul(m: &ScanMath) -> (String, String) {
-    (format!("<%= {a}*{b} %>", a = m.a, b = m.b), m.product.clone())
+    (
+        format!("<%= {a}*{b} %>", a = m.a, b = m.b),
+        m.product.clone(),
+    )
 }
 
 fn ejs_mul(m: &ScanMath) -> (String, String) {
@@ -364,18 +368,21 @@ fn mako_mul(m: &ScanMath) -> (String, String) {
 }
 
 fn pebble_mul(m: &ScanMath) -> (String, String) {
-    (format!("{{{{ {a} * {b} }}}}", a = m.a, b = m.b), m.product.clone())
-}
-
-fn spring_el(m: &ScanMath) -> (String, String) {
     (
-        format!("${{{a}*{b}}}", a = m.a, b = m.b),
+        format!("{{{{ {a} * {b} }}}}", a = m.a, b = m.b),
         m.product.clone(),
     )
 }
 
+fn spring_el(m: &ScanMath) -> (String, String) {
+    (format!("${{{a}*{b}}}", a = m.a, b = m.b), m.product.clone())
+}
+
 fn twig_mul(m: &ScanMath) -> (String, String) {
-    (format!("{{{{ {a} * {b} }}}}", a = m.a, b = m.b), m.product.clone())
+    (
+        format!("{{{{ {a} * {b} }}}}", a = m.a, b = m.b),
+        m.product.clone(),
+    )
 }
 
 const PAYLOAD_SPECS: &[PayloadSpec] = &[
@@ -574,7 +581,10 @@ fn evaluation_confirmed(
     if expected.len() < 6 {
         return false;
     }
-    if !matches!(probe.status, 200 | 201 | 202 | 204 | 206 | 301 | 302 | 307 | 308) {
+    if !matches!(
+        probe.status,
+        200 | 201 | 202 | 204 | 206 | 301 | 302 | 307 | 308
+    ) {
         return false;
     }
     probe.body.contains(expected)
@@ -590,7 +600,10 @@ fn bypass_variants(payload: &str) -> Vec<(&'static str, String)> {
             "spaced-braces",
             payload.replace("{{", "{{ ").replace("}}", " }}"),
         ));
-        out.push(("tab-braces", payload.replace("{{", "{{\t").replace("}}", "\t}}")));
+        out.push((
+            "tab-braces",
+            payload.replace("{{", "{{\t").replace("}}", "\t}}"),
+        ));
     }
     if payload.contains('*') {
         out.push(("spaced-mul", payload.replace('*', " * ")));
@@ -912,11 +925,11 @@ async fn probe_path(
 
             // POST JSON
             if cfg.check_post_json && !confirmed_here {
-                for key in ["input", "template", "content", "data", "body", "html", "message"] {
+                for key in [
+                    "input", "template", "content", "data", "body", "html", "message",
+                ] {
                     let body = json!({ key: variant_payload });
-                    if let Some(p) =
-                        http_post_json_with_headers(client, &url, &body, &[]).await
-                    {
+                    if let Some(p) = http_post_json_with_headers(client, &url, &body, &[]).await {
                         posture.checks += 1;
                         if evaluation_confirmed(&p, &variant_payload, &expected, &baseline) {
                             emit_confirmed(
@@ -1041,10 +1054,7 @@ async fn probe_path(
             let probe_url = format!(
                 "{}?{}={}",
                 url,
-                cfg.params
-                    .first()
-                    .map(String::as_str)
-                    .unwrap_or("q"),
+                cfg.params.first().map(String::as_str).unwrap_or("q"),
                 urlencoding::encode(frag)
             );
             if let Some(p) = http_get(client, &probe_url).await {
@@ -1273,7 +1283,9 @@ pub async fn run_ssti_result_ctx(target: &str, ctx: &EngineRunContext) -> Engine
         aggregate.error_based.extend(posture.error_based);
         aggregate.bypass_surfaces.extend(posture.bypass_surfaces);
         aggregate.template_engines.extend(posture.template_engines);
-        aggregate.injection_vectors.extend(posture.injection_vectors);
+        aggregate
+            .injection_vectors
+            .extend(posture.injection_vectors);
         aggregate.frameworks.extend(posture.frameworks);
         if rank_sev(&posture.worst) > rank_sev(&aggregate.worst) {
             aggregate.worst = posture.worst;

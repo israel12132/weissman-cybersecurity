@@ -369,22 +369,17 @@ struct TenantScanSecrets {
     oast_api_key: String,
 }
 
-async fn tenant_config_string(
-    pool: &PgPool,
-    tenant_id: i64,
-    key: &str,
-) -> Result<String, String> {
+async fn tenant_config_string(pool: &PgPool, tenant_id: i64, key: &str) -> Result<String, String> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx for {key}: {e}"))?;
-    let val: Option<String> = sqlx::query_scalar(
-        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
-    )
-    .bind(tenant_id)
-    .bind(key)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| format!("read system_configs.{key}: {e}"))?;
+    let val: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2")
+            .bind(tenant_id)
+            .bind(key)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| format!("read system_configs.{key}: {e}"))?;
     let _ = tx.commit().await;
     Ok(val.unwrap_or_default().trim().to_string())
 }
@@ -404,7 +399,10 @@ async fn load_tenant_scan_secrets(
             .to_string();
     }
     let github_token = if github_token.is_empty() {
-        std::env::var("GITHUB_TOKEN").unwrap_or_default().trim().to_string()
+        std::env::var("GITHUB_TOKEN")
+            .unwrap_or_default()
+            .trim()
+            .to_string()
     } else {
         github_token
     };
@@ -534,7 +532,11 @@ fn hydrate_extras_from_client(
     insert_if_absent(extras, "aws_external_id", &creds.aws_external_id);
     insert_if_absent(extras, "gcp_project", &creds.gcp_project_id);
     insert_if_absent(extras, "gcp_project_id", &creds.gcp_project_id);
-    insert_if_absent(extras, "azure_subscription_id", &creds.azure_subscription_id);
+    insert_if_absent(
+        extras,
+        "azure_subscription_id",
+        &creds.azure_subscription_id,
+    );
     insert_if_absent(extras, "azure_tenant_id", &creds.azure_tenant_id);
     insert_if_absent(extras, "ad_domain", &creds.ad_domain);
     insert_if_absent(extras, "domain", &creds.ad_domain);
@@ -925,12 +927,10 @@ pub async fn hydrate_stored_job_payload(
     tenant_id: i64,
     payload: &mut Value,
 ) -> Result<(), String> {
-    let client_id = payload
-        .get("client_id")
-        .and_then(|v| {
-            v.as_i64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
-        });
+    let client_id = payload.get("client_id").and_then(|v| {
+        v.as_i64()
+            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+    });
     let reserved = [
         "target",
         "client_id",
@@ -1062,7 +1062,10 @@ pub async fn route_scan_job(
     if let Some(scope) = scope_outcome.as_ref() {
         payload = inject_scope_validation(payload, scope);
     }
-    Ok(("command_center_engine".to_string(), seal_payload_for_queue(payload)))
+    Ok((
+        "command_center_engine".to_string(),
+        seal_payload_for_queue(payload),
+    ))
 }
 
 #[cfg(test)]
@@ -1130,7 +1133,8 @@ mod tests {
             oast_domain: "oast.example".into(),
             oast_api_key: String::new(),
         };
-        let mut extras = std::collections::HashMap::from([("github_token".into(), json!("••••••••"))]);
+        let mut extras =
+            std::collections::HashMap::from([("github_token".into(), json!("••••••••"))]);
         hydrate_extras_from_tenant(&mut extras, &secrets);
         assert_eq!(
             extras.get("github_token").and_then(Value::as_str),

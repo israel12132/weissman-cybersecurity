@@ -1,0 +1,20 @@
+[package]
+name = "weissman-fleet-shaping"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+description = "Distributed token-bucket traffic shaping, adaptive stealth throttling, and CRDT telemetry for multi-replica Red Team fleets"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "6"
+governor = "0.6"
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

@@ -38,8 +38,8 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
 
     if let Ok(secret) = std::env::var("WEISSMAN_JWT_SECRET") {
         let t = secret.trim();
-        if t.len() < 32 {
-            return Err("WEISSMAN_JWT_SECRET must be at least 32 characters in production".into());
+        if t.len() < 48 {
+            return Err("WEISSMAN_JWT_SECRET must be at least 48 characters in production".into());
         }
         let lower = t.to_ascii_lowercase();
         if WEAK_JWT_SECRETS
@@ -109,6 +109,14 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
             );
         }
 
+        let destructive = std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
+        if destructive.trim().len() < 32 {
+            return Err(
+                "WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET must be set to a strong (>=32 chars) value in production for destructive-action HMAC"
+                    .into(),
+            );
+        }
+
         // Without Redis, login lockout + per-tenant/IP rate limits fall back to
         // per-replica in-memory state. In a multi-replica deployment that lets a
         // brute-force attacker spread attempts across replicas to dodge the limits,
@@ -134,10 +142,41 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         }
     }
 
+    // Server + worker: zero-trust job bus HMAC signing secret (no JWT fallback in production).
+    if is_production_environment() {
+        let orchestrator = std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET").unwrap_or_default();
+        if orchestrator.trim().len() < 32 {
+            return Err(
+                "WEISSMAN_JOB_ORCHESTRATOR_SECRET must be set to a strong (>=32 chars) dedicated value in production for zero-trust job bus signing"
+                    .into(),
+            );
+        }
+    }
+
     Ok(())
 }
 
+/// True when production expects Redis-backed distributed lockout, rate limits, and agent registry.
+#[must_use]
+pub fn production_distributed_state_required() -> bool {
+    if !is_production_environment() {
+        return false;
+    }
+    if env_truthy_pub("WEISSMAN_ALLOW_SINGLE_NODE") {
+        return false;
+    }
+    std::env::var("REDIS_URL")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
 fn env_truthy(name: &str) -> bool {
+    env_truthy_pub(name)
+}
+
+/// Public wrapper for posture checks (same semantics as startup guards).
+pub fn env_truthy_pub(name: &str) -> bool {
     std::env::var(name)
         .ok()
         .map(|v| {

@@ -89,7 +89,7 @@ export default function AIModelRiskTab() {
         const d = await r.json().catch(() => ({}))
         throw new Error(d.detail || `HTTP ${r.status}`)
       }
-      setMsg({ type: 'ok', text: t(`${NS}.endpointsSaved`, { defaultValue: 'LLM endpoints saved securely.' }) })
+      setMsg({ type: 'ok', text: t(`${NS}.endpointsSaved`) })
       await loadEndpoints()
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
@@ -134,9 +134,7 @@ export default function AIModelRiskTab() {
     <div className="p-6 md:p-8 space-y-8 max-w-6xl">
       <div className="rounded-2xl bg-gradient-to-br from-violet-950/40 to-black/60 border border-violet-500/30 p-6">
         <h2 className="text-lg font-semibold text-white mb-1">{t(`${NS}.title`)}</h2>
-        <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`, {
-          defaultValue: 'Configure authorized client LLM/chat API endpoints. Secrets are masked at rest and sent only for live probes.',
-        })}</p>
+        <p className="text-sm text-white/60 mb-4">{t(`${NS}.descriptionSecure`)}</p>
 
         <div className="space-y-3 mb-4">
           {endpoints.map((ep, i) => (
@@ -177,10 +175,10 @@ export default function AIModelRiskTab() {
           ))}
           <div className="flex flex-wrap gap-2">
             <button type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
-              + {t(`${NS}.addEndpoint`, { defaultValue: 'Add endpoint' })}
+              + {t(`${NS}.addEndpoint`)}
             </button>
             <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
-              {t(`${NS}.fullIntegrations`, { defaultValue: 'Full integrations →' })}
+              {t(`${NS}.fullIntegrations`)}
             </Link>
           </div>
         </div>
@@ -192,7 +190,7 @@ export default function AIModelRiskTab() {
             onClick={saveEndpoints}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-violet-500/40 bg-violet-600/20 text-violet-100 hover:bg-violet-600/30 disabled:opacity-40"
           >
-            {saving ? t(`${NS}.saving`, { defaultValue: 'Saving…' }) : t(`${NS}.saveEndpoints`, { defaultValue: 'Save endpoints' })}
+            {saving ? t(`${NS}.saving`) : t(`${NS}.saveEndpoints`)}
           </button>
           <button
             type="button"

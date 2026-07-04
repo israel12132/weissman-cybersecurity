@@ -27,12 +27,17 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         for tag in f.policy.compliance {
             if let Some(cc) = soc2_cc_of(tag) {
                 *cc_failed.entry(cc.to_string()).or_insert(0) += 1;
-                cc_controls.entry(cc.to_string()).or_default().push(tag.to_string());
+                cc_controls
+                    .entry(cc.to_string())
+                    .or_default()
+                    .push(tag.to_string());
             }
         }
     }
 
-    let soc2_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("SOC2"));
+    let soc2_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("SOC2"));
     let total_controls = soc2_row
         .and_then(|r| r.get("controls_covered").and_then(Value::as_u64))
         .unwrap_or(0);
@@ -45,8 +50,14 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         100
     };
 
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
-    let high = findings.iter().filter(|f| f.policy.severity == Severity::High).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
+    let high = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::High)
+        .count() as u64;
 
     let families: Vec<Value> = CC_FAMILIES
         .iter()
@@ -125,7 +136,9 @@ mod tests {
     #[test]
     fn maps_soc2_tags_to_cc_families() {
         let findings = vec![Finding::new(S3_PUBLIC_ACL, "main.tf", "aws_s3_bucket.b")];
-        let compliance = vec![json!({"pack": "SOC2", "controls_covered": 20, "controls_failed": 2, "status": "fail"})];
+        let compliance = vec![
+            json!({"pack": "SOC2", "controls_covered": 20, "controls_failed": 2, "status": "fail"}),
+        ];
         let r = build(&findings, &compliance);
         assert!(r["cc_families"].as_array().unwrap().len() >= 9);
         assert_eq!(r["framework"], "SOC2");

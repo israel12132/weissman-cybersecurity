@@ -36,10 +36,7 @@ fn remote_finding(
     );
     if let Some(obj) = f.as_object_mut() {
         obj.insert("remote_surface".to_string(), json!(true));
-        obj.insert(
-            "agent_validation_recommended".to_string(),
-            json!(true),
-        );
+        obj.insert("agent_validation_recommended".to_string(), json!(true));
     }
     f
 }
@@ -288,7 +285,14 @@ async fn probe_log_tampering_surface(engine_id: &str, target: &str) -> EngineRes
         if status_indicates_presence(p.status) {
             let tok = probe_matched_token(
                 &p,
-                &["kibana", "elasticsearch", "graylog", "splunk", "logstash", "opensearch"],
+                &[
+                    "kibana",
+                    "elasticsearch",
+                    "graylog",
+                    "splunk",
+                    "logstash",
+                    "opensearch",
+                ],
             );
             if tok.is_some() || p.status == 200 {
                 findings.push(remote_finding(
@@ -419,7 +423,10 @@ async fn probe_dns_tunneling_surface(engine_id: &str, target: &str) -> EngineRes
                     &format!("Suspicious TXT token: {}", sig),
                     "medium",
                     "T1071.004",
-                    &format!("TXT record on {} contains '{}' — review for DNS tunneling indicators.", host, sig),
+                    &format!(
+                        "TXT record on {} contains '{}' — review for DNS tunneling indicators.",
+                        host, sig
+                    ),
                     target,
                 ));
                 break;
@@ -435,7 +442,10 @@ async fn probe_dns_tunneling_surface(engine_id: &str, target: &str) -> EngineRes
                 &format!("Suspicious subdomain resolves: {}", sub),
                 "high",
                 "T1071.004",
-                &format!("{} has A records — label '{}' is commonly used for DNS tunnel endpoints.", sub, label),
+                &format!(
+                    "{} has A records — label '{}' is commonly used for DNS tunnel endpoints.",
+                    sub, label
+                ),
                 target,
             ));
         }
@@ -585,7 +595,10 @@ async fn probe_ransomware_surface(engine_id: &str, target: &str) -> EngineResult
             &format!("File-share ports open: {:?}", open),
             "medium",
             "T1486",
-            &format!("Host {} exposes {:?} — ransomware staging often abuses open file services.", host, open),
+            &format!(
+                "Host {} exposes {:?} — ransomware staging often abuses open file services.",
+                host, open
+            ),
             target,
         ));
     }
@@ -756,7 +769,10 @@ async fn probe_storage_covert_surface(engine_id: &str, target: &str) -> EngineRe
             "MinIO/S3-compatible port exposed",
             "high",
             "T1567",
-            &format!("Host {} exposes {:?} — object storage covert channels often target S3/MinIO.", host, open),
+            &format!(
+                "Host {} exposes {:?} — object storage covert channels often target S3/MinIO.",
+                host, open
+            ),
             target,
         ));
     }
@@ -960,7 +976,10 @@ async fn probe_network_tap_surface(engine_id: &str, target: &str) -> EngineResul
 async fn probe_multicast_surface(engine_id: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
-    if udp_probe_response(&host, 5353, b"\x00\x00\x00\x00\x00\x01").await.is_some() {
+    if udp_probe_response(&host, 5353, b"\x00\x00\x00\x00\x00\x01")
+        .await
+        .is_some()
+    {
         findings.push(remote_finding(
             engine_id,
             "mDNS (5353) responded",

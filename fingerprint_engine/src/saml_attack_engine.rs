@@ -228,11 +228,25 @@ fn parse_metadata_cert(b64: &str) -> Option<CertFacts> {
     let cert = X509::from_pem(pem.as_bytes()).ok()?;
     let fmt = |e: &X509NameEntryRef| -> String {
         let key = e.object().nid().short_name().unwrap_or("?");
-        let val = e.data().as_utf8().map(|s| s.to_string()).unwrap_or_else(|_| "?".into());
+        let val = e
+            .data()
+            .as_utf8()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|_| "?".into());
         format!("{key}={val}")
     };
-    let issuer = cert.issuer_name().entries().map(fmt).collect::<Vec<_>>().join(", ");
-    let subject = cert.subject_name().entries().map(fmt).collect::<Vec<_>>().join(", ");
+    let issuer = cert
+        .issuer_name()
+        .entries()
+        .map(fmt)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let subject = cert
+        .subject_name()
+        .entries()
+        .map(fmt)
+        .collect::<Vec<_>>()
+        .join(", ");
     let self_signed = issuer == subject;
     let not_after = cert.not_after().to_owned();
     let now = openssl::asn1::Asn1Time::days_from_now(0).ok();
@@ -282,8 +296,10 @@ fn analyze_metadata(xml: &str) -> MetadataFacts {
     static SLO_RE: OnceLock<Regex> = OnceLock::new();
     static VALID_RE: OnceLock<Regex> = OnceLock::new();
     let cert_re = CERT_RE.get_or_init(|| {
-        Regex::new(r"(?s)<(?:[A-Za-z0-9]+:)?X509Certificate>(.*?)</(?:[A-Za-z0-9]+:)?X509Certificate>")
-            .expect("valid regex")
+        Regex::new(
+            r"(?s)<(?:[A-Za-z0-9]+:)?X509Certificate>(.*?)</(?:[A-Za-z0-9]+:)?X509Certificate>",
+        )
+        .expect("valid regex")
     });
     let entity_re =
         ENTITY_RE.get_or_init(|| Regex::new(r#"entityID\s*=\s*["']([^"']+)["']"#).expect("re"));
@@ -292,8 +308,7 @@ fn analyze_metadata(xml: &str) -> MetadataFacts {
             .expect("re")
     });
     let slo_re = SLO_RE.get_or_init(|| {
-        Regex::new(r#"(?i)SingleLogoutService[^>]*Location\s*=\s*["']([^"']+)["']"#)
-            .expect("re")
+        Regex::new(r#"(?i)SingleLogoutService[^>]*Location\s*=\s*["']([^"']+)["']"#).expect("re")
     });
     let valid_re =
         VALID_RE.get_or_init(|| Regex::new(r#"validUntil\s*=\s*["']([^"']+)["']"#).expect("re"));
@@ -447,7 +462,8 @@ impl SamlConfig {
                 "relaystate_canary",
                 "https://weissman-canary.example.net/probe",
             ),
-            cert_expiry_warn_days: i64::try_from(c.u64_or("cert_expiry_warn_days", 30)).unwrap_or(30),
+            cert_expiry_warn_days: i64::try_from(c.u64_or("cert_expiry_warn_days", 30))
+                .unwrap_or(30),
             min_cert_bits: u32::try_from(c.u64_or("min_cert_bits", 2048)).unwrap_or(2048),
             timeout_ms: c.timeout_ms(8000),
             concurrency: c.concurrency(),
@@ -469,7 +485,16 @@ fn saml_attack_path(
         .with("kind", "attack_path")
         .with("steps", json!(steps))
         .check("correlation", true, format!("{}-step chain", steps.len()));
-    let mut v = finding_rich(ENGINE_ID, title, severity, mitre, description, target, 0.82, ev);
+    let mut v = finding_rich(
+        ENGINE_ID,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        0.82,
+        ev,
+    );
     if let Some(o) = v.as_object_mut() {
         o.insert("category".to_string(), json!("attack_path"));
         o.insert("attack_path".to_string(), json!(true));
@@ -856,7 +881,10 @@ pub async fn run_saml_attack_result_ctx(target: &str, ctx: &EngineRunContext) ->
     // ── 6) Posture summary (graded headline, emitted first) ──
     let score = sig.score();
     let grade = sig.grade();
-    let vendor = sig.idp_vendor.clone().unwrap_or_else(|| "unidentified".to_string());
+    let vendor = sig
+        .idp_vendor
+        .clone()
+        .unwrap_or_else(|| "unidentified".to_string());
     let summary_sev = if score < 55 {
         "high"
     } else if score < 75 {

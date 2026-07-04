@@ -336,3 +336,38 @@ pub async fn maybe_enqueue_credential_hunt(
     info!(target: "sovereign_evolution", tenant_id, %id, "autonomous credential-hunt pivot enqueued");
     Ok(Some(id))
 }
+
+/// On engine execution failure, enqueue sovereign learning feedback (closed learning loop).
+pub async fn maybe_enqueue_learning_on_failure(
+    pool: &PgPool,
+    tenant_id: i64,
+    target_seed: &str,
+    failure_context: &Value,
+) -> Result<Option<uuid::Uuid>, sqlx::Error> {
+    if !sovereign_evolution_enabled() {
+        return Ok(None);
+    }
+    let seed = target_seed.trim();
+    if seed.is_empty() {
+        return Ok(None);
+    }
+    let payload = json!({
+        "target_seed": seed,
+        "failure_context": failure_context,
+    });
+    let id = weissman_db::job_queue::enqueue(
+        pool,
+        tenant_id,
+        "sovereign_learning_feedback",
+        payload,
+        Some("sovereign-learning-loop"),
+    )
+    .await?;
+    info!(
+        target: "sovereign_evolution",
+        tenant_id,
+        %id,
+        "sovereign learning feedback enqueued after engine failure"
+    );
+    Ok(Some(id))
+}

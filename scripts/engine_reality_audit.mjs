@@ -15,10 +15,18 @@ import { pathToFileURL } from 'node:url'
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
+const agentDispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch_agent.rs'), 'utf8')
 const aliasRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/alias_engine_runner.rs'), 'utf8')
+const criticalInfraRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/critical_infra/mod.rs'), 'utf8')
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
 
-const SPECIAL = new Set(['poe_synthesis'])
+const SPECIAL = new Set([])
+
+function extractCriticalInfraIds(text) {
+  const match = text.match(/pub const ENGINE_IDS: &\[&str\] = &\[(.*?)\];/s)
+  if (!match) return new Set()
+  return new Set([...match[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]))
+}
 
 function extractArray(name, text) {
   const m = text.match(new RegExp(`pub const ${name}: &\\[&str\\] = &\\[(.*?)\\];`, 's'))
@@ -61,16 +69,18 @@ function extractDispatchImpl(text) {
 }
 
 const productionIds = extractArray('PRODUCTION_ENGINE_IDS', engineRs)
-const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', dispatchRs))
+const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentDispatchRs))
 const resolveMap = extractResolveMap(engineRs)
 const dispatchImpl = extractDispatchImpl(dispatchRs)
 const dispatchIds = new Set(dispatchImpl.keys())
+const criticalInfraIds = extractCriticalInfraIds(criticalInfraRs)
 const frontendIds = frontendModule.ENGINES_REGISTRY.map((e) => e.id)
 
 function classify(id) {
   if (agentRequired.has(id)) return 'agent_required'
   const canon = resolveMap.get(id) || id
   if (canon !== id) return 'alias'
+  if (criticalInfraIds.has(id)) return 'real_probe'
   if (dispatchIds.has(id)) return 'real_probe'
   if (SPECIAL.has(id)) return 'special'
   return 'no_path'
@@ -88,7 +98,9 @@ const fe = tally(frontendIds)
 // Distinct real implementations behind the real_probe IDs (delegates share one impl fn).
 const implCount = new Map()
 for (const id of prod.real_probe) {
-  const impl = dispatchImpl.get(id) || '(unknown)'
+  const impl = criticalInfraIds.has(id)
+    ? 'critical_infra::dispatch'
+    : dispatchImpl.get(id) || '(unknown)'
   implCount.set(impl, (implCount.get(impl) || 0) + 1)
 }
 const distinctImpls = implCount.size
@@ -130,3 +142,7 @@ const out = {
 }
 
 console.log(JSON.stringify(out, null, 2))
+
+if (prod.no_path.length > 0) {
+  process.exit(1)
+}

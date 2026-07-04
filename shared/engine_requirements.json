@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-06-26T16:18:57.299Z",
-  "production_engine_count": 550,
+  "generated_at": "2026-07-03T20:20:33.559Z",
+  "production_engine_count": 558,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 410
+      "engine_count": 417
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -245,7 +245,7 @@
         "ad_domain",
         "scope_domains"
       ],
-      "engine_count": 49
+      "engine_count": 50
     },
     "endpoint_agent": {
       "id": "endpoint_agent",
@@ -265,7 +265,7 @@
         "iac_repos",
         "scope_domains"
       ],
-      "engine_count": 37
+      "engine_count": 38
     },
     "industrial_ot": {
       "id": "industrial_ot",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 32
+      "engine_count": 42
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -576,9 +576,9 @@
     },
     "http_feedback_fuzz": {
       "id": "http_feedback_fuzz",
-      "group": "unknown",
+      "group": "web",
       "kind": "real_probe",
-      "label": "http_feedback_fuzz",
+      "label": "HTTP Feedback Fuzz",
       "requirements": [
         "contact_email",
         "llm_secops_endpoints",
@@ -667,6 +667,102 @@
       "group": "ot",
       "kind": "real_probe",
       "label": "SCADA / ICS",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "avionics_adsb_attack": {
+      "id": "avionics_adsb_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Aviation ADS-B / ACARS Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "maritime_ais_attack": {
+      "id": "maritime_ais_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Maritime AIS / NMEA Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ev_charging_ocpp_attack": {
+      "id": "ev_charging_ocpp_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "EV Charging OCPP Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "smart_grid_dlms_attack": {
+      "id": "smart_grid_dlms_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Smart Grid DLMS / IEC-104 Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "rail_signaling_attack": {
+      "id": "rail_signaling_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Rail Signaling Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "building_automation_attack": {
+      "id": "building_automation_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Building Automation Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "robotics_ros2_attack": {
+      "id": "robotics_ros2_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "Robotics / ROS2 Attack",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_sis_triton_attack": {
+      "id": "ot_sis_triton_attack",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT SIS / Triconex TriStation",
       "requirements": [
         "contact_email",
         "industrial_ot",
@@ -988,9 +1084,9 @@
     },
     "microsecond_timing": {
       "id": "microsecond_timing",
-      "group": "unknown",
+      "group": "web",
       "kind": "real_probe",
-      "label": "microsecond_timing",
+      "label": "Microsecond Timing",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -2241,12 +2337,14 @@
     },
     "can_bus_surface": {
       "id": "can_bus_surface",
-      "group": "unknown",
+      "group": "ot",
       "kind": "real_probe",
-      "label": "can_bus_surface",
+      "label": "CAN Bus Surface",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
       ]
     },
     "ntp_amplification": {
@@ -2578,8 +2676,8 @@
       "kind": "real_probe",
       "label": "Identity Attack Chain",
       "requirements": [
+        "ad_domain",
         "contact_email",
-        "client_id",
         "scope_domains"
       ]
     },
@@ -2590,8 +2688,7 @@
       "label": "Pipeline-to-Runtime Risk",
       "requirements": [
         "contact_email",
-        "scope_domains",
-        "iac_repos"
+        "scope_domains"
       ]
     },
     "risk_superposition_collapse": {
@@ -2611,19 +2708,6 @@
       "label": "CHRONOS Temporal Rollback",
       "requirements": [
         "contact_email",
-        "client_id",
-        "endpoint_agent",
-        "scope_domains"
-      ]
-    },
-    "liquid_matrix": {
-      "id": "liquid_matrix",
-      "group": "defense",
-      "kind": "real_probe",
-      "label": "LIQUID-MATRIX MTD",
-      "requirements": [
-        "contact_email",
-        "client_id",
         "scope_domains"
       ]
     },
@@ -2634,7 +2718,6 @@
       "label": "COGNITIVE STARVATION",
       "requirements": [
         "contact_email",
-        "client_id",
         "scope_domains"
       ]
     },
@@ -3592,9 +3675,9 @@
     },
     "ollama_fuzz": {
       "id": "ollama_fuzz",
-      "group": "unknown",
+      "group": "ai",
       "kind": "real_probe",
-      "label": "ollama_fuzz",
+      "label": "Ollama Fuzz",
       "requirements": [
         "contact_email",
         "llm_secops_endpoints",
@@ -5139,13 +5222,14 @@
     },
     "lora_attack": {
       "id": "lora_attack",
-      "group": "unknown",
+      "group": "ot",
       "kind": "agent_required",
-      "label": "lora_attack",
+      "label": "LoRa Attack",
       "requirements": [
         "contact_email",
         "endpoint_agent",
-        "scope_domains"
+        "scope_domains",
+        "scope_ips"
       ]
     },
     "lorawan_attack": {
@@ -5209,10 +5293,11 @@
     "timestomping": {
       "id": "timestomping",
       "group": "stealth",
-      "kind": "real_probe",
+      "kind": "agent_required",
       "label": "Timestomping & Metadata Falsification",
       "requirements": [
         "contact_email",
+        "endpoint_agent",
         "scope_domains"
       ]
     },
@@ -6126,9 +6211,9 @@
     },
     "sap_erp_attack": {
       "id": "sap_erp_attack",
-      "group": "unknown",
+      "group": "apt",
       "kind": "real_probe",
-      "label": "sap_erp_attack",
+      "label": "SAP ERP Attack",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -6136,9 +6221,9 @@
     },
     "mainframe_zos_attack": {
       "id": "mainframe_zos_attack",
-      "group": "unknown",
+      "group": "apt",
       "kind": "real_probe",
-      "label": "mainframe_zos_attack",
+      "label": "Mainframe z/OS Attack",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -6146,9 +6231,9 @@
     },
     "malvertising_seo_poison": {
       "id": "malvertising_seo_poison",
-      "group": "unknown",
+      "group": "social",
       "kind": "real_probe",
-      "label": "malvertising_seo_poison",
+      "label": "Malvertising SEO Poison",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -6156,9 +6241,9 @@
     },
     "infostealer_emulation": {
       "id": "infostealer_emulation",
-      "group": "unknown",
+      "group": "malware",
       "kind": "agent_required",
-      "label": "infostealer_emulation",
+      "label": "Infostealer Emulation",
       "requirements": [
         "contact_email",
         "endpoint_agent",
@@ -6167,22 +6252,24 @@
     },
     "printer_mfp_attack": {
       "id": "printer_mfp_attack",
-      "group": "unknown",
+      "group": "network",
       "kind": "real_probe",
-      "label": "printer_mfp_attack",
+      "label": "Printer MFP Attack",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "scope_ips"
       ]
     },
     "radius_nac_bypass": {
       "id": "radius_nac_bypass",
-      "group": "unknown",
+      "group": "network",
       "kind": "real_probe",
-      "label": "radius_nac_bypass",
+      "label": "RADIUS NAC Bypass",
       "requirements": [
         "contact_email",
-        "scope_domains"
+        "scope_domains",
+        "scope_ips"
       ]
     }
   }

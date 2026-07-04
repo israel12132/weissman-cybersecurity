@@ -29,15 +29,17 @@ This activates guards in `fingerprint_engine/src/security_startup.rs` (`enforce_
 
 | Check | Failure mode |
 |-------|--------------|
-| `WEISSMAN_JWT_SECRET` missing or < 32 chars | Server/worker refuses boot |
-| Known weak JWT values (`changeme`, template placeholders) | Refuses boot |
+| `WEISSMAN_JWT_SECRET` missing or < 48 chars | Server/worker refuses boot |
+| Known weak JWT values (`changeme`, `ci-engine-smoke-secret`, template placeholders) | Refuses boot |
 | Weak DB password fragments in URLs | Refuses boot |
 | `WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=1` | Refuses boot |
 | `WEISSMAN_SAML_INSECURE_SKIP_VERIFY=1` | Refuses boot |
 | `WEISSMAN_COOKIE_SECURE` not enabled (server) | Refuses boot |
 | `WEISSMAN_MIGRATE_URL` unset (server) | Refuses boot |
-| `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` unset (server) | Refuses boot |
-| `WEISSMAN_METRICS_TOKEN` unset (server) | Refuses boot |
+| `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` unset or < 32 chars (server) | Refuses boot |
+| `WEISSMAN_METRICS_TOKEN` unset or < 32 chars (server) | Refuses boot |
+| `REDIS_URL` unset without `WEISSMAN_ALLOW_SINGLE_NODE=1` (server) | Refuses boot |
+| `WEISSMAN_JOB_ORCHESTRATOR_SECRET` unset or < 32 chars (server + worker) | Refuses boot |
 | JWT via `?access_token=` query param | Rejected at runtime |
 
 ---
@@ -47,9 +49,10 @@ This activates guards in `fingerprint_engine/src/security_startup.rs` (`enforce_
 ### 1. Rotate all secrets
 
 ```bash
-openssl rand -base64 48   # WEISSMAN_JWT_SECRET
-openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN
-openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+openssl rand -base64 48   # WEISSMAN_JWT_SECRET (minimum 48 characters enforced at boot)
+openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN (≥32)
+openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (≥32)
+openssl rand -base64 48   # WEISSMAN_JOB_ORCHESTRATOR_SECRET (≥32)
 ```
 
 Generate unique Postgres passwords for `weissman_app`, `weissman_auth`, and superuser migration role.
@@ -116,7 +119,15 @@ Never set `WEISSMAN_ALLOW_INSECURE_TLS=1` in production.
 REDIS_URL=redis://redis-host:6379/0
 ```
 
-Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`), and agent fleet registry.
+Required for multi-replica rate limits, login lockout (`/api/login`, `/api/auth/mfa/verify`), and agent fleet registry. When Redis is configured in production, middleware **fail-closed** (503) if Redis is unreachable — no silent in-memory fallback.
+
+Zero-trust job bus (requires `REDIS_URL` + dedicated orchestrator secret):
+
+```bash
+WEISSMAN_JOB_ORCHESTRATOR_SECRET=<openssl rand -base64 48>
+```
+
+See `docs/operations/AUTH-DB-ROTATION.md` for zero-downtime `weissman_auth` password rotation.
 
 ### 8. SAML / OIDC (if enabled)
 
@@ -136,6 +147,27 @@ WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION=true
 ```
 
 Requires SMTP configuration. Never set `WEISSMAN_SIGNUP_RETURN_LINK=1` in production.
+
+### 10. IaC Live AWS (runtime feature flag)
+
+The IaC Misconfig engine supports live AWS/K8s reconciliation when compiled with the `live-aws` feature (workspace default).
+
+**Runtime kill-switch (recommended in staging before go-live):**
+
+```bash
+# 0 = graph-only — no live AWS IAM/S3/API calls
+WEISSMAN_IAC_LIVE_AWS=0
+```
+
+When `WEISSMAN_IAC_LIVE_AWS=0`, scans remain graph-only even if params include `live_blast` or `aws_cross_account_role_arn`.
+
+**Full live mode (authorized production):**
+
+```bash
+WEISSMAN_IAC_LIVE_AWS=1   # or unset — enabled by default when feature is compiled
+```
+
+Also requires cross-account role ARN, `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` for cloud deploy paths, and operator RBAC.
 
 ---
 

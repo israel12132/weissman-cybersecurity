@@ -33,7 +33,15 @@ pub fn build(files: &[IacFile]) -> InfraGraph {
 
     for f in files {
         if f.name.ends_with(".tf") || f.content.contains("resource \"") {
-            ingest_terraform(f, &mut g, &mut sg_open, &mut role_wildcard, &mut instance_sgs, &mut rds_sgs, &mut bucket_ids);
+            ingest_terraform(
+                f,
+                &mut g,
+                &mut sg_open,
+                &mut role_wildcard,
+                &mut instance_sgs,
+                &mut rds_sgs,
+                &mut bucket_ids,
+            );
         }
         if f.name.ends_with(".yaml") || f.name.ends_with(".yml") {
             ingest_k8s(f, &mut g);
@@ -42,14 +50,24 @@ pub fn build(files: &[IacFile]) -> InfraGraph {
 
     for (sg_id, open) in &sg_open {
         if *open {
-            g.add_edge(INTERNET_ID, sg_id, EdgeKind::NetworkReachable, "ingress 0.0.0.0/0 or ::/0");
+            g.add_edge(
+                INTERNET_ID,
+                sg_id,
+                EdgeKind::NetworkReachable,
+                "ingress 0.0.0.0/0 or ::/0",
+            );
         }
     }
     for (inst_id, sgs) in &instance_sgs {
         for sg in sgs {
             let sg_nid = format!("sg:{sg}");
             if g.nodes.contains_key(&sg_nid) {
-                g.add_edge(&sg_nid, inst_id, EdgeKind::NetworkReachable, "vpc_security_group_ids");
+                g.add_edge(
+                    &sg_nid,
+                    inst_id,
+                    EdgeKind::NetworkReachable,
+                    "vpc_security_group_ids",
+                );
             }
         }
     }
@@ -57,18 +75,33 @@ pub fn build(files: &[IacFile]) -> InfraGraph {
         for sg in sgs {
             let sg_nid = format!("sg:{sg}");
             if g.nodes.contains_key(&sg_nid) {
-                g.add_edge(&sg_nid, rds_id, EdgeKind::NetworkReachable, "RDS vpc_security_group_ids");
+                g.add_edge(
+                    &sg_nid,
+                    rds_id,
+                    EdgeKind::NetworkReachable,
+                    "RDS vpc_security_group_ids",
+                );
             }
         }
         if *public {
-            g.add_edge(INTERNET_ID, rds_id, EdgeKind::NetworkReachable, "publicly_accessible = true");
+            g.add_edge(
+                INTERNET_ID,
+                rds_id,
+                EdgeKind::NetworkReachable,
+                "publicly_accessible = true",
+            );
         }
     }
     for (role_id, wild) in &role_wildcard {
         if *wild {
             for (bid, _, is_public) in &bucket_ids {
                 if *is_public {
-                    g.add_edge(role_id, bid, EdgeKind::IamAllows, "IAM Action */Resource * allows S3 access");
+                    g.add_edge(
+                        role_id,
+                        bid,
+                        EdgeKind::IamAllows,
+                        "IAM Action */Resource * allows S3 access",
+                    );
                 }
             }
         }
@@ -168,7 +201,8 @@ fn ingest_terraform(
                 let bucket_name = b.attr_str("bucket").unwrap_or_else(|| rname.to_string());
                 let nid = format!("s3:{rname}");
                 let lc = f.content.to_ascii_lowercase();
-                let public = lc.contains("public-read") || lc.contains("public_read")
+                let public = lc.contains("public-read")
+                    || lc.contains("public_read")
                     || lc.contains("acl = \"public");
                 bucket_ids.push((nid.clone(), bucket_name.clone(), public));
                 g.add_node(GraphNode {
@@ -185,7 +219,12 @@ fn ingest_terraform(
                     cloud_arn: None,
                 });
                 if public {
-                    g.add_edge(INTERNET_ID, &format!("s3:{rname}"), EdgeKind::NetworkReachable, "public S3 ACL/policy");
+                    g.add_edge(
+                        INTERNET_ID,
+                        &format!("s3:{rname}"),
+                        EdgeKind::NetworkReachable,
+                        "public S3 ACL/policy",
+                    );
                 }
             }
             "aws_iam_role" => {
@@ -207,9 +246,13 @@ fn ingest_terraform(
                 });
             }
             "aws_iam_role_policy" | "aws_iam_role_policy_attachment" | "aws_iam_policy" => {
-                let wild = policy_document_wildcard(&b) || f.content.contains("Action") && f.content.contains('*');
+                let wild = policy_document_wildcard(&b)
+                    || f.content.contains("Action") && f.content.contains('*');
                 if wild {
-                    if let Some(role) = b.attr_str("role").or_else(|| b.labels.get(1).map(|s| s.to_string())) {
+                    if let Some(role) = b
+                        .attr_str("role")
+                        .or_else(|| b.labels.get(1).map(|s| s.to_string()))
+                    {
                         let role_ref = role.split('.').last().unwrap_or(&role);
                         role_wildcard.insert(format!("iam:{role_ref}"), true);
                     }
@@ -231,7 +274,12 @@ fn ingest_terraform(
                     cloud_arn: None,
                 });
                 if b.attr_str("internal").as_deref() != Some("true") {
-                    g.add_edge(INTERNET_ID, &nid, EdgeKind::NetworkReachable, "internet-facing load balancer");
+                    g.add_edge(
+                        INTERNET_ID,
+                        &nid,
+                        EdgeKind::NetworkReachable,
+                        "internet-facing load balancer",
+                    );
                 }
             }
             "aws_secretsmanager_secret" => {
@@ -273,7 +321,9 @@ fn ingest_terraform(
 
 fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
     for doc in f.content.split("\n---\n") {
-        let Ok(v) = serde_yaml::from_str::<Value>(doc.trim()) else { continue };
+        let Ok(v) = serde_yaml::from_str::<Value>(doc.trim()) else {
+            continue;
+        };
         let kind = v.get("kind").and_then(Value::as_str).unwrap_or("");
         let name = v
             .get("metadata")
@@ -303,8 +353,21 @@ fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
                     iac_address: Some(format!("{ns}/Ingress/{name}")),
                     cloud_arn: None,
                 });
-                g.add_edge(INTERNET_ID, &nid, EdgeKind::NetworkReachable, if no_tls { "Ingress without TLS" } else { "Ingress" });
-                if let Some(rules) = v.get("spec").and_then(|s| s.get("rules")).and_then(Value::as_sequence) {
+                g.add_edge(
+                    INTERNET_ID,
+                    &nid,
+                    EdgeKind::NetworkReachable,
+                    if no_tls {
+                        "Ingress without TLS"
+                    } else {
+                        "Ingress"
+                    },
+                );
+                if let Some(rules) = v
+                    .get("spec")
+                    .and_then(|s| s.get("rules"))
+                    .and_then(Value::as_sequence)
+                {
                     for rule in rules {
                         if let Some(svc) = rule
                             .get("http")
@@ -317,13 +380,22 @@ fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
                             .and_then(Value::as_str)
                         {
                             let snid = format!("svc:{svc}");
-                            g.add_edge(&nid, &snid, EdgeKind::K8sRoutesTo, "Ingress backend service");
+                            g.add_edge(
+                                &nid,
+                                &snid,
+                                EdgeKind::K8sRoutesTo,
+                                "Ingress backend service",
+                            );
                         }
                     }
                 }
             }
             "Service" => {
-                let st = v.get("spec").and_then(|s| s.get("type")).and_then(Value::as_str).unwrap_or("ClusterIP");
+                let st = v
+                    .get("spec")
+                    .and_then(|s| s.get("type"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("ClusterIP");
                 let nid = format!("svc:{name}");
                 let external = st == "LoadBalancer" || st == "NodePort";
                 g.add_node(GraphNode {
@@ -340,7 +412,12 @@ fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
                     cloud_arn: None,
                 });
                 if external {
-                    g.add_edge(INTERNET_ID, &nid, EdgeKind::NetworkReachable, format!("Service type {st}"));
+                    g.add_edge(
+                        INTERNET_ID,
+                        &nid,
+                        EdgeKind::NetworkReachable,
+                        format!("Service type {st}"),
+                    );
                 }
             }
             "Deployment" | "StatefulSet" | "DaemonSet" => {
@@ -368,7 +445,12 @@ fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
                 });
                 let snid = format!("svc:{name}");
                 if g.nodes.contains_key(&snid) {
-                    g.add_edge(&snid, &nid, EdgeKind::K8sRoutesTo, "Service selector → workload");
+                    g.add_edge(
+                        &snid,
+                        &nid,
+                        EdgeKind::K8sRoutesTo,
+                        "Service selector → workload",
+                    );
                 }
                 let sanid = format!("sa:{sa}");
                 if !g.nodes.contains_key(&sanid) {
@@ -434,7 +516,12 @@ fn ingest_k8s(f: &IacFile, g: &mut InfraGraph) {
                                 if let Some(sa) = s.get("name").and_then(Value::as_str) {
                                     let sanid = format!("sa:{sa}");
                                     if g.nodes.contains_key(&sanid) {
-                                        g.add_edge(&sanid, &sanid, EdgeKind::RbacGrants, "cluster-admin binding");
+                                        g.add_edge(
+                                            &sanid,
+                                            &sanid,
+                                            EdgeKind::RbacGrants,
+                                            "cluster-admin binding",
+                                        );
                                     }
                                 }
                             }
@@ -527,7 +614,12 @@ fn wire_secret_volume_mounts(v: &Value, pod_id: &str, ns: &str, file: &str, g: &
         .into_iter()
         .flatten();
     for c in containers {
-        for vm in c.get("volumeMounts").and_then(Value::as_sequence).into_iter().flatten() {
+        for vm in c
+            .get("volumeMounts")
+            .and_then(Value::as_sequence)
+            .into_iter()
+            .flatten()
+        {
             let vol_name = vm.get("name").and_then(Value::as_str).unwrap_or("");
             let Some(secret_name) = secret_volumes.get(vol_name) else {
                 continue;
@@ -554,7 +646,12 @@ fn wire_secret_volume_mounts(v: &Value, pod_id: &str, ns: &str, file: &str, g: &
 }
 
 fn rule_open(b: &HclBlock) -> bool {
-    for key in ["cidr_blocks", "ipv6_cidr_blocks", "cidr_block", "ipv6_cidr_block"] {
+    for key in [
+        "cidr_blocks",
+        "ipv6_cidr_blocks",
+        "cidr_block",
+        "ipv6_cidr_block",
+    ] {
         if let Some(v) = b.attr(key) {
             for c in ref_list(v) {
                 let c = c.trim_matches('"');
@@ -574,7 +671,10 @@ fn block_has_open_cidr(content: &str, addr: &str) -> bool {
 
 fn ref_list(v: &HclValue) -> Vec<String> {
     match v {
-        HclValue::List(items) => items.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+        HclValue::List(items) => items
+            .iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect(),
         HclValue::Str(s) | HclValue::Raw(s) => vec![s.clone()],
         _ => vec![],
     }
@@ -583,7 +683,10 @@ fn ref_list(v: &HclValue) -> Vec<String> {
 fn policy_document_wildcard(b: &HclBlock) -> bool {
     if let Some(HclValue::Str(doc) | HclValue::Raw(doc)) = b.attr("policy") {
         let lc = doc.to_ascii_lowercase();
-        return lc.contains("\"action\"") && lc.contains('*') && lc.contains("\"resource\"") && lc.contains('*');
+        return lc.contains("\"action\"")
+            && lc.contains('*')
+            && lc.contains("\"resource\"")
+            && lc.contains('*');
     }
     false
 }

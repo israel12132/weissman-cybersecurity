@@ -1,7 +1,11 @@
 //! Recursive pipeline: shared target list, discovered paths, and wordlists for integrated scanning.
 //! OSINT -> target_list; ASM -> web bases; fingerprint -> dynamic wordlist (Knowledge Base).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, SystemTime};
+
+/// Default half-life for path confidence decay (6 hours).
+pub const PATH_CONFIDENCE_HALF_LIFE: Duration = Duration::from_secs(6 * 3600);
 
 /// Knowledge Base: ~50 high-value endpoints per tech stack (fingerprint-based dynamic wordlist).
 fn wordlist_php() -> Vec<&'static str> {
@@ -253,6 +257,21 @@ pub fn wordlist_for_tech_stack(tech_stack: &[String]) -> Vec<String> {
     set.into_iter().collect()
 }
 
+/// Single stack hint string → wordlist (falls back to expanded paths).
+#[must_use]
+pub fn wordlist_for_stack(stack_hint: &str) -> Vec<String> {
+    let hint = stack_hint.trim();
+    if hint.is_empty() {
+        return expanded_path_wordlist();
+    }
+    let wl = wordlist_for_tech_stack(&[hint.to_string()]);
+    if wl.is_empty() {
+        expanded_path_wordlist()
+    } else {
+        wl
+    }
+}
+
 /// Extract tech stack names from ASM findings (asset=fingerprint, tech_stack array).
 pub fn tech_stack_from_asm_findings(findings: &[serde_json::Value]) -> Vec<String> {
     let mut out = Vec::new();
@@ -380,10 +399,31 @@ pub fn web_bases_for_host(host: &str, ports: &[u16]) -> Vec<String> {
 
 /// Global Discovery Table: every path from any engine (Crawler, Archival, AI, ASM) is merged here.
 /// 403 paths are explicitly kept for BOLA/fuzzing. No path is ignored.
+/// Paths carry confidence scores that decay over time (OSINT 6h ago < crawler now).
+#[derive(Debug, Clone)]
+pub struct ScoredPath {
+    pub path: String,
+    pub confidence: f64,
+    pub discovered_at: SystemTime,
+    pub source_engine: String,
+}
+
+impl ScoredPath {
+    #[must_use]
+    pub fn effective_confidence(&self, now: SystemTime) -> f64 {
+        let age = now
+            .duration_since(self.discovered_at)
+            .unwrap_or(Duration::ZERO);
+        let half_lives = age.as_secs_f64() / PATH_CONFIDENCE_HALF_LIFE.as_secs_f64();
+        self.confidence * 0.5_f64.powf(half_lives)
+    }
+}
+
 #[derive(Default)]
 pub struct DiscoveryContext {
     pub paths: HashSet<String>,
     pub paths_403: Vec<String>,
+    scored: HashMap<String, ScoredPath>,
 }
 
 impl DiscoveryContext {
@@ -392,6 +432,7 @@ impl DiscoveryContext {
     }
 
     pub fn merge_paths(&mut self, paths: impl IntoIterator<Item = String>) {
+        let now = SystemTime::now();
         for p in paths {
             let n = if p.starts_with('/') {
                 p
@@ -399,7 +440,107 @@ impl DiscoveryContext {
                 format!("/{}", p)
             };
             if n.len() > 1 && n.len() < 500 {
-                self.paths.insert(n);
+                self.paths.insert(n.clone());
+                self.scored
+                    .entry(n.clone())
+                    .and_modify(|sp| {
+                        sp.confidence = (sp.confidence + 0.15).min(1.0);
+                        sp.discovered_at = now;
+                    })
+                    .or_insert(ScoredPath {
+                        path: n,
+                        confidence: 0.55,
+                        discovered_at: now,
+                        source_engine: "merge".into(),
+                    });
+            }
+        }
+    }
+
+    /// Merge paths discovered by a specific engine with source-weighted confidence.
+    pub fn merge_paths_from_engine(
+        &mut self,
+        engine_id: &str,
+        paths: impl IntoIterator<Item = String>,
+        base_confidence: f64,
+    ) {
+        let now = SystemTime::now();
+        let base = base_confidence.clamp(0.1, 1.0);
+        for p in paths {
+            let n = if p.starts_with('/') {
+                p
+            } else {
+                format!("/{}", p)
+            };
+            if n.len() <= 1 || n.len() >= 500 {
+                continue;
+            }
+            self.paths.insert(n.clone());
+            self.scored
+                .entry(n.clone())
+                .and_modify(|sp| {
+                    sp.confidence = (sp.confidence + base * 0.25).min(1.0);
+                    sp.discovered_at = now;
+                    sp.source_engine = engine_id.to_string();
+                })
+                .or_insert(ScoredPath {
+                    path: n,
+                    confidence: base,
+                    discovered_at: now,
+                    source_engine: engine_id.to_string(),
+                });
+        }
+    }
+
+    /// Live wordlist from fingerprint + archival findings (not static presets only).
+    #[must_use]
+    pub fn live_wordlist_from_findings(
+        findings: &[serde_json::Value],
+        stack_hint: &str,
+    ) -> Vec<String> {
+        let mut out = HashSet::new();
+        for f in findings {
+            for key in ["path", "url", "value", "endpoint", "affected_url"] {
+                if let Some(s) = f.get(key).and_then(|v| v.as_str()) {
+                    let s = s.trim();
+                    if s.starts_with('/') {
+                        out.insert(s.to_string());
+                    } else if let Some(idx) = s.find("://") {
+                        let rest = &s[idx + 3..];
+                        if let Some(path) = rest.find('/').map(|i| &rest[i..]) {
+                            if path.len() > 1 {
+                                out.insert(path.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let mut paths: Vec<String> = out.into_iter().collect();
+        if paths.is_empty() {
+            paths = wordlist_for_stack(stack_hint);
+        } else {
+            for p in wordlist_for_stack(stack_hint) {
+                paths.push(p);
+            }
+        }
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    /// Cross-engine memory: inject paths from pentest_memory payloads.
+    pub fn merge_from_pentest_memory(&mut self, memory: &serde_json::Value) {
+        if let Some(arr) = memory.get("discovered_paths").and_then(|v| v.as_array()) {
+            let paths: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            self.merge_paths_from_engine("pentest_memory", paths, 0.85);
+        }
+        if let Some(arr) = memory.get("paths_403").and_then(|v| v.as_array()) {
+            for p in arr.iter().filter_map(|v| v.as_str()) {
+                self.merge_403(p.to_string());
             }
         }
     }
@@ -416,8 +557,25 @@ impl DiscoveryContext {
         }
     }
 
+    /// Paths ranked by decay-adjusted confidence (highest first).
+    #[must_use]
+    pub fn ranked_paths(&self) -> Vec<(String, f64)> {
+        let now = SystemTime::now();
+        let mut ranked: Vec<(String, f64)> = self
+            .scored
+            .values()
+            .map(|sp| (sp.path.clone(), sp.effective_confidence(now)))
+            .collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        ranked
+    }
+
     /// All paths as a list (including 403). Use for BOLA, Fuzz, Timing.
     pub fn all_paths(&self) -> Vec<String> {
+        let ranked = self.ranked_paths();
+        if !ranked.is_empty() {
+            return ranked.into_iter().map(|(p, _)| p).collect();
+        }
         let mut out: Vec<String> = self.paths.iter().cloned().collect();
         for p in &self.paths_403 {
             if !out.contains(p) {

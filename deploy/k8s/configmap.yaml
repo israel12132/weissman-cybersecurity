@@ -2,10 +2,18 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: weissman-config
+  namespace: weissman
 data:
   PORT: "8000"
+  WEISSMAN_ENV: "production"
+  WEISSMAN_COOKIE_SECURE: "1"
   WEISSMAN_PUBLIC_BASE_URL: "https://weissmancyber.com"
   WEISSMAN_MIGRATIONS_DIR: "/srv/migrations"
-  # DATABASE_URL, WEISSMAN_AUTH_DATABASE_URL, WEISSMAN_MIGRATE_URL, WEISSMAN_JWT_SECRET,
-  # REDIS_URL, WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET must be supplied via Secrets in production.
-  # Run weissman-worker Deployment alongside backend (see worker-deployment.yaml).
+  WEISSMAN_BILLING_STRICT: "1"
+  WEISSMAN_WORKER_LIGHT_CONCURRENCY: "8"
+  WEISSMAN_WORKER_HEAVY_CONCURRENCY: "2"
+  WEISSMAN_SOAR_VERIFY_WORKER: "1"
+  WEISSMAN_AGENT_BIN_DIR: "/srv/bin/agents"
+  # Secrets (database_url, jwt_secret, destructive_confirm_secret, job_orchestrator_secret,
+  # metrics_token, redis_url, migrate_url) MUST come from Secret weissman-secrets.
+  # See deploy/k8s/secret.example.yaml and scripts/k8s-generate-secrets.sh.

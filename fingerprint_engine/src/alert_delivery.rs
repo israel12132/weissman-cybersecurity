@@ -335,3 +335,59 @@ pub async fn deliver_alert(
     }
     any_ok
 }
+
+/// Fire tenant alert channels when SOAR playbook dispatch fails after finding persist.
+pub async fn notify_soar_dispatch_failure(
+    pool: &PgPool,
+    tenant_id: i64,
+    finding_id: i64,
+    summary: &str,
+    results: &[crate::soar_playbook::PlaybookRunResult],
+) {
+    let config = load_delivery_config(pool, tenant_id).await;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| Client::new());
+
+    let payload = json!({
+        "event": "soar_dispatch_failure",
+        "tenant_id": tenant_id,
+        "finding_id": finding_id,
+        "summary": summary,
+        "results": results,
+        "text": format!(
+            "[Weissman][SOAR] playbook dispatch failure on finding #{finding_id}: {summary}"
+        ),
+    });
+
+    let mut delivered = false;
+    if let Some(url) = config.alert_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if let Some(url) = config.slack_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if let Some(key) = resolve_pagerduty_key(&config) {
+        let pd = json!({
+            "routing_key": key,
+            "event_action": "trigger",
+            "payload": {
+                "summary": format!("SOAR dispatch failure finding #{finding_id}"),
+                "severity": "error",
+                "source": "weissman-soar",
+                "custom_details": payload,
+            }
+        });
+        delivered |= post_json(&client, "https://events.pagerduty.com/v2/enqueue", &pd).await;
+    }
+
+    if !delivered {
+        tracing::warn!(
+            target: "alert_delivery",
+            tenant_id,
+            finding_id,
+            "SOAR dispatch failure alert not delivered (no channels configured)"
+        );
+    }
+}

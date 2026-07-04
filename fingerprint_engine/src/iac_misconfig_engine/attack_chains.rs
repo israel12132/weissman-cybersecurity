@@ -570,8 +570,14 @@ pub fn blast_radius_multiplier(chains: &[SynthesizedChain]) -> f64 {
     if chains.is_empty() {
         return 1.0;
     }
-    let crit = chains.iter().filter(|c| c.severity() == Severity::Critical).count();
-    let high = chains.iter().filter(|c| c.severity() == Severity::High).count();
+    let crit = chains
+        .iter()
+        .filter(|c| c.severity() == Severity::Critical)
+        .count();
+    let high = chains
+        .iter()
+        .filter(|c| c.severity() == Severity::High)
+        .count();
     (1.0 + crit as f64 * 0.35 + high as f64 * 0.15).min(3.0)
 }
 

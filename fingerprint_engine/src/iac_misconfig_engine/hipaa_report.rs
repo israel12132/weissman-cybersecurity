@@ -21,21 +21,33 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         for tag in f.policy.compliance {
             if let Some(fam) = hipaa_family_of(tag) {
                 *fam_failed.entry(fam.to_string()).or_insert(0) += 1;
-                fam_controls.entry(fam.to_string()).or_default().push(tag.to_string());
+                fam_controls
+                    .entry(fam.to_string())
+                    .or_default()
+                    .push(tag.to_string());
             }
         }
     }
 
-    let hipaa_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("HIPAA"));
-    let total_controls = hipaa_row.and_then(|r| r.get("controls_covered").and_then(Value::as_u64)).unwrap_or(0);
-    let failed_controls = hipaa_row.and_then(|r| r.get("controls_failed").and_then(Value::as_u64)).unwrap_or(0);
+    let hipaa_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("HIPAA"));
+    let total_controls = hipaa_row
+        .and_then(|r| r.get("controls_covered").and_then(Value::as_u64))
+        .unwrap_or(0);
+    let failed_controls = hipaa_row
+        .and_then(|r| r.get("controls_failed").and_then(Value::as_u64))
+        .unwrap_or(0);
     let pass_pct = if total_controls > 0 {
         ((total_controls.saturating_sub(failed_controls)) * 100 / total_controls.max(1)) as u64
     } else {
         100
     };
 
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
     let phi_risk = crit > 0 || failed_controls > 2;
 
     let families: Vec<Value> = HIPAA_FAMILIES
@@ -104,7 +116,8 @@ mod tests {
     #[test]
     fn maps_hipaa_tags() {
         let findings = vec![Finding::new(S3_PUBLIC_ACL, "main.tf", "b")];
-        let compliance = vec![json!({"pack": "HIPAA", "controls_covered": 8, "controls_failed": 1})];
+        let compliance =
+            vec![json!({"pack": "HIPAA", "controls_covered": 8, "controls_failed": 1})];
         let r = build(&findings, &compliance);
         assert_eq!(r["framework"], "HIPAA");
     }

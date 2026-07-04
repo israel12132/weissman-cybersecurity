@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "crossplane", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "crossplane",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -139,15 +148,26 @@ pub const XP_SA_AUTO: PolicyMeta = pol!(
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
     vec![
-        S3_PUBLIC, IAM_WILDCARD, COMP_PRIV, CREDS_INLINE, SG_OPEN, RDS_PUBLIC, NO_FINALIZER,
-        CLAIM_NO_SELECTOR, STORE_PLAINTEXT, PROVIDER_REVISION, XP_SA_AUTO,
+        S3_PUBLIC,
+        IAM_WILDCARD,
+        COMP_PRIV,
+        CREDS_INLINE,
+        SG_OPEN,
+        RDS_PUBLIC,
+        NO_FINALIZER,
+        CLAIM_NO_SELECTOR,
+        STORE_PLAINTEXT,
+        PROVIDER_REVISION,
+        XP_SA_AUTO,
     ]
 }
 
 fn is_crossplane(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n.contains("crossplane") || n.contains("/xrds/") || n.contains("/compositions/")
+    n.contains("crossplane")
+        || n.contains("/xrds/")
+        || n.contains("/compositions/")
         || lc.contains("apiversion: apiextensions.crossplane.io")
         || lc.contains("apiversion: pkg.crossplane.io")
         || lc.contains("kind: composition")
@@ -166,7 +186,9 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     }
     let lc = content.to_ascii_lowercase();
 
-    if (lc.contains("public-read") || lc.contains("blockpublicaccess: block_none") || lc.contains("blockpublicaccess: \"block_none\""))
+    if (lc.contains("public-read")
+        || lc.contains("blockpublicaccess: block_none")
+        || lc.contains("blockpublicaccess: \"block_none\""))
         && (lc.contains("s3") || lc.contains("bucket"))
     {
         out.push(Finding::new(S3_PUBLIC, file, file).observed("public S3 forProvider settings"));
@@ -177,18 +199,25 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     {
         out.push(Finding::new(IAM_WILDCARD, file, file).observed("IAM wildcard Action/Resource"));
     }
-    if (lc.contains("privileged: true") || (lc.contains(".privileged") && lc.contains("value: true")))
+    if (lc.contains("privileged: true")
+        || (lc.contains(".privileged") && lc.contains("value: true")))
         && (lc.contains("composition") || lc.contains("crossplane"))
     {
-        out.push(Finding::new(COMP_PRIV, file, file).observed("Composition patches privileged: true"));
+        out.push(
+            Finding::new(COMP_PRIV, file, file).observed("Composition patches privileged: true"),
+        );
     }
     if (lc.contains("accesskey") || lc.contains("secretkey") || lc.contains("aws_access_key_id"))
         && !lc.contains("secretref")
         && lc.contains("providerconfig")
     {
-        out.push(Finding::new(CREDS_INLINE, file, file).observed("inline credentials in ProviderConfig"));
+        out.push(
+            Finding::new(CREDS_INLINE, file, file).observed("inline credentials in ProviderConfig"),
+        );
     }
-    if lc.contains("0.0.0.0/0") && (lc.contains("cidrblocks") || lc.contains("cidr_blocks") || lc.contains("securitygroup")) {
+    if lc.contains("0.0.0.0/0")
+        && (lc.contains("cidrblocks") || lc.contains("cidr_blocks") || lc.contains("securitygroup"))
+    {
         out.push(Finding::new(SG_OPEN, file, file).observed("ingress cidrBlocks 0.0.0.0/0"));
     }
     if lc.contains("publiclyaccessible: true") && lc.contains("rds") {
@@ -198,19 +227,38 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
         && (lc.contains("rds") || lc.contains("database") || lc.contains("bucket"))
         && !lc.contains("finalizers:")
     {
-        out.push(Finding::new(NO_FINALIZER, file, file).observed("deletionPolicy Delete without finalizers"));
+        out.push(
+            Finding::new(NO_FINALIZER, file, file)
+                .observed("deletionPolicy Delete without finalizers"),
+        );
     }
     if lc.contains("kind: compositeresourceclaim") && !lc.contains("compositionselector") {
-        out.push(Finding::new(CLAIM_NO_SELECTOR, file, file).observed("Claim without compositionSelector"));
+        out.push(
+            Finding::new(CLAIM_NO_SELECTOR, file, file)
+                .observed("Claim without compositionSelector"),
+        );
     }
-    if lc.contains("kind: storeconfig") && !lc.contains("encryption") && !lc.contains("kubernetes") {
-        out.push(Finding::new(STORE_PLAINTEXT, file, file).observed("StoreConfig without encryption"));
+    if lc.contains("kind: storeconfig") && !lc.contains("encryption") && !lc.contains("kubernetes")
+    {
+        out.push(
+            Finding::new(STORE_PLAINTEXT, file, file).observed("StoreConfig without encryption"),
+        );
     }
-    if lc.contains("kind: provider") && lc.contains("pkg.crossplane.io") && !lc.contains("revision:") && !lc.contains("package:") {
-        out.push(Finding::new(PROVIDER_REVISION, file, file).observed("Provider without pinned revision"));
+    if lc.contains("kind: provider")
+        && lc.contains("pkg.crossplane.io")
+        && !lc.contains("revision:")
+        && !lc.contains("package:")
+    {
+        out.push(
+            Finding::new(PROVIDER_REVISION, file, file)
+                .observed("Provider without pinned revision"),
+        );
     }
     if lc.contains("automountserviceaccounttoken: true") && lc.contains("composition") {
-        out.push(Finding::new(XP_SA_AUTO, file, file).observed("automountServiceAccountToken: true in Composition"));
+        out.push(
+            Finding::new(XP_SA_AUTO, file, file)
+                .observed("automountServiceAccountToken: true in Composition"),
+        );
     }
 
     out
@@ -228,7 +276,9 @@ spec:
   forProvider:
     acl: public-read
 "#;
-        assert!(evaluate("bucket-xr.yaml", y).iter().any(|f| f.policy.id == S3_PUBLIC.id));
+        assert!(evaluate("bucket-xr.yaml", y)
+            .iter()
+            .any(|f| f.policy.id == S3_PUBLIC.id));
     }
 
     #[test]
@@ -241,6 +291,8 @@ spec:
         - toFieldPath: spec.template.spec.containers[0].securityContext.privileged
           value: true
 "#;
-        assert!(evaluate("comp.yaml", y).iter().any(|f| f.policy.id == COMP_PRIV.id));
+        assert!(evaluate("comp.yaml", y)
+            .iter()
+            .any(|f| f.policy.id == COMP_PRIV.id));
     }
 }

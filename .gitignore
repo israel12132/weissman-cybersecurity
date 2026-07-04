@@ -10,6 +10,8 @@ data/
 reports/
 *.db
 logs/
+.e2e-stack/
+evidence-pack/
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
@@ -34,6 +36,10 @@ celerybeat-schedule-wal
 # Sensitive config and live environment files
 config.yaml
 .envrc
+.env.dev
+.env.staging
+.env.production
+monitoring/prometheus-web.generated.yml
 
 # Runtime data files
 existing_ids.txt

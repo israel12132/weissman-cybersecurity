@@ -1,18 +1,34 @@
 //! JWT access tokens (short-lived) for API and WebSocket auth. Refresh uses opaque DB-backed tokens
 //! ([`crate::auth_refresh`]).
 //!
-//! **Transport:** Prefer `Authorization: Bearer` or the HttpOnly `weissman_token` cookie. User JWTs
-//! must not appear in query strings (logs, referrers, browser history). Exceptions:
-//! - **SSE** (`/api/telemetry/stream`, CEO war-room/council streams): `?access_token=` only because
-//!   `EventSource` cannot set headers — deprecated; migrate to cookie auth where possible.
-//! - **`/ws/agent`**: `?token=` accepts only agent session JWTs (`typ: agent`), not human access JWTs.
-//!   Agents should prefer `Authorization: Bearer` when the client supports it.
+//! **Transport:** `Authorization: Bearer` or HttpOnly `weissman_token` cookie only. Credentials must
+//! never appear in URLs (logs, Referer, proxy history). SSE uses fetch + ReadableStream with Bearer
+//! headers on the client; [`StreamBinding`] enforces IP/TLS context on stream connect.
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use std::sync::OnceLock;
 
-/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`, `jti`).
+/// Contextual binding for SSE streams — encoded in access JWT at login/refresh.
+#[derive(Clone, Debug, Default)]
+pub struct StreamBinding {
+    pub bind_ip: Option<String>,
+    pub bind_tls_fp: Option<String>,
+}
+
+impl StreamBinding {
+    /// Capture client context from the incoming HTTP request at token mint time.
+    #[must_use]
+    pub fn from_http(headers: &axum::http::HeaderMap, peer: SocketAddr) -> Self {
+        Self {
+            bind_ip: Some(crate::http::extract_client_ip(headers, peer)),
+            bind_tls_fp: crate::http::sse_context::extract_tls_fingerprint(headers),
+        }
+    }
+}
+
+/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`, `jti`) + stream binding.
 #[derive(Clone, Debug)]
 pub struct AuthContext {
     pub user_id: i64,
@@ -23,6 +39,10 @@ pub struct AuthContext {
     pub agent_id: Option<String>,
     /// Access JWT id for logout revocation (`typ: access` only).
     pub jti: Option<String>,
+    /// Originating client IP at token mint (SSE contextual binding).
+    pub bind_ip: Option<String>,
+    /// TLS/JA3 fingerprint at token mint when proxy provides it.
+    pub bind_tls_fp: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,6 +64,12 @@ struct JwtClaims {
     /// Unique token id for access JWT revocation.
     #[serde(default)]
     jti: Option<String>,
+    /// Client IP at mint time (SSE zero-trust binding).
+    #[serde(default)]
+    bind_ip: Option<String>,
+    /// TLS fingerprint at mint time when available.
+    #[serde(default)]
+    bind_tls_fp: Option<String>,
 }
 
 pub const WEISSMAN_COOKIE_NAME: &str = "weissman_token";
@@ -65,15 +91,6 @@ fn agent_token_ttl_secs() -> i64 {
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(240)
         .clamp(30, 1440)
-        * 60
-}
-
-fn sse_ticket_ttl_secs() -> i64 {
-    std::env::var("WEISSMAN_SSE_TICKET_MINUTES")
-        .ok()
-        .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(15)
-        .clamp(5, 60)
         * 60
 }
 
@@ -128,6 +145,8 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 is_superadmin: false,
                 agent_id: Some(aid),
                 jti: c.jti,
+                bind_ip: c.bind_ip,
+                bind_tls_fp: c.bind_tls_fp,
             })
         }
         Some("refresh") | Some("mfa_pending") => None,
@@ -149,6 +168,8 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 is_superadmin: c.is_superadmin.unwrap_or(false),
                 agent_id: None,
                 jti: c.jti,
+                bind_ip: c.bind_ip,
+                bind_tls_fp: c.bind_tls_fp,
             })
         }
     }
@@ -179,6 +200,8 @@ pub fn create_agent_session_token(
         is_superadmin: Some(false),
         agent_id: Some(aid.to_string()),
         jti: None,
+        bind_ip: None,
+        bind_tls_fp: None,
     };
     encode(
         &Header::default(),
@@ -194,12 +217,13 @@ pub struct MintedAccessToken {
     pub jti: String,
 }
 
-/// Short-lived access JWT (`typ: access`) with RBAC claims for middleware and `/api/auth/me`.
+/// Short-lived access JWT (`typ: access`) with RBAC + stream binding claims.
 pub fn create_access_token(
     user_id: i64,
     tenant_id: i64,
     role: &str,
     is_superadmin: bool,
+    binding: &StreamBinding,
 ) -> Result<MintedAccessToken, jsonwebtoken::errors::Error> {
     let secret = jwt_secret();
     if secret.is_empty() {
@@ -224,6 +248,8 @@ pub fn create_access_token(
         is_superadmin: Some(is_superadmin),
         agent_id: None,
         jti: Some(jti.clone()),
+        bind_ip: binding.bind_ip.clone(),
+        bind_tls_fp: binding.bind_tls_fp.clone(),
     };
     let token = encode(
         &Header::default(),
@@ -239,7 +265,14 @@ pub fn create_session_token(
     user_id: i64,
     tenant_id: i64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    create_access_token(user_id, tenant_id, "viewer", false).map(|m| m.token)
+    create_access_token(
+        user_id,
+        tenant_id,
+        "viewer",
+        false,
+        &StreamBinding::default(),
+    )
+    .map(|m| m.token)
 }
 
 fn mfa_pending_ttl_secs() -> i64 {
@@ -274,6 +307,8 @@ pub fn create_mfa_pending_token(
         is_superadmin: Some(is_superadmin),
         agent_id: None,
         jti: None,
+        bind_ip: None,
+        bind_tls_fp: None,
     };
     encode(
         &Header::default(),
@@ -282,59 +317,23 @@ pub fn create_mfa_pending_token(
     )
 }
 
-/// Short-lived scoped ticket for SSE when HttpOnly cookies are unavailable cross-origin.
-pub fn create_sse_ticket(
-    user_id: i64,
-    tenant_id: i64,
-    role: &str,
-    is_superadmin: bool,
-) -> Result<String, jsonwebtoken::errors::Error> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
+/// Verify stream contextual binding (IP + optional TLS fingerprint).
+#[must_use]
+pub fn verify_stream_context(auth: &AuthContext, client_ip: &str, tls_fp: Option<&str>) -> bool {
+    if let Some(ref expected) = auth.bind_ip {
+        if expected != client_ip {
+            return false;
+        }
     }
-    let now = chrono::Utc::now();
-    let exp = (now + chrono::Duration::seconds(sse_ticket_ttl_secs())).timestamp();
-    let role_norm = role.trim();
-    let role_s = if role_norm.is_empty() {
-        "viewer".to_string()
-    } else {
-        role_norm.to_string()
-    };
-    let claims = JwtClaims {
-        sub: user_id,
-        tid: tenant_id,
-        exp,
-        iat: now.timestamp(),
-        typ: Some("sse_ticket".to_string()),
-        role: Some(role_s),
-        is_superadmin: Some(is_superadmin),
-        agent_id: None,
-        jti: Some(uuid::Uuid::new_v4().to_string()),
-    };
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret),
-    )
-}
-
-pub fn verify_sse_ticket(token: &str) -> Option<AuthContext> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        return None;
+    if let Some(ref expected) = auth.bind_tls_fp {
+        let Some(actual) = tls_fp else {
+            return false;
+        };
+        if actual != expected {
+            return false;
+        }
     }
-    let mut validation = Validation::default();
-    validation.validate_exp = true;
-    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
-        .ok()
-        .and_then(|d| {
-            let c = d.claims;
-            if c.typ.as_deref() != Some("sse_ticket") {
-                return None;
-            }
-            auth_context_from_claims(c)
-        })
+    true
 }
 
 pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
@@ -522,6 +521,8 @@ mod agent_token_tests {
             is_superadmin: Some(false),
             agent_id: None,
             jti: Some("test-jti".to_string()),
+            bind_ip: None,
+            bind_tls_fp: None,
         };
         let token = encode(
             &Header::default(),
@@ -546,6 +547,8 @@ mod agent_token_tests {
             is_superadmin: Some(false),
             agent_id: Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
             jti: None,
+            bind_ip: None,
+            bind_tls_fp: None,
         };
         let token = encode(
             &Header::default(),

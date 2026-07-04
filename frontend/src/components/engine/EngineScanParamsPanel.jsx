@@ -147,12 +147,12 @@ export default function EngineScanParamsPanel({
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
           </button>
         )}
-        {t('components.engineScanParams.title', { defaultValue: 'Engine Parameters' })}
+        {t('components.engineScanParams.title')}
         {' · '}
         <span className="text-cyan-400/80">{schema.length}</span>
         {filledCount > 0 && (
           <span className="text-emerald-400/70 normal-case tracking-normal">
-            ({filledCount} {t('components.engineScanParams.filled', { defaultValue: 'set' })})
+            ({filledCount} {t('components.engineScanParams.filled')})
           </span>
         )}
       </span>
@@ -162,12 +162,12 @@ export default function EngineScanParamsPanel({
             to={`/clients/${clientId}/integrations`}
             className="text-amber-300/90 hover:text-amber-200 border border-amber-500/30 rounded px-2 py-0.5"
           >
-            {t('components.engineScanParams.integrations', { defaultValue: 'Client Integrations →' })}
+            {t('components.engineScanParams.integrations')}
           </Link>
         )}
         {hubRoute && (
           <Link to={hubRoute} className="text-violet-300/90 hover:text-violet-200 border border-violet-500/30 rounded px-2 py-0.5">
-            {t('components.engineScanParams.command_center', { defaultValue: 'Command Center →' })}
+            {t('components.engineScanParams.command_center')}
           </Link>
         )}
       </div>
@@ -194,7 +194,7 @@ export default function EngineScanParamsPanel({
       ) : (
         <div className="space-y-2">
           <ParamSection
-            title={t('components.engineScanParams.section_core', { defaultValue: 'Scan Options' })}
+            title={t('components.engineScanParams.section_core')}
             defs={groups.core}
             values={values}
             onChange={onChange}
@@ -202,7 +202,7 @@ export default function EngineScanParamsPanel({
             defaultOpen
           />
           <ParamSection
-            title={t('components.engineScanParams.section_credentials', { defaultValue: 'Credentials & Integrations' })}
+            title={t('components.engineScanParams.section_credentials')}
             defs={groups.credentials}
             values={values}
             onChange={onChange}
@@ -210,7 +210,7 @@ export default function EngineScanParamsPanel({
             defaultOpen={groups.credentials.length <= 6}
           />
           <ParamSection
-            title={t('components.engineScanParams.section_advanced', { defaultValue: 'Advanced / Tuning' })}
+            title={t('components.engineScanParams.section_advanced')}
             defs={groups.advanced}
             values={values}
             onChange={onChange}
@@ -222,9 +222,7 @@ export default function EngineScanParamsPanel({
 
       {clientId && groups.credentials.length > 0 && (
         <p className="text-[10px] text-white/35 font-mono leading-relaxed">
-          {t('components.engineScanParams.secrets_hint', {
-            defaultValue: 'Secrets prefilled from client integrations. Masked values (••••) are never sent back to the server.',
-          })}
+          {t('components.engineScanParams.secrets_hint')}
         </p>
       )}
         </>

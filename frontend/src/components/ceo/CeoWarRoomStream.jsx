@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { apiEventSourceUrl } from '../../lib/apiBase'
+import { openSseStream } from '../../lib/sseStream'
 
 function phaseStyle(phase) {
   const p = (phase || '').toLowerCase()
@@ -63,7 +63,13 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
     setSince(0)
     setStatus('connecting')
     const path = '/api/ceo/council/sessions/' + encodeURIComponent(jid) + '/stream?since=0'
-    const es = new EventSource(apiEventSourceUrl(path), { withCredentials: true })
+    const es = openSseStream(path, {
+      getReconnectUrl: () =>
+        '/api/ceo/council/sessions/' +
+        encodeURIComponent(jid) +
+        '/stream?since=' +
+        String(sinceRef.current),
+    })
     esRef.current = es
 
     es.addEventListener('war_room', (ev) => {

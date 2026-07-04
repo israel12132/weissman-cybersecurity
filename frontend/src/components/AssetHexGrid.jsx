@@ -79,19 +79,19 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
       </div>
 
       {!clientId && !loading && (
-        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.select_client`, { defaultValue: 'No clients — add a target to map assets.' })}</p>
+        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.select_client`)}</p>
       )}
 
       {clientId && loading && (
-        <p className="text-[10px] text-white/40 font-mono animate-pulse">{t(`${NS}.loading`, { defaultValue: 'Loading attack surface…' })}</p>
+        <p className="text-[10px] text-white/40 font-mono animate-pulse">{t(`${NS}.loading`)}</p>
       )}
 
       {clientId && !loading && error && (
-        <p className="text-[10px] text-rose-400/80 font-mono">{t(`${NS}.error`, { defaultValue: 'Could not load assets.' })}</p>
+        <p className="text-[10px] text-rose-400/80 font-mono">{t(`${NS}.error`)}</p>
       )}
 
       {clientId && !loading && !error && nodes.length === 0 && (
-        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.empty`, { defaultValue: 'No ASM graph yet — run discovery/ASM engines.' })}</p>
+        <p className="text-[10px] text-white/40 font-mono">{t(`${NS}.empty`)}</p>
       )}
 
       {nodes.length > 0 && (

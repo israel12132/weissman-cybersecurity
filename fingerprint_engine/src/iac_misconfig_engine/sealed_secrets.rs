@@ -7,8 +7,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "sealed_secrets", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "sealed_secrets",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -71,13 +80,21 @@ pub const INSECURE_ANNOTATION: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![WIDE_SCOPE, WEAK_RSA, PLAINTEXT_TEMPLATE, NO_ROTATION, INSECURE_ANNOTATION]
+    vec![
+        WIDE_SCOPE,
+        WEAK_RSA,
+        PLAINTEXT_TEMPLATE,
+        NO_ROTATION,
+        INSECURE_ANNOTATION,
+    ]
 }
 
 fn is_sealed_secret(name: &str, content: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let lc = content.to_ascii_lowercase();
-    n.contains("sealedsecret") || lc.contains("kind: sealedsecret") || lc.contains("bitnami.com/sealedsecret")
+    n.contains("sealedsecret")
+        || lc.contains("kind: sealedsecret")
+        || lc.contains("bitnami.com/sealedsecret")
 }
 
 #[must_use]
@@ -91,7 +108,10 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("cluster-wide: 'true'") || lc.contains("cluster-wide: true") {
         out.push(Finding::new(WIDE_SCOPE, file, file).observed("cluster-wide SealedSecret"));
     }
-    if lc.contains("rsa-1024") || lc.contains("keysize: 1024") || lc.contains("encryption: rsa") && lc.contains("1024") {
+    if lc.contains("rsa-1024")
+        || lc.contains("keysize: 1024")
+        || lc.contains("encryption: rsa") && lc.contains("1024")
+    {
         out.push(Finding::new(WEAK_RSA, file, file).observed("weak RSA key size"));
     }
     if (lc.contains("stringdata:") || lc.contains("template:") && lc.contains("data:"))
@@ -100,12 +120,20 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
         out.push(Finding::new(PLAINTEXT_TEMPLATE, file, file).observed("plaintext template data"));
     }
     if lc.contains("encrypteddata:") && (lc.contains("stringdata:") || lc.contains("password:")) {
-        out.push(Finding::new(PLAINTEXT_TEMPLATE, file, file).observed("plaintext alongside encryptedData"));
+        out.push(
+            Finding::new(PLAINTEXT_TEMPLATE, file, file)
+                .observed("plaintext alongside encryptedData"),
+        );
     }
     if lc.contains("strict-validation: 'false'") || lc.contains("skip-validation: true") {
-        out.push(Finding::new(INSECURE_ANNOTATION, file, file).observed("strict validation disabled"));
+        out.push(
+            Finding::new(INSECURE_ANNOTATION, file, file).observed("strict validation disabled"),
+        );
     }
-    if lc.contains("encrypteddata:") && !lc.contains("managed: 'true'") && !lc.contains("managed: true") {
+    if lc.contains("encrypteddata:")
+        && !lc.contains("managed: 'true'")
+        && !lc.contains("managed: true")
+    {
         out.push(Finding::new(NO_ROTATION, file, file).observed("no managed rotation annotation"));
     }
 

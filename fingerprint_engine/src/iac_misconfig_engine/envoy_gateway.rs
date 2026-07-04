@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "envoy_gateway", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "envoy_gateway",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const TLS_VERIFY_SKIP: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![CLEARTEXT_LISTENER, JWT_DISABLED, WILDCARD_HOST, ADMIN_EXPOSED, TLS_VERIFY_SKIP]
+    vec![
+        CLEARTEXT_LISTENER,
+        JWT_DISABLED,
+        WILDCARD_HOST,
+        ADMIN_EXPOSED,
+        TLS_VERIFY_SKIP,
+    ]
 }
 
 fn is_envoy_gateway(name: &str, content: &str) -> bool {
@@ -81,8 +96,7 @@ fn is_envoy_gateway(name: &str, content: &str) -> bool {
     n.contains("envoy-gateway")
         || n.contains("envoygateway")
         || lc.contains("gateway.envoyproxy.io")
-        || lc.contains("gatewayclass")
-            && lc.contains("envoy")
+        || lc.contains("gatewayclass") && lc.contains("envoy")
         || lc.contains("kind: envoyproxy")
 }
 
@@ -102,14 +116,19 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     {
         out.push(Finding::new(JWT_DISABLED, file, file).observed("JWT/ext_authz disabled"));
     }
-    if lc.contains("hostname: '*'") || lc.contains("hostnames:\n  - '*'") || lc.contains("hostnames: ['*']") {
+    if lc.contains("hostname: '*'")
+        || lc.contains("hostnames:\n  - '*'")
+        || lc.contains("hostnames: ['*']")
+    {
         out.push(Finding::new(WILDCARD_HOST, file, file).observed("wildcard hostname"));
     }
     if lc.contains("0.0.0.0:9901") || lc.contains("admin:\n  address:") && lc.contains("0.0.0.0") {
         out.push(Finding::new(ADMIN_EXPOSED, file, file).observed("admin on 0.0.0.0"));
     }
     if lc.contains("insecureskipverify: true") || lc.contains("validateservercertificate: false") {
-        out.push(Finding::new(TLS_VERIFY_SKIP, file, file).observed("upstream TLS verify disabled"));
+        out.push(
+            Finding::new(TLS_VERIFY_SKIP, file, file).observed("upstream TLS verify disabled"),
+        );
     }
 
     out

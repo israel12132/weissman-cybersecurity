@@ -65,10 +65,10 @@ export function WarRoomProvider({ children }) {
     setMapZoomComplete(done)
   }, [])
 
-  // Consume the SINGLE telemetry EventSource owned by TelemetryProvider (which already
+  // Consume the SINGLE telemetry stream owned by TelemetryProvider (which already
   // handles reconnect with exponential backoff) instead of opening a duplicate
   // connection to /api/telemetry/stream. WarRoomProvider is always mounted inside
-  // TelemetryProvider (see Cockpit.jsx), so `subscribe` is available.
+  // TelemetryProvider (see providers/ProtectedProviders.jsx), so `subscribe` is available.
   const { subscribe } = useTelemetry()
 
   useEffect(() => {

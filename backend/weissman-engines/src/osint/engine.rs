@@ -111,7 +111,12 @@ pub async fn run_osint_result(target: &str, st: Option<&stealth::StealthConfig>)
                                 "value": part,
                                 "confidence": "high",
                                 "risk_impact": "medium",
-                                "severity": "medium"
+                                "severity": "medium",
+                                "title": format!("Subdomain discovered via CT: {}", part),
+                                "evidence": {
+                                    "proof": format!("Certificate Transparency log entry for {}", part),
+                                    "engine_id": "osint",
+                                }
                             }));
                         }
                     }
@@ -145,7 +150,12 @@ pub async fn run_osint_result(target: &str, st: Option<&stealth::StealthConfig>)
                             "value": part,
                             "confidence": "medium",
                             "risk_impact": "medium",
-                            "severity": "medium"
+                            "severity": "medium",
+                            "title": format!("Subdomain discovered via WHOIS: {}", part),
+                            "evidence": {
+                                "proof": format!("WHOIS registry line references host {}", part),
+                                "engine_id": "osint",
+                            }
                         }));
                     }
                 }

@@ -46,7 +46,9 @@
 
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, extract_host, http1_client, http2_client, http_get_with_headers, normalize_url};
+use crate::engine_probes::{
+    empty_ok, extract_host, http1_client, http2_client, http_get_with_headers, normalize_url,
+};
 use crate::engine_result::{print_result, EngineResult};
 use futures::stream::{self, StreamExt};
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
@@ -115,16 +117,20 @@ impl ScanConfig {
             check_h2_downgrade: cfg.bool_or("check_h2_downgrade", true),
             check_zero_cl: cfg.bool_or("check_zero_cl", intensity != Intensity::Light),
             check_h2c_upgrade: cfg.bool_or("check_h2c_upgrade", true),
-            check_chunk_extensions: cfg.bool_or("check_chunk_extensions", intensity != Intensity::Light),
+            check_chunk_extensions: cfg
+                .bool_or("check_chunk_extensions", intensity != Intensity::Light),
             check_dual_response: cfg.bool_or("check_dual_response", true),
-            check_timing_oracle: cfg.bool_or("check_timing_oracle", intensity == Intensity::Aggressive),
+            check_timing_oracle: cfg
+                .bool_or("check_timing_oracle", intensity == Intensity::Aggressive),
             check_client_desync: cfg.bool_or("check_client_desync", intensity != Intensity::Light),
-            check_response_queue: cfg.bool_or("check_response_queue", intensity != Intensity::Light),
+            check_response_queue: cfg
+                .bool_or("check_response_queue", intensity != Intensity::Light),
             check_backend_fingerprint: cfg.bool_or("check_backend_fingerprint", true),
             check_cl_cl: cfg.bool_or("check_cl_cl", intensity != Intensity::Light),
             check_lf_only: cfg.bool_or("check_lf_only", intensity == Intensity::Aggressive),
             check_cl0: cfg.bool_or("check_cl0", intensity != Intensity::Light),
-            check_host_confusion: cfg.bool_or("check_host_confusion", intensity != Intensity::Light),
+            check_host_confusion: cfg
+                .bool_or("check_host_confusion", intensity != Intensity::Light),
             check_multi_port: cfg.bool_or("check_multi_port", true),
             ports: cfg.ports_or("ports", &[]),
             check_fingerprint: cfg.bool_or("check_fingerprint", true),
@@ -211,27 +217,42 @@ fn parse_http_response(raw: &str) -> (Option<u16>, Vec<(String, String)>, String
 }
 
 fn count_http_responses(raw: &str) -> usize {
-    raw.matches("HTTP/1.").count().max(if raw.is_empty() { 0 } else { 1 })
+    raw.matches("HTTP/1.")
+        .count()
+        .max(if raw.is_empty() { 0 } else { 1 })
 }
 
 /// Every HTTP status code observed in a raw wire read (multi-block / desync oracle).
 fn all_status_codes(raw: &str) -> Vec<u16> {
-    raw.lines()
-        .filter_map(|l| {
-            l.strip_prefix("HTTP/1.")
-                .and_then(|rest| rest.split_whitespace().nth(1))
-                .and_then(|s| s.parse().ok())
-        })
-        .collect()
+    let mut codes = Vec::new();
+    let mut rest = raw;
+    while let Some(idx) = rest.find("HTTP/1.") {
+        let slice = &rest[idx..];
+        let after = slice.strip_prefix("HTTP/1.").unwrap_or(slice);
+        if let Some(code_str) = after.split_whitespace().nth(1) {
+            if let Ok(code) = code_str.parse::<u16>() {
+                codes.push(code);
+            }
+        }
+        rest = &rest[idx + 7..];
+    }
+    codes
 }
 
 fn has_h2c_upgrade_accept(raw: &str) -> bool {
-    raw.starts_with("HTTP/1.1 101") || raw.starts_with("HTTP/1.0 101")
+    raw.starts_with("HTTP/1.1 101")
+        || raw.starts_with("HTTP/1.0 101")
         || raw.contains("\r\n101 ")
         || raw.to_ascii_lowercase().contains("switching protocols")
 }
 
-fn raw_probe_sync(host: &str, port: u16, tls: bool, request: &[u8], timeout_ms: u64) -> RawResponse {
+fn raw_probe_sync(
+    host: &str,
+    port: u16,
+    tls: bool,
+    request: &[u8],
+    timeout_ms: u64,
+) -> RawResponse {
     let start = Instant::now();
     let addr = match format!("{}:{}", host, port).to_socket_addrs() {
         Ok(mut a) => match a.next() {
@@ -477,7 +498,13 @@ fn build_response_queue_oracle(host: &str, path: &str) -> Vec<u8> {
 }
 
 fn server_fingerprint(headers: &[(String, String)]) -> String {
-    for key in ["Server", "X-Powered-By", "Via", "X-AspNet-Version", "X-Backend"] {
+    for key in [
+        "Server",
+        "X-Powered-By",
+        "Via",
+        "X-AspNet-Version",
+        "X-Backend",
+    ] {
         if let Some(v) = header_value(headers, key) {
             if !v.is_empty() {
                 return format!("{key}: {v}");
@@ -657,14 +684,46 @@ struct ObfuscationVariant {
 }
 
 const TE_OBFUSCATIONS: &[ObfuscationVariant] = &[
-    ObfuscationVariant { id: "xchunked", header: "Transfer-Encoding: xchunked", body: "PROBE" },
-    ObfuscationVariant { id: "tab-value", header: "Transfer-Encoding:\tchunked", body: "0\r\n\r\n" },
-    ObfuscationVariant { id: "capital", header: "Transfer-Encoding: CHUNKED", body: "0\r\n\r\n" },
-    ObfuscationVariant { id: "cow", header: "Transfer-Encoding: cow", body: "moo" },
-    ObfuscationVariant { id: "space-colon", header: "Transfer-Encoding : chunked", body: "0\r\n\r\n" },
-    ObfuscationVariant { id: "quoted", header: "Transfer-Encoding: \"chunked\"", body: "0\r\n\r\n" },
-    ObfuscationVariant { id: "compress-chunked", header: "Transfer-Encoding: compress, chunked", body: "0\r\n\r\n" },
-    ObfuscationVariant { id: "chunked-gzip", header: "Transfer-Encoding: chunked, gzip", body: "0\r\n\r\n" },
+    ObfuscationVariant {
+        id: "xchunked",
+        header: "Transfer-Encoding: xchunked",
+        body: "PROBE",
+    },
+    ObfuscationVariant {
+        id: "tab-value",
+        header: "Transfer-Encoding:\tchunked",
+        body: "0\r\n\r\n",
+    },
+    ObfuscationVariant {
+        id: "capital",
+        header: "Transfer-Encoding: CHUNKED",
+        body: "0\r\n\r\n",
+    },
+    ObfuscationVariant {
+        id: "cow",
+        header: "Transfer-Encoding: cow",
+        body: "moo",
+    },
+    ObfuscationVariant {
+        id: "space-colon",
+        header: "Transfer-Encoding : chunked",
+        body: "0\r\n\r\n",
+    },
+    ObfuscationVariant {
+        id: "quoted",
+        header: "Transfer-Encoding: \"chunked\"",
+        body: "0\r\n\r\n",
+    },
+    ObfuscationVariant {
+        id: "compress-chunked",
+        header: "Transfer-Encoding: compress, chunked",
+        body: "0\r\n\r\n",
+    },
+    ObfuscationVariant {
+        id: "chunked-gzip",
+        header: "Transfer-Encoding: chunked, gzip",
+        body: "0\r\n\r\n",
+    },
 ];
 
 fn emit_dual_response(
@@ -781,7 +840,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
         let mut vendor = None;
         if cf.is_some() {
             vendor = Some("Cloudflare".to_string());
-        } else if x_cache.as_deref().map(|x| x.contains("cloudfront")).unwrap_or(false) {
+        } else if x_cache
+            .as_deref()
+            .map(|x| x.contains("cloudfront"))
+            .unwrap_or(false)
+        {
             vendor = Some("AWS CloudFront".to_string());
         } else if header_value(&baseline.headers, "X-Served-By").is_some() {
             vendor = Some("Fastly".to_string());
@@ -799,7 +862,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 .with("via", via.clone().unwrap_or_default())
                 .with("cdn_vendor", vendor.clone().unwrap_or_default())
                 .with("alt_svc", alt_svc.clone().unwrap_or_default())
-                .check("baseline_reachable", baseline.status.is_some(), "GET baseline");
+                .check(
+                    "baseline_reachable",
+                    baseline.status.is_some(),
+                    "GET baseline",
+                );
             findings.push(with_category(
                 finding_rich(
                     ENGINE_ID,
@@ -895,8 +962,25 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 ));
             }
         }
-        emit_dual_response(&mut findings, &mut posture, ep, target, &resp, "CL.TE", cfg.check_dual_response);
-        emit_timing_oracle(&mut findings, &mut posture, ep, target, &resp, "CL.TE", baseline_ms, cfg.check_timing_oracle);
+        emit_dual_response(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "CL.TE",
+            cfg.check_dual_response,
+        );
+        emit_timing_oracle(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "CL.TE",
+            baseline_ms,
+            cfg.check_timing_oracle,
+        );
         if cfg.check_backend_fingerprint {
             let post_fp = server_fingerprint(&resp.headers);
             if !post_fp.is_empty() && !baseline_fp.is_empty() && post_fp != baseline_fp {
@@ -906,7 +990,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     .with("url", ep.url.clone())
                     .with("baseline_fingerprint", baseline_fp.clone())
                     .with("smuggle_fingerprint", post_fp.clone())
-                    .check("backend_tier_divergence", true, "Server/Via changed on smuggle probe");
+                    .check(
+                        "backend_tier_divergence",
+                        true,
+                        "Server/Via changed on smuggle probe",
+                    );
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
@@ -991,8 +1079,25 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 ));
             }
         }
-        emit_dual_response(&mut findings, &mut posture, ep, target, &resp, "TE.CL", cfg.check_dual_response);
-        emit_timing_oracle(&mut findings, &mut posture, ep, target, &resp, "TE.CL", baseline_ms, cfg.check_timing_oracle);
+        emit_dual_response(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "TE.CL",
+            cfg.check_dual_response,
+        );
+        emit_timing_oracle(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "TE.CL",
+            baseline_ms,
+            cfg.check_timing_oracle,
+        );
     }
 
     // 0.CL — Content-Length: 0 with trailing chunked body
@@ -1056,8 +1161,25 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 ));
             }
         }
-        emit_dual_response(&mut findings, &mut posture, ep, target, &resp, "0.CL", cfg.check_dual_response);
-        emit_timing_oracle(&mut findings, &mut posture, ep, target, &resp, "0.CL", baseline_ms, cfg.check_timing_oracle);
+        emit_dual_response(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "0.CL",
+            cfg.check_dual_response,
+        );
+        emit_timing_oracle(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "0.CL",
+            baseline_ms,
+            cfg.check_timing_oracle,
+        );
     }
 
     // TE.TE dual Transfer-Encoding
@@ -1135,7 +1257,9 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 // Differential: obfuscated accepted when strict rejected, or vice versa.
                 let differential = accepted != strict_ok || (accepted && variant.id != "capital");
                 if accepted && (differential || variant.id == "xchunked" || variant.id == "cow") {
-                    posture.obfuscation_hits.push(format!("{}:{}", ep.url, variant.id));
+                    posture
+                        .obfuscation_hits
+                        .push(format!("{}:{}", ep.url, variant.id));
                     let sev = if variant.id == "xchunked" || variant.id == "cow" {
                         posture.bump_worst("high");
                         "high"
@@ -1173,20 +1297,22 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
         }
         // CDN-specific TE variants when vendor identified from baseline.
         for variant in cdn_extra_te_variants(posture.cdn_vendor.as_deref()) {
-                let req = build_te_obfuscated(&ep.host, &ep.path, variant.header, variant.body);
-                let resp = raw_probe(ep, req, cfg.timeout_ms).await;
-                posture.checks += 1;
-                if let Some(status) = resp.status {
-                    if status != 400 && status != 501 {
-                        posture.obfuscation_hits.push(format!("{}:{}", ep.url, variant.id));
-                        posture.bump_worst("high");
-                        let ev = Evidence::new()
-                            .with("url", ep.url.clone())
-                            .with("status", status)
-                            .with("variant", variant.id)
-                            .with("cdn_vendor", posture.cdn_vendor.clone().unwrap_or_default())
-                            .check("cdn_te_accepted", true, variant.id);
-                        findings.push(with_category(
+            let req = build_te_obfuscated(&ep.host, &ep.path, variant.header, variant.body);
+            let resp = raw_probe(ep, req, cfg.timeout_ms).await;
+            posture.checks += 1;
+            if let Some(status) = resp.status {
+                if status != 400 && status != 501 {
+                    posture
+                        .obfuscation_hits
+                        .push(format!("{}:{}", ep.url, variant.id));
+                    posture.bump_worst("high");
+                    let ev = Evidence::new()
+                        .with("url", ep.url.clone())
+                        .with("status", status)
+                        .with("variant", variant.id)
+                        .with("cdn_vendor", posture.cdn_vendor.clone().unwrap_or_default())
+                        .check("cdn_te_accepted", true, variant.id);
+                    findings.push(with_category(
                             finding_rich(
                                 ENGINE_ID,
                                 &format!("CDN-specific TE variant accepted ({}) on {}", variant.id, ep.path),
@@ -1257,7 +1383,15 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 ));
             }
         }
-        emit_dual_response(&mut findings, &mut posture, ep, target, &resp, "CL.CL", cfg.check_dual_response);
+        emit_dual_response(
+            &mut findings,
+            &mut posture,
+            ep,
+            target,
+            &resp,
+            "CL.CL",
+            cfg.check_dual_response,
+        );
     }
 
     // Content-Length anomalies
@@ -1500,7 +1634,9 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                 if status != 400 && status != 501 && status != 405 {
                     let reflected = resp.body.contains(&token);
                     if label == "fat-get" || reflected {
-                        posture.client_desync_hits.push(format!("{}:{}", ep.url, label));
+                        posture
+                            .client_desync_hits
+                            .push(format!("{}:{}", ep.url, label));
                         let sev = if reflected { "high" } else { "medium" };
                         posture.bump_worst(sev);
                         let ev = Evidence::new()
@@ -1544,7 +1680,8 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
             posture.checks += 1;
             let diverge = h1.status != h2.status
                 || (h1.status == h2.status
-                    && h1.body.len().abs_diff(h2.body.len()) > h1.body.len().max(h2.body.len()) / 4);
+                    && h1.body.len().abs_diff(h2.body.len())
+                        > h1.body.len().max(h2.body.len()) / 4);
             if diverge {
                 posture.h2_divergence = true;
                 posture.bump_worst("medium");
@@ -1611,7 +1748,9 @@ fn synthesize_attack_paths(target: &str, p: &SmugglePosture, url: &str) -> Vec<V
             "attack_path",
         ));
     }
-    if !p.pipeline_confirmed.is_empty() && (!p.cl_te_surfaces.is_empty() || !p.te_cl_surfaces.is_empty()) {
+    if !p.pipeline_confirmed.is_empty()
+        && (!p.cl_te_surfaces.is_empty() || !p.te_cl_surfaces.is_empty())
+    {
         paths.push(with_category(
             finding_rich(
                 ENGINE_ID,
@@ -1649,7 +1788,9 @@ fn synthesize_attack_paths(target: &str, p: &SmugglePosture, url: &str) -> Vec<V
                 ),
                 target,
                 0.78,
-                Evidence::new().with("url", url).with("obfuscation_hits", json!(p.obfuscation_hits)),
+                Evidence::new()
+                    .with("url", url)
+                    .with("obfuscation_hits", json!(p.obfuscation_hits)),
             ),
             "attack_path",
         ));
@@ -1769,7 +1910,9 @@ fn synthesize_attack_paths(target: &str, p: &SmugglePosture, url: &str) -> Vec<V
                 ),
                 target,
                 0.73,
-                Evidence::new().with("url", url).with("backend_divergence", true),
+                Evidence::new()
+                    .with("url", url)
+                    .with("backend_divergence", true),
             ),
             "attack_path",
         ));
@@ -1841,13 +1984,19 @@ fn build_posture_summary(target: &str, p: &SmugglePosture, finding_count: usize)
         if !p.confirmed_reflections.is_empty() || !p.dual_response_hits.is_empty() {
             weak.push("smuggle_confirmed");
         }
-        if !p.cl_te_surfaces.is_empty() || !p.te_cl_surfaces.is_empty() || !p.zero_cl_surfaces.is_empty() {
+        if !p.cl_te_surfaces.is_empty()
+            || !p.te_cl_surfaces.is_empty()
+            || !p.zero_cl_surfaces.is_empty()
+        {
             weak.push("smuggle_cl_te");
         }
         if !p.obfuscation_hits.is_empty() || !p.te_te_surfaces.is_empty() {
             weak.push("smuggle_te_obfuscation");
         }
-        if !p.pipeline_confirmed.is_empty() || !p.timing_anomalies.is_empty() || !p.response_queue_hits.is_empty() {
+        if !p.pipeline_confirmed.is_empty()
+            || !p.timing_anomalies.is_empty()
+            || !p.response_queue_hits.is_empty()
+        {
             weak.push("smuggle_pipeline");
         }
         if !p.backend_divergence.is_empty() {
@@ -1913,7 +2062,8 @@ pub async fn run_http_smuggling_result_ctx(target: &str, ctx: &EngineRunContext)
             aggregate.bump_worst("high");
         }
         let cat = f.get("category").and_then(Value::as_str).unwrap_or("");
-        let url = f.get("evidence")
+        let url = f
+            .get("evidence")
             .and_then(|e| e.get("url"))
             .and_then(Value::as_str)
             .unwrap_or("")
@@ -1953,15 +2103,14 @@ pub async fn run_http_smuggling_result_ctx(target: &str, ctx: &EngineRunContext)
         .count();
 
     if cfg.posture_score {
-        all_findings.push(build_posture_summary(
-            target,
-            &aggregate,
-            non_summary_count,
-        ));
+        all_findings.push(build_posture_summary(target, &aggregate, non_summary_count));
     }
 
     if all_findings.is_empty() {
-        return empty_ok(ENGINE_ID, &format!("{}: no desync indicators on {}", ENGINE_ID, host));
+        return empty_ok(
+            ENGINE_ID,
+            &format!("{}: no desync indicators on {}", ENGINE_ID, host),
+        );
     }
 
     let msg = format!(
@@ -2073,7 +2222,9 @@ mod tests {
 
     #[test]
     fn h2c_upgrade_detection() {
-        assert!(has_h2c_upgrade_accept("HTTP/1.1 101 Switching Protocols\r\nUpgrade: h2c\r\n\r\n"));
+        assert!(has_h2c_upgrade_accept(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: h2c\r\n\r\n"
+        ));
         assert!(!has_h2c_upgrade_accept("HTTP/1.1 200 OK\r\n\r\n"));
     }
 

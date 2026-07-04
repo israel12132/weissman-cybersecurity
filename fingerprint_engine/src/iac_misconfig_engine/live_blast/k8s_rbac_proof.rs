@@ -14,10 +14,26 @@ struct SarCheck {
 }
 
 const SA_CHECKS: &[SarCheck] = &[
-    SarCheck { verb: "get", resource: "secrets", subresource: None },
-    SarCheck { verb: "list", resource: "secrets", subresource: None },
-    SarCheck { verb: "create", resource: "pods", subresource: None },
-    SarCheck { verb: "get", resource: "serviceaccounts", subresource: None },
+    SarCheck {
+        verb: "get",
+        resource: "secrets",
+        subresource: None,
+    },
+    SarCheck {
+        verb: "list",
+        resource: "secrets",
+        subresource: None,
+    },
+    SarCheck {
+        verb: "create",
+        resource: "pods",
+        subresource: None,
+    },
+    SarCheck {
+        verb: "get",
+        resource: "serviceaccounts",
+        subresource: None,
+    },
 ];
 
 fn build_client(cfg: &K8sReconcileConfig) -> Client {

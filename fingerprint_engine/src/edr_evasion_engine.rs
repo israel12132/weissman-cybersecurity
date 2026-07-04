@@ -26,9 +26,8 @@
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence, Intensity};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    empty_ok, extract_host, has_header, header_value, http_client, http_get,
-    http_get_with_headers, normalize_url, probe_paths_concurrent, status_indicates_presence,
-    HttpProbe,
+    empty_ok, extract_host, has_header, header_value, http_client, http_get, http_get_with_headers,
+    normalize_url, probe_paths_concurrent, status_indicates_presence, HttpProbe,
 };
 use crate::engine_result::{print_result, EngineResult};
 use regex::Regex;
@@ -121,7 +120,8 @@ impl EdrScanConfig {
         cfg.check_debug_paths = c.bool_or("check_debug_paths", cfg.check_debug_paths);
         cfg.check_source_maps = c.bool_or("check_source_maps", cfg.check_source_maps);
         cfg.check_error_verbosity = c.bool_or("check_error_verbosity", cfg.check_error_verbosity);
-        cfg.check_minimal_fingerprint = c.bool_or("check_minimal_fingerprint", cfg.check_minimal_fingerprint);
+        cfg.check_minimal_fingerprint =
+            c.bool_or("check_minimal_fingerprint", cfg.check_minimal_fingerprint);
         cfg.emit_agent_guidance = c.emit_agent_guidance();
         cfg.extra_paths = c.string_list("extra_paths");
         cfg.extra_user_agents = c.string_list("extra_user_agents");
@@ -161,7 +161,10 @@ fn fingerprint_edge(probe: &HttpProbe) -> Option<WafHit> {
     ];
     for (hdr, needle, vendor, conf) in checks {
         if let Some(v) = header_value(&probe.headers, hdr) {
-            if needle.is_empty() || v.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
+            if needle.is_empty()
+                || v.to_ascii_lowercase()
+                    .contains(&needle.to_ascii_lowercase())
+            {
                 return Some(WafHit {
                     vendor,
                     signal: format!("{hdr}={v}"),
@@ -305,12 +308,16 @@ fn analyze_csp(csp: &str) -> Vec<CspIssue> {
         if lc.contains(bad.trim()) {
             out.push(CspIssue {
                 directive: "script-src / default-src".to_string(),
-                issue: format!("CSP allows {bad} — script injection & eval payloads easier to land"),
+                issue: format!(
+                    "CSP allows {bad} — script injection & eval payloads easier to land"
+                ),
                 severity: "medium",
             });
         }
     }
-    if lc.contains("connect-src") && (lc.contains("connect-src *") || lc.contains("connect-src ' *'")) {
+    if lc.contains("connect-src")
+        && (lc.contains("connect-src *") || lc.contains("connect-src ' *'"))
+    {
         out.push(CspIssue {
             directive: "connect-src".to_string(),
             issue: "Wildcard connect-src permits exfil/C2 callbacks to arbitrary hosts".to_string(),
@@ -333,13 +340,22 @@ fn cookie_issues(set_cookies: &[String]) -> Vec<(String, String)> {
         let lc = raw.to_ascii_lowercase();
         let name = raw.split('=').next().unwrap_or("cookie").to_string();
         if !lc.contains("httponly") {
-            issues.push((name.clone(), "missing HttpOnly — stealable via XSS".to_string()));
+            issues.push((
+                name.clone(),
+                "missing HttpOnly — stealable via XSS".to_string(),
+            ));
         }
         if !lc.contains("secure") {
-            issues.push((name.clone(), "missing Secure — sendable over HTTP".to_string()));
+            issues.push((
+                name.clone(),
+                "missing Secure — sendable over HTTP".to_string(),
+            ));
         }
         if !lc.contains("samesite") {
-            issues.push((name, "missing SameSite — CSRF/session-riding risk".to_string()));
+            issues.push((
+                name,
+                "missing SameSite — CSRF/session-riding risk".to_string(),
+            ));
         }
     }
     issues
@@ -351,10 +367,16 @@ fn telemetry_patterns() -> &'static [(&'static str, Regex)] {
     static CACHE: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
     CACHE.get_or_init(|| {
         let raw: &[(&str, &str)] = &[
-            ("Sentry DSN", r#"https://[a-f0-9]+@[a-z0-9.-]+\.ingest\.(sentry\.io|us\.sentry\.io)/"#),
+            (
+                "Sentry DSN",
+                r#"https://[a-f0-9]+@[a-z0-9.-]+\.ingest\.(sentry\.io|us\.sentry\.io)/"#,
+            ),
             ("Datadog RUM", r#"dd-api-key|datadoghq\.com|DD_RUM"#),
             ("New Relic", r#"newrelic\.com|NREUM|nr-data\.net"#),
-            ("App Insights", r#"ApplicationInsights|ai\.instrumentationkey"#),
+            (
+                "App Insights",
+                r#"ApplicationInsights|ai\.instrumentationkey"#,
+            ),
             ("Rollbar", r#"rollbar\.com|rollbar\.js"#),
             ("Bugsnag", r#"bugsnag\.com|apiKey.*bugsnag"#),
             ("Firebase", r#"firebaseio\.com|firebaseConfig"#),
@@ -443,16 +465,25 @@ fn compute_resilience(
 
     if waf {
         score += (15.0 * waf_conf).round() as i32;
-        reasons.push(format!("Edge WAF/CDN detected (confidence {:.0}%)", waf_conf * 100.0));
+        reasons.push(format!(
+            "Edge WAF/CDN detected (confidence {:.0}%)",
+            waf_conf * 100.0
+        ));
     } else {
         reasons.push("No edge WAF/CDN fingerprint — easier HTTP ingress".to_string());
     }
     if ua_block_rate >= 0.75 {
         score += 20;
-        reasons.push(format!("Scanner UA block rate {:.0}%", ua_block_rate * 100.0));
+        reasons.push(format!(
+            "Scanner UA block rate {:.0}%",
+            ua_block_rate * 100.0
+        ));
     } else if ua_block_rate >= 0.4 {
         score += 10;
-        reasons.push(format!("Partial UA blocking ({:.0}%)", ua_block_rate * 100.0));
+        reasons.push(format!(
+            "Partial UA blocking ({:.0}%)",
+            ua_block_rate * 100.0
+        ));
     } else {
         score -= 5;
         reasons.push("Scanner/spider User-Agents largely unblocked at the edge".to_string());
@@ -652,7 +683,10 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
                 ("x-frame-options", "Missing X-Frame-Options"),
                 ("referrer-policy", "Missing Referrer-Policy"),
                 ("permissions-policy", "Missing Permissions-Policy"),
-                ("cross-origin-opener-policy", "Missing Cross-Origin-Opener-Policy"),
+                (
+                    "cross-origin-opener-policy",
+                    "Missing Cross-Origin-Opener-Policy",
+                ),
             ] {
                 if !has_header(&base_probe.headers, hdr) {
                     findings.push(finding_rich(
@@ -681,7 +715,9 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
                             &issue.issue,
                             target,
                             0.85,
-                            Evidence::new().with("csp", csp).with("directive", issue.directive),
+                            Evidence::new()
+                                .with("csp", csp)
+                                .with("directive", issue.directive),
                         ));
                     }
                 }
@@ -789,10 +825,20 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
             let url = if map_url.starts_with("http") {
                 map_url
             } else {
-                format!("{}{}", base.trim_end_matches('/'), if map_url.starts_with('/') { map_url } else { format!("/{map_url}") })
+                format!(
+                    "{}{}",
+                    base.trim_end_matches('/'),
+                    if map_url.starts_with('/') {
+                        map_url
+                    } else {
+                        format!("/{map_url}")
+                    }
+                )
             };
             if let Some(p) = http_get(&client, &url).await {
-                if p.status == 200 && (p.body.contains("\"mappings\"") || p.body.contains("\"sources\"")) {
+                if p.status == 200
+                    && (p.body.contains("\"mappings\"") || p.body.contains("\"sources\""))
+                {
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("JavaScript source map exposed: {url}"),
@@ -813,7 +859,11 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
     if cfg.check_error_verbosity {
         let probes = [
             format!("{}/%7B%7B7*7%7D%7D", base.trim_end_matches('/')),
-            format!("{}/weissman-nonexistent-{}", base.trim_end_matches('/'), host),
+            format!(
+                "{}/weissman-nonexistent-{}",
+                base.trim_end_matches('/'),
+                host
+            ),
         ];
         for url in &probes {
             if let Some(p) = http_get(&client, url).await {
@@ -841,7 +891,11 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
     if cfg.check_minimal_fingerprint {
         let server = header_value(&base_probe.headers, "server").unwrap_or("");
         let powered = header_value(&base_probe.headers, "x-powered-by").unwrap_or("");
-        if server.is_empty() && powered.is_empty() && base_probe.status >= 200 && base_probe.status < 400 {
+        if server.is_empty()
+            && powered.is_empty()
+            && base_probe.status >= 200
+            && base_probe.status < 400
+        {
             findings.push(finding_rich(
                 ENGINE_ID,
                 "Minimal HTTP server fingerprint (stripped banners)",

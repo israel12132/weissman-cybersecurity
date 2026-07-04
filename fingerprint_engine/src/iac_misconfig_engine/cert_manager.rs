@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "cert_manager", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "cert_manager",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,17 +81,21 @@ pub const HTTP01_PROD: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![WEAK_KEY_SIZE, LONG_VALIDITY, IS_CA_TRUE, ROTATION_NEVER, HTTP01_PROD]
+    vec![
+        WEAK_KEY_SIZE,
+        LONG_VALIDITY,
+        IS_CA_TRUE,
+        ROTATION_NEVER,
+        HTTP01_PROD,
+    ]
 }
 
 fn is_cert_manager(name: &str, content: &str) -> bool {
     let lc = content.to_ascii_lowercase();
     lc.contains("cert-manager.io")
-        || lc.contains("kind: certificate")
-            && lc.contains("cert-manager")
+        || lc.contains("kind: certificate") && lc.contains("cert-manager")
         || lc.contains("kind: clusterissuer")
-        || lc.contains("kind: issuer")
-            && lc.contains("acme")
+        || lc.contains("kind: issuer") && lc.contains("acme")
 }
 
 #[must_use]
@@ -96,7 +109,10 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("size: 1024") || lc.contains("size: 512") {
         out.push(Finding::new(WEAK_KEY_SIZE, file, file).observed("RSA key size < 2048"));
     }
-    if lc.contains("duration: 8760h") || lc.contains("duration: 17520h") || lc.contains("duration: 2160h0m0s") {
+    if lc.contains("duration: 8760h")
+        || lc.contains("duration: 17520h")
+        || lc.contains("duration: 2160h0m0s")
+    {
         // only flag clearly long durations
         if lc.contains("8760h") || lc.contains("17520h") {
             out.push(Finding::new(LONG_VALIDITY, file, file).observed("validity > 90 days"));
@@ -108,7 +124,9 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("rotationpolicy: never") {
         out.push(Finding::new(ROTATION_NEVER, file, file).observed("rotationPolicy Never"));
     }
-    if lc.contains("http01:") && (lc.contains("prod") || lc.contains("production") || !lc.contains("staging")) {
+    if lc.contains("http01:")
+        && (lc.contains("prod") || lc.contains("production") || !lc.contains("staging"))
+    {
         out.push(Finding::new(HTTP01_PROD, file, file).observed("HTTP-01 ACME solver"));
     }
 

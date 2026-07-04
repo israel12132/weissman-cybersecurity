@@ -1,37 +1,8 @@
 import { useMemo } from 'react'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
+import { REALITY_KIND_META } from '../lib/realityKindMeta'
 
-/** Reality kind styling — mirrors backend `/api/engines/capabilities` legend. */
-export const REALITY_KIND_META = {
-  real_probe: {
-    label: 'LIVE PROBE',
-    color: '#34d399',
-    border: 'rgba(52,211,153,0.35)',
-    bg: 'rgba(52,211,153,0.08)',
-    description: 'Live probe — real network/host detection',
-  },
-  alias: {
-    label: 'ALIAS',
-    color: '#9ca3af',
-    border: 'rgba(156,163,175,0.30)',
-    bg: 'rgba(156,163,175,0.07)',
-    description: 'Alias — same detection as its canonical engine',
-  },
-  agent_required: {
-    label: 'AGENT REQUIRED',
-    color: '#f59e0b',
-    border: 'rgba(245,158,11,0.35)',
-    bg: 'rgba(245,158,11,0.08)',
-    description: 'Requires the endpoint agent; info-only from a remote scan',
-  },
-  special: {
-    label: 'PoE',
-    color: '#a78bfa',
-    border: 'rgba(167,139,250,0.35)',
-    bg: 'rgba(167,139,250,0.08)',
-    description: 'poe_synthesis — runs via the async-job path',
-  },
-}
+export { REALITY_KIND_META }
 
 const SIZE_CLASSES = {
   xs: 'text-[8px] px-1.5 py-0.5 tracking-[0.14em]',
@@ -115,7 +86,15 @@ export default function EngineRealityBadge({
           {remoteDetection ? 'REMOTE' : 'LOCAL'}
         </span>
       )}
-      {showCanonical && canonical && (
+      {kind === 'alias' && canonical && (
+        <span
+          className="text-[9px] font-mono text-amber-200/80 truncate max-w-[180px] border border-amber-500/25 rounded px-1.5 py-0.5"
+          title={`Same engine as ${canonical}`}
+        >
+          = {canonical}
+        </span>
+      )}
+      {showCanonical && canonical && kind !== 'alias' && (
         <span className="text-[9px] font-mono text-gray-500 truncate max-w-[140px]" title={`Canonical: ${canonical}`}>
           → {canonical}
         </span>

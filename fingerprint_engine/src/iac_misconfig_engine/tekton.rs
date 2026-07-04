@@ -7,8 +7,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "tekton", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "tekton",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -82,7 +91,9 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("privileged: true") {
         out.push(Finding::new(PRIVILEGED_TASK, file, file).observed("privileged Tekton step"));
     }
-    if lc.contains("params:") && (lc.contains("password:") || lc.contains("token:") || lc.contains("apikey:")) {
+    if lc.contains("params:")
+        && (lc.contains("password:") || lc.contains("token:") || lc.contains("apikey:"))
+    {
         out.push(Finding::new(PARAM_SECRET, file, file).observed("secret literal in params"));
     }
     if lc.contains("image:") && lc.contains(":latest") {

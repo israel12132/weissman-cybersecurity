@@ -5,6 +5,7 @@ import RuntimeExecutionFlow from '../cockpit/RuntimeExecutionFlow'
 import { formatApiErrorFromBody } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import { apiFetch } from '../../lib/apiBase'
+import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
 
 const NS = 'components.cockpitWidgets.digitalEvidenceHud'
 
@@ -92,7 +93,7 @@ function proofCurlText(finding, decryptedCurl, awaitingText) {
   return awaitingText
 }
 
-export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
+export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerified }) {
   const { t } = useTranslation()
   const awaitingPoe = t(`${NS}.awaitingPoe`)
   const [phase, setPhase] = useState('decrypt')
@@ -258,7 +259,13 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose }) {
                 transition={{ duration: 0.3 }}
                 className="space-y-4"
               >
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <LiveVerdictBadge verification={finding.live_verification} verdict={finding.live_verdict} />
+                  <FindingVerifyButton
+                    finding={finding}
+                    onVerified={onVerified}
+                    variant="primary"
+                  />
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                       (finding.severity || '').toLowerCase().includes('critical')

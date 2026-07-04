@@ -151,7 +151,10 @@ mod imp {
         notes.push(format!(
             "live AWS reconcile: {} API matches, {} confirmed live",
             matches.len(),
-            matches.iter().filter(|m| m.live_status == LiveStatus::ConfirmedLive).count()
+            matches
+                .iter()
+                .filter(|m| m.live_status == LiveStatus::ConfirmedLive)
+                .count()
         ));
         (matches, notes)
     }
@@ -208,7 +211,11 @@ mod imp {
         if public_reason.is_none() {
             if let Ok(acl) = client.get_bucket_acl().bucket(bucket).send().await {
                 for g in acl.grants() {
-                    let uri = g.grantee().and_then(|gg| gg.uri()).unwrap_or("").to_lowercase();
+                    let uri = g
+                        .grantee()
+                        .and_then(|gg| gg.uri())
+                        .unwrap_or("")
+                        .to_lowercase();
                     if uri.contains("allusers") || uri.contains("authenticatedusers") {
                         public_reason = Some(format!("GetBucketAcl: {uri}"));
                         break;
@@ -241,7 +248,10 @@ mod imp {
         let mut sg_id = String::new();
         for sg in resp.security_groups() {
             let name_match = sg.group_name() == Some(tag_name)
-                || sg.tags().iter().any(|t| t.key() == Some("Name") && t.value() == Some(tag_name));
+                || sg
+                    .tags()
+                    .iter()
+                    .any(|t| t.key() == Some("Name") && t.value() == Some(tag_name));
             if !name_match {
                 continue;
             }
@@ -288,7 +298,12 @@ mod imp {
                 .region(Region::new(region.to_string()))
                 .build(),
         );
-        match rds.describe_db_instances().db_instance_identifier(identifier).send().await {
+        match rds
+            .describe_db_instances()
+            .db_instance_identifier(identifier)
+            .send()
+            .await
+        {
             Ok(out) => {
                 let inst = out.db_instances().first()?;
                 Some(LiveReconcileMatch {
@@ -496,7 +511,9 @@ mod imp {
     ) -> (Vec<LiveReconcileMatch>, Vec<String>) {
         let mut notes = vec!["live AWS API stub (build without live-aws feature)".to_string()];
         if !cfg.role_arn.is_empty() {
-            notes.push("graph-only mode: compile with --features live-aws for real API calls".to_string());
+            notes.push(
+                "graph-only mode: compile with --features live-aws for real API calls".to_string(),
+            );
         }
         for node in graph.nodes.values_mut() {
             if node.kind != NodeKind::Internet {

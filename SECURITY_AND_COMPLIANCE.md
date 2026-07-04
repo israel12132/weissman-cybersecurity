@@ -1,6 +1,6 @@
 # Weissman Cybersecurity — Security & Compliance Overview
 
-Last updated: 2026-06-09 (synced with the autonomous-defence phase-3 rollout)
+Last updated: 2026-07-03 (synced with Phase 7 audit gate — 558 engines, 112 routes, JWT ≥48)
 
 ## 1. Scope
 
@@ -8,6 +8,18 @@ This document summarises the platform's current security architecture and
 controls, suitable for customer security reviews and procurement questionnaires.
 Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
 [`SLA_AND_STATUS.md`](SLA_AND_STATUS.md).
+
+### Platform scale (code-verified)
+
+| Metric | Value | Audit script |
+|--------|-------|--------------|
+| Production engines | **558** | `scripts/verify_engine_wiring.mjs` |
+| Command Center routes | **112** | `scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **95/95** | same |
+| Engine kinds | 300 real_probe, 213 alias, 45 agent_required | `scripts/engine_reality_audit.mjs` |
+
+Global release gate: **`bash scripts/full_audit_gate.sh`** (G1–G7, exit 0).
+Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
 
 ## 2. Data handling
 
@@ -144,6 +156,9 @@ incorporated by reference in [`/dpa.html`](deploy/public/dpa.html).
 
 | Concern | Implementation |
 |---------|----------------|
+| Full audit gate G1–G7 | `scripts/full_audit_gate.sh` |
+| Auditor evidence pack (JSON + PDF) | `scripts/generate_audit_evidence_pack.sh` |
+| Live Playwright E2E | `frontend/tests-e2e/live-journey.spec.ts` |
 | Tenant isolation + RLS | `crates/weissman-db/src/lib.rs` (`begin_tenant_tx`, GUC `app.current_tenant_id`) |
 | Audit trail | `fingerprint_engine/src/audit_log.rs` |
 | RBAC | `fingerprint_engine/src/rbac.rs` + `http/ceo_rbac.rs` |

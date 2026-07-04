@@ -91,26 +91,23 @@ pub fn production_ids_json() -> Vec<serde_json::Value> {
 #[path = "engine_dispatch_agent.rs"]
 mod engine_dispatch_agent;
 
+pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 pub use engine_dispatch_agent::{
     is_agent_required_engine, run_agent_required_engine, AGENT_REQUIRED_ENGINES,
 };
-pub(crate) use engine_dispatch_agent::merge_agent_hybrid;
 
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
     let _oast_guard = {
         let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
         let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();
         if !listener.is_empty() || !domain.is_empty() {
-            Some(crate::fuzz_oob::push_tenant_oast(crate::fuzz_oob::TenantOastConfig {
-                listener_url: listener.to_string(),
-                domain: domain.to_string(),
-                api_key: ctx
-                    .oast_api_key
-                    .as_deref()
-                    .unwrap_or("")
-                    .trim()
-                    .to_string(),
-            }))
+            Some(crate::fuzz_oob::push_tenant_oast(
+                crate::fuzz_oob::TenantOastConfig {
+                    listener_url: listener.to_string(),
+                    domain: domain.to_string(),
+                    api_key: ctx.oast_api_key.as_deref().unwrap_or("").trim().to_string(),
+                },
+            ))
         } else {
             None
         }
@@ -145,6 +142,58 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     }
 
     let canonical = dispatch_engine_id(raw);
+
+    // Critical-infrastructure engines: isolated path with mandatory RoE preflight.
+    if crate::critical_infra::is_critical_infra_engine(canonical) {
+        let roe_input = crate::critical_infra::roe::RoePreflightInput {
+            pool: ctx.app_pool.as_deref(),
+            tenant_id: ctx.tenant_id,
+            client_id: ctx.client_id,
+            engine_id: canonical,
+            target,
+            job_params: &ctx.job_params,
+        };
+        match crate::critical_infra::roe::preflight(&roe_input).await {
+            Ok(authority) => {
+                tracing::info!(
+                    target: "critical_infra_roe",
+                    engine_id = %canonical,
+                    probe_target = %target,
+                    authority = ?authority,
+                    "RoE preflight passed — executing critical infrastructure engine"
+                );
+            }
+            Err(violation) => {
+                crate::critical_infra::roe::log_violation(
+                    ctx.app_pool.as_deref(),
+                    ctx.tenant_id,
+                    ctx.client_id,
+                    canonical,
+                    target,
+                    violation,
+                )
+                .await;
+                return EngineResult::error(format!(
+                    "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
+                ));
+            }
+        }
+        let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;
+        for f in &mut result.findings {
+            if let Some(obj) = f.as_object_mut() {
+                obj.entry("source_engine".to_string())
+                    .or_insert_with(|| serde_json::Value::String(raw.to_string()));
+                obj.entry("engine_id".to_string())
+                    .or_insert_with(|| serde_json::Value::String(raw.to_string()));
+            }
+        }
+        crate::critical_infra::postprocess_result(canonical, target, &ctx, &mut result).await;
+        if raw != canonical && !result.message.contains(raw) {
+            result.message = format!("{} (via {})", result.message, raw);
+        }
+        return result;
+    }
+
     let mut ctx = ctx.clone();
     if crate::pentest_memory::is_http_offensive_engine(canonical) {
         if let (Some(pool), Some(tid)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
@@ -190,6 +239,39 @@ pub(crate) async fn dispatch_canonical_engine(
     ctx: &EngineRunContext,
 ) -> EngineResult {
     dispatch_engine_match(canonical, target, ctx).await
+}
+
+async fn run_poe_synthesis_dispatch(target: &str, ctx: &EngineRunContext) -> EngineResult {
+    let Some(tid) = ctx.tenant_id else {
+        return EngineResult::error(
+            "poe_synthesis requires tenant_id in engine context (enqueue via command center scan)"
+                .to_string(),
+        );
+    };
+    let Some(pool) = ctx.app_pool.as_ref() else {
+        return EngineResult::error(
+            "poe_synthesis requires database pool in engine context".to_string(),
+        );
+    };
+    let cfg =
+        match crate::orchestrator::load_poe_config_http(pool.as_ref(), tid, pool.clone()).await {
+            Ok(c) => c,
+            Err(e) => return EngineResult::error(format!("poe_synthesis config: {e}")),
+        };
+    crate::exploit_synthesis_engine::run_exploit_synthesis_async(
+        target,
+        &cfg,
+        None,
+        None,
+        Some(tid),
+        ctx.job_params
+            .get("oast_interaction_token")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+    )
+    .await
 }
 
 async fn dispatch_engine_match(
@@ -625,6 +707,7 @@ async fn dispatch_engine_match(
             .await
         }
         "chronos" => crate::chronos_engine::run_chronos_result(target, ctx).await,
+        "poe_synthesis" => run_poe_synthesis_dispatch(target, ctx).await,
         "liquid_matrix" => crate::liquid_matrix_engine::run_liquid_matrix_result(target, ctx).await,
         "cognitive_starvation" => {
             crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
@@ -812,17 +895,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn production_without_dispatch_runner_returns_error() {
+    async fn poe_synthesis_requires_tenant_context() {
         let ctx = EngineRunContext::default();
-        // poe_synthesis is production but routed via exploit_synthesis_engine, not dispatch match arms.
         let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
-        assert!(!r.success, "expected error status: {}", r.message);
-        assert!(r.findings.is_empty());
-        assert!(
-            r.message.contains("no dispatch runner"),
-            "expected dispatch runner message, got: {}",
-            r.message
-        );
+        assert!(!r.success, "expected error without tenant: {}", r.message);
+        assert!(r.message.contains("tenant_id"));
     }
 }
-

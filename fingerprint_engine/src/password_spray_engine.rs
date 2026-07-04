@@ -161,11 +161,7 @@ const LARGE_USERS: &[&str] = &[
     "weissman_probe_security",
 ];
 
-const SMALL_PASSWORDS: &[&str] = &[
-    "WeissmanProbe!2024",
-    "Changeme123!",
-    "Password1!",
-];
+const SMALL_PASSWORDS: &[&str] = &["WeissmanProbe!2024", "Changeme123!", "Password1!"];
 
 const MEDIUM_PASSWORDS: &[&str] = &[
     "WeissmanProbe!2024",
@@ -399,7 +395,10 @@ impl ScanConfig {
         let timing_samples = cfg.usize_or("timing_samples", 8).clamp(4, 24);
         let lockout_decay_ms = cfg.u64_or("lockout_decay_ms", 30_000).clamp(5_000, 120_000);
         let subdomain_prefixes = if cfg.string_list("subdomain_prefixes").is_empty() {
-            SUBDOMAIN_PREFIXES.iter().map(|s| (*s).to_string()).collect()
+            SUBDOMAIN_PREFIXES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
         } else {
             cfg.string_list("subdomain_prefixes")
         };
@@ -650,30 +649,35 @@ impl SprayPosture {
 
     /// Composite 0–1 friction index — how hard credential stuffing is for an attacker.
     pub(crate) fn stuffing_friction(&self) -> f64 {
-        let mut friction = 1.0f64;
-        if self.no_rate_limit.is_empty() {
-            friction += 0.25;
+        let mut risk = 0.12f64;
+        if !self.no_rate_limit.is_empty() {
+            risk += 0.28;
         }
-        if self.no_lockout.is_empty() {
-            friction += 0.2;
+        if !self.no_lockout.is_empty() {
+            risk += 0.22;
         }
-        if self.captcha_absent.is_empty() {
-            friction += 0.15;
+        if !self.captcha_absent.is_empty() {
+            risk += 0.14;
         }
-        if self.mfa_absent.is_empty() {
-            friction += 0.2;
+        if !self.mfa_absent.is_empty() {
+            risk += 0.18;
         }
-        if self.user_enum.is_empty() {
-            friction += 0.1;
+        if !self.user_enum.is_empty() {
+            risk += 0.08;
         }
-        if self.ropc_enabled.is_empty() {
-            friction += 0.1;
+        if !self.ropc_enabled.is_empty() {
+            risk += 0.08;
         }
-        (friction / 2.0).clamp(0.0, 1.0)
+        risk.clamp(0.0, 1.0)
     }
 }
 
-fn fingerprint_auth_type(path: &str, status: u16, body: &str, headers: &[(String, String)]) -> (String, bool) {
+fn fingerprint_auth_type(
+    path: &str,
+    status: u16,
+    body: &str,
+    headers: &[(String, String)],
+) -> (String, bool) {
     let bl = body_lower(body);
     let pl = path.to_ascii_lowercase();
     let loc = headers
@@ -727,7 +731,8 @@ async fn discover_surface(
         return None;
     }
     let bl = body_lower(&probe.body);
-    let (auth_type, federated) = fingerprint_auth_type(path, probe.status, &probe.body, &probe.headers);
+    let (auth_type, federated) =
+        fingerprint_auth_type(path, probe.status, &probe.body, &probe.headers);
     let login_hint = bl.contains("password")
         || bl.contains("sign in")
         || bl.contains("log in")
@@ -778,7 +783,11 @@ async fn http_get_with_extra(
     } else {
         body
     };
-    Some(HttpResp { status, body, headers })
+    Some(HttpResp {
+        status,
+        body,
+        headers,
+    })
 }
 
 async fn attempt_json_login(
@@ -835,22 +844,26 @@ async fn attempt_form_login(
     } else {
         body
     };
-    Some(HttpResp { status, body, headers })
+    Some(HttpResp {
+        status,
+        body,
+        headers,
+    })
 }
 
 fn analyze_attempt(resp: &HttpResp, attempt_no: u32) -> SprayOutcome {
     let bl = body_lower(&resp.body);
     let rate_limited = resp.status == 429
         || resp.status == 503
-        || resp.headers.iter().any(|(k, v)| {
-            k.eq_ignore_ascii_case("retry-after") && !v.trim().is_empty()
-        });
+        || resp
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("retry-after") && !v.trim().is_empty());
     let locked = resp.status == 423 || contains_any(&bl, LOCKOUT_MARKERS);
     let captcha = contains_any(&bl, CAPTCHA_MARKERS);
     let mfa = contains_any(&bl, MFA_MARKERS)
         || resp.headers.iter().any(|(k, v)| {
-            k.eq_ignore_ascii_case("location")
-                && contains_any(&v.to_ascii_lowercase(), MFA_MARKERS)
+            k.eq_ignore_ascii_case("location") && contains_any(&v.to_ascii_lowercase(), MFA_MARKERS)
         });
     SprayOutcome {
         attempts: attempt_no,
@@ -953,9 +966,21 @@ async fn probe_user_enumeration(
             .with("status_b", rb.status)
             .with("body_len_a", len_a)
             .with("body_len_b", len_b)
-            .check("status_differential", status_diff, format!("{} vs {}", ra.status, rb.status))
-            .check("body_length_differential", len_diff, format!("{len_a} vs {len_b}"))
-            .check("error_message_differential", msg_diff, "distinct user-existence signals");
+            .check(
+                "status_differential",
+                status_diff,
+                format!("{} vs {}", ra.status, rb.status),
+            )
+            .check(
+                "body_length_differential",
+                len_diff,
+                format!("{len_a} vs {len_b}"),
+            )
+            .check(
+                "error_message_differential",
+                msg_diff,
+                "distinct user-existence signals",
+            );
         return Some(("user_enumeration".into(), ev));
     }
     None
@@ -987,7 +1012,11 @@ fn surface_findings(
                 "Discovered an authentication entry point at {} — type `{}`{}.",
                 surface.url,
                 surface.auth_type,
-                if surface.federated { " (federated SSO)" } else { "" }
+                if surface.federated {
+                    " (federated SSO)"
+                } else {
+                    ""
+                }
             ),
             target,
             0.95,
@@ -1211,11 +1240,7 @@ fn synthesize_attack_paths(target: &str, posture: &SprayPosture, host: &str) -> 
 
 // ── Tenant intelligence (real external probes — nothing simulated) ────────────
 
-async fn probe_m365_user_realm(
-    client: &Client,
-    domain: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_m365_user_realm(client: &Client, domain: &str, target: &str) -> Option<Value> {
     let login = format!("weissman_probe@{domain}");
     let url = format!(
         "https://login.microsoftonline.com/getuserrealm.srf?login={}&json=1",
@@ -1270,11 +1295,7 @@ async fn probe_m365_user_realm(
     ))
 }
 
-async fn probe_oidc_ropc(
-    client: &Client,
-    base: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_oidc_ropc(client: &Client, base: &str, target: &str) -> Option<Value> {
     const DISCOVERY: &[&str] = &[
         "/.well-known/openid-configuration",
         "/.well-known/oauth-authorization-server",
@@ -1336,11 +1357,7 @@ async fn probe_oidc_ropc(
     None
 }
 
-async fn probe_exchange_autodiscover(
-    client: &Client,
-    domain: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_exchange_autodiscover(client: &Client, domain: &str, target: &str) -> Option<Value> {
     let url = format!("https://autodiscover.{domain}/autodiscover/autodiscover.svc");
     let soap = format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
@@ -1421,7 +1438,10 @@ async fn probe_xff_rate_limit_surface(
         return None;
     }
     let mut xff_extra: Vec<(&str, &str)> = extra.to_vec();
-    for (i, ip) in ["203.0.113.10", "203.0.113.11", "203.0.113.12"].iter().enumerate() {
+    for (i, ip) in ["203.0.113.10", "203.0.113.11", "203.0.113.12"]
+        .iter()
+        .enumerate()
+    {
         xff_extra.retain(|(k, _)| *k != "X-Forwarded-For");
         xff_extra.push(("X-Forwarded-For", ip));
         let Some(r) = attempt_json_login(client, &surface.url, user, pass, &xff_extra).await else {
@@ -1542,11 +1562,7 @@ async fn hunt_subdomain_logins(
         .await
 }
 
-async fn probe_saml_metadata(
-    client: &Client,
-    base: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_saml_metadata(client: &Client, base: &str, target: &str) -> Option<Value> {
     for path in SAML_METADATA_PATHS {
         let url = join_url(base, path);
         let Some(p) = http_get(client, &url).await else {
@@ -1556,7 +1572,10 @@ async fn probe_saml_metadata(
             continue;
         }
         let bl = body_lower(&p.body);
-        if !(bl.contains("entitydescriptor") || bl.contains("idpssodescriptor") || bl.contains("saml")) {
+        if !(bl.contains("entitydescriptor")
+            || bl.contains("idpssodescriptor")
+            || bl.contains("saml"))
+        {
             continue;
         }
         return Some(with_fields(
@@ -1578,11 +1597,7 @@ async fn probe_saml_metadata(
     None
 }
 
-async fn probe_password_policy_oracle(
-    client: &Client,
-    base: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_password_policy_oracle(client: &Client, base: &str, target: &str) -> Option<Value> {
     for path in POLICY_PROBE_PATHS {
         let url = join_url(base, path);
         let payload = json!({
@@ -1647,8 +1662,9 @@ async fn probe_oidc_device_code(client: &Client, base: &str, target: &str) -> Op
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        if !grants.iter().any(|g| g.contains("device_code") || g.contains("urn:ietf:params:oauth:grant-type:device-code"))
-        {
+        if !grants.iter().any(|g| {
+            g.contains("device_code") || g.contains("urn:ietf:params:oauth:grant-type:device-code")
+        }) {
             continue;
         }
         return Some(with_fields(
@@ -1672,11 +1688,7 @@ async fn probe_oidc_device_code(client: &Client, base: &str, target: &str) -> Op
     None
 }
 
-async fn probe_basic_ntlm_surface(
-    client: &Client,
-    url: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_basic_ntlm_surface(client: &Client, url: &str, target: &str) -> Option<Value> {
     let Some(p) = http_get(client, url).await else {
         return None;
     };
@@ -1717,13 +1729,8 @@ async fn probe_browser_script_differential(
     let user = "weissman_probe_waf";
     let pass = "WeissmanProbe!WAF";
     let payload = json!({"username": user, "password": pass});
-    let script = http_post_json_with_headers(
-        client,
-        url,
-        &payload,
-        &[("User-Agent", "curl/8.0")],
-    )
-    .await?;
+    let script =
+        http_post_json_with_headers(client, url, &payload, &[("User-Agent", "curl/8.0")]).await?;
     let browser = http_post_json_with_headers(
         client,
         url,
@@ -1810,7 +1817,14 @@ async fn probe_timing_user_enum(
         let _ = attempt_json_login(client, url, "weissman_probe_timing_a", pass, &[]).await;
         a.push(t0.elapsed().as_millis() as u64);
         let t1 = Instant::now();
-        let _ = attempt_json_login(client, url, "weissman_probe_timing_xyz_nonexistent", pass, &[]).await;
+        let _ = attempt_json_login(
+            client,
+            url,
+            "weissman_probe_timing_xyz_nonexistent",
+            pass,
+            &[],
+        )
+        .await;
         b.push(t1.elapsed().as_millis() as u64);
     }
     let ma = a.iter().sum::<u64>() as f64 / a.len() as f64;
@@ -1841,11 +1855,7 @@ async fn probe_timing_user_enum(
     ))
 }
 
-async fn probe_entra_aadsts(
-    client: &Client,
-    domain: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_entra_aadsts(client: &Client, domain: &str, target: &str) -> Option<Value> {
     let url = format!("https://login.microsoftonline.com/{domain}/oauth2/v2.0/token");
     let form = [
         ("grant_type", "password"),
@@ -1861,9 +1871,15 @@ async fn probe_entra_aadsts(
         return None;
     }
     let bl = body.to_ascii_lowercase();
-    let user_exists = AADSTS_USER_EXISTS.iter().any(|c| bl.contains(&c.to_ascii_lowercase()));
-    let user_missing = AADSTS_USER_MISSING.iter().any(|c| bl.contains(&c.to_ascii_lowercase()));
-    let locked = AADSTS_LOCKOUT.iter().any(|c| bl.contains(&c.to_ascii_lowercase()));
+    let user_exists = AADSTS_USER_EXISTS
+        .iter()
+        .any(|c| bl.contains(&c.to_ascii_lowercase()));
+    let user_missing = AADSTS_USER_MISSING
+        .iter()
+        .any(|c| bl.contains(&c.to_ascii_lowercase()));
+    let locked = AADSTS_LOCKOUT
+        .iter()
+        .any(|c| bl.contains(&c.to_ascii_lowercase()));
     let code = AADSTS_USER_EXISTS
         .iter()
         .chain(AADSTS_USER_MISSING.iter())
@@ -1904,11 +1920,7 @@ async fn probe_entra_aadsts(
     ))
 }
 
-async fn probe_cors_login_api(
-    client: &Client,
-    url: &str,
-    target: &str,
-) -> Option<Value> {
+async fn probe_cors_login_api(client: &Client, url: &str, target: &str) -> Option<Value> {
     let resp = client
         .post(url)
         .header("Origin", "https://evil.weissman.invalid")
@@ -2051,10 +2063,7 @@ fn build_remediation_playbook(posture: &SprayPosture, host: &str) -> Value {
 
 // ── Entry points ────────────────────────────────────────────────────────────────
 
-pub async fn run_password_spray_result_ctx(
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
+pub async fn run_password_spray_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
     let target = target.trim();
     if target.is_empty() {
         return EngineResult::error("target required");
@@ -2152,7 +2161,11 @@ pub async fn run_password_spray_result_ctx(
         )
         .await;
         for f in subs {
-            if let Some(url) = f.get("evidence").and_then(|e| e.get("url")).and_then(Value::as_str) {
+            if let Some(url) = f
+                .get("evidence")
+                .and_then(|e| e.get("url"))
+                .and_then(Value::as_str)
+            {
                 posture.subdomain_logins.push(url.to_string());
             }
             findings.push(f);
@@ -2187,7 +2200,13 @@ pub async fn run_password_spray_result_ctx(
         } else {
             run_spray_simulation(&client, &surface, &cfg, &extra).await
         };
-        findings.extend(surface_findings(target, &surface, &spray, &cfg, &mut posture));
+        findings.extend(surface_findings(
+            target,
+            &surface,
+            &spray,
+            &cfg,
+            &mut posture,
+        ));
 
         if cfg.check_user_enum && !cfg.dry_run {
             if let Some((kind, ev)) =
@@ -2235,7 +2254,8 @@ pub async fn run_password_spray_result_ctx(
             }
         }
         if cfg.check_xff_bypass && !cfg.dry_run && !spray.rate_limited {
-            if let Some(f) = probe_xff_rate_limit_surface(&client, &surface, &cfg, &extra, target).await
+            if let Some(f) =
+                probe_xff_rate_limit_surface(&client, &surface, &cfg, &extra, target).await
             {
                 posture.xff_bypassable.push(surface.url.clone());
                 findings.push(f);
@@ -2260,13 +2280,15 @@ pub async fn run_password_spray_result_ctx(
             }
         }
         if cfg.check_browser_differential && !cfg.dry_run {
-            if let Some(f) = probe_browser_script_differential(&client, &surface.url, target).await {
+            if let Some(f) = probe_browser_script_differential(&client, &surface.url, target).await
+            {
                 posture.browser_waf_gaps.push(surface.url.clone());
                 findings.push(f);
             }
         }
         if cfg.check_breach_differential && !cfg.dry_run {
-            if let Some(f) = probe_breach_password_differential(&client, &surface.url, target).await {
+            if let Some(f) = probe_breach_password_differential(&client, &surface.url, target).await
+            {
                 posture.breach_oracles.push(surface.url.clone());
                 findings.push(f);
             }

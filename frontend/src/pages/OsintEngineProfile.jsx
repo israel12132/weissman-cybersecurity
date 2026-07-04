@@ -5,9 +5,11 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream, SSE_CLOSED } from '../lib/sseStream'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useRegisterHubClient } from '../context/EngineHubContext'
+import { useClient } from '../context/ClientContext'
 import { useLaunchEngineScan, useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
@@ -65,6 +67,7 @@ function Terminal({ lines }) {
 
 export default function OsintEngineProfile() {
   const { t } = useTranslation()
+  const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState('')
   const [target, setTarget] = useState('')
@@ -83,7 +86,7 @@ export default function OsintEngineProfile() {
     const es = eventSourceRef.current
     if (!es) return
     eventSourceRef.current = null
-    if (es.readyState !== EventSource.CLOSED) es.close()
+    if (es.readyState !== SSE_CLOSED) es.close()
   }, [])
 
   const capabilities = useMemo(
@@ -96,6 +99,10 @@ export default function OsintEngineProfile() {
     ],
     [t],
   )
+
+  useEffect(() => {
+    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
+  }, [cockpitClientId])
 
   useEffect(() => {
     apiFetch('/api/clients')
@@ -225,8 +232,7 @@ export default function OsintEngineProfile() {
 
       closeStream()
       const streamPath = `/api/telemetry/stream?job_id=${encodeURIComponent(jobId)}`
-      const streamUrl = apiEventSourceUrl(streamPath)
-      const es = new EventSource(streamUrl, { withCredentials: true })
+      const es = openSseStream(streamPath)
       eventSourceRef.current = es
 
       es.onmessage = (e) => {

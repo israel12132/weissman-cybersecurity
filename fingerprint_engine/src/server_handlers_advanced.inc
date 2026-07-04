@@ -86,6 +86,63 @@ async fn api_risk_node_flags_patch(
     }
 }
 
+// ─── Battlespace topology (force-directed C2) ───────────────────────────────
+
+async fn api_battlespace_topology(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+) -> Response {
+    match crate::battlespace_topology::topology_bundle(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_battlespace_techniques(
+    Extension(_auth): Extension<AuthContext>,
+) -> Response {
+    (
+        StatusCode::OK,
+        Json(crate::battlespace_topology::techniques_json()),
+    )
+        .into_response()
+}
+
+async fn api_battlespace_shadow_preview(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<crate::battlespace_topology::ShadowPreviewBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    match crate::battlespace_topology::shadow_preview(
+        &state.app_pool,
+        auth.tenant_id,
+        &body,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Unified threat analysis (planner + correlation + NDR + ITDR over live findings) ───
 async fn api_threat_analysis_for_client(
     State(state): State<Arc<AppState>>,
@@ -547,9 +604,14 @@ struct PlaybookFireBody {
 async fn api_playbooks_fire(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
     Json(body): Json<PlaybookFireBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_operator(&auth) {
+    if !body.dry_run {
+        if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+            return r;
+        }
+    } else if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
     let mut event = body.event;
@@ -566,6 +628,74 @@ async fn api_playbooks_fire(
         "dry_run": body.dry_run,
         "results": results,
     }))).into_response()
+}
+
+async fn api_soar_execution_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<uuid::Uuid>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT e.id, e.action_kind, e.status, e.target_id, e.provider, e.result_detail,
+                  e.external_ref, e.blast_radius, e.evidence, e.execution_payload,
+                  e.created_at, e.resolved_at,
+                  r.id AS revert_id, r.status AS revert_status, r.steps AS revert_steps
+           FROM soar_action_executions e
+           LEFT JOIN soar_revert_runbooks r ON r.execution_id = e.id
+           WHERE e.id = $1 AND e.tenant_id = $2"#,
+    )
+    .bind(id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
+    match row {
+        Ok(Some(r)) => {
+            let execution = json!({
+                "id": r.try_get::<uuid::Uuid,_>("id").ok(),
+                "action_kind": r.try_get::<String,_>("action_kind").ok(),
+                "status": r.try_get::<String,_>("status").ok(),
+                "target_id": r.try_get::<String,_>("target_id").ok(),
+                "provider": r.try_get::<String,_>("provider").ok(),
+                "result_detail": r.try_get::<String,_>("result_detail").ok(),
+                "external_ref": r.try_get::<Option<String>,_>("external_ref").ok().flatten(),
+                "blast_radius": r.try_get::<serde_json::Value,_>("blast_radius").unwrap_or(json!({})),
+                "evidence": r.try_get::<serde_json::Value,_>("evidence").unwrap_or(json!({})),
+                "execution_payload": r.try_get::<serde_json::Value,_>("execution_payload").unwrap_or(json!({})),
+                "created_at": r.try_get::<chrono::DateTime<chrono::Utc>,_>("created_at").ok(),
+                "resolved_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>,_>("resolved_at").ok().flatten(),
+                "revert_runbook": {
+                    "id": r.try_get::<Option<uuid::Uuid>,_>("revert_id").ok().flatten(),
+                    "status": r.try_get::<Option<String>,_>("revert_status").ok().flatten(),
+                    "steps": r.try_get::<serde_json::Value,_>("revert_steps").unwrap_or(json!([])),
+                },
+            });
+            (StatusCode::OK, Json(json!({"ok": true, "execution": execution}))).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+    }
+}
+
+async fn api_soar_execution_revert(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    headers: axum::http::HeaderMap,
+    Path(id): Path<uuid::Uuid>,
+) -> Response {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    match crate::soar::revert_execution(&state.app_pool, auth.tenant_id, id).await {
+        Ok(detail) => (StatusCode::OK, Json(json!({"ok": true, "detail": detail}))).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": e}))).into_response(),
+    }
 }
 
 // ─── Financial blast-radius endpoints ──────────────────────────────────────

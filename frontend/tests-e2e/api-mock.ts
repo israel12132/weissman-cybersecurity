@@ -17,7 +17,7 @@ function fulfillJson(route: Route, body: unknown, status = 200) {
 
 /**
  * Intercepts all `/api/**` calls so the SPA can authenticate and load every cockpit tab
- * without a live Rust server or database. Keeps EventSource telemetry open with a minimal SSE body.
+ * without a live Rust server or database. Keeps fetch-based SSE telemetry open with a minimal SSE body.
  */
 export async function installCommandCenterApiMocks(page: Page): Promise<void> {
   await page.route('**/api/**', async (route) => {
@@ -37,7 +37,7 @@ export async function installCommandCenterApiMocks(page: Page): Promise<void> {
       })
     }
 
-    // EventSource — keep connection valid; clients close on error anyway.
+    // SSE telemetry — fetch ReadableStream clients accept a single fulfilled body in e2e mocks.
     if (path === '/api/telemetry/stream' && method === 'GET') {
       return route.fulfill({
         status: 200,

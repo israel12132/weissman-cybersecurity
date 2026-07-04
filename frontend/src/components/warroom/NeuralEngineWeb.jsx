@@ -74,15 +74,15 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
         <div className="absolute inset-0 flex items-center justify-center text-center px-4">
           <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
             {!hasClients
-              ? t('components.neuralEngineWeb.no_clients', { defaultValue: 'No clients — add a target to see engine topology' })
-              : t('components.neuralEngineWeb.no_engines', { defaultValue: 'No enabled engines for this client' })}
+              ? t('components.neuralEngineWeb.no_clients')
+              : t('components.neuralEngineWeb.no_engines')}
           </p>
         </div>
       )}
       {showIdle && (
         <div className="absolute inset-0 flex items-center justify-center text-center px-4">
           <p className="text-[10px] font-mono text-white/35 uppercase tracking-widest">
-            {t('components.neuralEngineWeb.idle', { defaultValue: 'Awaiting live engine telemetry…' })}
+            {t('components.neuralEngineWeb.idle')}
           </p>
         </div>
       )}

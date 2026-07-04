@@ -43,8 +43,29 @@ const T_DEPENDENCIES: &str = "T1195.001"; // Compromise Software Dependencies an
 
 const DEFAULT_ECOSYSTEMS: &[&str] = &["npm", "pypi"];
 const DEFAULT_AFFIXES: &[&str] = &[
-    "js", "-js", ".js", "cli", "-cli", "core", "-core", "lib", "-lib", "node", "node-", "py", "py-",
-    "python-", "sdk", "-sdk", "api", "-api", "2", "official", "-official", "app", "-app",
+    "js",
+    "-js",
+    ".js",
+    "cli",
+    "-cli",
+    "core",
+    "-core",
+    "lib",
+    "-lib",
+    "node",
+    "node-",
+    "py",
+    "py-",
+    "python-",
+    "sdk",
+    "-sdk",
+    "api",
+    "-api",
+    "2",
+    "official",
+    "-official",
+    "app",
+    "-app",
 ];
 
 // ── Per-package registry observation ────────────────────────────────────────────
@@ -142,11 +163,31 @@ impl TypoStrategies {
 
 fn qwerty_adjacent(c: char) -> &'static str {
     match c {
-        'q' => "wa", 'w' => "qeas", 'e' => "wrsd", 'r' => "etdf", 't' => "ryfg", 'y' => "tugh",
-        'u' => "yihj", 'i' => "uojk", 'o' => "ipkl", 'p' => "ol",
-        'a' => "qwsz", 's' => "wedxza", 'd' => "erfcxs", 'f' => "rtgvcd", 'g' => "tyhbvf",
-        'h' => "yujnbg", 'j' => "uikmnh", 'k' => "iolmj", 'l' => "opk",
-        'z' => "asx", 'x' => "sdcz", 'c' => "dfvx", 'v' => "fgbc", 'b' => "ghnv", 'n' => "hjmb",
+        'q' => "wa",
+        'w' => "qeas",
+        'e' => "wrsd",
+        'r' => "etdf",
+        't' => "ryfg",
+        'y' => "tugh",
+        'u' => "yihj",
+        'i' => "uojk",
+        'o' => "ipkl",
+        'p' => "ol",
+        'a' => "qwsz",
+        's' => "wedxza",
+        'd' => "erfcxs",
+        'f' => "rtgvcd",
+        'g' => "tyhbvf",
+        'h' => "yujnbg",
+        'j' => "uikmnh",
+        'k' => "iolmj",
+        'l' => "opk",
+        'z' => "asx",
+        'x' => "sdcz",
+        'c' => "dfvx",
+        'v' => "fgbc",
+        'b' => "ghnv",
+        'n' => "hjmb",
         'm' => "jkn",
         _ => "",
     }
@@ -154,9 +195,23 @@ fn qwerty_adjacent(c: char) -> &'static str {
 
 fn homoglyphs(c: char) -> &'static str {
     match c {
-        'o' => "0", '0' => "o", 'l' => "1i", 'i' => "1l", '1' => "li", 'e' => "3", '3' => "e",
-        'a' => "4", '4' => "a", 's' => "5", '5' => "s", 'b' => "8", '8' => "b", 'g' => "9",
-        't' => "7", 'z' => "2", '2' => "z",
+        'o' => "0",
+        '0' => "o",
+        'l' => "1i",
+        'i' => "1l",
+        '1' => "li",
+        'e' => "3",
+        '3' => "e",
+        'a' => "4",
+        '4' => "a",
+        's' => "5",
+        '5' => "s",
+        'b' => "8",
+        '8' => "b",
+        'g' => "9",
+        't' => "7",
+        'z' => "2",
+        '2' => "z",
         _ => "",
     }
 }
@@ -166,8 +221,9 @@ fn valid_pkg_name(s: &str) -> bool {
     s.len() >= 2
         && s.len() <= 100
         && s.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
-        && s.bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_' || b == b'.')
+        && s.bytes().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_' || b == b'.'
+        })
 }
 
 fn generate_typos(base: &str, st: &TypoStrategies, affixes: &[String], cap: usize) -> Vec<String> {
@@ -244,7 +300,10 @@ fn generate_typos(base: &str, st: &TypoStrategies, affixes: &[String], cap: usiz
     }
 
     out.remove(&b);
-    out.into_iter().filter(|s| valid_pkg_name(s)).take(cap).collect()
+    out.into_iter()
+        .filter(|s| valid_pkg_name(s))
+        .take(cap)
+        .collect()
 }
 
 fn base_package_names(host: &str) -> Vec<String> {
@@ -312,11 +371,26 @@ async fn check_npm(client: &reqwest::Client, name: &str, recent_days: i64) -> Op
         .and_then(|t| t.get("created"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    info.recent = info.created.as_deref().map(|c| is_recent(c, recent_days)).unwrap_or(false);
-    let latest = v.get("dist-tags").and_then(|d| d.get("latest")).and_then(Value::as_str);
+    info.recent = info
+        .created
+        .as_deref()
+        .map(|c| is_recent(c, recent_days))
+        .unwrap_or(false);
+    let latest = v
+        .get("dist-tags")
+        .and_then(|d| d.get("latest"))
+        .and_then(Value::as_str);
     info.install_scripts = latest
-        .and_then(|lv| v.get("versions").and_then(|vs| vs.get(lv)).and_then(|ver| ver.get("scripts")))
-        .map(|s| ["preinstall", "install", "postinstall"].iter().any(|k| s.get(*k).is_some()))
+        .and_then(|lv| {
+            v.get("versions")
+                .and_then(|vs| vs.get(lv))
+                .and_then(|ver| ver.get("scripts"))
+        })
+        .map(|s| {
+            ["preinstall", "install", "postinstall"]
+                .iter()
+                .any(|k| s.get(*k).is_some())
+        })
         .unwrap_or(false);
     info.versions = v
         .get("versions")
@@ -358,7 +432,10 @@ async fn check_pypi(client: &reqwest::Client, name: &str, recent_days: i64) -> O
             }
         }
     }
-    info.recent = newest.as_deref().map(|c| is_recent(c, recent_days)).unwrap_or(false);
+    info.recent = newest
+        .as_deref()
+        .map(|c| is_recent(c, recent_days))
+        .unwrap_or(false);
     info.created = newest;
     Some(info)
 }
@@ -388,11 +465,19 @@ async fn check_crates(client: &reqwest::Client, name: &str, recent_days: i64) ->
         .and_then(|c| c.get("created_at"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    info.recent = info.created.as_deref().map(|c| is_recent(c, recent_days)).unwrap_or(false);
+    info.recent = info
+        .created
+        .as_deref()
+        .map(|c| is_recent(c, recent_days))
+        .unwrap_or(false);
     Some(info)
 }
 
-async fn check_rubygems(client: &reqwest::Client, name: &str, _recent_days: i64) -> Option<PkgInfo> {
+async fn check_rubygems(
+    client: &reqwest::Client,
+    name: &str,
+    _recent_days: i64,
+) -> Option<PkgInfo> {
     let url = format!("https://rubygems.org/api/v1/gems/{}.json", name);
     let p = http_get(client, &url).await?;
     let mut info = PkgInfo {
@@ -455,7 +540,10 @@ fn synthesize_attack_paths(target: &str, p: &SupplyPosture) -> Vec<Value> {
                 0.9,
                 ev,
             ),
-            &[("category", json!("attack_path")), ("kill_chain", json!(steps))],
+            &[
+                ("category", json!("attack_path")),
+                ("kill_chain", json!(steps)),
+            ],
         ));
     };
 
@@ -594,7 +682,9 @@ pub async fn run_typosquatting_monitor_result_ctx(
 
     let mut findings: Vec<Value> = Vec::new();
     for info in hits {
-        posture.registered_squats.push(format!("{}:{}", info.ecosystem, info.name));
+        posture
+            .registered_squats
+            .push(format!("{}:{}", info.ecosystem, info.name));
         let suspicious_install = check_install && info.install_scripts;
         if suspicious_install {
             posture.malicious_indicators += 1;
@@ -616,9 +706,17 @@ pub async fn run_typosquatting_monitor_result_ctx(
             .with("published", info.created.clone().unwrap_or_default())
             .with("recently_published", info.recent)
             .with("version_count", info.versions)
-            .check("registered_on_public_registry", true, "package name resolves on the public registry");
+            .check(
+                "registered_on_public_registry",
+                true,
+                "package name resolves on the public registry",
+            );
         if suspicious_install {
-            ev = ev.check("install_hook", true, "ships preinstall/install/postinstall script");
+            ev = ev.check(
+                "install_hook",
+                true,
+                "ships preinstall/install/postinstall script",
+            );
         }
         findings.push(with_fields(
             finding_rich(
@@ -669,14 +767,24 @@ pub async fn run_typosquatting_monitor_result_ctx(
             .await;
         for info in conf_hits {
             if info.exists {
-                posture.confusion_taken.push(format!("{}:{}", info.ecosystem, info.name));
-                let sev = if info.recent || info.install_scripts { "critical" } else { "high" };
+                posture
+                    .confusion_taken
+                    .push(format!("{}:{}", info.ecosystem, info.name));
+                let sev = if info.recent || info.install_scripts {
+                    "critical"
+                } else {
+                    "high"
+                };
                 let ev = Evidence::new()
                     .with("ecosystem", info.ecosystem.clone())
                     .with("internal_package", info.name.clone())
                     .with("registry_url", info.url.clone())
                     .with("published", info.created.clone().unwrap_or_default())
-                    .check("public_name_taken", true, "a public package already holds this internal name");
+                    .check(
+                        "public_name_taken",
+                        true,
+                        "a public package already holds this internal name",
+                    );
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
@@ -694,12 +802,18 @@ pub async fn run_typosquatting_monitor_result_ctx(
                     &[("category", json!("dependency_confusion")), ("ecosystem", json!(info.ecosystem)), ("package", json!(info.name))],
                 ));
             } else {
-                posture.confusion_unclaimed.push(format!("{}:{}", info.ecosystem, info.name));
+                posture
+                    .confusion_unclaimed
+                    .push(format!("{}:{}", info.ecosystem, info.name));
                 let ev = Evidence::new()
                     .with("ecosystem", info.ecosystem.clone())
                     .with("internal_package", info.name.clone())
                     .with("registry_url", info.url.clone())
-                    .check("public_name_unclaimed", true, "internal name is free to register on the public registry");
+                    .check(
+                        "public_name_unclaimed",
+                        true,
+                        "internal name is free to register on the public registry",
+                    );
                 findings.push(with_fields(
                     finding_rich(
                         ENGINE_ID,
@@ -736,7 +850,10 @@ pub async fn run_typosquatting_monitor_result_ctx(
             .with("registered_squats", json!(posture.registered_squats))
             .with("malicious_indicators", posture.malicious_indicators)
             .with("recent_squats", posture.recent_squats)
-            .with("dependency_confusion_unclaimed", json!(posture.confusion_unclaimed))
+            .with(
+                "dependency_confusion_unclaimed",
+                json!(posture.confusion_unclaimed),
+            )
             .with("dependency_confusion_taken", json!(posture.confusion_taken));
         findings.push(with_fields(
             finding_rich(
@@ -804,7 +921,9 @@ mod tests {
         assert!(!typos.contains(&"react".to_string()));
         assert!(typos.iter().all(|t| valid_pkg_name(t)));
         // omission of a char yields "reat"/"rect"/etc.; transposition yields "raect".
-        assert!(typos.iter().any(|t| t == "raect" || t == "reactjs" || t == "react-js"));
+        assert!(typos
+            .iter()
+            .any(|t| t == "raect" || t == "reactjs" || t == "react-js"));
     }
 
     #[test]

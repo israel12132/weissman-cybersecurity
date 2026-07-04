@@ -124,9 +124,7 @@ impl ScanConfig {
             intensity,
             paths: cfg.string_list_or("paths", DEFAULT_PATHS),
             reset_paths: cfg.string_list_or("reset_paths", DEFAULT_RESET_PATHS),
-            baseline_samples: cfg
-                .usize_or("baseline_samples", baseline)
-                .clamp(10, 200),
+            baseline_samples: cfg.usize_or("baseline_samples", baseline).clamp(10, 200),
             test_samples: cfg.usize_or("test_samples", test_n).clamp(10, 200),
             z_threshold: {
                 let z = cfg.u64_or("z_threshold", 30) as f64 / 10.0;
@@ -268,11 +266,7 @@ async fn measure_post_us(client: &reqwest::Client, url: &str, body: &Value) -> u
 
 async fn measure_get_auth_us(client: &reqwest::Client, url: &str, auth: &str) -> u64 {
     let start = Instant::now();
-    let _ = client
-        .get(url)
-        .header("Authorization", auth)
-        .send()
-        .await;
+    let _ = client.get(url).header("Authorization", auth).send().await;
     start.elapsed().as_micros() as u64
 }
 
@@ -415,7 +409,11 @@ async fn probe_user_enum_reset(
 ) -> Option<TimingSignal> {
     let url = join_url(base, path);
     let known = format!("{}@{}", cfg.probe_username, cfg.probe_domain);
-    let unknown = format!("weissman_nonexistent_{}@{}", uuid_simple(), cfg.probe_domain);
+    let unknown = format!(
+        "weissman_nonexistent_{}@{}",
+        uuid_simple(),
+        cfg.probe_domain
+    );
 
     let known_body = json!({"email": known, "username": cfg.probe_username});
     let unknown_body = json!({"email": unknown});
@@ -645,7 +643,11 @@ async fn probe_cache_timing(
     cfg: &ScanConfig,
     _target: &str,
 ) -> Option<TimingSignal> {
-    let bust = format!("{url}{}weissman_bust={}", if url.contains('?') { "&" } else { "?" }, uuid_simple());
+    let bust = format!(
+        "{url}{}weissman_bust={}",
+        if url.contains('?') { "&" } else { "?" },
+        uuid_simple()
+    );
     let _ = measure_get_us(client, url).await;
     let cached = sample_get(client, url, cfg.baseline_samples.min(15)).await;
     let uncached = sample_get(client, &bust, cfg.test_samples.min(15)).await;
@@ -869,7 +871,12 @@ fn build_summary(target: &str, posture: &SideChannelPosture, endpoint_count: usi
         if posture.categories.is_empty() {
             "none".to_string()
         } else {
-            posture.categories.iter().cloned().collect::<Vec<_>>().join(", ")
+            posture
+                .categories
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         }
     );
     let mut summary = finding_rich(
@@ -991,9 +998,7 @@ pub async fn run_timing_sidechannel_result_ctx(
 
     if cfg.check_user_enum {
         for rpath in cfg.reset_paths.iter().take(8) {
-            if let Some(sig) =
-                probe_user_enum_reset(&client, &base, rpath, &cfg, target).await
-            {
+            if let Some(sig) = probe_user_enum_reset(&client, &base, rpath, &cfg, target).await {
                 let f = signal_to_finding(target, sig);
                 posture.absorb(&f);
                 all_findings.push(f);

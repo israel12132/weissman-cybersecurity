@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
-import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { normalizeIntegrations, TOP_TIER_PARAM_ROUTES } from '../lib/engineClientPrefill'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
@@ -13,6 +13,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
@@ -269,7 +270,10 @@ export default function TopTierEngineProfile() {
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         <AgentRequiredGate engineId={engineId}>
-        <EvidenceNotice>{t('pages.topTierEngineProfile.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader
+          evidence={t('pages.topTierEngineProfile.evidence_notice')}
+          engineId={engineId}
+        />
 
         <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">

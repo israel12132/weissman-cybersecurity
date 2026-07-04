@@ -3,6 +3,24 @@ import { apiFetch } from '../lib/apiBase'
 
 const DEFAULT_MODULES = ['baseline_asm']
 
+function str(value) {
+  return typeof value === 'string' ? value : ''
+}
+
+function splitLines(value) {
+  const raw = str(value).trim()
+  if (!raw) return []
+  return raw.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
+}
+
+function llmSecopsUrlsFromForm(form) {
+  if (typeof form?.llm_secops_urls === 'string') return form.llm_secops_urls
+  if (Array.isArray(form?.llm_endpoints)) {
+    return form.llm_endpoints.map((e) => e?.url || '').filter(Boolean).join('\n')
+  }
+  return ''
+}
+
 export function useEngineRequirements() {
   const [catalog, setCatalog] = useState(null)
   const [tenantStatus, setTenantStatus] = useState(null)
@@ -49,29 +67,26 @@ export function computeLocalReadiness(catalog, tenantStatus, form, selectedModul
     ;['msa_acknowledged', 'emergency_contact', 'contact_email', 'scope_domains'].forEach((r) => reqIds.add(r))
   }
 
-  const domains = form.domains.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const ips = form.ip_ranges.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const repos = form.repo_urls.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
+  const domains = splitLines(form.domains)
+  const ips = splitLines(form.ip_ranges)
+  const repos = splitLines(form.repo_urls)
   const platforms = form.agent_platforms || []
 
   const checks = {
-    msa_acknowledged: form.msa_acknowledged,
-    emergency_contact: !!form.emergency_contact_phone.trim(),
-    contact_email: !!form.contact_email.trim(),
+    msa_acknowledged: !!form.msa_acknowledged,
+    emergency_contact: !!str(form.emergency_contact_phone).trim(),
+    contact_email: !!str(form.contact_email).trim(),
     scope_domains: domains.length > 0,
     scope_ips: ips.length > 0,
     scope_exclusions: true,
-    aws_cross_account: !!form.aws_cross_account_role_arn.trim() && !!form.aws_external_id.trim(),
-    gcp_project: !!form.gcp_project_id.trim(),
-    azure_subscription: !!form.azure_subscription_id.trim() && !!form.azure_tenant_id.trim(),
-    ad_domain: !!form.ad_domain.trim(),
+    aws_cross_account: !!str(form.aws_cross_account_role_arn).trim() && !!str(form.aws_external_id).trim(),
+    gcp_project: !!str(form.gcp_project_id).trim(),
+    azure_subscription: !!str(form.azure_subscription_id).trim() && !!str(form.azure_tenant_id).trim(),
+    ad_domain: !!str(form.ad_domain).trim(),
     iac_repos: repos.length > 0,
     endpoint_agent: platforms.length > 0,
     industrial_ot: form.industrial_ot_enabled && ips.length > 0,
-    llm_secops_endpoints: (() => {
-      const urls = form.llm_secops_urls.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-      return urls.length > 0
-    })(),
+    llm_secops_endpoints: splitLines(llmSecopsUrlsFromForm(form)).length > 0,
     tenant_llm: tenantStatus?.llm_configured,
     tenant_oast: tenantStatus?.oast_configured,
     tenant_ai_entitlement: tenantStatus?.ai_heavy_entitled !== false,
@@ -132,32 +147,32 @@ export function defaultOnboardingForm() {
 }
 
 export function buildClientPayload(form) {
-  const domains = form.domains.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const ip_ranges = form.ip_ranges.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const tech_stack = form.tech_stack.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const exclusions = form.exclusions.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const repo_urls = form.repo_urls.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
-  const llm_endpoints = form.llm_secops_urls.split(/[\n,]+/).map((d) => d.trim()).filter(Boolean)
+  const domains = splitLines(form.domains)
+  const ip_ranges = splitLines(form.ip_ranges)
+  const tech_stack = splitLines(form.tech_stack)
+  const exclusions = splitLines(form.exclusions)
+  const repo_urls = splitLines(form.repo_urls)
+  const llm_endpoints = splitLines(llmSecopsUrlsFromForm(form))
 
   return {
-    name: form.name.trim(),
-    contact_email: form.contact_email.trim(),
+    name: str(form.name).trim(),
+    contact_email: str(form.contact_email).trim(),
     domains: JSON.stringify(domains),
     ip_ranges: JSON.stringify(ip_ranges),
     tech_stack: JSON.stringify(tech_stack),
     auto_detect_tech_stack: form.auto_detect_tech_stack,
-    aws_cross_account_role_arn: form.aws_cross_account_role_arn.trim(),
-    aws_external_id: form.aws_external_id.trim(),
-    gcp_project_id: form.gcp_project_id.trim(),
+    aws_cross_account_role_arn: str(form.aws_cross_account_role_arn).trim(),
+    aws_external_id: str(form.aws_external_id).trim(),
+    gcp_project_id: str(form.gcp_project_id).trim(),
     engagement_modules: form.engagement_modules,
     onboarding: {
       msa_acknowledged: form.msa_acknowledged,
-      emergency_contact_name: form.emergency_contact_name.trim(),
-      emergency_contact_phone: form.emergency_contact_phone.trim(),
+      emergency_contact_name: str(form.emergency_contact_name).trim(),
+      emergency_contact_phone: str(form.emergency_contact_phone).trim(),
       exclusions,
-      azure_subscription_id: form.azure_subscription_id.trim(),
-      azure_tenant_id: form.azure_tenant_id.trim(),
-      ad_domain: form.ad_domain.trim(),
+      azure_subscription_id: str(form.azure_subscription_id).trim(),
+      azure_tenant_id: str(form.azure_tenant_id).trim(),
+      ad_domain: str(form.ad_domain).trim(),
       repo_urls,
       agent_platforms: form.agent_platforms,
       industrial_ot_enabled: form.industrial_ot_enabled,

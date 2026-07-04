@@ -8,7 +8,8 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch, apiEventSourceUrl } from '../lib/apiBase'
+import { apiFetch } from '../lib/apiBase'
+import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 
 const ENGINE_ID = 'cicd_pipeline'
@@ -517,7 +518,7 @@ export default function CicdPipelineSecurityCommandCenter() {
       const jobId = data.job_id
       appendLine(`[CI/CD] Job queued: ${jobId}`)
       if (esRef.current) esRef.current.close()
-      const es = new EventSource(apiEventSourceUrl(`/api/telemetry/stream?job_id=${jobId}`))
+      const es = openSseStream(`/api/telemetry/stream?job_id=${jobId}`)
       esRef.current = es
       es.onmessage = (ev) => {
         try {

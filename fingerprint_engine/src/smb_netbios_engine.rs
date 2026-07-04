@@ -76,19 +76,25 @@ fn nbss_wrap(smb: &[u8]) -> Vec<u8> {
 /// Read one complete NBSS-framed message (header + declared body length) from a stream.
 async fn read_nbss(stream: &mut TcpStream, timeout_ms: u64) -> Option<Vec<u8>> {
     let mut hdr = [0u8; 4];
-    timeout(Duration::from_millis(timeout_ms), stream.read_exact(&mut hdr))
-        .await
-        .ok()?
-        .ok()?;
+    timeout(
+        Duration::from_millis(timeout_ms),
+        stream.read_exact(&mut hdr),
+    )
+    .await
+    .ok()?
+    .ok()?;
     let len = ((hdr[1] as usize) << 16) | ((hdr[2] as usize) << 8) | (hdr[3] as usize);
     if len == 0 || len > 131_072 {
         return None;
     }
     let mut body = vec![0u8; len];
-    timeout(Duration::from_millis(timeout_ms), stream.read_exact(&mut body))
-        .await
-        .ok()?
-        .ok()?;
+    timeout(
+        Duration::from_millis(timeout_ms),
+        stream.read_exact(&mut body),
+    )
+    .await
+    .ok()?
+    .ok()?;
     let mut full = Vec::with_capacity(4 + len);
     full.extend_from_slice(&hdr);
     full.extend_from_slice(&body);
@@ -354,7 +360,12 @@ fn build_smb2_tree_connect(path: &str, message_id: u64, session_id: u64) -> Vec<
     nbss_wrap(&smb)
 }
 
-fn build_smb2_create_pipe(pipe_name: &str, message_id: u64, session_id: u64, tree_id: u32) -> Vec<u8> {
+fn build_smb2_create_pipe(
+    pipe_name: &str,
+    message_id: u64,
+    session_id: u64,
+    tree_id: u32,
+) -> Vec<u8> {
     let name = utf16le(pipe_name);
     let mut h = smb2_header(0x0005, message_id, session_id);
     h[36..40].copy_from_slice(&tree_id.to_le_bytes());
@@ -378,7 +389,13 @@ fn build_smb2_create_pipe(pipe_name: &str, message_id: u64, session_id: u64, tre
     nbss_wrap(&smb)
 }
 
-fn build_smb2_write(data: &[u8], message_id: u64, session_id: u64, tree_id: u32, file_id: &[u8; 16]) -> Vec<u8> {
+fn build_smb2_write(
+    data: &[u8],
+    message_id: u64,
+    session_id: u64,
+    tree_id: u32,
+    file_id: &[u8; 16],
+) -> Vec<u8> {
     let mut h = smb2_header(0x0009, message_id, session_id);
     h[36..40].copy_from_slice(&tree_id.to_le_bytes());
     let data_off = 64u16 + 48u16;
@@ -400,7 +417,13 @@ fn build_smb2_write(data: &[u8], message_id: u64, session_id: u64, tree_id: u32,
     nbss_wrap(&smb)
 }
 
-fn build_smb2_read(length: u32, message_id: u64, session_id: u64, tree_id: u32, file_id: &[u8; 16]) -> Vec<u8> {
+fn build_smb2_read(
+    length: u32,
+    message_id: u64,
+    session_id: u64,
+    tree_id: u32,
+    file_id: &[u8; 16],
+) -> Vec<u8> {
     let mut h = smb2_header(0x0008, message_id, session_id);
     h[36..40].copy_from_slice(&tree_id.to_le_bytes());
     let mut body = Vec::new();
@@ -434,21 +457,21 @@ fn build_dce_rpc_bind_epmapper(call_id: u32) -> Vec<u8> {
     pdu.push(1); // num_context_items
     pdu.push(0); // reserved
     pdu.extend_from_slice(&0u16.to_le_bytes()); // reserved2
-    // Context 0
+                                                // Context 0
     pdu.extend_from_slice(&0u16.to_le_bytes()); // context_id
     pdu.push(1); // num_trans_items
     pdu.push(0); // reserved
-    // Abstract syntax: e1af8308-5d1f-11c9-91a4-08002b14a0fa v3.0
+                 // Abstract syntax: e1af8308-5d1f-11c9-91a4-08002b14a0fa v3.0
     pdu.extend_from_slice(&[
-        0x08, 0x83, 0xAF, 0xE1, 0x1F, 0x5D, 0xC9, 0x11, 0x91, 0xA4, 0x08, 0x00, 0x2B, 0x14,
-        0xA0, 0xFA,
+        0x08, 0x83, 0xAF, 0xE1, 0x1F, 0x5D, 0xC9, 0x11, 0x91, 0xA4, 0x08, 0x00, 0x2B, 0x14, 0xA0,
+        0xFA,
     ]);
     pdu.extend_from_slice(&3u16.to_le_bytes()); // version major
     pdu.extend_from_slice(&0u16.to_le_bytes()); // version minor
-    // Transfer syntax: 8a885d04-1ceb-11c9-9fe8-08002b104280 v2.0
+                                                // Transfer syntax: 8a885d04-1ceb-11c9-9fe8-08002b104280 v2.0
     pdu.extend_from_slice(&[
-        0x04, 0x5D, 0x88, 0x8A, 0xEB, 0x1C, 0xC9, 0x11, 0x9F, 0xE8, 0x08, 0x00, 0x2B, 0x10,
-        0x42, 0x80,
+        0x04, 0x5D, 0x88, 0x8A, 0xEB, 0x1C, 0xC9, 0x11, 0x9F, 0xE8, 0x08, 0x00, 0x2B, 0x10, 0x42,
+        0x80,
     ]);
     pdu.extend_from_slice(&2u16.to_le_bytes());
     pdu.extend_from_slice(&0u16.to_le_bytes());
@@ -525,7 +548,9 @@ async fn probe_pipe_create(
     timeout_ms: u64,
 ) -> bool {
     if stream
-        .write_all(&build_smb2_create_pipe(pipe, message_id, session_id, tree_id))
+        .write_all(&build_smb2_create_pipe(
+            pipe, message_id, session_id, tree_id,
+        ))
         .await
         .is_err()
     {
@@ -546,7 +571,12 @@ async fn try_epmapper_bind(
     timeout_ms: u64,
 ) -> bool {
     if stream
-        .write_all(&build_smb2_create_pipe(r"\epmapper", 4, session_id, tree_id))
+        .write_all(&build_smb2_create_pipe(
+            r"\epmapper",
+            4,
+            session_id,
+            tree_id,
+        ))
         .await
         .is_err()
     {
@@ -590,10 +620,7 @@ async fn try_epmapper_bind(
 /// Full SMB2 null-session → IPC$ → named-pipe + DCE/RPC cartography (Impacket / CME class).
 async fn ipc_named_pipe_probe(host: &str, port: u16, timeout_ms: u64) -> Option<IpcProbeResult> {
     let mut stream = connect(host, port, timeout_ms).await?;
-    stream
-        .write_all(&build_smb2_negotiate(false))
-        .await
-        .ok()?;
+    stream.write_all(&build_smb2_negotiate(false)).await.ok()?;
     let _neg_resp = read_nbss(&mut stream, timeout_ms).await?;
 
     stream
@@ -607,7 +634,11 @@ async fn ipc_named_pipe_probe(host: &str, port: u16, timeout_ms: u64) -> Option<
     }
     let type3 = build_ntlm_type3_null(&sess1)?;
     stream
-        .write_all(&build_smb2_session_setup_with_session(&type3, 2, hdr1.session_id))
+        .write_all(&build_smb2_session_setup_with_session(
+            &type3,
+            2,
+            hdr1.session_id,
+        ))
         .await
         .ok()?;
     let sess2 = read_nbss(&mut stream, timeout_ms).await?;
@@ -655,8 +686,15 @@ async fn ipc_named_pipe_probe(host: &str, port: u16, timeout_ms: u64) -> Option<
         setter(&mut out, ok);
         mid += 1;
     }
-    out.wkssvc_pipe =
-        probe_pipe_create(&mut stream, r"\wkssvc", mid, session_id, tree_id, timeout_ms).await;
+    out.wkssvc_pipe = probe_pipe_create(
+        &mut stream,
+        r"\wkssvc",
+        mid,
+        session_id,
+        tree_id,
+        timeout_ms,
+    )
+    .await;
     mid += 1;
 
     // Admin / hidden share tree-connect oracle (C$ / ADMIN$ / PRINT$) on the same session.
@@ -688,8 +726,10 @@ fn cipher_name(c: u16) -> &'static str {
     }
 }
 
-fn nbns_suffix_role(suffix: u8) -> Option<&'static str> {
-    match suffix {
+fn nbns_suffix_role(suffix: &str) -> Option<&'static str> {
+    let s = suffix.trim();
+    let code = u8::from_str_radix(s, 16).ok()?;
+    match code {
         0x1B => Some("Domain Master Browser"),
         0x1C => Some("Domain Controller"),
         0x1D => Some("Local Master Browser"),
@@ -704,7 +744,7 @@ fn classify_nbns_roles(names: &[String]) -> Vec<(String, &'static str)> {
         .iter()
         .filter_map(|n| {
             let (base, suf) = n.rsplit_once('<')?;
-            let suf = suf.trim_end_matches('>').parse::<u8>().ok()?;
+            let suf = suf.trim_end_matches('>');
             nbns_suffix_role(suf).map(|role| (base.to_string(), role))
         })
         .collect()
@@ -714,9 +754,25 @@ fn posture_score(ledger: &Ledger) -> u32 {
     let mut score = 0u32;
     for (tag, sev) in &ledger.items {
         score += match (*tag, *sev) {
-            ("ms17_010" | "efsrpc_pipe" | "petitpotam_surface" | "zerologon_surface" | "smbv1", "critical") => 35,
+            (
+                "ms17_010" | "efsrpc_pipe" | "petitpotam_surface" | "zerologon_surface" | "smbv1",
+                "critical",
+            ) => 35,
             (_, "critical") => 35,
-            ("no_signing" | "smbghost" | "anonymous_ipc" | "epmapper_rpc" | "spoolss_pipe" | "lsarpc_pipe" | "svcctl_pipe" | "efsrpc_pipe" | "ntlm_weak" | "guest_session" | "printnightmare_surface", "high") => 25,
+            (
+                "no_signing"
+                | "smbghost"
+                | "anonymous_ipc"
+                | "epmapper_rpc"
+                | "spoolss_pipe"
+                | "lsarpc_pipe"
+                | "svcctl_pipe"
+                | "efsrpc_pipe"
+                | "ntlm_weak"
+                | "guest_session"
+                | "printnightmare_surface",
+                "high",
+            ) => 25,
             ("eol_os" | "nbns_dc" | "no_encryption", "high") => 20,
             (_, "high") => 18,
             (_, "medium") => 10,
@@ -763,7 +819,8 @@ fn build_exposure_graph(host: &str, ledger: &Ledger) -> Value {
         json!({ "id": "internet", "label": "Attacker", "type": "source" }),
         json!({ "id": "smb", "label": format!("SMB {}", host), "type": "service" }),
     ];
-    let mut edges: Vec<Value> = vec![json!({ "from": "internet", "to": "smb", "label": "TCP 445" })];
+    let mut edges: Vec<Value> =
+        vec![json!({ "from": "internet", "to": "smb", "label": "TCP 445" })];
     let pipe_parent = if ledger.has("anonymous_ipc") {
         nodes.push(json!({ "id": "ipc", "label": "IPC$", "type": "share" }));
         edges.push(json!({ "from": "smb", "to": "ipc", "label": "TREE_CONNECT" }));
@@ -986,8 +1043,8 @@ fn attach_standards(findings: &mut [Value]) {
 }
 
 fn synthesize_petitpotam_surface(ledger: &Ledger, target: &str, host: &str) -> Option<Value> {
-    let has_coerce = ledger.has("no_signing")
-        && (ledger.has("efsrpc_pipe") || ledger.has("lsarpc_pipe"));
+    let has_coerce =
+        ledger.has("no_signing") && (ledger.has("efsrpc_pipe") || ledger.has("lsarpc_pipe"));
     let domain_context = ledger.has("nbns_dc") || ledger.has("ntlm_info");
     if !has_coerce || !domain_context {
         return None;
@@ -999,8 +1056,15 @@ fn synthesize_petitpotam_surface(ledger: &Ledger, target: &str, host: &str) -> O
     ];
     let ev = Evidence::new()
         .with("host", host)
-        .with("toxic_tags", json!(["no_signing", "efsrpc_pipe", "domain_context"]))
-        .check("petitpotam_surface", true, "signing + EFSRPC + domain role observed together");
+        .with(
+            "toxic_tags",
+            json!(["no_signing", "efsrpc_pipe", "domain_context"]),
+        )
+        .check(
+            "petitpotam_surface",
+            true,
+            "signing + EFSRPC + domain role observed together",
+        );
     let mut f = finding_rich(
         ENGINE_ID,
         "PetitPotam-class domain coercion surface (signing + EFSRPC + domain role)",
@@ -1030,7 +1094,11 @@ fn synthesize_zerologon_surface(ledger: &Ledger, target: &str, host: &str) -> Op
     let ev = Evidence::new()
         .with("host", host)
         .with("toxic_tags", json!(["netlogon_pipe", "nbns_dc"]))
-        .check("zerologon_surface", true, "DC role + reachable Netlogon pipe observed together");
+        .check(
+            "zerologon_surface",
+            true,
+            "DC role + reachable Netlogon pipe observed together",
+        );
     let mut f = finding_rich(
         ENGINE_ID,
         "Zerologon-class domain controller exposure (Netlogon pipe + DC NBNS role)",
@@ -1060,7 +1128,11 @@ fn synthesize_printnightmare_surface(ledger: &Ledger, target: &str, host: &str) 
     let ev = Evidence::new()
         .with("host", host)
         .with("toxic_tags", json!(["spoolss_pipe", "no_signing"]))
-        .check("printnightmare_surface", true, "spoolss pipe + signing-not-required observed together");
+        .check(
+            "printnightmare_surface",
+            true,
+            "spoolss pipe + signing-not-required observed together",
+        );
     let mut f = finding_rich(
         ENGINE_ID,
         "PrintNightmare-class toxic combination (spoolss + SMB signing not required)",
@@ -1103,13 +1175,26 @@ fn build_smb_metrics_finding(
         .with("ransomware_readiness", ransomware_score)
         .with("compliance_gaps", compliance.clone())
         .with("max_dialect", max_dialect.unwrap_or("unknown"))
-        .with("ms17_010_ntstatus", ms17_status.map(|s| format!("0x{:08X}", s)).unwrap_or_default())
+        .with(
+            "ms17_010_ntstatus",
+            ms17_status
+                .map(|s| format!("0x{:08X}", s))
+                .unwrap_or_default(),
+        )
         .with("scan_elapsed_ms", scan_elapsed_ms)
         .with(
             "weakness_tags",
-            json!(ledger.items.iter().map(|(t, s)| json!({"tag": t, "severity": s})).collect::<Vec<_>>()),
+            json!(ledger
+                .items
+                .iter()
+                .map(|(t, s)| json!({"tag": t, "severity": s}))
+                .collect::<Vec<_>>()),
         )
-        .check("smb_metrics", true, "telemetry from live protocol probes only");
+        .check(
+            "smb_metrics",
+            true,
+            "telemetry from live protocol probes only",
+        );
     let mut m = finding_rich(
         ENGINE_ID,
         &format!(
@@ -1147,7 +1232,11 @@ fn apply_finding_categories(findings: &mut [Value]) {
         if f.get("category").is_some() {
             continue;
         }
-        let title = f.get("title").and_then(|t| t.as_str()).unwrap_or("").to_lowercase();
+        let title = f
+            .get("title")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_lowercase();
         let cat = if title.contains("posture score") {
             "posture_summary"
         } else if title.contains("attack path") {
@@ -1175,9 +1264,14 @@ fn apply_finding_categories(findings: &mut [Value]) {
             "ipc_rpc"
         } else if title.contains("fingerprint") || title.contains("end-of-life") {
             "fingerprint"
-        } else if title.contains("ms17-010") || title.contains("eternalblue") && title.contains("likely") {
+        } else if title.contains("ms17-010")
+            || title.contains("eternalblue") && title.contains("likely")
+        {
             "cve_surface"
-        } else if title.contains("smbghost") || title.contains("smbv1") || title.contains("eternalblue") {
+        } else if title.contains("smbghost")
+            || title.contains("smbv1")
+            || title.contains("eternalblue")
+        {
             "cve_surface"
         } else if title.contains("netbios") || title.contains("domain controller advertised") {
             "netbios"
@@ -1310,12 +1404,16 @@ fn detect_spnego_mechanisms(blob: &[u8]) -> Vec<&'static str> {
         mechs.push("NTLM");
     }
     // Kerberos 5 OID 1.2.840.113554.1.2.2 → DER 06 09 2A 86 48 86 F7 12 01 02 02
-    const KRB5_OID: [u8; 11] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x12, 0x01, 0x02, 0x02];
+    const KRB5_OID: [u8; 11] = [
+        0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x12, 0x01, 0x02, 0x02,
+    ];
     if blob.windows(KRB5_OID.len()).any(|w| w == KRB5_OID) {
         mechs.push("Kerberos");
     }
     // Microsoft Kerberos OID 1.2.840.48018.1.2.2
-    const MSKRB_OID: [u8; 11] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x82, 0xF7, 0x12, 0x01, 0x02, 0x02];
+    const MSKRB_OID: [u8; 11] = [
+        0x06, 0x09, 0x2A, 0x86, 0x48, 0x82, 0xF7, 0x12, 0x01, 0x02, 0x02,
+    ];
     if blob.windows(MSKRB_OID.len()).any(|w| w == MSKRB_OID) {
         mechs.push("Kerberos-MS");
     }
@@ -1789,7 +1887,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                 .with("port", port)
                 .with("implementation", implementation)
                 .with("max_dialect", dialect_name(dialect))
-                .check("implementation_fingerprint", true, "derived from NEGOTIATE capabilities + NTLM target info");
+                .check(
+                    "implementation_fingerprint",
+                    true,
+                    "derived from NEGOTIATE capabilities + NTLM target info",
+                );
             findings.push(finding_rich(
                 ENGINE_ID,
                 &format!("SMB stack fingerprint: {}", implementation),
@@ -1808,8 +1910,18 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
             .with("port", port)
             .with("max_dialect", dialect_name(dialect))
             .with("dialect_hex", format!("0x{:04x}", dialect))
-            .with("server_guid", neg.server_guid.iter().map(|b| format!("{:02x}", b)).collect::<String>())
-            .check("smb2_negotiate", true, "server completed an SMB2/3 NEGOTIATE exchange");
+            .with(
+                "server_guid",
+                neg.server_guid
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<String>(),
+            )
+            .check(
+                "smb2_negotiate",
+                true,
+                "server completed an SMB2/3 NEGOTIATE exchange",
+            );
         findings.push(finding_rich(
             ENGINE_ID,
             &format!("SMB service reachable on {}:{} ({})", host, port, dialect_name(dialect)),
@@ -1829,7 +1941,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     .with("host", host.clone())
                     .with("port", port)
                     .with("uptime_days", (days * 10.0).round() / 10.0)
-                    .check("filetime_uptime", true, "computed from NEGOTIATE SystemTime − SystemStartTime");
+                    .check(
+                        "filetime_uptime",
+                        true,
+                        "computed from NEGOTIATE SystemTime − SystemStartTime",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     &format!("SMB host uptime {:.1} days (from negotiate FILETIME)", days),
@@ -1847,13 +1963,21 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
         if cfg.bool_or("check_signing", true) {
             if !signing_required(&neg) {
                 let enabled = signing_enabled(&neg);
-                let (sev, score) = if enabled { ("high", 0.7) } else { ("high", 0.78) };
+                let (sev, score) = if enabled {
+                    ("high", 0.7)
+                } else {
+                    ("high", 0.78)
+                };
                 let ev = Evidence::new()
                     .with("host", host.clone())
                     .with("port", port)
                     .with("security_mode", format!("0x{:04x}", neg.security_mode))
                     .check("signing_enabled", enabled, "SMB2_NEGOTIATE_SIGNING_ENABLED")
-                    .check("signing_required", false, "SMB2_NEGOTIATE_SIGNING_REQUIRED is NOT set");
+                    .check(
+                        "signing_required",
+                        false,
+                        "SMB2_NEGOTIATE_SIGNING_REQUIRED is NOT set",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     "SMB signing not required (NTLM relay exposure)",
@@ -1869,7 +1993,10 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
         }
 
         // SMB 3.1.1 negotiate — shared for SMBGhost + encryption posture probes.
-        let neg311 = if cfg.bool_or("check_smbghost", true) || cfg.bool_or("check_encryption", true) || cfg.bool_or("check_dialect_downgrade", true) {
+        let neg311 = if cfg.bool_or("check_smbghost", true)
+            || cfg.bool_or("check_encryption", true)
+            || cfg.bool_or("check_dialect_downgrade", true)
+        {
             smb311_probe(&host, port, timeout_ms).await
         } else {
             None
@@ -1877,13 +2004,20 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
 
         if let Some(ref n311) = neg311 {
             max_dialect_label = Some(dialect_name(n311.dialect).to_string());
-            if cfg.bool_or("check_dialect_downgrade", true) && n311.dialect >= 0x0311 && dialect < 0x0300 {
+            if cfg.bool_or("check_dialect_downgrade", true)
+                && n311.dialect >= 0x0311
+                && dialect < 0x0300
+            {
                 let ev = Evidence::new()
                     .with("host", host.clone())
                     .with("port", port)
                     .with("negotiated_dialect", dialect_name(dialect))
                     .with("max_dialect", dialect_name(n311.dialect))
-                    .check("dialect_downgrade", true, "server accepts lower dialect while advertising SMB 3.1.1");
+                    .check(
+                        "dialect_downgrade",
+                        true,
+                        "server accepts lower dialect while advertising SMB 3.1.1",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     &format!(
@@ -1910,7 +2044,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     .with("port", port)
                     .with("capabilities", json!(caps))
                     .with("capabilities_raw", format!("0x{:08x}", neg.capabilities))
-                    .check("smb2_capabilities", true, "SMB2_GLOBAL_CAP_* flags from NEGOTIATE response");
+                    .check(
+                        "smb2_capabilities",
+                        true,
+                        "SMB2_GLOBAL_CAP_* flags from NEGOTIATE response",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     &format!("SMB server capabilities: {}", caps.join(", ")),
@@ -1939,7 +2077,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                         .with("dialect", dialect_name(n311.dialect))
                         .with("encryption_ciphers", json!(cipher_labels))
                         .with("preauth_integrity", n311.preauth_integrity)
-                        .check("encryption_available", true, "SMB2_ENCRYPTION_CAPABILITIES in negotiate response");
+                        .check(
+                            "encryption_available",
+                            true,
+                            "SMB2_ENCRYPTION_CAPABILITIES in negotiate response",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "SMB3 encryption available but not enforced on this session",
@@ -1964,7 +2106,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                 .with("host", host.clone())
                 .with("port", port)
                 .with("auth_mechanisms", json!(mechs))
-                .check("spnego_mechanisms", true, "auth mechanisms parsed from NEGOTIATE security buffer");
+                .check(
+                    "spnego_mechanisms",
+                    true,
+                    "auth mechanisms parsed from NEGOTIATE security buffer",
+                );
             findings.push(finding_rich(
                 ENGINE_ID,
                 if ntlm_only {
@@ -1995,7 +2141,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("ipc_tree_connect", true, "anonymous/guest SESSION_SETUP + TREE_CONNECT to IPC$ succeeded");
+                        .check(
+                            "ipc_tree_connect",
+                            true,
+                            "anonymous/guest SESSION_SETUP + TREE_CONNECT to IPC$ succeeded",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("Anonymous SMB IPC$ access on {}:{}", host, port),
@@ -2013,7 +2163,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                         .with("host", host.clone())
                         .with("port", port)
                         .with("session_flags", "IS_GUEST")
-                        .check("guest_session", true, "SMB2 SESSION_SETUP response set IS_GUEST flag");
+                        .check(
+                            "guest_session",
+                            true,
+                            "SMB2 SESSION_SETUP response set IS_GUEST flag",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("Guest SMB session accepted on {}:{}", host, port),
@@ -2030,7 +2184,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("dce_rpc_bind_ack", true, "MSRPC v5 BIND_ACK received on \\\\pipe\\epmapper");
+                        .check(
+                            "dce_rpc_bind_ack",
+                            true,
+                            "MSRPC v5 BIND_ACK received on \\\\pipe\\epmapper",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "DCE/RPC Endpoint Mapper reachable via SMB (epmapper BIND_ACK)",
@@ -2047,7 +2205,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("spoolss_pipe_open", true, "CREATE on \\\\pipe\\spoolss returned STATUS_SUCCESS");
+                        .check(
+                            "spoolss_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\spoolss returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Print Spooler RPC pipe exposed (PrintNightmare / spooler abuse surface)",
@@ -2064,7 +2226,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("samr_pipe_open", true, "CREATE on \\\\pipe\\samr returned STATUS_SUCCESS");
+                        .check(
+                            "samr_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\samr returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "SAMR RPC pipe exposed (account enumeration surface)",
@@ -2081,7 +2247,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("lsarpc_pipe_open", true, "CREATE on \\\\pipe\\lsarpc returned STATUS_SUCCESS");
+                        .check(
+                            "lsarpc_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\lsarpc returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "LSARPC pipe exposed (LSA policy / trust enumeration surface)",
@@ -2098,7 +2268,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("svcctl_pipe_open", true, "CREATE on \\\\pipe\\svcctl returned STATUS_SUCCESS");
+                        .check(
+                            "svcctl_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\svcctl returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "SVCCTL pipe exposed (remote service control surface)",
@@ -2115,7 +2289,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("efsrpc_pipe_open", true, "CREATE on \\\\pipe\\efsrpc returned STATUS_SUCCESS");
+                        .check(
+                            "efsrpc_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\efsrpc returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "EFSRPC pipe exposed (PetitPotam / MS-EFSR coercion surface)",
@@ -2132,7 +2310,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("netlogon_pipe_open", true, "CREATE on \\\\pipe\\netlogon returned STATUS_SUCCESS");
+                        .check(
+                            "netlogon_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\netlogon returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Netlogon RPC pipe exposed (Zerologon / trust abuse surface)",
@@ -2149,7 +2331,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("winreg_pipe_open", true, "CREATE on \\\\pipe\\winreg returned STATUS_SUCCESS");
+                        .check(
+                            "winreg_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\winreg returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Remote Registry pipe exposed (\\\\pipe\\winreg)",
@@ -2166,7 +2352,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("atsvc_pipe_open", true, "CREATE on \\\\pipe\\atsvc returned STATUS_SUCCESS");
+                        .check(
+                            "atsvc_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\atsvc returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Task Scheduler RPC pipe exposed (\\\\pipe\\atsvc)",
@@ -2183,7 +2373,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("srvsvc_pipe_open", true, "CREATE on \\\\pipe\\srvsvc returned STATUS_SUCCESS");
+                        .check(
+                            "srvsvc_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\srvsvc returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Server Service RPC pipe exposed (\\\\pipe\\srvsvc — share enum surface)",
@@ -2200,7 +2394,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     let ev = Evidence::new()
                         .with("host", host.clone())
                         .with("port", port)
-                        .check("wkssvc_pipe_open", true, "CREATE on \\\\pipe\\wkssvc returned STATUS_SUCCESS");
+                        .check(
+                            "wkssvc_pipe_open",
+                            true,
+                            "CREATE on \\\\pipe\\wkssvc returned STATUS_SUCCESS",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "Workstation Service RPC pipe exposed (\\\\pipe\\wkssvc)",
@@ -2222,7 +2420,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                                 .with("port", port)
                                 .with("share", share.clone())
                                 .with("ntstatus", format!("0x{:08X}", status))
-                                .check("admin_share_tree_connect", true, "TREE_CONNECT to hidden admin share succeeded");
+                                .check(
+                                    "admin_share_tree_connect",
+                                    true,
+                                    "TREE_CONNECT to hidden admin share succeeded",
+                                );
                             findings.push(finding_rich(
                                 ENGINE_ID,
                                 &format!("Hidden admin share {} accessible without credentials on {}:{}", share, host, port),
@@ -2241,7 +2443,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                                 .with("share", share.clone())
                                 .with("ntstatus", format!("0x{:08X}", status))
                                 .with("ntstatus_name", st_name)
-                                .check("admin_share_exists", true, "TREE_CONNECT returned ACCESS_DENIED — share exists");
+                                .check(
+                                    "admin_share_exists",
+                                    true,
+                                    "TREE_CONNECT returned ACCESS_DENIED — share exists",
+                                );
                             findings.push(finding_rich(
                                 ENGINE_ID,
                                 &format!("Hidden share {} exists on {} ({} — share present, access denied)", share, host, st_name),
@@ -2263,7 +2469,9 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
 
         // NTLMSSP host / domain / OS fingerprint (anonymous challenge).
         if let Some(info) = ntlm {
-            let mut ev = Evidence::new().with("host", host.clone()).with("port", port);
+            let mut ev = Evidence::new()
+                .with("host", host.clone())
+                .with("port", port);
             if let Some(v) = &info.target_name {
                 ev = ev.with("target_name", v.clone());
             }
@@ -2316,7 +2524,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                         .with("port", port)
                         .with("negotiate_flags", format!("0x{:08x}", info.negotiate_flags))
                         .with("weak_auth", json!(weak))
-                        .check("ntlm_type2_flags", true, "weak auth modes parsed from NTLM type-2 message");
+                        .check(
+                            "ntlm_type2_flags",
+                            true,
+                            "weak auth modes parsed from NTLM type-2 message",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         &format!("Weak NTLM authentication modes offered: {}", weak.join(", ")),
@@ -2335,7 +2547,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                 let ev = Evidence::new()
                     .with("host", host.clone())
                     .with("os_release", release.clone())
-                    .check("end_of_life_os", true, "OS build no longer receives security updates");
+                    .check(
+                        "end_of_life_os",
+                        true,
+                        "OS build no longer receives security updates",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     &format!("End-of-Life Windows detected: {}", release),
@@ -2358,7 +2574,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                         .with("host", host.clone())
                         .with("port", port)
                         .with("dialect", dialect_name(neg311.dialect))
-                        .check("compression_capabilities", true, "SMB2_COMPRESSION_CAPABILITIES present in negotiate response");
+                        .check(
+                            "compression_capabilities",
+                            true,
+                            "SMB2_COMPRESSION_CAPABILITIES present in negotiate response",
+                        );
                     findings.push(finding_rich(
                         ENGINE_ID,
                         "SMBGhost (CVE-2020-0796) compression surface present",
@@ -2379,7 +2599,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
             let ev = Evidence::new()
                 .with("host", host.clone())
                 .with("port", port)
-                .check("smbv1_negotiate", true, "server selected an SMBv1 dialect (NT LM 0.12)");
+                .check(
+                    "smbv1_negotiate",
+                    true,
+                    "server selected an SMBv1 dialect (NT LM 0.12)",
+                );
             findings.push(finding_rich(
                 ENGINE_ID,
                 &format!("SMBv1 enabled on {}:{} (EternalBlue / MS17-010 surface)", host, port),
@@ -2421,7 +2645,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                             .with("port", port)
                             .with("ntstatus", format!("0x{:08X}", ms17.status))
                             .with("ntstatus_name", st_name)
-                            .check("ms17_010_trans2", true, "Trans2 probe did NOT return patched NTSTATUS 0xC0000205");
+                            .check(
+                                "ms17_010_trans2",
+                                true,
+                                "Trans2 probe did NOT return patched NTSTATUS 0xC0000205",
+                            );
                         findings.push(finding_rich(
                             ENGINE_ID,
                             &format!(
@@ -2457,7 +2685,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                     .with("udp_port", nb_port)
                     .with("names", json!(nb.names))
                     .with("mac_address", nb.mac.clone().unwrap_or_default())
-                    .check("nbns_node_status", true, "NetBIOS node status answered with the name table");
+                    .check(
+                        "nbns_node_status",
+                        true,
+                        "NetBIOS node status answered with the name table",
+                    );
                 findings.push(finding_rich(
                     ENGINE_ID,
                     "NetBIOS Name Service information disclosure (UDP 137)",
@@ -2477,7 +2709,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                                 .with("host", host.clone())
                                 .with("mac_address", mac.clone())
                                 .with("oui_vendor", vendor)
-                                .check("mac_oui_lookup", true, "IEEE OUI prefix matched from NBNS disclosure");
+                                .check(
+                                    "mac_oui_lookup",
+                                    true,
+                                    "IEEE OUI prefix matched from NBNS disclosure",
+                                );
                             findings.push(finding_rich(
                                 ENGINE_ID,
                                 &format!("NBNS disclosed MAC {} ({})", mac, vendor),
@@ -2501,7 +2737,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                                     .with("host", host.clone())
                                     .with("nbns_name", name.clone())
                                     .with("role", role)
-                                    .check("nbns_dc_suffix", true, "NetBIOS name table contains <1C> Domain Controller suffix");
+                                    .check(
+                                        "nbns_dc_suffix",
+                                        true,
+                                        "NetBIOS name table contains <1C> Domain Controller suffix",
+                                    );
                                 findings.push(finding_rich(
                                     ENGINE_ID,
                                     &format!("Domain Controller advertised via NetBIOS: {}", name),
@@ -2537,7 +2777,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                                     .with("host", host.clone())
                                     .with("nbns_name", name.clone())
                                     .with("role", role)
-                                    .check("nbns_file_server", true, "NetBIOS name table contains <20> File Server suffix");
+                                    .check(
+                                        "nbns_file_server",
+                                        true,
+                                        "NetBIOS name table contains <20> File Server suffix",
+                                    );
                                 findings.push(finding_rich(
                                     ENGINE_ID,
                                     &format!("File Server role advertised via NetBIOS: {}", name),
@@ -2581,7 +2825,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
             let ev = Evidence::new()
                 .with("host", host.clone())
                 .with("port", 139u16)
-                .check("tcp_connect", true, "NetBIOS session service accepted a connection");
+                .check(
+                    "tcp_connect",
+                    true,
+                    "NetBIOS session service accepted a connection",
+                );
             findings.push(finding_rich(
                 ENGINE_ID,
                 &format!("Legacy NetBIOS session service open on {}:139", host),
@@ -2658,8 +2906,19 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
             .with("grade", grade)
             .with("counts", counts.clone())
             .with("exposure_graph", graph.clone())
-            .with("observed_weaknesses", json!(ledger.items.iter().map(|(t, s)| json!({"tag": t, "severity": s})).collect::<Vec<_>>()))
-            .check("posture_aggregate", true, "score computed from protocol-observed SMB weaknesses only");
+            .with(
+                "observed_weaknesses",
+                json!(ledger
+                    .items
+                    .iter()
+                    .map(|(t, s)| json!({"tag": t, "severity": s}))
+                    .collect::<Vec<_>>()),
+            )
+            .check(
+                "posture_aggregate",
+                true,
+                "score computed from protocol-observed SMB weaknesses only",
+            );
         let mut summary = finding_rich(
             ENGINE_ID,
             &format!("SMB/NetBIOS posture score: {}/100 (grade {})", score, grade),
@@ -2684,7 +2943,11 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
     apply_finding_categories(&mut findings);
     attach_standards(&mut findings);
 
-    let crit = ledger.items.iter().filter(|(_, s)| *s == "critical").count();
+    let crit = ledger
+        .items
+        .iter()
+        .filter(|(_, s)| *s == "critical")
+        .count();
     let msg = if findings.is_empty() {
         format!(
             "smb_netbios: no SMB/NetBIOS service answered on {} (ports {:?})",
@@ -2707,7 +2970,8 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
 fn synthesize_attack_path(ledger: &Ledger, target: &str, host: &str) -> Option<Value> {
     let mut steps: Vec<&str> = Vec::new();
     if ledger.has("smbv1") {
-        steps.push("Exploit SMBv1 (EternalBlue/MS17-010) for unauthenticated remote code execution");
+        steps
+            .push("Exploit SMBv1 (EternalBlue/MS17-010) for unauthenticated remote code execution");
     }
     if ledger.has("no_signing") {
         steps.push("Coerce + relay NTLM authentication (signing not required) to authenticate as a privileged account");
@@ -2719,30 +2983,45 @@ fn synthesize_attack_path(ledger: &Ledger, target: &str, host: &str) -> Option<V
         steps.push("Enumerate RPC interfaces and pivot through IPC$ (SAMR/SVCCTL/LSARPC) for domain-wide compromise");
     }
     if ledger.has("spoolss_pipe") {
-        steps.push("Abuse Print Spooler RPC (PrintNightmare / coerced authentication) for SYSTEM or relay");
+        steps.push(
+            "Abuse Print Spooler RPC (PrintNightmare / coerced authentication) for SYSTEM or relay",
+        );
     }
     if ledger.has("no_signing") && (ledger.has("ntlm_info") || ledger.has("nbns_dc")) {
         steps.push("Coerce NTLM authentication to this host (PetitPotam / PrinterBug) and relay without signing");
     }
     if ledger.has("ms17_010") {
-        steps.push("Exploit MS17-010 (EternalBlue) — Trans2 oracle indicates likely unpatched kernel path");
+        steps.push(
+            "Exploit MS17-010 (EternalBlue) — Trans2 oracle indicates likely unpatched kernel path",
+        );
     }
     if ledger.has("petitpotam_surface") || (ledger.has("efsrpc_pipe") && ledger.has("no_signing")) {
-        steps.push("Coerce domain authentication via EFSRPC (PetitPotam) and relay without SMB signing");
+        steps.push(
+            "Coerce domain authentication via EFSRPC (PetitPotam) and relay without SMB signing",
+        );
     }
     if ledger.has("zerologon_surface") || (ledger.has("netlogon_pipe") && ledger.has("nbns_dc")) {
         steps.push("Reset domain-controller secure channel via Zerologon-class Netlogon RPC abuse");
     }
-    if ledger.has("printnightmare_surface") || (ledger.has("spoolss_pipe") && ledger.has("no_signing")) {
+    if ledger.has("printnightmare_surface")
+        || (ledger.has("spoolss_pipe") && ledger.has("no_signing"))
+    {
         steps.push("Achieve SYSTEM or relay via Print Spooler RPC without SMB signing");
     }
     if ledger.has("admin_share_open") {
-        steps.push("Harvest secrets from accessible hidden admin shares (C$ / ADMIN$) via null session");
+        steps.push(
+            "Harvest secrets from accessible hidden admin shares (C$ / ADMIN$) via null session",
+        );
     }
     if ledger.has("eol_os") {
         steps.push("Leverage unpatched End-of-Life Windows vulnerabilities");
     }
-    let critical_like = ledger.has("smbv1") || ledger.has("smbghost") || ledger.has("ms17_010") || ledger.has("admin_share_open") || ledger.has("zerologon_surface") || ledger.has("printnightmare_surface");
+    let critical_like = ledger.has("smbv1")
+        || ledger.has("smbghost")
+        || ledger.has("ms17_010")
+        || ledger.has("admin_share_open")
+        || ledger.has("zerologon_surface")
+        || ledger.has("printnightmare_surface");
     let relay_takeover = ledger.has("no_signing")
         && (ledger.has("anonymous_ipc")
             || ledger.has("spoolss_pipe")
@@ -2769,7 +3048,11 @@ fn synthesize_attack_path(ledger: &Ledger, target: &str, host: &str) -> Option<V
         .with("host", host)
         .with("attack_path_steps", json!(step_strings))
         .with("graph", json!({ "nodes": nodes, "edges": edges }))
-        .check("toxic_combination", true, "multiple high-impact SMB weaknesses observed on one host");
+        .check(
+            "toxic_combination",
+            true,
+            "multiple high-impact SMB weaknesses observed on one host",
+        );
     let mut f = finding_rich(
         ENGINE_ID,
         "SMB ransomware / lateral-movement attack path",
@@ -2823,7 +3106,7 @@ mod tests {
         let pkt = build_smb2_negotiate(true);
         let body = &pkt[4 + 64..];
         assert_eq!(u16::from_le_bytes([body[2], body[3]]), 5); // DialectCount: 5 incl 3.1.1
-        // NegotiateContextCount lives in the trailing 8 bytes of the 36-byte fixed body.
+                                                               // NegotiateContextCount lives in the trailing 8 bytes of the 36-byte fixed body.
         let ctx_count = u16::from_le_bytes([body[32], body[33]]);
         assert_eq!(ctx_count, 2);
     }
@@ -2842,7 +3125,7 @@ mod tests {
         smb.extend_from_slice(&0u32.to_le_bytes()); // tree id
         smb.extend_from_slice(&0u64.to_le_bytes()); // session id
         smb.extend_from_slice(&[0u8; 16]); // signature
-        // body (64 bytes)
+                                           // body (64 bytes)
         let mut body = Vec::new();
         body.extend_from_slice(&65u16.to_le_bytes()); // StructureSize
         body.extend_from_slice(&security_mode.to_le_bytes());
@@ -2917,7 +3200,10 @@ mod tests {
         av.extend_from_slice(&av_pair(4, "corp.local")); // DNS domain
         av.extend_from_slice(&[0, 0, 0, 0]); // MsvAvEOL
 
-        let target_name = "CORP".encode_utf16().flat_map(|u| u.to_le_bytes()).collect::<Vec<u8>>();
+        let target_name = "CORP"
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect::<Vec<u8>>();
         let header_len = 56u32; // up to end of version
         let tn_off = header_len;
         let ti_off = header_len + target_name.len() as u32;
@@ -2993,7 +3279,9 @@ mod tests {
         let names = vec!["CORPDC<1C>".to_string(), "WORKSTATION<00>".to_string()];
         let roles = classify_nbns_roles(&names);
         assert_eq!(roles.len(), 2);
-        assert!(roles.iter().any(|(n, r)| n == "CORPDC" && *r == "Domain Controller"));
+        assert!(roles
+            .iter()
+            .any(|(n, r)| n == "CORPDC" && *r == "Domain Controller"));
     }
 
     #[test]

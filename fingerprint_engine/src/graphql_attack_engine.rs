@@ -42,9 +42,9 @@
 //! (`POST /api/command-center/scan` → `EngineRunContext::job_params`). MITRE: T1046 (Network Service
 //! Discovery), T1190 (Exploit Public-Facing Application), T1213 (Data from Information Repositories).
 
+use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{extract_host, header_value, HttpProbe};
-use crate::cloud_hunter::{GraphEdge, GraphNode};
 use crate::engine_result::{print_result, EngineResult};
 
 #[path = "graphql_attack_supreme.rs"]
@@ -200,12 +200,57 @@ const IDE_SIBLING_PATHS: &[&str] = &[
 
 /// Wordlist used for Clairvoyance-style schema reconstruction when introspection is disabled.
 const DEFAULT_RECON_FIELDS: &[&str] = &[
-    "user", "users", "me", "account", "accounts", "profile", "admin", "node", "nodes", "viewer",
-    "customer", "customers", "order", "orders", "product", "products", "payment", "payments",
-    "invoice", "invoices", "secret", "secrets", "token", "tokens", "apiKey", "apiKeys", "setting",
-    "settings", "config", "role", "roles", "permission", "permissions", "session", "sessions",
-    "file", "files", "document", "documents", "message", "messages", "transaction", "transactions",
-    "subscription", "wallet", "balance", "credential", "credentials", "key", "keys", "search",
+    "user",
+    "users",
+    "me",
+    "account",
+    "accounts",
+    "profile",
+    "admin",
+    "node",
+    "nodes",
+    "viewer",
+    "customer",
+    "customers",
+    "order",
+    "orders",
+    "product",
+    "products",
+    "payment",
+    "payments",
+    "invoice",
+    "invoices",
+    "secret",
+    "secrets",
+    "token",
+    "tokens",
+    "apiKey",
+    "apiKeys",
+    "setting",
+    "settings",
+    "config",
+    "role",
+    "roles",
+    "permission",
+    "permissions",
+    "session",
+    "sessions",
+    "file",
+    "files",
+    "document",
+    "documents",
+    "message",
+    "messages",
+    "transaction",
+    "transactions",
+    "subscription",
+    "wallet",
+    "balance",
+    "credential",
+    "credentials",
+    "key",
+    "keys",
+    "search",
 ];
 
 /// Mutation field-name substrings that indicate high-impact state change if reachable.
@@ -412,7 +457,10 @@ impl Default for GraphqlScanConfig {
             probe_union_fragment_bola: true,
             probe_dual_auth_bola: true,
             probe_custom_scalar_leak: true,
-            graphql_paths: DEFAULT_GRAPHQL_PATHS.iter().map(|s| s.to_string()).collect(),
+            graphql_paths: DEFAULT_GRAPHQL_PATHS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             recon_fields: DEFAULT_RECON_FIELDS.iter().map(|s| s.to_string()).collect(),
             max_recon_fields: 48,
             alias_count: 100,
@@ -453,18 +501,27 @@ impl GraphqlScanConfig {
         let d = Self::default();
         let mut extra_headers = jp_headers(p, "extra_headers");
         if let Some(token) = jp_str(p, "bearer_token") {
-            if !extra_headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+            if !extra_headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+            {
                 extra_headers.push(("Authorization".to_string(), format!("Bearer {token}")));
             }
         }
         if let Some(key) = jp_str(p, "api_key") {
             let hdr = jp_str(p, "api_key_header").unwrap_or_else(|| "X-API-Key".to_string());
-            if !extra_headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(&hdr)) {
+            if !extra_headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case(&hdr))
+            {
                 extra_headers.push((hdr, key));
             }
         }
         if let Some(cookie) = jp_str(p, "cookie") {
-            if !extra_headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("cookie")) {
+            if !extra_headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("cookie"))
+            {
                 extra_headers.push(("Cookie".to_string(), cookie));
             }
         }
@@ -562,8 +619,8 @@ impl GraphqlScanConfig {
                 base.dedup();
                 base
             },
-            max_recon_fields: jp_u64(p, "max_recon_fields", d.max_recon_fields as u64)
-                .clamp(1, 500) as usize,
+            max_recon_fields: jp_u64(p, "max_recon_fields", d.max_recon_fields as u64).clamp(1, 500)
+                as usize,
             alias_count: jp_u64(p, "alias_count", d.alias_count).clamp(2, 5000),
             batch_count: jp_u64(p, "batch_count", d.batch_count).clamp(2, 1000),
             depth_levels: jp_u64(p, "depth_levels", d.depth_levels).clamp(2, 60),
@@ -585,8 +642,8 @@ impl GraphqlScanConfig {
             },
             bola_id_range_start: jp_u64(p, "bola_id_range_start", d.bola_id_range_start),
             bola_id_range_end: jp_u64(p, "bola_id_range_end", d.bola_id_range_end),
-            max_bola_probes: jp_u64(p, "max_bola_probes", d.max_bola_probes as u64)
-                .clamp(1, 32) as usize,
+            max_bola_probes: jp_u64(p, "max_bola_probes", d.max_bola_probes as u64).clamp(1, 32)
+                as usize,
             bola_batch_size: jp_u64(p, "bola_batch_size", d.bola_batch_size).clamp(2, 32),
             attack_path_synthesis: jp_bool(p, "attack_path_synthesis", d.attack_path_synthesis),
             timeout_ms: jp_u64(p, "timeout_ms", d.timeout_ms).clamp(500, 60_000),
@@ -791,17 +848,8 @@ async fn get(client: &reqwest::Client, url: &str) -> Option<HttpProbe> {
     Some(probe_to_http(resp).await)
 }
 
-async fn get_with_accept(
-    client: &reqwest::Client,
-    url: &str,
-    accept: &str,
-) -> Option<HttpProbe> {
-    let resp = client
-        .get(url)
-        .header("accept", accept)
-        .send()
-        .await
-        .ok()?;
+async fn get_with_accept(client: &reqwest::Client, url: &str, accept: &str) -> Option<HttpProbe> {
+    let resp = client.get(url).header("accept", accept).send().await.ok()?;
     Some(probe_to_http(resp).await)
 }
 
@@ -1024,9 +1072,7 @@ fn looks_like_graphql(p: &HttpProbe) -> bool {
         || bl.contains("cannot query field")
         || bl.contains("must provide an operation")
         || bl.contains("graphql")
-            && (bl.contains("syntax error")
-                || bl.contains("query")
-                || bl.contains("\"errors\""))
+            && (bl.contains("syntax error") || bl.contains("query") || bl.contains("\"errors\""))
 }
 
 // ── Introspection / schema parsing ───────────────────────────────────────────────────────────────
@@ -1055,15 +1101,47 @@ const FIELD_AUTH_ROOT_PROBES: &[&str] = &[
 
 /// Query-root field names that commonly accept object IDs (fallback when args introspection fails).
 const BOLA_HEURISTIC_FIELDS: &[&str] = &[
-    "user", "users", "node", "account", "order", "customer", "profile", "invoice", "document",
-    "message", "payment", "transaction", "session", "file", "project", "team", "member",
-    "userById", "getUser", "getOrder", "getAccount", "viewer", "me",
+    "user",
+    "users",
+    "node",
+    "account",
+    "order",
+    "customer",
+    "profile",
+    "invoice",
+    "document",
+    "message",
+    "payment",
+    "transaction",
+    "session",
+    "file",
+    "project",
+    "team",
+    "member",
+    "userById",
+    "getUser",
+    "getOrder",
+    "getAccount",
+    "viewer",
+    "me",
 ];
 
 /// Argument names that indicate an object identifier.
 const BOLA_ID_ARG_TOKENS: &[&str] = &[
-    "id", "uuid", "guid", "userid", "user_id", "orderid", "order_id", "accountid", "account_id",
-    "nodeid", "node_id", "key", "ref", "slug",
+    "id",
+    "uuid",
+    "guid",
+    "userid",
+    "user_id",
+    "orderid",
+    "order_id",
+    "accountid",
+    "account_id",
+    "nodeid",
+    "node_id",
+    "key",
+    "ref",
+    "slug",
 ];
 
 #[derive(Clone, Debug)]
@@ -1154,10 +1232,7 @@ fn parse_schema(body: &str) -> Option<SchemaSummary> {
             s.mutation_fields = field_names.len();
             for fname in &field_names {
                 let fl = fname.to_ascii_lowercase();
-                if DANGEROUS_MUTATION_TOKENS
-                    .iter()
-                    .any(|tok| fl.contains(tok))
-                {
+                if DANGEROUS_MUTATION_TOKENS.iter().any(|tok| fl.contains(tok)) {
                     s.dangerous_mutations.push(fname.clone());
                 }
             }
@@ -1187,7 +1262,9 @@ fn parse_schema(body: &str) -> Option<SchemaSummary> {
 }
 
 fn scalar_is_numeric(kind: &str, name: &str) -> bool {
-    matches!(kind, "INT" | "FLOAT") || name.eq_ignore_ascii_case("Int") || name.eq_ignore_ascii_case("Float")
+    matches!(kind, "INT" | "FLOAT")
+        || name.eq_ignore_ascii_case("Int")
+        || name.eq_ignore_ascii_case("Float")
 }
 
 fn type_is_id_like(kind: &str, name: &str) -> bool {
@@ -1368,9 +1445,7 @@ fn parse_nested_id_chains(body: &str) -> Vec<NestedIdChain> {
         let Some(root_acc) = field_id_accessor(rf) else {
             continue;
         };
-        let nested_fields = rf
-            .get("type")
-            .and_then(|t| unwrap_object_fields(Some(t)));
+        let nested_fields = rf.get("type").and_then(|t| unwrap_object_fields(Some(t)));
         let Some(nested_fields) = nested_fields else {
             continue;
         };
@@ -1515,13 +1590,7 @@ async fn probe_operation_allowlist_surface(
             let pascal: String = f
                 .chars()
                 .enumerate()
-                .map(|(i, c)| {
-                    if i == 0 {
-                        c.to_ascii_uppercase()
-                    } else {
-                        c
-                    }
-                })
+                .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
                 .collect();
             names.push(format!("Get{pascal}"));
         }
@@ -1599,7 +1668,10 @@ async fn probe_hasura_hardening_surface(
         };
         if (200..300).contains(&p.status)
             && p.body.contains("\"data\"")
-            && !p.body.to_ascii_lowercase().contains("invalid x-hasura-admin-secret")
+            && !p
+                .body
+                .to_ascii_lowercase()
+                .contains("invalid x-hasura-admin-secret")
         {
             let sev = if role == "admin" { "critical" } else { "high" };
             out.push(finding(
@@ -1795,11 +1867,7 @@ async fn probe_bola_batch_surface(
     out
 }
 
-async fn probe_cors_misconfig(
-    client: &reqwest::Client,
-    url: &str,
-    target: &str,
-) -> Vec<Value> {
+async fn probe_cors_misconfig(client: &reqwest::Client, url: &str, target: &str) -> Vec<Value> {
     let mut out = Vec::new();
     let origin = CORS_PROBE_ORIGIN;
     let preflight = client
@@ -1850,13 +1918,7 @@ async fn probe_cors_misconfig(
             ));
         }
     }
-    if let Some(p) = post_json(
-        client,
-        url,
-        &json!({ "query": "{ __typename }" }),
-    )
-    .await
-    {
+    if let Some(p) = post_json(client, url, &json!({ "query": "{ __typename }" })).await {
         let acao = header_value(&p.headers, "access-control-allow-origin");
         if acao.as_deref() == Some(origin) || acao.as_deref() == Some("*") {
             if out.is_empty() {
@@ -1881,11 +1943,7 @@ async fn probe_cors_misconfig(
     out
 }
 
-async fn probe_graphql_cswsh(
-    client: &reqwest::Client,
-    http_url: &str,
-    target: &str,
-) -> Vec<Value> {
+async fn probe_graphql_cswsh(client: &reqwest::Client, http_url: &str, target: &str) -> Vec<Value> {
     let mut out = Vec::new();
     let ws_url = http_to_ws_url(http_url);
     let origin = CSWSH_PROBE_ORIGIN;
@@ -1934,11 +1992,7 @@ async fn probe_graphql_cswsh(
     out
 }
 
-async fn probe_variable_tampering(
-    client: &reqwest::Client,
-    url: &str,
-    target: &str,
-) -> Vec<Value> {
+async fn probe_variable_tampering(client: &reqwest::Client, url: &str, target: &str) -> Vec<Value> {
     let mut out = Vec::new();
     let probes: Vec<(&str, Value)> = vec![
         (
@@ -1976,9 +2030,8 @@ async fn probe_variable_tampering(
             || bl.contains("sqlite")
             || bl.contains("stacktrace")
             || bl.contains("unexpected token");
-        let unexpected_data = bl.contains("\"data\"")
-            && !bl.contains("\"errors\"")
-            && kind == "type_confusion";
+        let unexpected_data =
+            bl.contains("\"data\"") && !bl.contains("\"errors\"") && kind == "type_confusion";
         if verbose || unexpected_data {
             out.push(finding(
                 "variable_tampering",
@@ -2021,27 +2074,15 @@ fn extract_query_cost_signals(body: &str, headers: &[(String, String)]) -> Optio
     }
     for (k, v) in headers {
         let kl = k.to_ascii_lowercase();
-        if kl.contains("graphql-cost")
-            || kl.contains("query-cost")
-            || kl.contains("complexity")
-        {
+        if kl.contains("graphql-cost") || kl.contains("query-cost") || kl.contains("complexity") {
             return Some(format!("header {k}: {v}"));
         }
     }
     None
 }
 
-async fn probe_query_cost_leak(
-    client: &reqwest::Client,
-    url: &str,
-    target: &str,
-) -> Option<Value> {
-    let p = post_json(
-        client,
-        url,
-        &json!({ "query": INTROSPECTION_QUERY }),
-    )
-    .await?;
+async fn probe_query_cost_leak(client: &reqwest::Client, url: &str, target: &str) -> Option<Value> {
+    let p = post_json(client, url, &json!({ "query": INTROSPECTION_QUERY })).await?;
     if !(200..300).contains(&p.status) {
         return None;
     }
@@ -2547,7 +2588,10 @@ async fn probe_pagination_abuse_surface(
 
 fn extract_limit_from_error(body: &str) -> Option<u64> {
     let bl = body.to_ascii_lowercase();
-    if !(bl.contains("alias") || bl.contains("depth") || bl.contains("complexity") || bl.contains("limit"))
+    if !(bl.contains("alias")
+        || bl.contains("depth")
+        || bl.contains("complexity")
+        || bl.contains("limit"))
     {
         return None;
     }
@@ -2567,11 +2611,7 @@ async fn probe_limit_fingerprint_surface(
     target: &str,
     cfg: &GraphqlScanConfig,
 ) -> Option<Value> {
-    let tiers = [
-        50_u64,
-        200,
-        cfg.alias_count.min(500),
-    ];
+    let tiers = [50_u64, 200, cfg.alias_count.min(500)];
     let mut highest_ok = 0_u64;
     let mut disclosed_limit = None;
     for n in tiers {
@@ -2651,13 +2691,7 @@ async fn probe_waf_evasion_surface(
     ];
     for (label, payload) in variants {
         let p = if label.starts_with("charset") {
-            post_json_ct(
-                client,
-                url,
-                &payload,
-                "application/json; charset=utf-8",
-            )
-            .await
+            post_json_ct(client, url, &payload, "application/json; charset=utf-8").await
         } else {
             post_json(client, url, &payload).await
         };
@@ -2764,7 +2798,10 @@ fn nested_introspection_query(depth: u64) -> String {
     for _ in 0..depth {
         inner = format!("ofType {{ {} }}", inner);
     }
-    format!("query {{ __schema {{ types {{ fields {{ type {{ {} }} }} }} }} }}", inner)
+    format!(
+        "query {{ __schema {{ types {{ fields {{ type {{ {} }} }} }} }} }}",
+        inner
+    )
 }
 
 /// Build an alias-amplification query with `n` aliases of `__typename`.
@@ -2855,12 +2892,8 @@ async fn assess_endpoint(
                     ));
                 }
                 if cfg.probe_bola {
-                    if let Some(args_p) = post_json(
-                        client,
-                        url,
-                        &json!({ "query": INTROSPECTION_ARGS_QUERY }),
-                    )
-                    .await
+                    if let Some(args_p) =
+                        post_json(client, url, &json!({ "query": INTROSPECTION_ARGS_QUERY })).await
                     {
                         state.id_accessors = parse_id_accessors(&args_p.body);
                     }
@@ -2967,7 +3000,13 @@ async fn assess_endpoint(
 
     // 4. Alias amplification (amount limit).
     if cfg.probe_alias_overload {
-        if let Some(p) = post_json(client, url, &json!({ "query": alias_overload_query(cfg.alias_count) })).await {
+        if let Some(p) = post_json(
+            client,
+            url,
+            &json!({ "query": alias_overload_query(cfg.alias_count) }),
+        )
+        .await
+        {
             let count = p.body.matches("\"a").count();
             if (200..300).contains(&p.status) && count as u64 >= cfg.alias_count / 2 {
                 state.dos_vectors += 1;
@@ -2992,7 +3031,13 @@ async fn assess_endpoint(
 
     // 5. Depth / query-cost limit (via nested introspection).
     if cfg.probe_depth && state.introspection {
-        if let Some(p) = post_json(client, url, &json!({ "query": nested_introspection_query(cfg.depth_levels) })).await {
+        if let Some(p) = post_json(
+            client,
+            url,
+            &json!({ "query": nested_introspection_query(cfg.depth_levels) }),
+        )
+        .await
+        {
             let bl = p.body.to_ascii_lowercase();
             let rejected = bl.contains("depth")
                 || bl.contains("too deep")
@@ -3024,7 +3069,10 @@ async fn assess_endpoint(
     if cfg.probe_csrf_get {
         let get_url = format!("{}?query=%7B__typename%7D", url);
         if let Some(p) = get(client, &get_url).await {
-            if (200..300).contains(&p.status) && p.body.contains("__typename") && p.body.contains("data") {
+            if (200..300).contains(&p.status)
+                && p.body.contains("__typename")
+                && p.body.contains("data")
+            {
                 state.csrf = true;
                 let elevated = state.mutations > 0;
                 out.push(finding(
@@ -3047,7 +3095,10 @@ async fn assess_endpoint(
         }
         // form-urlencoded POST (also CSRF-able from a simple HTML form).
         if let Some(p) = post_form(client, url, "query={__typename}".to_string()).await {
-            if (200..300).contains(&p.status) && p.body.contains("__typename") && p.body.contains("data") {
+            if (200..300).contains(&p.status)
+                && p.body.contains("__typename")
+                && p.body.contains("data")
+            {
                 state.csrf = true;
                 out.push(finding(
                     "csrf",
@@ -3070,9 +3121,25 @@ async fn assess_endpoint(
 
     // 7. Error verbosity / debug-mode disclosure (safe malformed query).
     if cfg.probe_error_verbosity {
-        if let Some(p) = post_json(client, url, &json!({ "query": "{ __typename __typename(" })).await {
+        if let Some(p) =
+            post_json(client, url, &json!({ "query": "{ __typename __typename(" })).await
+        {
             let bl = p.body.to_ascii_lowercase();
-            let leaks = ["at /", "traceback", "stacktrace", "stack trace", ".rb:", ".py", ".js:", "node_modules", "sqlstate", "syntax error at or near", "exception in", "\"extensions\"", "\"stacktrace\""];
+            let leaks = [
+                "at /",
+                "traceback",
+                "stacktrace",
+                "stack trace",
+                ".rb:",
+                ".py",
+                ".js:",
+                "node_modules",
+                "sqlstate",
+                "syntax error at or near",
+                "exception in",
+                "\"extensions\"",
+                "\"stacktrace\"",
+            ];
             if let Some(sig) = leaks.iter().find(|s| bl.contains(**s)) {
                 out.push(finding(
                     "error_verbosity",
@@ -3154,12 +3221,8 @@ async fn assess_endpoint(
 
     // 10. Partial introspection disable bypass (`__type` when `__schema` is blocked).
     if cfg.probe_introspection_bypass && !state.introspection {
-        if let Some(p) = post_json(
-            client,
-            url,
-            &json!({ "query": INTROSPECTION_BYPASS_QUERY }),
-        )
-        .await
+        if let Some(p) =
+            post_json(client, url, &json!({ "query": INTROSPECTION_BYPASS_QUERY })).await
         {
             if p.body.contains("\"fields\"") && p.body.contains("\"data\"") {
                 state.introspection = true;
@@ -3192,9 +3255,7 @@ async fn assess_endpoint(
         .await
         {
             let count = p.body.matches("__typename").count();
-            if (200..300).contains(&p.status)
-                && count as u64 >= cfg.field_duplication_count / 2
-            {
+            if (200..300).contains(&p.status) && count as u64 >= cfg.field_duplication_count / 2 {
                 state.dos_vectors += 1;
                 out.push(finding(
                     "dos",
@@ -3274,7 +3335,9 @@ async fn assess_endpoint(
     // 14. application/graphql content-type acceptance.
     if cfg.probe_content_type_graphql {
         if let Some(p) = post_graphql_ct(client, url, "{ __typename }").await {
-            if (200..300).contains(&p.status) && p.body.contains("__typename") && p.body.contains("data")
+            if (200..300).contains(&p.status)
+                && p.body.contains("__typename")
+                && p.body.contains("data")
             {
                 out.push(finding(
                     "transport",
@@ -3568,11 +3631,7 @@ async fn probe_ide_exposure(client: &reqwest::Client, url: &str, target: &str) -
     let base = url.trim_end_matches('/');
     let origin = site_origin(url);
     let candidates: Vec<String> = std::iter::once(base.to_string())
-        .chain(
-            IDE_SIBLING_PATHS
-                .iter()
-                .map(|p| format!("{origin}{p}")),
-        )
+        .chain(IDE_SIBLING_PATHS.iter().map(|p| format!("{origin}{p}")))
         .collect();
     for candidate in candidates {
         if !checked.insert(candidate.clone()) {
@@ -3623,7 +3682,11 @@ async fn probe_subscription_ws(
 ) -> Vec<Value> {
     let mut out = Vec::new();
     let ws_url = http_to_ws_url(http_url);
-    for proto in ["graphql-transport-ws", "graphql-ws", "subscriptions-transport-ws"] {
+    for proto in [
+        "graphql-transport-ws",
+        "graphql-ws",
+        "subscriptions-transport-ws",
+    ] {
         let key = random_ws_key();
         let expected = ws_accept(&key);
         let resp = client
@@ -3674,18 +3737,8 @@ async fn probe_auth_differential(
     target: &str,
 ) -> Vec<Value> {
     let mut out = Vec::new();
-    let auth = post_json(
-        auth_client,
-        url,
-        &json!({ "query": INTROSPECTION_QUERY }),
-    )
-    .await;
-    let unauth = post_json(
-        unauth_client,
-        url,
-        &json!({ "query": INTROSPECTION_QUERY }),
-    )
-    .await;
+    let auth = post_json(auth_client, url, &json!({ "query": INTROSPECTION_QUERY })).await;
+    let unauth = post_json(unauth_client, url, &json!({ "query": INTROSPECTION_QUERY })).await;
     let (Some(auth_p), Some(unauth_p)) = (auth, unauth) else {
         return out;
     };
@@ -3783,12 +3836,7 @@ fn compute_owasp_posture(findings: &[Value]) -> Value {
         let Some(owasp) = f.get("owasp_api").and_then(Value::as_str) else {
             continue;
         };
-        let key = owasp
-            .split(':')
-            .next()
-            .unwrap_or(owasp)
-            .trim()
-            .to_string();
+        let key = owasp.split(':').next().unwrap_or(owasp).trim().to_string();
         *buckets.entry(key).or_insert(0) += 1;
     }
     json!(buckets)
@@ -3856,7 +3904,7 @@ fn compute_compliance_scorecard(findings: &[Value]) -> Value {
     let overall = if grade_scores.is_empty() {
         100
     } else {
-        grade_scores.iter().sum::<u8>() / grade_scores.len() as u8
+        *grade_scores.iter().min().unwrap_or(&100)
     };
     let overall_grade = if overall >= 95 {
         "A"
@@ -3926,7 +3974,9 @@ fn compute_executive_summary(
         .first()
         .and_then(|r| r.get("remediation"))
         .and_then(Value::as_str)
-        .unwrap_or("Disable introspection and enforce object-level authorization on all resolvers.");
+        .unwrap_or(
+            "Disable introspection and enforce object-level authorization on all resolvers.",
+        );
     let risk_tier = if exposure_score >= 70 || criticals > 0 {
         "critical"
     } else if exposure_score >= 40 || highs > 0 {
@@ -3972,8 +4022,8 @@ fn synthesize_attack_paths(findings: &[Value], target: &str) -> (Vec<Value>, u32
         })
     };
 
-    let schema_known =
-        has_class(findings, "introspection_enabled") || has_class(findings, "schema_reconstruction");
+    let schema_known = has_class(findings, "introspection_enabled")
+        || has_class(findings, "schema_reconstruction");
     if schema_known && has_class(findings, "sensitive_schema_fields") {
         score += 80;
         paths.push(mk(
@@ -4170,7 +4220,8 @@ fn synthesize_attack_paths(findings: &[Value], target: &str) -> (Vec<Value>, u32
             "Complete GraphQL authorization bypass on Hasura.",
         ));
     }
-    if has_class(findings, "persisted_query_hash_only") || has_class(findings, "operation_name_get") {
+    if has_class(findings, "persisted_query_hash_only") || has_class(findings, "operation_name_get")
+    {
         score += 35;
         paths.push(mk(
             "Operation allowlist / persisted-query bypass",
@@ -4355,9 +4406,7 @@ pub async fn run_graphql_attack_result_ctx(target: &str, ctx: &EngineRunContext)
         unauth_cfg.bearer_token = None;
         unauth_cfg.api_key = None;
         unauth_cfg.cookie = None;
-        unauth_cfg
-            .extra_headers
-            .retain(|(k, _)| !is_auth_header(k));
+        unauth_cfg.extra_headers.retain(|(k, _)| !is_auth_header(k));
         Some(build_client(&unauth_cfg))
     } else {
         None
@@ -4578,10 +4627,20 @@ pub async fn run_graphql_attack_result_ctx(target: &str, ctx: &EngineRunContext)
         attack_paths.len(),
         started.elapsed().as_millis()
     );
-    let toxic = findings.iter().filter(|f| f.get("category").and_then(Value::as_str) == Some("toxic_combination")).count();
+    let toxic = findings
+        .iter()
+        .filter(|f| f.get("category").and_then(Value::as_str) == Some("toxic_combination"))
+        .count();
     EngineResult::ok_with_graph(
         findings,
-        format!("{msg}{}", if toxic > 0 { format!(", {toxic} toxic combo(s)") } else { String::new() }),
+        format!(
+            "{msg}{}",
+            if toxic > 0 {
+                format!(", {toxic} toxic combo(s)")
+            } else {
+                String::new()
+            }
+        ),
         graph_nodes,
         graph_edges,
     )
@@ -4626,7 +4685,7 @@ mod tests {
     #[test]
     fn config_defaults_enable_all_components() {
         let cfg = GraphqlScanConfig::default();
-        assert_eq!(cfg.enabled_components(), 46);
+        assert_eq!(cfg.enabled_components(), 47);
         assert!(cfg.graphql_paths.iter().any(|p| p == "/graphql"));
     }
 
@@ -4698,7 +4757,10 @@ mod tests {
         assert_eq!(s.types, 3); // __Type excluded
         assert_eq!(s.query_fields, 2);
         assert_eq!(s.mutation_fields, 1);
-        assert!(s.sensitive_fields.iter().any(|f| f.contains("passwordHash")));
+        assert!(s
+            .sensitive_fields
+            .iter()
+            .any(|f| f.contains("passwordHash")));
         assert!(s.sensitive_fields.iter().any(|f| f.contains("apiKey")));
     }
 
@@ -4718,7 +4780,8 @@ mod tests {
                     ]},
                 ]
             }}
-        }).to_string();
+        })
+        .to_string();
         let s = parse_schema(&body).unwrap();
         assert_eq!(s.dangerous_mutations.len(), 2);
         assert!(s.dangerous_mutations.iter().any(|m| m == "deleteUser"));

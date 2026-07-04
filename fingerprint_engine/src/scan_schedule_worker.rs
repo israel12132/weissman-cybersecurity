@@ -91,8 +91,7 @@ async fn run_due_schedule(
     }
 
     let job_count = (domains.len() * engines.len()) as u64;
-    if let Err(detail) =
-        crate::billing::gate_scan_enqueue_n(auth_pool, tenant_id, job_count).await
+    if let Err(detail) = crate::billing::gate_scan_enqueue_n(auth_pool, tenant_id, job_count).await
     {
         let _ = tx.rollback().await;
         tracing::warn!(

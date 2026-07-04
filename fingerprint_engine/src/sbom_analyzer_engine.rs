@@ -97,7 +97,11 @@ fn extract_components(body: &str, doc_kind: &str) -> Vec<(String, String)> {
                     if path.is_empty() || !path.contains("node_modules") {
                         continue;
                     }
-                    let name = path.rsplit("node_modules/").next().unwrap_or(path).to_string();
+                    let name = path
+                        .rsplit("node_modules/")
+                        .next()
+                        .unwrap_or(path)
+                        .to_string();
                     let version = meta
                         .get("version")
                         .and_then(|n| n.as_str())

@@ -19,7 +19,11 @@ pub fn parse_iac_address(addr: &str, default_ns: &str) -> Option<(String, String
     match parts.as_slice() {
         ["cluster", kind, name] => Some(("".to_string(), (*kind).to_string(), (*name).to_string())),
         [ns, kind, name] => Some(((*ns).to_string(), (*kind).to_string(), (*name).to_string())),
-        [kind, name] => Some((default_ns.to_string(), (*kind).to_string(), (*name).to_string())),
+        [kind, name] => Some((
+            default_ns.to_string(),
+            (*kind).to_string(),
+            (*name).to_string(),
+        )),
         _ => None,
     }
 }
@@ -33,9 +37,13 @@ fn api_path(ns: &str, kind: &str, name: &str) -> Option<String> {
         "Deployment" => format!("/apis/apps/v1/namespaces/{ns}/deployments/{name}"),
         "StatefulSet" => format!("/apis/apps/v1/namespaces/{ns}/statefulsets/{name}"),
         "DaemonSet" => format!("/apis/apps/v1/namespaces/{ns}/daemonsets/{name}"),
-        "NetworkPolicy" => format!("/apis/networking.k8s.io/v1/namespaces/{ns}/networkpolicies/{name}"),
+        "NetworkPolicy" => {
+            format!("/apis/networking.k8s.io/v1/namespaces/{ns}/networkpolicies/{name}")
+        }
         "Role" => format!("/apis/rbac.authorization.k8s.io/v1/namespaces/{ns}/roles/{name}"),
-        "RoleBinding" => format!("/apis/rbac.authorization.k8s.io/v1/namespaces/{ns}/rolebindings/{name}"),
+        "RoleBinding" => {
+            format!("/apis/rbac.authorization.k8s.io/v1/namespaces/{ns}/rolebindings/{name}")
+        }
         "ClusterRole" => format!("/apis/rbac.authorization.k8s.io/v1/clusterroles/{name}"),
         "ConfigMap" => format!("/api/v1/namespaces/{ns}/configmaps/{name}"),
         _ => return None,
@@ -116,8 +124,12 @@ pub async fn reconcile_graph(
                 let evidence = match kind {
                     NodeKind::K8sIngress => format!("GET {path}: Ingress exists in namespace {ns}"),
                     NodeKind::K8sService => format!("GET {path}: Service exists in namespace {ns}"),
-                    NodeKind::K8sServiceAccount => format!("GET {path}: ServiceAccount exists in namespace {ns}"),
-                    NodeKind::K8sSecret => format!("GET {path}: Secret resource exists in namespace {ns}"),
+                    NodeKind::K8sServiceAccount => {
+                        format!("GET {path}: ServiceAccount exists in namespace {ns}")
+                    }
+                    NodeKind::K8sSecret => {
+                        format!("GET {path}: Secret resource exists in namespace {ns}")
+                    }
                     NodeKind::K8sPod => format!("GET {path}: Workload exists in namespace {ns}"),
                     _ => format!("GET {path}: resource confirmed"),
                 };
@@ -142,7 +154,9 @@ pub async fn reconcile_graph(
                     node_id: node_id.clone(),
                     iac_address: addr.clone(),
                     live_status: LiveStatus::ConfirmedLive,
-                    evidence: format!("GET {path}: HTTP 403 — resource likely exists (RBAC denied read)"),
+                    evidence: format!(
+                        "GET {path}: HTTP 403 — resource likely exists (RBAC denied read)"
+                    ),
                     api_called: format!("k8s:GET {path}"),
                 }
             }
@@ -172,7 +186,10 @@ pub async fn reconcile_graph(
     notes.push(format!(
         "live K8s reconcile: {} matches, {} confirmed live",
         matches.len(),
-        matches.iter().filter(|m| m.live_status == LiveStatus::ConfirmedLive).count()
+        matches
+            .iter()
+            .filter(|m| m.live_status == LiveStatus::ConfirmedLive)
+            .count()
     ));
     (matches, notes)
 }
@@ -190,6 +207,9 @@ mod tests {
     #[test]
     fn parse_address_default_ns() {
         let p = parse_iac_address("Service/frontend", "kube-system").unwrap();
-        assert_eq!(p, ("kube-system".into(), "Service".into(), "frontend".into()));
+        assert_eq!(
+            p,
+            ("kube-system".into(), "Service".into(), "frontend".into())
+        );
     }
 }

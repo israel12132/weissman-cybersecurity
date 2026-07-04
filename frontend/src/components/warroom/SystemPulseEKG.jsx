@@ -57,11 +57,11 @@ export default function SystemPulseEKG() {
         const ms = data.latency_ms
         const value = ms == null || data.error ? null : ms
         if (value != null && value > 0) hadSuccessRef.current = true
-        addLatency(value)
+        if (typeof addLatency === 'function') addLatency(value)
         if (setLastLatencyMs) setLastLatencyMs(value)
         setProbePending(false)
       } catch (_) {
-        addLatency(null)
+        if (typeof addLatency === 'function') addLatency(null)
         if (setLastLatencyMs) setLastLatencyMs(null)
         setProbePending(false)
       }

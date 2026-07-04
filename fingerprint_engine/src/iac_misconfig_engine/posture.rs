@@ -9,10 +9,24 @@ use serde_json::{json, Value};
 /// Compute 0–100 exploitability index from severity mix + attack chains.
 #[must_use]
 pub fn exploitability_index(findings: &[Finding], chains: &[SynthesizedChain]) -> u64 {
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
-    let high = findings.iter().filter(|f| f.policy.severity == Severity::High).count() as u64;
-    let chain_boost = chains.iter().filter(|c| c.severity() == Severity::Critical).count() as u64 * 8
-        + chains.iter().filter(|c| c.severity() == Severity::High).count() as u64 * 4;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
+    let high = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::High)
+        .count() as u64;
+    let chain_boost = chains
+        .iter()
+        .filter(|c| c.severity() == Severity::Critical)
+        .count() as u64
+        * 8
+        + chains
+            .iter()
+            .filter(|c| c.severity() == Severity::High)
+            .count() as u64
+            * 4;
     (crit * 12 + high * 5 + chain_boost).min(100)
 }
 
@@ -29,7 +43,8 @@ pub fn remediation_queue(findings: &[Finding], chains: &[SynthesizedChain]) -> V
     ranked.sort_by(|a, b| {
         let a_chain = chain_policies.contains(a.policy.id);
         let b_chain = chain_policies.contains(b.policy.id);
-        b_chain.cmp(&a_chain)
+        b_chain
+            .cmp(&a_chain)
             .then(b.policy.severity.cmp(&a.policy.severity))
             .then(a.file.cmp(&b.file))
     });
@@ -101,8 +116,14 @@ pub fn cis_scorecard(compliance_rows: &[Value]) -> Value {
     let mut total_failed = 0u64;
     for row in compliance_rows {
         let pack = row.get("pack").and_then(Value::as_str).unwrap_or("?");
-        let covered = row.get("controls_covered").and_then(Value::as_u64).unwrap_or(0);
-        let failed = row.get("controls_failed").and_then(Value::as_u64).unwrap_or(0);
+        let covered = row
+            .get("controls_covered")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let failed = row
+            .get("controls_failed")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         total_covered += covered;
         total_failed += failed;
         let pass_pct = if covered > 0 {
@@ -150,7 +171,10 @@ pub fn readiness_report(
     drift_count: u64,
     waived_count: u64,
 ) -> Value {
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
     let with_fix = findings.iter().filter(|f| f.code_fix.is_some()).count() as u64;
     let fixability_pct = if findings.is_empty() {
         100
@@ -164,7 +188,12 @@ pub fn readiness_report(
         .saturating_sub(chain_pressure)
         .saturating_sub(drift_count * 4)
         .saturating_sub(waived_count);
-    let est_hours = crit * 4 + findings.iter().filter(|f| f.policy.severity == Severity::High).count() as u64 * 2
+    let est_hours = crit * 4
+        + findings
+            .iter()
+            .filter(|f| f.policy.severity == Severity::High)
+            .count() as u64
+            * 2
         + findings.len() as u64 / 3;
     json!({
         "readiness_score": readiness,

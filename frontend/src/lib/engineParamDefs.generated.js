@@ -580,6 +580,390 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
+  "avionics_adsb_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "maritime_ais_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ev_charging_ocpp_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "smart_grid_dlms_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "rail_signaling_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "building_automation_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "robotics_ros2_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "ot_sis_triton_attack": [
+    {
+      "key": "ports",
+      "label": "Ports / Port Range",
+      "type": "text",
+      "defaultVal": "top",
+      "placeholder": "top | 80,443,8080"
+    },
+    {
+      "key": "protocol_strict",
+      "label": "OT Protocol Strict",
+      "type": "select",
+      "defaultVal": "true",
+      "options": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "key": "depth",
+      "label": "Probe Depth",
+      "type": "select",
+      "defaultVal": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "key": "timeout_ms",
+      "label": "Probe Timeout (ms)",
+      "type": "number",
+      "defaultVal": "8000",
+      "min": 500,
+      "max": 60000
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
   "iot_firmware": [
     {
       "key": "protocol_strict",

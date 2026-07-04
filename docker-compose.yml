@@ -180,17 +180,39 @@ services:
   prometheus:
     image: prom/prometheus:latest
     profiles: [monitoring]
+    environment:
+      WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:-}
+      WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:-}
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts:/etc/prometheus/alerts:ro
+      - ./monitoring/prometheus-web.generated.yml:/etc/prometheus/web.yml:ro
       - weissman_prometheus:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
-      - '--web.enable-lifecycle'
-    expose:
-      - "9090"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ -n "$${WEISSMAN_METRICS_TOKEN:-}" ]; then
+          printf '%s' "$$WEISSMAN_METRICS_TOKEN" > /etc/prometheus/metrics_token
+          chmod 600 /etc/prometheus/metrics_token
+        else
+          echo "WARN: WEISSMAN_METRICS_TOKEN unset — create /etc/prometheus/metrics_token manually for scrape auth" >&2
+          : > /etc/prometheus/metrics_token
+        fi
+        WEB_ARGS=""
+        if [ -s /etc/prometheus/web.yml ]; then
+          WEB_ARGS="--web.config.file=/etc/prometheus/web.yml"
+        fi
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=30d \
+          --web.enable-lifecycle \
+          $${WEB_ARGS}
+    ports:
+      - "9090:9090"
     depends_on:
       - backend
     restart: unless-stopped
@@ -204,13 +226,16 @@ services:
     image: grafana/grafana:latest
     profiles: [monitoring]
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-weissman-grafana-dev}
+      GF_SECURITY_ADMIN_USER: ${WEISSMAN_ADMIN_EMAIL:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:-weissman-grafana-dev}}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: http://localhost:3000
     ports:
       - "3000:3000"
     volumes:
       - weissman_grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
     restart: unless-stopped

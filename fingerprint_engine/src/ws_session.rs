@@ -57,9 +57,7 @@ pub async fn connect_request(
     http_url: &str,
     opts: &WsConnectOpts,
 ) -> Option<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let ws_url = http_to_ws_url(http_url);
     let mut request = ws_url.as_str().into_client_request().ok()?;
@@ -69,10 +67,9 @@ pub async fn connect_request(
             .insert("Origin", HeaderValue::from_str(&o).ok()?);
     }
     if let Some(sp) = opts.subprotocol.clone() {
-        request.headers_mut().insert(
-            "Sec-WebSocket-Protocol",
-            HeaderValue::from_str(&sp).ok()?,
-        );
+        request
+            .headers_mut()
+            .insert("Sec-WebSocket-Protocol", HeaderValue::from_str(&sp).ok()?);
     }
     for (k, v) in opts.auth.clone() {
         let name = HeaderName::from_bytes(k.as_bytes()).ok()?;
@@ -111,9 +108,7 @@ pub async fn exchange_frames(
         if ws.send(Message::Binary(bin.clone())).await.is_err() {
             break;
         }
-        result
-            .sent
-            .push(format!("[binary {}B]", bin.len()));
+        result.sent.push(format!("[binary {}B]", bin.len()));
     }
 
     let deadline = Instant::now() + Duration::from_millis(opts.read_ms.clamp(500, 15_000));
@@ -130,8 +125,7 @@ pub async fn exchange_frames(
                 result.received_binary.push(b);
             }
             Ok(Some(Ok(Message::Close(frame)))) => {
-                result.close_reason =
-                    frame.map(|f| preview(f.reason.to_string().as_str(), 120));
+                result.close_reason = frame.map(|f| preview(f.reason.to_string().as_str(), 120));
                 break;
             }
             Ok(Some(Ok(Message::Ping(_)))) | Ok(Some(Ok(Message::Pong(_)))) => {}
@@ -163,8 +157,8 @@ pub async fn exchange_phases(
             }
             result.sent.push(preview(msg, 240));
         }
-        let deadline =
-            Instant::now() + Duration::from_millis((opts.read_ms / phases.len().max(1) as u64).clamp(300, 8000));
+        let deadline = Instant::now()
+            + Duration::from_millis((opts.read_ms / phases.len().max(1) as u64).clamp(300, 8000));
         while result.received.len() + result.received_binary.len() < opts.max_messages
             && Instant::now() < deadline
             && result.received.len() < phase_budget * (phases.len())

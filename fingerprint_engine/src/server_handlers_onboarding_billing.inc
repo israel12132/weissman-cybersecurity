@@ -290,11 +290,13 @@ async fn api_onboarding_register(
                 let _ = tx.commit().await;
             }
 
+            let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let (access_jwt, access_cookie, refresh_cookie) =
                 match crate::auth_refresh::build_session_cookie_headers(
                     state.auth_pool.as_ref(),
                     user_id,
                     tenant_id,
+                    &binding,
                 )
                 .await
                 {

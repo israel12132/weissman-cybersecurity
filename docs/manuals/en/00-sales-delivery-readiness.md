@@ -4,15 +4,17 @@
 
 ---
 
-## Executive summary (June 2026)
+## Executive summary (July 2026)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| **Engine wiring** | ✅ Complete | `verify_engine_wiring.mjs` → 0 gaps; 545 production engines |
-| **UI standard** | ✅ Complete | `weissman-ui-audit.mjs` → 94/94 pages |
-| **Agent-required UX** | ✅ Complete | Empty state + per-route gates; 45 agent engines |
+| **Engine wiring** | ✅ Complete | `verify_engine_wiring.mjs` → 0 gaps; **558 production engines** |
+| **UI standard** | ✅ Complete | `weissman-ui-audit.mjs` → **95/95 pages**, **112 routes** |
+| **Agent-required UX** | ✅ Complete | Empty state + per-route gates; **45 agent engines** |
 | **Billing / quota** | ✅ Complete | All scan & async enqueue paths gated; strict in production |
-| **Production security guards** | ✅ Complete | `security_startup.rs` blocks weak secrets in production |
+| **Production security guards** | ✅ Complete | `security_startup.rs` — JWT **≥48 chars**, other secrets **≥32** |
+| **Testing & evidence (Phase 6)** | ✅ Complete | Playwright live E2E, 67+ frontend test files, evidence pack generator |
+| **Full audit gate (Phase 7)** | ✅ Complete | `bash scripts/full_audit_gate.sh` — G1–G7 global PASS |
 | **Docker stack** | ✅ Code-ready | Requires `docker compose up --build` on capable hardware |
 | **Legal pages** | ✅ Present | `deploy/public/` — terms, privacy, DPA, subprocessors |
 | **Operational runbooks** | ✅ Present | This manual pack + root runbooks |
@@ -77,8 +79,9 @@
 ## Sales positioning (accurate claims)
 
 **You CAN claim:**
-- 530+ production security engines with live probes (no fake findings)
-- Multi-tenant RLS, JWT + MFA, RBAC, audit log
+- **558** production security engines with live probes (300 real_probe + 213 alias + 45 agent_required — no fake findings)
+- **112** Command Center routes with live API evidence banners
+- Multi-tenant RLS, JWT (≥48 char production) + MFA, RBAC, audit log
 - Endpoint agent with 45+ agent-required detection surfaces
 - SOAR playbooks, attack-path graph, KEV/EPSS enrichment
 - Paddle billing with monthly scan quotas
@@ -92,15 +95,18 @@
 
 ---
 
-## Pre-demo checklist (30 minutes)
+## Pre-demo / inspection checklist (30 minutes)
 
-1. `curl -sf https://<host>/api/health` → 200
-2. Login → Command Center loads
-3. `GET /api/engines/capabilities` → JSON with engine kinds
-4. Create demo client with **your own** authorized domain
-5. Run one engine (e.g. `asm`, `jwt_attack`) → job completes
-6. Show findings panel + PDF export
-7. If selling agent: show Agent Management + one online agent
+See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for the full 60-minute script (demo + CISO deep dive).
+
+1. `bash scripts/full_audit_gate.sh` → **GLOBAL PASS** (exit 0)
+2. `curl -sf https://<host>/api/health` → 200
+3. Login → Command Center loads (`POST /api/login`)
+4. `GET /api/engines/capabilities` → 558 engines with kind legend
+5. Create demo client with **authorized domain only**
+6. Run one engine (e.g. `osint`, `asm`) → job completes
+7. Findings panel + PDF export + compliance evidence-pack API
+8. Hand auditor `./scripts/generate_audit_evidence_pack.sh` artifacts
 
 ---
 

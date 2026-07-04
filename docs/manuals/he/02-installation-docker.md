@@ -53,8 +53,16 @@ POSTGRES_PASSWORD=<חזק>
 
 ### 2. Build והפעלה
 
+**פקודה אחת (מומלץ ללקוחות — אמת לייב):**
+
 ```bash
-docker compose up -d --build
+./start_weissman_live.sh --url https://your-company.example
+```
+
+**ידני (equivalent):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monitoring up -d --build
 ```
 
 שירותים:

@@ -3,9 +3,10 @@
  * Horizontal pipeline (Commit -> Build -> Test -> Deploy), red stages, modal with Attacker's Playbook.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const STAGE_KEYS = ['commit', 'build', 'test', 'deploy']
 
@@ -70,18 +71,10 @@ export default function CICDThreatMatrix() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">{t(`${NS}.back_war_room`)}</Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{t(`${NS}.title`)}</h1>
-          </div>
-          {clientId && client && (
-            <span className="text-slate-500 text-sm">{t(`${NS}.client_meta`, { name: client.name, id: clientId })}</span>
-          )}
-        </div>
-
+    <StandaloneLabShell
+      title={t(`${NS}.title`)}
+      subtitle={clientId && client ? t(`${NS}.client_meta`, { name: client.name, id: clientId }) : undefined}
+    >
         <div className="mb-6 flex flex-wrap gap-2">
           <input
             type="text"
@@ -173,7 +166,6 @@ export default function CICDThreatMatrix() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </StandaloneLabShell>
   )
 }

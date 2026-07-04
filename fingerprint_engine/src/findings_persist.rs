@@ -20,6 +20,7 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
+use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -197,50 +198,16 @@ fn extract_array(f: &Value, keys: &[&str]) -> Value {
     Value::Array(vec![])
 }
 
-/// Build a stable finding identifier. **Must only hash invariants** — the same engine
-/// detecting the same vulnerability on the same target across re-runs must produce the
-/// same `finding_id`, otherwise the `ON CONFLICT (finding_id) DO UPDATE` dedup path
-/// inserts duplicate rows for every scan.
-///
-/// We intentionally exclude every volatile field (timestamps, request IDs, HTTP bodies,
-/// banner text, host headers, response_ms, …) and only hash the *signature* — the
-/// minimal set of fields that uniquely identifies the vulnerability class on this asset.
-pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    let cve = extract_cve_from_finding(finding);
-    let cwe = extract_string(finding, &["cwe", "cwe_id"]);
-    let mitre = extract_string(finding, &["mitre_attack", "mitre", "attack_id"]);
-    let signature = extract_string(
-        finding,
-        &["signature", "rule", "rule_id", "vuln_signature", "type"],
-    );
-    let title = extract_title(finding, engine);
-    let normalized_title = title
-        .chars()
-        .filter(|c| !c.is_ascii_digit() && !"./_-?#&=".contains(*c))
-        .collect::<String>()
-        .to_lowercase();
+/// Authorized writer — only this type may execute vulnerability INSERT/UPSERT.
+struct FindingsPersistWriter;
 
-    let mut hasher = Sha256::new();
-    hasher.update(engine.as_bytes());
-    hasher.update(b"|");
-    hasher.update(target.trim().to_lowercase().as_bytes());
-    hasher.update(b"|");
-    hasher.update(cve.as_bytes());
-    hasher.update(b"|");
-    hasher.update(cwe.as_bytes());
-    hasher.update(b"|");
-    hasher.update(mitre.as_bytes());
-    hasher.update(b"|");
-    hasher.update(signature.as_bytes());
-    hasher.update(b"|");
-    hasher.update(normalized_title.as_bytes());
-    let digest = hasher.finalize();
-    let short: String = digest
-        .iter()
-        .take(12)
-        .map(|b| format!("{:02x}", b))
-        .collect();
-    format!("{}-{}", engine, short)
+impl Sealed for FindingsPersistWriter {}
+
+impl VulnerabilitiesWriter for FindingsPersistWriter {}
+
+/// Build a stable finding identifier (delegates to evidence gate).
+pub(crate) fn build_finding_id(engine: &str, target: &str, finding: &Value) -> String {
+    findings_gate::build_legacy_finding_id(engine, target, finding)
 }
 
 /// Create (or reuse) a report_runs row and insert one row per finding.
@@ -281,23 +248,36 @@ pub async fn persist_engine_findings(
     .map_err(|e| format!("insert report_runs: {e}"))?;
 
     let mut inserted: u64 = 0;
-    for f in findings {
-        let severity = normalize_severity(f.get("severity").and_then(Value::as_str));
-        let mut cvss = extract_cvss(f);
+    for raw in findings.iter().cloned() {
+        let Some(gated) = gate_finding(engine, target, raw) else {
+            tracing::warn!(
+                target: "findings_persist",
+                engine = %engine,
+                tenant_id,
+                "skipping finding without evidence.proof for actionable severity"
+            );
+            continue;
+        };
+        FindingsPersistWriter::assert_gated(&gated);
+        let f = gated.json();
+        let finding_id = gated.finding_id().to_string();
+        let dedup_hash = gated.dedup_hash().to_string();
+        let severity = gated.severity().to_string();
+        let mut cvss = extract_cvss(&f);
         if cvss <= 0.0 {
             cvss = severity_to_score(&severity);
         }
-        let title = extract_title(f, engine);
-        let description = extract_description(f);
-        let target_url = extract_target(f, target);
+        let title = extract_title(&f, engine);
+        let description = extract_description(&f);
+        let target_url = extract_target(&f, target);
         let mitre = extract_string(
-            f,
+            &f,
             &["mitre_attack", "mitre", "attack_id", "mitre_attack_id"],
         );
-        let cwe = extract_string(f, &["cwe", "cwe_id"]);
-        let cve = extract_cve_from_finding(f);
+        let cwe = extract_string(&f, &["cwe", "cwe_id"]);
+        let cve = extract_cve_from_finding(&f);
         let remediation = extract_string(
-            f,
+            &f,
             &[
                 "remediation",
                 "fix",
@@ -308,7 +288,7 @@ pub async fn persist_engine_findings(
             ],
         );
         let references = extract_array(
-            f,
+            &f,
             &[
                 "references",
                 "reference",
@@ -318,10 +298,10 @@ pub async fn persist_engine_findings(
             ],
         );
         let compliance = extract_array(
-            f,
+            &f,
             &["compliance", "compliance_tags", "frameworks", "controls"],
         );
-        let poc = extract_string(f, &["poc", "poc_text", "proof_of_concept", "evidence"]);
+        let poc = extract_string(&f, &["poc", "poc_text", "proof_of_concept", "evidence"]);
         let poc_commitment = if !poc.is_empty() {
             let mut h = Sha256::new();
             h.update(poc.as_bytes());
@@ -329,7 +309,7 @@ pub async fn persist_engine_findings(
         } else {
             String::new()
         };
-        let confidence = extract_string(f, &["confidence", "certainty"]);
+        let confidence = extract_string(&f, &["confidence", "certainty"]);
 
         // ── Threat-intel enrichment (EPSS + CISA KEV) ───────────────────────
         // When the engine emits a CVE we look it up against our local mirror.
@@ -352,6 +332,7 @@ pub async fn persist_engine_findings(
             "compliance": compliance,
             "confidence": confidence,
             "evidence": f.get("evidence").cloned().unwrap_or(Value::Null),
+            "dedup_hash": dedup_hash,
             "raw": f.clone(),
         });
         if !cve.is_empty() {
@@ -380,8 +361,6 @@ pub async fn persist_engine_findings(
                 }
             }
         }
-
-        let finding_id = build_finding_id(engine, &target_url, f);
 
         // ── Tamper-evident attestation ──────────────────────────────────────
         // Sign the finding's immutable identity (id|title|severity|target) at
@@ -413,6 +392,12 @@ pub async fn persist_engine_findings(
         let vuln_signature = derive_vuln_signature_for_persist(f, &title);
         let signature_hash =
             findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
+        // Prefer cryptographic dedup hash when correlator signature is empty.
+        let signature_hash = if signature_hash.trim().is_empty() {
+            dedup_hash.clone()
+        } else {
+            signature_hash
+        };
 
         // ── Confidence multiplier + effective risk (persist-time, not read-time only) ──
         let conf_mult =
@@ -425,29 +410,19 @@ pub async fn persist_engine_findings(
         };
         let effective_risk = ((base_risk * conf_mult).min(10.0) * 10.0).round() / 10.0;
         let finding_verified = f.get("verified").and_then(Value::as_bool).unwrap_or(false)
-            || f
-                .get("verification_method")
+            || f.get("verification_method")
                 .and_then(Value::as_str)
                 .map(|s| !s.trim().is_empty())
                 .unwrap_or(false);
         let poc_sealed = finding_verified || !poc.is_empty();
         if let Value::Object(obj) = &mut raw_data_enriched {
-            obj.insert(
-                "confidence_multiplier".to_string(),
-                json!(conf_mult),
-            );
+            obj.insert("confidence_multiplier".to_string(), json!(conf_mult));
             obj.insert("effective_risk".to_string(), json!(effective_risk));
             obj.insert("verified".to_string(), json!(poc_sealed));
             if poc_sealed {
-                obj.insert(
-                    "verification_status".to_string(),
-                    json!("verified"),
-                );
+                obj.insert("verification_status".to_string(), json!("verified"));
             } else {
-                obj.insert(
-                    "verification_status".to_string(),
-                    json!("unverified"),
-                );
+                obj.insert("verification_status".to_string(), json!("unverified"));
             }
         }
 
@@ -472,10 +447,10 @@ pub async fn persist_engine_findings(
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
                   signature_hash, epss_score, kev_listed, kev_known_ransomware, kev_due_date,
                   intel_enriched_at, confidence_multiplier, effective_risk, poc_sealed)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $14, $9, $10, $11, now(),
-                       $12, $13, $16, $17, $18,
-                       CASE WHEN $13 IS NOT NULL OR $16 THEN now() ELSE NULL END,
-                       $19, $20, $21)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(),
+                       $13, $14, $15, $16, $17,
+                       CASE WHEN $14 IS NOT NULL OR $15 THEN now() ELSE NULL END,
+                       $18, $19, $20)
                ON CONFLICT (tenant_id, client_id, finding_id) DO UPDATE SET
                    run_id               = EXCLUDED.run_id,
                    title                = EXCLUDED.title,
@@ -505,12 +480,12 @@ pub async fn persist_engine_findings(
         .bind(&severity)
         .bind(engine)
         .bind(&description)
+        .bind(effective_status)
         .bind(&poc)
         .bind(&poc_commitment)
         .bind(&raw_data_enriched)
         .bind(&signature_hash)
         .bind(epss_score)
-        .bind(effective_status)
         .bind(kev_listed)
         .bind(kev_known_ransomware)
         .bind(kev_due_date)
@@ -521,13 +496,38 @@ pub async fn persist_engine_findings(
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
 
+        // PoE exploit sealing (critical/high) — sole authorized post-insert mutation.
+        if crate::exploit_crypto::should_seal_poc(poc.as_str(), severity.as_str()) {
+            if let Some(key) = crate::exploit_crypto::master_key_bytes() {
+                if let Ok(seal) = crate::exploit_crypto::seal_poc(poc.as_str(), &key, &finding_id) {
+                    let redacted = "[SEALED — use Command Center «Decrypt Exploit Evidence»]";
+                    let _ = sqlx::query(
+                        r#"UPDATE vulnerabilities SET poc_sealed = true, poc_ciphertext_b64 = $1,
+                           poc_nonce_b64 = $2, poc_commitment_sha256 = $3, poc_zkp_hmac = $4,
+                           poc_exploit = $5, updated_at = now()
+                           WHERE tenant_id = $6 AND client_id = $7 AND finding_id = $8"#,
+                    )
+                    .bind(&seal.ciphertext_b64)
+                    .bind(&seal.nonce_b64)
+                    .bind(&seal.commitment_sha256_hex)
+                    .bind(&seal.zkp_hmac_hex)
+                    .bind(redacted)
+                    .bind(tenant_id)
+                    .bind(client_id)
+                    .bind(&finding_id)
+                    .execute(&mut *tx)
+                    .await;
+                }
+            }
+        }
+
         // ── Correlate into a finding_cluster ─────────────────────────────────
         let source_label = engine;
         let cluster = findings_correlator::upsert_cluster_for_finding(
             &mut tx,
             tenant_id,
             client_id,
-            f,
+            &f,
             ClusterAttrs {
                 target: &target_url,
                 engine,
@@ -556,9 +556,29 @@ pub async fn persist_engine_findings(
         inserted += 1;
         let _ = upserted_id; // silence unused warning when not building tests
 
+        if crate::critical_infra::is_critical_risk_finding(&f) {
+            let eng_alert = engine.to_string();
+            let target_alert = target_url.clone();
+            let fid_alert = finding_id.clone();
+            let title_alert = title.clone();
+            let sev_alert = severity.clone();
+            tokio::spawn(async move {
+                crate::critical_infra::telemetry::emit_critical_risk_finding_persisted(
+                    tenant_id,
+                    client_id,
+                    &eng_alert,
+                    &target_alert,
+                    &fid_alert,
+                    &title_alert,
+                    &sev_alert,
+                )
+                .await;
+            });
+        }
+
         // ── Pentest reinforcement memory (fire-and-forget) ───────────────────
         let payload = extract_string(
-            f,
+            &f,
             &[
                 "payload",
                 "probe_payload",
@@ -577,8 +597,8 @@ pub async fn persist_engine_findings(
                 .next()
                 .unwrap_or(&target_url)
                 .to_string();
-            let server_hdr = extract_string(f, &["server", "server_header"]);
-            let powered_by = extract_string(f, &["x_powered_by", "powered_by"]);
+            let server_hdr = extract_string(&f, &["server", "server_header"]);
+            let powered_by = extract_string(&f, &["x_powered_by", "powered_by"]);
             let server_opt = if server_hdr.is_empty() {
                 None
             } else {
@@ -630,7 +650,7 @@ pub async fn persist_engine_findings(
         }
 
         let internet_exposed =
-            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, f).await;
+            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
 
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.
@@ -659,12 +679,15 @@ pub async fn persist_engine_findings(
             signature_hash: Some(signature_hash.clone()),
             internet_exposed,
         };
-        // `PgPool` is internally an Arc, so `(*pool).clone()` is a cheap refcount bump.
         let pool_for_dispatch: PgPool = (*pool).clone();
         tokio::spawn(async move {
-            // Best-effort: any failure inside dispatch is logged but doesn't
-            // affect the persist transaction.
-            let _ = crate::soar_playbook::dispatch_event(&pool_for_dispatch, event, false).await;
+            crate::soar::dispatch_record::record_post_persist_dispatch(
+                &pool_for_dispatch,
+                tenant_id,
+                upserted_id,
+                event,
+            )
+            .await;
         });
     }
 

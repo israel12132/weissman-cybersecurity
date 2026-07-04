@@ -77,6 +77,27 @@ stop_procs() {
   done
 }
 
+# Prevent multi-GB worker logs from HMAC-reject retry loops on stale jobs.
+rotate_e2e_logs() {
+  : >"$LOG_DIR/server.log"
+  : >"$LOG_DIR/worker.log"
+}
+
+# Cancel pending/running jobs left from prior runs (wrong HMAC secret, orchestrator floods, etc.).
+reset_stale_e2e_jobs() {
+  if docker exec "$PG_NAME" pg_isready -U postgres -d weissman >/dev/null 2>&1; then
+    docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
+      "UPDATE weissman_async_jobs SET status='failed', last_error='e2e stack restart — stale job cancelled', updated_at=NOW(), locked_until=NULL WHERE status IN ('pending','running');" \
+      >/dev/null 2>&1 || true
+  fi
+}
+
+flush_e2e_redis() {
+  if docker ps --format '{{.Names}}' | grep -qx "$REDIS_NAME"; then
+    docker exec "$REDIS_NAME" redis-cli FLUSHDB >/dev/null 2>&1 || true
+  fi
+}
+
 start_migrations() {
   load_env
   echo "Applying database migrations..."
@@ -89,19 +110,60 @@ start_migrations() {
 start_apps() {
   load_env
   start_migrations
+  # Local E2E stack must not inherit production security refusal from .env
+  export WEISSMAN_ENV="${WEISSMAN_E2E_ENV:-development}"
+  export RUST_ENV="${WEISSMAN_E2E_ENV:-development}"
+  export NODE_ENV="${WEISSMAN_E2E_ENV:-development}"
+  export APP_ENV="${WEISSMAN_E2E_ENV:-development}"
+  export RAILS_ENV="${WEISSMAN_E2E_ENV:-development}"
+  export WEISSMAN_COOKIE_SECURE="${WEISSMAN_E2E_COOKIE_SECURE:-0}"
+  # Force stable dev secret so server/worker HMAC always matches (ignore production .env).
+  export WEISSMAN_JOB_ORCHESTRATOR_SECRET="dev-job-orchestrator-secret-32-bytes-minimum-v1"
+  export WEISSMAN_ENGINE_STACK_BYTES="${WEISSMAN_ENGINE_STACK_BYTES:-33554432}"
+  unset WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD
   if [[ -z "${WEISSMAN_JWT_SECRET:-}" || -z "${WEISSMAN_ADMIN_PASSWORD:-}" ]]; then
     echo "Set WEISSMAN_JWT_SECRET and WEISSMAN_ADMIN_PASSWORD in .env" >&2
     exit 1
   fi
   echo "Building weissman-server + weissman-worker..."
   cargo build -p weissman-db -p weissman-server -p weissman-worker --quiet
+  if [[ ! -d "$ROOT/frontend/dist" ]]; then
+    echo "Building frontend/dist for Command Center UI..."
+    (cd "$ROOT/frontend" && npm ci && npm run build)
+  fi
+  export WEISSMAN_E2E_STACK=1
   stop_procs
+  rotate_e2e_logs
+  flush_e2e_redis
+  reset_stale_e2e_jobs
+  # Docker-compose server/worker compete for :8000 and DB pool — pause during local E2E.
+  for c in weissman-cybersecurity-worker-1 weissman-worker weissman-server weissman-cybersecurity-server-1 weissman-cybersecurity-backend-1; do
+    if docker ps --format '{{.Names}}' | grep -qx "$c" 2>/dev/null; then
+      echo "Pausing competing docker container: $c"
+      docker stop "$c" >/dev/null 2>&1 || true
+    fi
+  done
   echo "Starting weissman-server on :${PORT}..."
-  env -u WEISSMAN_MIGRATE_URL "$ROOT/target/debug/weissman-server" >"$LOG_DIR/server.log" 2>&1 &
+  env -u WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD \
+    WEISSMAN_E2E_STACK=1 \
+    WEISSMAN_ENV="$WEISSMAN_ENV" RUST_ENV="$RUST_ENV" NODE_ENV="$NODE_ENV" \
+    APP_ENV="$APP_ENV" RAILS_ENV="$RAILS_ENV" \
+    WEISSMAN_COOKIE_SECURE="$WEISSMAN_COOKIE_SECURE" \
+    WEISSMAN_SCANNING_ENABLED=0 \
+    WEISSMAN_APP_POOL_MAX="${WEISSMAN_APP_POOL_MAX:-24}" \
+    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-6}" \
+    WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
+    WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
+    "$ROOT/target/debug/weissman-server" >"$LOG_DIR/server.log" 2>&1 &
   echo $! >"$SERVER_PID"
   echo "Starting weissman-worker..."
-  # Large-stack engine threads are spawned per job; default Tokio worker stack is sufficient.
-  "$ROOT/target/debug/weissman-worker" >"$LOG_DIR/worker.log" 2>&1 &
+  WEISSMAN_E2E_STACK=1 WEISSMAN_ENV="$WEISSMAN_ENV" \
+    WEISSMAN_APP_POOL_MAX="${WEISSMAN_WORKER_POOL_MAX:-12}" \
+    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-4}" \
+    WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
+    WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
+    WEISSMAN_ENGINE_STACK_BYTES="$WEISSMAN_ENGINE_STACK_BYTES" \
+    "$ROOT/target/debug/weissman-worker" >"$LOG_DIR/worker.log" 2>&1 &
   echo $! >"$WORKER_PID"
   echo "Waiting for /api/health..."
   for _ in $(seq 1 90); do

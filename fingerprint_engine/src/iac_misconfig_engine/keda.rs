@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "keda", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "keda",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -61,12 +70,19 @@ pub const SCALE_TO_ZERO_PROD: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![TRIGGER_SECRET, INSECURE_PROM, KAFKA_NO_TLS, SCALE_TO_ZERO_PROD]
+    vec![
+        TRIGGER_SECRET,
+        INSECURE_PROM,
+        KAFKA_NO_TLS,
+        SCALE_TO_ZERO_PROD,
+    ]
 }
 
 fn is_keda(content: &str) -> bool {
     let lc = content.to_ascii_lowercase();
-    lc.contains("keda.sh") || lc.contains("kind: scaledobject") || lc.contains("kind: triggerauthentication")
+    lc.contains("keda.sh")
+        || lc.contains("kind: scaledobject")
+        || lc.contains("kind: triggerauthentication")
 }
 
 #[must_use]
@@ -81,12 +97,17 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
         && (lc.contains("password:") || lc.contains("token:") || lc.contains("apikey:"))
         && !lc.contains("secretkeyref")
     {
-        out.push(Finding::new(TRIGGER_SECRET, file, file).observed("literal in TriggerAuthentication"));
+        out.push(
+            Finding::new(TRIGGER_SECRET, file, file).observed("literal in TriggerAuthentication"),
+        );
     }
     if lc.contains("serveraddress: http://") || lc.contains("serveraddress: \"http://") {
         out.push(Finding::new(INSECURE_PROM, file, file).observed("Prometheus http://"));
     }
-    if lc.contains("tls: disable") || lc.contains("tls: \"disable\"") || lc.contains("enable: false") && lc.contains("kafka") {
+    if lc.contains("tls: disable")
+        || lc.contains("tls: \"disable\"")
+        || lc.contains("enable: false") && lc.contains("kafka")
+    {
         out.push(Finding::new(KAFKA_NO_TLS, file, file).observed("Kafka TLS disabled"));
     }
     if lc.contains("minreplicacount: 0") && (lc.contains("prod") || lc.contains("production")) {

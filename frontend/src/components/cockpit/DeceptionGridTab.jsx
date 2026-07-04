@@ -291,6 +291,16 @@ export default function DeceptionGridTab() {
                   <span className="text-xs font-medium text-white/90">
                     #{a.id} {a.asset_type}
                   </span>
+                  {a.simulation_mode && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {t(`${NS}.simulationBadge`, 'Simulation')}
+                    </span>
+                  )}
+                  {a.live_aws_canary && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      {t(`${NS}.liveAwsBadge`, 'Live AWS')}
+                    </span>
+                  )}
                   {a.status === 'triggered' && <AlertTriangle className="w-4 h-4 text-red-400 ml-auto" />}
                 </div>
                 <div className="mt-1 font-mono text-[10px] text-white/60 truncate" title={a.token_value_masked}>

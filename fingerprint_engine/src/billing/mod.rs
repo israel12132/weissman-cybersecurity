@@ -106,7 +106,11 @@ pub async fn enforce_scan_start(pool: &PgPool, tenant_id: i64) -> Result<(), Str
 }
 
 /// Verify the tenant can enqueue `job_count` additional scan jobs this billing period.
-pub async fn enforce_scan_quota(pool: &PgPool, tenant_id: i64, job_count: u64) -> Result<(), String> {
+pub async fn enforce_scan_quota(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_count: u64,
+) -> Result<(), String> {
     if job_count == 0 || !billing_strict_enabled() {
         return Ok(());
     }
@@ -163,7 +167,11 @@ pub async fn gate_scan_enqueue(pool: &PgPool, tenant_id: i64) -> Result<(), Stri
 }
 
 /// Enforce quota for a bulk enqueue (run-all, schedules, cron) and record all jobs atomically.
-pub async fn gate_scan_enqueue_n(pool: &PgPool, tenant_id: i64, job_count: u64) -> Result<(), String> {
+pub async fn gate_scan_enqueue_n(
+    pool: &PgPool,
+    tenant_id: i64,
+    job_count: u64,
+) -> Result<(), String> {
     if job_count == 0 {
         return Ok(());
     }

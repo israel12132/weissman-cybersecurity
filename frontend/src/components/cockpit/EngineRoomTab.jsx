@@ -5,7 +5,7 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import RoEPanel from './RoEPanel'
 import EngineCard from './EngineCard'
 import RedTeamSkullSwitch from '../warroom/RedTeamSkullSwitch'
-import { ENGINE_GROUP_DEFS } from '../../lib/enginesRegistry'
+import { ENGINE_GROUP_DEFS } from '../../lib/engineGroupDefs'
 import { useProductionEngines } from '../../lib/useProductionEngines'
 
 const defaultEngines = []
@@ -146,7 +146,7 @@ export default function EngineRoomTab() {
     return (
       <div className="p-8 flex items-center justify-center min-h-[280px]">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
-          <p className="text-sm text-white/70">Connecting to Submarine...</p>
+          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.connecting')}</p>
         </div>
       </div>
     )
@@ -156,7 +156,7 @@ export default function EngineRoomTab() {
     return (
       <div className="p-8">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-8 text-center">
-          <p className="text-sm text-white/70">Select a client from the sidebar to configure the Engine Room.</p>
+          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.select_client')}</p>
         </div>
       </div>
     )
@@ -167,7 +167,7 @@ export default function EngineRoomTab() {
       <div className="p-8 flex items-center justify-center min-h-[280px]">
         <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-8 py-10 text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#22d3ee]/50 border-t-[#22d3ee] mb-4" />
-          <p className="text-sm text-white/70">Loading Data from Submarine...</p>
+          <p className="text-sm text-white/70">{t('components.cockpitWidgets.engineRoomTab.loading')}</p>
         </div>
       </div>
     )

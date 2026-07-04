@@ -1,10 +1,10 @@
 //! Prototype Pollution Engine — differential server-side pollution detection + client gadget hints.
 //! MITRE: T1059 (Command and Scripting Interpreter).
 
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     empty_ok, finding_with_probe_depth, http_client, http_get, normalize_url,
 };
-use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -12,13 +12,7 @@ use std::time::Duration;
 const PP_PROBE_DEPTH: &str = "prototype_pollution_surface";
 const SENTINEL: &str = "wzPP9137polluted";
 
-fn pp_finding(
-    title: &str,
-    severity: &str,
-    description: &str,
-    target: &str,
-    extra: Value,
-) -> Value {
+fn pp_finding(title: &str, severity: &str, description: &str, target: &str, extra: Value) -> Value {
     let mut f = finding_with_probe_depth(
         "prototype_pollution",
         title,
@@ -72,7 +66,10 @@ async fn http_post_json(
     })
 }
 
-fn responses_differ(a: &crate::engine_probes::HttpProbe, b: &crate::engine_probes::HttpProbe) -> bool {
+fn responses_differ(
+    a: &crate::engine_probes::HttpProbe,
+    b: &crate::engine_probes::HttpProbe,
+) -> bool {
     if a.status != b.status {
         return true;
     }
@@ -87,11 +84,26 @@ fn responses_differ(a: &crate::engine_probes::HttpProbe, b: &crate::engine_probe
 }
 
 fn sentinel_leaked(body: &str, vector: &str) -> bool {
-    body.contains(SENTINEL) && !body.contains(vector)
+    if !body.contains(SENTINEL) {
+        return false;
+    }
+    // When the vector is the sentinel token itself, any body hit is a confirmed leak.
+    if vector == SENTINEL {
+        return true;
+    }
+    !body.contains(vector)
 }
 
 const API_PATHS: &[&str] = &[
-    "/api", "/api/v1", "/api/v2", "/graphql", "/data", "/submit", "/merge", "/api/merge", "/",
+    "/api",
+    "/api/v1",
+    "/api/v2",
+    "/graphql",
+    "/data",
+    "/submit",
+    "/merge",
+    "/api/merge",
+    "/",
 ];
 
 const CLIENT_GADGET_LIBS: &[(&str, &str)] = &[
@@ -230,7 +242,10 @@ pub async fn run_prototype_pollution_result(target: &str) -> EngineResult {
         empty_ok("prototype_pollution", target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("prototype_pollution: {} live finding(s)", n))
+        EngineResult::ok(
+            findings,
+            format!("prototype_pollution: {} live finding(s)", n),
+        )
     }
 }
 
@@ -284,7 +299,10 @@ mod tests {
 
     #[test]
     fn sentinel_leaked_detects_without_vector_echo() {
-        assert!(sentinel_leaked("value wzPP9137polluted ok", "wzPP9137polluted"));
+        assert!(sentinel_leaked(
+            "value wzPP9137polluted ok",
+            "wzPP9137polluted"
+        ));
         assert!(!sentinel_leaked("__proto__ wzPP9137polluted", "__proto__"));
     }
 

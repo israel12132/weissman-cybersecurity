@@ -27,15 +27,16 @@ WEISSMAN_ENV=production
 
 | בדיקה | כשל |
 |-------|------|
-| `WEISSMAN_JWT_SECRET` חסר או < 32 | Refuse boot |
-| ערכי JWT חלשים (`changeme`, placeholders) | Refuse boot |
+| `WEISSMAN_JWT_SECRET` חסר או < 48 תווים | Refuse boot |
+| ערכי JWT חלשים (`changeme`, `ci-engine-smoke-secret`, placeholders) | Refuse boot |
 | fragments חלשים ב-DB URL | Refuse boot |
 | `WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=1` | Refuse boot |
 | `WEISSMAN_SAML_INSECURE_SKIP_VERIFY=1` | Refuse boot |
 | `WEISSMAN_COOKIE_SECURE` לא מופעל (server) | Refuse boot |
 | `WEISSMAN_MIGRATE_URL` חסר (server) | Refuse boot |
-| `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` חסר | Refuse boot |
-| `WEISSMAN_METRICS_TOKEN` חסר | Refuse boot |
+| `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` חסר או < 32 תווים | Refuse boot |
+| `WEISSMAN_METRICS_TOKEN` חסר או < 32 תווים | Refuse boot |
+| `WEISSMAN_JOB_ORCHESTRATOR_SECRET` חסר או < 32 תווים (server + worker) | Refuse boot |
 | JWT ב-`?access_token=` | נדחה ב-runtime |
 
 ---
@@ -45,9 +46,10 @@ WEISSMAN_ENV=production
 ### 1. סיבוב סודות
 
 ```bash
-openssl rand -base64 48   # WEISSMAN_JWT_SECRET
-openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN
-openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+openssl rand -base64 48   # WEISSMAN_JWT_SECRET (מינימום 48 תווים ב-boot)
+openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN (≥32)
+openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (≥32)
+openssl rand -base64 48   # WEISSMAN_JOB_ORCHESTRATOR_SECRET (≥32)
 ```
 
 החליפו סיסמת admin אחרי login ראשון.
@@ -122,6 +124,27 @@ WEISSMAN_ALLOW_SELF_SERVE_IN_PRODUCTION=true
 ```
 
 דורש SMTP. לעולם לא `WEISSMAN_SIGNUP_RETURN_LINK=1` ב-production.
+
+### 10. IaC Live AWS (feature flag)
+
+מנוע IaC Misconfig תומך ב-reconciliation חי מול AWS/K8s כשהפיצ'ר `live-aws` מקומפל (ברירת מחדל ב-workspace).
+
+**Kill-switch ב-runtime (מומלץ ב-staging לפני go-live):**
+
+```bash
+# 0 = graph-only — אין קריאות AWS IAM/S3/API חיות
+WEISSMAN_IAC_LIVE_AWS=0
+```
+
+כש-`WEISSMAN_IAC_LIVE_AWS=0`, גם אם scan params כוללים `live_blast` / `aws_cross_account_role_arn`, המנוע נשאר ב-graph-only.
+
+**הפעלה מלאה (production מורשה):**
+
+```bash
+WEISSMAN_IAC_LIVE_AWS=1   # או השאר ריק — ברירת מחדל מופעלת
+```
+
+דרישות נוספות: role ARN חוצה-חשבון, `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` לפעולות cloud deploy, ו-RBAC operator.
 
 ---
 

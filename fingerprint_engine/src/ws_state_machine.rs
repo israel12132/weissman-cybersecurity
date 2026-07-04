@@ -38,7 +38,9 @@ pub fn ingest_server_frame(text: &str, session: &mut SessionVars) {
     }
     for cap in key_regex().captures_iter(text) {
         if let (Some(k), Some(val)) = (cap.get(1), cap.get(2)) {
-            session.vars.insert(k.as_str().to_ascii_lowercase(), val.as_str().to_string());
+            session
+                .vars
+                .insert(k.as_str().to_ascii_lowercase(), val.as_str().to_string());
         }
     }
 }
@@ -78,7 +80,9 @@ pub fn mutation_frames(session: &SessionVars) -> Vec<String> {
     for (k, v) in &session.vars {
         let kl = k.to_ascii_lowercase();
         if kl.contains("id") || kl.contains("token") || kl.contains("sid") {
-            out.push(json!({"type":"subscribe","id":"weissman-mut","payload":{k: "1"}}).to_string());
+            out.push(
+                json!({"type":"subscribe","id":"weissman-mut","payload":{k: "1"}}).to_string(),
+            );
             out.push(json!({"type":"subscribe","id":"weissman-mut2","payload":{k: v}}).to_string());
             out.push(
                 json!({"type":"message","payload":{k: "00000000-0000-0000-0000-000000000001"}})
@@ -91,7 +95,9 @@ pub fn mutation_frames(session: &SessionVars) -> Vec<String> {
         }
     }
     if out.is_empty() {
-        out.push(json!({"type":"subscribe","id":"weissman-fallback","payload":{"id":1}}).to_string());
+        out.push(
+            json!({"type":"subscribe","id":"weissman-fallback","payload":{"id":1}}).to_string(),
+        );
     }
     out.sort();
     out.dedup();
@@ -104,7 +110,10 @@ fn initial_handshake_frames(framework: Option<&str>, subproto: Option<&str>) -> 
     let fw = framework.unwrap_or("");
     let sp = subproto.unwrap_or("").to_ascii_lowercase();
     if fw.contains("GraphQL") || sp.contains("graphql") {
-        frames.push(r#"{"type":"subscribe","id":"conv-1","payload":{"query":"{ __typename }"}}"#.to_string());
+        frames.push(
+            r#"{"type":"subscribe","id":"conv-1","payload":{"query":"{ __typename }"}}"#
+                .to_string(),
+        );
     }
     if fw.contains("Socket.IO") {
         frames.push("40".to_string());
@@ -122,7 +131,9 @@ fn analyze_mutations(recv: &[String], sent: &[String]) -> (bool, bool, bool) {
             || joined.contains("connection_ack")
             || joined.contains("\"success\":true")
             || joined.contains("subscribed"));
-    let idor_surface = sent.iter().any(|s| s.contains("\"id\":1") || s.contains("00000000-0000"))
+    let idor_surface = sent
+        .iter()
+        .any(|s| s.contains("\"id\":1") || s.contains("00000000-0000"))
         && mutation_accepted
         && !joined.contains("unauthorized")
         && !joined.contains("forbidden");
@@ -142,7 +153,11 @@ pub async fn run_conversational_fuzz(
     max_rounds: u8,
 ) -> Option<ConvFuzzResult> {
     let mut session = SessionVars::default();
-    let visited = vec!["Init".into(), "AwaitChallenge".into(), "InjectMutations".into()];
+    let visited = vec![
+        "Init".into(),
+        "AwaitChallenge".into(),
+        "InjectMutations".into(),
+    ];
 
     let handshake = initial_handshake_frames(framework, subproto);
     let phase1 = handshake;

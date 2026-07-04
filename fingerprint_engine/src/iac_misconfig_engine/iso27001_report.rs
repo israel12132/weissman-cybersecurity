@@ -21,21 +21,33 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         for tag in f.policy.compliance {
             if let Some(theme) = iso_theme_of(tag) {
                 *theme_failed.entry(theme.to_string()).or_insert(0) += 1;
-                theme_controls.entry(theme.to_string()).or_default().push(tag.to_string());
+                theme_controls
+                    .entry(theme.to_string())
+                    .or_default()
+                    .push(tag.to_string());
             }
         }
     }
 
-    let iso_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("ISO27001"));
-    let total_controls = iso_row.and_then(|r| r.get("controls_covered").and_then(Value::as_u64)).unwrap_or(0);
-    let failed_controls = iso_row.and_then(|r| r.get("controls_failed").and_then(Value::as_u64)).unwrap_or(0);
+    let iso_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("ISO27001"));
+    let total_controls = iso_row
+        .and_then(|r| r.get("controls_covered").and_then(Value::as_u64))
+        .unwrap_or(0);
+    let failed_controls = iso_row
+        .and_then(|r| r.get("controls_failed").and_then(Value::as_u64))
+        .unwrap_or(0);
     let pass_pct = if total_controls > 0 {
         ((total_controls.saturating_sub(failed_controls)) * 100 / total_controls.max(1)) as u64
     } else {
         100
     };
 
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
     let cert_ready = pass_pct >= 88 && crit == 0;
 
     let themes: Vec<Value> = ISO_THEMES
@@ -90,7 +102,11 @@ fn iso_theme_of(tag: &str) -> Option<&'static str> {
         if rest.starts_with("A.7") {
             return Some("A.7");
         }
-        if rest.starts_with("A.8") || rest.starts_with("A.9") || rest.starts_with("A.10") || rest.starts_with("A.13") {
+        if rest.starts_with("A.8")
+            || rest.starts_with("A.9")
+            || rest.starts_with("A.10")
+            || rest.starts_with("A.13")
+        {
             return Some("A.8");
         }
     }
@@ -104,8 +120,13 @@ mod tests {
 
     #[test]
     fn maps_iso_themes() {
-        let findings = vec![Finding::new(GUEST_AUTH, "app-config.yaml", "app-config.yaml")];
-        let compliance = vec![json!({"pack": "ISO27001", "controls_covered": 40, "controls_failed": 1})];
+        let findings = vec![Finding::new(
+            GUEST_AUTH,
+            "app-config.yaml",
+            "app-config.yaml",
+        )];
+        let compliance =
+            vec![json!({"pack": "ISO27001", "controls_covered": 40, "controls_failed": 1})];
         let r = build(&findings, &compliance);
         assert_eq!(r["framework"], "ISO27001");
         assert!(r["annex_a_themes"].is_array());

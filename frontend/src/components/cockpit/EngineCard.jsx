@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useTelemetry } from '../../context/TelemetryContext'
 import { useWarRoom } from '../../context/WarRoomContext'
-import { apiFetch, apiEventSourceUrl } from '../../lib/apiBase'
+import { apiFetch } from '../../lib/apiBase'
+import { openSseStream } from '../../lib/sseStream'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
 import { launchEngineScan } from '../../lib/launchEngineScan'
-import { ENGINES_BY_ID } from '../../lib/enginesRegistry'
+import { loadEnginesRegistry } from '../../lib/enginesRegistryLoader'
 import EngineRealityBadge from '../EngineRealityBadge'
 
 const NS = 'components.cockpitWidgets.engineCard'
@@ -98,8 +99,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     setPoeJobLines([])
     setHasError(false)
     const path = `/api/poe-scan/stream/${encodeURIComponent(sseJobId)}`
-    const url = apiEventSourceUrl(path)
-    const es = new EventSource(url, { withCredentials: true })
+    const es = openSseStream(path)
     setPoeJobLines((prev) => [...prev, t(`${NS}.terminalConnecting`)])
     es.onmessage = (e) => {
       try {
@@ -142,7 +142,18 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     return base
   })()
 
-  const registryEntry = ENGINES_BY_ID[engineId]
+  const [registryEntry, setRegistryEntry] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    loadEnginesRegistry().then((mod) => {
+      if (!cancelled) setRegistryEntry(mod.ENGINES_BY_ID?.[engineId] ?? null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [engineId])
+
   const mitreId = registryEntry?.mitre ?? null
 
   return (

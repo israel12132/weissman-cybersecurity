@@ -92,6 +92,8 @@ export function useEngineCapabilities() {
   const getEngine = useCallback((engineId) => byId[engineId] ?? null, [byId])
 
   return {
+    /** Full API payload including cryptographic `provenance` manifest. */
+    payload,
     /** @deprecated prefer `byId` — kept for existing callers */
     kindById,
     byId,

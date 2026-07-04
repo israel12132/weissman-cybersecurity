@@ -34,10 +34,9 @@
 //! Implementation notes:
 //!  * Actions run sequentially; failures don't abort subsequent actions (best-effort).
 //!  * Action params support `{{placeholder}}` substitution from the trigger event.
-//!  * `isolate_host` / `open_pr` / `page_oncall` are stubs that delegate to the
-//!    existing modules (`auto_heal::create_branch_and_pr`, etc.) where wired.
-//!    The framework runs and audits even when wiring is partial — analyst sees
-//!    an actionable "what would have happened" trail.
+//!  * `isolate_host` / `open_pr` / `page_oncall` route through `soar::engine` with
+//!    adapter plugins, Redis idempotency locks, blast-radius gates, verification,
+//!    and auto-revert runbooks. Simple notify actions remain inline.
 //!  * Every dispatch is idempotent: same `(playbook_id, run_dedup_key)` inside
 //!    the cooldown window is a no-op.
 
@@ -351,6 +350,28 @@ async fn run_actions(
 async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -> (String, String) {
     let kind = a.kind.trim().to_ascii_lowercase();
     let params = render_params(&a.params, ev);
+
+    if crate::soar::engine::is_armored_action(&kind) {
+        let target = params
+            .get("target")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| ev.target.clone());
+        let evidence = crate::soar::types::ThreatEvidence::from_playbook_event(ev);
+        let cmd = crate::soar::engine::build_command(
+            &kind,
+            ev.tenant_id,
+            ev.client_id,
+            None,
+            target,
+            params,
+            evidence,
+            false,
+        );
+        let outcome = crate::soar::engine::execute_armored_action(pool, cmd).await;
+        return (outcome.status, outcome.detail);
+    }
+
     match kind.as_str() {
         // 1) Workflow control — set finding status.
         "set_status" => {
@@ -426,119 +447,7 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
             }
         }
 
-        // 3) PagerDuty / OpsGenie — generic HTTP webhook with severity routing.
-        "page_oncall" => {
-            let team = params
-                .get("team")
-                .and_then(Value::as_str)
-                .unwrap_or("sec-oncall");
-            let sev = params
-                .get("severity")
-                .and_then(Value::as_str)
-                .unwrap_or(&ev.severity);
-            let url = std::env::var("WEISSMAN_PAGER_WEBHOOK_URL")
-                .ok()
-                .unwrap_or_default();
-            if url.is_empty() {
-                return (
-                    "skipped".into(),
-                    "WEISSMAN_PAGER_WEBHOOK_URL not set".into(),
-                );
-            }
-            let body = json!({
-                "team":     team,
-                "severity": sev,
-                "summary":  render_template("{{severity}}: {{title}} on {{target}}", ev),
-                "details":  ev,
-            });
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .build()
-                .unwrap_or_default();
-            match client.post(&url).json(&body).send().await {
-                Ok(r) if r.status().is_success() => ("ok".into(), format!("paged team={team}")),
-                Ok(r) => ("failed".into(), format!("HTTP {}", r.status())),
-                Err(e) => ("failed".into(), e.to_string()),
-            }
-        }
-
-        // 4) Open PR via the existing auto_heal pipeline.
-        //    auto_heal::create_branch_and_pr handles the actual git work; here
-        //    we just enqueue an auto_heal_job_spec the worker picks up.
-        "open_pr" => {
-            let Some(fid) = ev.finding_id else {
-                return ("skipped".into(), "no finding_id on event".into());
-            };
-            let Some(cid) = ev.client_id else {
-                return ("skipped".into(), "no client_id on event".into());
-            };
-            let title = params
-                .get("title")
-                .and_then(Value::as_str)
-                .map(|s| render_template(s, ev))
-                .unwrap_or_else(|| format!("Auto-remediation: {}", ev.title));
-            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-                return ("failed".into(), "tenant tx".into());
-            };
-            let res = sqlx::query(
-                r#"INSERT INTO auto_heal_job_specs
-                       (tenant_id, client_id, finding_id, status, requested_pr_title, created_at)
-                   VALUES ($1, $2, $3, 'queued', $4, now())"#,
-            )
-            .bind(ev.tenant_id)
-            .bind(cid)
-            .bind(fid)
-            .bind(&title)
-            .execute(&mut *tx)
-            .await;
-            let _ = tx.commit().await;
-            match res {
-                Ok(_) => ("ok".into(), format!("auto_heal queued for finding {fid}")),
-                Err(e) => {
-                    // The table may not exist on a tiny install; degrade gracefully.
-                    (
-                        "skipped".into(),
-                        format!("auto_heal_job_specs unavailable: {e}"),
-                    )
-                }
-            }
-        }
-
-        // 5) Host isolation — placeholder that records the request. Production
-        //    deployments wire this to the EDR / cloud-API integration. Recording
-        //    the intent in audit_logs is enough to drive a downstream worker.
-        "isolate_host" => {
-            let target = params
-                .get("target")
-                .and_then(Value::as_str)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| ev.target.clone());
-            let duration = params
-                .get("duration_seconds")
-                .and_then(Value::as_i64)
-                .unwrap_or(900);
-            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
-                return ("failed".into(), "tenant tx".into());
-            };
-            let _ = crate::audit_log::insert_audit(
-                &mut tx,
-                ev.tenant_id,
-                None,
-                "soar_playbook",
-                "containment_requested",
-                &format!(
-                    "isolate_host target={} duration={}s playbook_event={}",
-                    target, duration, ev.kind
-                ),
-                "0.0.0.0",
-            )
-            .await;
-            let _ = tx.commit().await;
-            (
-                "ok".into(),
-                format!("containment requested for {target} ({duration}s)"),
-            )
-        }
+        // 3–5) armored actions handled before match (isolate_host, open_pr, page_oncall).
 
         // 6) HTTP raw — escape hatch for anything not above.
         "http_post" => {

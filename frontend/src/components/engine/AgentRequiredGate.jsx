@@ -6,11 +6,13 @@ import AgentRequiredEmptyState from './AgentRequiredEmptyState'
  * Otherwise shows a strict empty state (no mock / guidance findings).
  */
 export default function AgentRequiredGate({ engineId, children, className = '' }) {
-  const { blocked, loading } = useAgentRequiredGate(engineId)
+  const { blocked, loading, isAgentRequired } = useAgentRequiredGate(engineId)
 
   if (!engineId) return children
 
-  if (loading) {
+  // Only defer the surface while capabilities load for agent-gated engines.
+  // Remote probes (OSINT, ASM, etc.) must stay runnable without waiting on fleet status.
+  if (loading && isAgentRequired) {
     return (
       <div className={`rounded-2xl border border-white/[0.07] bg-white/[0.02] p-10 animate-pulse ${className}`}>
         <div className="h-4 w-48 bg-white/10 rounded mb-3" />

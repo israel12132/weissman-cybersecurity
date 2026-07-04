@@ -4,19 +4,19 @@
 //! Crypto posture engine: live TLS handshakes, HTTP secret leakage, cookie/JWT surface,
 //! and predictable nonce detection — evidence-bearing findings only.
 
-use base64::{
-    engine::general_purpose::{URL_SAFE_NO_PAD, STANDARD as BASE64},
-    Engine,
-};
 use crate::arsenal_config::{finding_rich, Evidence};
 use crate::engine_probes::{detect_secrets, extract_host, header_value, http_get, normalize_url};
 use crate::engine_result::EngineResult;
+use base64::{
+    engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD},
+    Engine,
+};
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkcs7::Pkcs7Flags;
 use openssl::pkey::PKey;
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode, SslVersion};
-use openssl::x509::{X509, X509Ref, X509VerifyResult};
+use openssl::x509::{X509Ref, X509VerifyResult, X509};
 use regex::Regex;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -343,8 +343,10 @@ fn resolve_addr(host: &str, port: u16) -> Option<SocketAddr> {
 fn build_tls_connector(ver: SslVersion) -> Result<SslConnector, String> {
     let mut b = SslConnector::builder(SslMethod::tls()).map_err(|e| e.to_string())?;
     b.set_verify(SslVerifyMode::NONE);
-    b.set_min_proto_version(Some(ver)).map_err(|e| e.to_string())?;
-    b.set_max_proto_version(Some(ver)).map_err(|e| e.to_string())?;
+    b.set_min_proto_version(Some(ver))
+        .map_err(|e| e.to_string())?;
+    b.set_max_proto_version(Some(ver))
+        .map_err(|e| e.to_string())?;
     if ver != SslVersion::TLS1_3 {
         let _ = b.set_cipher_list(LEGACY_CIPHER_LIST);
     }
@@ -356,7 +358,11 @@ fn parse_leaf_cert(cert: &X509Ref) -> LeafCertInfo {
         name.entries()
             .map(|e| {
                 let key = e.object().nid().short_name().unwrap_or("?");
-                let val = e.data().as_utf8().map(|s| s.to_string()).unwrap_or_default();
+                let val = e
+                    .data()
+                    .as_utf8()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
                 format!("{key}={val}")
             })
             .collect::<Vec<_>>()
@@ -529,10 +535,14 @@ fn extract_form_nonces(html: &str) -> Vec<String> {
         Regex::new(
             r#"(?i)<input[^>]+(?:name=["'](?:csrf(?:token)?|_token|nonce|authenticity_token)["'][^>]+value=["']([^"']+)["']|value=["']([^"']+)["'][^>]+name=["'](?:csrf(?:token)?|_token|nonce|authenticity_token)["'])"#,
         )
-        .unwrap_or_else(|_| Regex::new("(?!x)x").expect("fallback regex"))
+        .unwrap_or_else(|_| Regex::new("^$").expect("fallback regex"))
     });
     re.captures_iter(html)
-        .filter_map(|cap| cap.get(1).or_else(|| cap.get(2)).map(|m| m.as_str().to_string()))
+        .filter_map(|cap| {
+            cap.get(1)
+                .or_else(|| cap.get(2))
+                .map(|m| m.as_str().to_string())
+        })
         .collect()
 }
 
@@ -828,10 +838,13 @@ fn emit_secret_findings(
     if secret_kinds.is_empty() {
         return;
     }
-    scores.secrets = scores.secrets.saturating_sub((secret_kinds.len() as u8).saturating_mul(25));
-    let sev = if secret_kinds.iter().any(|k| {
-        k.contains("Private Key") || k.contains("Stripe") || k.contains("AWS Secret")
-    }) {
+    scores.secrets = scores
+        .secrets
+        .saturating_sub((secret_kinds.len() as u8).saturating_mul(25));
+    let sev = if secret_kinds
+        .iter()
+        .any(|k| k.contains("Private Key") || k.contains("Stripe") || k.contains("AWS Secret"))
+    {
         "critical"
     } else {
         "high"
@@ -901,7 +914,9 @@ fn emit_cookie_findings(
             ),
             target,
             0.9,
-            Evidence::new().with("cookie", name).with("issues", json!(issues)),
+            Evidence::new()
+                .with("cookie", name)
+                .with("issues", json!(issues)),
         ));
     }
 }
@@ -1127,7 +1142,15 @@ mod tests {
 
     #[test]
     fn cert_weakness_classifier_flags_sha1_rsa_and_host_mismatch() {
-        let cert = sample_cert("RSA", 1024, true, false, false, vec![], Some("other.example".into()));
+        let cert = sample_cert(
+            "RSA",
+            1024,
+            true,
+            false,
+            false,
+            vec![],
+            Some("other.example".into()),
+        );
         let weaknesses = classify_cert_weaknesses(&cert, "app.example.com");
         assert!(weaknesses.contains(&CertWeakness::WeakSigSha1));
         assert!(weaknesses.contains(&CertWeakness::RsaKeyTooSmall));
@@ -1136,7 +1159,15 @@ mod tests {
 
     #[test]
     fn cert_weakness_classifier_flags_ec_and_self_signed() {
-        let cert = sample_cert("EC", 224, false, true, true, vec!["*.test.local".into()], None);
+        let cert = sample_cert(
+            "EC",
+            224,
+            false,
+            true,
+            true,
+            vec!["*.test.local".into()],
+            None,
+        );
         let weaknesses = classify_cert_weaknesses(&cert, "api.test.local");
         assert!(weaknesses.contains(&CertWeakness::EcKeyTooSmall));
         assert!(weaknesses.contains(&CertWeakness::Expired));
@@ -1154,7 +1185,8 @@ mod tests {
         assert!(!issues.hs256_with_kid);
         assert!(issues.missing_exp);
 
-        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","kid":"../../etc/passwd"}"#.as_bytes());
+        let header =
+            URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","kid":"../../etc/passwd"}"#.as_bytes());
         let payload = URL_SAFE_NO_PAD.encode(r#"{"sub":"123","exp":9999999999}"#.as_bytes());
         let token = format!("{header}.{payload}.sig");
         let issues = parse_jwt_header_issues(&token).expect("parse");
@@ -1165,7 +1197,15 @@ mod tests {
 
     #[test]
     fn host_matching_supports_wildcard_san() {
-        let cert = sample_cert("RSA", 2048, false, false, false, vec!["*.example.com".into()], None);
+        let cert = sample_cert(
+            "RSA",
+            2048,
+            false,
+            false,
+            false,
+            vec!["*.example.com".into()],
+            None,
+        );
         assert!(host_matches_cert("app.example.com", &cert));
         assert!(!host_matches_cert("app.other.com", &cert));
     }

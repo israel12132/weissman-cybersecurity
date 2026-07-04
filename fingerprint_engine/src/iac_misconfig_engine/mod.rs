@@ -15,19 +15,21 @@
 
 pub mod ansible;
 pub mod argo_rollouts;
-pub mod audit_packet;
-pub mod backstage;
 pub mod argocd;
 pub mod arm;
 pub mod attack_chains;
+pub mod audit_packet;
+pub mod backstage;
 pub mod bicep;
-pub mod cert_manager;
 pub mod cdk;
+pub mod cert_manager;
+pub mod ci_platform;
 pub mod cloudformation;
 pub mod compliance_playbooks;
 pub mod compose;
 pub mod cross_correlation;
 pub mod crossplane;
+pub mod cue;
 pub mod detect;
 pub mod dockerfile;
 pub mod drift_hints;
@@ -37,9 +39,9 @@ pub mod falco;
 pub mod fedramp_report;
 pub mod fix_bundles;
 pub mod flux;
-pub mod gateway_api;
 pub mod gate_evidence;
 pub mod gate_profiles;
+pub mod gateway_api;
 pub mod github_actions;
 pub mod helm;
 pub mod helmfile;
@@ -47,19 +49,17 @@ pub mod hipaa_report;
 pub mod iso27001_report;
 pub mod istio;
 pub mod keda;
-pub mod kyverno;
-pub mod ci_platform;
-pub mod cue;
-pub mod kustomize;
 pub mod kubernetes;
+pub mod kustomize;
+pub mod kyverno;
 pub mod linkerd;
 pub mod live_blast;
 pub mod mitre;
 pub mod model;
 pub mod nginx;
 pub mod nist_report;
-pub mod openapi;
 pub mod opa;
+pub mod openapi;
 pub mod packer;
 pub mod pci_report;
 pub mod plan_reconcile;
@@ -68,8 +68,8 @@ pub mod posture;
 pub mod prometheus_operator;
 pub mod pulumi;
 pub mod resource_graph;
-pub mod secrets;
 pub mod sealed_secrets;
+pub mod secrets;
 pub mod serverless;
 pub mod skaffold;
 pub mod soc_report;
@@ -95,15 +95,23 @@ use std::time::Duration;
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn jp<'a>(p: &'a Value, key: &str) -> Option<&'a Value> {
-    p.get(key).or_else(|| p.get("options").and_then(|o| o.get(key)))
+    p.get(key)
+        .or_else(|| p.get("options").and_then(|o| o.get(key)))
 }
 fn jp_str(p: &Value, key: &str) -> Option<String> {
-    jp(p, key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    jp(p, key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 fn jp_bool(p: &Value, key: &str, default: bool) -> bool {
     match jp(p, key) {
         Some(Value::Bool(b)) => *b,
-        Some(Value::String(s)) => matches!(s.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"),
+        Some(Value::String(s)) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
         Some(Value::Number(n)) => n.as_i64().map(|x| x != 0).unwrap_or(default),
         _ => default,
     }
@@ -117,8 +125,19 @@ fn jp_u64(p: &Value, key: &str, default: u64) -> u64 {
 }
 fn jp_list(p: &Value, key: &str) -> Vec<String> {
     match jp(p, key) {
-        Some(Value::Array(arr)) => arr.iter().filter_map(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect(),
-        Some(Value::String(s)) => s.split(['\n', ',']).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect(),
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect(),
+        Some(Value::String(s)) => s
+            .split(['\n', ','])
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -177,7 +196,11 @@ impl Cfg {
             if l.is_empty() {
                 None
             } else {
-                Some(l.iter().filter_map(|s| Framework::parse(s).map(|f| f.as_str().to_string())).collect())
+                Some(
+                    l.iter()
+                        .filter_map(|s| Framework::parse(s).map(|f| f.as_str().to_string()))
+                        .collect(),
+                )
             }
         };
         let providers_filter = {
@@ -191,7 +214,10 @@ impl Cfg {
         let compliance_packs = {
             let l = jp_list(p, "compliance_packs");
             if l.is_empty() {
-                policies::KNOWN_PACKS.iter().map(|s| s.to_string()).collect()
+                policies::KNOWN_PACKS
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect()
             } else {
                 l.iter().map(|s| s.to_ascii_uppercase()).collect()
             }
@@ -209,11 +235,19 @@ impl Cfg {
             frameworks_filter,
             providers_filter,
             compliance_packs,
-            min_severity: jp_str(p, "min_severity").and_then(|s| Severity::parse(&s)).unwrap_or(Severity::Info),
-            fail_severity: jp_str(p, "fail_severity").and_then(|s| Severity::parse(&s)).unwrap_or(Severity::High),
+            min_severity: jp_str(p, "min_severity")
+                .and_then(|s| Severity::parse(&s))
+                .unwrap_or(Severity::Info),
+            fail_severity: jp_str(p, "fail_severity")
+                .and_then(|s| Severity::parse(&s))
+                .unwrap_or(Severity::High),
             secret_scan: jp_bool(p, "secret_scan", true),
             skip_policies: jp_list(p, "skip_policies").into_iter().collect(),
-            only_policies: if only.is_empty() { None } else { Some(only.into_iter().collect()) },
+            only_policies: if only.is_empty() {
+                None
+            } else {
+                Some(only.into_iter().collect())
+            },
             extra_exposure_paths: jp_list(p, "exposure_paths"),
             timeout_ms: jp_u64(p, "timeout_ms", 8000).clamp(500, 30_000),
             verify_tls: jp_bool(p, "verify_tls", true),
@@ -225,29 +259,43 @@ impl Cfg {
             asset_tier: jp_str(p, "asset_tier").unwrap_or_else(|| "tier3".to_string()),
             resource_graph: jp_bool(p, "resource_graph", true),
             drift_analysis: jp_bool(p, "drift_analysis", true),
-            live_blast: jp_bool(p, "live_blast", jp_bool(p, "live_cloud_reconcile", false)
-                || jp_str(p, "aws_cross_account_role_arn").is_some()
-                || (jp_str(p, "k8s_api_server").is_some() && jp_str(p, "k8s_token").is_some())),
+            live_blast: jp_bool(
+                p,
+                "live_blast",
+                jp_bool(p, "live_cloud_reconcile", false)
+                    || jp_str(p, "aws_cross_account_role_arn").is_some()
+                    || (jp_str(p, "k8s_api_server").is_some() && jp_str(p, "k8s_token").is_some()),
+            ),
         }
     }
 
     fn live_blast_config(p: &Value, github_token: Option<String>) -> live_blast::LiveBlastConfig {
-        let repo = jp_str(p, "git_repo_url").or_else(|| jp_str(p, "repo_url")).unwrap_or_default();
+        let repo = jp_str(p, "git_repo_url")
+            .or_else(|| jp_str(p, "repo_url"))
+            .unwrap_or_default();
         live_blast::LiveBlastConfig {
-            enabled: jp_bool(p, "live_blast", jp_bool(p, "live_cloud_reconcile", false)
-                || jp_str(p, "aws_cross_account_role_arn").is_some()
-                || (jp_str(p, "k8s_api_server").is_some() && jp_str(p, "k8s_token").is_some())),
+            enabled: live_blast::live_aws_runtime_enabled()
+                && jp_bool(
+                    p,
+                    "live_blast",
+                    jp_bool(p, "live_cloud_reconcile", false)
+                        || jp_str(p, "aws_cross_account_role_arn").is_some()
+                        || (jp_str(p, "k8s_api_server").is_some()
+                            && jp_str(p, "k8s_token").is_some()),
+                ),
             aws_role_arn: jp_str(p, "aws_cross_account_role_arn").unwrap_or_default(),
             aws_external_id: jp_str(p, "aws_external_id").unwrap_or_default(),
             aws_regions: jp_list(p, "aws_regions"),
             k8s_api_server: jp_str(p, "k8s_api_server").unwrap_or_default(),
-            k8s_token: jp_str(p, "k8s_token").or_else(|| jp_str(p, "k8s_bearer_token")).unwrap_or_default(),
+            k8s_token: jp_str(p, "k8s_token")
+                .or_else(|| jp_str(p, "k8s_bearer_token"))
+                .unwrap_or_default(),
             k8s_namespace: jp_str(p, "k8s_namespace").unwrap_or_else(|| "default".to_string()),
             verify_tls: jp_bool(p, "verify_tls", true),
             timeout_ms: jp_u64(p, "timeout_ms", 8000).clamp(500, 30_000),
             iam_simulate: jp_bool(p, "iam_simulate", jp_bool(p, "live_blast", false)),
             k8s_rbac_prove: jp_bool(p, "k8s_rbac_prove", jp_bool(p, "live_blast", false)),
-            autopilot: jp_bool(p, "autopilot", jp_bool(p, "live_blast", false)),
+            autopilot: jp_bool(p, "autopilot", false),
             autopilot_create_pr: jp_bool(p, "autopilot_create_pr", false),
             git_repo_url: repo,
             git_base_branch: jp_str(p, "git_base_branch").unwrap_or_else(|| "main".to_string()),
@@ -342,7 +390,9 @@ pub async fn run_iac_misconfig_result(target: &str, ctx: &EngineRunContext) -> E
     if cfg.drift_analysis && files.len() >= 2 {
         findings.extend(drift_hints::analyze(&files));
     }
-    if let Some(plan) = jp_str(&job_params, "terraform_plan_json").or_else(|| jp_str(&job_params, "tf_plan_json")) {
+    if let Some(plan) =
+        jp_str(&job_params, "terraform_plan_json").or_else(|| jp_str(&job_params, "tf_plan_json"))
+    {
         let plan_findings = tfplan::evaluate_plan(&plan);
         findings.extend(plan_findings.iter().cloned());
         sources.push("tfplan:operator-supplied".to_string());
@@ -381,7 +431,12 @@ pub async fn run_iac_misconfig_result(target: &str, ctx: &EngineRunContext) -> E
     findings.retain(|f| keep(f, &cfg));
     if cfg.dedupe {
         let mut seen = HashSet::new();
-        findings.retain(|f| seen.insert(format!("{}|{}|{}|{}", f.policy.id, f.file, f.line, f.resource)));
+        findings.retain(|f| {
+            seen.insert(format!(
+                "{}|{}|{}|{}",
+                f.policy.id, f.file, f.line, f.resource
+            ))
+        });
     }
     findings.sort_by(|a, b| b.policy.severity.cmp(&a.policy.severity));
 
@@ -461,12 +516,24 @@ pub async fn run_iac_misconfig(target: &str) {
 fn collect_inline_files(cfg: &Cfg, params: &Value) -> Vec<IacFile> {
     let mut out = Vec::new();
     let raw = jp(params, "iac_files");
-    let Some(Value::Array(arr)) = raw else { return out };
+    let Some(Value::Array(arr)) = raw else {
+        return out;
+    };
     for item in arr {
         let (name, content, forced) = match item {
             Value::Object(obj) => {
-                let name = obj.get("name").or_else(|| obj.get("filename")).and_then(Value::as_str).unwrap_or("input.tf").trim().to_string();
-                let content = obj.get("content").and_then(Value::as_str).unwrap_or("").to_string();
+                let name = obj
+                    .get("name")
+                    .or_else(|| obj.get("filename"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("input.tf")
+                    .trim()
+                    .to_string();
+                let content = obj
+                    .get("content")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 if content.is_empty() {
                     continue;
                 }
@@ -480,7 +547,12 @@ fn collect_inline_files(cfg: &Cfg, params: &Value) -> Vec<IacFile> {
             Value::String(s) if !s.trim().is_empty() => continue,
             _ => continue,
         };
-        out.push(IacFile { name, content, forced, origin: "inline".to_string() });
+        out.push(IacFile {
+            name,
+            content,
+            forced,
+            origin: "inline".to_string(),
+        });
     }
     let _ = cfg; // reserved for future per-file limits
     out
@@ -626,13 +698,20 @@ fn build_summary(
             Severity::Low => low += 1,
             Severity::Info => info += 1,
         }
-        *by_framework.entry(f.policy.framework.to_string()).or_insert(0) += 1;
-        *by_provider.entry(f.policy.provider.to_string()).or_insert(0) += 1;
+        *by_framework
+            .entry(f.policy.framework.to_string())
+            .or_insert(0) += 1;
+        *by_provider
+            .entry(f.policy.provider.to_string())
+            .or_insert(0) += 1;
         triggered.insert(f.policy.id);
         for tag in f.policy.compliance {
             let pack = policies::pack_of(tag);
             if cfg.compliance_packs.contains(pack) {
-                pack_controls.entry(pack.to_string()).or_default().insert((*tag).to_string());
+                pack_controls
+                    .entry(pack.to_string())
+                    .or_default()
+                    .insert((*tag).to_string());
                 *pack_findings.entry(pack.to_string()).or_insert(0) += 1;
             }
         }
@@ -642,21 +721,36 @@ fn build_summary(
     let base_risk = (crit * 25 + high * 10 + med * 4 + low).min(100);
     let static_risk = ((base_risk as f64) * blast * tier_mult).round().min(100.0) as u64;
     let (risk_score, real_live_risk_score, live_blast_json) = if let Some(lb) = live_blast {
-        let live_score = ((lb.real_live_risk_score as f64) * blast * tier_mult).round().min(100.0) as u64;
+        let live_score = ((lb.real_live_risk_score as f64) * blast * tier_mult)
+            .round()
+            .min(100.0) as u64;
         let final_score = static_risk.max(live_score);
-        (final_score, Some(live_score), Some(lb.summary_json(base_risk)))
+        (
+            final_score,
+            Some(live_score),
+            Some(lb.summary_json(base_risk)),
+        )
     } else {
         (static_risk, None, None)
     };
-    let gate_blocking = findings.iter().filter(|f| f.policy.severity >= cfg.fail_severity).count() as u64
-        + chains.iter().filter(|c| c.severity() >= cfg.fail_severity).count() as u64;
+    let gate_blocking = findings
+        .iter()
+        .filter(|f| f.policy.severity >= cfg.fail_severity)
+        .count() as u64
+        + chains
+            .iter()
+            .filter(|c| c.severity() >= cfg.fail_severity)
+            .count() as u64;
 
     // compliance coverage of the whole catalog (how many controls per pack the engine can assess)
     let catalog = policies::all_policies();
     let mut catalog_pack_controls: BTreeMap<String, HashSet<String>> = BTreeMap::new();
     for p in &catalog {
         for tag in p.compliance {
-            catalog_pack_controls.entry(policies::pack_of(tag).to_string()).or_default().insert((*tag).to_string());
+            catalog_pack_controls
+                .entry(policies::pack_of(tag).to_string())
+                .or_default()
+                .insert((*tag).to_string());
         }
     }
 
@@ -667,7 +761,10 @@ fn build_summary(
             let failed: HashSet<String> = pack_controls.get(*pack).cloned().unwrap_or_default();
             let mut failed_sorted: Vec<String> = failed.iter().cloned().collect();
             failed_sorted.sort();
-            let covered = catalog_pack_controls.get(*pack).map(HashSet::len).unwrap_or(0);
+            let covered = catalog_pack_controls
+                .get(*pack)
+                .map(HashSet::len)
+                .unwrap_or(0);
             json!({
                 "pack": pack,
                 "controls_covered": covered,
@@ -679,7 +776,11 @@ fn build_summary(
         })
         .collect();
 
-    let frameworks: Value = frameworks_seen.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>().into();
+    let frameworks: Value = frameworks_seen
+        .iter()
+        .map(|(k, v)| (k.clone(), json!(v)))
+        .collect::<serde_json::Map<_, _>>()
+        .into();
     let exploit = posture::exploitability_index(findings, chains);
     let remediation = posture::remediation_queue(findings, chains);
     let coverage = posture::framework_coverage(&triggered);
@@ -689,7 +790,13 @@ fn build_summary(
         Value::Null
     };
     let mitre = mitre::mitre_rollup(findings, chains);
-    let executive = mitre::executive_summary(findings, chains, exploit, grade(risk_score), gate_blocking == 0);
+    let executive = mitre::executive_summary(
+        findings,
+        chains,
+        exploit,
+        grade(risk_score),
+        gate_blocking == 0,
+    );
     let gate_evidence = gate_evidence::build(
         target,
         findings,
@@ -703,11 +810,30 @@ fn build_summary(
     let fix_bundle = fix_bundles::export_bundle(findings, target, Some(&gate_evidence));
     let attack_mermaid = attack_chains::mermaid_graph(chains);
     let cis_scorecard = posture::cis_scorecard(&compliance);
-    let drift_count = findings.iter().filter(|f| f.policy.framework == "drift").count() as u64;
-    let reconcile_count = findings.iter().filter(|f| f.policy.framework == "reconcile").count() as u64;
-    let supply_chain_count = findings.iter().filter(|f| f.policy.framework == "supply_chain").count() as u64;
-    let fix_count = fix_bundle.get("fix_count").and_then(Value::as_u64).unwrap_or(0);
-    let readiness = posture::readiness_report(findings, chains, exploit, fix_count, drift_count, waived.len() as u64);
+    let drift_count = findings
+        .iter()
+        .filter(|f| f.policy.framework == "drift")
+        .count() as u64;
+    let reconcile_count = findings
+        .iter()
+        .filter(|f| f.policy.framework == "reconcile")
+        .count() as u64;
+    let supply_chain_count = findings
+        .iter()
+        .filter(|f| f.policy.framework == "supply_chain")
+        .count() as u64;
+    let fix_count = fix_bundle
+        .get("fix_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let readiness = posture::readiness_report(
+        findings,
+        chains,
+        exploit,
+        fix_count,
+        drift_count,
+        waived.len() as u64,
+    );
     let risk_heatmap = posture::risk_heatmap(findings);
     let playbooks = compliance_playbooks::build(findings, &compliance);
     let soc2_report = soc_report::build(findings, &compliance);
@@ -815,7 +941,8 @@ fn build_summary(
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn client(cfg: &Cfg) -> reqwest::Client {
-    let accept_invalid = !cfg.verify_tls || weissman_core::tls_policy::danger_accept_invalid_certs();
+    let accept_invalid =
+        !cfg.verify_tls || weissman_core::tls_policy::danger_accept_invalid_certs();
     reqwest::Client::builder()
         .timeout(Duration::from_millis(cfg.timeout_ms))
         .danger_accept_invalid_certs(accept_invalid)
@@ -846,47 +973,211 @@ struct ExpPath {
 fn exposure_paths() -> Vec<ExpPath> {
     use policies::*;
     vec![
-        ExpPath { path: "/terraform.tfstate", policy: EXPOSED_TFSTATE, indicators: &["terraform_version", "\"resources\"", "\"outputs\""] },
-        ExpPath { path: "/.terraform/terraform.tfstate", policy: EXPOSED_TFSTATE, indicators: &["terraform_version", "\"resources\""] },
-        ExpPath { path: "/terraform.tfstate.backup", policy: EXPOSED_TFSTATE, indicators: &["terraform_version", "\"resources\""] },
-        ExpPath { path: "/.env", policy: EXPOSED_ENV, indicators: &["=", "SECRET", "KEY", "PASSWORD", "TOKEN"] },
-        ExpPath { path: "/.env.local", policy: EXPOSED_ENV, indicators: &["=", "SECRET", "KEY", "PASSWORD"] },
-        ExpPath { path: "/.env.production", policy: EXPOSED_ENV, indicators: &["=", "SECRET", "KEY", "PASSWORD"] },
-        ExpPath { path: "/.git/config", policy: EXPOSED_GIT, indicators: &["[core]", "[remote", "url ="] },
-        ExpPath { path: "/docker-compose.yml", policy: EXPOSED_COMPOSE, indicators: &["services:", "image:"] },
-        ExpPath { path: "/docker-compose.yaml", policy: EXPOSED_COMPOSE, indicators: &["services:", "image:"] },
-        ExpPath { path: "/k8s.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "kind:"] },
-        ExpPath { path: "/kubernetes.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "kind:"] },
-        ExpPath { path: "/deployment.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "kind:"] },
-        ExpPath { path: "/Dockerfile", policy: EXPOSED_GENERIC, indicators: &["FROM "] },
-        ExpPath { path: "/main.tf", policy: EXPOSED_GENERIC, indicators: &["resource \"", "provider \""] },
-        ExpPath { path: "/variables.tf", policy: EXPOSED_GENERIC, indicators: &["variable \""] },
-        ExpPath { path: "/.terraform.lock.hcl", policy: EXPOSED_GENERIC, indicators: &["provider", "hashes"] },
-        ExpPath { path: "/serverless.yml", policy: EXPOSED_GENERIC, indicators: &["service:", "provider:"] },
-        ExpPath { path: "/cloudformation.yaml", policy: EXPOSED_GENERIC, indicators: &["AWSTemplateFormatVersion", "Resources:"] },
-        ExpPath { path: "/ansible/hosts", policy: EXPOSED_GENERIC, indicators: &["[all]", "ansible_"] },
-        ExpPath { path: "/inventory", policy: EXPOSED_GENERIC, indicators: &["[all]", "ansible_host"] },
-        ExpPath { path: "/Pulumi.yaml", policy: EXPOSED_GENERIC, indicators: &["name:", "runtime:"] },
-        ExpPath { path: "/pulumi/Pulumi.yaml", policy: EXPOSED_GENERIC, indicators: &["name:", "runtime:"] },
-        ExpPath { path: "/crossplane/providerconfig.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "ProviderConfig"] },
-        ExpPath { path: "/terragrunt.hcl", policy: EXPOSED_GENERIC, indicators: &["remote_state", "terraform"] },
-        ExpPath { path: "/atlantis.yaml", policy: EXPOSED_GENERIC, indicators: &["repos:", "workflows:"] },
-        ExpPath { path: "/.kube/config", policy: EXPOSED_ENV, indicators: &["apiVersion:", "clusters:", "users:"] },
-        ExpPath { path: "/kubeconfig", policy: EXPOSED_ENV, indicators: &["apiVersion:", "clusters:"] },
-        ExpPath { path: "/.sops.yaml", policy: EXPOSED_GENERIC, indicators: &["creation_rules:", "sops"] },
-        ExpPath { path: "/secrets.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "kind:", "Secret"] },
-        ExpPath { path: "/spacelift.yaml", policy: EXPOSED_GENERIC, indicators: &["stack:", "terraform"] },
-        ExpPath { path: "/helmfile.yaml", policy: EXPOSED_K8S, indicators: &["releases:", "chart:"] },
-        ExpPath { path: "/packer.pkr.hcl", policy: EXPOSED_GENERIC, indicators: &["source", "builder"] },
-        ExpPath { path: "/skaffold.yaml", policy: EXPOSED_K8S, indicators: &["apiVersion:", "skaffold"] },
-        ExpPath { path: "/falco/custom-rules.yaml", policy: EXPOSED_GENERIC, indicators: &["- rule:", "condition:"] },
-        ExpPath { path: "/app-config.yaml", policy: EXPOSED_GENERIC, indicators: &["backstage", "auth:", "integrations:"] },
-        ExpPath { path: "/envoy-gateway/gateway.yaml", policy: EXPOSED_K8S, indicators: &["gateway.envoyproxy.io", "EnvoyProxy"] },
-        ExpPath { path: "/sealed-secrets/db.yaml", policy: EXPOSED_K8S, indicators: &["SealedSecret", "encryptedData"] },
-        ExpPath { path: "/monitoring/servicemonitor.yaml", policy: EXPOSED_K8S, indicators: &["ServiceMonitor", "monitoring.coreos.com"] },
-        ExpPath { path: "/rollouts/api.yaml", policy: EXPOSED_K8S, indicators: &["Rollout", "argoproj.io"] },
-        ExpPath { path: "/renovate.json", policy: EXPOSED_GENERIC, indicators: &["extends:", "packageRules", "renovate"] },
-        ExpPath { path: "/.terraformrc", policy: EXPOSED_GENERIC, indicators: &["credentials", "provider_install"] },
+        ExpPath {
+            path: "/terraform.tfstate",
+            policy: EXPOSED_TFSTATE,
+            indicators: &["terraform_version", "\"resources\"", "\"outputs\""],
+        },
+        ExpPath {
+            path: "/.terraform/terraform.tfstate",
+            policy: EXPOSED_TFSTATE,
+            indicators: &["terraform_version", "\"resources\""],
+        },
+        ExpPath {
+            path: "/terraform.tfstate.backup",
+            policy: EXPOSED_TFSTATE,
+            indicators: &["terraform_version", "\"resources\""],
+        },
+        ExpPath {
+            path: "/.env",
+            policy: EXPOSED_ENV,
+            indicators: &["=", "SECRET", "KEY", "PASSWORD", "TOKEN"],
+        },
+        ExpPath {
+            path: "/.env.local",
+            policy: EXPOSED_ENV,
+            indicators: &["=", "SECRET", "KEY", "PASSWORD"],
+        },
+        ExpPath {
+            path: "/.env.production",
+            policy: EXPOSED_ENV,
+            indicators: &["=", "SECRET", "KEY", "PASSWORD"],
+        },
+        ExpPath {
+            path: "/.git/config",
+            policy: EXPOSED_GIT,
+            indicators: &["[core]", "[remote", "url ="],
+        },
+        ExpPath {
+            path: "/docker-compose.yml",
+            policy: EXPOSED_COMPOSE,
+            indicators: &["services:", "image:"],
+        },
+        ExpPath {
+            path: "/docker-compose.yaml",
+            policy: EXPOSED_COMPOSE,
+            indicators: &["services:", "image:"],
+        },
+        ExpPath {
+            path: "/k8s.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "kind:"],
+        },
+        ExpPath {
+            path: "/kubernetes.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "kind:"],
+        },
+        ExpPath {
+            path: "/deployment.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "kind:"],
+        },
+        ExpPath {
+            path: "/Dockerfile",
+            policy: EXPOSED_GENERIC,
+            indicators: &["FROM "],
+        },
+        ExpPath {
+            path: "/main.tf",
+            policy: EXPOSED_GENERIC,
+            indicators: &["resource \"", "provider \""],
+        },
+        ExpPath {
+            path: "/variables.tf",
+            policy: EXPOSED_GENERIC,
+            indicators: &["variable \""],
+        },
+        ExpPath {
+            path: "/.terraform.lock.hcl",
+            policy: EXPOSED_GENERIC,
+            indicators: &["provider", "hashes"],
+        },
+        ExpPath {
+            path: "/serverless.yml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["service:", "provider:"],
+        },
+        ExpPath {
+            path: "/cloudformation.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["AWSTemplateFormatVersion", "Resources:"],
+        },
+        ExpPath {
+            path: "/ansible/hosts",
+            policy: EXPOSED_GENERIC,
+            indicators: &["[all]", "ansible_"],
+        },
+        ExpPath {
+            path: "/inventory",
+            policy: EXPOSED_GENERIC,
+            indicators: &["[all]", "ansible_host"],
+        },
+        ExpPath {
+            path: "/Pulumi.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["name:", "runtime:"],
+        },
+        ExpPath {
+            path: "/pulumi/Pulumi.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["name:", "runtime:"],
+        },
+        ExpPath {
+            path: "/crossplane/providerconfig.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "ProviderConfig"],
+        },
+        ExpPath {
+            path: "/terragrunt.hcl",
+            policy: EXPOSED_GENERIC,
+            indicators: &["remote_state", "terraform"],
+        },
+        ExpPath {
+            path: "/atlantis.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["repos:", "workflows:"],
+        },
+        ExpPath {
+            path: "/.kube/config",
+            policy: EXPOSED_ENV,
+            indicators: &["apiVersion:", "clusters:", "users:"],
+        },
+        ExpPath {
+            path: "/kubeconfig",
+            policy: EXPOSED_ENV,
+            indicators: &["apiVersion:", "clusters:"],
+        },
+        ExpPath {
+            path: "/.sops.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["creation_rules:", "sops"],
+        },
+        ExpPath {
+            path: "/secrets.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "kind:", "Secret"],
+        },
+        ExpPath {
+            path: "/spacelift.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["stack:", "terraform"],
+        },
+        ExpPath {
+            path: "/helmfile.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["releases:", "chart:"],
+        },
+        ExpPath {
+            path: "/packer.pkr.hcl",
+            policy: EXPOSED_GENERIC,
+            indicators: &["source", "builder"],
+        },
+        ExpPath {
+            path: "/skaffold.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["apiVersion:", "skaffold"],
+        },
+        ExpPath {
+            path: "/falco/custom-rules.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["- rule:", "condition:"],
+        },
+        ExpPath {
+            path: "/app-config.yaml",
+            policy: EXPOSED_GENERIC,
+            indicators: &["backstage", "auth:", "integrations:"],
+        },
+        ExpPath {
+            path: "/envoy-gateway/gateway.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["gateway.envoyproxy.io", "EnvoyProxy"],
+        },
+        ExpPath {
+            path: "/sealed-secrets/db.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["SealedSecret", "encryptedData"],
+        },
+        ExpPath {
+            path: "/monitoring/servicemonitor.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["ServiceMonitor", "monitoring.coreos.com"],
+        },
+        ExpPath {
+            path: "/rollouts/api.yaml",
+            policy: EXPOSED_K8S,
+            indicators: &["Rollout", "argoproj.io"],
+        },
+        ExpPath {
+            path: "/renovate.json",
+            policy: EXPOSED_GENERIC,
+            indicators: &["extends:", "packageRules", "renovate"],
+        },
+        ExpPath {
+            path: "/.terraformrc",
+            policy: EXPOSED_GENERIC,
+            indicators: &["credentials", "provider_install"],
+        },
     ]
 }
 
@@ -899,17 +1190,25 @@ async fn exposure_scan(target: &str, cfg: &Cfg) -> (Vec<Finding>, Vec<IacFile>, 
 
     // (path, policy, indicators) — builtin table plus operator-supplied extras.
     let builtin = exposure_paths();
-    let mut targets: Vec<(String, model::PolicyMeta, &[&str])> =
-        builtin.iter().map(|e| (e.path.to_string(), e.policy, e.indicators)).collect();
+    let mut targets: Vec<(String, model::PolicyMeta, &[&str])> = builtin
+        .iter()
+        .map(|e| (e.path.to_string(), e.policy, e.indicators))
+        .collect();
     for extra in &cfg.extra_exposure_paths {
-        let p = if extra.starts_with('/') { extra.clone() } else { format!("/{}", extra) };
+        let p = if extra.starts_with('/') {
+            extra.clone()
+        } else {
+            format!("/{}", extra)
+        };
         targets.push((p, policies::EXPOSED_GENERIC, &[]));
     }
 
     for (path, policy, indicators) in &targets {
         let url = format!("{}{}", base, path);
         probed += 1;
-        let Ok(resp) = cli.get(&url).send().await else { continue };
+        let Ok(resp) = cli.get(&url).send().await else {
+            continue;
+        };
         if resp.status().as_u16() != 200 {
             continue;
         }
@@ -921,13 +1220,25 @@ async fn exposure_scan(target: &str, cfg: &Cfg) -> (Vec<Finding>, Vec<IacFile>, 
         if !confirmed {
             continue;
         }
-        findings.push(Finding::new(*policy, url.clone(), url.clone()).observed(format!("HTTP 200, {} bytes", body.len())));
+        findings.push(
+            Finding::new(*policy, url.clone(), url.clone())
+                .observed(format!("HTTP 200, {} bytes", body.len())),
+        );
         // deep-analyze the leaked artifact too
         if detect::detect(path, &body, None) != Framework::Unknown {
-            fetched.push(IacFile { name: path.trim_start_matches('/').to_string(), content: body, forced: None, origin: format!("exposure:{}", url) });
+            fetched.push(IacFile {
+                name: path.trim_start_matches('/').to_string(),
+                content: body,
+                forced: None,
+                origin: format!("exposure:{}", url),
+            });
         }
     }
-    (findings, fetched, Some(format!("probed {} exposure paths on {}", probed, base)))
+    (
+        findings,
+        fetched,
+        Some(format!("probed {} exposure paths on {}", probed, base)),
+    )
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -952,7 +1263,10 @@ fn parse_github(url: &str) -> Option<(String, String)> {
 
 fn is_playbook_path(path: &str) -> bool {
     let p = path.to_ascii_lowercase();
-    p.contains("playbook") || p.contains("/roles/") || p.ends_with("/main.yml") || p.ends_with("/main.yaml")
+    p.contains("playbook")
+        || p.contains("/roles/")
+        || p.ends_with("/main.yml")
+        || p.ends_with("/main.yaml")
 }
 
 fn is_iac_path(path: &str) -> bool {
@@ -979,9 +1293,13 @@ fn is_iac_path(path: &str) -> bool {
         || base.ends_with(".tf.json")
         || base.ends_with(".tfvars")
         || base == "terragrunt.hcl"
-        || (base.ends_with(".hcl") && (p.contains("/terragrunt/") || base.starts_with("terragrunt")))
-        || p.contains("/crossplane/") || p.contains("/xrds/") || p.contains("/compositions/")
-        || p.contains("/argocd/") || p.contains("flux-system/")
+        || (base.ends_with(".hcl")
+            && (p.contains("/terragrunt/") || base.starts_with("terragrunt")))
+        || p.contains("/crossplane/")
+        || p.contains("/xrds/")
+        || p.contains("/compositions/")
+        || p.contains("/argocd/")
+        || p.contains("flux-system/")
         || base.ends_with(".rego")
         || (p.contains("vault") && base.ends_with(".hcl"))
         || p.contains("istio")
@@ -1016,8 +1334,13 @@ fn is_iac_path(path: &str) -> bool {
         || base == "cdk.json"
         || base.ends_with("nginx.conf")
         || (p.contains("nginx/") && base.ends_with(".conf"))
-        || (base.ends_with(".ts") && (p.contains("/infra/") || p.contains("/pulumi/") || p.contains("/cdk/") || p.contains("/lib/")))
-        || (base.ends_with(".py") && (p.contains("/infra/") || p.contains("/pulumi/") || p.contains("/cdk/")))
+        || (base.ends_with(".ts")
+            && (p.contains("/infra/")
+                || p.contains("/pulumi/")
+                || p.contains("/cdk/")
+                || p.contains("/lib/")))
+        || (base.ends_with(".py")
+            && (p.contains("/infra/") || p.contains("/pulumi/") || p.contains("/cdk/")))
         || is_playbook_path(path)
         || base.starts_with("docker-compose")
         || p.contains(".github/workflows/") && (base.ends_with(".yml") || base.ends_with(".yaml"))
@@ -1026,13 +1349,20 @@ fn is_iac_path(path: &str) -> bool {
         || base.ends_with(".json") && base.len() < 64
 }
 
-async fn fetch_repo_files(url: &str, cfg: &Cfg, ctx: &EngineRunContext) -> Result<Vec<IacFile>, String> {
-    let (owner, repo) = parse_github(url).ok_or_else(|| "only github.com repositories are supported".to_string())?;
+async fn fetch_repo_files(
+    url: &str,
+    cfg: &Cfg,
+    ctx: &EngineRunContext,
+) -> Result<Vec<IacFile>, String> {
+    let (owner, repo) = parse_github(url)
+        .ok_or_else(|| "only github.com repositories are supported".to_string())?;
     let cli = client(cfg);
     let token = ctx.github_token.clone().filter(|t| !t.trim().is_empty());
 
     let auth = |req: reqwest::RequestBuilder| -> reqwest::RequestBuilder {
-        let req = req.header("Accept", "application/vnd.github+json").header("User-Agent", "Weissman-IaC-Security/1.0");
+        let req = req
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Weissman-IaC-Security/1.0");
         if let Some(t) = &token {
             req.header("Authorization", format!("Bearer {}", t))
         } else {
@@ -1045,22 +1375,38 @@ async fn fetch_repo_files(url: &str, cfg: &Cfg, ctx: &EngineRunContext) -> Resul
         Some(r) => r.clone(),
         None => {
             let meta_url = format!("https://api.github.com/repos/{}/{}", owner, repo);
-            let resp = auth(cli.get(&meta_url)).send().await.map_err(|e| e.to_string())?;
+            let resp = auth(cli.get(&meta_url))
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
             if !resp.status().is_success() {
                 return Err(format!("repo metadata HTTP {}", resp.status().as_u16()));
             }
             let v: Value = resp.json().await.map_err(|e| e.to_string())?;
-            v.get("default_branch").and_then(Value::as_str).unwrap_or("main").to_string()
+            v.get("default_branch")
+                .and_then(Value::as_str)
+                .unwrap_or("main")
+                .to_string()
         }
     };
 
-    let tree_url = format!("https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1", owner, repo, reff);
-    let resp = auth(cli.get(&tree_url)).send().await.map_err(|e| e.to_string())?;
+    let tree_url = format!(
+        "https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1",
+        owner, repo, reff
+    );
+    let resp = auth(cli.get(&tree_url))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Err(format!("git tree HTTP {}", resp.status().as_u16()));
     }
     let tree: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let entries = tree.get("tree").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = tree
+        .get("tree")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
 
     let mut files = Vec::new();
     for e in entries {
@@ -1070,8 +1416,11 @@ async fn fetch_repo_files(url: &str, cfg: &Cfg, ctx: &EngineRunContext) -> Resul
         if e.get("type").and_then(Value::as_str) != Some("blob") {
             continue;
         }
-        let Some(path) = e.get("path").and_then(Value::as_str) else { continue };
-        if !cfg.repo_subdir.is_empty() && !path.starts_with(cfg.repo_subdir.trim_start_matches('/')) {
+        let Some(path) = e.get("path").and_then(Value::as_str) else {
+            continue;
+        };
+        if !cfg.repo_subdir.is_empty() && !path.starts_with(cfg.repo_subdir.trim_start_matches('/'))
+        {
             continue;
         }
         if !is_iac_path(path) {
@@ -1081,15 +1430,25 @@ async fn fetch_repo_files(url: &str, cfg: &Cfg, ctx: &EngineRunContext) -> Resul
         if size > 524_288 {
             continue; // skip files > 512 KB
         }
-        let raw_url = format!("https://raw.githubusercontent.com/{}/{}/{}/{}", owner, repo, reff, path);
-        let mut rb = cli.get(&raw_url).header("User-Agent", "Weissman-IaC-Security/1.0");
+        let raw_url = format!(
+            "https://raw.githubusercontent.com/{}/{}/{}/{}",
+            owner, repo, reff, path
+        );
+        let mut rb = cli
+            .get(&raw_url)
+            .header("User-Agent", "Weissman-IaC-Security/1.0");
         if let Some(t) = &token {
             rb = rb.header("Authorization", format!("Bearer {}", t));
         }
         if let Ok(r) = rb.send().await {
             if r.status().is_success() {
                 if let Ok(body) = r.text().await {
-                    files.push(IacFile { name: path.to_string(), content: body, forced: None, origin: format!("repo:{}/{}@{}", owner, repo, reff) });
+                    files.push(IacFile {
+                        name: path.to_string(),
+                        content: body,
+                        forced: None,
+                        origin: format!("repo:{}/{}@{}", owner, repo, reff),
+                    });
                 }
             }
         }
@@ -1106,41 +1465,77 @@ mod tests {
     use super::*;
 
     fn ctx_with(params: Value) -> EngineRunContext {
-        EngineRunContext { job_params: params, ..Default::default() }
+        EngineRunContext {
+            job_params: params,
+            ..Default::default()
+        }
     }
 
     #[tokio::test]
     async fn static_inline_terraform_scan() {
         let tf = "resource \"aws_s3_bucket\" \"b\" { acl = \"public-read\" }\nresource \"aws_security_group\" \"sg\" { ingress { from_port = 22 to_port = 22 cidr_blocks = [\"0.0.0.0/0\"] } }\nresource \"aws_iam_policy\" \"admin\" {\n  policy = <<EOF\n{ \"Version\": \"2012-10-17\", \"Statement\": [ { \"Effect\": \"Allow\", \"Action\": \"*\", \"Resource\": \"*\" } ] }\nEOF\n}";
-        let ctx = ctx_with(json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "main.tf" }));
+        let ctx = ctx_with(
+            json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "main.tf" }),
+        );
         let r = run_iac_misconfig_result("inline", &ctx).await;
         assert!(r.success);
         // summary + at least the two violations
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").expect("summary present");
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .expect("summary present");
         assert!(summary["iac_summary"]["findings_total"].as_u64().unwrap() >= 2);
-        assert!(summary["iac_summary"]["by_severity"]["critical"].as_u64().unwrap() >= 1);
-        assert!(r.findings.iter().any(|f| f["policy_id"] == "WZ-TF-AWS-S3-001"));
-        assert!(r.findings.iter().any(|f| f["policy_id"] == "WZ-TF-AWS-SG-002"));
+        assert!(
+            summary["iac_summary"]["by_severity"]["critical"]
+                .as_u64()
+                .unwrap()
+                >= 1
+        );
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f["policy_id"] == "WZ-TF-AWS-S3-001"));
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f["policy_id"] == "WZ-TF-AWS-SG-002"));
         let chains = summary["iac_summary"]["attack_chains"].as_array().unwrap();
-        assert!(!chains.is_empty(), "toxic combo sample should trigger attack paths");
+        assert!(
+            !chains.is_empty(),
+            "toxic combo sample should trigger attack paths"
+        );
     }
 
     #[tokio::test]
     async fn min_severity_filter_drops_low() {
         let tf = "resource \"aws_kms_key\" \"k\" { }"; // medium finding
-        let ctx = ctx_with(json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "k.tf", "min_severity": "high" }));
+        let ctx = ctx_with(
+            json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "k.tf", "min_severity": "high" }),
+        );
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        assert!(!r.findings.iter().any(|f| f["policy_id"] == "WZ-TF-AWS-KMS-001"));
+        assert!(!r
+            .findings
+            .iter()
+            .any(|f| f["policy_id"] == "WZ-TF-AWS-KMS-001"));
     }
 
     #[tokio::test]
     async fn compliance_posture_present() {
         let tf = "resource \"aws_s3_bucket\" \"b\" { acl = \"public-read\" }";
-        let ctx = ctx_with(json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "main.tf", "compliance_packs": ["CIS", "PCI-DSS"] }));
+        let ctx = ctx_with(
+            json!({ "scan_modes": ["static"], "iac_content": tf, "iac_filename": "main.tf", "compliance_packs": ["CIS", "PCI-DSS"] }),
+        );
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         let packs = summary["iac_summary"]["compliance"].as_array().unwrap();
-        assert!(packs.iter().any(|p| p["pack"] == "CIS" && p["status"] == "fail"));
+        assert!(packs
+            .iter()
+            .any(|p| p["pack"] == "CIS" && p["status"] == "fail"));
     }
 
     #[tokio::test]
@@ -1155,10 +1550,18 @@ mod tests {
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
         assert!(r.success);
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         assert!(summary["iac_summary"]["drift_findings"].as_u64().unwrap() >= 1);
-        assert!(summary["iac_summary"]["readiness"].get("readiness_score").is_some());
-        assert!(summary["iac_summary"]["cis_scorecard"].get("overall_pass_pct").is_some());
+        assert!(summary["iac_summary"]["readiness"]
+            .get("readiness_score")
+            .is_some());
+        assert!(summary["iac_summary"]["cis_scorecard"]
+            .get("overall_pass_pct")
+            .is_some());
     }
 
     #[tokio::test]
@@ -1174,19 +1577,32 @@ mod tests {
         let r = run_iac_misconfig_result("inline", &ctx).await;
         assert!(r.success);
         assert!(r.findings.iter().any(|f| f["policy_id"] == "WZ-RECON-001"));
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
-        assert!(summary["iac_summary"]["plan_reconcile_findings"].as_u64().unwrap() >= 1);
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
+        assert!(
+            summary["iac_summary"]["plan_reconcile_findings"]
+                .as_u64()
+                .unwrap()
+                >= 1
+        );
     }
 
     #[tokio::test]
     async fn kyverno_and_atlantis_samples() {
         let kyverno = "apiVersion: kyverno.io/v1\nkind: ClusterPolicy\nmetadata:\n  name: audit-only\nspec:\n  validationFailureAction: audit\n  background: false";
-        let ctx = ctx_with(json!({ "scan_modes": ["static"], "iac_content": kyverno, "iac_filename": "kyverno/policy.yaml", "iac_type": "kyverno" }));
+        let ctx = ctx_with(
+            json!({ "scan_modes": ["static"], "iac_content": kyverno, "iac_filename": "kyverno/policy.yaml", "iac_type": "kyverno" }),
+        );
         let r = run_iac_misconfig_result("inline", &ctx).await;
         assert!(r.findings.iter().any(|f| f["policy_id"] == "WZ-KYV-001"));
 
         let atl = "repos:\n  - id: /.*/\n    automerge: true\n    apply_requirements: []";
-        let ctx2 = ctx_with(json!({ "scan_modes": ["static"], "iac_content": atl, "iac_filename": "atlantis.yaml", "iac_type": "ci_platform" }));
+        let ctx2 = ctx_with(
+            json!({ "scan_modes": ["static"], "iac_content": atl, "iac_filename": "atlantis.yaml", "iac_type": "ci_platform" }),
+        );
         let r2 = run_iac_misconfig_result("inline", &ctx2).await;
         assert!(r2.findings.iter().any(|f| f["policy_id"] == "WZ-CI-001"));
     }
@@ -1201,8 +1617,14 @@ mod tests {
             "compliance_packs": ["SOC2", "CIS"]
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
-        assert!(summary["iac_summary"]["soc2_report"].get("cc_families").is_some());
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
+        assert!(summary["iac_summary"]["soc2_report"]
+            .get("cc_families")
+            .is_some());
     }
 
     #[tokio::test]
@@ -1215,8 +1637,14 @@ mod tests {
             "compliance_packs": ["PCI-DSS", "SOC2"]
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
-        assert!(summary["iac_summary"]["pci_report"].get("requirements").is_some());
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
+        assert!(summary["iac_summary"]["pci_report"]
+            .get("requirements")
+            .is_some());
     }
 
     #[tokio::test]
@@ -1229,13 +1657,20 @@ mod tests {
             "compliance_packs": ["HIPAA", "NIST", "PCI-DSS", "SOC2"]
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         let s = &summary["iac_summary"];
         assert!(s["hipaa_report"].get("safeguard_families").is_some());
         assert!(s["nist_report"].get("control_families").is_some());
         assert!(s["iso27001_report"].get("annex_a_themes").is_some());
         assert!(s["fedramp_report"].get("families").is_some());
-        assert_eq!(s["audit_packet"]["packet_type"], "weissman-iac-audit-packet-v1");
+        assert_eq!(
+            s["audit_packet"]["packet_type"],
+            "weissman-iac-audit-packet-v1"
+        );
         assert_eq!(s["gate_evidence"]["evidence_type"], "iac_gate_audit");
         assert!(s["fix_bundle"].get("gate_evidence").is_some());
     }
@@ -1250,7 +1685,11 @@ mod tests {
             "iac_type": "sealed_secrets"
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let viol: Vec<_> = r.findings.iter().filter(|f| f["category"] == "iac_policy_violation").collect();
+        let viol: Vec<_> = r
+            .findings
+            .iter()
+            .filter(|f| f["category"] == "iac_policy_violation")
+            .collect();
         assert!(viol.iter().any(|f| f["policy_id"] == "WZ-SS-001"));
 
         let prm = "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nspec:\n  endpoints:\n    - tlsConfig:\n        insecureSkipVerify: true";
@@ -1261,7 +1700,11 @@ mod tests {
             "iac_type": "prometheus_operator"
         }));
         let r2 = run_iac_misconfig_result("inline", &ctx2).await;
-        let viol2: Vec<_> = r2.findings.iter().filter(|f| f["category"] == "iac_policy_violation").collect();
+        let viol2: Vec<_> = r2
+            .findings
+            .iter()
+            .filter(|f| f["category"] == "iac_policy_violation")
+            .collect();
         assert!(viol2.iter().any(|f| f["policy_id"] == "WZ-PRM-001"));
 
         let aro = "apiVersion: argoproj.io/v1alpha1\nkind: Rollout\nspec:\n  strategy:\n    canary:\n      steps:\n        - setWeight: 50";
@@ -1272,7 +1715,11 @@ mod tests {
             "iac_type": "argo_rollouts"
         }));
         let r3 = run_iac_misconfig_result("inline", &ctx3).await;
-        let viol3: Vec<_> = r3.findings.iter().filter(|f| f["category"] == "iac_policy_violation").collect();
+        let viol3: Vec<_> = r3
+            .findings
+            .iter()
+            .filter(|f| f["category"] == "iac_policy_violation")
+            .collect();
         assert!(viol3.iter().any(|f| f["policy_id"] == "WZ-ARO-001"));
     }
 
@@ -1286,7 +1733,11 @@ mod tests {
             "iac_type": "backstage"
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let findings: Vec<_> = r.findings.iter().filter(|f| f["category"] == "iac_policy_violation").collect();
+        let findings: Vec<_> = r
+            .findings
+            .iter()
+            .filter(|f| f["category"] == "iac_policy_violation")
+            .collect();
         assert!(findings.iter().any(|f| f["policy_id"] == "WZ-BS-001"));
 
         let egw = "apiVersion: gateway.envoyproxy.io/v1alpha1\nkind: EnvoyProxy\nspec:\n  admin:\n    address: 0.0.0.0:9901";
@@ -1297,7 +1748,11 @@ mod tests {
             "iac_type": "envoy_gateway"
         }));
         let r2 = run_iac_misconfig_result("inline", &ctx2).await;
-        let findings2: Vec<_> = r2.findings.iter().filter(|f| f["category"] == "iac_policy_violation").collect();
+        let findings2: Vec<_> = r2
+            .findings
+            .iter()
+            .filter(|f| f["category"] == "iac_policy_violation")
+            .collect();
         assert!(findings2.iter().any(|f| f["policy_id"] == "WZ-EGW-004"));
     }
 
@@ -1323,10 +1778,24 @@ resource "aws_s3_bucket" "assets" {
             "live_blast": true
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         let lb = &summary["iac_summary"]["live_blast"];
-        assert!(lb.get("proven_path_count").and_then(Value::as_u64).unwrap_or(0) >= 1
-            || lb.get("graph").and_then(|g| g.get("edge_count")).and_then(Value::as_u64).unwrap_or(0) >= 2);
+        assert!(
+            lb.get("proven_path_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                >= 1
+                || lb
+                    .get("graph")
+                    .and_then(|g| g.get("edge_count"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    >= 2
+        );
     }
 
     #[tokio::test]
@@ -1397,10 +1866,22 @@ spec:
             "iam_simulate": false
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         let lb = &summary["iac_summary"]["live_blast"];
-        assert!(lb.get("cross_plane_bridges").and_then(Value::as_u64).unwrap_or(0) >= 1);
-        assert_eq!(lb.get("engine_tier").and_then(Value::as_str), Some("sovereign-autopilot"));
+        assert!(
+            lb.get("cross_plane_bridges")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                >= 1
+        );
+        assert_eq!(
+            lb.get("engine_tier").and_then(Value::as_str),
+            Some("sovereign-autopilot")
+        );
     }
 
     #[tokio::test]
@@ -1420,14 +1901,24 @@ resource "aws_s3_bucket" "assets" {
             "iam_simulate": false
         }));
         let r = run_iac_misconfig_result("inline", &ctx).await;
-        let summary = r.findings.iter().find(|f| f["category"] == "iac_summary").unwrap();
+        let summary = r
+            .findings
+            .iter()
+            .find(|f| f["category"] == "iac_summary")
+            .unwrap();
         let ap = &summary["iac_summary"]["live_blast"]["autopilot"];
         assert!(ap.get("patch_count").and_then(Value::as_u64).unwrap_or(0) >= 1);
     }
 
     #[test]
     fn github_url_parsing() {
-        assert_eq!(parse_github("https://github.com/hashicorp/terraform.git"), Some(("hashicorp".to_string(), "terraform".to_string())));
-        assert_eq!(parse_github("git@github.com:owner/repo"), Some(("owner".to_string(), "repo".to_string())));
+        assert_eq!(
+            parse_github("https://github.com/hashicorp/terraform.git"),
+            Some(("hashicorp".to_string(), "terraform".to_string()))
+        );
+        assert_eq!(
+            parse_github("git@github.com:owner/repo"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
     }
 }

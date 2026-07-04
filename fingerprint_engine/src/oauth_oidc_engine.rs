@@ -33,8 +33,8 @@
 //! T1539 (Steal Web Session Cookie).
 
 use crate::arsenal_config::{finding_rich, ArsenalConfig, Evidence};
-use crate::engine_dispatch::EngineRunContext;
 use crate::cloud_hunter::{GraphEdge, GraphNode};
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_result::{print_result, EngineResult};
 
 #[path = "oauth_oidc_supreme.rs"]
@@ -368,11 +368,12 @@ impl IdentitySignals {
             || self.ropc_grant
             || self.ropc_live_accepts
             || self.device_flow_advertised && self.device_flow_reachable;
-        let crypto_bad = self.alg_none || self.symmetric_alg || self.weak_jwks_key || self.jwks_http;
+        let crypto_bad =
+            self.alg_none || self.symmetric_alg || self.weak_jwks_key || self.jwks_http;
         let redirect_bad = self.open_redirect_uri;
-        let client_auth_bad =
-            self.public_clients_allowed && (self.pkce_not_advertised || self.pkce_plain_only)
-                || self.token_issued_without_auth;
+        let client_auth_bad = self.public_clients_allowed
+            && (self.pkce_not_advertised || self.pkce_plain_only)
+            || self.token_issued_without_auth;
         let hardening_bad = self.pkce_not_advertised
             || self.pkce_plain_only
             || self.pkce_not_enforced_live
@@ -406,26 +407,118 @@ impl IdentitySignals {
             })
         };
         json!([
-            row("RFC9700-2.1", "Exact redirect_uri matching", !self.open_redirect_uri,
-                if self.open_redirect_uri { "Arbitrary redirect_uri accepted in live probe" } else { "Attacker redirect_uri rejected or not honored" }),
-            row("RFC9700-2.1.1", "PKCE (S256) for public clients", !self.pkce_not_advertised && !self.pkce_plain_only && !self.pkce_not_enforced_live,
-                if self.pkce_not_advertised { "PKCE not advertised" } else if self.pkce_plain_only { "Only plain PKCE" } else if self.pkce_not_enforced_live { "Authorization code issued without code_challenge" } else { "PKCE posture acceptable" }),
-            row("RFC9700-2.1.2", "No implicit flow", !self.implicit_flow,
-                if self.implicit_flow { "Implicit flow advertised or accepted live" } else { "Implicit flow not observed" }),
-            row("RFC9700-2.4", "No ROPC grant", !self.ropc_grant && !self.ropc_live_accepts,
-                if self.ropc_live_accepts { "ROPC grant accepted at token endpoint" } else if self.ropc_grant { "ROPC advertised in metadata" } else { "ROPC not advertised" }),
-            row("RFC9700-2.5", "Token-endpoint client authentication", !self.token_issued_without_auth,
-                if self.token_issued_without_auth { "client_credentials without secret returned access_token" } else { "No unauthenticated token minting observed" }),
-            row("RFC9700-4", "Strong asymmetric token signing", !self.alg_none && !self.symmetric_alg && !self.weak_jwks_key,
-                if self.alg_none { "alg:none advertised" } else if self.symmetric_alg { "HS* symmetric signing advertised" } else if self.weak_jwks_key { "Undersized JWKS RSA key" } else { "Signing algorithms and JWKS acceptable" }),
-            row("RFC9700-4.5", "request_uri registration", !self.request_uri_unregistered,
-                if self.request_uri_unregistered { "request_uri without registration" } else { "request_uri posture acceptable" }),
-            row("RFC9126", "Pushed Authorization Requests (PAR)", !self.par_missing,
-                if self.par_missing { "PAR endpoint not advertised" } else { "PAR advertised" }),
-            row("RFC9449", "DPoP sender-constrained tokens", !self.dpop_missing,
-                if self.dpop_missing { "DPoP not advertised" } else { "DPoP signing algs advertised" }),
-            row("RFC9700-2.1", "TLS for issuer and JWKS", !self.insecure_issuer_transport && !self.jwks_http,
-                if self.insecure_issuer_transport { "Issuer uses http://" } else if self.jwks_http { "jwks_uri uses http://" } else { "HTTPS for issuer/JWKS" }),
+            row(
+                "RFC9700-2.1",
+                "Exact redirect_uri matching",
+                !self.open_redirect_uri,
+                if self.open_redirect_uri {
+                    "Arbitrary redirect_uri accepted in live probe"
+                } else {
+                    "Attacker redirect_uri rejected or not honored"
+                }
+            ),
+            row(
+                "RFC9700-2.1.1",
+                "PKCE (S256) for public clients",
+                !self.pkce_not_advertised && !self.pkce_plain_only && !self.pkce_not_enforced_live,
+                if self.pkce_not_advertised {
+                    "PKCE not advertised"
+                } else if self.pkce_plain_only {
+                    "Only plain PKCE"
+                } else if self.pkce_not_enforced_live {
+                    "Authorization code issued without code_challenge"
+                } else {
+                    "PKCE posture acceptable"
+                }
+            ),
+            row(
+                "RFC9700-2.1.2",
+                "No implicit flow",
+                !self.implicit_flow,
+                if self.implicit_flow {
+                    "Implicit flow advertised or accepted live"
+                } else {
+                    "Implicit flow not observed"
+                }
+            ),
+            row(
+                "RFC9700-2.4",
+                "No ROPC grant",
+                !self.ropc_grant && !self.ropc_live_accepts,
+                if self.ropc_live_accepts {
+                    "ROPC grant accepted at token endpoint"
+                } else if self.ropc_grant {
+                    "ROPC advertised in metadata"
+                } else {
+                    "ROPC not advertised"
+                }
+            ),
+            row(
+                "RFC9700-2.5",
+                "Token-endpoint client authentication",
+                !self.token_issued_without_auth,
+                if self.token_issued_without_auth {
+                    "client_credentials without secret returned access_token"
+                } else {
+                    "No unauthenticated token minting observed"
+                }
+            ),
+            row(
+                "RFC9700-4",
+                "Strong asymmetric token signing",
+                !self.alg_none && !self.symmetric_alg && !self.weak_jwks_key,
+                if self.alg_none {
+                    "alg:none advertised"
+                } else if self.symmetric_alg {
+                    "HS* symmetric signing advertised"
+                } else if self.weak_jwks_key {
+                    "Undersized JWKS RSA key"
+                } else {
+                    "Signing algorithms and JWKS acceptable"
+                }
+            ),
+            row(
+                "RFC9700-4.5",
+                "request_uri registration",
+                !self.request_uri_unregistered,
+                if self.request_uri_unregistered {
+                    "request_uri without registration"
+                } else {
+                    "request_uri posture acceptable"
+                }
+            ),
+            row(
+                "RFC9126",
+                "Pushed Authorization Requests (PAR)",
+                !self.par_missing,
+                if self.par_missing {
+                    "PAR endpoint not advertised"
+                } else {
+                    "PAR advertised"
+                }
+            ),
+            row(
+                "RFC9449",
+                "DPoP sender-constrained tokens",
+                !self.dpop_missing,
+                if self.dpop_missing {
+                    "DPoP not advertised"
+                } else {
+                    "DPoP signing algs advertised"
+                }
+            ),
+            row(
+                "RFC9700-2.1",
+                "TLS for issuer and JWKS",
+                !self.insecure_issuer_transport && !self.jwks_http,
+                if self.insecure_issuer_transport {
+                    "Issuer uses http://"
+                } else if self.jwks_http {
+                    "jwks_uri uses http://"
+                } else {
+                    "HTTPS for issuer/JWKS"
+                }
+            ),
         ])
     }
 }
@@ -533,7 +626,10 @@ fn analyze_metadata(
         .get("end_session_endpoint")
         .and_then(Value::as_str)
         .map(str::to_string);
-    sig.jwks_uri = doc.get("jwks_uri").and_then(Value::as_str).map(str::to_string);
+    sig.jwks_uri = doc
+        .get("jwks_uri")
+        .and_then(Value::as_str)
+        .map(str::to_string);
 
     if let Some(jwks) = sig.jwks_uri.as_deref() {
         if jwks.starts_with("http://") {
@@ -654,10 +750,9 @@ fn analyze_metadata(
             &["RFC9700-2.4", "OAuth2.1"],
         ));
     }
-    let device_grant = grant_types
-        .iter()
-        .any(|t| t.contains("device_code") || t.contains("urn:ietf:params:oauth:grant-type:device_code"))
-        || sig.device_auth_endpoint.is_some();
+    let device_grant = grant_types.iter().any(|t| {
+        t.contains("device_code") || t.contains("urn:ietf:params:oauth:grant-type:device_code")
+    }) || sig.device_auth_endpoint.is_some();
     if device_grant {
         sig.device_flow_advertised = true;
         findings.push(id_finding(
@@ -1148,7 +1243,10 @@ async fn probe_ws_intelligence_cross_protocol(
     sig: &IdentitySignals,
     findings: &mut Vec<Value>,
 ) {
-    let Some(arr) = job_params.get("intelligence_artifacts").and_then(|v| v.as_array()) else {
+    let Some(arr) = job_params
+        .get("intelligence_artifacts")
+        .and_then(|v| v.as_array())
+    else {
         return;
     };
     let client = make_client();
@@ -1282,10 +1380,19 @@ async fn probe_oidc_extension_endpoints(
                     "UserInfo endpoint reachable",
                     "info",
                     T_APP_TOKEN,
-                    &format!("UserInfo endpoint at {ui} responded (HTTP {status}). {}", if status == 401 || status == 403 { "Authentication required — expected." } else { "Review access-token requirements." }),
+                    &format!(
+                        "UserInfo endpoint at {ui} responded (HTTP {status}). {}",
+                        if status == 401 || status == 403 {
+                            "Authentication required — expected."
+                        } else {
+                            "Review access-token requirements."
+                        }
+                    ),
                     target,
                     0.65,
-                    Evidence::new().with("userinfo_endpoint", ui).with("http_status", status),
+                    Evidence::new()
+                        .with("userinfo_endpoint", ui)
+                        .with("http_status", status),
                     "asset_inventory",
                     &["OIDC-Core-5.3"],
                 ));
@@ -1517,12 +1624,7 @@ async fn probe_metadata_cors(
     let client = make_client();
     let probe_origin = "https://evil.weissman.invalid";
     for url in std::iter::once(discovery_url).chain(jwks_uri) {
-        if let Ok(resp) = client
-            .get(url)
-            .header("Origin", probe_origin)
-            .send()
-            .await
-        {
+        if let Ok(resp) = client.get(url).header("Origin", probe_origin).send().await {
             let acao = resp
                 .headers()
                 .get("access-control-allow-origin")
@@ -1592,7 +1694,11 @@ async fn probe_saml_federation_surface(
 fn apex_domain(host: &str) -> Option<String> {
     let parts: Vec<&str> = host.split('.').collect();
     if parts.len() >= 2 {
-        Some(format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]))
+        Some(format!(
+            "{}.{}",
+            parts[parts.len() - 2],
+            parts[parts.len() - 1]
+        ))
     } else {
         None
     }
@@ -1670,7 +1776,11 @@ fn build_rfc9700_matrix_finding(target: &str, sig: &IdentitySignals) -> Value {
     let matrix = sig.rfc9700_matrix();
     let fails = matrix
         .as_array()
-        .map(|a| a.iter().filter(|r| r.get("status") == Some(&json!("fail"))).count())
+        .map(|a| {
+            a.iter()
+                .filter(|r| r.get("status") == Some(&json!("fail")))
+                .count()
+        })
         .unwrap_or(0);
     let passes = matrix
         .as_array()
@@ -1991,7 +2101,8 @@ async fn probe_authorization_endpoint(
                     "missing_pkce",
                     &["RFC7636", "RFC9700-2.1.1"],
                 ));
-            } else if !pkce_required_error && (301..=308).contains(&status) && !location.is_empty() {
+            } else if !pkce_required_error && (301..=308).contains(&status) && !location.is_empty()
+            {
                 findings.push(id_finding(
                     "Authorization endpoint processed code flow without explicit PKCE error",
                     "low",

@@ -1,9 +1,8 @@
 //! Phase 5: Global zero-day ingestion — GitHub Advisories, NVD (NIST API), OSV.dev lookups;
 //! LLM structuring via `identity_classifier::threat_chatter_to_exploit_signature_llm`;
-//! SBOM match → emergency `run_cycle_async` across all tenants.
+//! SBOM match → emergency `tenant_full_scan` job dispatch across all tenants.
 
 use crate::identity_classifier;
-use crate::orchestrator;
 use crate::regex_util::never_matches;
 use crate::threat_intel_engine::{self, ThreatFeedItem};
 use serde_json::{json, Value};
@@ -283,7 +282,7 @@ async fn sbom_clients_matching(
 
 fn trigger_emergency_global_scan(
     app_pool: Arc<PgPool>,
-    intel_pool: Arc<PgPool>,
+    _intel_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
     telemetry: Arc<broadcast::Sender<String>>,
     reason: Value,
@@ -310,11 +309,24 @@ fn trigger_emergency_global_scan(
             return;
         };
         let _permit = permit;
-        let tel = telemetry.clone();
-        let _ = crate::panic_shield::catch_unwind_future("emergency_global_cycle", async move {
-            orchestrator::run_cycle_async(app_pool, intel_pool, auth_pool, Some(tel)).await;
-        })
-        .await;
+        match crate::orchestrator::dispatch::dispatch_all_tenant_scans(
+            app_pool.as_ref(),
+            auth_pool.as_ref(),
+            "emergency_intel",
+        )
+        .await
+        {
+            Ok(n) => tracing::warn!(
+                target: "threat_ingest",
+                enqueued = n,
+                "emergency tenant_full_scan jobs dispatched (worker executes)"
+            ),
+            Err(e) => tracing::error!(
+                target: "threat_ingest",
+                error = %e,
+                "emergency scan dispatch failed"
+            ),
+        }
     });
 }
 
@@ -329,12 +341,7 @@ pub async fn run_one_cycle(
 ) {
     log_intel_integration_status();
     run_ingest_cycle(
-        app_pool,
-        intel_pool,
-        auth_pool,
-        telemetry,
-        llm_base,
-        llm_model,
+        app_pool, intel_pool, auth_pool, telemetry, llm_base, llm_model,
     )
     .await;
 }

@@ -27,16 +27,32 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value], nist_report: &Valu
         }
     }
 
-    let nist_pass = nist_report.get("pass_pct").and_then(Value::as_u64).unwrap_or(0);
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
-    let nist_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("NIST"));
-    let failed_controls = nist_row.and_then(|r| r.get("controls_failed").and_then(Value::as_u64)).unwrap_or(0);
+    let nist_pass = nist_report
+        .get("pass_pct")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
+    let nist_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("NIST"));
+    let failed_controls = nist_row
+        .and_then(|r| r.get("controls_failed").and_then(Value::as_u64))
+        .unwrap_or(0);
 
     let families: Vec<Value> = BASELINE_FAMILIES
         .iter()
         .map(|(id, title, baseline)| {
             let failed = fam_failed.get(*id).copied().unwrap_or(0);
-            let status = if failed == 0 { "pass" } else if failed <= 2 { "partial" } else { "fail" };
+            let status = if failed == 0 {
+                "pass"
+            } else if failed <= 2 {
+                "partial"
+            } else {
+                "fail"
+            };
             json!({
                 "family": id,
                 "title": title,
@@ -79,7 +95,10 @@ fn nist_family_of(tag: &str) -> Option<&'static str> {
         return None;
     }
     let rest = t.strip_prefix("NIST-")?;
-    let fam: String = rest.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+    let fam: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect();
     match fam.as_str() {
         "AC" => Some("AC"),
         "AU" => Some("AU"),
@@ -101,7 +120,8 @@ mod tests {
     #[test]
     fn builds_fedramp_report() {
         let findings = vec![Finding::new(S3_PUBLIC_ACL, "main.tf", "main.tf")];
-        let compliance = vec![json!({"pack": "NIST", "controls_covered": 30, "controls_failed": 2})];
+        let compliance =
+            vec![json!({"pack": "NIST", "controls_covered": 30, "controls_failed": 2})];
         let nist = json!({"pass_pct": 93, "control_families": []});
         let r = build(&findings, &compliance, &nist);
         assert_eq!(r["framework"], "FedRAMP");

@@ -36,7 +36,7 @@ export default function NotFound() {
             404
           </div>
           <h1 className="text-xl font-semibold text-white/90 mb-2">
-            {t('errors.unknown_route', { defaultValue: 'Page not found' })}
+            {t('errors.unknown_route')}
           </h1>
           <p className="text-sm text-white/50 font-mono break-all">
             <code className="text-cyan-300/75">{location.pathname}</code>

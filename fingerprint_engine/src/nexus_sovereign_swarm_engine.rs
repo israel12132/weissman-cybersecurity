@@ -310,7 +310,14 @@ fn split_origin_path(url: &str) -> (String, String) {
 fn extract_paths_from_html(body: &str, origin: &str) -> Vec<String> {
     let mut out: HashSet<String> = HashSet::new();
     let body_lower = body.to_lowercase();
-    for marker in ["href=\"", "href='", "src=\"", "src='", "action=\"", "action='"] {
+    for marker in [
+        "href=\"",
+        "href='",
+        "src=\"",
+        "src='",
+        "action=\"",
+        "action='",
+    ] {
         let mut search_from = 0usize;
         while let Some(idx) = body_lower[search_from..].find(marker) {
             let start = search_from + idx + marker.len();
@@ -396,7 +403,8 @@ fn audit_set_cookie_header(raw: &str) -> Value {
     let has_httponly = lower.contains("httponly");
     let has_secure = lower.contains("secure");
     let has_samesite = lower.contains("samesite");
-    let session_like = lower.contains("session") || lower.contains("auth") || lower.contains("token");
+    let session_like =
+        lower.contains("session") || lower.contains("auth") || lower.contains("token");
     let issues: Vec<&str> = [
         (!has_httponly && session_like).then_some("missing_httponly_on_session_cookie"),
         (!has_secure && session_like).then_some("missing_secure_on_session_cookie"),
@@ -418,8 +426,12 @@ fn build_cookie_security_intel(signals: &[ProbeSignal]) -> Option<Value> {
     let mut samples = 0u64;
     let mut issue_counts: HashMap<String, u64> = HashMap::new();
     for s in signals.iter().filter(|s| s.archetype == "scout") {
-        let Some(ev) = s.evidence.as_ref() else { continue };
-        let Some(audit) = ev.get("cookie_audit") else { continue };
+        let Some(ev) = s.evidence.as_ref() else {
+            continue;
+        };
+        let Some(audit) = ev.get("cookie_audit") else {
+            continue;
+        };
         samples += 1;
         if let Some(arr) = audit.get("issues").and_then(Value::as_array) {
             for iss in arr {
@@ -442,7 +454,12 @@ fn build_rate_limit_intel(signals: &[ProbeSignal]) -> Option<Value> {
     let mut status_429 = 0u64;
     let mut status_403 = 0u64;
     for s in signals {
-        let Some(status) = s.evidence.as_ref().and_then(|e| e.get("status")).and_then(Value::as_u64) else {
+        let Some(status) = s
+            .evidence
+            .as_ref()
+            .and_then(|e| e.get("status"))
+            .and_then(Value::as_u64)
+        else {
             continue;
         };
         match status {
@@ -548,8 +565,15 @@ fn build_auth_perimeter(signals: &[ProbeSignal]) -> Value {
     let mut auth_required: Vec<String> = Vec::new();
     let mut forbidden: Vec<String> = Vec::new();
     let mut not_found: Vec<String> = Vec::new();
-    for s in signals.iter().filter(|s| s.archetype == "scout" || s.archetype == "exploiter") {
-        let Some(status) = s.evidence.as_ref().and_then(|e| e.get("status")).and_then(Value::as_u64)
+    for s in signals
+        .iter()
+        .filter(|s| s.archetype == "scout" || s.archetype == "exploiter")
+    {
+        let Some(status) = s
+            .evidence
+            .as_ref()
+            .and_then(|e| e.get("status"))
+            .and_then(Value::as_u64)
         else {
             continue;
         };
@@ -650,7 +674,10 @@ fn detect_attack_chains(signals: &[ProbeSignal], base: &str) -> Vec<ProbeSignal>
         })
         .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(str::to_string)))
         .collect();
-    for exp in signals.iter().filter(|s| s.signal_type == "exposure_vector") {
+    for exp in signals
+        .iter()
+        .filter(|s| s.signal_type == "exposure_vector")
+    {
         let (_, path) = split_origin_path(&exp.url);
         if stealth_leaks.contains(&path) && sev_rank(exp.severity) >= sev_rank("medium") {
             chains.push(ProbeSignal {
@@ -677,15 +704,18 @@ fn detect_attack_chains(signals: &[ProbeSignal], base: &str) -> Vec<ProbeSignal>
     }
 
     // Missing HSTS on scout samples + open sensitive paths
-    let scouts_no_hsts = signals.iter().filter(|s| {
-        s.archetype == "scout"
-            && s.evidence
-                .as_ref()
-                .and_then(|e| e.get("security_headers"))
-                .and_then(|h| h.get("hsts"))
-                .and_then(Value::as_bool)
-                == Some(false)
-    }).count();
+    let scouts_no_hsts = signals
+        .iter()
+        .filter(|s| {
+            s.archetype == "scout"
+                && s.evidence
+                    .as_ref()
+                    .and_then(|e| e.get("security_headers"))
+                    .and_then(|h| h.get("hsts"))
+                    .and_then(Value::as_bool)
+                    == Some(false)
+        })
+        .count();
     let open_sensitive = signals
         .iter()
         .filter(|s| s.signal_type == "exposure_vector" && s.severity == "critical")
@@ -725,9 +755,9 @@ fn detect_attack_chains(signals: &[ProbeSignal], base: &str) -> Vec<ProbeSignal>
         .collect::<Vec<_>>()
         .join("|");
     let waf_present = !waf_blob.is_empty()
-        && WAF_SIGNATURES.iter().any(|(_, tokens)| {
-            tokens.iter().any(|t| waf_blob.contains(*t))
-        });
+        && WAF_SIGNATURES
+            .iter()
+            .any(|(_, tokens)| tokens.iter().any(|t| waf_blob.contains(*t)));
     if waf_present && open_sensitive > 0 {
         chains.push(ProbeSignal {
             agent_id: 0,
@@ -750,7 +780,10 @@ fn detect_attack_chains(signals: &[ProbeSignal], base: &str) -> Vec<ProbeSignal>
     }
 
     // Admin/management paths reachable without auth challenge (HTTP 200, not 401/403).
-    for exp in signals.iter().filter(|s| s.signal_type == "exposure_vector") {
+    for exp in signals
+        .iter()
+        .filter(|s| s.signal_type == "exposure_vector")
+    {
         let (_, path) = split_origin_path(&exp.url);
         let pl = path.to_lowercase();
         let admin_like = pl.contains("admin")
@@ -808,27 +841,58 @@ fn recommend_engines(
     };
 
     if waf.is_some() {
-        push("waf_bypass_engine", "WAF/CDN layer detected — run dedicated bypass probes", 5);
+        push(
+            "waf_bypass_engine",
+            "WAF/CDN layer detected — run dedicated bypass probes",
+            5,
+        );
     }
     let blob = tech.to_string().to_lowercase();
     if blob.contains("graphql") {
-        push("graphql_attack", "GraphQL surface indicators in tech fingerprint", 4);
+        push(
+            "graphql_attack",
+            "GraphQL surface indicators in tech fingerprint",
+            4,
+        );
     }
     if blob.contains("swagger") || blob.contains("openapi") {
-        push("swagger_abuse", "OpenAPI/Swagger documentation surface observed", 4);
+        push(
+            "swagger_abuse",
+            "OpenAPI/Swagger documentation surface observed",
+            4,
+        );
     }
-    if signals.iter().any(|s| s.url.to_lowercase().contains("jwt") || s.url.contains("token")) {
-        push("jwt_attack", "JWT/token endpoints observed in swarm surface", 4);
+    if signals
+        .iter()
+        .any(|s| s.url.to_lowercase().contains("jwt") || s.url.contains("token"))
+    {
+        push(
+            "jwt_attack",
+            "JWT/token endpoints observed in swarm surface",
+            4,
+        );
     }
     if signals
         .iter()
         .any(|s| s.signal_type == "exposure_vector" && s.severity == "critical")
     {
-        push("bola_idor", "Critical exposure vectors — validate object-level authorization", 5);
-        push("ssrf_advanced", "High-value surface — test server-side request forgery chains", 3);
+        push(
+            "bola_idor",
+            "Critical exposure vectors — validate object-level authorization",
+            5,
+        );
+        push(
+            "ssrf_advanced",
+            "High-value surface — test server-side request forgery chains",
+            3,
+        );
     }
     if chain_count > 0 {
-        push("kill_chain", "Emergent attack chains detected — orchestrate full kill-chain simulation", 5);
+        push(
+            "kill_chain",
+            "Emergent attack chains detected — orchestrate full kill-chain simulation",
+            5,
+        );
     }
     if signals.iter().any(|s| {
         s.evidence
@@ -837,7 +901,11 @@ fn recommend_engines(
             .and_then(Value::as_bool)
             .unwrap_or(false)
     }) {
-        push("file_upload", "Directory listing observed — probe upload/write surfaces", 4);
+        push(
+            "file_upload",
+            "Directory listing observed — probe upload/write surfaces",
+            4,
+        );
     }
     let has_no_hsts = signals.iter().any(|s| {
         s.evidence
@@ -848,7 +916,11 @@ fn recommend_engines(
             == Some(false)
     });
     if has_no_hsts {
-        push("pki_tls", "Missing HSTS on scout samples — deep TLS/PKI posture review", 3);
+        push(
+            "pki_tls",
+            "Missing HSTS on scout samples — deep TLS/PKI posture review",
+            3,
+        );
     }
     if signals.iter().any(|s| {
         s.evidence
@@ -857,9 +929,17 @@ fn recommend_engines(
             .and_then(Value::as_array)
             .is_some_and(|a| !a.is_empty())
     }) {
-        push("graphql_attack", "GraphQL/OpenAPI body markers in live HTTP responses", 4);
+        push(
+            "graphql_attack",
+            "GraphQL/OpenAPI body markers in live HTTP responses",
+            4,
+        );
     }
-    push("http_smuggling", "Always validate HTTP desync after large-scale surface mapping", 2);
+    push(
+        "http_smuggling",
+        "Always validate HTTP desync after large-scale surface mapping",
+        2,
+    );
 
     recs.sort_by(|a, b| b.2.cmp(&a.2));
     recs.truncate(12);
@@ -870,11 +950,7 @@ fn recommend_engines(
         .collect()
 }
 
-fn compute_exposure_velocity(
-    elapsed: Duration,
-    requests: usize,
-    signals: &[ProbeSignal],
-) -> Value {
+fn compute_exposure_velocity(elapsed: Duration, requests: usize, signals: &[ProbeSignal]) -> Value {
     let secs = elapsed.as_secs_f64().max(0.001);
     let rps = (requests as f64 / secs).round();
     let first_critical_ms = signals
@@ -976,8 +1052,7 @@ fn detect_body_surface_markers(body: &str) -> Vec<&'static str> {
     let mut out = Vec::new();
     if sample.contains("__schema")
         || (sample.contains("graphql")
-            && (sample.contains("\"query\"")
-                || sample.contains("query {")))
+            && (sample.contains("\"query\"") || sample.contains("query {")))
     {
         out.push("graphql_surface");
     }
@@ -1026,7 +1101,10 @@ pub fn nssi_completeness_report() -> Value {
         .as_array()
         .map(|a| a.len())
         .unwrap_or(0);
-    let events = schema["live_events"].as_array().map(|a| a.len()).unwrap_or(0);
+    let events = schema["live_events"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
     json!({
         "world_class_verified": param_count >= 52 && intel >= 19 && events >= 10,
         "parameter_count": param_count,
@@ -1373,7 +1451,10 @@ impl SwarmConfig {
                 .unwrap_or(64)
                 .min(4096),
             single_wave: jp_lookup(p, "single_wave")
-                .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+                .and_then(|v| {
+                    v.as_u64()
+                        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                })
                 .map(|n| n as usize)
                 .filter(|&n| (1..=4).contains(&n)),
             timeout_ms: jp_u64(p, "timeout_ms", 12_000).clamp(500, 60_000),
@@ -1704,11 +1785,11 @@ fn build_surface(
         }
     };
     let push = |out: &mut Vec<(String, String)>,
-              seen: &mut HashSet<String>,
-              base: &str,
-              path: &str,
-              lineage: &mut Value,
-              source: &str| {
+                seen: &mut HashSet<String>,
+                base: &str,
+                path: &str,
+                lineage: &mut Value,
+                source: &str| {
         let path = if path.is_empty() {
             "/"
         } else if path.starts_with('/') {
@@ -1729,7 +1810,14 @@ fn build_surface(
         push(&mut out, &mut seen, base, path, &mut lineage, "sensitive");
     }
     for path in &config.stealth_paths {
-        push(&mut out, &mut seen, base, path, &mut lineage, "stealth_paths");
+        push(
+            &mut out,
+            &mut seen,
+            base,
+            path,
+            &mut lineage,
+            "stealth_paths",
+        );
     }
 
     for path in pipeline_context::expanded_path_wordlist()
@@ -1740,7 +1828,12 @@ fn build_surface(
     }
 
     if config.include_discovered_paths {
-        for path in ctx.discovered_paths.iter().chain(extra_paths.iter()).take(400) {
+        for path in ctx
+            .discovered_paths
+            .iter()
+            .chain(extra_paths.iter())
+            .take(400)
+        {
             push(&mut out, &mut seen, base, path, &mut lineage, "discovered");
         }
         if let Some(arr) = ctx
@@ -1767,7 +1860,14 @@ fn build_surface(
         } else {
             format!("https://{}", sub.trim_start_matches('/'))
         };
-        push(&mut out, &mut seen, &sub_base, "/", &mut lineage, "subdomain");
+        push(
+            &mut out,
+            &mut seen,
+            &sub_base,
+            "/",
+            &mut lineage,
+            "subdomain",
+        );
     }
     for url in ctx.target_list.iter().take(20) {
         let b = normalize_base(url);
@@ -2209,13 +2309,19 @@ async fn run_scout_probe(
         desc.push_str(&format!(" | X-Powered-By: {}", powered));
     }
     if !extracted_paths.is_empty() {
-        desc.push_str(&format!(" | {} live paths extracted from HTML", extracted_paths.len()));
+        desc.push_str(&format!(
+            " | {} live paths extracted from HTML",
+            extracted_paths.len()
+        ));
     }
     if dir_listing {
         desc.push_str(" | directory listing indicators in body");
     }
     if !internal_hdrs.is_empty() {
-        desc.push_str(&format!(" | disclosure headers: {}", internal_hdrs.join(", ")));
+        desc.push_str(&format!(
+            " | disclosure headers: {}",
+            internal_hdrs.join(", ")
+        ));
     }
     if let Some(ref audit) = cookie_audit {
         if let Some(arr) = audit.get("issues").and_then(Value::as_array) {
@@ -2266,7 +2372,11 @@ async fn run_scout_probe(
         title: if dir_listing {
             format!("Swarm Scout — Directory Listing at {}", task.path)
         } else if !extracted_paths.is_empty() {
-            format!("Swarm Scout — {} Live Paths Discovered at {}", extracted_paths.len(), task.path)
+            format!(
+                "Swarm Scout — {} Live Paths Discovered at {}",
+                extracted_paths.len(),
+                task.path
+            )
         } else {
             format!("Swarm Scout Signal — {}", task.path)
         },
@@ -2772,10 +2882,7 @@ fn heuristic_oracle_synthesis(
         .get("waf_vendor")
         .and_then(Value::as_str)
         .unwrap_or("none");
-    let auth_open = brief
-        .get("auth_open")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
+    let auth_open = brief.get("auth_open").and_then(Value::as_u64).unwrap_or(0);
     let siq = compute_swarm_iq(
         agents_deployed.max(config.agent_count),
         raw_signals.len(),
@@ -3158,11 +3265,7 @@ pub async fn run_nexus_sovereign_swarm_result(
             .await;
 
             let progress = if config.progress_emit_interval > 0 && config.emit_live_telemetry {
-                Some((
-                    ctx.clone(),
-                    w + 1,
-                    config.progress_emit_interval,
-                ))
+                Some((ctx.clone(), w + 1, config.progress_emit_interval))
             } else {
                 None
             };
@@ -3206,7 +3309,10 @@ pub async fn run_nexus_sovereign_swarm_result(
                 },
             }));
 
-            let crit_this_wave = wave_signals.iter().filter(|s| s.severity == "critical").count();
+            let crit_this_wave = wave_signals
+                .iter()
+                .filter(|s| s.severity == "critical")
+                .count();
             let partial_siq = compute_swarm_iq(
                 agents_deployed,
                 all_signals.len() + wave_signals.len(),
@@ -3276,7 +3382,9 @@ pub async fn run_nexus_sovereign_swarm_result(
                     .is_some_and(|d| d < 30);
             let open_exposure = raw_signals
                 .iter()
-                .filter(|s| s.signal_type == "exposure_vector" && sev_rank(s.severity) >= sev_rank("high"))
+                .filter(|s| {
+                    s.signal_type == "exposure_vector" && sev_rank(s.severity) >= sev_rank("high")
+                })
                 .count();
             if cert_bad && open_exposure > 0 {
                 chains.push(ProbeSignal {
@@ -3424,11 +3532,8 @@ pub async fn run_nexus_sovereign_swarm_result(
             }
         }
     }
-    let exposure_velocity = compute_exposure_velocity(
-        deployment_start.elapsed(),
-        requests_sent,
-        &raw_signals,
-    );
+    let exposure_velocity =
+        compute_exposure_velocity(deployment_start.elapsed(), requests_sent, &raw_signals);
 
     nssi_emit(
         ctx,
@@ -3586,7 +3691,10 @@ pub async fn run_nexus_sovereign_swarm_result(
     }
 
     if let Some(ref perimeter) = auth_perimeter {
-        let open = perimeter.get("open_count").and_then(Value::as_u64).unwrap_or(0);
+        let open = perimeter
+            .get("open_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let auth = perimeter
             .get("auth_required_count")
             .and_then(Value::as_u64)
@@ -4031,7 +4139,8 @@ mod tests {
 
     #[test]
     fn extract_paths_from_html_finds_hrefs() {
-        let html = r#"<a href="/api/v1/users">u</a><img src="/static/logo.png"><form action="/login">"#;
+        let html =
+            r#"<a href="/api/v1/users">u</a><img src="/static/logo.png"><form action="/login">"#;
         let paths = extract_paths_from_html(html, "https://example.com");
         assert!(paths.contains(&"/api/v1/users".to_string()));
         assert!(paths.contains(&"/static/logo.png".to_string()));
@@ -4128,7 +4237,10 @@ mod tests {
         let brief = json!({ "threat_surface_score": 72, "security_grade": "C", "waf_vendor": "cloudflare" });
         let o = heuristic_oracle_synthesis(&c, &brief, &[], &[], 128, 0, None, &json!({}), 2);
         assert_eq!(o["source"], json!("heuristic_telemetry"));
-        assert!(o["operator_brief"].as_str().unwrap().contains("telemetry-only"));
+        assert!(o["operator_brief"]
+            .as_str()
+            .unwrap()
+            .contains("telemetry-only"));
     }
 
     #[test]
@@ -4192,7 +4304,10 @@ mod tests {
         ]);
         assert_eq!(p["open_count"], json!(1));
         assert_eq!(p["auth_required_count"], json!(1));
-        assert!(p["forbidden"].as_array().unwrap().contains(&json!("/secret")));
+        assert!(p["forbidden"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("/secret")));
     }
 
     #[test]
@@ -4229,7 +4344,9 @@ mod tests {
     #[test]
     fn recommend_engines_includes_waf_bypass() {
         let recs = recommend_engines(&[], Some("Cloudflare"), &json!({}), 0);
-        assert!(recs.iter().any(|r| r["engine_id"] == json!("waf_bypass_engine")));
+        assert!(recs
+            .iter()
+            .any(|r| r["engine_id"] == json!("waf_bypass_engine")));
     }
 
     #[tokio::test]

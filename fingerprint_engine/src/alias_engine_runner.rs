@@ -1765,17 +1765,7 @@ pub async fn run_alias_engine(
             .await
         }
         "timestomping" => {
-            run_alias_probe(
-                "timestomping",
-                "antiforensics",
-                "",
-                "Specialized timestomping probe against live target",
-                "antiforensics",
-                "",
-                target,
-                ctx,
-            )
-            .await
+            crate::engine_dispatch::run_agent_required_engine("timestomping", target, ctx).await
         }
         "log_wiping" => {
             run_alias_probe(
@@ -2954,12 +2944,10 @@ async fn run_alias_probe(
 
     // Agent-required canonical: remote surface + agent fleet (hybrid).
     if crate::engine_dispatch::is_agent_required_engine(canonical) {
-        let remote = crate::agent_remote_surface::run_remote_surface_probe(canonical, target, ctx)
-            .await;
-        let agent =
-            crate::engine_dispatch::run_agent_required_engine(canonical, target, ctx).await;
-        let mut result =
-            crate::engine_dispatch::merge_agent_hybrid(remote, agent, canonical);
+        let remote =
+            crate::agent_remote_surface::run_remote_surface_probe(canonical, target, ctx).await;
+        let agent = crate::engine_dispatch::run_agent_required_engine(canonical, target, ctx).await;
+        let mut result = crate::engine_dispatch::merge_agent_hybrid(remote, agent, canonical);
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
                 obj.insert("type".to_string(), json!(engine_id));
@@ -2994,9 +2982,10 @@ async fn run_alias_probe(
     let mut merged: Vec<serde_json::Value> = specialized.findings;
     for f in canon_result.findings.drain(..) {
         let title = f.get("title").and_then(|v| v.as_str()).unwrap_or("");
-        if merged.iter().any(|m| {
-            m.get("title").and_then(|v| v.as_str()).unwrap_or("") == title
-        }) {
+        if merged
+            .iter()
+            .any(|m| m.get("title").and_then(|v| v.as_str()).unwrap_or("") == title)
+        {
             continue;
         }
         merged.push(f);
@@ -3017,13 +3006,7 @@ async fn run_alias_probe(
             } else {
                 "canonical_enrichment".to_string()
             };
-            apply_alias_honest_metadata(
-                obj,
-                engine_id,
-                canonical,
-                &fidelity,
-                cognitive_hint,
-            );
+            apply_alias_honest_metadata(obj, engine_id, canonical, &fidelity, cognitive_hint);
             if !mitre.is_empty() {
                 obj.entry("mitre_attack".to_string())
                     .or_insert_with(|| json!(mitre));

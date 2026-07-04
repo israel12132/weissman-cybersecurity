@@ -6,6 +6,7 @@ import { Search, Download } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { SkeletonBar } from '../components/ui/Skeleton'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -439,7 +440,10 @@ export default function DomainDiscovery() {
       </AnimatePresence>
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
-        <EvidenceNotice>{t('pages.domainDiscovery.evidence_notice')}</EvidenceNotice>
+        <EngineHubForensicHeader
+          evidence={t('pages.domainDiscovery.evidence_notice')}
+          engineId="discovery_engine"
+        />
         {lastSync && (
           <p className="text-[10px] font-mono text-white/35 -mt-4">
             {t('weissmanFindings.last_updated', { time: lastSync.toLocaleString() })}

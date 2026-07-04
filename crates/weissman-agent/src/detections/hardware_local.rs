@@ -14,7 +14,11 @@ pub async fn run_lorawan(engine: &str) -> anyhow::Result<Vec<Value>> {
     if let Some(out) = run_cmd_lossy("lsusb", &[]).await {
         for line in out.lines() {
             let l = line.to_ascii_lowercase();
-            if l.contains("silicon labs") || l.contains("ftdi") || l.contains("ch340") || l.contains("lora") {
+            if l.contains("silicon labs")
+                || l.contains("ftdi")
+                || l.contains("ch340")
+                || l.contains("lora")
+            {
                 radios.push(line.trim().to_string());
             }
         }
@@ -40,7 +44,12 @@ pub async fn run_voltage_glitch(engine: &str) -> anyhow::Result<Vec<Value>> {
         }
     }
     let glitch_tools = super::util::any_process_matches(&[
-        "openocd", "st-link", "jlink", "chipwhisperer", "pyocd", "dfu-util",
+        "openocd",
+        "st-link",
+        "jlink",
+        "chipwhisperer",
+        "pyocd",
+        "dfu-util",
     ]);
 
     let mut extras = Map::new();
@@ -75,7 +84,11 @@ pub async fn run_tpm(engine: &str) -> anyhow::Result<Vec<Value>> {
     {
         if let Some(out) = run_cmd_lossy(
             "powershell",
-            &["-NoProfile", "-Command", "Get-Tpm | Select-Object TpmPresent, TpmReady, ManufacturerVersion"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "Get-Tpm | Select-Object TpmPresent, TpmReady, ManufacturerVersion",
+            ],
         )
         .await
         {

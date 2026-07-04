@@ -67,6 +67,7 @@ export const ROUTE_EVIDENCE = {
   '/saml-security': 'pages.samlSecurityCommandCenter.evidence_notice',
   '/cicd-security': 'pages.cicdPipelineSecurityCommandCenter.evidence_notice',
   '/serverless-security': 'pages.serverlessSecurityCommandCenter.evidence_notice',
+  '/websocket-security': 'pages.websocketSecurity.evidence_notice',
   '/threat-intel': 'pages.threatIntelHub.evidence_notice',
   '/threat-analysis': 'pages.threatAnalysisCenter.evidence_notice',
   '/engine-reliability': 'pages.engineReliability.evidence_notice',
@@ -90,6 +91,7 @@ export const ROUTE_EVIDENCE = {
   '/ceo-vault': 'pages.ceoVault.evidence_notice',
   '/sbom': 'pages.sbomBrowser.evidence_notice',
   '/integrations': 'pages.integrationManager.evidence_notice',
+  '/settings/integrations': 'pages.integrationManager.evidence_notice',
   '/alert-rules': 'pages.alertRulesEngine.evidence_notice',
   '/scan-scheduler': 'pages.scanScheduler.evidence_notice',
   '/containment-rules': 'pages.containmentRulesBuilder.evidence_notice',
@@ -105,6 +107,8 @@ export const ROUTE_EVIDENCE = {
   '/system-core': 'pages.systemCore.evidence_notice',
   '/engines/strategic': 'pages.strategicEngineProgram.evidence_notice',
   '/intel-map': 'pages.intelMap.evidence_notice',
+  '/ai-arena': 'components.tools.aiRedteamArena.evidence_notice',
+  '/timing-profiler': 'components.tools.quantumTimingProfiler.evidence_notice',
 }
 
 /** Longest-prefix-first dynamic routes → i18n key. */
@@ -112,6 +116,12 @@ export const ROUTE_EVIDENCE_PREFIX = [
   { prefix: '/clients/', key: 'pages.clientDetail.evidence_notice' },
   { prefix: '/engines/', key: 'pages.engineDetail.evidence_notice' },
   { prefix: '/digital-twin/', key: 'pages.digitalTwinSimulator.evidence_notice' },
+  { prefix: '/attack-chain/', key: 'components.tools.attackChainView.evidence_notice' },
+  { prefix: '/attack-surface-graph/', key: 'components.tools.attackSurfaceGraph.evidence_notice' },
+  { prefix: '/cicd-matrix/', key: 'components.tools.cicdThreatMatrix.evidence_notice' },
+  { prefix: '/memory-lab/', key: 'components.tools.memoryForensicsLab.evidence_notice' },
+  { prefix: '/report/', key: 'components.reportView.evidence_notice' },
+  { prefix: '/semantic-logic/', key: 'components.tools.semanticLogicEngine.evidence_notice' },
 ]
 
 function normalizePath(pathname) {
@@ -144,6 +154,6 @@ export function resolveRouteEvidence(pathname, t) {
   if (isSkipped(path)) return null
   const key = resolveKey(path)
   if (!key) return null
-  const text = t(key, { defaultValue: '' })
+  const text = t(key)
   return text && text !== key ? text : null
 }

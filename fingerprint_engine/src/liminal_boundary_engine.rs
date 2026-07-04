@@ -46,8 +46,15 @@ const MITRE: &str = "T1190";
 const MITRE_MITM: &str = "T1557";
 
 const DEFAULT_PATHS: &[&str] = &["/", "/admin", "/api", "/api/v1", "/internal", "/dashboard"];
-const DEFAULT_SENSITIVE: &[&str] =
-    &["/admin", "/api/admin", "/internal", "/manager", "/console", "/actuator", "/debug"];
+const DEFAULT_SENSITIVE: &[&str] = &[
+    "/admin",
+    "/api/admin",
+    "/internal",
+    "/manager",
+    "/console",
+    "/actuator",
+    "/debug",
+];
 const DEFAULT_REWRITE_HEADERS: &[&str] = &[
     "X-Original-URL",
     "X-Rewrite-URL",
@@ -92,7 +99,10 @@ impl ScanConfig {
             }
         }
         if let Some(tok) = cfg.string("bearer_token") {
-            auth_headers.push(("Authorization".to_string(), format!("Bearer {}", tok.trim())));
+            auth_headers.push((
+                "Authorization".to_string(),
+                format!("Bearer {}", tok.trim()),
+            ));
         }
         if let Some(c) = cfg.string("cookies") {
             auth_headers.push(("Cookie".to_string(), c));
@@ -117,12 +127,11 @@ impl ScanConfig {
             check_method_schism: cfg.bool_or("check_method_schism", intensity != Intensity::Light),
             check_cache_vary: cfg.bool_or("check_cache_vary", true),
             check_trusted_headers: cfg.bool_or("check_trusted_headers", true),
-            check_ip_trust_headers: cfg.bool_or(
-                "check_ip_trust_headers",
-                intensity == Intensity::Aggressive,
-            ),
+            check_ip_trust_headers: cfg
+                .bool_or("check_ip_trust_headers", intensity == Intensity::Aggressive),
             check_entropy_divergence: cfg.bool_or("check_entropy_divergence", true),
-            check_encoding_schism: cfg.bool_or("check_encoding_schism", intensity != Intensity::Light),
+            check_encoding_schism: cfg
+                .bool_or("check_encoding_schism", intensity != Intensity::Light),
             check_fingerprint: cfg.bool_or("check_fingerprint", true),
             check_attack_paths: cfg.bool_or("check_attack_paths", true),
             check_posture_score: cfg.bool_or("check_posture_score", true),
@@ -287,7 +296,10 @@ fn fingerprint_edge(headers: &[(String, String)], body: &str) -> Option<(&'stati
     let body_lc = body.to_ascii_lowercase();
 
     if get("cf-ray").is_some() || get("cf-mitigated").is_some() || body_lc.contains("cloudflare") {
-        return Some(("Cloudflare", get("cf-ray").unwrap_or("cloudflare").to_string()));
+        return Some((
+            "Cloudflare",
+            get("cf-ray").unwrap_or("cloudflare").to_string(),
+        ));
     }
     if get("x-akamai-transformed").is_some() || body_lc.contains("akamai") {
         return Some(("Akamai", "akamai".to_string()));
@@ -296,7 +308,10 @@ fn fingerprint_edge(headers: &[(String, String)], body: &str) -> Option<(&'stati
         return Some(("AWS CloudFront/WAF", "aws".to_string()));
     }
     if get("x-fastly-request-id").is_some() {
-        return Some(("Fastly", get("x-fastly-request-id").unwrap_or("fastly").to_string()));
+        return Some((
+            "Fastly",
+            get("x-fastly-request-id").unwrap_or("fastly").to_string(),
+        ));
     }
     if get("x-sucuri-id").is_some() {
         return Some(("Sucuri WAF", "sucuri".to_string()));
@@ -495,7 +510,11 @@ fn probe_protocol_schism(
             .with("h2_entropy", e2)
             .with("h1_len", h1.body.len())
             .with("h2_len", h2.body.len())
-            .check("entropy_divergence", true, "bodies differ across ALPN stacks");
+            .check(
+                "entropy_divergence",
+                true,
+                "bodies differ across ALPN stacks",
+            );
         let f = with_category(
             finding_rich(
                 ENGINE_ID,
@@ -546,11 +565,18 @@ async fn probe_method_schism(
                 .with("path", path)
                 .with("get_status", get.status)
                 .with("options_status", opt.status)
-                .check("method_schism_h1", true, "OPTIONS allowed where GET blocked");
+                .check(
+                    "method_schism_h1",
+                    true,
+                    "OPTIONS allowed where GET blocked",
+                );
             let f = with_category(
                 finding_rich(
                     ENGINE_ID,
-                    &format!("Method schism on {} — OPTIONS {} vs GET {}", path, opt.status, get.status),
+                    &format!(
+                        "Method schism on {} — OPTIONS {} vs GET {}",
+                        path, opt.status, get.status
+                    ),
                     "high",
                     MITRE,
                     &format!(
@@ -574,7 +600,11 @@ async fn probe_method_schism(
                 .with("path", path)
                 .with("get_status", get.status)
                 .with("options_status", opt.status)
-                .check("method_schism_h2", true, "OPTIONS allowed where GET blocked on HTTP/2");
+                .check(
+                    "method_schism_h2",
+                    true,
+                    "OPTIONS allowed where GET blocked on HTTP/2",
+                );
             let f = with_category(
                 finding_rich(
                     ENGINE_ID,
@@ -610,11 +640,11 @@ async fn probe_cache_vary_oracle(
 ) {
     let client = http1_client().await;
     let url = format!("{}/", base.trim_end_matches('/'));
-    let baseline = match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await
-    {
-        Some(p) => p,
-        None => return,
-    };
+    let baseline =
+        match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await {
+            Some(p) => p,
+            None => return,
+        };
 
     let lang_a = get_with_merged(
         &client,
@@ -743,10 +773,11 @@ async fn probe_cache_vary_oracle(
                 let publicly_cacheable = !cache_ctrl.contains("no-store");
                 let vary_ok = vary.to_ascii_lowercase().contains("accept-encoding");
                 if publicly_cacheable && !vary_ok {
-                    let ev = Evidence::new()
-                        .with("url", &url)
-                        .with("vary", vary)
-                        .check("encoding_vary", false, "gzip vs identity without Vary");
+                    let ev = Evidence::new().with("url", &url).with("vary", vary).check(
+                        "encoding_vary",
+                        false,
+                        "gzip vs identity without Vary",
+                    );
                     let f = with_category(
                         finding_rich(
                             ENGINE_ID,
@@ -784,16 +815,13 @@ async fn probe_trusted_header_rewrite(
 
     for path in &cfg.sensitive_paths {
         let direct_url = format!("{}{}", base.trim_end_matches('/'), path);
-        let direct = match http_get_with_headers(
-            &client,
-            &direct_url,
-            &header_pairs(&cfg.auth_headers),
-        )
-        .await
-        {
-            Some(p) => p,
-            None => continue,
-        };
+        let direct =
+            match http_get_with_headers(&client, &direct_url, &header_pairs(&cfg.auth_headers))
+                .await
+            {
+                Some(p) => p,
+                None => continue,
+            };
 
         for header in &cfg.rewrite_headers {
             if let Some(rewritten) = get_with_merged(
@@ -815,7 +843,11 @@ async fn probe_trusted_header_rewrite(
                         .with("path", path)
                         .with("direct_status", direct.status)
                         .with("rewrite_status", rewritten.status)
-                        .check("header_rewrite_bypass", true, "trusted header reached blocked path");
+                        .check(
+                            "header_rewrite_bypass",
+                            true,
+                            "trusted header reached blocked path",
+                        );
                     let f = with_category(
                         finding_rich(
                             ENGINE_ID,
@@ -844,7 +876,11 @@ async fn probe_trusted_header_rewrite(
                     let ev = Evidence::new()
                         .with("header", header)
                         .with("path", path)
-                        .check("header_rewrite_expose", true, "internal path via rewrite header");
+                        .check(
+                            "header_rewrite_expose",
+                            true,
+                            "internal path via rewrite header",
+                        );
                     let f = with_category(
                         finding_rich(
                             ENGINE_ID,
@@ -880,11 +916,11 @@ async fn probe_ip_trust_headers(
 ) {
     let client = http1_client().await;
     let url = format!("{}{}", base.trim_end_matches('/'), path);
-    let baseline = match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await
-    {
-        Some(p) => p,
-        None => return,
-    };
+    let baseline =
+        match http_get_with_headers(&client, &url, &header_pairs(&cfg.auth_headers)).await {
+            Some(p) => p,
+            None => return,
+        };
     if !is_auth_block(baseline.status) {
         return;
     }
@@ -1149,10 +1185,7 @@ async fn probe_path(
 
 // ── Public entry points ───────────────────────────────────────────────────────────
 
-pub async fn run_liminal_boundary_result_ctx(
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
+pub async fn run_liminal_boundary_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
     let target = target.trim();
     if target.is_empty() {
         return EngineResult::error("target required");
@@ -1187,7 +1220,9 @@ pub async fn run_liminal_boundary_result_ctx(
         aggregate.cache_vary_gaps.append(&mut p.cache_vary_gaps);
         aggregate.header_rewrites.append(&mut p.header_rewrites);
         aggregate.ip_trust_bypasses.append(&mut p.ip_trust_bypasses);
-        aggregate.entropy_divergences.append(&mut p.entropy_divergences);
+        aggregate
+            .entropy_divergences
+            .append(&mut p.entropy_divergences);
         aggregate.encoding_schisms.append(&mut p.encoding_schisms);
         if aggregate.edge_vendor.is_none() {
             aggregate.edge_vendor = p.edge_vendor;
@@ -1201,18 +1236,30 @@ pub async fn run_liminal_boundary_result_ctx(
         let mut vary_posture = LiminalPosture::default();
         probe_cache_vary_oracle(target, &base, &cfg, &mut vary_posture, &mut vary_findings).await;
         all_findings.append(&mut vary_findings);
-        aggregate.cache_vary_gaps.append(&mut vary_posture.cache_vary_gaps);
-        aggregate.encoding_schisms.append(&mut vary_posture.encoding_schisms);
+        aggregate
+            .cache_vary_gaps
+            .append(&mut vary_posture.cache_vary_gaps);
+        aggregate
+            .encoding_schisms
+            .append(&mut vary_posture.encoding_schisms);
         aggregate.bump_worst(&vary_posture.worst);
     }
 
     if cfg.check_trusted_headers {
         let mut rewrite_findings = Vec::new();
         let mut rewrite_posture = LiminalPosture::default();
-        probe_trusted_header_rewrite(target, &base, &cfg, &mut rewrite_posture, &mut rewrite_findings)
-            .await;
+        probe_trusted_header_rewrite(
+            target,
+            &base,
+            &cfg,
+            &mut rewrite_posture,
+            &mut rewrite_findings,
+        )
+        .await;
         all_findings.append(&mut rewrite_findings);
-        aggregate.header_rewrites.append(&mut rewrite_posture.header_rewrites);
+        aggregate
+            .header_rewrites
+            .append(&mut rewrite_posture.header_rewrites);
         aggregate.bump_worst(&rewrite_posture.worst);
     }
 
@@ -1232,18 +1279,30 @@ pub async fn run_liminal_boundary_result_ctx(
             if !obj.contains_key("remediation") {
                 obj.insert(
                     "remediation".into(),
-                    json!(crate::engine_probes::default_remediation(ENGINE_ID, obj.get("severity").and_then(|v| v.as_str()).unwrap_or("medium"))),
+                    json!(crate::engine_probes::default_remediation(
+                        ENGINE_ID,
+                        obj.get("severity")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("medium")
+                    )),
                 );
             }
         }
     }
 
     if cfg.check_posture_score {
-        let n = all_findings.iter().filter(|f| f.get("summary") != Some(&json!(true))).count();
+        let n = all_findings
+            .iter()
+            .filter(|f| f.get("summary") != Some(&json!(true)))
+            .count();
         all_findings.insert(0, build_posture_summary(target, &aggregate, n));
     }
 
-    if all_findings.is_empty() || all_findings.iter().all(|f| f.get("summary") == Some(&json!(true))) {
+    if all_findings.is_empty()
+        || all_findings
+            .iter()
+            .all(|f| f.get("summary") == Some(&json!(true)))
+    {
         if all_findings.is_empty() {
             empty_ok(ENGINE_ID, target)
         } else {

@@ -127,6 +127,21 @@ jobs:
           exit-code: "1"
           format: table
 
+      - name: Generate SBOM (CycloneDX via Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom-cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom-cyclonedx.json
+          if-no-files-found: error
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -159,8 +174,8 @@ jobs:
         run: npm run lint
         working-directory: frontend
 
-      - name: Unit tests (Vitest)
-        run: npm run test
+      - name: Unit tests with coverage (Vitest ≥60% critical paths)
+        run: npm run test:coverage
         working-directory: frontend
 
       - name: Build frontend
@@ -263,6 +278,8 @@ jobs:
         run: cargo run -q -p weissman-db --example run_migrate
 
       - name: Run Rust workspace tests (blocking gate)
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo test --workspace --all-targets
 
       - name: Build Docker production images
@@ -291,8 +308,10 @@ jobs:
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_METRICS_TOKEN: ci-metrics-token-32-bytes-minimum
+          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
+          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
@@ -307,7 +326,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: ci-engine-smoke-secret
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
@@ -331,7 +351,7 @@ jobs:
           # real row-level security (the role + migrations were created by the
           # weissman-server boot above).
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-        run: cargo test -p weissman-db --test rls_cross_tenant -- --ignored --nocapture
+        run: cargo test -p weissman-db --test rls_cross_tenant -- --nocapture
 
       - name: Smoke one engine per group
         env:
@@ -361,6 +381,35 @@ jobs:
           WEISSMAN_E2E_POLL_MAX: "90"
         run: node scripts/verify_scan_pipeline_e2e.mjs
 
+      - name: Playwright live journey (login → scan → findings → PDF)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          cd frontend
+          npx playwright install chromium
+          npm run test:e2e:live
+
+      - name: Generate audit evidence pack
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_EVIDENCE_OUT: ${{ github.workspace }}/evidence-pack/ci
+        run: |
+          chmod +x scripts/generate_audit_evidence_pack.sh
+          ./scripts/generate_audit_evidence_pack.sh
+
+      - name: Upload audit evidence pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-evidence-pack
+          path: evidence-pack/ci/
+          if-no-files-found: error
+
       - name: Live scan pipeline pytest contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
@@ -381,6 +430,15 @@ jobs:
           WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
         run: node scripts/verify_engine_groups_findings_e2e.mjs
 
+      - name: SOAR playbook E2E contract
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
+          WEISSMAN_DUAL_APPROVAL_SECRET: ci-dual-approval-secret-32-bytes-minimum-v1
+        run: node scripts/verify_soar_playbook_e2e.mjs
+
       - name: FP/TP confidence feedback E2E
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
@@ -398,7 +456,7 @@ jobs:
           cat /tmp/weissman-worker.log || true
 
   semgrep:
-    name: Semgrep SAST (report-only)
+    name: Semgrep SAST (critical blocking)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -411,14 +469,11 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep
 
-      # Report-only: `semgrep scan` exits 0 on findings (only --error blocks), so this
-      # never breaks the build today. Findings print to the CI log. Once the baseline
-      # is clean, add `--error` to turn this into a hard gate. Complements CodeQL
-      # (codeql.yml) which covers JS/TS + Python via the Security tab.
-      - name: Run Semgrep (security-audit, secrets, owasp-top-ten)
+      - name: Run Semgrep (security-audit, secrets, owasp-top-ten — blocking)
         run: |
           semgrep scan \
             --config p/security-audit \
             --config p/secrets \
             --config p/owasp-top-ten \
-            --metrics off
+            --metrics off \
+            --error

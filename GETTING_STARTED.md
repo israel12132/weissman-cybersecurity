@@ -19,6 +19,14 @@
 
 ## Quick start (~5 minutes)
 
+**Production / customer deploy (one command):**
+
+```bash
+./start_weissman_live.sh --url https://your-company.example
+```
+
+**Local dev (hot-reload UI):**
+
 ```bash
 cp PRODUCTION.env.template .env
 # Edit: WEISSMAN_JWT_SECRET, WEISSMAN_ADMIN_PASSWORD, DATABASE_URL, REDIS_URL

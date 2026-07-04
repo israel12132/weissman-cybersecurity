@@ -67,7 +67,9 @@ fn snmp_public_sysdescr_response(resp: &[u8]) -> bool {
     }
     // Require printable sysDescr payload, not just ASN.1 framing.
     resp.iter().any(|b| b.is_ascii_graphic() && *b != b' ')
-        && String::from_utf8_lossy(resp).chars().any(|c| c.is_alphabetic())
+        && String::from_utf8_lossy(resp)
+            .chars()
+            .any(|c| c.is_alphabetic())
 }
 
 /// LDAP bind response that indicates the server answered (success or invalid credentials).
@@ -78,7 +80,9 @@ fn ldap_bind_response(resp: &[u8]) -> bool {
     }
     // LDAPMessage → bindResponse (0x61) or resultCode present in typical bind reply.
     resp.contains(&0x61)
-        || resp.windows(3).any(|w| w == [0x0a, 0x01, 0x00] || w == [0x0a, 0x01, 0x31])
+        || resp
+            .windows(3)
+            .any(|w| w == [0x0a, 0x01, 0x00] || w == [0x0a, 0x01, 0x31])
 }
 
 pub async fn run_arp_spoofing_engine_result(t: &str) -> EngineResult {
@@ -793,6 +797,8 @@ mod tests {
     #[test]
     fn ldap_bind_response_requires_bind_reply_marker() {
         assert!(!ldap_bind_response(&[0x30, 0x03, 0x02, 0x01, 0x01]));
-        assert!(ldap_bind_response(&[0x30, 0x0c, 0x02, 0x01, 0x01, 0x61, 0x07]));
+        assert!(ldap_bind_response(&[
+            0x30, 0x0c, 0x02, 0x01, 0x01, 0x61, 0x07
+        ]));
     }
 }

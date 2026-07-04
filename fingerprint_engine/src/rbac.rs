@@ -213,6 +213,8 @@ mod tests {
             is_superadmin: superadmin,
             agent_id: None,
             jti: None,
+            bind_ip: None,
+            bind_tls_fp: None,
         }
     }
 

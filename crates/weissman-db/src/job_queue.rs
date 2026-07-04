@@ -96,6 +96,96 @@ impl WorkerPoolRole {
     }
 }
 
+/// Zero-trust reserve: lock row but leave `pending` until cryptographic claim projects `running`.
+pub async fn reserve_next(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+) -> Result<Option<AsyncJob>, sqlx::Error> {
+    reserve_next_with_role(pool, worker_id, lock_secs, WorkerPoolRole::from_env()).await
+}
+
+pub async fn reserve_next_with_role(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+    role: WorkerPoolRole,
+) -> Result<Option<AsyncJob>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        WITH c AS (
+            SELECT id FROM weissman_async_jobs
+            WHERE status = 'pending'
+              AND (run_after IS NULL OR run_after <= now())
+              AND (locked_until IS NULL OR locked_until <= now())
+              AND (
+                $3::int = 0
+                OR (
+                  $3::int = 1
+                  AND kind IN (
+                    'genesis_eternal_fuzz',
+                    'genesis_knowledge_match',
+                    'sovereign_learning_feedback',
+                    'council_debate',
+                    'poe_synthesis_run'
+                  )
+                )
+                OR (
+                  $3::int = 2
+                  AND kind NOT IN (
+                    'genesis_eternal_fuzz',
+                    'genesis_knowledge_match',
+                    'sovereign_learning_feedback',
+                    'council_debate',
+                    'poe_synthesis_run'
+                  )
+                )
+              )
+            ORDER BY created_at
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        UPDATE weissman_async_jobs j
+        SET locked_until = now() + ($2::bigint * interval '1 second'),
+            worker_id = $1,
+            heartbeat_at = now(),
+            attempt_count = j.attempt_count + 1,
+            updated_at = now()
+        FROM c
+        WHERE j.id = c.id
+        RETURNING j.id, j.tenant_id, j.kind, j.payload, j.attempt_count, j.max_attempts, j.trace_id
+        "#,
+    )
+    .bind(worker_id)
+    .bind(lock_secs)
+    .bind(role.sql_mode())
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let id: Uuid = row.try_get("id")?;
+    let tenant_id: i64 = row.try_get("tenant_id")?;
+    let kind: String = row.try_get("kind")?;
+    let payload: Json<Value> = row.try_get("payload")?;
+    let payload = payload.0;
+    let attempt_count: i32 = row.try_get("attempt_count")?;
+    let max_attempts: i32 = row.try_get("max_attempts")?;
+    let trace_id: Option<String> = row.try_get("trace_id").ok();
+
+    Ok(Some(AsyncJob {
+        id,
+        tenant_id,
+        kind,
+        payload,
+        attempt_count,
+        max_attempts,
+        trace_id,
+    }))
+}
+
 /// Claim the next runnable job. Respects `WEISSMAN_WORKER_POOL` when set (`research` / `client` / `mixed`).
 pub async fn claim_next(
     pool: &PgPool,
@@ -118,6 +208,7 @@ pub async fn claim_next_with_role(
             SELECT id FROM weissman_async_jobs
             WHERE status = 'pending'
               AND (run_after IS NULL OR run_after <= now())
+              AND (locked_until IS NULL OR locked_until <= now())
               AND (
                 $3::int = 0
                 OR (
@@ -347,14 +438,15 @@ pub async fn fail_job(
     Ok(())
 }
 
-/// Mark `running` rows with expired locks or stale heartbeats as failed (worker crash / hung job).
+/// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
 pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
-           SET status = 'failed',
+           SET status = 'pending',
                last_error = 'stale lock reclaimed',
                locked_until = NULL,
                worker_id = NULL,
+               run_after = now() + interval '2 seconds',
                updated_at = now()
            WHERE status = 'running'
              AND (
@@ -362,6 +454,49 @@ pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Err
                OR locked_until < now()
              )"#,
     )
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
+/// Immediately move a job to dead-letter — no retry (HMAC mismatch, expired envelope, etc.).
+pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(), sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
+           worker_id = NULL, updated_at = now() WHERE id = $1"#,
+    )
+    .bind(job_id)
+    .bind(&msg)
+    .execute(pool)
+    .await?;
+    tracing::error!(
+        target: "weissman_worker",
+        job_id = %job_id,
+        error = %msg,
+        "job dead-lettered (permanent failure)"
+    );
+    Ok(())
+}
+
+/// When zero-trust claim fails after [`reserve_next`], clear the reservation and backoff
+/// so workers do not hot-loop the same row (lease storm / stack overflow).
+pub async fn release_reserved_job(
+    pool: &PgPool,
+    job_id: Uuid,
+    note: &str,
+    backoff_secs: i64,
+) -> Result<u64, sqlx::Error> {
+    let msg: String = note.chars().take(4000).collect();
+    let backoff = backoff_secs.clamp(1, 300);
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
+           last_error = $2, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
+           WHERE id = $1 AND status IN ('pending', 'running')"#,
+    )
+    .bind(job_id)
+    .bind(&msg)
+    .bind(backoff)
     .execute(pool)
     .await?;
     Ok(r.rows_affected())
@@ -378,7 +513,7 @@ pub async fn force_requeue_running(
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now(), updated_at = now()
-           WHERE id = $1 AND status = 'running'"#,
+           WHERE id = $1 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)

@@ -10,8 +10,17 @@ use Severity::High;
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "reconcile", provider: "generic",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "reconcile",
+            provider: "generic",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -56,7 +65,13 @@ pub fn policies() -> Vec<PolicyMeta> {
 }
 
 const PLAN_IDS: &[&str] = &["WZ-PLAN-001", "WZ-PLAN-002", "WZ-PLAN-003", "WZ-PLAN-004"];
-const STATIC_S3_IAM: &[&str] = &["WZ-TF-AWS-S3-001", "WZ-TF-AWS-S3-002", "WZ-TF-AWS-IAM-001", "WZ-TF-AWS-SG-001", "WZ-TF-AWS-SG-002"];
+const STATIC_S3_IAM: &[&str] = &[
+    "WZ-TF-AWS-S3-001",
+    "WZ-TF-AWS-S3-002",
+    "WZ-TF-AWS-IAM-001",
+    "WZ-TF-AWS-SG-001",
+    "WZ-TF-AWS-SG-002",
+];
 
 /// Reconcile static terraform findings against plan findings.
 #[must_use]
@@ -102,12 +117,16 @@ pub fn reconcile(static_findings: &[Finding], plan_findings: &[Finding]) -> Vec<
         );
     }
 
-    let static_s3_iam = static_ids.iter().filter(|id| STATIC_S3_IAM.contains(id)).count();
+    let static_s3_iam = static_ids
+        .iter()
+        .filter(|id| STATIC_S3_IAM.contains(id))
+        .count();
     let plan_s3_iam = plan_ids.iter().filter(|id| PLAN_IDS.contains(id)).count();
     if static_s3_iam > 0 && plan_s3_iam > 0 && static_s3_iam != plan_s3_iam {
         out.push(
-            Finding::new(PLAN_STATIC_GAP, "s3-iam-reconcile", "reconcile")
-                .observed(format!("static_s3_iam={static_s3_iam} plan_risk={plan_s3_iam}")),
+            Finding::new(PLAN_STATIC_GAP, "s3-iam-reconcile", "reconcile").observed(format!(
+                "static_s3_iam={static_s3_iam} plan_risk={plan_s3_iam}"
+            )),
         );
     }
 

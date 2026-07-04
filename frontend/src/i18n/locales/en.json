@@ -96,6 +96,32 @@
     "ceo": "CEO",
     "tenant": "tenant {{id}}"
   },
+  "battlespace": {
+    "title": "Hyper-Dimensional Cognitive Battlespace",
+    "topology_live": "TOPOLOGY LIVE",
+    "commander_intent": "Commander's Intent",
+    "path_highlight": "Attack paths from perimeter → asset highlighted",
+    "shadow_wargame": "STRIPS shadow preview",
+    "clear_focus": "Clear focus",
+    "select_asset": "Click a high-value asset to trace feasible attack paths from the internet perimeter.",
+    "loading": "Hydrating battlespace topology…",
+    "offline": "Telemetry link lost",
+    "forensic_provenance": "Forensic provenance",
+    "linked_findings": "Linked findings",
+    "shadow_node": "Shadow node — projected STRIPS future state. Not yet observed in live recon.",
+    "nodes": "NODES",
+    "edges": "EDGES"
+  },
+  "engineC2": {
+    "kill_switch_region": "Emergency kill switch",
+    "c2_armed": "C2 ARMED",
+    "killed": "EXECUTION HALTED",
+    "reset_kill": "Reset",
+    "emergency_stop": "⏹ Emergency Stop",
+    "telemetry_strip": "Live engine telemetry",
+    "memory_telemetry": "Memory / AST telemetry",
+    "live_telemetry": "Live telemetry"
+  },
   "nav": {
     "cockpit": "Cockpit",
     "dashboard": "Dashboard",
@@ -212,6 +238,7 @@
     "engine_management": "Engine Management",
     "metrics": "Metrics Dashboard",
     "ceo_vault": "CEO Vault",
+    "supreme_nerve_center": "Supreme Nerve Center",
     "system_core": "System Core",
     "operations_view": "Operations",
     "open_menu": "Open navigation menu",
@@ -646,7 +673,23 @@
     "toast_status_rejected": "Status update rejected: {{detail}}",
     "toast_status_failed": "Status update failed: {{detail}}",
     "toast_export_ok": "Downloaded {{filename}}",
-    "toast_export_failed": "CSV export failed: {{detail}}"
+    "toast_export_failed": "CSV export failed: {{detail}}",
+    "col_live_verify": "Live verify",
+    "liveVerify": {
+      "button": "Verify finding",
+      "button_short": "Verify",
+      "button_deep": "Deep re-scan",
+      "confidence_pct": "{{pct}}% confidence",
+      "pass": "pass",
+      "fail": "fail",
+      "failed": "Verification failed",
+      "reproduced": "Reproduced on live engine re-scan",
+      "verdict_CONFIRMED": "Confirmed",
+      "verdict_LIKELY_VALID": "Likely valid",
+      "verdict_INCONCLUSIVE": "Inconclusive",
+      "verdict_NOISE": "Noise",
+      "verdict_FALSE_POSITIVE": "False positive"
+    }
   },
   "vuln_intel": {
     "title": "Vulnerability Intelligence",
@@ -3981,6 +4024,7 @@
       "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only."
     },
     "websocketSecurity": {
+      "evidence_notice": "WebSocket DAST via POST /api/command-center/scan (websocket_attack). RFC6455 handshake verification, CSWSH differential, and stateful fuzz findings stream on GET /api/telemetry/stream?job_id=… — live authorized probing only, no simulated WS results.",
       "title": "WebSocket Security Command Center",
       "badge": "WEISSMAN · REAL-TIME API",
       "subtitle": "Agentless WebSocket DAST — RFC6455 verified handshake, CSWSH differential, stateful conversational fuzzing, binary protobuf mutation, barrier-sync race execution, cross-protocol Intelligence Bus.",
@@ -4173,6 +4217,39 @@
       "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage."
     },
     "cockpitWidgets": {
+      "protectedRoute": {
+        "verifying": "Verifying session"
+      },
+      "engineRoomTab": {
+        "connecting": "Connecting to Submarine…",
+        "select_client": "Select a client from the sidebar to configure the Engine Room.",
+        "loading": "Loading data from Submarine…"
+      },
+      "clientCockpit": {
+        "loading_mission": "Loading mission control…",
+        "loading_tab": "Loading cockpit tab…"
+      },
+      "globalNexus": {
+        "ceo_integrated": "Cockpit · mission control",
+        "ceo_home": "CEO cockpit home",
+        "enter_client_name": "Enter client name",
+        "login_again": "Please log in again",
+        "network_error": "Network error",
+        "network_error_api": "Network error — could not reach API.",
+        "client_added": "Client \"{{name}}\" added",
+        "advanced_scope": "Advanced scope",
+        "auto_detect_tech": "Auto-detect tech stack",
+        "adding": "Adding…",
+        "add_client": "Add Client",
+        "placeholder_name": "Client name *",
+        "placeholder_domains": "Domains: a.com, b.com",
+        "placeholder_contact_email": "Contact email",
+        "placeholder_ip_ranges": "IP ranges",
+        "placeholder_tech_stack": "Tech stack hints",
+        "placeholder_aws_arn": "AWS role ARN",
+        "placeholder_aws_external_id": "AWS external ID",
+        "placeholder_gcp_project": "GCP project ID"
+      },
       "liveActivityFeed": {
         "ariaLabel": "Live activity feed",
         "connected": "Telemetry connected",
@@ -4830,6 +4907,7 @@
       "aiModelRisk": {
         "selectClient": "Select a client to view AI model risk telemetry.",
         "title": "AI Model Risk (AI-SecOps)",
+        "descriptionSecure": "Configure authorized client LLM/chat API endpoints. Secrets are masked at rest and sent only for live probes.",
         "descriptionBefore": "Adversarial probes against endpoints declared in client config under ",
         "descriptionAfter": ". OpenAI-style chat JSON is assumed; leakage and hallucination-under-duress scores are heuristic.",
         "runningProbes": "Running probes…",
@@ -4965,6 +5043,7 @@
       }
     },
     "reportView": {
+      "evidence_notice": "Executive report rows from GET /api/clients/:id/report and cryptographic seals from GET /api/clients/:id/audit-trail — no placeholder findings.",
       "loading": "Loading report…",
       "title": "Report — {{name}}",
       "download_pdf": "Download PDF (HTML)",
@@ -4994,6 +5073,7 @@
     },
     "tools": {
       "memoryForensicsLab": {
+        "evidence_notice": "PoE findings and hex memory views from POST /api/command-center/scan (exploit_research) with live telemetry on GET /api/telemetry/stream?job_id=… — no synthetic crash dumps.",
         "back_war_room": "← War Room",
         "title": "Exploit Synthesis & Memory Lab",
         "client_meta": "{{name}} (ID: {{id}})",
@@ -5046,6 +5126,7 @@
         "entropy_critical": "Critical"
       },
       "aiRedteamArena": {
+        "evidence_notice": "Adversarial LLM rounds from POST /api/command-center/scan (ai_adversarial_redteam) with live judge status over WebSocket — findings persist to GET /api/findings.",
         "back_war_room": "← War Room",
         "title": "AI Red Teaming Arena",
         "subtitle": "AI vs AI • OWASP LLM01",
@@ -5069,6 +5150,7 @@
         "footer": "Findings are saved with source ai_adversarial_redteam and appear in the Executive PDF Report."
       },
       "quantumTimingProfiler": {
+        "evidence_notice": "Microsecond latency samples from POST /api/command-center/scan (timing_side_channel) — Z-score anomalies computed from live HTTP round-trips, not scripted charts.",
         "back_war_room": "← War Room",
         "title": "Quantum Timing Profiler",
         "subtitle": "Microsecond latency • Z-Score anomaly detection",
@@ -5113,6 +5195,7 @@
         "footer": "Probes are safe detection-only (no destructive exploits). Findings saved with source zero_day_radar."
       },
       "attackSurfaceGraph": {
+        "evidence_notice": "Graph nodes and edges from GET /api/risk/graph?client_id=… and attack-path snapshots from GET /api/attack-paths/:clientId — no pre-baked topology.",
         "loading": "Loading Attack Surface Graph…",
         "title": "Attack Surface Graph",
         "run_id": "Run ID: {{id}}",
@@ -5131,6 +5214,7 @@
         "remediation_secure": "No critical finding. Ensure CNAME target remains valid and storage is not exposed."
       },
       "semanticLogicEngine": {
+        "evidence_notice": "OpenAPI-derived state machines and LLM reasoning logs from POST /api/command-center/scan (semantic_logic) — reasoning text is tenant-scoped live output.",
         "loading": "Loading Semantic Logic Engine…",
         "title": "Semantic Logic Engine",
         "target_label": "Target: {{target}}",
@@ -5143,6 +5227,7 @@
         "no_reasoning": "No reasoning log yet. Run a scan with Semantic Logic Engine enabled."
       },
       "cicdThreatMatrix": {
+        "evidence_notice": "Pipeline findings from POST /api/command-center/scan (cicd_pipeline) against a live GitHub repo URL — PoC snippets stored as findings, never auto-deployed.",
         "back_war_room": "← War Room",
         "title": "Phantom Pipeline / CI/CD Matrix",
         "client_meta": "{{name}} (ID: {{id}})",
@@ -5165,6 +5250,7 @@
         }
       },
       "attackChainView": {
+        "evidence_notice": "Kill-chain steps from GET /api/clients/:clientId/attack-chain — synthesized only from verified findings in your tenant.",
         "no_client": "No client selected.",
         "loading": "Loading attack chain…",
         "back_war_room": "← Back to War Room",
@@ -5210,6 +5296,18 @@
       "max_depth_current": "Max API endpoints to analyze per target: {{value}}",
       "save_semantic": "Save Semantic Logic settings",
       "semantic_hint": "Findings are saved with source semantic_ai_fuzz and appear in the Executive PDF with AI remediation.",
+      "oast_heading": "OAST — Out-of-Band Callbacks",
+      "oast_body": "Configure blind SSRF, XXE, and Log4Shell callback correlation. Required for oast_blind module engines.",
+      "oast_listener_label": "Listener URL",
+      "oast_domain_label": "DNS domain (wildcard)",
+      "oast_api_key_label": "API key (optional)",
+      "save_oast": "Save OAST",
+      "oast_testing": "Testing…",
+      "oast_test": "Test connectivity",
+      "oast_dashboard": "OAST Dashboard →",
+      "ai_entitlement_heading": "AI-Heavy Entitlement",
+      "ai_entitlement_body": "Gates 48 AI red-team / semantic fuzz engines. Disable for tenants without AI workload authorization.",
+      "ai_entitlement_label": "Allow AI-heavy engines",
       "timing_heading": "Quantum Timing Profiler (Module 5)",
       "timing_body": "Microsecond timing attacks: baseline sample size and Z-Score sensitivity for blind injection detection. Used by the orchestrator and the Timing Profiler UI.",
       "timing_sample_label": "Timing sample size (baseline + payload requests)",
@@ -5450,6 +5548,7 @@
       "defaultTitle": "Finding",
       "copyCve": "Copy CVE",
       "status": "Status",
+      "attestationValid": "Attestation intact",
       "description": "Description",
       "remediation": "Remediation",
       "technicalDetails": "Technical Details",
@@ -5532,5 +5631,59 @@
       "min_abbr": "min",
       "close": "Close"
     }
+  },
+  "supremeNerveCenter": {
+    "title": "Supreme Nerve Center",
+    "ceoOnly": "CEO / superadmin only",
+    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 558 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
+    "refresh": "Refresh",
+    "pollInterval": "Auto-refresh every {{sec}}s",
+    "stuckAlert": "{{count}} engine(s) appear stuck — investigate worker heartbeat and phase updates.",
+    "sections": {
+      "overview": "Overview",
+      "engines": "Engines",
+      "modules": "System Modules",
+      "jobs": "Live Jobs",
+      "controls": "Control Parameters"
+    },
+    "metrics": {
+      "enginesTotal": "Production engines",
+      "running": "Running now",
+      "stuck": "Stuck",
+      "liveJobs": "Queue (pending+running)",
+      "inFlight": "In-flight runs",
+      "modules": "Subsystems"
+    },
+    "activeRuns": "Active engine runs",
+    "noActiveRuns": "No engines running in this process right now.",
+    "clientBoot": "Browser boot (this session)",
+    "documentReady": "document.readyState",
+    "domMs": "DOM ready",
+    "chunksLoaded": "JS chunks loaded",
+    "searchEngines": "Search engine id, phase, target…",
+    "filterAll": "All lifecycles",
+    "filterRunning": "Running",
+    "filterStuck": "Stuck",
+    "filterIdle": "Idle",
+    "filterFailed": "Last run failed",
+    "colEngine": "Engine",
+    "colLifecycle": "Lifecycle",
+    "colPhase": "Phase (start → now)",
+    "colElapsed": "Elapsed",
+    "colTarget": "Target",
+    "colLastStatus": "Last status",
+    "colRuns": "Runs",
+    "colKind": "Kind",
+    "colStatus": "Status",
+    "colWorker": "Worker",
+    "engineCount": "Showing {{shown}} of {{total}} production engines",
+    "moduleLoaded": "Loaded",
+    "modulePhase": "Phase",
+    "yes": "yes",
+    "no": "no",
+    "frontendChunks": "Frontend JS chunks (Performance API)",
+    "noJobs": "No pending or running async jobs for this tenant.",
+    "controlParams": "Runtime control parameters",
+    "ceoTelemetry": "CEO ops telemetry (raw)"
   }
 }

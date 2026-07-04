@@ -32,28 +32,30 @@ export default function IntegrationManager() {
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [testingConnection, setTestingConnection] = useState(null);
+  const [dryRunTests, setDryRunTests] = useState(true);
   const [addModal, setAddModal] = useState(false);
 
   const availableIntegrations = [
+    { id: 'aws_ec2', name: 'AWS EC2 Isolate', category: 'SOAR', icon: '☁️', color: 'orange', fields: ['region', 'forensic_source_cidr'] },
+    { id: 'azure_vm', name: 'Azure VM Isolate', category: 'SOAR', icon: '🔷', color: 'blue', fields: ['subscription_id', 'resource_group', 'tenant_id', 'client_id', 'client_secret'] },
+    { id: 'crowdstrike_falcon', name: 'CrowdStrike Falcon', category: 'SOAR', icon: '🦅', color: 'red', fields: ['client_id', 'client_secret', 'api_url'] },
+    { id: 'github', name: 'GitHub PR', category: 'SOAR', icon: '🐙', color: 'gray', fields: ['token', 'default_repo'] },
+    { id: 'pagerduty', name: 'PagerDuty', category: 'SOAR', icon: '🚨', color: 'red', fields: ['routing_key'] },
+    { id: 'opsgenie', name: 'OpsGenie', category: 'SOAR', icon: '📟', color: 'blue', fields: ['api_key'] },
+    { id: 'slack', name: 'Slack', category: 'SOAR', icon: '💬', color: 'purple', fields: ['webhook_url', 'bot_token', 'channel'] },
+    { id: 'servicenow', name: 'ServiceNow', category: 'SOAR', icon: '🎫', color: 'green', fields: ['instance_url', 'username', 'password'] },
     { id: 'splunk', name: 'Splunk', category: 'SIEM', icon: '📊', color: 'green' },
-    { id: 'qradar', name: 'IBM QRadar', category: 'SIEM', icon: '🔷', color: 'blue' },
     { id: 'sentinel', name: 'Microsoft Sentinel', category: 'SIEM', icon: '🛡️', color: 'cyan' },
     { id: 'jira', name: 'Jira', category: 'Ticketing', icon: '📝', color: 'blue' },
-    { id: 'servicenow', name: 'ServiceNow', category: 'Ticketing', icon: '🎫', color: 'green' },
-    { id: 'slack', name: 'Slack', category: 'Communication', icon: '💬', color: 'purple' },
-    { id: 'teams', name: 'Microsoft Teams', category: 'Communication', icon: '👥', color: 'blue' },
-    { id: 'pagerduty', name: 'PagerDuty', category: 'Communication', icon: '🚨', color: 'red' },
-    { id: 'github', name: 'GitHub', category: 'DevOps', icon: '🐙', color: 'gray' },
-    { id: 'gitlab', name: 'GitLab', category: 'DevOps', icon: '🦊', color: 'orange' },
-    { id: 'aws', name: 'AWS Security Hub', category: 'Cloud', icon: '☁️', color: 'orange' },
-    { id: 'azure', name: 'Azure Defender', category: 'Cloud', icon: '☁️', color: 'blue' },
   ];
+  const [vaultEnabled, setVaultEnabled] = useState(false);
 
   const fetchIntegrations = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.get('/api/integrations');
       setIntegrations(data.integrations || []);
+      setVaultEnabled(Boolean(data.vault_enabled));
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
     } finally {
@@ -89,7 +91,7 @@ export default function IntegrationManager() {
   const testConnection = async (integrationId) => {
     try {
       setTestingConnection(integrationId);
-      const result = await api.post(`/api/integrations/${integrationId}/test`);
+      const result = await api.post(`/api/integrations/${integrationId}/test`, { dry_run: dryRunTests });
 
       // Update integration status
       setIntegrations((prev) =>
@@ -172,6 +174,11 @@ export default function IntegrationManager() {
       )}
     >
       <div className="space-y-6">
+        {vaultEnabled && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            Vault encryption active — integration secrets stored encrypted at rest (AES-256-GCM).
+          </div>
+        )}
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
@@ -208,7 +215,16 @@ export default function IntegrationManager() {
         </div>
 
         {/* Add Integration Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end items-center gap-4">
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dryRunTests}
+              onChange={(e) => setDryRunTests(e.target.checked)}
+              className="rounded border-white/20"
+            />
+            Dry-run SOAR tests (recommended)
+          </label>
           <button
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
@@ -328,7 +344,7 @@ export default function IntegrationManager() {
           <h3 className="text-sm font-semibold text-white mb-4">Available Integrations</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {availableIntegrations
-              .filter((ai) => !integrations.find((i) => i.type === ai.id))
+              .filter((ai) => !integrations.find((i) => i.id === ai.id || i.type === ai.id))
               .map((integration) => (
                 <button
                   key={integration.id}
@@ -370,12 +386,12 @@ export default function IntegrationManager() {
  */
 function AddIntegrationModal({ integration, onClose, onSave }) {
   const { t } = useTranslation();
+  const providerFields = integration?.fields || ['endpoint', 'api_key', 'webhook_url'];
+  const initialConfig = Object.fromEntries(providerFields.map((f) => [f, '']));
   const [formData, setFormData] = useState({
     type: integration?.id || '',
     name: integration?.name || '',
-    endpoint: '',
-    api_key: '',
-    webhook_url: '',
+    config: initialConfig,
   });
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null);
@@ -388,11 +404,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
         id: formData.type,
         name: formData.name,
         category: integration?.category || 'Custom',
-        config: {
-          endpoint: formData.endpoint,
-          api_key: formData.api_key,
-          webhook_url: formData.webhook_url,
-        },
+        config: formData.config,
       };
       const result = await api.post('/api/integrations', payload);
       onSave(result);
@@ -443,46 +455,24 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Endpoint URL
-            </label>
-            <input
-              type="text"
-              value={formData.endpoint}
-              onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="https://splunk.example.com:8088"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              API Key / Token
-            </label>
-            <input
-              type="password"
-              value={formData.api_key}
-              onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Enter API key"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Webhook URL (optional)
-            </label>
-            <input
-              type="text"
-              value={formData.webhook_url}
-              onChange={(e) =>
-                setFormData({ ...formData, webhook_url: e.target.value })
-              }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="https://your-instance/webhook"
-            />
-          </div>
+          {providerFields.map((field) => (
+            <div key={field}>
+              <label className="block text-sm font-medium text-gray-300 mb-2 capitalize">
+                {field.replace(/_/g, ' ')}
+              </label>
+              <input
+                type={field.includes('secret') || field.includes('password') || field.includes('token') || field.includes('key') ? 'password' : 'text'}
+                value={formData.config[field] || ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    config: { ...formData.config, [field]: e.target.value },
+                  })
+                }
+                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
+            </div>
+          ))}
         </div>
 
         {saveResult && (
@@ -504,7 +494,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !formData.name || !formData.endpoint || !formData.type}
+            disabled={saving || !formData.name || !formData.type}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? t('pages.integrationManager.adding') : t('pages.integrationManager.add_integration')}

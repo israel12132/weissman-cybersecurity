@@ -30,7 +30,11 @@ const SIM_SPECS: &[SimSpec] = &[
     SimSpec {
         kind: NodeKind::SecretsManagerSecret,
         prefix: "sm",
-        actions: &["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "secretsmanager:*"],
+        actions: &[
+            "secretsmanager:GetSecretValue",
+            "secretsmanager:DescribeSecret",
+            "secretsmanager:*",
+        ],
     },
     SimSpec {
         kind: NodeKind::KmsKey,
@@ -46,7 +50,15 @@ pub fn extract_static_proofs(files: &[IacFile], graph: &InfraGraph) -> Vec<Permi
     let targets: Vec<_> = graph
         .nodes
         .values()
-        .filter(|n| matches!(n.kind, NodeKind::S3Bucket | NodeKind::RdsInstance | NodeKind::SecretsManagerSecret | NodeKind::KmsKey))
+        .filter(|n| {
+            matches!(
+                n.kind,
+                NodeKind::S3Bucket
+                    | NodeKind::RdsInstance
+                    | NodeKind::SecretsManagerSecret
+                    | NodeKind::KmsKey
+            )
+        })
         .map(|n| (n.id.clone(), n.kind, n.label.clone()))
         .collect();
     let roles: Vec<_> = graph
@@ -113,7 +125,11 @@ pub fn extract_static_proofs(files: &[IacFile], graph: &InfraGraph) -> Vec<Permi
     }
 
     proofs.sort_by(|a, b| {
-        (&a.principal_id, &a.resource_id, &a.action).cmp(&(&b.principal_id, &b.resource_id, &b.action))
+        (&a.principal_id, &a.resource_id, &a.action).cmp(&(
+            &b.principal_id,
+            &b.resource_id,
+            &b.action,
+        ))
     });
     proofs.dedup_by(|a, b| {
         a.principal_id == b.principal_id && a.resource_id == b.resource_id && a.action == b.action
@@ -121,7 +137,11 @@ pub fn extract_static_proofs(files: &[IacFile], graph: &InfraGraph) -> Vec<Permi
 
     for (rid, _) in &roles {
         for (tid, kind, label) in &targets {
-            if graph.edges.iter().any(|e| e.from == *rid && e.to == *tid && e.kind == EdgeKind::IamAllows) {
+            if graph
+                .edges
+                .iter()
+                .any(|e| e.from == *rid && e.to == *tid && e.kind == EdgeKind::IamAllows)
+            {
                 let action = match kind {
                     NodeKind::S3Bucket => "s3:*",
                     NodeKind::RdsInstance => "rds:*",
@@ -129,7 +149,10 @@ pub fn extract_static_proofs(files: &[IacFile], graph: &InfraGraph) -> Vec<Permi
                     NodeKind::KmsKey => "kms:*",
                     _ => continue,
                 };
-                if !proofs.iter().any(|p| p.principal_id == *rid && p.resource_id == *tid && p.action == action) {
+                if !proofs
+                    .iter()
+                    .any(|p| p.principal_id == *rid && p.resource_id == *tid && p.action == action)
+                {
                     proofs.push(PermissionProof {
                         principal_id: rid.clone(),
                         resource_id: tid.clone(),
@@ -157,7 +180,12 @@ pub fn apply_static_proofs(graph: &mut InfraGraph, proofs: &[PermissionProof]) {
             continue;
         }
         if p.method == "static_policy_parse" || p.method == "iam:SimulatePrincipalPolicy" {
-            graph.add_edge(&p.principal_id, &p.resource_id, EdgeKind::IamProven, p.evidence.clone());
+            graph.add_edge(
+                &p.principal_id,
+                &p.resource_id,
+                EdgeKind::IamProven,
+                p.evidence.clone(),
+            );
         }
     }
 }
@@ -244,7 +272,10 @@ mod imp {
             }
         }
 
-        notes.push(format!("IAM SimulatePrincipalPolicy: {} proven permissions", proofs.len()));
+        notes.push(format!(
+            "IAM SimulatePrincipalPolicy: {} proven permissions",
+            proofs.len()
+        ));
         graph.permission_proofs.extend(proofs.clone());
         (proofs, notes)
     }
@@ -301,7 +332,9 @@ fn resource_arns_for(kind: NodeKind, label: &str, account_id: &str) -> Vec<Strin
             format!("arn:aws:rds:*:*:db:{label}"),
             format!("arn:aws:rds-db:*:*:dbuser:*/{label}"),
         ],
-        NodeKind::SecretsManagerSecret => vec![format!("arn:aws:secretsmanager:*:*:secret:{label}*")],
+        NodeKind::SecretsManagerSecret => {
+            vec![format!("arn:aws:secretsmanager:*:*:secret:{label}*")]
+        }
         NodeKind::KmsKey => vec![format!("arn:aws:kms:*:*:key/{label}")],
         _ => vec![format!("arn:aws:iam::{account_id}:role/{label}")],
     }

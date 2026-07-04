@@ -1,90 +1,47 @@
 /**
- * Route → primary engine id for command-center scan hubs.
- * Used by PageShell to auto-apply AgentRequiredGate (no mock data when agent offline).
+ * @deprecated Static ROUTE_ENGINE_ID map eradicated — use engineC2/engineManifestRegistry.
+ * This module is a backward-compatible facade over capability-based manifests.
  */
+import {
+  getManifestByRoute,
+  getManifestByEngineId,
+  getRegisteredEngineRoutes,
+  resolveEngineIdFromRoute,
+} from '../engineC2/engineManifestRegistry.js'
 
-/** Exact pathname (basename-relative, no trailing slash) → engine id */
-export const ROUTE_ENGINE_ID = {
-  '/attack-surface': 'asm',
-  '/cache-posture': 'cache_poisoning',
-  '/cicd-security': 'cicd_pipeline',
-  '/cloud-posture': 'cloud_posture',
-  '/detection-surface': 'edr_evasion',
-  '/digital-twin': 'digital_twin',
-  '/dns-posture': 'bgp_dns_hijacking',
-  '/email-posture': 'email_dns_posture',
-  '/file-upload-lab': 'file_upload',
-  '/graphql-security': 'graphql_attack',
-  '/http-smuggling': 'http_smuggling',
-  '/iac-security': 'iac_misconfig',
-  '/identity-security': 'oauth_oidc',
-  '/jwt-lab': 'jwt_attack',
-  '/kerberos-security': 'kerberoasting',
-  '/mobile-security': 'mobile_attack',
-  '/nexus-swarm': 'nexus_sovereign_swarm',
-  '/superposition-collapse': 'risk_superposition_collapse',
-  '/sovereign-defense-matrix': 'chronos',
-  '/ot-ics': 'scada_ics',
-  '/password-spray': 'password_spray',
-  '/pqc-radar': 'pqc_scanner',
-  '/saml-security': 'saml_attack',
-  '/serverless-security': 'serverless_attack',
-  '/smb-netbios': 'smb_netbios',
-  '/tls-posture': 'pki_tls',
-  '/transport-security': 'mtls_grpc',
-  '/waf-bypass': 'waf_bypass',
-  '/websocket-security': 'websocket_attack',
-  '/engines/osint': 'osint',
-  '/threat-emulation': 'threat_emulation',
-  '/supply-chain': 'supply_chain',
-  '/social-engineering': 'spear_phishing',
-  '/oast': 'oast_oob',
-  '/exploit-lab': 'exploit_lab',
-  '/network': 'bgp_dns_hijacking',
-  '/verification/oob': 'oast_oob',
-  '/engine-catalog': 'asm',
-  '/cloud': 'aws_attack',
-  '/network-protocols': 'bgp_dns_hijacking',
-  '/feedback-loop': 'feedback_fuzz',
-  '/zero-day-radar': 'zero_day_radar',
-}
+/** @deprecated Use getManifestByRoute */
+export const ROUTE_ENGINE_ID = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      if (prop === 'toJSON' || prop === Symbol.toStringTag) return undefined
+      const m = getManifestByRoute(String(prop))
+      return m?.engine_id
+    },
+    ownKeys() {
+      return getRegisteredEngineRoutes()
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      const id = resolveEngineIdFromRoute(String(prop))
+      if (id) return { enumerable: true, configurable: true, value: id }
+      return undefined
+    },
+  },
+)
 
-/** Parametric hub routes: /digital-twin/:clientId → engine id */
 export const ROUTE_ENGINE_ID_PARAM_PREFIX = [
   { prefix: '/digital-twin/', engine: 'digital_twin' },
   { prefix: '/timing-profiler/', engine: 'side_channel' },
 ]
 
-/** Prefix routes for nested engine profiles */
 export const ROUTE_ENGINE_ID_PREFIX = [
   { prefix: '/engines/top-tier/', engineFromParam: true },
   { prefix: '/engines/business/', engineFromParam: true },
   { prefix: '/engines/', engineFromParam: true },
 ]
 
-/**
- * Resolve engine id for current pathname (supports /command-center basename).
- * Returns null when the route is not tied to a single engine hub.
- */
 export function resolveRouteEngineId(pathname) {
-  if (!pathname) return null
-  let p = pathname
-  if (p.startsWith('/command-center')) {
-    p = p.slice('/command-center'.length) || '/'
-  }
-  if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
-
-  if (ROUTE_ENGINE_ID[p]) return ROUTE_ENGINE_ID[p]
-
-  for (const rule of ROUTE_ENGINE_ID_PARAM_PREFIX) {
-    if (p.startsWith(rule.prefix)) return rule.engine
-  }
-
-  for (const rule of ROUTE_ENGINE_ID_PREFIX) {
-    if (!p.startsWith(rule.prefix)) continue
-    const tail = p.slice(rule.prefix.length).split('/')[0]
-    if (tail && rule.engineFromParam) return tail
-  }
-
-  return null
+  return resolveEngineIdFromRoute(pathname)
 }
+
+export { getManifestByRoute, getManifestByEngineId }

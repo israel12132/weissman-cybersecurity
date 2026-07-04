@@ -9,7 +9,10 @@ const PCI_REQS: &[(&str, &str)] = &[
     ("1", "Install and Maintain Network Security Controls"),
     ("2", "Apply Secure Configurations"),
     ("3", "Protect Stored Account Data"),
-    ("4", "Protect Data with Strong Cryptography During Transmission"),
+    (
+        "4",
+        "Protect Data with Strong Cryptography During Transmission",
+    ),
     ("6", "Develop and Maintain Secure Systems"),
     ("7", "Restrict Access by Business Need to Know"),
     ("8", "Identify Users and Authenticate Access"),
@@ -28,12 +31,17 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         for tag in f.policy.compliance {
             if let Some(req) = pci_req_of(tag) {
                 *req_failed.entry(req.to_string()).or_insert(0) += 1;
-                req_controls.entry(req.to_string()).or_default().push(tag.to_string());
+                req_controls
+                    .entry(req.to_string())
+                    .or_default()
+                    .push(tag.to_string());
             }
         }
     }
 
-    let pci_row = compliance_rows.iter().find(|r| r.get("pack").and_then(Value::as_str) == Some("PCI-DSS"));
+    let pci_row = compliance_rows
+        .iter()
+        .find(|r| r.get("pack").and_then(Value::as_str) == Some("PCI-DSS"));
     let total_controls = pci_row
         .and_then(|r| r.get("controls_covered").and_then(Value::as_u64))
         .unwrap_or(0);
@@ -46,8 +54,14 @@ pub fn build(findings: &[Finding], compliance_rows: &[Value]) -> Value {
         100
     };
 
-    let crit = findings.iter().filter(|f| f.policy.severity == Severity::Critical).count() as u64;
-    let high = findings.iter().filter(|f| f.policy.severity == Severity::High).count() as u64;
+    let crit = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::Critical)
+        .count() as u64;
+    let high = findings
+        .iter()
+        .filter(|f| f.policy.severity == Severity::High)
+        .count() as u64;
 
     let requirements: Vec<Value> = PCI_REQS
         .iter()
@@ -127,7 +141,9 @@ mod tests {
     #[test]
     fn maps_pci_tags() {
         let findings = vec![Finding::new(S3_PUBLIC_ACL, "main.tf", "aws_s3_bucket.b")];
-        let compliance = vec![json!({"pack": "PCI-DSS", "controls_covered": 15, "controls_failed": 1, "status": "fail"})];
+        let compliance = vec![
+            json!({"pack": "PCI-DSS", "controls_covered": 15, "controls_failed": 1, "status": "fail"}),
+        ];
         let r = build(&findings, &compliance);
         assert_eq!(r["framework"], "PCI-DSS");
         assert!(r["requirements"].as_array().unwrap().len() >= 10);

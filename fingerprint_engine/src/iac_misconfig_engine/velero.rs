@@ -7,8 +7,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "velero", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "velero",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -71,12 +80,20 @@ pub const INSECURE_URL: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![PUBLIC_BSL, INLINE_CREDS, NO_ENCRYPTION, FS_BACKUP_SECRETS, INSECURE_URL]
+    vec![
+        PUBLIC_BSL,
+        INLINE_CREDS,
+        NO_ENCRYPTION,
+        FS_BACKUP_SECRETS,
+        INSECURE_URL,
+    ]
 }
 
 fn is_velero(content: &str) -> bool {
     let lc = content.to_ascii_lowercase();
-    lc.contains("velero.io") || lc.contains("backupstoragelocation") || lc.contains("kind: schedule") && lc.contains("velero")
+    lc.contains("velero.io")
+        || lc.contains("backupstoragelocation")
+        || lc.contains("kind: schedule") && lc.contains("velero")
 }
 
 #[must_use]
@@ -87,7 +104,10 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     }
     let lc = content.to_ascii_lowercase();
 
-    if lc.contains("publicaccess") || lc.contains("acl: public") || lc.contains("blockpublicaccess: false") {
+    if lc.contains("publicaccess")
+        || lc.contains("acl: public")
+        || lc.contains("blockpublicaccess: false")
+    {
         out.push(Finding::new(PUBLIC_BSL, file, file).observed("public backup storage"));
     }
     if lc.contains("accesskey") || lc.contains("secretkey") || lc.contains("aws_access_key_id") {
@@ -96,7 +116,10 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     if lc.contains("s3url:") && !lc.contains("serversideencryption") && !lc.contains("kmskeyid") {
         out.push(Finding::new(NO_ENCRYPTION, file, file).observed("no backup encryption"));
     }
-    if lc.contains("includedresources:") && lc.contains("secrets") && !lc.contains("excludednamespaces") {
+    if lc.contains("includedresources:")
+        && lc.contains("secrets")
+        && !lc.contains("excludednamespaces")
+    {
         out.push(Finding::new(FS_BACKUP_SECRETS, file, file).observed("schedule backs up secrets"));
     }
     if lc.contains("s3url: http://") || lc.contains("configurl: http://") {

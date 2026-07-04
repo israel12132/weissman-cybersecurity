@@ -2,6 +2,7 @@
 //! Human-in-the-loop: optional `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET`; caller must send matching `X-Weissman-Destructive-Confirm`.
 
 use axum::http::HeaderMap;
+use axum::response::{IntoResponse, Response};
 use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -35,12 +36,65 @@ pub fn destructive_action_authorized(headers: &HeaderMap) -> bool {
     else {
         return false;
     };
-    let a = hv.as_bytes();
-    let b = secret.as_bytes();
+    header_secret_matches(hv, &secret)
+}
+
+/// Dual approval: second operator must send `X-Weissman-Dual-Approve` matching
+/// `WEISSMAN_DUAL_APPROVAL_SECRET` (independent from primary destructive confirm).
+pub fn dual_approval_authorized(headers: &HeaderMap) -> bool {
+    let secret = std::env::var("WEISSMAN_DUAL_APPROVAL_SECRET").unwrap_or_default();
+    if secret.is_empty() {
+        return !weissman_core::tls_policy::is_production_environment();
+    }
+    let Some(hv) = headers
+        .get("x-weissman-dual-approve")
+        .and_then(|v| v.to_str().ok())
+    else {
+        return false;
+    };
+    header_secret_matches(hv, &secret)
+}
+
+fn header_secret_matches(provided: &str, expected: &str) -> bool {
+    let a = provided.as_bytes();
+    let b = expected.as_bytes();
     if a.len() != b.len() {
         return false;
     }
     a.ct_eq(b).into()
+}
+
+/// Destructive SOAR / containment paths: admin role + primary + dual approval headers.
+pub fn destructive_admin_dual_authorized(
+    headers: &HeaderMap,
+    auth: &crate::auth_jwt::AuthContext,
+) -> Result<(), Response> {
+    if let Err(r) = crate::rbac::require_admin(auth) {
+        return Err(r);
+    }
+    if !destructive_action_authorized(headers) {
+        return Err(destructive_denied_response(
+            "Missing or invalid X-Weissman-Destructive-Confirm header",
+        ));
+    }
+    if !dual_approval_authorized(headers) {
+        return Err(destructive_denied_response(
+            "Missing or invalid X-Weissman-Dual-Approve header (dual approval required)",
+        ));
+    }
+    Ok(())
+}
+
+fn destructive_denied_response(detail: &str) -> Response {
+    (
+        axum::http::StatusCode::FORBIDDEN,
+        axum::Json(serde_json::json!({
+            "ok": false,
+            "code": "destructive_approval_required",
+            "detail": detail,
+        })),
+    )
+        .into_response()
 }
 
 /// Constant-time compare of raw HMAC/digest bytes against a hex signature (optional `sha256=` prefix).
@@ -385,10 +439,29 @@ pub async fn enforce_execution_scope_pin(
     if current_ips.is_empty() {
         return Err(format!("failed to resolve target host '{target_host}'"));
     }
-    if let Some(ip) = current_ips.iter().find(|ip| !pinned_ips.contains(*ip)) {
-        return Err(format!(
-            "validated_scope pin mismatch: resolved ip {ip} was not in pinned set"
-        ));
+
+    if current_ips.iter().all(|ip| pinned_ips.contains(ip)) {
+        return Ok(());
+    }
+
+    // Dual-stack drift: allow new A/AAAA records on the same host when pinned anchors
+    // still resolve (blocks DNS rebind to a wholly different address set).
+    let fresh_ips: HashSet<String> = lookup_host((target_host.as_str(), 80))
+        .await
+        .map_err(|_| format!("failed to re-resolve target host '{target_host}'"))?
+        .map(|sa| sa.ip().to_string())
+        .collect();
+    if fresh_ips.is_empty() {
+        return Err(format!("failed to re-resolve target host '{target_host}'"));
+    }
+    if !current_ips.iter().all(|ip| fresh_ips.contains(ip)) {
+        return Err("validated_scope pin mismatch: current resolution outside fresh DNS set".to_string());
+    }
+    if fresh_ips.is_disjoint(&pinned_ips) {
+        return Err(
+            "validated_scope pin mismatch: pinned DNS anchors no longer resolve for host"
+                .to_string(),
+        );
     }
     Ok(())
 }

@@ -29,7 +29,10 @@ pub async fn run_satellite_recon_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     for ip in ips.iter().take(2) {
-        let url = format!("http://ip-api.com/json/{}?fields=status,lat,lon,country,city", ip);
+        let url = format!(
+            "http://ip-api.com/json/{}?fields=status,lat,lon,country,city",
+            ip
+        );
         if let Some(p) = http_get(&client, &url).await {
             if p.status != 200 {
                 continue;
@@ -686,6 +689,10 @@ mod tests {
     fn passive_dns_requires_at_least_one_record_set() {
         assert!(!passive_dns_has_records(&[], &[], &[]));
         assert!(passive_dns_has_records(&["1.2.3.4".into()], &[], &[]));
-        assert!(passive_dns_has_records(&[], &["mx.example.com".into()], &[]));
+        assert!(passive_dns_has_records(
+            &[],
+            &["mx.example.com".into()],
+            &[]
+        ));
     }
 }

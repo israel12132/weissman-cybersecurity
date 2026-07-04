@@ -240,7 +240,11 @@ fn parse_doh_json(v: &Value) -> DohResponse {
                 .collect()
         })
         .unwrap_or_default();
-    DohResponse { status, ad, answers }
+    DohResponse {
+        status,
+        ad,
+        answers,
+    }
 }
 
 async fn doh_query(
@@ -263,7 +267,11 @@ async fn doh_query_timed(
     dnssec: bool,
 ) -> (Option<DohResponse>, u64) {
     let start = Instant::now();
-    let sep = if resolver_base.contains('?') { '&' } else { '?' };
+    let sep = if resolver_base.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
     let mut url = format!("{resolver_base}{sep}name={name}&type={rtype}");
     if dnssec {
         url.push_str("&do=1");
@@ -407,7 +415,11 @@ async fn probe_ct_count(client: &reqwest::Client, domain: &str) -> Option<usize>
 }
 
 /// Recent CT issuers (crt.sh) — surfaces mis-issuance after hijack.
-async fn probe_ct_recent_issuers(client: &reqwest::Client, domain: &str, limit: usize) -> Vec<String> {
+async fn probe_ct_recent_issuers(
+    client: &reqwest::Client,
+    domain: &str,
+    limit: usize,
+) -> Vec<String> {
     let url = format!("https://crt.sh/?q={domain}&output=json");
     let Some(p) = http_get(client, &url).await else {
         return vec![];
@@ -424,7 +436,11 @@ async fn probe_ct_recent_issuers(client: &reqwest::Client, domain: &str, limit: 
     let mut issuers: Vec<String> = arr
         .iter()
         .take(limit.max(1).min(50))
-        .filter_map(|e| e.get("issuer_name").and_then(Value::as_str).map(str::to_string))
+        .filter_map(|e| {
+            e.get("issuer_name")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .collect();
     issuers.sort();
     issuers.dedup();
@@ -432,7 +448,11 @@ async fn probe_ct_recent_issuers(client: &reqwest::Client, domain: &str, limit: 
 }
 
 /// Extract unique hostnames under `domain` from crt.sh CT logs (live discovery, not a static list).
-async fn discover_ct_hostnames(client: &reqwest::Client, domain: &str, limit: usize) -> Vec<String> {
+async fn discover_ct_hostnames(
+    client: &reqwest::Client,
+    domain: &str,
+    limit: usize,
+) -> Vec<String> {
     let dom = domain.trim().trim_end_matches('.').to_ascii_lowercase();
     let url = format!("https://crt.sh/?q=%25.{dom}&output=json");
     let Some(p) = http_get(client, &url).await else {
@@ -667,7 +687,8 @@ async fn run_zone_discovery(
             .map(|h| h.trim().trim_end_matches('.').to_ascii_lowercase())
             .collect();
         if !d.cname_targets.is_empty() {
-            d.signals.push(format!("CNAME chain → {}", d.cname_targets.join(" → ")));
+            d.signals
+                .push(format!("CNAME chain → {}", d.cname_targets.join(" → ")));
         }
     }
 
@@ -702,7 +723,9 @@ async fn run_zone_discovery(
     let dmarc = format!("_dmarc.{domain}");
     if let Some(r) = doh_query(client, doh_base, &dmarc, T_TXT, false).await {
         let txt = answers_of(&r, T_TXT);
-        d.has_dmarc = txt.iter().any(|t| t.to_ascii_lowercase().contains("v=dmarc1"));
+        d.has_dmarc = txt
+            .iter()
+            .any(|t| t.to_ascii_lowercase().contains("v=dmarc1"));
         if d.has_dmarc {
             d.signals.push("DMARC at _dmarc".into());
         }
@@ -752,7 +775,8 @@ async fn run_zone_discovery(
     if ct_discovery {
         d.ct_hosts = discover_ct_hostnames(client, domain, max_ct_hosts).await;
         if !d.ct_hosts.is_empty() {
-            d.signals.push(format!("CT discovered {} host(s)", d.ct_hosts.len()));
+            d.signals
+                .push(format!("CT discovered {} host(s)", d.ct_hosts.len()));
         }
     }
 
@@ -769,83 +793,125 @@ async fn run_zone_discovery(
 
 fn adaptive_enable(plan: &mut AdaptivePlan, key: &'static str, reason: &str) {
     plan.auto_enabled.insert(key.to_string());
-    plan.rationale.push(json!({ "probe": key, "action": "enable", "reason": reason }));
+    plan.rationale
+        .push(json!({ "probe": key, "action": "enable", "reason": reason }));
 }
 
 fn adaptive_skip(plan: &mut AdaptivePlan, key: &'static str, reason: &str) {
     plan.auto_skipped.insert(key.to_string());
-    plan.rationale.push(json!({ "probe": key, "action": "skip", "reason": reason }));
+    plan.rationale
+        .push(json!({ "probe": key, "action": "skip", "reason": reason }));
 }
 
 fn plan_adaptive_probes(d: &ZoneDiscovery, cfg: &BgpConfig) -> AdaptivePlan {
     let mut plan = AdaptivePlan::default();
 
     // Always-on hijack baseline — autonomous mode never disables these.
-    adaptive_enable(&mut plan, "resolver_consensus", "core — multi-resolver divergence is primary hijack signal");
-    adaptive_enable(&mut plan, "tls_identity", "core — live TLS binds DNS answer to endpoint");
-    adaptive_enable(&mut plan, "rdap", "core — registrar lock prevents domain theft");
-    adaptive_enable(&mut plan, "baseline_delta", "core — drift vs prior fingerprint");
-    adaptive_enable(&mut plan, "resolver_timing", "core — resolver path latency skew precursor");
+    adaptive_enable(
+        &mut plan,
+        "resolver_consensus",
+        "core — multi-resolver divergence is primary hijack signal",
+    );
+    adaptive_enable(
+        &mut plan,
+        "tls_identity",
+        "core — live TLS binds DNS answer to endpoint",
+    );
+    adaptive_enable(
+        &mut plan,
+        "rdap",
+        "core — registrar lock prevents domain theft",
+    );
+    adaptive_enable(
+        &mut plan,
+        "baseline_delta",
+        "core — drift vs prior fingerprint",
+    );
+    adaptive_enable(
+        &mut plan,
+        "resolver_timing",
+        "core — resolver path latency skew precursor",
+    );
 
     if d.has_ds || d.has_dnskey || d.has_nsec {
         adaptive_enable(&mut plan, "dnssec", "zone publishes DNSSEC material");
-        adaptive_enable(&mut plan, "dnssec_ad_divergence", "DNSSEC signed — AD consensus matters");
+        adaptive_enable(
+            &mut plan,
+            "dnssec_ad_divergence",
+            "DNSSEC signed — AD consensus matters",
+        );
         adaptive_enable(&mut plan, "orphan_ds", "DS present — validate DNSKEY chain");
-        adaptive_enable(&mut plan, "cds_cdnskey", "DNSSEC zone — check rollover automation");
+        adaptive_enable(
+            &mut plan,
+            "cds_cdnskey",
+            "DNSSEC zone — check rollover automation",
+        );
     } else if !cfg.force_all_probes {
         adaptive_skip(&mut plan, "orphan_ds", "no DS/DNSKEY/NSEC observed");
         adaptive_skip(&mut plan, "cds_cdnskey", "zone not DNSSEC-signed");
     }
 
     if d.has_aaaa {
-        adaptive_enable(&mut plan,"aaaa_consensus", "AAAA records discovered");
-        adaptive_enable(&mut plan,"dual_stack", "dual-stack surface");
+        adaptive_enable(&mut plan, "aaaa_consensus", "AAAA records discovered");
+        adaptive_enable(&mut plan, "dual_stack", "dual-stack surface");
     } else if !cfg.force_all_probes {
-        adaptive_skip(&mut plan,"dual_stack", "no AAAA at apex");
+        adaptive_skip(&mut plan, "dual_stack", "no AAAA at apex");
     }
 
     if d.is_cname_apex {
-        adaptive_enable(&mut plan,"cname_chain", "apex is CNAME — follow chain");
+        adaptive_enable(&mut plan, "cname_chain", "apex is CNAME — follow chain");
     }
 
     if d.has_mx || d.has_spf {
-        adaptive_enable(&mut plan,"mx_origin", "mail exchanger present");
-        adaptive_enable(&mut plan,"spf_apex", "email DNS path active");
+        adaptive_enable(&mut plan, "mx_origin", "mail exchanger present");
+        adaptive_enable(&mut plan, "spf_apex", "email DNS path active");
     }
 
     if d.has_caa {
-        adaptive_enable(&mut plan,"caa_ct_cross", "CAA published — cross-check CT");
+        adaptive_enable(&mut plan, "caa_ct_cross", "CAA published — cross-check CT");
     }
 
     if d.has_tlsa {
-        adaptive_enable(&mut plan,"dane", "TLSA records present");
+        adaptive_enable(&mut plan, "dane", "TLSA records present");
     }
 
     if d.ns_count > 0 {
-        adaptive_enable(&mut plan,"auth_vs_recursive", "authoritative NS exist");
-        adaptive_enable(&mut plan,"ns_lame", "validate each NS responds");
-        adaptive_enable(&mut plan,"glue", "in-bailiwick glue check");
-        adaptive_enable(&mut plan,"ns_diversity", "NS origin diversity");
+        adaptive_enable(&mut plan, "auth_vs_recursive", "authoritative NS exist");
+        adaptive_enable(&mut plan, "ns_lame", "validate each NS responds");
+        adaptive_enable(&mut plan, "glue", "in-bailiwick glue check");
+        adaptive_enable(&mut plan, "ns_diversity", "NS origin diversity");
     }
 
     if d.has_a || !d.apex_ips.is_empty() {
-        adaptive_enable(&mut plan,"rpki", "routable A records — BGP/RPKI applies");
-        adaptive_enable(&mut plan,"bgp_origin", "IPs map to origin ASes");
-        adaptive_enable(&mut plan,"fcrdns", "A records need PTR confirmation");
-        adaptive_enable(&mut plan,"bogon", "public A answers — bogon check");
-        adaptive_enable(&mut plan,"ttl", "TTL fast-flux signal");
+        adaptive_enable(&mut plan, "rpki", "routable A records — BGP/RPKI applies");
+        adaptive_enable(&mut plan, "bgp_origin", "IPs map to origin ASes");
+        adaptive_enable(&mut plan, "fcrdns", "A records need PTR confirmation");
+        adaptive_enable(&mut plan, "bogon", "public A answers — bogon check");
+        adaptive_enable(&mut plan, "ttl", "TTL fast-flux signal");
         adaptive_enable(&mut plan, "irr", "route registry must match live BGP");
         adaptive_enable(&mut plan, "more_specific", "prefix hijack surface");
         adaptive_enable(&mut plan, "routing_history", "origin churn precursor");
         adaptive_enable(&mut plan, "hsts", "TLS hardening on web endpoint");
         adaptive_enable(&mut plan, "redirect", "HTTP must not redirect off-domain");
         adaptive_enable(&mut plan, "soa", "SOA MNAME integrity");
-        adaptive_enable(&mut plan, "soa_serial", "SOA serial consensus across auth NS");
+        adaptive_enable(
+            &mut plan,
+            "soa_serial",
+            "SOA serial consensus across auth NS",
+        );
         adaptive_enable(&mut plan, "caa", "issuance control at apex");
         adaptive_enable(&mut plan, "ct", "CT blast-radius inventory");
-        adaptive_enable(&mut plan, "rpki_maxlength", "ROA maxLength slack measurement");
+        adaptive_enable(
+            &mut plan,
+            "rpki_maxlength",
+            "ROA maxLength slack measurement",
+        );
         adaptive_enable(&mut plan, "bgp_visibility", "global prefix visibility");
-        adaptive_enable(&mut plan, "discovered_tls", "TLS binding on discovered hostnames");
+        adaptive_enable(
+            &mut plan,
+            "discovered_tls",
+            "TLS binding on discovered hostnames",
+        );
     }
 
     if !cfg.expected_countries.is_empty() && (d.has_a || !d.apex_ips.is_empty()) {
@@ -853,27 +919,47 @@ fn plan_adaptive_probes(d: &ZoneDiscovery, cfg: &BgpConfig) -> AdaptivePlan {
     }
 
     if !d.discovered_hosts.is_empty() {
-        adaptive_enable(&mut plan,"ct_discovery", "live host inventory from DNS/CT surface");
-        adaptive_enable(&mut plan,"takeover", "probe every discovered hostname for dangling CNAME");
+        adaptive_enable(
+            &mut plan,
+            "ct_discovery",
+            "live host inventory from DNS/CT surface",
+        );
+        adaptive_enable(
+            &mut plan,
+            "takeover",
+            "probe every discovered hostname for dangling CNAME",
+        );
         plan.dynamic_hosts = d.discovered_hosts.clone();
     } else if !d.ct_hosts.is_empty() {
-        adaptive_enable(&mut plan,"ct_discovery", "CT logs expose hostnames");
-        adaptive_enable(&mut plan,"takeover", "probe CT-discovered hosts for dangling CNAME");
+        adaptive_enable(&mut plan, "ct_discovery", "CT logs expose hostnames");
+        adaptive_enable(
+            &mut plan,
+            "takeover",
+            "probe CT-discovered hosts for dangling CNAME",
+        );
         plan.dynamic_hosts = d.ct_hosts.clone();
     }
 
     if d.parent_zone.is_some() {
-        adaptive_enable(&mut plan,"delegation_walk", "multi-label domain — walk delegation");
-        adaptive_enable(&mut plan,"parent_ns", "parent/child NS consistency");
+        adaptive_enable(
+            &mut plan,
+            "delegation_walk",
+            "multi-label domain — walk delegation",
+        );
+        adaptive_enable(&mut plan, "parent_ns", "parent/child NS consistency");
     }
 
     if d.has_a {
-        adaptive_enable(&mut plan,"udp_doh_cross", "A records — UDP vs DoH cross-check");
-        adaptive_enable(&mut plan,"wildcard_dns", "wildcard poisoning probe");
+        adaptive_enable(
+            &mut plan,
+            "udp_doh_cross",
+            "A records — UDP vs DoH cross-check",
+        );
+        adaptive_enable(&mut plan, "wildcard_dns", "wildcard poisoning probe");
     }
 
     if !d.has_dmarc && (d.has_mx || d.has_spf) {
-        adaptive_enable(&mut plan,"dmarc", "mail path without DMARC");
+        adaptive_enable(&mut plan, "dmarc", "mail path without DMARC");
     }
 
     plan
@@ -1110,7 +1196,11 @@ fn discovery_graph(d: &ZoneDiscovery, plan: &AdaptivePlan) -> Value {
     })
 }
 
-async fn public_udp_lookup_a(domain: &str, resolver_ip: IpAddr, timeout_ms: u64) -> BTreeSet<String> {
+async fn public_udp_lookup_a(
+    domain: &str,
+    resolver_ip: IpAddr,
+    timeout_ms: u64,
+) -> BTreeSet<String> {
     auth_lookup_a(domain, resolver_ip, timeout_ms).await
 }
 
@@ -1124,7 +1214,9 @@ const PUBLIC_UDP_RESOLVERS: &[(&str, &str)] = &[
 async fn public_udp_lookup_all(domain: &str, timeout_ms: u64) -> Vec<(String, BTreeSet<String>)> {
     let mut out = Vec::new();
     for (name, ip_str) in PUBLIC_UDP_RESOLVERS {
-        let Ok(ip) = IpAddr::from_str(ip_str) else { continue };
+        let Ok(ip) = IpAddr::from_str(ip_str) else {
+            continue;
+        };
         let ips = public_udp_lookup_a(domain, ip, timeout_ms).await;
         if !ips.is_empty() {
             out.push(((*name).to_string(), ips));
@@ -1225,7 +1317,14 @@ struct RdapProfile {
 
 async fn probe_rdap(client: &reqwest::Client, domain: &str) -> Option<RdapProfile> {
     let url = format!("https://rdap.org/domain/{}", domain.to_ascii_uppercase());
-    let v = client.get(&url).send().await.ok()?.json::<Value>().await.ok()?;
+    let v = client
+        .get(&url)
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
     let statuses: Vec<String> = v
         .get("status")
         .and_then(Value::as_array)
@@ -1235,26 +1334,29 @@ async fn probe_rdap(client: &reqwest::Client, domain: &str) -> Option<RdapProfil
                 .collect()
         })
         .unwrap_or_default();
-    let transfer_locked = statuses.iter().any(|s| s.contains("transfer prohibited") || s.contains("transferprohibited"));
-    let update_locked = statuses.iter().any(|s| s.contains("update prohibited") || s.contains("updateprohibited"));
+    let transfer_locked = statuses
+        .iter()
+        .any(|s| s.contains("transfer prohibited") || s.contains("transferprohibited"));
+    let update_locked = statuses
+        .iter()
+        .any(|s| s.contains("update prohibited") || s.contains("updateprohibited"));
     let delegation_signed = v
         .get("secureDNS")
         .and_then(|s| s.get("delegationSigned"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let expires = v
-        .get("events")
-        .and_then(Value::as_array)
-        .and_then(|ev| {
-            ev.iter().find_map(|e| {
-                let action = e.get("eventAction").and_then(Value::as_str).unwrap_or("");
-                if action.eq_ignore_ascii_case("expiration") {
-                    e.get("eventDate").and_then(Value::as_str).map(str::to_string)
-                } else {
-                    None
-                }
-            })
-        });
+    let expires = v.get("events").and_then(Value::as_array).and_then(|ev| {
+        ev.iter().find_map(|e| {
+            let action = e.get("eventAction").and_then(Value::as_str).unwrap_or("");
+            if action.eq_ignore_ascii_case("expiration") {
+                e.get("eventDate")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            } else {
+                None
+            }
+        })
+    });
     Some(RdapProfile {
         transfer_locked,
         update_locked,
@@ -1286,14 +1388,21 @@ fn is_more_specific_v4(child: &str, parent: &str) -> bool {
         return false;
     }
     let full_octets = (pl / 8) as usize;
-    c_parts.iter().take(full_octets).eq(p_parts.iter().take(full_octets))
+    c_parts
+        .iter()
+        .take(full_octets)
+        .eq(p_parts.iter().take(full_octets))
 }
 
 /// Parse SOA MNAME from DoH `data` (`"ns1.example.com. hostmaster..."`).
 fn parse_soa_mname(soa: &str) -> Option<String> {
     let first = soa.split_whitespace().next()?;
     let m = first.trim().trim_end_matches('.').to_ascii_lowercase();
-    if m.is_empty() { None } else { Some(m) }
+    if m.is_empty() {
+        None
+    } else {
+        Some(m)
+    }
 }
 
 /// Parse SOA serial (third field) from DoH `data`.
@@ -1353,7 +1462,11 @@ async fn ripe_irr_route_origins(
         Err(_) => return BTreeSet::new(),
     };
     let mut origins = BTreeSet::new();
-    if let Some(records) = v.get("data").and_then(|d| d.get("records")).and_then(Value::as_array) {
+    if let Some(records) = v
+        .get("data")
+        .and_then(|d| d.get("records"))
+        .and_then(Value::as_array)
+    {
         for rec in records {
             if let Some(lines) = rec.get("details").and_then(Value::as_array) {
                 for line in lines {
@@ -1397,7 +1510,11 @@ async fn ripe_foreign_more_specifics(
         .get("data")
         .and_then(|d| d.get("prefixes"))
         .and_then(Value::as_array)
-        .or_else(|| v.get("data").and_then(|d| d.get("related_prefixes")).and_then(Value::as_array));
+        .or_else(|| {
+            v.get("data")
+                .and_then(|d| d.get("related_prefixes"))
+                .and_then(Value::as_array)
+        });
     let Some(list) = prefixes else {
         return vec![];
     };
@@ -1426,11 +1543,7 @@ async fn ripe_foreign_more_specifics(
     threats
 }
 
-async fn origin_asns_for_ip(
-    client: &reqwest::Client,
-    ripe_base: &str,
-    ip: &str,
-) -> Vec<u32> {
+async fn origin_asns_for_ip(client: &reqwest::Client, ripe_base: &str, ip: &str) -> Vec<u32> {
     ripe_prefix_overview(client, ripe_base, ip)
         .await
         .map(|po| po.origins.iter().map(|(a, _)| *a).collect())
@@ -1499,7 +1612,10 @@ fn parse_caa_issuers(caa: &[String]) -> BTreeSet<String> {
         if let Some(start) = rec.find('"') {
             let rest = &rec[start + 1..];
             if let Some(end) = rest.find('"') {
-                let issuer = rest[..end].trim().trim_end_matches('.').to_ascii_lowercase();
+                let issuer = rest[..end]
+                    .trim()
+                    .trim_end_matches('.')
+                    .to_ascii_lowercase();
                 if !issuer.is_empty() && issuer != ";" {
                     out.insert(issuer);
                 }
@@ -1525,8 +1641,18 @@ fn extract_host_from_url(url: &str) -> Option<String> {
         .strip_prefix("https://")
         .or_else(|| u.strip_prefix("http://"))
         .unwrap_or(u);
-    let host = stripped.split('/').next()?.split(':').next()?.trim().to_ascii_lowercase();
-    if host.is_empty() { None } else { Some(host) }
+    let host = stripped
+        .split('/')
+        .next()?
+        .split(':')
+        .next()?
+        .trim()
+        .to_ascii_lowercase();
+    if host.is_empty() {
+        None
+    } else {
+        Some(host)
+    }
 }
 
 fn is_in_bailiwick_ns(ns: &str, zone: &str) -> bool {
@@ -1545,23 +1671,14 @@ fn ipv4_ptr_name(ip: &str) -> Option<String> {
     Some(format!("{}.{}.{}.{}.in-addr.arpa", p[3], p[2], p[1], p[0]))
 }
 
-async fn reverse_ptr_v4(
-    client: &reqwest::Client,
-    doh_base: &str,
-    ip: &str,
-) -> Option<String> {
+async fn reverse_ptr_v4(client: &reqwest::Client, doh_base: &str, ip: &str) -> Option<String> {
     let arpa = ipv4_ptr_name(ip)?;
     let r = doh_query(client, doh_base, &arpa, T_PTR, false).await?;
     answers_of(&r, T_PTR).into_iter().next()
 }
 
 /// Forward-confirmed reverse DNS: PTR exists and forward-A includes `ip` or covers `domain`.
-async fn fcrdns_valid(
-    client: &reqwest::Client,
-    doh_base: &str,
-    domain: &str,
-    ip: &str,
-) -> bool {
+async fn fcrdns_valid(client: &reqwest::Client, doh_base: &str, domain: &str, ip: &str) -> bool {
     let Some(ptr) = reverse_ptr_v4(client, doh_base, ip).await else {
         return false;
     };
@@ -1605,11 +1722,13 @@ fn wildcard_probe_host(domain: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("ws{:x}.{}", nanos % 0xffff_ffff, domain.trim().trim_end_matches('.'))
+    let apex = domain.trim().trim_end_matches('.').to_ascii_lowercase();
+    format!("ws{:x}.{}", nanos % 0xffff_ffff, apex)
 }
 
 fn apex_has_spf(txt: &[String]) -> bool {
-    txt.iter().any(|t| t.to_ascii_lowercase().contains("v=spf1"))
+    txt.iter()
+        .any(|t| t.to_ascii_lowercase().contains("v=spf1"))
 }
 
 fn mitre_coverage(findings: &[Value]) -> Vec<String> {
@@ -1771,12 +1890,7 @@ fn probe_manifest_from_cfg(cfg: &BgpConfig) -> Vec<&'static str> {
     m
 }
 
-fn coverage_row(
-    id: &'static str,
-    enabled: bool,
-    executed: bool,
-    passed: Option<bool>,
-) -> Value {
+fn coverage_row(id: &'static str, enabled: bool, executed: bool, passed: Option<bool>) -> Value {
     let status = if !enabled {
         "disabled"
     } else if !executed {
@@ -1800,54 +1914,252 @@ fn coverage_row(
 /// Full probe matrix — proves which checks were armed, ran, and passed for this scan.
 fn build_coverage_audit(cfg: &BgpConfig, p: &Posture) -> Value {
     let rows = vec![
-        coverage_row("resolver_consensus", cfg.check_resolver_consensus, p.resolver_checked, Some(p.resolver_consensus)),
-        coverage_row("dnssec", cfg.check_dnssec, p.dnssec_checked, Some(p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong)),
-        coverage_row("dnssec_ad_divergence", cfg.check_dnssec_ad_divergence, p.dnssec_ad_divergence_checked, Some(p.dnssec_ad_consensus)),
-        coverage_row("auth_vs_recursive", cfg.check_auth_recursive, p.auth_recursive_checked, Some(p.auth_recursive_match)),
-        coverage_row("rpki", cfg.check_rpki, p.rpki_checked, Some(p.rpki_valid && !p.rpki_invalid)),
-        coverage_row("bgp_origin", cfg.check_bgp, p.bgp_checked, Some(!p.unexpected_origin && p.bgp_origin_stable && !p.moas)),
+        coverage_row(
+            "resolver_consensus",
+            cfg.check_resolver_consensus,
+            p.resolver_checked,
+            Some(p.resolver_consensus),
+        ),
+        coverage_row(
+            "dnssec",
+            cfg.check_dnssec,
+            p.dnssec_checked,
+            Some(p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong),
+        ),
+        coverage_row(
+            "dnssec_ad_divergence",
+            cfg.check_dnssec_ad_divergence,
+            p.dnssec_ad_divergence_checked,
+            Some(p.dnssec_ad_consensus),
+        ),
+        coverage_row(
+            "auth_vs_recursive",
+            cfg.check_auth_recursive,
+            p.auth_recursive_checked,
+            Some(p.auth_recursive_match),
+        ),
+        coverage_row(
+            "rpki",
+            cfg.check_rpki,
+            p.rpki_checked,
+            Some(p.rpki_valid && !p.rpki_invalid),
+        ),
+        coverage_row(
+            "bgp_origin",
+            cfg.check_bgp,
+            p.bgp_checked,
+            Some(!p.unexpected_origin && p.bgp_origin_stable && !p.moas),
+        ),
         coverage_row("irr", cfg.check_irr, p.irr_checked, Some(p.irr_matches_bgp)),
-        coverage_row("more_specific", cfg.check_more_specific, p.more_specific_checked, Some(p.more_specific_clean)),
-        coverage_row("routing_history", cfg.check_routing_history, p.bgp_checked, None),
-        coverage_row("tls_identity", cfg.check_tls_identity, p.tls_checked, Some(p.tls_identity_match)),
-        coverage_row("discovered_tls", cfg.check_discovered_tls, p.discovered_tls_checked, Some(p.discovered_tls_match)),
-        coverage_row("fcrdns", cfg.check_fcrdns, p.fcrdns_checked, Some(p.fcrdns_valid)),
-        coverage_row("expected_ips", cfg.check_expected_ips, p.expected_ips_checked, Some(p.expected_ips_match)),
-        coverage_row("aaaa_consensus", cfg.check_aaaa, p.aaaa_consensus_checked, Some(p.aaaa_consensus)),
-        coverage_row("dual_stack", cfg.check_dual_stack, p.dual_stack_checked, Some(p.dual_stack_origin_match)),
-        coverage_row("bogon", cfg.check_bogon, p.bogon_checked, Some(p.bogon_free)),
+        coverage_row(
+            "more_specific",
+            cfg.check_more_specific,
+            p.more_specific_checked,
+            Some(p.more_specific_clean),
+        ),
+        coverage_row(
+            "routing_history",
+            cfg.check_routing_history,
+            p.bgp_checked,
+            None,
+        ),
+        coverage_row(
+            "tls_identity",
+            cfg.check_tls_identity,
+            p.tls_checked,
+            Some(p.tls_identity_match),
+        ),
+        coverage_row(
+            "discovered_tls",
+            cfg.check_discovered_tls,
+            p.discovered_tls_checked,
+            Some(p.discovered_tls_match),
+        ),
+        coverage_row(
+            "fcrdns",
+            cfg.check_fcrdns,
+            p.fcrdns_checked,
+            Some(p.fcrdns_valid),
+        ),
+        coverage_row(
+            "expected_ips",
+            cfg.check_expected_ips,
+            p.expected_ips_checked,
+            Some(p.expected_ips_match),
+        ),
+        coverage_row(
+            "aaaa_consensus",
+            cfg.check_aaaa,
+            p.aaaa_consensus_checked,
+            Some(p.aaaa_consensus),
+        ),
+        coverage_row(
+            "dual_stack",
+            cfg.check_dual_stack,
+            p.dual_stack_checked,
+            Some(p.dual_stack_origin_match),
+        ),
+        coverage_row(
+            "bogon",
+            cfg.check_bogon,
+            p.bogon_checked,
+            Some(p.bogon_free),
+        ),
         coverage_row("ttl", cfg.check_ttl, p.ttl_checked, Some(p.ttl_healthy)),
         coverage_row("dane", cfg.check_dane, p.dane_checked, Some(p.dane_present)),
         coverage_row("ct_inventory", cfg.check_ct, p.ct_inventory_checked, None),
-        coverage_row("rdap", cfg.check_rdap, p.rdap_checked, Some(p.rdap_transfer_locked)),
+        coverage_row(
+            "rdap",
+            cfg.check_rdap,
+            p.rdap_checked,
+            Some(p.rdap_transfer_locked),
+        ),
         coverage_row("caa", cfg.check_caa, p.caa_checked, Some(p.caa_present)),
-        coverage_row("ns_diversity", cfg.check_ns, p.ns_checked, Some(p.ns_diverse)),
-        coverage_row("takeover", cfg.check_takeover, p.takeover_checked, Some(p.takeover_clean)),
-        coverage_row("baseline_delta", cfg.check_baseline_delta, p.baseline_checked, Some(p.baseline_stable)),
-        coverage_row("wildcard_dns", cfg.check_wildcard, p.wildcard_checked, Some(p.wildcard_clean)),
-        coverage_row("ns_lame", cfg.check_ns_lame, p.ns_lame_checked, Some(p.ns_lame_free)),
-        coverage_row("cname_chain", cfg.check_cname_chain, p.cname_checked, Some(p.cname_healthy)),
-        coverage_row("spf_apex", cfg.check_spf_apex, p.spf_checked, Some(p.spf_present)),
-        coverage_row("cds_cdnskey", cfg.check_cds_cdnskey, p.cds_checked, Some(p.cds_automation_ready)),
-        coverage_row("orphan_ds", cfg.check_orphan_ds, p.orphan_ds_checked, Some(p.orphan_ds_clean)),
-        coverage_row("resolver_timing", cfg.check_resolver_timing, p.resolver_timing_checked, Some(p.resolver_timing_healthy)),
-        coverage_row("delegation_walk", cfg.check_delegation_walk, p.delegation_walk_checked, Some(p.delegation_chain_valid)),
-        coverage_row("udp_doh_cross", cfg.check_udp_doh_cross, p.udp_doh_checked, Some(p.udp_doh_consistent)),
-        coverage_row("dmarc", cfg.check_dmarc, p.dmarc_checked, Some(p.dmarc_present)),
-        coverage_row("parent_ns", cfg.check_parent_ns, p.parent_ns_checked, Some(p.parent_ns_consistent)),
-        coverage_row("soa_mname", cfg.check_soa, p.soa_checked, Some(p.soa_mname_in_ns)),
-        coverage_row("soa_serial", cfg.check_soa_serial, p.soa_serial_checked, Some(p.soa_serial_consistent)),
-        coverage_row("caa_ct_cross", cfg.check_caa_ct_cross, p.caa_ct_checked, Some(p.caa_ct_aligned)),
-        coverage_row("rpki_maxlength", cfg.check_rpki_maxlength, p.rpki_maxlength_checked, Some(p.rpki_maxlength_tight)),
+        coverage_row(
+            "ns_diversity",
+            cfg.check_ns,
+            p.ns_checked,
+            Some(p.ns_diverse),
+        ),
+        coverage_row(
+            "takeover",
+            cfg.check_takeover,
+            p.takeover_checked,
+            Some(p.takeover_clean),
+        ),
+        coverage_row(
+            "baseline_delta",
+            cfg.check_baseline_delta,
+            p.baseline_checked,
+            Some(p.baseline_stable),
+        ),
+        coverage_row(
+            "wildcard_dns",
+            cfg.check_wildcard,
+            p.wildcard_checked,
+            Some(p.wildcard_clean),
+        ),
+        coverage_row(
+            "ns_lame",
+            cfg.check_ns_lame,
+            p.ns_lame_checked,
+            Some(p.ns_lame_free),
+        ),
+        coverage_row(
+            "cname_chain",
+            cfg.check_cname_chain,
+            p.cname_checked,
+            Some(p.cname_healthy),
+        ),
+        coverage_row(
+            "spf_apex",
+            cfg.check_spf_apex,
+            p.spf_checked,
+            Some(p.spf_present),
+        ),
+        coverage_row(
+            "cds_cdnskey",
+            cfg.check_cds_cdnskey,
+            p.cds_checked,
+            Some(p.cds_automation_ready),
+        ),
+        coverage_row(
+            "orphan_ds",
+            cfg.check_orphan_ds,
+            p.orphan_ds_checked,
+            Some(p.orphan_ds_clean),
+        ),
+        coverage_row(
+            "resolver_timing",
+            cfg.check_resolver_timing,
+            p.resolver_timing_checked,
+            Some(p.resolver_timing_healthy),
+        ),
+        coverage_row(
+            "delegation_walk",
+            cfg.check_delegation_walk,
+            p.delegation_walk_checked,
+            Some(p.delegation_chain_valid),
+        ),
+        coverage_row(
+            "udp_doh_cross",
+            cfg.check_udp_doh_cross,
+            p.udp_doh_checked,
+            Some(p.udp_doh_consistent),
+        ),
+        coverage_row(
+            "dmarc",
+            cfg.check_dmarc,
+            p.dmarc_checked,
+            Some(p.dmarc_present),
+        ),
+        coverage_row(
+            "parent_ns",
+            cfg.check_parent_ns,
+            p.parent_ns_checked,
+            Some(p.parent_ns_consistent),
+        ),
+        coverage_row(
+            "soa_mname",
+            cfg.check_soa,
+            p.soa_checked,
+            Some(p.soa_mname_in_ns),
+        ),
+        coverage_row(
+            "soa_serial",
+            cfg.check_soa_serial,
+            p.soa_serial_checked,
+            Some(p.soa_serial_consistent),
+        ),
+        coverage_row(
+            "caa_ct_cross",
+            cfg.check_caa_ct_cross,
+            p.caa_ct_checked,
+            Some(p.caa_ct_aligned),
+        ),
+        coverage_row(
+            "rpki_maxlength",
+            cfg.check_rpki_maxlength,
+            p.rpki_maxlength_checked,
+            Some(p.rpki_maxlength_tight),
+        ),
         coverage_row("hsts", cfg.check_hsts, p.hsts_checked, Some(p.hsts_present)),
-        coverage_row("http_redirect", cfg.check_http_redirect, p.redirect_checked, Some(p.redirect_healthy)),
-        coverage_row("mx_origin", cfg.check_mx_origin, p.mx_checked, Some(p.mx_origin_match)),
-        coverage_row("glue", cfg.check_glue, p.glue_checked, Some(p.glue_consistent)),
-        coverage_row("bgp_visibility", cfg.check_bgp_visibility, p.visibility_checked, Some(p.bgp_visible)),
+        coverage_row(
+            "http_redirect",
+            cfg.check_http_redirect,
+            p.redirect_checked,
+            Some(p.redirect_healthy),
+        ),
+        coverage_row(
+            "mx_origin",
+            cfg.check_mx_origin,
+            p.mx_checked,
+            Some(p.mx_origin_match),
+        ),
+        coverage_row(
+            "glue",
+            cfg.check_glue,
+            p.glue_checked,
+            Some(p.glue_consistent),
+        ),
+        coverage_row(
+            "bgp_visibility",
+            cfg.check_bgp_visibility,
+            p.visibility_checked,
+            Some(p.bgp_visible),
+        ),
         coverage_row("geo", cfg.check_geo, p.geo_checked, Some(p.geo_match)),
-        coverage_row("autonomous_discovery", cfg.autonomous_mode, p.discovery_ran, Some(p.discovery_ran)),
+        coverage_row(
+            "autonomous_discovery",
+            cfg.autonomous_mode,
+            p.discovery_ran,
+            Some(p.discovery_ran),
+        ),
     ];
-    let enabled_count = rows.iter().filter(|r| r.get("enabled").and_then(Value::as_bool) == Some(true)).count();
+    let enabled_count = rows
+        .iter()
+        .filter(|r| r.get("enabled").and_then(Value::as_bool) == Some(true))
+        .count();
     let executed_count = rows
         .iter()
         .filter(|r| {
@@ -1923,7 +2235,11 @@ async fn ripe_geoloc_countries(
         .and_then(Value::as_array)
     {
         for a in addrs {
-            if let Some(cc) = a.get("location").and_then(|l| l.get("country")).and_then(Value::as_str) {
+            if let Some(cc) = a
+                .get("location")
+                .and_then(|l| l.get("country"))
+                .and_then(Value::as_str)
+            {
                 out.insert(cc.to_ascii_uppercase());
             }
         }
@@ -1938,7 +2254,14 @@ async fn ripe_bgp_visibility(
     prefix: &str,
 ) -> Option<f64> {
     let url = format!("{ripe_base}/data/routing-status/data.json?resource={prefix}");
-    let v = client.get(&url).send().await.ok()?.json::<Value>().await.ok()?;
+    let v = client
+        .get(&url)
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
     v.get("data")
         .and_then(|d| d.get("visibility").and_then(Value::as_f64))
         .or_else(|| {
@@ -1957,8 +2280,16 @@ async fn ripe_rpki_maxlength_slack(
     asn: u32,
     prefix: &str,
 ) -> Option<u8> {
-    let url = format!("{ripe_base}/data/rpki-validation/data.json?resource=AS{asn}&prefix={prefix}");
-    let v = client.get(&url).send().await.ok()?.json::<Value>().await.ok()?;
+    let url =
+        format!("{ripe_base}/data/rpki-validation/data.json?resource=AS{asn}&prefix={prefix}");
+    let v = client
+        .get(&url)
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
     let pl = prefix.split('/').nth(1)?.parse::<u8>().ok()?;
     let max_len = v
         .get("data")
@@ -2104,7 +2435,6 @@ struct ThreatCompromised {
     registry: bool,
 }
 
-
 #[derive(Debug, Clone, Default)]
 struct PrefixOverview {
     prefix: String,
@@ -2119,14 +2449,24 @@ async fn ripe_prefix_overview(
     ip: &str,
 ) -> Option<PrefixOverview> {
     let url = format!("{ripe_base}/data/prefix-overview/data.json?resource={ip}");
-    let v = client.get(&url).send().await.ok()?.json::<Value>().await.ok()?;
+    let v = client
+        .get(&url)
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
     let data = v.get("data")?;
     let prefix = data
         .get("resource")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let announced = data.get("announced").and_then(Value::as_bool).unwrap_or(false);
+    let announced = data
+        .get("announced")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let origins = data
         .get("asns")
         .and_then(Value::as_array)
@@ -2182,8 +2522,16 @@ async fn ripe_rpki_validation(
     asn: u32,
     prefix: &str,
 ) -> Option<RpkiState> {
-    let url = format!("{ripe_base}/data/rpki-validation/data.json?resource=AS{asn}&prefix={prefix}");
-    let v = client.get(&url).send().await.ok()?.json::<Value>().await.ok()?;
+    let url =
+        format!("{ripe_base}/data/rpki-validation/data.json?resource=AS{asn}&prefix={prefix}");
+    let v = client
+        .get(&url)
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
     let status = v.get("data")?.get("status").and_then(Value::as_str)?;
     Some(RpkiState::parse(status))
 }
@@ -2332,7 +2680,11 @@ fn hijack_resistance_score(p: &Posture) -> u32 {
             }
         }
     };
-    add(18.0, p.dnssec_checked, p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong);
+    add(
+        18.0,
+        p.dnssec_checked,
+        p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong,
+    );
     add(18.0, p.rpki_checked, p.rpki_valid && !p.rpki_invalid);
     add(10.0, p.auth_recursive_checked, p.auth_recursive_match);
     add(10.0, p.resolver_checked, p.resolver_consensus);
@@ -2345,7 +2697,11 @@ fn hijack_resistance_score(p: &Posture) -> u32 {
     add(4.0, p.irr_checked, p.irr_matches_bgp);
     add(4.0, p.rdap_checked, p.rdap_transfer_locked);
     add(4.0, p.ttl_checked, p.ttl_healthy);
-    add(4.0, p.bgp_checked, !p.unexpected_origin && p.bgp_origin_stable);
+    add(
+        4.0,
+        p.bgp_checked,
+        !p.unexpected_origin && p.bgp_origin_stable,
+    );
     add(3.0, p.soa_checked, p.soa_mname_in_ns);
     add(3.0, p.dane_checked, p.dane_present);
     add(2.0, p.bgp_checked && p.moas, !p.moas);
@@ -2368,7 +2724,14 @@ fn hijack_resistance_score(p: &Posture) -> u32 {
     if applicable <= 0.0 {
         return 0;
     }
-    (achieved / applicable * 100.0).round() as u32
+    let mut score = (achieved / applicable * 100.0).round() as u32;
+    let dnssec_ok =
+        !p.dnssec_checked || (p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong);
+    let rpki_ok = !p.rpki_checked || (p.rpki_valid && !p.rpki_invalid);
+    if p.dnssec_checked && p.rpki_checked && !dnssec_ok && !rpki_ok {
+        score = score.min(40);
+    }
+    score
 }
 
 fn summary_severity(score: u32, critical_signal: bool) -> &'static str {
@@ -2406,7 +2769,16 @@ fn bgp_finding(
     confidence: f64,
     evidence: Evidence,
 ) -> Value {
-    let mut f = finding_rich(ENGINE_ID, title, severity, mitre, description, target, confidence, evidence);
+    let mut f = finding_rich(
+        ENGINE_ID,
+        title,
+        severity,
+        mitre,
+        description,
+        target,
+        confidence,
+        evidence,
+    );
     if let Some(obj) = f.as_object_mut() {
         obj.insert("remediation".to_string(), json!(remediation));
         obj.insert("category".to_string(), json!("dns_bgp_integrity"));
@@ -2619,7 +2991,10 @@ pub async fn run_bgp_dns_hijacking_result(target: &str) -> EngineResult {
 }
 
 /// Parameterised entry point used by the dispatch layer (reads `ctx.job_params`).
-pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunContext) -> EngineResult {
+pub async fn run_bgp_dns_hijacking_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -2830,7 +3205,10 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     ));
                 } else {
                     findings.push(bgp_finding(
-                        &format!("AAAA consistent across {} resolvers for {domain}", v6_sets.len()),
+                        &format!(
+                            "AAAA consistent across {} resolvers for {domain}",
+                            v6_sets.len()
+                        ),
                         "info",
                         "T1590.002",
                         &format!(
@@ -2840,7 +3218,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                         target,
                         "Extend RPKI ROAs and BGP monitoring to IPv6 prefixes.",
                         0.78,
-                        Evidence::new().with("domain", domain.clone()).with("resolvers", json!(detail)),
+                        Evidence::new()
+                            .with("domain", domain.clone())
+                            .with("resolvers", json!(detail)),
                     ));
                 }
             } else if let Some((_, set)) = v6_sets.first() {
@@ -3028,7 +3408,11 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 .with("update_locked", rdap.update_locked)
                 .with("rdap_delegation_signed", rdap.delegation_signed)
                 .with("expires", rdap.expires.clone().unwrap_or_default())
-                .check("client_transfer_prohibited", rdap.transfer_locked, "RDAP status");
+                .check(
+                    "client_transfer_prohibited",
+                    rdap.transfer_locked,
+                    "RDAP status",
+                );
             if !rdap.transfer_locked {
                 findings.push(bgp_finding(
                     &format!("Domain transfer NOT locked for {domain}"),
@@ -3245,9 +3629,12 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
 
             // BGP routing-history drift (origin churn on the covering prefix).
             if cfg.check_routing_history && !po.prefix.is_empty() {
-                let hist_origins = ripe_routing_history_origins(&client, &cfg.ripe_base, &po.prefix).await;
+                let hist_origins =
+                    ripe_routing_history_origins(&client, &cfg.ripe_base, &po.prefix).await;
                 posture.bgp_origin_stable = hist_origins.len() <= 1
-                    || hist_origins.iter().all(|a| cfg.expected_origin_asns.is_empty() || cfg.expected_origin_asns.contains(a));
+                    || hist_origins.iter().all(|a| {
+                        cfg.expected_origin_asns.is_empty() || cfg.expected_origin_asns.contains(a)
+                    });
                 if hist_origins.len() > 1 {
                     findings.push(bgp_finding(
                         &format!("BGP origin churn on {} ({} distinct origins in history)", po.prefix, hist_origins.len()),
@@ -3282,7 +3669,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     if let Some(state) =
                         ripe_rpki_validation(&client, &cfg.ripe_base, *asn, &po.prefix).await
                     {
-                        states.push(json!({ "asn": asn, "prefix": po.prefix, "rpki": state.as_str() }));
+                        states.push(
+                            json!({ "asn": asn, "prefix": po.prefix, "rpki": state.as_str() }),
+                        );
                         match state {
                             RpkiState::Valid => any_valid = true,
                             RpkiState::Invalid => any_invalid = true,
@@ -3362,13 +3751,17 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
     if cfg.check_irr && !covering_prefix.is_empty() && !observed_bgp_origins.is_empty() {
         posture.irr_checked = true;
         let irr_origins = ripe_irr_route_origins(&client, &cfg.ripe_base, &covering_prefix).await;
-        posture.irr_matches_bgp = irr_origins.is_empty()
-            || observed_bgp_origins.iter().all(|o| irr_origins.contains(o));
+        posture.irr_matches_bgp =
+            irr_origins.is_empty() || observed_bgp_origins.iter().all(|o| irr_origins.contains(o));
         let ev = Evidence::new()
             .with("prefix", covering_prefix.clone())
             .with("observed_origins", json!(observed_bgp_origins))
             .with("irr_origins", json!(irr_origins.iter().collect::<Vec<_>>()))
-            .check("irr_covers_bgp", posture.irr_matches_bgp, json!(irr_origins.len()));
+            .check(
+                "irr_covers_bgp",
+                posture.irr_matches_bgp,
+                json!(irr_origins.len()),
+            );
         if !posture.irr_matches_bgp {
             critical_signal = true;
             findings.push(bgp_finding(
@@ -3406,7 +3799,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
         } else {
             cfg.expected_origin_asns.iter().copied().collect()
         };
-        let threats = ripe_foreign_more_specifics(&client, &cfg.ripe_base, &covering_prefix, &legit).await;
+        let threats =
+            ripe_foreign_more_specifics(&client, &cfg.ripe_base, &covering_prefix, &legit).await;
         posture.more_specific_clean = threats.is_empty();
         if !threats.is_empty() {
             critical_signal = true;
@@ -3455,9 +3849,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                         .copied()
                         .filter(|a| v6_origins.contains(a))
                         .collect();
-                    posture.dual_stack_origin_match = !v4_origins.is_empty()
-                        && !v6_origins.is_empty()
-                        && !overlap.is_empty();
+                    posture.dual_stack_origin_match =
+                        !v4_origins.is_empty() && !v6_origins.is_empty() && !overlap.is_empty();
                     if !posture.dual_stack_origin_match {
                         findings.push(bgp_finding(
                             &format!("IPv4/IPv6 origin mismatch for {domain}"),
@@ -3623,7 +4016,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             if let Some(soa_raw) = soa.first() {
                 posture.soa_checked = true;
                 if let Some(mname) = parse_soa_mname(soa_raw) {
-                    let ns_resp = doh_query(&client, &cfg.resolvers[0].1, &domain, T_NS, false).await;
+                    let ns_resp =
+                        doh_query(&client, &cfg.resolvers[0].1, &domain, T_NS, false).await;
                     let ns_set: BTreeSet<String> = ns_resp
                         .map(|nr| {
                             answers_of(&nr, T_NS)
@@ -3676,9 +4070,19 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 // Resolve each NS to an IP, map to origin AS, count distinct ASes.
                 let mut as_of_ns: HashMap<String, u32> = HashMap::new();
                 for nsname in ns.iter().take(8) {
-                    if let Some(rr) = doh_query(&client, &cfg.resolvers[0].1, nsname.trim_end_matches('.'), T_A, false).await {
+                    if let Some(rr) = doh_query(
+                        &client,
+                        &cfg.resolvers[0].1,
+                        nsname.trim_end_matches('.'),
+                        T_A,
+                        false,
+                    )
+                    .await
+                    {
                         if let Some(ip) = answers_of(&rr, T_A).into_iter().next() {
-                            if let Some(po) = ripe_prefix_overview(&client, &cfg.ripe_base, &ip).await {
+                            if let Some(po) =
+                                ripe_prefix_overview(&client, &cfg.ripe_base, &ip).await
+                            {
                                 if let Some((asn, _)) = po.origins.first() {
                                     as_of_ns.insert(nsname.clone(), *asn);
                                 }
@@ -3691,9 +4095,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 let ev = Evidence::new()
                     .with("domain", domain.clone())
                     .with("nameservers", json!(ns))
-                    .with("ns_origin_asns", json!(distinct_as.iter().collect::<Vec<_>>()))
+                    .with(
+                        "ns_origin_asns",
+                        json!(distinct_as.iter().collect::<Vec<_>>()),
+                    )
                     .check("multiple_nameservers", ns.len() >= 2, json!(ns.len()))
-                    .check("multiple_networks", distinct_as.len() >= 2, json!(distinct_as.len()));
+                    .check(
+                        "multiple_networks",
+                        distinct_as.len() >= 2,
+                        json!(distinct_as.len()),
+                    );
                 if !posture.ns_diverse {
                     findings.push(bgp_finding(
                         &format!("Low authoritative-NS diversity for {domain}"),
@@ -3767,7 +4178,11 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             if s.is_empty() {
                 continue;
             }
-            names.push(if s.ends_with(&domain) { s.to_string() } else { format!("{s}.{domain}") });
+            names.push(if s.ends_with(&domain) {
+                s.to_string()
+            } else {
+                format!("{s}.{domain}")
+            });
         }
         for name in names.into_iter().take(25) {
             if let Some(r) = doh_query(&client, &cfg.resolvers[0].1, &name, T_CNAME, false).await {
@@ -3778,10 +4193,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                         TAKEOVER_SUFFIXES.iter().find(|(suf, _)| cl.ends_with(*suf))
                     {
                         // Dangling check: does the CNAME target itself resolve to an address?
-                        let resolves = doh_query(&client, &cfg.resolvers[0].1, cn.trim_end_matches('.'), T_A, false)
-                            .await
-                            .map(|rr| !answers_of(&rr, T_A).is_empty())
-                            .unwrap_or(false);
+                        let resolves = doh_query(
+                            &client,
+                            &cfg.resolvers[0].1,
+                            cn.trim_end_matches('.'),
+                            T_A,
+                            false,
+                        )
+                        .await
+                        .map(|rr| !answers_of(&rr, T_A).is_empty())
+                        .unwrap_or(false);
                         let sev = if resolves { "low" } else { "high" };
                         findings.push(bgp_finding(
                             &format!("{} CNAME to {} ({})", if resolves { "Third-party" } else { "Dangling" }, service, name),
@@ -3822,7 +4243,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
         posture.hsts_checked = true;
         if let Some(https) = http_get(&client, &format!("https://{domain}/")).await {
             let hsts = http_header(&https.headers, "strict-transport-security");
-            posture.hsts_present = hsts.as_ref().is_some_and(|h| h.to_ascii_lowercase().contains("max-age"));
+            posture.hsts_present = hsts
+                .as_ref()
+                .is_some_and(|h| h.to_ascii_lowercase().contains("max-age"));
             if !posture.hsts_present {
                 findings.push(bgp_finding(
                     &format!("No HSTS for {domain}"),
@@ -3915,11 +4338,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 &format!("CT issuers align with CAA for {domain}"),
                 "info",
                 "T1584.001",
-                &format!("Recent CT issuers {:?} match CAA allow-list {:?}.", issuers, allowed),
+                &format!(
+                    "Recent CT issuers {:?} match CAA allow-list {:?}.",
+                    issuers, allowed
+                ),
                 target,
                 "Continue CT+CAA continuous monitoring.",
                 0.75,
-                Evidence::new().with("domain", domain.clone()).with("issuers", json!(issuers)),
+                Evidence::new()
+                    .with("domain", domain.clone())
+                    .with("issuers", json!(issuers)),
             ));
         }
     }
@@ -3928,7 +4356,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
     if cfg.check_rpki_maxlength && !covering_prefix.is_empty() {
         if let Some(asn) = observed_bgp_origins.first() {
             posture.rpki_maxlength_checked = true;
-            if let Some(slack) = ripe_rpki_maxlength_slack(&client, &cfg.ripe_base, *asn, &covering_prefix).await {
+            if let Some(slack) =
+                ripe_rpki_maxlength_slack(&client, &cfg.ripe_base, *asn, &covering_prefix).await
+            {
                 posture.rpki_maxlength_tight = slack <= 8;
                 if slack > 16 {
                     findings.push(bgp_finding(
@@ -3951,11 +4381,15 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                         &format!("RPKI maxLength tight for {}", covering_prefix),
                         "info",
                         "T1584.004",
-                        &format!("ROA maxLength slack {slack} — limited more-specific hijack window."),
+                        &format!(
+                            "ROA maxLength slack {slack} — limited more-specific hijack window."
+                        ),
                         target,
                         "Review ROA when aggregating prefixes.",
                         0.68,
-                        Evidence::new().with("prefix", covering_prefix.clone()).with("slack", slack as u64),
+                        Evidence::new()
+                            .with("prefix", covering_prefix.clone())
+                            .with("slack", slack as u64),
                     ));
                 }
             }
@@ -3967,7 +4401,13 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
         posture.visibility_checked = true;
         if let Some(vis) = ripe_bgp_visibility(&client, &cfg.ripe_base, &covering_prefix).await {
             posture.bgp_visible = vis >= 0.5;
-            let sev = if vis < 0.3 { "high" } else if vis < 0.7 { "medium" } else { "info" };
+            let sev = if vis < 0.3 {
+                "high"
+            } else if vis < 0.7 {
+                "medium"
+            } else {
+                "info"
+            };
             findings.push(bgp_finding(
                 &format!("BGP visibility {:.0}% for {}", vis * 100.0, covering_prefix),
                 sev,
@@ -3993,13 +4433,19 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             let mx_raw = answers_of(&r, T_MX);
             if let Some(mx_host) = mx_raw.first().and_then(|m| m.split_whitespace().nth(1)) {
                 let mx_host = mx_host.trim().trim_end_matches('.');
-                if let Some(rr) = doh_query(&client, &cfg.resolvers[0].1, mx_host, T_A, false).await {
+                if let Some(rr) = doh_query(&client, &cfg.resolvers[0].1, mx_host, T_A, false).await
+                {
                     if let Some(mx_ip) = answers_of(&rr, T_A).into_iter().next() {
                         posture.mx_checked = true;
                         let web_as = observed_bgp_origins.clone();
                         let mx_as = origin_asns_for_ip(&client, &cfg.ripe_base, &mx_ip).await;
-                        let overlap: BTreeSet<u32> = web_as.iter().copied().filter(|a| mx_as.contains(a)).collect();
-                        posture.mx_origin_match = !web_as.is_empty() && !mx_as.is_empty() && !overlap.is_empty();
+                        let overlap: BTreeSet<u32> = web_as
+                            .iter()
+                            .copied()
+                            .filter(|a| mx_as.contains(a))
+                            .collect();
+                        posture.mx_origin_match =
+                            !web_as.is_empty() && !mx_as.is_empty() && !overlap.is_empty();
                         if !posture.mx_origin_match && !web_as.is_empty() && !mx_as.is_empty() {
                             findings.push(bgp_finding(
                                 &format!("MX origin differs from web A for {domain}"),
@@ -4198,7 +4644,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     target,
                     "Monitor AD-flag divergence continuously alongside A-record consensus.",
                     0.8,
-                    Evidence::new().with("domain", domain.clone()).with("resolvers", json!(detail)),
+                    Evidence::new()
+                        .with("domain", domain.clone())
+                        .with("resolvers", json!(detail)),
                 ));
             }
         }
@@ -4230,7 +4678,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     target,
                     "Maintain PTR↔A consistency across infrastructure changes.",
                     0.72,
-                    Evidence::new().with("domain", domain.clone()).with("ip", ip.clone()),
+                    Evidence::new()
+                        .with("domain", domain.clone())
+                        .with("ip", ip.clone()),
                 ));
             }
         }
@@ -4291,9 +4741,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             .last()
             .map(|s| s.trim().trim_end_matches('.').to_ascii_lowercase())
             .unwrap_or_default();
-        posture.cname_healthy = chain.len() <= 1
-            || terminator == dom
-            || terminator.ends_with(&format!(".{dom}"));
+        posture.cname_healthy =
+            chain.len() <= 1 || terminator == dom || terminator.ends_with(&format!(".{dom}"));
         if !posture.cname_healthy {
             threat_compromised.dns = true;
             findings.push(bgp_finding(
@@ -4321,7 +4770,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 target,
                 "Re-audit after DNS changes.",
                 0.7,
-                Evidence::new().with("domain", domain.clone()).with("chain", json!(chain)),
+                Evidence::new()
+                    .with("domain", domain.clone())
+                    .with("chain", json!(chain)),
             ));
         }
     }
@@ -4388,11 +4839,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     &format!("Wildcard DNS present for {domain} (IPs match apex)"),
                     "info",
                     "T1584.002",
-                    &format!("Wildcard resolves {probe} → {:?} — consistent with apex.", probe_ips),
+                    &format!(
+                        "Wildcard resolves {probe} → {:?} — consistent with apex.",
+                        probe_ips
+                    ),
                     target,
                     "Document intentional wildcard use; monitor for drift.",
                     0.7,
-                    Evidence::new().with("domain", domain.clone()).with("probe_host", probe),
+                    Evidence::new()
+                        .with("domain", domain.clone())
+                        .with("probe_host", probe),
                 ));
             }
         } else {
@@ -4470,9 +4926,19 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
 
     if cfg.check_resolver_timing && resolver_timings.len() >= 2 {
         posture.resolver_timing_checked = true;
-        let min_ms = resolver_timings.iter().map(|(_, ms)| *ms).min().unwrap_or(1).max(1);
-        let max_ms = resolver_timings.iter().map(|(_, ms)| *ms).max().unwrap_or(0);
-        posture.resolver_timing_healthy = max_ms as f64 <= min_ms as f64 * cfg.resolver_timing_factor;
+        let min_ms = resolver_timings
+            .iter()
+            .map(|(_, ms)| *ms)
+            .min()
+            .unwrap_or(1)
+            .max(1);
+        let max_ms = resolver_timings
+            .iter()
+            .map(|(_, ms)| *ms)
+            .max()
+            .unwrap_or(0);
+        posture.resolver_timing_healthy =
+            max_ms as f64 <= min_ms as f64 * cfg.resolver_timing_factor;
         let detail: Vec<Value> = resolver_timings
             .iter()
             .map(|(n, ms)| json!({ "resolver": n, "latency_ms": ms }))
@@ -4500,11 +4966,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 &format!("Resolver timing healthy for {domain}"),
                 "info",
                 "T1557",
-                &format!("All resolver paths {min_ms}–{max_ms} ms — within {:.1}× factor.", cfg.resolver_timing_factor),
+                &format!(
+                    "All resolver paths {min_ms}–{max_ms} ms — within {:.1}× factor.",
+                    cfg.resolver_timing_factor
+                ),
                 target,
                 "Alert when timing skew exceeds baseline.",
                 0.68,
-                Evidence::new().with("domain", domain.clone()).with("timings", json!(detail)),
+                Evidence::new()
+                    .with("domain", domain.clone())
+                    .with("timings", json!(detail)),
             ));
         }
     }
@@ -4544,7 +5015,11 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             }
         }
         posture.delegation_chain_valid = valid && chain.len() >= 2;
-        let sev = if posture.delegation_chain_valid { "info" } else { "medium" };
+        let sev = if posture.delegation_chain_valid {
+            "info"
+        } else {
+            "medium"
+        };
         findings.push(bgp_finding(
             &format!(
                 "Delegation chain {} for {domain}",
@@ -4605,10 +5080,16 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
             ));
         } else {
             findings.push(bgp_finding(
-                &format!("UDP/53 matches DoH across {} resolver(s) for {domain}", udp_sets.len()),
+                &format!(
+                    "UDP/53 matches DoH across {} resolver(s) for {domain}",
+                    udp_sets.len()
+                ),
                 "info",
                 "T1557",
-                &format!("UDP and DoH agree on {:?}.", all_a_ips.iter().collect::<Vec<_>>()),
+                &format!(
+                    "UDP and DoH agree on {:?}.",
+                    all_a_ips.iter().collect::<Vec<_>>()
+                ),
                 target,
                 "Monitor UDP vs DoH continuously on all public resolvers.",
                 0.74,
@@ -4736,7 +5217,10 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                 &format!("SOA serial consensus for {domain}"),
                 "info",
                 "T1584.002",
-                &format!("All responding auth NS agree on SOA serial {}.", serials.iter().next().unwrap_or(&0)),
+                &format!(
+                    "All responding auth NS agree on SOA serial {}.",
+                    serials.iter().next().unwrap_or(&0)
+                ),
                 target,
                 "Continue monitoring serial jumps after zone updates.",
                 0.7,
@@ -4814,19 +5298,21 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
         posture.baseline_checked = prior_fp.is_some();
         if let Some(prior) = &prior_fp {
             let score_drop = prior.score.saturating_sub(current_fp.score);
-            let new_ips: BTreeSet<String> = current_fp
-                .a_ips
-                .difference(&prior.a_ips)
-                .cloned()
-                .collect();
+            let new_ips: BTreeSet<String> =
+                current_fp.a_ips.difference(&prior.a_ips).cloned().collect();
             let new_origins: BTreeSet<u32> = current_fp
                 .origin_asns
                 .difference(&prior.origin_asns)
                 .copied()
                 .collect();
-            posture.baseline_stable = score_drop <= 5 && new_ips.is_empty() && new_origins.is_empty();
+            posture.baseline_stable =
+                score_drop <= 5 && new_ips.is_empty() && new_origins.is_empty();
             if !posture.baseline_stable {
-                let sev = if score_drop > 20 || !new_ips.is_empty() { "critical" } else { "high" };
+                let sev = if score_drop > 20 || !new_ips.is_empty() {
+                    "critical"
+                } else {
+                    "high"
+                };
                 if sev == "critical" {
                     critical_signal = true;
                 }
@@ -4853,7 +5339,10 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
                     &format!("Stable vs baseline for {domain}"),
                     "info",
                     "T1584",
-                    &format!("Score {}→{} — no new IPs or origin ASes vs prior fingerprint.", prior.score, current_fp.score),
+                    &format!(
+                        "Score {}→{} — no new IPs or origin ASes vs prior fingerprint.",
+                        prior.score, current_fp.score
+                    ),
                     target,
                     "Keep scheduled scans to detect drift early.",
                     0.72,
@@ -4880,9 +5369,9 @@ pub async fn run_bgp_dns_hijacking_result_ctx(target: &str, ctx: &EngineRunConte
         !posture.dnssec_ad_consensus && posture.dnssec_ad_divergence_checked,
         !posture.orphan_ds_clean && posture.orphan_ds_checked,
     ]
-        .iter()
-        .filter(|&&x| x)
-        .count();
+    .iter()
+    .filter(|&&x| x)
+    .count();
     if corroboration_count >= 2 {
         critical_signal = true;
         findings.push(bgp_finding(
@@ -4930,28 +5419,138 @@ fn build_roadmap(p: &Posture) -> Vec<Value> {
     let mut step = |order: u32, title: &str, done: bool, detail: &str| {
         steps.push(json!({ "order": order, "title": title, "done": done, "detail": detail }));
     };
-    step(1, "Enable DNSSEC", p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong, "Sign the zone with modern algorithms and publish the parent DS.");
-    step(2, "File RPKI ROAs", p.rpki_valid && !p.rpki_invalid, "Authorise your origin AS for every prefix (tight maxLength).");
-    step(3, "Match authoritative & recursive", p.auth_recursive_match, "Every recursive answer must appear on authoritative NS — detect poisoning.");
-    step(4, "Lock registrar (RDAP)", p.rdap_transfer_locked, "Enable clientTransferProhibited to block domain theft.");
-    step(5, "Bind TLS identity", p.tls_identity_match, "Ensure HTTPS presents a cert covering the scanned name.");
-    step(6, "Sync IRR with BGP", p.irr_matches_bgp, "Publish route objects matching live origin AS.");
-    step(7, "Monitor BGP origins", p.bgp_origin_stable && !p.unexpected_origin, "Alert on new origins/more-specifics.");
-    step(8, "Publish CAA", p.caa_present, "Restrict which CAs can issue certificates.");
-    step(9, "Diversify nameservers", p.ns_diverse, "Use 2+ providers on independent networks.");
-    step(10, "Dual-stack binding", p.dual_stack_origin_match, "A and AAAA should share origin AS.");
-    step(11, "Watch resolver divergence", p.resolver_consensus, "Compare answers across resolvers continuously.");
-    step(12, "Bind expected A IPs", !p.expected_ips_checked || p.expected_ips_match, "Declare allow-list; alert on any foreign A record.");
-    step(13, "FCrDNS alignment", !p.fcrdns_checked || p.fcrdns_valid, "PTR must forward-confirm every production A record.");
-    step(14, "Eliminate lame NS", !p.ns_lame_checked || p.ns_lame_free, "Every authoritative NS must answer for the zone.");
-    step(15, "Audit wildcard DNS", !p.wildcard_checked || p.wildcard_clean, "No catch-all wildcard to foreign IPs.");
-    step(16, "DNSSEC AD consensus", !p.dnssec_ad_divergence_checked || p.dnssec_ad_consensus, "All validating resolvers must agree on AD.");
-    step(17, "Delegation chain intact", !p.delegation_walk_checked || p.delegation_chain_valid, "Parent zones must delegate cleanly.");
-    step(18, "UDP/DoH transport parity", !p.udp_doh_checked || p.udp_doh_consistent, "Recursive UDP must match DoH consensus.");
-    step(19, "DMARC on mail zones", !p.dmarc_checked || p.dmarc_present, "Publish _dmarc when MX/SPF exist.");
-    step(20, "SOA serial consensus", !p.soa_serial_checked || p.soa_serial_consistent, "All auth NS must publish the same SOA serial.");
-    step(21, "Discovered-host TLS", !p.discovered_tls_checked || p.discovered_tls_match, "Every production hostname must present a matching cert.");
-    step(22, "Full probe coverage", true, "Review coverage_audit in summary — every enabled probe must execute.");
+    step(
+        1,
+        "Enable DNSSEC",
+        p.dnssec_validated && !p.dnssec_broken && p.dnskey_strong,
+        "Sign the zone with modern algorithms and publish the parent DS.",
+    );
+    step(
+        2,
+        "File RPKI ROAs",
+        p.rpki_valid && !p.rpki_invalid,
+        "Authorise your origin AS for every prefix (tight maxLength).",
+    );
+    step(
+        3,
+        "Match authoritative & recursive",
+        p.auth_recursive_match,
+        "Every recursive answer must appear on authoritative NS — detect poisoning.",
+    );
+    step(
+        4,
+        "Lock registrar (RDAP)",
+        p.rdap_transfer_locked,
+        "Enable clientTransferProhibited to block domain theft.",
+    );
+    step(
+        5,
+        "Bind TLS identity",
+        p.tls_identity_match,
+        "Ensure HTTPS presents a cert covering the scanned name.",
+    );
+    step(
+        6,
+        "Sync IRR with BGP",
+        p.irr_matches_bgp,
+        "Publish route objects matching live origin AS.",
+    );
+    step(
+        7,
+        "Monitor BGP origins",
+        p.bgp_origin_stable && !p.unexpected_origin,
+        "Alert on new origins/more-specifics.",
+    );
+    step(
+        8,
+        "Publish CAA",
+        p.caa_present,
+        "Restrict which CAs can issue certificates.",
+    );
+    step(
+        9,
+        "Diversify nameservers",
+        p.ns_diverse,
+        "Use 2+ providers on independent networks.",
+    );
+    step(
+        10,
+        "Dual-stack binding",
+        p.dual_stack_origin_match,
+        "A and AAAA should share origin AS.",
+    );
+    step(
+        11,
+        "Watch resolver divergence",
+        p.resolver_consensus,
+        "Compare answers across resolvers continuously.",
+    );
+    step(
+        12,
+        "Bind expected A IPs",
+        !p.expected_ips_checked || p.expected_ips_match,
+        "Declare allow-list; alert on any foreign A record.",
+    );
+    step(
+        13,
+        "FCrDNS alignment",
+        !p.fcrdns_checked || p.fcrdns_valid,
+        "PTR must forward-confirm every production A record.",
+    );
+    step(
+        14,
+        "Eliminate lame NS",
+        !p.ns_lame_checked || p.ns_lame_free,
+        "Every authoritative NS must answer for the zone.",
+    );
+    step(
+        15,
+        "Audit wildcard DNS",
+        !p.wildcard_checked || p.wildcard_clean,
+        "No catch-all wildcard to foreign IPs.",
+    );
+    step(
+        16,
+        "DNSSEC AD consensus",
+        !p.dnssec_ad_divergence_checked || p.dnssec_ad_consensus,
+        "All validating resolvers must agree on AD.",
+    );
+    step(
+        17,
+        "Delegation chain intact",
+        !p.delegation_walk_checked || p.delegation_chain_valid,
+        "Parent zones must delegate cleanly.",
+    );
+    step(
+        18,
+        "UDP/DoH transport parity",
+        !p.udp_doh_checked || p.udp_doh_consistent,
+        "Recursive UDP must match DoH consensus.",
+    );
+    step(
+        19,
+        "DMARC on mail zones",
+        !p.dmarc_checked || p.dmarc_present,
+        "Publish _dmarc when MX/SPF exist.",
+    );
+    step(
+        20,
+        "SOA serial consensus",
+        !p.soa_serial_checked || p.soa_serial_consistent,
+        "All auth NS must publish the same SOA serial.",
+    );
+    step(
+        21,
+        "Discovered-host TLS",
+        !p.discovered_tls_checked || p.discovered_tls_match,
+        "Every production hostname must present a matching cert.",
+    );
+    step(
+        22,
+        "Full probe coverage",
+        true,
+        "Review coverage_audit in summary — every enabled probe must execute.",
+    );
     steps
 }
 
@@ -4972,7 +5571,8 @@ fn finalize(
     let roadmap = build_roadmap(posture);
     let manifest = probe_manifest_from_cfg(cfg);
     let coverage_audit = build_coverage_audit(cfg, posture);
-    let incident_bundle = build_incident_bundle(&findings, posture, plane_matrix, &roadmap, &manifest);
+    let incident_bundle =
+        build_incident_bundle(&findings, posture, plane_matrix, &roadmap, &manifest);
     let disc_graph = discovery_graph(discovery, adaptive);
 
     let summary_ev = Evidence::new()
@@ -5021,7 +5621,13 @@ fn finalize(
         .with("discovered_tls_match", posture.discovered_tls_match)
         .with("takeover_clean", posture.takeover_clean)
         .with("discovery_ran", posture.discovery_ran)
-        .with("coverage_complete", coverage_audit.get("coverage_complete").and_then(Value::as_bool).unwrap_or(false))
+        .with(
+            "coverage_complete",
+            coverage_audit
+                .get("coverage_complete")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
         .with("threat_planes", plane_matrix.clone());
 
     let mut summary = bgp_finding(
@@ -5050,11 +5656,14 @@ fn finalize(
         obj.insert("critical_signal".to_string(), json!(critical_signal));
         obj.insert("roadmap".to_string(), json!(roadmap));
         obj.insert("threat_planes".to_string(), plane_matrix.clone());
-        obj.insert("scan_fingerprint".to_string(), json!({
-            "a_ips": fingerprint.a_ips.iter().collect::<Vec<_>>(),
-            "origin_asns": fingerprint.origin_asns.iter().collect::<Vec<_>>(),
-            "score": score,
-        }));
+        obj.insert(
+            "scan_fingerprint".to_string(),
+            json!({
+                "a_ips": fingerprint.a_ips.iter().collect::<Vec<_>>(),
+                "origin_asns": fingerprint.origin_asns.iter().collect::<Vec<_>>(),
+                "score": score,
+            }),
+        );
         obj.insert("engine_version".to_string(), json!("8.0"));
         obj.insert("incident_bundle".to_string(), incident_bundle.clone());
         obj.insert("probe_manifest".to_string(), json!(manifest));
@@ -5088,7 +5697,10 @@ mod tests {
 
     #[test]
     fn extract_domain_strips_scheme_port_path() {
-        assert_eq!(extract_domain("https://Example.com:443/login"), "example.com");
+        assert_eq!(
+            extract_domain("https://Example.com:443/login"),
+            "example.com"
+        );
         assert_eq!(extract_domain("http://a.b.c/"), "a.b.c");
         assert_eq!(extract_domain("host.tld."), "host.tld");
     }
@@ -5168,7 +5780,10 @@ mod tests {
             ..Posture::default()
         };
         let strong = hijack_resistance_score(&p);
-        assert!(strong >= 95, "hardened posture should score very high, got {strong}");
+        assert!(
+            strong >= 95,
+            "hardened posture should score very high, got {strong}"
+        );
 
         // Drop DNSSEC + RPKI → score must fall substantially.
         p.dnssec_validated = false;
@@ -5206,7 +5821,9 @@ mod tests {
     #[test]
     fn parse_soa_mname_extracts_primary() {
         assert_eq!(
-            parse_soa_mname("ns1.example.com. hostmaster.example.com. 2024010101 7200 3600 1209600 3600"),
+            parse_soa_mname(
+                "ns1.example.com. hostmaster.example.com. 2024010101 7200 3600 1209600 3600"
+            ),
             Some("ns1.example.com".into())
         );
     }
@@ -5227,8 +5844,14 @@ mod tests {
     fn ct_issuer_violates_caa_when_not_in_allowlist() {
         let mut allowed = BTreeSet::new();
         allowed.insert("letsencrypt.org".to_string());
-        assert!(ct_issuer_violates_caa("C=US, O=Let's Encrypt, CN=R3", &allowed));
-        assert!(!ct_issuer_violates_caa("C=US, O=Let's Encrypt, CN=R3", &BTreeSet::new()));
+        assert!(ct_issuer_violates_caa(
+            "C=US, O=Let's Encrypt, CN=R3",
+            &allowed
+        ));
+        assert!(!ct_issuer_violates_caa(
+            "C=US, O=Let's Encrypt, CN=R3",
+            &BTreeSet::new()
+        ));
     }
 
     #[test]
@@ -5279,7 +5902,9 @@ mod tests {
 
     #[test]
     fn expected_origin_asns_parse_with_and_without_prefix() {
-        let c = ArsenalConfig::from_value(json!({ "expected_origin_asns": ["AS13335", "15169", "as2906"] }));
+        let c = ArsenalConfig::from_value(
+            json!({ "expected_origin_asns": ["AS13335", "15169", "as2906"] }),
+        );
         let cfg = load_config(&c);
         assert!(cfg.expected_origin_asns.contains(&13335));
         assert!(cfg.expected_origin_asns.contains(&15169));
@@ -5297,7 +5922,9 @@ mod tests {
 
     #[test]
     fn apex_has_spf_detects_v_spf1() {
-        assert!(apex_has_spf(&["v=spf1 include:_spf.google.com ~all".to_string()]));
+        assert!(apex_has_spf(&[
+            "v=spf1 include:_spf.google.com ~all".to_string()
+        ]));
         assert!(!apex_has_spf(&["google-site-verification=abc".to_string()]));
     }
 
@@ -5324,7 +5951,10 @@ mod tests {
 
     #[test]
     fn parent_zone_name_strips_leftmost_label() {
-        assert_eq!(parent_zone_name("www.example.com"), Some("example.com".into()));
+        assert_eq!(
+            parent_zone_name("www.example.com"),
+            Some("example.com".into())
+        );
         assert_eq!(parent_zone_name("example.com"), Some("com".into()));
         assert!(parent_zone_name("com").is_none());
     }
@@ -5343,7 +5973,9 @@ mod tests {
     #[test]
     fn adaptive_plan_skips_dual_stack_without_aaaa() {
         let d = ZoneDiscovery::default();
-        let cfg = load_config(&ArsenalConfig::from_value(json!({ "force_all_probes": false })));
+        let cfg = load_config(&ArsenalConfig::from_value(
+            json!({ "force_all_probes": false }),
+        ));
         let plan = plan_adaptive_probes(&d, &cfg);
         assert!(plan.auto_skipped.contains("dual_stack"));
     }
@@ -5396,7 +6028,9 @@ mod tests {
     #[test]
     fn parse_soa_serial_extracts_third_field() {
         assert_eq!(
-            parse_soa_serial("ns1.example.com. hostmaster.example.com. 2026061801 7200 3600 1209600 3600"),
+            parse_soa_serial(
+                "ns1.example.com. hostmaster.example.com. 2026061801 7200 3600 1209600 3600"
+            ),
             Some(2026061801)
         );
         assert_eq!(parse_soa_serial("incomplete"), None);
@@ -5414,7 +6048,10 @@ mod tests {
             "autonomous_mode": true,
         })));
         let audit = build_coverage_audit(&cfg, &p);
-        assert_eq!(audit.get("engine_version").and_then(Value::as_str), Some("8.0"));
+        assert_eq!(
+            audit.get("engine_version").and_then(Value::as_str),
+            Some("8.0")
+        );
         assert!(audit.get("probes").and_then(Value::as_array).is_some());
     }
 
@@ -5425,7 +6062,9 @@ mod tests {
             has_a: true,
             ..ZoneDiscovery::default()
         };
-        let cfg = load_config(&ArsenalConfig::from_value(json!({ "force_all_probes": false })));
+        let cfg = load_config(&ArsenalConfig::from_value(
+            json!({ "force_all_probes": false }),
+        ));
         let plan = plan_adaptive_probes(&d, &cfg);
         assert!(plan.auto_enabled.contains("irr"));
         assert!(plan.auto_enabled.contains("soa_serial"));

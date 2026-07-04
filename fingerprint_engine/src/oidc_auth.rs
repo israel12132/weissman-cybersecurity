@@ -370,15 +370,21 @@ pub async fn oidc_callback(
         .await;
         let _ = tx.commit().await;
     }
+    let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
     let (_access_jwt, access_line, refresh_line) =
-        crate::auth_refresh::build_session_cookie_headers(auth, user_id, state_data.tenant_id)
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "detail": format!("session: {}", e)})),
-                )
-            })?;
+        crate::auth_refresh::build_session_cookie_headers(
+            auth,
+            user_id,
+            state_data.tenant_id,
+            &binding,
+        )
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": format!("session: {}", e)})),
+            )
+        })?;
     let mut res = Redirect::to("/command-center/").into_response();
     if let Ok(v) = HeaderValue::from_str(&access_line) {
         res.headers_mut().append(SET_COOKIE, v);

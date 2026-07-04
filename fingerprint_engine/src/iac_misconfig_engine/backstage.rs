@@ -8,8 +8,17 @@ use Severity::{Critical, High, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "backstage", provider: "kubernetes",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "backstage",
+            provider: "kubernetes",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
@@ -72,7 +81,13 @@ pub const TECHDOCS_PUBLIC_S3: PolicyMeta = pol!(
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![GUEST_AUTH, INLINE_SECRETS, ADMIN_URL_EXPOSED, PERMISSIVE_CORS, TECHDOCS_PUBLIC_S3]
+    vec![
+        GUEST_AUTH,
+        INLINE_SECRETS,
+        ADMIN_URL_EXPOSED,
+        PERMISSIVE_CORS,
+        TECHDOCS_PUBLIC_S3,
+    ]
 }
 
 fn is_backstage(name: &str, content: &str) -> bool {
@@ -83,8 +98,7 @@ fn is_backstage(name: &str, content: &str) -> bool {
         || n == "app-config.yml"
         || n.ends_with("catalog-info.yaml")
         || lc.contains("backstage.io")
-        || lc.contains("kind: location")
-            && lc.contains("backstage")
+        || lc.contains("kind: location") && lc.contains("backstage")
 }
 
 #[must_use]
@@ -106,19 +120,27 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
         || lc.contains("aws_secret_access_key")
         || lc.contains("github_token:")
         || lc.contains("gitlab_token:")
-        || lc.contains("password:")
-            && (lc.contains("integration") || lc.contains("auth"))
+        || lc.contains("password:") && (lc.contains("integration") || lc.contains("auth"))
     {
-        out.push(Finding::new(INLINE_SECRETS, file, file).observed("inline credentials in app-config"));
+        out.push(
+            Finding::new(INLINE_SECRETS, file, file).observed("inline credentials in app-config"),
+        );
     }
     if lc.contains("/admin") || lc.contains("/debug") || lc.contains("actuator") {
-        out.push(Finding::new(ADMIN_URL_EXPOSED, file, file).observed("admin/debug URL in catalog"));
+        out.push(
+            Finding::new(ADMIN_URL_EXPOSED, file, file).observed("admin/debug URL in catalog"),
+        );
     }
-    if lc.contains("origin: '*'") || lc.contains("origin: \"*\"") || lc.contains("allowedorigins: '*'") {
+    if lc.contains("origin: '*'")
+        || lc.contains("origin: \"*\"")
+        || lc.contains("allowedorigins: '*'")
+    {
         out.push(Finding::new(PERMISSIVE_CORS, file, file).observed("wildcard CORS origin"));
     }
     if (lc.contains("techdocs") || lc.contains("awss3"))
-        && (lc.contains("publicread") || lc.contains("public-read") || lc.contains("blockpublicaccess: false"))
+        && (lc.contains("publicread")
+            || lc.contains("public-read")
+            || lc.contains("blockpublicaccess: false"))
     {
         out.push(Finding::new(TECHDOCS_PUBLIC_S3, file, file).observed("public TechDocs storage"));
     }

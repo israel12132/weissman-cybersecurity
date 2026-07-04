@@ -4,23 +4,25 @@
 
 ---
 
-## סיכום מנהלים (יוני 2026)
+## סיכום מנהלים (יולי 2026)
 
 | תחום | סטטוס | הערות |
 |------|--------|-------|
-| **חיווט מנועים** | ✅ מלא | `verify_engine_wiring.mjs` → 0 פערים; 545 מנועי production |
-| **תקן UI** | ✅ מלא | `weissman-ui-audit.mjs` → 94/94 דפים |
-| **UX למנועי Agent** | ✅ מלא | Empty state + gates; 45 מנועים |
+| **חיווט מנועים** | ✅ מלא | `verify_engine_wiring.mjs` → 0 פערים; **558 מנועי production** |
+| **תקן UI** | ✅ מלא | `weissman-ui-audit.mjs` → **95/95 דפים**, **112 נתיבים** |
+| **UX למנועי Agent** | ✅ מלא | Empty state + gates; **45 מנועים** |
 | **Billing / quota** | ✅ מלא | כל נתיבי enqueue; strict ב-production |
-| **Guards אבטחה** | ✅ מלא | `security_startup.rs` חוסם סודות חלשים |
+| **Guards אבטחה** | ✅ מלא | JWT **≥48 תווים**, סודות אחרים **≥32** |
+| **בדיקות וראיות (שלב 6)** | ✅ | Playwright live, 67+ קבצי test, evidence pack |
+| **שער ביקורת מלא (שלב 7)** | ✅ | `bash scripts/full_audit_gate.sh` — G1–G7 |
 | **Docker stack** | ✅ מוכן בקוד | דורש `docker compose up --build` על חומרה מתאימה |
 | **דפים משפטיים** | ✅ קיימים | `deploy/public/` — terms/privacy **EN+HE**, DPA |
-| **Runbooks** | ✅ קיימים | Ops: `docs/operations/` + Week-1 go-live |
+| **Runbooks** | ✅ קיימים | Ops: `docs/operations/` + Week-1 go-live + **`INSPECTION-DAY-RUNBOOK.md`** |
 | **Go-live QA** | ✅ | `./scripts/go_live_check.sh` |
 | **ספר מוצר (מכירות)** | ✅ **681 עמודים** | `docs/sales/viewer/index.html` |
 | **MSA template** | ✅ outline | `docs/legal/MSA-ORDER-FORM-OUTLINE-he.md` |
 | **מוכנות חברה (קוד)** | ✅ 100% | `docs/sales/COMPANY-READINESS-he.md` |
-| **Pricing / marketing** | ✅ | 545 engines, quotas aligned, no false SOC2 audit claim |
+| **Pricing / marketing** | ✅ | 558 engines, 112 routes, quotas aligned, no false SOC2 audit claim |
 | **וידאו / LMS** | ⚠️ פער | אין קורס וידאו מצורף — אופציונלי |
 | **קטלוג Paddle חי** | ⚠️ per-deployment | חובה להגדיר `pri_*` |
 | **SMTP ל-signup** | ⚠️ אם self-serve | נדרש עם `WEISSMAN_SELF_SERVE_SIGNUP=1` |
@@ -82,7 +84,7 @@
 ## מה מותר / אסור לטעון במכירות
 
 **מותר:**
-- 530+ מנועים עם probes אמיתיים (ללא findings מזויפים)
+- **558** מנועי production עם probes אמיתיים (300 real_probe + 213 alias + 45 agent_required — ללא findings מזויפים)
 - RLS multi-tenant, JWT + MFA, RBAC, audit
 - Agent + 45+ משטחי detection
 - SOAR, attack-path, KEV/EPSS
@@ -99,6 +101,7 @@
 
 ## Checklist לפני דמו (30 דקות)
 
+0. `bash scripts/full_audit_gate.sh` → **GLOBAL PASS** (exit 0)
 1. `curl -sf https://<host>/api/health`
 2. Login → Command Center
 3. `GET /api/engines/capabilities`
@@ -115,4 +118,4 @@
 - [18-qa-verification](18-qa-verification.md)
 - [05-production-security](05-production-security.md)
 - [Week-1 go-live](../../sales/WEEK-1-GOLIVE-he.md)
-- [Incident/on-call](../../operations/INCIDENT-ONCALL-RUNBOOK-he.md)
+- [Inspection Day Runbook](../../operations/INSPECTION-DAY-RUNBOOK.md)

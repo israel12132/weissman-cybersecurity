@@ -9,31 +9,186 @@ use Severity::{Critical, High, Low, Medium};
 macro_rules! pol {
     ($id:expr, $title:expr, $sev:expr, $desc:expr, $rem:expr, $mitre:expr, $cwe:expr, $refs:expr, $comp:expr) => {
         PolicyMeta {
-            id: $id, title: $title, severity: $sev, framework: "cloudformation", provider: "aws",
-            description: $desc, remediation: $rem, mitre: $mitre, cwe: $cwe, references: $refs, compliance: $comp,
+            id: $id,
+            title: $title,
+            severity: $sev,
+            framework: "cloudformation",
+            provider: "aws",
+            description: $desc,
+            remediation: $rem,
+            mitre: $mitre,
+            cwe: $cwe,
+            references: $refs,
+            compliance: $comp,
         }
     };
 }
 
 pub const S3_PUBLIC: PolicyMeta = pol!("WZ-CFN-S3-001", "S3 bucket AccessControl is public", Critical, "An AWS::S3::Bucket sets AccessControl to PublicRead/PublicReadWrite, exposing objects to anonymous users.", "Set AccessControl to Private and add a PublicAccessBlockConfiguration with all flags true.", "T1530", "CWE-732", &["CIS-AWS-2.1.5"], &["CIS-AWS-2.1.5", "PCI-DSS-1.2.1", "NIST-AC-3", "SOC2-CC6.1", "HIPAA-164.312(a)(1)"]);
 pub const S3_PAB: PolicyMeta = pol!("WZ-CFN-S3-002", "S3 PublicAccessBlock weakens protection", High, "PublicAccessBlockConfiguration has one or more flags set to false.", "Set BlockPublicAcls, BlockPublicPolicy, IgnorePublicAcls and RestrictPublicBuckets all to true.", "T1530", "CWE-732", &["CIS-AWS-2.1.5"], &["CIS-AWS-2.1.5", "PCI-DSS-1.3", "NIST-AC-3"]);
-pub const SG_OPEN: PolicyMeta = pol!("WZ-CFN-SG-001", "Security group ingress open to 0.0.0.0/0", High, "A SecurityGroup ingress allows CidrIp 0.0.0.0/0.", "Restrict CidrIp to known ranges; front public services with a load balancer.", "T1190", "CWE-284", &["CIS-AWS-5.2"], &["CIS-AWS-5.2", "PCI-DSS-1.2.1", "NIST-SC-7"]);
-pub const SG_ADMIN: PolicyMeta = pol!("WZ-CFN-SG-002", "Admin port (SSH/RDP) open to the internet", Critical, "A SecurityGroup exposes port 22 or 3389 to 0.0.0.0/0.", "Never expose SSH/RDP publicly; use SSM/bastion/VPN and scope CidrIp.", "T1190", "CWE-284", &["CIS-AWS-5.2", "CIS-AWS-5.3"], &["CIS-AWS-5.2", "CIS-AWS-5.3", "NIST-SC-7", "MITRE-T1190"]);
-pub const RDS_PUBLIC: PolicyMeta = pol!("WZ-CFN-RDS-001", "RDS instance is publicly accessible", High, "AWS::RDS::DBInstance has PubliclyAccessible true.", "Set PubliclyAccessible: false and place the DB in private subnets.", "T1190", "CWE-668", &["CIS-AWS-2.3"], &["CIS-AWS-2.3", "PCI-DSS-1.3.6", "NIST-SC-7"]);
-pub const RDS_ENC: PolicyMeta = pol!("WZ-CFN-RDS-002", "RDS storage not encrypted", High, "AWS::RDS::DBInstance/DBCluster StorageEncrypted is false or unset.", "Set StorageEncrypted: true with a KmsKeyId.", "T1530", "CWE-311", &["CIS-AWS-2.3.1"], &["CIS-AWS-2.3.1", "PCI-DSS-3.4", "NIST-SC-28", "HIPAA-164.312(a)(2)(iv)"]);
-pub const EBS_ENC: PolicyMeta = pol!("WZ-CFN-EBS-001", "EBS volume not encrypted", High, "AWS::EC2::Volume Encrypted is false or unset.", "Set Encrypted: true and a KmsKeyId.", "T1530", "CWE-311", &["CIS-AWS-2.2.1"], &["CIS-AWS-2.2.1", "PCI-DSS-3.4", "NIST-SC-28"]);
-pub const IAM_WILDCARD: PolicyMeta = pol!("WZ-CFN-IAM-001", "IAM policy grants wildcard admin", Critical, "An IAM policy statement allows Action '*' on Resource '*' (full administrator).", "Apply least privilege: scope Action and Resource to the minimum required.", "T1098", "CWE-269", &["CIS-AWS-1.16"], &["CIS-AWS-1.16", "NIST-AC-6", "SOC2-CC6.3", "MITRE-T1098"]);
+pub const SG_OPEN: PolicyMeta = pol!(
+    "WZ-CFN-SG-001",
+    "Security group ingress open to 0.0.0.0/0",
+    High,
+    "A SecurityGroup ingress allows CidrIp 0.0.0.0/0.",
+    "Restrict CidrIp to known ranges; front public services with a load balancer.",
+    "T1190",
+    "CWE-284",
+    &["CIS-AWS-5.2"],
+    &["CIS-AWS-5.2", "PCI-DSS-1.2.1", "NIST-SC-7"]
+);
+pub const SG_ADMIN: PolicyMeta = pol!(
+    "WZ-CFN-SG-002",
+    "Admin port (SSH/RDP) open to the internet",
+    Critical,
+    "A SecurityGroup exposes port 22 or 3389 to 0.0.0.0/0.",
+    "Never expose SSH/RDP publicly; use SSM/bastion/VPN and scope CidrIp.",
+    "T1190",
+    "CWE-284",
+    &["CIS-AWS-5.2", "CIS-AWS-5.3"],
+    &["CIS-AWS-5.2", "CIS-AWS-5.3", "NIST-SC-7", "MITRE-T1190"]
+);
+pub const RDS_PUBLIC: PolicyMeta = pol!(
+    "WZ-CFN-RDS-001",
+    "RDS instance is publicly accessible",
+    High,
+    "AWS::RDS::DBInstance has PubliclyAccessible true.",
+    "Set PubliclyAccessible: false and place the DB in private subnets.",
+    "T1190",
+    "CWE-668",
+    &["CIS-AWS-2.3"],
+    &["CIS-AWS-2.3", "PCI-DSS-1.3.6", "NIST-SC-7"]
+);
+pub const RDS_ENC: PolicyMeta = pol!(
+    "WZ-CFN-RDS-002",
+    "RDS storage not encrypted",
+    High,
+    "AWS::RDS::DBInstance/DBCluster StorageEncrypted is false or unset.",
+    "Set StorageEncrypted: true with a KmsKeyId.",
+    "T1530",
+    "CWE-311",
+    &["CIS-AWS-2.3.1"],
+    &[
+        "CIS-AWS-2.3.1",
+        "PCI-DSS-3.4",
+        "NIST-SC-28",
+        "HIPAA-164.312(a)(2)(iv)"
+    ]
+);
+pub const EBS_ENC: PolicyMeta = pol!(
+    "WZ-CFN-EBS-001",
+    "EBS volume not encrypted",
+    High,
+    "AWS::EC2::Volume Encrypted is false or unset.",
+    "Set Encrypted: true and a KmsKeyId.",
+    "T1530",
+    "CWE-311",
+    &["CIS-AWS-2.2.1"],
+    &["CIS-AWS-2.2.1", "PCI-DSS-3.4", "NIST-SC-28"]
+);
+pub const IAM_WILDCARD: PolicyMeta = pol!(
+    "WZ-CFN-IAM-001",
+    "IAM policy grants wildcard admin",
+    Critical,
+    "An IAM policy statement allows Action '*' on Resource '*' (full administrator).",
+    "Apply least privilege: scope Action and Resource to the minimum required.",
+    "T1098",
+    "CWE-269",
+    &["CIS-AWS-1.16"],
+    &["CIS-AWS-1.16", "NIST-AC-6", "SOC2-CC6.3", "MITRE-T1098"]
+);
 pub const IMDSV1: PolicyMeta = pol!("WZ-CFN-EC2-001", "EC2/LaunchTemplate allows IMDSv1", High, "MetadataOptions does not require IMDSv2 (HttpTokens != required), enabling SSRF credential theft.", "Set MetadataOptions HttpTokens: required.", "T1552.005", "CWE-918", &["CIS-AWS-5.6"], &["CIS-AWS-5.6", "NIST-SC-7", "MITRE-T1552.005"]);
-pub const CT_LOGGING: PolicyMeta = pol!("WZ-CFN-CT-001", "CloudTrail logging disabled", High, "AWS::CloudTrail::Trail has IsLogging false.", "Set IsLogging: true and EnableLogFileValidation; make it multi-region.", "T1562.008", "CWE-778", &["CIS-AWS-3.1"], &["CIS-AWS-3.1", "PCI-DSS-10.1", "NIST-AU-2", "MITRE-T1562.008"]);
-pub const KMS_ROT: PolicyMeta = pol!("WZ-CFN-KMS-001", "KMS key rotation disabled", Medium, "AWS::KMS::Key EnableKeyRotation is false or unset.", "Set EnableKeyRotation: true.", "T1552", "CWE-320", &["CIS-AWS-3.8"], &["CIS-AWS-3.8", "NIST-SC-12"]);
-pub const OS_ENC: PolicyMeta = pol!("WZ-CFN-OS-001", "OpenSearch/Elasticsearch not encrypted at rest", High, "EncryptionAtRestOptions is disabled on an OpenSearch/Elasticsearch domain.", "Enable EncryptionAtRestOptions and NodeToNodeEncryptionOptions.", "T1530", "CWE-311", &["CIS-AWS-x"], &["NIST-SC-28", "PCI-DSS-3.4"]);
-pub const REDSHIFT: PolicyMeta = pol!("WZ-CFN-RS-001", "Redshift cluster public or unencrypted", High, "AWS::Redshift::Cluster is PubliclyAccessible or has Encrypted false.", "Set PubliclyAccessible: false and Encrypted: true.", "T1190", "CWE-668", &["CIS-AWS-x"], &["NIST-SC-7", "PCI-DSS-1.3.6"]);
-pub const DDB_SSE: PolicyMeta = pol!("WZ-CFN-DDB-001", "DynamoDB SSE disabled", Low, "SSESpecification.SSEEnabled is false on a DynamoDB table.", "Enable SSESpecification (AWS-managed or KMS CMK).", "T1530", "CWE-311", &["CIS-AWS-x"], &["NIST-SC-28"]);
-pub const SQS_ENC: PolicyMeta = pol!("WZ-CFN-SQS-001", "SQS/SNS without KMS encryption", Low, "An SQS queue or SNS topic has no KmsMasterKeyId, so messages are not encrypted with a CMK.", "Set KmsMasterKeyId to a KMS key.", "T1530", "CWE-311", &["CIS-AWS-x"], &["NIST-SC-28"]);
+pub const CT_LOGGING: PolicyMeta = pol!(
+    "WZ-CFN-CT-001",
+    "CloudTrail logging disabled",
+    High,
+    "AWS::CloudTrail::Trail has IsLogging false.",
+    "Set IsLogging: true and EnableLogFileValidation; make it multi-region.",
+    "T1562.008",
+    "CWE-778",
+    &["CIS-AWS-3.1"],
+    &[
+        "CIS-AWS-3.1",
+        "PCI-DSS-10.1",
+        "NIST-AU-2",
+        "MITRE-T1562.008"
+    ]
+);
+pub const KMS_ROT: PolicyMeta = pol!(
+    "WZ-CFN-KMS-001",
+    "KMS key rotation disabled",
+    Medium,
+    "AWS::KMS::Key EnableKeyRotation is false or unset.",
+    "Set EnableKeyRotation: true.",
+    "T1552",
+    "CWE-320",
+    &["CIS-AWS-3.8"],
+    &["CIS-AWS-3.8", "NIST-SC-12"]
+);
+pub const OS_ENC: PolicyMeta = pol!(
+    "WZ-CFN-OS-001",
+    "OpenSearch/Elasticsearch not encrypted at rest",
+    High,
+    "EncryptionAtRestOptions is disabled on an OpenSearch/Elasticsearch domain.",
+    "Enable EncryptionAtRestOptions and NodeToNodeEncryptionOptions.",
+    "T1530",
+    "CWE-311",
+    &["CIS-AWS-x"],
+    &["NIST-SC-28", "PCI-DSS-3.4"]
+);
+pub const REDSHIFT: PolicyMeta = pol!(
+    "WZ-CFN-RS-001",
+    "Redshift cluster public or unencrypted",
+    High,
+    "AWS::Redshift::Cluster is PubliclyAccessible or has Encrypted false.",
+    "Set PubliclyAccessible: false and Encrypted: true.",
+    "T1190",
+    "CWE-668",
+    &["CIS-AWS-x"],
+    &["NIST-SC-7", "PCI-DSS-1.3.6"]
+);
+pub const DDB_SSE: PolicyMeta = pol!(
+    "WZ-CFN-DDB-001",
+    "DynamoDB SSE disabled",
+    Low,
+    "SSESpecification.SSEEnabled is false on a DynamoDB table.",
+    "Enable SSESpecification (AWS-managed or KMS CMK).",
+    "T1530",
+    "CWE-311",
+    &["CIS-AWS-x"],
+    &["NIST-SC-28"]
+);
+pub const SQS_ENC: PolicyMeta = pol!(
+    "WZ-CFN-SQS-001",
+    "SQS/SNS without KMS encryption",
+    Low,
+    "An SQS queue or SNS topic has no KmsMasterKeyId, so messages are not encrypted with a CMK.",
+    "Set KmsMasterKeyId to a KMS key.",
+    "T1530",
+    "CWE-311",
+    &["CIS-AWS-x"],
+    &["NIST-SC-28"]
+);
 
 #[must_use]
 pub fn policies() -> Vec<PolicyMeta> {
-    vec![S3_PUBLIC, S3_PAB, SG_OPEN, SG_ADMIN, RDS_PUBLIC, RDS_ENC, EBS_ENC, IAM_WILDCARD, IMDSV1, CT_LOGGING, KMS_ROT, OS_ENC, REDSHIFT, DDB_SSE, SQS_ENC]
+    vec![
+        S3_PUBLIC,
+        S3_PAB,
+        SG_OPEN,
+        SG_ADMIN,
+        RDS_PUBLIC,
+        RDS_ENC,
+        EBS_ENC,
+        IAM_WILDCARD,
+        IMDSV1,
+        CT_LOGGING,
+        KMS_ROT,
+        OS_ENC,
+        REDSHIFT,
+        DDB_SSE,
+        SQS_ENC,
+    ]
 }
 
 fn vstr<'a>(v: &'a Value, k: &str) -> Option<&'a str> {
@@ -54,7 +209,10 @@ fn vbool_like(v: &Value, k: &str) -> Option<bool> {
 fn str_list(v: &Value) -> Vec<String> {
     match v {
         Value::String(s) => vec![s.clone()],
-        Value::Sequence(seq) => seq.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+        Value::Sequence(seq) => seq
+            .iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect(),
         _ => vec![],
     }
 }
@@ -62,8 +220,12 @@ fn str_list(v: &Value) -> Vec<String> {
 #[must_use]
 pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
     let mut out = Vec::new();
-    let Ok(doc): Result<Value, _> = serde_yaml::from_str(content) else { return out };
-    let Some(resources) = doc.get("Resources").and_then(|r| r.as_mapping()) else { return out };
+    let Ok(doc): Result<Value, _> = serde_yaml::from_str(content) else {
+        return out;
+    };
+    let Some(resources) = doc.get("Resources").and_then(|r| r.as_mapping()) else {
+        return out;
+    };
 
     for (k, res) in resources {
         let logical = k.as_str().unwrap_or("resource").to_string();
@@ -75,41 +237,84 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
             "AWS::S3::Bucket" => {
                 if let Some(acl) = vstr(&props, "AccessControl") {
                     if acl.contains("Public") {
-                        out.push(Finding::new(S3_PUBLIC, &logical, file).at(line).observed(format!("AccessControl: {}", acl)).fix("AccessControl: Private"));
+                        out.push(
+                            Finding::new(S3_PUBLIC, &logical, file)
+                                .at(line)
+                                .observed(format!("AccessControl: {}", acl))
+                                .fix("AccessControl: Private"),
+                        );
                     }
                 }
                 if let Some(pab) = props.get("PublicAccessBlockConfiguration") {
-                    for flag in ["BlockPublicAcls", "BlockPublicPolicy", "IgnorePublicAcls", "RestrictPublicBuckets"] {
+                    for flag in [
+                        "BlockPublicAcls",
+                        "BlockPublicPolicy",
+                        "IgnorePublicAcls",
+                        "RestrictPublicBuckets",
+                    ] {
                         if vbool_like(pab, flag) == Some(false) {
-                            out.push(Finding::new(S3_PAB, &logical, file).at(line).observed(format!("{}: false", flag)).fix(format!("{}: true", flag)));
+                            out.push(
+                                Finding::new(S3_PAB, &logical, file)
+                                    .at(line)
+                                    .observed(format!("{}: false", flag))
+                                    .fix(format!("{}: true", flag)),
+                            );
                         }
                     }
                 }
             }
             "AWS::EC2::SecurityGroup" => {
-                if let Some(ingress) = props.get("SecurityGroupIngress").and_then(Value::as_sequence) {
+                if let Some(ingress) = props
+                    .get("SecurityGroupIngress")
+                    .and_then(Value::as_sequence)
+                {
                     for rule in ingress {
                         check_cfn_ingress(file, &logical, line, rule, &mut out);
                     }
                 }
             }
-            "AWS::EC2::SecurityGroupIngress" => check_cfn_ingress(file, &logical, line, &props, &mut out),
+            "AWS::EC2::SecurityGroupIngress" => {
+                check_cfn_ingress(file, &logical, line, &props, &mut out)
+            }
             "AWS::RDS::DBInstance" | "AWS::RDS::DBCluster" => {
                 if vbool_like(&props, "PubliclyAccessible") == Some(true) {
-                    out.push(Finding::new(RDS_PUBLIC, &logical, file).at(line).observed("PubliclyAccessible: true").fix("PubliclyAccessible: false"));
+                    out.push(
+                        Finding::new(RDS_PUBLIC, &logical, file)
+                            .at(line)
+                            .observed("PubliclyAccessible: true")
+                            .fix("PubliclyAccessible: false"),
+                    );
                 }
                 if vbool_like(&props, "StorageEncrypted") != Some(true) {
-                    out.push(Finding::new(RDS_ENC, &logical, file).at(line).observed("StorageEncrypted not true").fix("StorageEncrypted: true"));
+                    out.push(
+                        Finding::new(RDS_ENC, &logical, file)
+                            .at(line)
+                            .observed("StorageEncrypted not true")
+                            .fix("StorageEncrypted: true"),
+                    );
                 }
             }
             "AWS::EC2::Volume" => {
                 if vbool_like(&props, "Encrypted") != Some(true) {
-                    out.push(Finding::new(EBS_ENC, &logical, file).at(line).observed("Encrypted not true").fix("Encrypted: true"));
+                    out.push(
+                        Finding::new(EBS_ENC, &logical, file)
+                            .at(line)
+                            .observed("Encrypted not true")
+                            .fix("Encrypted: true"),
+                    );
                 }
             }
-            "AWS::IAM::Policy" | "AWS::IAM::Role" | "AWS::IAM::ManagedPolicy" | "AWS::IAM::User" | "AWS::IAM::Group" => {
+            "AWS::IAM::Policy"
+            | "AWS::IAM::Role"
+            | "AWS::IAM::ManagedPolicy"
+            | "AWS::IAM::User"
+            | "AWS::IAM::Group" => {
                 if has_wildcard_statement(res) {
-                    out.push(Finding::new(IAM_WILDCARD, &logical, file).at(line).observed("Effect Allow with Action '*' and Resource '*'"));
+                    out.push(
+                        Finding::new(IAM_WILDCARD, &logical, file)
+                            .at(line)
+                            .observed("Effect Allow with Action '*' and Resource '*'"),
+                    );
                 }
             }
             "AWS::EC2::Instance" | "AWS::EC2::LaunchTemplate" => {
@@ -117,41 +322,86 @@ pub fn evaluate(file: &str, content: &str) -> Vec<Finding> {
                     .get("LaunchTemplateData")
                     .and_then(|d| d.get("MetadataOptions"))
                     .or_else(|| props.get("MetadataOptions"));
-                let enforced = md.and_then(|m| vstr(m, "HttpTokens")).map(|t| t == "required").unwrap_or(false);
+                let enforced = md
+                    .and_then(|m| vstr(m, "HttpTokens"))
+                    .map(|t| t == "required")
+                    .unwrap_or(false);
                 if !enforced {
-                    out.push(Finding::new(IMDSV1, &logical, file).at(line).observed("MetadataOptions.HttpTokens != required").fix("MetadataOptions:\n  HttpTokens: required"));
+                    out.push(
+                        Finding::new(IMDSV1, &logical, file)
+                            .at(line)
+                            .observed("MetadataOptions.HttpTokens != required")
+                            .fix("MetadataOptions:\n  HttpTokens: required"),
+                    );
                 }
             }
             "AWS::CloudTrail::Trail" => {
                 if vbool_like(&props, "IsLogging") == Some(false) {
-                    out.push(Finding::new(CT_LOGGING, &logical, file).at(line).observed("IsLogging: false").fix("IsLogging: true"));
+                    out.push(
+                        Finding::new(CT_LOGGING, &logical, file)
+                            .at(line)
+                            .observed("IsLogging: false")
+                            .fix("IsLogging: true"),
+                    );
                 }
             }
             "AWS::KMS::Key" => {
                 if vbool_like(&props, "EnableKeyRotation") != Some(true) {
-                    out.push(Finding::new(KMS_ROT, &logical, file).at(line).observed("EnableKeyRotation not true").fix("EnableKeyRotation: true"));
+                    out.push(
+                        Finding::new(KMS_ROT, &logical, file)
+                            .at(line)
+                            .observed("EnableKeyRotation not true")
+                            .fix("EnableKeyRotation: true"),
+                    );
                 }
             }
             "AWS::Elasticsearch::Domain" | "AWS::OpenSearchService::Domain" => {
-                let enc = props.get("EncryptionAtRestOptions").and_then(|e| vbool_like(e, "Enabled")).unwrap_or(false);
+                let enc = props
+                    .get("EncryptionAtRestOptions")
+                    .and_then(|e| vbool_like(e, "Enabled"))
+                    .unwrap_or(false);
                 if !enc {
-                    out.push(Finding::new(OS_ENC, &logical, file).at(line).observed("EncryptionAtRestOptions.Enabled != true").fix("EncryptionAtRestOptions:\n  Enabled: true"));
+                    out.push(
+                        Finding::new(OS_ENC, &logical, file)
+                            .at(line)
+                            .observed("EncryptionAtRestOptions.Enabled != true")
+                            .fix("EncryptionAtRestOptions:\n  Enabled: true"),
+                    );
                 }
             }
             "AWS::Redshift::Cluster" => {
-                if vbool_like(&props, "PubliclyAccessible") == Some(true) || vbool_like(&props, "Encrypted") == Some(false) {
-                    out.push(Finding::new(REDSHIFT, &logical, file).at(line).observed("PubliclyAccessible true or Encrypted false").fix("PubliclyAccessible: false\nEncrypted: true"));
+                if vbool_like(&props, "PubliclyAccessible") == Some(true)
+                    || vbool_like(&props, "Encrypted") == Some(false)
+                {
+                    out.push(
+                        Finding::new(REDSHIFT, &logical, file)
+                            .at(line)
+                            .observed("PubliclyAccessible true or Encrypted false")
+                            .fix("PubliclyAccessible: false\nEncrypted: true"),
+                    );
                 }
             }
             "AWS::DynamoDB::Table" => {
-                let sse = props.get("SSESpecification").and_then(|s| vbool_like(s, "SSEEnabled"));
+                let sse = props
+                    .get("SSESpecification")
+                    .and_then(|s| vbool_like(s, "SSEEnabled"));
                 if sse == Some(false) {
-                    out.push(Finding::new(DDB_SSE, &logical, file).at(line).observed("SSESpecification.SSEEnabled: false").fix("SSESpecification:\n  SSEEnabled: true"));
+                    out.push(
+                        Finding::new(DDB_SSE, &logical, file)
+                            .at(line)
+                            .observed("SSESpecification.SSEEnabled: false")
+                            .fix("SSESpecification:\n  SSEEnabled: true"),
+                    );
                 }
             }
             "AWS::SQS::Queue" | "AWS::SNS::Topic" => {
                 if props.get("KmsMasterKeyId").is_none() {
-                    out.push(Finding::new(SQS_ENC, &logical, file).at(line).observed("no KmsMasterKeyId").fix("KmsMasterKeyId: alias/aws/sqs"));
+                    out.push(
+                        Finding::new(SQS_ENC, &logical, file)
+                            .at(line)
+                            .observed("no KmsMasterKeyId")
+                            .fix("KmsMasterKeyId: alias/aws/sqs"),
+                    );
                 }
             }
             _ => {}
@@ -174,7 +424,12 @@ fn check_cfn_ingress(file: &str, logical: &str, line: usize, rule: &Value, out: 
             _ => false,
         };
         let pol = if admin { SG_ADMIN } else { SG_OPEN };
-        out.push(Finding::new(pol, logical, file).at(line).observed(format!("CidrIp 0.0.0.0/0 (FromPort={:?})", from)).fix("CidrIp: 10.0.0.0/8"));
+        out.push(
+            Finding::new(pol, logical, file)
+                .at(line)
+                .observed(format!("CidrIp 0.0.0.0/0 (FromPort={:?})", from))
+                .fix("CidrIp: 10.0.0.0/8"),
+        );
     }
 }
 

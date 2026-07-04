@@ -57,6 +57,7 @@ describe('route evidence registry', () => {
   it('maps primary engine command centers', () => {
     expect(ROUTE_EVIDENCE['/iac-security']).toBe('pages.iacSecurityCenter.evidence_notice')
     expect(ROUTE_EVIDENCE['/graphql-security']).toBe('pages.graphqlSecurityCommandCenter.evidence_notice')
+    expect(ROUTE_EVIDENCE['/websocket-security']).toBe('pages.websocketSecurity.evidence_notice')
     expect(ROUTE_EVIDENCE['/attack-surface']).toBe('pages.attackSurfaceManagement.evidence_notice')
   })
 
