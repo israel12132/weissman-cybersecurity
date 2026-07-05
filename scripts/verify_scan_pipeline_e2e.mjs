@@ -79,6 +79,28 @@ function parseDomains(raw) {
   return []
 }
 
+function domainIncludesExample(domains) {
+  return domains.some((x) => String(x).includes('example.com'))
+}
+
+async function ensureClientScope(clientId, auth) {
+  const clients = await req('GET', '/api/clients', auth)
+  if (clients.status !== 200 || !Array.isArray(clients.data)) return
+  const client = clients.data.find((c) => Number(c.id) === Number(clientId))
+  const domains = parseDomains(client?.domains)
+  if (domainIncludesExample(domains)) return
+  const updated = [...domains, 'https://example.com']
+  const patch = await req('POST', `/api/clients/${clientId}`, {
+    ...auth,
+    body: { domains: JSON.stringify(updated) },
+  })
+  if (patch.status >= 200 && patch.status < 300) {
+    ok('client_scope', 'example.com added to client domains')
+  } else {
+    fail('client_scope', `HTTP ${patch.status} ${patch.data?.detail || ''}`)
+  }
+}
+
 async function pollJob(jobId, auth, { label = 'job_poll', max = POLL_MAX } = {}) {
   const terminal = new Set(['completed', 'done', 'failed', 'error', 'dead', 'cancelled'])
   for (let i = 0; i < max; i += 1) {
@@ -172,6 +194,8 @@ async function main() {
   } else {
     ok('client_resolve', `id=${clientId}`)
   }
+
+  await ensureClientScope(clientId, auth)
 
   // Integrations GET — masked shape
   const ints = await req('GET', `/api/clients/${clientId}/integrations`, auth)

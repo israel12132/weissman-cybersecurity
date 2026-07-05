@@ -25,16 +25,28 @@ pub async fn enqueue(
     payload: Value,
     trace_id: Option<&str>,
 ) -> Result<Uuid, sqlx::Error> {
-    let id: Uuid = sqlx::query_scalar(
-        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id)
-           VALUES ($1, $2, $3, 'pending', $4)
-           RETURNING id"#,
+    enqueue_with_id(pool, Uuid::new_v4(), tenant_id, kind, payload, trace_id).await
+}
+
+/// Enqueue with a caller-chosen id (zero-trust envelope must be signed before insert).
+pub async fn enqueue_with_id(
+    pool: &PgPool,
+    id: Uuid,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO weissman_async_jobs (id, tenant_id, kind, payload, status, trace_id)
+           VALUES ($1, $2, $3, $4, 'pending', $5)"#,
     )
+    .bind(id)
     .bind(tenant_id)
     .bind(kind)
     .bind(Json(payload))
     .bind(trace_id)
-    .fetch_one(pool)
+    .execute(pool)
     .await?;
     Ok(id)
 }

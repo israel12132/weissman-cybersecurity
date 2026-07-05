@@ -18,14 +18,8 @@ pub async fn enqueue(
     payload: Value,
     trace_id: Option<String>,
 ) -> Result<Uuid, sqlx::Error> {
-    let id = weissman_db::job_queue::enqueue(
-        pool,
-        tenant_id,
-        kind,
-        payload.clone(),
-        trace_id.as_deref(),
-    )
-    .await?;
+    let id = Uuid::new_v4();
+    let mut stored_payload = payload.clone();
 
     let bus = JobBus::from_env(pool.clone()).await;
     if bus.is_enabled() {
@@ -34,23 +28,10 @@ pub async fn enqueue(
             .await
         {
             Ok(Some(envelope)) => {
-                let mut enriched = payload;
-                attach_signed_envelope(&mut enriched, envelope);
-                let _ = sqlx::query("UPDATE weissman_async_jobs SET payload = $2 WHERE id = $1")
-                    .bind(id)
-                    .bind(sqlx::types::Json(enriched))
-                    .execute(pool)
-                    .await;
+                attach_signed_envelope(&mut stored_payload, envelope);
             }
             Ok(None) => {
                 if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
-                    )
-                    .bind(id)
-                    .bind("job bus dispatch produced no signed envelope in production")
-                    .execute(pool)
-                    .await;
                     return Err(sqlx::Error::Protocol(
                         "job bus dispatch produced no signed envelope".into(),
                     ));
@@ -58,13 +39,6 @@ pub async fn enqueue(
             }
             Err(e) => {
                 if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
-                    )
-                    .bind(id)
-                    .bind(format!("job bus dispatch failed: {e}"))
-                    .execute(pool)
-                    .await;
                     return Err(sqlx::Error::Protocol(format!(
                         "job bus dispatch failed: {e}"
                     )));
@@ -80,17 +54,20 @@ pub async fn enqueue(
     } else if weissman_core::tls_policy::is_production_environment()
         && crate::http::rate_limit_redis::is_enabled()
     {
-        let _ = sqlx::query(
-            "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
-        )
-        .bind(id)
-        .bind("zero-trust job bus not enabled despite production Redis + orchestrator policy")
-        .execute(pool)
-        .await;
         return Err(sqlx::Error::Protocol(
             "zero-trust job bus not enabled in production".into(),
         ));
     }
+
+    weissman_db::job_queue::enqueue_with_id(
+        pool,
+        id,
+        tenant_id,
+        kind,
+        stored_payload,
+        trace_id.as_deref(),
+    )
+    .await?;
 
     Ok(id)
 }

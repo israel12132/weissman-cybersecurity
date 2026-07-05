@@ -116,8 +116,9 @@ async fn process_one(
                 );
                 let err_s = e.to_string();
                 let permanent = err_s.contains("envelope expired")
-                    || err_s.contains("signature mismatch")
-                    || err_s.contains("missing signed envelope");
+                    || err_s.contains("HMAC verification failed")
+                    || err_s.contains("envelope job_id mismatch")
+                    || err_s.contains("unsupported envelope version");
                 if permanent {
                     let _ = job_queue::dead_letter_job(
                         pool,

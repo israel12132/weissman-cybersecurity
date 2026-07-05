@@ -87,6 +87,9 @@ rotate_e2e_logs() {
 reset_stale_e2e_jobs() {
   if docker exec "$PG_NAME" pg_isready -U postgres -d weissman >/dev/null 2>&1; then
     docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
+      "UPDATE weissman_async_jobs SET status='failed', last_error='e2e stack restart — stale job without signed envelope cleared', updated_at=NOW(), locked_until=NULL, worker_id=NULL WHERE status IN ('pending','running') AND (payload->'_weissman_job_bus' IS NULL OR payload->'_weissman_job_bus'->'envelope' IS NULL);" \
+      >/dev/null 2>&1 || true
+    docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
       "UPDATE weissman_async_jobs SET status='pending', last_error='e2e stack restart — stale running job requeued', updated_at=NOW(), locked_until=NULL, worker_id=NULL, run_after=NOW() WHERE status='running';" \
       >/dev/null 2>&1 || true
     docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
@@ -130,7 +133,7 @@ start_apps() {
   fi
   echo "Building weissman-server + weissman-worker..."
   cargo build -p weissman-db -p weissman-server -p weissman-worker --quiet
-  if [[ ! -d "$ROOT/frontend/dist" ]]; then
+  if [[ ! -d "$ROOT/frontend/dist" || "${WEISSMAN_E2E_REBUILD_FRONTEND:-0}" == "1" ]]; then
     echo "Building frontend/dist for Command Center UI..."
     (cd "$ROOT/frontend" && npm ci && npm run build)
   fi
