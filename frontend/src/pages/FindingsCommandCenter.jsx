@@ -1,7 +1,7 @@
 /**
  * Phase 3 – Findings Command Center
  *
- * TanStack Table aggregating results from all 119 engines.
+ * TanStack Table aggregating results from all 559 engines.
  * Columns: Severity, Engine Name, Title, MITRE ATT&CK, Score (CVSS), Status, Time/Date.
  * Filters: Severity, Engine group/name, Status, global text search.
  * Row click: drawer showing raw JSON + technical details + status update.
@@ -78,6 +78,36 @@ const PAGE_SIZES = [25, 50, 100]
 
 function isKevListed(f) {
   return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
+}
+
+function isMetaFinding(f) {
+  if (f?.is_meta === true) return true
+  if (f?.is_meta === false) return false
+  const title = String(f?.title || '').toLowerCase()
+  const kind = String(f?.raw?.finding_kind || f?.finding_kind || '').toLowerCase()
+  const cat = String(f?.raw?.category || f?.category || '').toLowerCase()
+  if (['executive', 'posture', 'meta', 'synthesis', 'analytical'].some((k) => cat.includes(k))) {
+    return true
+  }
+  if (kind.includes('meta') || kind.includes('synthesis')) return true
+  return (
+    title.includes('executive summary')
+    || title.includes('attack surface score')
+    || title.includes('belief')
+    || title.includes('posture score')
+    || title.includes('blast radius')
+  )
+}
+
+function MetaBadge({ t }) {
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider text-violet-300 border border-violet-500/35 bg-violet-500/10"
+      title={t('findings.meta_badge_hint')}
+    >
+      {t('findings.meta_badge')}
+    </span>
+  )
 }
 
 /** Map source/engine-id string → registry label & group */
@@ -215,13 +245,16 @@ function buildColumns(t, onVerifyRow) {
       id: 'title',
       header: t('findings.col_title'),
       size: 280,
-      cell: ({ getValue }) => (
-        <span
-          className="text-[12px] text-white/85 line-clamp-2 leading-snug"
-          title={sanitizeFindingPlainText(getValue() || '', 512)}
-        >
-          {sanitizeFindingPlainText(getValue() || t('findings.untitled'), 128)}
-        </span>
+      cell: ({ getValue, row }) => (
+        <div className="flex flex-wrap items-start gap-1.5 min-w-0">
+          {isMetaFinding(row.original) ? <MetaBadge t={t} /> : null}
+          <span
+            className="text-[12px] text-white/85 line-clamp-2 leading-snug min-w-0"
+            title={sanitizeFindingPlainText(getValue() || '', 512)}
+          >
+            {sanitizeFindingPlainText(getValue() || t('findings.untitled'), 128)}
+          </span>
+        </div>
       ),
     }),
     columnHelper.accessor(
@@ -425,6 +458,7 @@ export default function FindingsCommandCenter() {
   const [engineFilter, setEngineFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [kevFilter, setKevFilter] = useState(false)
+  const [metaFilter, setMetaFilter] = useState('actionable')
   const [filtersExpanded, setFiltersExpanded] = useState(true)
 
   // Sorting
@@ -526,9 +560,12 @@ export default function FindingsCommandCenter() {
   const columns = useMemo(() => buildColumns(t, handleVerifyComplete), [t, handleVerifyComplete])
 
   const tableData = useMemo(() => {
-    if (!kevFilter) return rawFindings
-    return rawFindings.filter(isKevListed)
-  }, [rawFindings, kevFilter])
+    let rows = rawFindings
+    if (kevFilter) rows = rows.filter(isKevListed)
+    if (metaFilter === 'actionable') rows = rows.filter((f) => !isMetaFinding(f))
+    else if (metaFilter === 'meta') rows = rows.filter(isMetaFinding)
+    return rows
+  }, [rawFindings, kevFilter, metaFilter])
 
   // Column filters built from controlled state
   const columnFilters = useMemo(() => {
@@ -573,6 +610,12 @@ export default function FindingsCommandCenter() {
     })
     return c
   }, [tableData])
+
+  const metaCount = useMemo(() => rawFindings.filter(isMetaFinding).length, [rawFindings])
+  const actionableCount = useMemo(
+    () => rawFindings.filter((f) => !isMetaFinding(f)).length,
+    [rawFindings],
+  )
 
   const kevCount = useMemo(() => tableData.filter(isKevListed).length, [tableData])
 
@@ -722,6 +765,45 @@ export default function FindingsCommandCenter() {
                   color: '#f59e0b',
                   onClick: () => {
                     setKevFilter((v) => !v)
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
+              ]}
+            />
+
+            <FilterPills
+              label={t('findings.filter_kind')}
+              pills={[
+                {
+                  id: 'findings-filter-kind-actionable',
+                  label: t('findings.filter_actionable'),
+                  count: actionableCount,
+                  active: metaFilter === 'actionable',
+                  color: '#22d3ee',
+                  onClick: () => {
+                    setMetaFilter('actionable')
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
+                {
+                  id: 'findings-filter-kind-meta',
+                  label: t('findings.filter_meta'),
+                  count: metaCount,
+                  active: metaFilter === 'meta',
+                  color: '#a78bfa',
+                  onClick: () => {
+                    setMetaFilter('meta')
+                    setPagination((p) => ({ ...p, pageIndex: 0 }))
+                  },
+                },
+                {
+                  id: 'findings-filter-kind-all',
+                  label: t('findings.filter_all_kinds'),
+                  count: rawFindings.length,
+                  active: metaFilter === 'all',
+                  color: '#94a3b8',
+                  onClick: () => {
+                    setMetaFilter('all')
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   },
                 },

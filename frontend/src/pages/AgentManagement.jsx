@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { useToast } from '../components/ui/Toaster'
 
 function timeAgo(iso, t) {
   if (!iso) return t('agents.never_seen')
@@ -46,6 +47,7 @@ function StatusBadge({ online, last_seen_at, t }) {
 
 export default function AgentManagement() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [agents, setAgents] = useState([])
   const [fleetBusy, setFleetBusy] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -115,6 +117,19 @@ export default function AgentManagement() {
       setErr(e.message)
     }
   }, [tokenClient, tokenValidity, t])
+
+  const purgeStale = useCallback(async () => {
+    setErr(null)
+    try {
+      const r = await apiFetch('/api/agents/purge-stale', { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      await refresh()
+      toast.success(t('agents.purge_stale_done', { count: d.removed ?? 0 }))
+    } catch (e) {
+      setErr(e.message)
+    }
+  }, [refresh, toast, t])
 
   const fleetDispatch = useCallback(async () => {
     const cid = Number(tokenClient)
@@ -214,6 +229,13 @@ export default function AgentManagement() {
           <Link to="/nexus-swarm" className="text-[11px] font-mono px-2 py-1 rounded border border-violet-500/40 text-violet-300 hover:bg-violet-500/10">
             {t('nav.nexus_swarm', 'Nexus Swarm')}
           </Link>
+          <button
+            type="button"
+            onClick={purgeStale}
+            className="text-[11px] font-mono px-2 py-1 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+          >
+            {t('agents.purge_stale')}
+          </button>
           <ShellScanActions
             onRefresh={refresh}
             onExport={exportCsv}

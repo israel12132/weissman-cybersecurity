@@ -21,10 +21,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/findings/:id/status",
             patch(api_findings_update_status),
         )
-        .route(
-            "/api/findings/:id/verify",
-            post(api_findings_verify_live),
-        )
+        .route("/api/findings/:id/verify", post(api_findings_verify_live))
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -180,6 +177,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/agents/enroll", post(api_agents_enroll))
         .route("/api/agents/status", get(api_agents_status))
+        .route("/api/agents/purge-stale", post(api_agents_purge_stale))
+        .route("/api/agents/:agent_id", delete(api_agents_deregister))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
         .route("/install/agent.sh", get(install_agent_sh))
         .route("/install/agent.ps1", get(install_agent_ps1))

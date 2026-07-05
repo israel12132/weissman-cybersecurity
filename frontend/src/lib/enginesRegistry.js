@@ -3951,6 +3951,15 @@ export const ENGINES_REGISTRY = [
     requiresAgent: true,
   },
   {
+    id: 'liquid_matrix',
+    label: 'LIQUID-MATRIX MTD Routing',
+    group: 'defense',
+    mitre: 'T1599',
+    description:
+      'TOTP-synchronized moving-target routing tokens with live DB rotation epochs and optional gateway Server-header probe — SDN dataplane injection via Sovereign Defense Matrix',
+    requiresTarget: true,
+  },
+  {
     id: 'cognitive_starvation',
     label: 'COGNITIVE STARVATION',
     group: 'defense',

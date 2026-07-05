@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-07-03T20:20:33.559Z",
-  "production_engine_count": 558,
+  "generated_at": "2026-07-05T05:53:11.912Z",
+  "production_engine_count": 559,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 417
+      "engine_count": 418
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -6270,6 +6270,16 @@
         "contact_email",
         "scope_domains",
         "scope_ips"
+      ]
+    },
+    "liquid_matrix": {
+      "id": "liquid_matrix",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "LIQUID-MATRIX MTD Routing",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
       ]
     }
   }

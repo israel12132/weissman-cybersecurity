@@ -378,6 +378,14 @@ async fn main() {
         }
     };
 
+    if let Err(e) =
+        weissman_db::job_queue::recover_stale_running_on_stack_boot(app_pool.as_ref()).await
+    {
+        warn!(target: "weissman_worker", error = %e, "stack recovery failed");
+    } else {
+        info!(target: "weissman_worker", "stack recovery complete");
+    }
+
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);
     let light_sem = Arc::new(tokio::sync::Semaphore::new(light_n));

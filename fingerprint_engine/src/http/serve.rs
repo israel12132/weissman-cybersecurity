@@ -152,7 +152,7 @@ fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String
     if path == "/ws/agent" {
         if let Some(q) = req.uri().query() {
             for (k, v) in url::form_urlencoded::parse(q.as_bytes()) {
-                if k == "token" {
+                if k == "token" || k == "access_token" {
                     let t = v.trim();
                     if !t.is_empty() {
                         return Some((t.to_owned(), TokenSource::QueryAgentWsToken));
@@ -844,24 +844,7 @@ async fn handle_ws_command_center(
         .fetch_one(&mut *tx)
         .await
         .unwrap_or(0);
-    let score: i64 = sqlx::query_scalar::<_, String>(
-        "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-    .and_then(|j| {
-        j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-            (100i64
-                - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                .max(0)
-        })
-    })
-    .unwrap_or(0);
+    let score = crate::tenant_security_score::fetch_live_score(&mut tx).await;
     let _ = tx.commit().await;
     let globe = json!({
         "scanPulses": [],
@@ -1399,6 +1382,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             state.telemetry_broadcast_tx.clone(),
         );
         crate::data_retention::spawn_data_retention_loop(app_pool.clone(), intel_pool.clone());
+        let pool_recover = app_pool.clone();
+        tokio::spawn(async move {
+            crate::async_jobs::recover_stale_running_on_stack_boot(pool_recover.as_ref()).await;
+        });
         crate::async_jobs::spawn_stale_lock_reclaim_loop(app_pool.clone());
         // Threat-intel mirrors (CISA KEV + FIRST EPSS). Both are best-effort, idempotent,
         // and gated by env vars so dev/offline runs can skip outbound HTTP.
@@ -1407,6 +1394,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
         crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
         crate::intel_findings_backfill::bootstrap_findings_intel_backfill(app_pool.clone());
+        crate::findings_meta_backfill::bootstrap_meta_findings_backfill(app_pool.clone());
         // UEBA — purge old samples once an hour so the table stays bounded.
         crate::ueba_detector::spawn_retention_loop(app_pool.clone());
         crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(

@@ -128,17 +128,26 @@ function MiniSpark({ values, color = '#22d3ee', height = 24 }) {
 export default function ExecKpiStrip() {
   const { t } = useTranslation()
   const [kpis, setKpis] = useState(null)
+  const [billing, setBilling] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
   const cancelRef = useRef(false)
 
   const refresh = async () => {
     try {
-      const r = await apiFetch('/api/dashboard/exec-kpis')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const [kpiRes, billingRes] = await Promise.all([
+        apiFetch('/api/dashboard/exec-kpis'),
+        apiFetch('/api/billing/usage'),
+      ])
+      if (!kpiRes.ok) throw new Error(`HTTP ${kpiRes.status}`)
+      const d = await kpiRes.json()
+      let billingData = null
+      if (billingRes.ok) {
+        billingData = await billingRes.json().catch(() => null)
+      }
       if (!cancelRef.current) {
         setKpis(d)
+        setBilling(billingData)
         setErr(null)
       }
     } catch (e) {
@@ -195,9 +204,19 @@ export default function ExecKpiStrip() {
   const trend = kpis?.trend || {}
   const mttr = kpis?.mttr_hours ?? 0
   const lastUpdated = kpis?.last_updated_unix
-
   const totalOpen =
     (sev.critical || 0) + (sev.high || 0) + (sev.medium || 0) + (sev.low || 0) + (sev.info || 0)
+
+  const metaReclassified = kpis?.scoring?.meta_analytical_reclassified ?? 0
+  const scanUsed = billing?.usage?.scans_this_month
+  const scanMax = billing?.limits?.max_scans_per_month
+  const criticalFooter =
+    metaReclassified > 0
+      ? t('components.cockpitTabs.execKpiStrip.critical_meta_footer', {
+          count: fmtCount(sev.critical),
+          meta: fmtCount(metaReclassified),
+        })
+      : t('components.cockpitTabs.execKpiStrip.open_count', { count: fmtCount(totalOpen) })
 
   return (
     <div
@@ -224,6 +243,21 @@ export default function ExecKpiStrip() {
               registered: fmtCount(agents.registered || 0),
             })}
           </span>
+          {scanMax > 0 && scanUsed != null ? (
+            <>
+              <span className="text-white/20 hidden md:inline">|</span>
+              <Link
+                to="/billing"
+                className="hidden md:inline text-white/45 hover:text-cyan-300/90 transition-colors normal-case tracking-normal"
+                title={t('components.cockpitTabs.execKpiStrip.scan_quota_title')}
+              >
+                {t('components.cockpitTabs.execKpiStrip.scan_quota', {
+                  used: fmtCount(scanUsed),
+                  max: fmtCount(scanMax),
+                })}
+              </Link>
+            </>
+          ) : null}
           <span className="text-white/20 hidden lg:inline">|</span>
           <Link
             to="/engine-reliability"
@@ -273,7 +307,7 @@ export default function ExecKpiStrip() {
           }
           color="#ef4444"
           to="/findings?severity=critical"
-          footer={t('components.cockpitTabs.execKpiStrip.open_count', { count: fmtCount(totalOpen) })}
+          footer={criticalFooter}
           showDivider
         />
         <Tile

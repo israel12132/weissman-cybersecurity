@@ -7,13 +7,14 @@ import {
   Cpu,
   Layers,
   ListTodo,
-  RefreshCw,
   Search,
   Server,
   Shield,
   Zap,
 } from 'lucide-react'
 import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { apiFetch } from '../lib/apiBase'
 
 const POLL_MS = 2000
@@ -86,6 +87,7 @@ function SupremeNerveCenterInner() {
   const [lifecycleFilter, setLifecycleFilter] = useState('all')
   const [clientBoot, setClientBoot] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +105,29 @@ function SupremeNerveCenterInner() {
       setLoading(false)
     }
   }, [])
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const r = await apiFetch('/api/ceo/supreme/nerve-center')
+      const payload = r.ok ? await r.json() : { error: `HTTP ${r.status}` }
+      const bundle = {
+        exported_at: new Date().toISOString(),
+        source: 'GET /api/ceo/supreme/nerve-center',
+        client_boot: clientBoot,
+        nerve_center: payload,
+      }
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-supreme-nerve-center-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }, [clientBoot])
 
   useEffect(() => {
     setClientBoot(collectClientBootModules())
@@ -178,17 +203,16 @@ function SupremeNerveCenterInner() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-white">{sectionLabel(section)}</h1>
-            <p className="text-xs text-slate-500">{t('supremeNerveCenter.evidence_notice')}</p>
           </div>
-          <button
-            type="button"
-            onClick={load}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-mono text-slate-300 hover:bg-white/5"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {t('supremeNerveCenter.refresh')}
-          </button>
+          <ShellScanActions
+            onRefresh={load}
+            onExport={handleExport}
+            exportDisabled={exporting}
+            refreshLoading={loading}
+          />
         </header>
+
+        <EvidenceNotice>{t('supremeNerveCenter.evidence_notice')}</EvidenceNotice>
 
         {error ? (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">

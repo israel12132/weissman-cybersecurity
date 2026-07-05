@@ -243,7 +243,6 @@ fn extract_description(f: &Value) -> String {
 /// Returns `None` when actionable severities lack proof (evidence gate).
 pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<PersistableFinding> {
     let now = chrono::Utc::now().to_rfc3339();
-    let severity = normalize_severity(raw.get("severity").and_then(Value::as_str));
 
     if let Some(obj) = raw.as_object_mut() {
         obj.entry("engine_id")
@@ -251,6 +250,11 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
         obj.entry("discovered_at")
             .or_insert_with(|| Value::String(now.clone()));
     }
+
+    // Meta/analytical synthesis outputs must not inherit critical severities.
+    crate::findings_meta::apply_meta_finding_policy(engine, &mut raw);
+
+    let severity = normalize_severity(raw.get("severity").and_then(Value::as_str));
 
     let evidence_proof = raw
         .get("evidence")
@@ -279,10 +283,7 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
         if let Some(v) = raw.get("value").and_then(Value::as_str) {
             let t = v.trim();
             if !t.is_empty() {
-                let src = raw
-                    .get("source")
-                    .and_then(Value::as_str)
-                    .unwrap_or("probe");
+                let src = raw.get("source").and_then(Value::as_str).unwrap_or("probe");
                 return Some(format!("live {src} observation: {t}"));
             }
         }

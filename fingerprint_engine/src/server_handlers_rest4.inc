@@ -446,9 +446,23 @@ async fn api_ai_redteam_run(
     }
 }
 
-async fn api_threat_intel_feed() -> Response {
-    let items = threat_intel_engine::fetch_nvd_recent(7).await;
-    (StatusCode::OK, Json(json!({ "items": items }))).into_response()
+async fn api_threat_intel_feed(State(state): State<Arc<AppState>>) -> Response {
+    let mut items = threat_intel_engine::fetch_nvd_recent(7).await;
+    let feed_source = if items.is_empty() {
+        items = threat_intel_engine::fetch_kev_fallback_feed(state.app_pool.as_ref(), 50).await;
+        if items.is_empty() {
+            "empty"
+        } else {
+            "cisa_kev_fallback"
+        }
+    } else {
+        "nvd"
+    };
+    (
+        StatusCode::OK,
+        Json(json!({ "items": items, "feed_source": feed_source })),
+    )
+        .into_response()
 }
 
 #[allow(dead_code)]

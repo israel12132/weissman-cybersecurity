@@ -43,6 +43,15 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
 
     let password_ok = !hash.is_empty() && matches!(bcrypt::verify(&password, &hash), Ok(true));
     if password_ok && is_active {
+        // Platform admin on local E2E stack needs CEO surfaces for inspection.
+        if matches!(std::env::var("WEISSMAN_E2E_STACK").as_deref(), Ok("1")) {
+            let _ = sqlx::query(
+                "UPDATE users SET is_superadmin = true WHERE id = $1 AND COALESCE(is_superadmin, false) = false",
+            )
+            .bind(user_id)
+            .execute(app_pool)
+            .await;
+        }
         return;
     }
 

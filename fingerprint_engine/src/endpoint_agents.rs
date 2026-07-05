@@ -664,6 +664,84 @@ pub async fn all_agent_uuids_for_tenant(
     Ok(rows)
 }
 
+/// Remove an offline agent registration (admin/analyst). Refuses online agents.
+pub async fn deregister_agent(
+    pool: &PgPool,
+    tenant_id: i64,
+    agent_uuid: &Uuid,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let r = sqlx::query(
+        r#"DELETE FROM endpoint_agents
+            WHERE tenant_id = $1 AND agent_uuid = $2"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_uuid)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// Drop duplicate offline enrollments — keeps newest row per (client_id, hostname).
+pub async fn purge_stale_offline_agents(
+    pool: &PgPool,
+    tenant_id: i64,
+    online: &std::collections::HashSet<String>,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let rows = sqlx::query(
+        r#"SELECT agent_uuid::text, client_id, hostname, last_seen_at
+             FROM endpoint_agents
+            WHERE tenant_id = $1
+            ORDER BY last_seen_at DESC NULLS LAST"#,
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    use sqlx::Row;
+    let mut keep: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_keys: std::collections::HashSet<(i64, String)> = std::collections::HashSet::new();
+
+    for row in &rows {
+        let uuid: String = row.try_get("agent_uuid").unwrap_or_default();
+        if online.contains(&uuid) {
+            keep.insert(uuid.clone());
+            let cid: i64 = row.try_get("client_id").unwrap_or(0);
+            let host: String = row.try_get("hostname").unwrap_or_default();
+            seen_keys.insert((cid, host));
+            continue;
+        }
+        let cid: i64 = row.try_get("client_id").unwrap_or(0);
+        let host: String = row.try_get("hostname").unwrap_or_default();
+        let key = (cid, host.clone());
+        if !seen_keys.contains(&key) {
+            seen_keys.insert(key);
+            keep.insert(uuid);
+        }
+    }
+
+    let mut deleted = 0u64;
+    for row in rows {
+        let uuid: String = row.try_get("agent_uuid").unwrap_or_default();
+        if keep.contains(&uuid) {
+            continue;
+        }
+        if let Ok(u) = uuid::Uuid::parse_str(&uuid) {
+            let r =
+                sqlx::query("DELETE FROM endpoint_agents WHERE tenant_id = $1 AND agent_uuid = $2")
+                    .bind(tenant_id)
+                    .bind(u)
+                    .execute(&mut *tx)
+                    .await?;
+            deleted += r.rows_affected();
+        }
+    }
+    tx.commit().await?;
+    Ok(deleted)
+}
+
 /// Push pending tasks to all online agents (API process — worker only queues).
 pub async fn push_pending_tasks_to_online(
     pool: &PgPool,

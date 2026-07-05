@@ -95,6 +95,23 @@ pub async fn enqueue(
     Ok(id)
 }
 
+/// Once at process start: requeue jobs stuck in `running` from a prior crash/restart.
+pub async fn recover_stale_running_on_stack_boot(pool: &PgPool) {
+    match weissman_db::job_queue::recover_stale_running_on_stack_boot(pool).await {
+        Ok(n) if n > 0 => tracing::info!(
+            target: "async_jobs",
+            requeued = n,
+            "stack recovery — stale running jobs requeued to pending"
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::warn!(
+            target: "async_jobs",
+            error = %e,
+            "stack recovery failed"
+        ),
+    }
+}
+
 /// Every 5 minutes, orphan recovery via swarm coordinator (sub-second) + legacy reclaim fallback.
 pub fn spawn_stale_lock_reclaim_loop(pool: Arc<PgPool>) {
     weissman_job_bus::spawn_coordinator_if_enabled((*pool).clone());

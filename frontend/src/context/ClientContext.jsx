@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
+import { filterClientsForOperatorRoster } from '../lib/clientRoster'
 
 const defaultConfig = {
   enabled_engines: ['osint', 'asm', 'nexus_sovereign_swarm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
@@ -46,7 +47,7 @@ export function ClientProvider({ children }) {
       if (r.ok) {
         const data = await r.json()
         if (Array.isArray(data)) {
-          setClients(data)
+          setClients(filterClientsForOperatorRoster(data))
           setClientsError(null)
         } else {
           setClients([])

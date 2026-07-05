@@ -225,27 +225,32 @@ pub async fn persist_engine_findings(
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
 
-    let mut tx = db::begin_tenant_tx(pool, tenant_id)
-        .await
-        .map_err(|e| format!("tenant tx: {e}"))?;
-
     let summary_obj = json!({
         "engine": engine,
         "target": target,
         "findings_count": findings.len(),
     });
 
-    let run_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO report_runs (tenant_id, findings_json, summary, created_at)
-           VALUES ($1, $2::jsonb::text, $3::jsonb::text, now())
-           RETURNING id"#,
-    )
-    .bind(tenant_id)
-    .bind(Value::Array(findings.to_vec()))
-    .bind(summary_obj)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| format!("insert report_runs: {e}"))?;
+    let run_id: i64 = {
+        let mut tx = db::begin_tenant_tx(pool, tenant_id)
+            .await
+            .map_err(|e| format!("tenant tx: {e}"))?;
+        let run_id: i64 = sqlx::query_scalar(
+            r#"INSERT INTO report_runs (tenant_id, findings_json, summary, created_at)
+               VALUES ($1, $2::jsonb::text, $3::jsonb::text, now())
+               RETURNING id"#,
+        )
+        .bind(tenant_id)
+        .bind(Value::Array(findings.to_vec()))
+        .bind(summary_obj)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| format!("insert report_runs: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| format!("commit report_runs: {e}"))?;
+        run_id
+    };
 
     let mut inserted: u64 = 0;
     for raw in findings.iter().cloned() {
@@ -267,13 +272,27 @@ pub async fn persist_engine_findings(
         if cvss <= 0.0 {
             cvss = severity_to_score(&severity);
         }
+        // Belt-and-suspenders: meta findings never exceed CVSS 3.9.
+        if crate::findings_meta::is_meta_analytical_finding(engine, &f) {
+            let title = extract_title(&f, engine);
+            let category = extract_string(&f, &["category", "phase", "finding_kind", "kind"]);
+            let (_, meta_cvss) = crate::findings_meta::meta_severity_and_cvss(&title, &category);
+            cvss = meta_cvss.min(3.9);
+        }
         let title = extract_title(&f, engine);
         let description = extract_description(&f);
         let target_url = extract_target(&f, target);
-        let mitre = extract_string(
+        let mut mitre = extract_string(
             &f,
             &["mitre_attack", "mitre", "attack_id", "mitre_attack_id"],
         );
+        if mitre.is_empty()
+            || (mitre == "T1595" && crate::findings_meta::is_meta_analytical_finding(engine, &f))
+        {
+            let category = extract_string(&f, &["category", "phase", "finding_kind", "kind"]);
+            mitre =
+                crate::findings_meta::meta_mitre_technique(engine, &title, &category).to_string();
+        }
         let cwe = extract_string(&f, &["cwe", "cwe_id"]);
         let cve = extract_cve_from_finding(&f);
         let remediation = extract_string(
@@ -401,8 +420,7 @@ pub async fn persist_engine_findings(
 
         // ── Confidence multiplier + effective risk (persist-time, not read-time only) ──
         let conf_mult =
-            fp_feedback::confidence_multiplier_tx(&mut tx, tenant_id, engine, &signature_hash)
-                .await;
+            fp_feedback::confidence_multiplier(pool, tenant_id, engine, &signature_hash).await;
         let base_risk = if cvss > 0.0 {
             cvss
         } else {
@@ -436,6 +454,13 @@ pub async fn persist_engine_findings(
         // Re-open the tx if it was committed during the suppression check. We
         // keep one tx per finding for clean rollback semantics.
         // (Implementation note: is_suppressed uses its own tx, so ours is still alive.)
+
+        let internet_exposed =
+            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
+
+        let mut tx = db::begin_tenant_tx(pool, tenant_id)
+            .await
+            .map_err(|e| format!("tenant tx: {e}"))?;
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
@@ -649,9 +674,6 @@ pub async fn persist_engine_findings(
             });
         }
 
-        let internet_exposed =
-            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
-
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.
         // We snapshot the event here while we still have all the data and
@@ -680,6 +702,10 @@ pub async fn persist_engine_findings(
             internet_exposed,
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
+        tx.commit()
+            .await
+            .map_err(|e| format!("commit finding: {e}"))?;
+
         tokio::spawn(async move {
             crate::soar::dispatch_record::record_post_persist_dispatch(
                 &pool_for_dispatch,
@@ -690,8 +716,6 @@ pub async fn persist_engine_findings(
             .await;
         });
     }
-
-    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
 
     if inserted > 0 {
         let pool_arc = std::sync::Arc::new((*pool).clone());

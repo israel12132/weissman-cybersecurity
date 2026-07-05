@@ -365,6 +365,93 @@ async fn api_agents_status(
         .into_response()
 }
 
+async fn api_agents_purge_stale(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let online: std::collections::HashSet<String> = state
+        .endpoint_agents
+        .online_agents()
+        .await
+        .into_iter()
+        .collect();
+    match crate::endpoint_agents::purge_stale_offline_agents(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &online,
+    )
+    .await
+    {
+        Ok(n) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "removed": n,
+                "online_preserved": online.len(),
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": format!("purge stale agents: {e}") })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_agents_deregister(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    axum::extract::Path(agent_id): axum::extract::Path<String>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    if state.endpoint_agents.is_agent_online(&agent_id).await {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "detail": "Cannot deregister an online agent — stop the agent process first",
+            })),
+        )
+            .into_response();
+    }
+    let Ok(agent_u) = uuid::Uuid::parse_str(agent_id.trim()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": "invalid agent_id" })),
+        )
+            .into_response();
+    };
+    match crate::endpoint_agents::deregister_agent(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &agent_u,
+    )
+    .await
+    {
+        Ok(true) => (
+            StatusCode::OK,
+            Json(json!({ "ok": true, "agent_id": agent_id })),
+        )
+            .into_response(),
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": "agent not found" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": format!("deregister: {e}") })),
+        )
+            .into_response(),
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct DispatchAgentTaskBody {
     client_id: i64,

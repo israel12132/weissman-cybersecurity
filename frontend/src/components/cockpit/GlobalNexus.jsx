@@ -38,7 +38,7 @@ import LanguageSwitcher from '../LanguageSwitcher'
 import { useToast } from '../ui/Toaster'
 
 const STORAGE_KEY = 'weissman.nav.sections'
-const GN = 'components.cockpit.globalNexus'
+const GN = 'components.cockpitWidgets.globalNexus'
 
 function readSectionState() {
   try {
@@ -145,6 +145,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   const { toast } = useToast()
   const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients } = useClient()
   const [stats, setStats] = useState({ total_vulnerabilities: 0, security_score: 0, active_scans: 0 })
+  const [healthScore, setHealthScore] = useState(null)
   const [addName, setAddName] = useState('')
   const [addDomains, setAddDomains] = useState('')
   const [addContactEmail, setAddContactEmail] = useState('')
@@ -321,14 +322,22 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     let cancelled = false
     const load = async () => {
       try {
-        const r = await apiFetch('/api/dashboard/stats')
-        if (r.ok && !cancelled) {
-          const d = await r.json()
+        const [statsRes, kpisRes] = await Promise.all([
+          apiFetch('/api/dashboard/stats'),
+          apiFetch('/api/dashboard/exec-kpis'),
+        ])
+        if (cancelled) return
+        if (statsRes.ok) {
+          const d = await statsRes.json()
           setStats({
             total_vulnerabilities: d.total_vulnerabilities ?? 0,
             security_score: d.security_score ?? 0,
             active_scans: d.active_scans ? 1 : 0,
           })
+        }
+        if (kpisRes.ok) {
+          const k = await kpisRes.json()
+          setHealthScore(typeof k.security_score === 'number' ? k.security_score : null)
         }
       } catch (_) {}
     }
@@ -340,7 +349,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     }
   }, [])
 
-  const healthColor = stats.security_score >= 70 ? '#4ade80' : stats.security_score >= 40 ? '#fbbf24' : '#f87171'
+  const systemHealth = healthScore ?? stats.security_score
+  const healthColor = systemHealth >= 70 ? '#4ade80' : systemHealth >= 40 ? '#fbbf24' : '#f87171'
 
   const sidebarContent = (
     <>
@@ -374,7 +384,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
               {t('nav.system_health')}
             </div>
             <div className="text-sm font-semibold font-mono tabular-nums" style={{ color: healthColor }}>
-              {stats.security_score}%
+              {systemHealth}%
             </div>
           </div>
         </div>

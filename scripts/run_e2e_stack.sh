@@ -87,7 +87,10 @@ rotate_e2e_logs() {
 reset_stale_e2e_jobs() {
   if docker exec "$PG_NAME" pg_isready -U postgres -d weissman >/dev/null 2>&1; then
     docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
-      "UPDATE weissman_async_jobs SET status='failed', last_error='e2e stack restart — stale job cancelled', updated_at=NOW(), locked_until=NULL WHERE status IN ('pending','running');" \
+      "UPDATE weissman_async_jobs SET status='pending', last_error='e2e stack restart — stale running job requeued', updated_at=NOW(), locked_until=NULL, worker_id=NULL, run_after=NOW() WHERE status='running';" \
+      >/dev/null 2>&1 || true
+    docker exec "$PG_NAME" psql -U postgres -d weissman -v ON_ERROR_STOP=1 -c \
+      "UPDATE weissman_async_jobs SET status='pending', last_error='e2e stack restart — stale lock cleared', updated_at=NOW(), locked_until=NULL, worker_id=NULL, run_after=NOW() WHERE status='pending' AND locked_until IS NOT NULL AND locked_until < NOW() - interval '2 minutes';" \
       >/dev/null 2>&1 || true
   fi
 }
@@ -150,16 +153,16 @@ start_apps() {
     APP_ENV="$APP_ENV" RAILS_ENV="$RAILS_ENV" \
     WEISSMAN_COOKIE_SECURE="$WEISSMAN_COOKIE_SECURE" \
     WEISSMAN_SCANNING_ENABLED=0 \
-    WEISSMAN_APP_POOL_MAX="${WEISSMAN_APP_POOL_MAX:-24}" \
-    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-6}" \
-    WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
+    WEISSMAN_APP_POOL_MAX="${WEISSMAN_APP_POOL_MAX:-32}" \
+    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-8}" \
+    WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-6}" \
     WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
     "$ROOT/target/debug/weissman-server" >"$LOG_DIR/server.log" 2>&1 &
   echo $! >"$SERVER_PID"
   echo "Starting weissman-worker..."
   WEISSMAN_E2E_STACK=1 WEISSMAN_ENV="$WEISSMAN_ENV" \
-    WEISSMAN_APP_POOL_MAX="${WEISSMAN_WORKER_POOL_MAX:-12}" \
-    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-4}" \
+    WEISSMAN_APP_POOL_MAX="${WEISSMAN_WORKER_POOL_MAX:-16}" \
+    WEISSMAN_AUTH_POOL_MAX="${WEISSMAN_AUTH_POOL_MAX:-6}" \
     WEISSMAN_INTEL_POOL_MAX="${WEISSMAN_INTEL_POOL_MAX:-4}" \
     WEISSMAN_JOB_ORCHESTRATOR_SECRET="$WEISSMAN_JOB_ORCHESTRATOR_SECRET" \
     WEISSMAN_ENGINE_STACK_BYTES="$WEISSMAN_ENGINE_STACK_BYTES" \

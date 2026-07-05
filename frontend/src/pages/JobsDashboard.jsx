@@ -62,6 +62,7 @@ export default function JobsDashboard() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
+  const [statusCountsFromApi, setStatusCountsFromApi] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const hasLoadedRef = useRef(false)
 
@@ -88,6 +89,7 @@ export default function JobsDashboard() {
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setTotal(data.total ?? jobsList.length)
+      setStatusCountsFromApi(data.status_counts ?? null)
       setError('')
       setLastUpdated(new Date())
       hasLoadedRef.current = true
@@ -125,13 +127,22 @@ export default function JobsDashboard() {
   }, [jobs, search])
 
   const statusCounts = useMemo(() => {
+    if (statusCountsFromApi && typeof statusCountsFromApi === 'object') {
+      return {
+        queued: statusCountsFromApi.queued ?? 0,
+        running: statusCountsFromApi.running ?? 0,
+        completed: statusCountsFromApi.completed ?? 0,
+        failed: statusCountsFromApi.failed ?? 0,
+        cancelled: statusCountsFromApi.cancelled ?? 0,
+      }
+    }
     const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
     for (const j of jobs) {
       const s = normalizeJobStatus(j.status)
       if (counts[s] != null) counts[s] += 1
     }
     return counts
-  }, [jobs])
+  }, [jobs, statusCountsFromApi])
 
   const listFindings = useMemo(() => filteredJobs.map((j) => ({
     id: j.id || j.job_id,

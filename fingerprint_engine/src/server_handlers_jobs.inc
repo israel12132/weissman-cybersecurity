@@ -1,3 +1,41 @@
+fn normalize_jobs_list_status_filter(raw: Option<&str>) -> Option<String> {
+    let s = raw?.trim().to_lowercase();
+    if s.is_empty() || s == "all" {
+        return None;
+    }
+    let db = match s.as_str() {
+        "queued" => "pending",
+        "cancelled" => "dead",
+        other => other,
+    };
+    Some(db.to_string())
+}
+
+fn jobs_status_counts_json(rows: Vec<(String, i64)>) -> serde_json::Value {
+    let mut pending = 0i64;
+    let mut running = 0i64;
+    let mut completed = 0i64;
+    let mut failed = 0i64;
+    let mut cancelled = 0i64;
+    for (status, n) in rows {
+        match status.as_str() {
+            "pending" => pending = n,
+            "running" => running = n,
+            "completed" => completed = n,
+            "failed" => failed = n,
+            "dead" => cancelled = n,
+            _ => {}
+        }
+    }
+    serde_json::json!({
+        "queued": pending,
+        "running": running,
+        "completed": completed,
+        "failed": failed,
+        "cancelled": cancelled,
+    })
+}
+
 /// GET /api/jobs?limit=&offset=&status= — tenant-scoped list for the Jobs dashboard.
 async fn api_async_jobs_list(
     State(state): State<Arc<AppState>>,
@@ -14,10 +52,8 @@ async fn api_async_jobs_list(
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0)
         .max(0);
-    let status_filter: Option<String> = q
-        .get("status")
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let status_filter: Option<String> =
+        normalize_jobs_list_status_filter(q.get("status").map(|s| s.as_str()));
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
@@ -26,6 +62,16 @@ async fn api_async_jobs_list(
         )
             .into_response();
     };
+
+    let status_count_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+        r#"SELECT status, COUNT(*)::bigint FROM weissman_async_jobs
+            WHERE tenant_id = $1 GROUP BY status"#,
+    )
+    .bind(auth.tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let status_counts = jobs_status_counts_json(status_count_rows);
 
     let rows = sqlx::query(
         r#"SELECT id, kind, status,
@@ -104,6 +150,7 @@ async fn api_async_jobs_list(
             "ok": true,
             "jobs": out,
             "total": total,
+            "status_counts": status_counts,
             "limit": limit,
             "offset": offset,
         })),

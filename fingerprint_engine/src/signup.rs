@@ -522,7 +522,7 @@ fn spawn_signup_welcome_email(email: String, workspace: String, slug: String) {
              Next steps:\n\
               1. Add a client (target) under Clients → New.\n\
               2. Approve scan scope (domains, IP ranges).\n\
-              3. Hit \"Run\" on any of the 545 production engines.\n\n\
+              3. Hit \"Run\" on any of the 559 production engines.\n\n\
              Reply to this email or write to support@weissman.io if you need help.\n\n\
              — The Weissman team",
             workspace_display_name(&workspace),

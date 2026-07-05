@@ -158,6 +158,30 @@ pub async fn fetch_nvd_recent(days_back: u32) -> Vec<ThreatFeedItem> {
     parse_nvd_recent_value(&data)
 }
 
+/// When NVD is unavailable, surface CISA KEV catalog entries from the local mirror (live intel, not fabricated).
+pub async fn fetch_kev_fallback_feed(pool: &sqlx::PgPool, limit: i64) -> Vec<ThreatFeedItem> {
+    let rows = sqlx::query_as::<_, (String, String, String, Option<chrono::NaiveDate>)>(
+        r#"SELECT cve, vulnerability_name, short_description, date_added
+             FROM kev_intel
+            ORDER BY date_added DESC NULLS LAST
+            LIMIT $1"#,
+    )
+    .bind(limit.clamp(1, 200))
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    rows.into_iter()
+        .map(|(cve, title, desc, date)| ThreatFeedItem {
+            source: "CISA_KEV".to_string(),
+            external_id: cve.clone(),
+            title: if title.trim().is_empty() { cve } else { title },
+            description: desc,
+            severity: "critical".to_string(),
+            published_at: date.map(|d| d.to_string()).unwrap_or_default(),
+        })
+        .collect()
+}
+
 fn parse_nvd_recent_value(data: &Value) -> Vec<ThreatFeedItem> {
     let empty: Vec<Value> = vec![];
     let vulns = data

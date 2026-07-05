@@ -652,12 +652,14 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "infostealer_emulation",
     "printer_mfp_attack",
     "radius_nac_bypass",
+    // ── Sovereign defense (MTD + cognitive counter-AI) ──
+    "liquid_matrix",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
 pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = KNOWN_ENGINE_IDS;
 
-/// Full ordered registry of all 303 engines in proper execution order.
+/// Full ordered registry of all production engines in proper execution order.
 /// Matches frontend/src/lib/enginesRegistry.js
 pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     // Recon & OSINT (run first to discover attack surface)

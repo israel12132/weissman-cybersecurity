@@ -438,6 +438,23 @@ pub async fn fail_job(
     Ok(())
 }
 
+/// Requeue all `running` rows after a stack/process restart (do not fail `pending` work).
+pub async fn recover_stale_running_on_stack_boot(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+           SET status = 'pending',
+               last_error = 'stack recovery — stale running job requeued',
+               locked_until = NULL,
+               worker_id = NULL,
+               run_after = now(),
+               updated_at = now()
+           WHERE status = 'running'"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 /// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
 pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(

@@ -18,7 +18,7 @@ longer dispatches scans through them.
 
 The authoritative list is in `backend/weissman-core/src/models/engine.rs`:
 
-- `PRODUCTION_ENGINE_IDS` — **536 entries** (verify the live count with
+- `PRODUCTION_ENGINE_IDS` — **559 entries** (verify the live count with
   `node scripts/verify_engine_wiring.mjs`). Every ID maps to a real Rust
   function returning `EngineResult`. The orchestrator and the
   `/api/command-center/scan` endpoint will only dispatch IDs in this list

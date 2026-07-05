@@ -170,7 +170,7 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
 ///   "scan_velocity": { "scans_24h": 42, "avg_scan_secs": 18.4 },
 ///   "mttr_hours": 6.8,
 ///   "security_score": 73,
-///   "scoring": { "method": "weighted_severity", "weights": { ... } },
+///   "scoring": { "method": "log_per_asset_severity", "weights": { ... } },
 ///   "trend": { // 24 hourly buckets, newest last
 ///     "labels": ["00:00","01:00", ...],
 ///     "discovered": [3, 1, 0, ...],
@@ -274,28 +274,32 @@ async fn api_dashboard_exec_kpis(
 
     // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
     let jobs_pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'pending'",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_running: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running'",
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE tenant_id = $1 AND status = 'running'",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_completed_24h: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+          WHERE tenant_id = $1 AND status = 'completed' AND updated_at > now() - interval '24 hours'",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_failed_24h: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours'",
+          WHERE tenant_id = $1 AND status IN ('failed','dead') AND updated_at > now() - interval '24 hours'",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -304,8 +308,9 @@ async fn api_dashboard_exec_kpis(
     let avg_scan_secs: f64 = sqlx::query_scalar::<_, Option<f64>>(
         "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
            FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+          WHERE tenant_id = $1 AND status = 'completed' AND updated_at > now() - interval '24 hours'",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .ok()
@@ -373,22 +378,25 @@ async fn api_dashboard_exec_kpis(
     .await
     .unwrap_or_default();
 
-    let clients_top: Vec<(i64, String, i64, i64)> =
-        sqlx::query_as::<_, (i64, String, i64, i64)>(
+    let clients_top: Vec<(i64, String, i64)> =
+        sqlx::query_as::<_, (i64, String, i64)>(
             "SELECT c.id, c.name,
-                    COUNT(v.id) FILTER (WHERE lower(v.severity)='critical')::bigint AS open_crit,
                     COUNT(v.id)::bigint AS total_open
                FROM clients c
                LEFT JOIN vulnerabilities v
                  ON v.client_id = c.id
                 AND COALESCE(v.status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
               GROUP BY c.id, c.name
-              ORDER BY open_crit DESC, total_open DESC
+              ORDER BY total_open DESC
               LIMIT 8",
         )
         .fetch_all(&mut *tx)
         .await
         .unwrap_or_default();
+    let client_crit_norm =
+        crate::tenant_security_score::normalized_critical_by_client(&mut tx)
+            .await
+            .unwrap_or_default();
 
     // CVE roll-up — pull from raw_data.cve / raw_data.raw.cve.
     let cve_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(
@@ -422,24 +430,26 @@ async fn api_dashboard_exec_kpis(
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
+    let severity_agg = crate::tenant_security_score::aggregate_normalized_open_severities(&mut tx)
+        .await
+        .unwrap_or_default();
     let _ = tx.commit().await;
 
-    // ── Security score (weighted, clamped 0..100) ──────────────────────────────────
-    let score = {
-        let crit = sev_get(&sev_now, "critical");
-        let high = sev_get(&sev_now, "high");
-        let med = sev_get(&sev_now, "medium");
-        let raw = 100i64 - crit * 25 - high * 10 - med * 3;
-        raw.max(0).min(100)
-    };
+    // ── Security score (log-scaled per-asset, clamped 0..100, meta-normalized) ───
+    let score = crate::tenant_security_score::compute_score(
+        severity_agg.counts,
+        clients_with_findings,
+        total_clients,
+    );
 
     // ── Helpers for the response payload ──────────────────────────────────────────
+    let sev_get_norm = |k: &str| severity_agg.by_severity.get(k).copied().unwrap_or(0);
     let sev_obj = json!({
-        "critical": sev_get(&sev_now, "critical"),
-        "high":     sev_get(&sev_now, "high"),
-        "medium":   sev_get(&sev_now, "medium"),
-        "low":      sev_get(&sev_now, "low"),
-        "info":     sev_get(&sev_now, "info"),
+        "critical": sev_get_norm("critical"),
+        "high":     sev_get_norm("high"),
+        "medium":   sev_get_norm("medium"),
+        "low":      sev_get_norm("low"),
+        "info":     sev_get_norm("info"),
     });
     let sev_delta = json!({
         "critical": sev_get(&sev_now, "critical") - sev_get(&sev_prev, "critical"),
@@ -463,12 +473,25 @@ async fn api_dashboard_exec_kpis(
         .into_iter()
         .map(|(e, hits, crit)| json!({ "id": e, "hits": hits, "critical": crit }))
         .collect();
-    let clients_top: Vec<Value> = clients_top
+    let mut clients_top: Vec<Value> = clients_top
         .into_iter()
-        .map(|(id, name, oc, total)| {
+        .map(|(id, name, total)| {
+            let oc = client_crit_norm.get(&id).copied().unwrap_or(0);
             json!({ "id": id, "name": name, "open_critical": oc, "total_open": total })
         })
         .collect();
+    clients_top.sort_by(|a, b| {
+        b.get("open_critical")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            .cmp(&a.get("open_critical").and_then(Value::as_i64).unwrap_or(0))
+            .then_with(|| {
+                b.get("total_open")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0)
+                    .cmp(&a.get("total_open").and_then(Value::as_i64).unwrap_or(0))
+            })
+    });
     let cves_top: Vec<Value> = cve_rows
         .into_iter()
         .map(|(cve, sev, hits)| json!({ "cve": cve, "severity": sev, "hits": hits }))
@@ -502,11 +525,7 @@ async fn api_dashboard_exec_kpis(
             },
             "mttr_hours":     (mttr_hours * 10.0).round() / 10.0,
             "security_score": score,
-            "scoring": {
-                "method":  "weighted_severity",
-                "weights": { "critical": 25, "high": 10, "medium": 3 },
-                "max":     100
-            },
+            "scoring": crate::tenant_security_score::scoring_metadata(&severity_agg),
             "trend": {
                 "labels":     labels,
                 "discovered": series_disc,
@@ -863,11 +882,13 @@ async fn api_findings(
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
         let poc_sealed = r.try_get::<bool, _>("poc_sealed").unwrap_or(false);
         let raw_data = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
-        let cvss = raw_data
+        let source = r.try_get::<String, _>("source").unwrap_or_default();
+        let engine_id = crate::findings_meta::resolve_engine_id(&source, &raw_data);
+        let mut cvss = raw_data
             .get("cvss_score")
             .and_then(Value::as_f64)
             .unwrap_or(0.0);
-        let mitre = raw_data
+        let mut mitre = raw_data
             .get("mitre_attack")
             .and_then(Value::as_str)
             .unwrap_or("")
@@ -899,10 +920,21 @@ async fn api_findings(
         let signature_hash = r.try_get::<Option<String>, _>("signature_hash").ok().flatten();
         let seen_count = r.try_get::<i32, _>("seen_count").unwrap_or(1);
 
+        let att_title = r.try_get::<String, _>("title").unwrap_or_default();
+        let att_sev_raw = r.try_get::<String, _>("severity").unwrap_or_default();
+        let (att_sev, cvss, mitre) = crate::findings_meta::normalize_meta_display(
+            &engine_id,
+            &att_title,
+            &att_sev_raw,
+            cvss,
+            &mitre,
+            &raw_data,
+        );
+
         // Apply the FP/TP confidence multiplier to risk_score so a chronically-FP
         // engine gets pushed down in the prioritised list, while a high-EPSS or KEV
         // finding gets boosted. This makes the inbox automatically self-tuning.
-        let base_risk = if cvss > 0.0 { cvss } else { severity_to_score(&r.try_get::<String, _>("severity").unwrap_or_default()) };
+        let base_risk = if cvss > 0.0 { cvss } else { severity_to_score(&att_sev) };
         let mut risk = base_risk;
         if let Some(s) = epss_score {
             risk *= 1.0 + (s as f64) * 0.5; // up to +50% for max EPSS
@@ -924,14 +956,24 @@ async fn api_findings(
         };
         let stored_effective = r.try_get::<Option<f64>, _>("effective_risk").ok().flatten();
         risk *= conf_mult;
-        let risk = stored_effective.unwrap_or_else(|| (risk.min(10.0) * 10.0).round() / 10.0);
+        let is_meta = crate::findings_meta::is_meta_analytical_finding(
+            &engine_id,
+            &json!({
+                "title": att_title,
+                "category": raw_data.get("category").or_else(|| raw_data.get("phase")),
+                "finding_kind": raw_data.get("finding_kind"),
+            }),
+        );
+        let risk = if is_meta {
+            ((cvss * conf_mult).min(3.9) * 10.0).round() / 10.0
+        } else {
+            stored_effective.unwrap_or_else(|| (risk.min(10.0) * 10.0).round() / 10.0)
+        };
 
         // Tamper-evident attestation: re-derive the digest from the stored fields and
         // verify it against the stored receipt. attestation_valid=false means the row
         // was altered out-of-band since it was recorded (or predates attestation).
         let fid = r.try_get::<String, _>("finding_id").unwrap_or_default();
-        let att_title = r.try_get::<String, _>("title").unwrap_or_default();
-        let att_sev = r.try_get::<String, _>("severity").unwrap_or_default();
         let att_receipt = raw_data
             .get("attestation")
             .and_then(|a| a.get("receipt"))
@@ -947,9 +989,10 @@ async fn api_findings(
             "id": format!("VLN-{}", raw_id),
             "raw_id": raw_id,
             "finding_id": fid,
-            "title": r.try_get::<String, _>("title").unwrap_or_else(|_| "Finding".to_string()),
-            "source": r.try_get::<String, _>("source").unwrap_or_else(|_| "NVD".to_string()),
-            "severity": r.try_get::<String, _>("severity").unwrap_or_else(|_| "MEDIUM".to_string()),
+            "title": att_title,
+            "source": if source.is_empty() { "NVD".to_string() } else { source.clone() },
+            "engine_id": engine_id,
+            "severity": att_sev,
             "status": r.try_get::<String, _>("status").unwrap_or_else(|_| "OPEN".to_string()),
             "client_id": r.try_get::<String, _>("client_id").unwrap_or_default(),
             "client": r.try_get::<String, _>("client_id").unwrap_or_default(),
@@ -984,6 +1027,7 @@ async fn api_findings(
             "cluster_id": cluster_id,
             "signature_hash": signature_hash,
             "seen_count": seen_count,
+            "is_meta": is_meta,
             "raw": raw_data,
         }));
     }

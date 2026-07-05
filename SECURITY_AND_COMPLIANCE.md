@@ -1,6 +1,6 @@
 # Weissman Cybersecurity — Security & Compliance Overview
 
-Last updated: 2026-07-03 (synced with Phase 7 audit gate — 558 engines, 112 routes, JWT ≥48)
+Last updated: 2026-07-05 (synced with Phase 7 audit gate — 559 engines, 112 routes, JWT ≥48)
 
 ## 1. Scope
 
@@ -13,10 +13,10 @@ Detailed Q&A is in [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md); SLA in
 
 | Metric | Value | Audit script |
 |--------|-------|--------------|
-| Production engines | **558** | `scripts/verify_engine_wiring.mjs` |
+| Production engines | **559** | `scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **112** | `scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **95/95** | same |
-| Engine kinds | 300 real_probe, 213 alias, 45 agent_required | `scripts/engine_reality_audit.mjs` |
+| Engine kinds | 301 real_probe, 212 alias, 46 agent_required | `scripts/engine_reality_audit.mjs` |
 
 Global release gate: **`bash scripts/full_audit_gate.sh`** (G1–G7, exit 0).
 Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.

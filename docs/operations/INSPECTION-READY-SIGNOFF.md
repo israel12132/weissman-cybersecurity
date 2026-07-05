@@ -10,7 +10,7 @@
 
 | Metric | Value | Verify |
 |--------|-------|--------|
-| Production engines | **558** | `node scripts/verify_engine_wiring.mjs` |
+| Production engines | **559** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **112** | `node scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **95/95** | same |
 | Engine `no_path` | **0** | `node scripts/engine_reality_audit.mjs` |
@@ -37,7 +37,7 @@ bash scripts/full_audit_gate.sh
 - [x] G1 Build — `cargo build --workspace` + `frontend npm run build`
 - [x] G2 Tests — `cargo test --workspace --all-targets` + `npm run test:coverage`
 - [x] G3 Lint — clippy + `cargo fmt --check`
-- [x] G4 Wiring — 558 engines, 0 gaps
+- [x] G4 Wiring — 559 engines, 0 gaps
 - [x] G5 Reality — 0 `no_path`
 - [x] G6 Migrations — `check-migration-sync.sh`
 - [x] G7 Live + evidence — UI audit, staging-qa, evidence pack, go_live_check, Playwright live

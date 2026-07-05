@@ -50,7 +50,7 @@
    │            │ POST /api/ueba/ingest               │ HTTP/TCP/DNS/TLS │
    │            │ + finding payloads                  ▼                  │
    │            ▼                           ┌──────────────────┐         │
-   │            ───────────────────────────▶│ 530+ engines     │         │
+   │            ───────────────────────────▶│ 559 engines      │         │
    │                                        │ web · cloud · OT │         │
    │                                        │ AI/LLM · supply  │         │
    │                                        │ chain · OSINT ·  │         │
@@ -63,7 +63,7 @@
                 ┌──────────────────────────────────────────────────────┐
                 │  PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`) │
                 │  ─────────────────────────────────────────────────── │
-                │  • 56 migrations (sqlx + no-tx pre-runner)           │
+                │  • 82 migrations (sqlx + no-tx pre-runner)           │
                 │  • RLS forced on every multi-tenant table            │
                 │  • 3 roles:                                          │
                 │      weissman_app   — app, subject to RLS            │

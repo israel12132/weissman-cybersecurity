@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'
@@ -76,6 +77,12 @@ export default function CeoCommandCenter() {
             onExport={handleExport}
             exportDisabled={exporting}
           />
+          <Link
+            to="/supreme-nerve-center"
+            className="text-[11px] font-mono px-2.5 py-1.5 rounded-lg border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+          >
+            {t('pages.ceoCommandCenter.nerve_center_link')}
+          </Link>
         </div>
       </header>
 
