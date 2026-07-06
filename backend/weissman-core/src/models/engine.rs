@@ -308,6 +308,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "chronos",
     "cognitive_starvation",
+    "liquid_matrix",
     "adversarial_simulation",
     "dark_web_monitor",
     "passive_dns_forensics",
@@ -329,6 +330,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "typosquatting_phishing",
     // ── Advanced Stealth / Evasion engines ───────────────────────────────────
     "process_hollowing",
+    "process_inventory",
+    "usb_enumeration",
     "living_off_land",
     "heap_exploitation",
     // ── Advanced Supply Chain engines ────────────────────────────────────────
@@ -657,8 +660,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
 /// Default engines enabled for new clients (core continuous scan).
 pub const DEFAULT_ORCHESTRATOR_ENGINES: &[&str] = KNOWN_ENGINE_IDS;
 
-/// Full ordered registry of all 303 engines in proper execution order.
-/// Matches frontend/src/lib/enginesRegistry.js
+/// Full ordered registry of all production engines in proper execution order.
+/// Matches frontend/src/lib/enginesRegistry.js (same count as `PRODUCTION_ENGINE_IDS`).
 pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     // Recon & OSINT (run first to discover attack surface)
     "osint",
@@ -1102,6 +1105,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "imds_ssrf",
     "implantable_device_hack",
     "infostealer_emulation",
+    "process_inventory",
+    "usb_enumeration",
     "insider_threat",
     "ipsec_vpn_audit",
     "js_prototype_pollution",

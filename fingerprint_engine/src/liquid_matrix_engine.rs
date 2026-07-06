@@ -1,8 +1,7 @@
 //! **LIQUID-MATRIX** — Moving Target Defense via TOTP-synchronized routing tokens.
 //!
-//! **Catalog-only / simulation:** not in `PRODUCTION_ENGINE_IDS`. Findings are tagged
-//! `simulation_mode: true` — routing rotation is persisted in DB; SDN dataplane injection is
-//! operator-configured separately via Sovereign Defense Matrix.
+//! Findings are tagged `simulation_mode: true` — routing rotation is persisted in DB; SDN
+//! dataplane injection is operator-configured separately via Sovereign Defense Matrix.
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get};

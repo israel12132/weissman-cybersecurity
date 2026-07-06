@@ -13,6 +13,7 @@ if (gen.status !== 0) {
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
+const agentDispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch_agent.rs'), 'utf8')
 const aliasRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/alias_engine_runner.rs'), 'utf8')
 const criticalInfraRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/critical_infra/mod.rs'), 'utf8')
 
@@ -89,6 +90,7 @@ const resolveMap = extractResolveMap(engineRs)
 const dispatchIds = extractDispatchIds(dispatchRs)
 const criticalInfraIds = extractCriticalInfraIds(criticalInfraRs)
 const aliasRunnerIds = extractAliasRunnerIds(aliasRs)
+const agentRequiredIds = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentDispatchRs))
 
 const missingFromProduction = frontendIds.filter((id) => !productionIds.has(id))
 
@@ -117,6 +119,7 @@ const productionWithoutExecutionPath = []
 for (const id of productionIds) {
   if (SPECIAL_RUNNABLE_IDS.has(id)) continue
   if (criticalInfraIds.has(id)) continue
+  if (agentRequiredIds.has(id)) continue
   if (dispatchIds.has(id)) continue
   if (isAliasEngine(id, resolveMap) && aliasRunnerIds.has(id)) continue
   productionWithoutExecutionPath.push(id)
@@ -127,6 +130,7 @@ const summary = {
   productionTotal: productionIds.size,
   aliasTotal: resolveMap.size,
   aliasRunnerArms: aliasRunnerIds.size,
+  agentRequiredTotal: agentRequiredIds.size,
   specialRunnableTotal: SPECIAL_RUNNABLE_IDS.size,
   missingFromProductionCount: missingFromProduction.length,
   unresolvedFrontendCount: unresolvedFrontend.length,

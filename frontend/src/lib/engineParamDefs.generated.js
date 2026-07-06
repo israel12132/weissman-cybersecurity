@@ -8951,6 +8951,64 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
+  "process_inventory": [
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "stealth_level",
+      "label": "Stealth Level (1-5)",
+      "type": "number",
+      "defaultVal": "3",
+      "min": 1,
+      "max": 5
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
+  "usb_enumeration": [
+    {
+      "key": "stealth_mode",
+      "label": "Stealth Mode",
+      "type": "select",
+      "defaultVal": "low",
+      "options": [
+        "off",
+        "low",
+        "high"
+      ]
+    },
+    {
+      "key": "stealth_level",
+      "label": "Stealth Level (1-5)",
+      "type": "number",
+      "defaultVal": "3",
+      "min": 1,
+      "max": 5
+    },
+    {
+      "key": "max_findings",
+      "label": "Max Findings",
+      "type": "number",
+      "defaultVal": "200",
+      "min": 1,
+      "max": 5000
+    }
+  ],
   "living_off_land": [
     {
       "key": "stealth_mode",

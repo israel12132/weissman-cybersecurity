@@ -325,6 +325,38 @@
       }
     },
     {
+      "engine_id": "liquid_matrix",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#14b8a6"
+      }
+    },
+    {
+      "engine_id": "cognitive_starvation",
+      "route_paths": [
+        "/sovereign-defense-matrix"
+      ],
+      "evidence_i18n_key": "pages.sovereignDefense.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#14b8a6"
+      }
+    },
+    {
       "engine_id": "scada_ics",
       "route_paths": [
         "/ot-ics"

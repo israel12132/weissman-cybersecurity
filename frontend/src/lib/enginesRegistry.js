@@ -1860,6 +1860,26 @@ export const ENGINES_REGISTRY = [
     requiresTarget: false,
   },
   {
+    id: 'process_inventory',
+    label: 'Process Inventory (Agent)',
+    group: 'stealth',
+    mitre: 'T1057',
+    description:
+      'Endpoint agent enumerates every visible process with image path, parent PID, and memory footprint — hybrid remote-surface probe runs first when a target host is supplied',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
+    id: 'usb_enumeration',
+    label: 'USB Device Enumeration (Agent)',
+    group: 'stealth',
+    mitre: 'T1091',
+    description:
+      'Endpoint agent inventories attached USB devices for rogue storage detection — hybrid remote-surface policy probe when a target is supplied',
+    requiresTarget: false,
+    requiresAgent: true,
+  },
+  {
     id: 'fileless_malware',
     label: 'Fileless Malware Execution',
     group: 'stealth',
@@ -3957,6 +3977,15 @@ export const ENGINES_REGISTRY = [
     mitre: 'T1566',
     description:
       'Detects LLM/bot scanners and feeds adversarial poison payloads via deception shadow routes — offensive AI starvation, not 403 blocks',
+    requiresTarget: true,
+  },
+  {
+    id: 'liquid_matrix',
+    label: 'LIQUID-MATRIX Moving Target Defense',
+    group: 'defense',
+    mitre: 'T1599',
+    description:
+      'TOTP-synchronized routing tokens with DB-persisted MTD epochs; live gateway probe compares Server header vs current rotation fingerprint (simulation_mode until SDN enforcement is configured)',
     requiresTarget: true,
   },
   {
