@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Play, RotateCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
@@ -228,7 +229,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
           {running || isPending ? <Loader2 className="w-3 h-3 animate-spin" />
             : hasResult ? <RotateCw className="w-3 h-3" /> : <Play className="w-3 h-3" />}
           {running ? t('pages.digitalTwinSimulator.simulating')
-            : isPending ? t('pages.digitalTwinSimulatostatus_pending')
+            : isPending ? t('pages.digitalTwinSimulator.status_pending')
               : hasResult ? t('pages.digitalTwinSimulator.rerun')
                 : t('pages.digitalTwinSimulator.simulate')}
         </button>
@@ -518,6 +519,8 @@ export default function DigitalTwinSimulator() {
         />
       )}
     >
+      <EvidenceNotice className="mb-6">{t('pages.digitalTwinSimulator.evidence_notice')}</EvidenceNotice>
+
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#8b5cf6]/30 text-[#8b5cf6]'}`}>
           {toast.msg}

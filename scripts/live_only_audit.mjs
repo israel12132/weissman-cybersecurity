@@ -30,6 +30,16 @@ const RULES = [
     file: 'frontend/src/pages/DigitalTwinSimulator.jsx',
     patterns: [/overview_simulated/, /SIMULATION_SCENARIO/, /handleSimulate/],
   },
+  {
+    file: 'frontend/src/i18n/locales/en.json',
+    patterns: [
+      /"title":\s*"[^"]*Simulator"/,
+      /"badge":\s*"[^"]*SIMULATION"/,
+      /Simulates reflected/,
+      /Run the simulation to model/,
+    ],
+    allow: [/Exploit Research Lab/, /Research Lab/],
+  },
 ]
 
 /** Scan broad prod surfaces for forbidden persisted-finding markers. */
@@ -49,6 +59,10 @@ const BROAD_FORBIDDEN = [
     exclude: ['EvidenceNotice.jsx'],
   },
 ]
+
+/** Dev-only example binaries must not ship *_demo* artifacts. */
+const FORBIDDEN_EXAMPLE_GLOBS = ['fingerprint_engine/examples']
+const FORBIDDEN_EXAMPLE_NAME = /demo/i
 
 function read(rel) {
   const abs = path.join(ROOT, rel)
@@ -99,6 +113,20 @@ for (const rule of BROAD_FORBIDDEN) {
         violations.push({ file: rel, line: i + 1, detail: rule.label, snippet: line.trim() })
       })
     }
+  }
+}
+
+for (const relDir of FORBIDDEN_EXAMPLE_GLOBS) {
+  const absDir = path.join(ROOT, relDir)
+  if (!fs.existsSync(absDir)) continue
+  for (const ent of fs.readdirSync(absDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue
+    if (!FORBIDDEN_EXAMPLE_NAME.test(ent.name)) continue
+    violations.push({
+      file: path.join(relDir, ent.name),
+      detail: 'demo example file forbidden in production repo',
+      snippet: ent.name,
+    })
   }
 }
 

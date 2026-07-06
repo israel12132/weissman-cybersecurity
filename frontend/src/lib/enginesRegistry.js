@@ -578,7 +578,7 @@ export const ENGINES_REGISTRY = [
     label: 'Digital Twin',
     group: 'apt',
     mitre: 'T1588',
-    description: 'Environment simulation with XSS, SQLi, MITM, CORS attack path modeling',
+    description: 'Live HTTP/TLS digital twin: differential XSS, SQLi, MITM/transport, and CORS probes with evidence-only posture grading — no simulated findings',
     requiresTarget: true,
   },
   {
