@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url'
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const engineRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine.rs'), 'utf8')
 const dispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch.rs'), 'utf8')
-const agentDispatchRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/engine_dispatch_agent.rs'), 'utf8')
+const agentAgentRs = fs.readFileSync(path.join(root, 'backend/weissman-core/src/models/engine_agent.rs'), 'utf8')
 const aliasRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/alias_engine_runner.rs'), 'utf8')
 const criticalInfraRs = fs.readFileSync(path.join(root, 'fingerprint_engine/src/critical_infra/mod.rs'), 'utf8')
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)
@@ -69,7 +69,7 @@ function extractDispatchImpl(text) {
 }
 
 const productionIds = extractArray('PRODUCTION_ENGINE_IDS', engineRs)
-const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentDispatchRs))
+const agentRequired = new Set(extractArray('AGENT_REQUIRED_ENGINES', agentAgentRs))
 const resolveMap = extractResolveMap(engineRs)
 const dispatchImpl = extractDispatchImpl(dispatchRs)
 const dispatchIds = new Set(dispatchImpl.keys())

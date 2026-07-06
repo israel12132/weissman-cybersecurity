@@ -40,7 +40,7 @@ pub fn compute() -> EngineAccounting {
     }
     let total_ids = ids.len();
     let distinct_canonical = canonical.len();
-    let agent_required = crate::engine_dispatch::AGENT_REQUIRED_ENGINES.len();
+    let agent_required = weissman_core::models::engine_agent::AGENT_REQUIRED_ENGINES.len();
     let remotely_detecting = distinct_canonical.saturating_sub(agent_required);
     let distinct_ratio = if total_ids == 0 {
         0.0

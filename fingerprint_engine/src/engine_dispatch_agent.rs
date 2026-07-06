@@ -1,76 +1,14 @@
 //! Endpoint-agent dispatch — engines that require host-resident collection.
 //!
 //! Split from `engine_dispatch.rs` for maintainability. Hybrid engines (e.g. CHRONOS)
-//! call `run_agent_required_engine` internally without being listed here.
+//! call `run_agent_required_engine` internally without being listed in the canonical agent list.
 
 use super::EngineRunContext;
 use crate::engine_result::EngineResult;
 
-/// Engines whose detection must run on an enrolled endpoint agent (not from a remote probe).
-pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
-    // Stealth / EDR (host-only observation)
-    "process_hollowing",
-    "dll_hijacking_engine",
-    "process_inventory",
-    "av_bypass_engine",
-    "log_tampering_engine",
-    "timestomping",
-    "anti_debug_evasion",
-    "rootkit_simulation",
-    "memory_forensics_evasion",
-    "usb_enumeration",
-    "dns_tunneling_c2",
-    "icmp_covert",
-    // Malware / persistence (advanced_malware_engines agent_required_ok)
-    "bootkit_uefi",
-    "persistence_mechanism",
-    "polymorphic_engine",
-    "ransomware_emulation",
-    // Data exfiltration (advanced_data_engines agent_required_ok)
-    "acoustic_exfil",
-    "em_exfil_engine",
-    "optical_exfil",
-    "keyboard_acoustic",
-    "screen_capture_exfil",
-    "clipboard_hijack",
-    "insider_exfil",
-    "storage_covert_channel",
-    // Network / wireless (advanced_network_engines agent_required_ok)
-    "arp_spoofing_engine",
-    "vlan_hopping_attack",
-    "dhcp_attack_engine",
-    "wifi_attack_engine",
-    "bluetooth_attack_engine",
-    "lte_5g_attack",
-    "wpa3_attack_engine",
-    "packet_injection_engine",
-    "network_tap_advanced",
-    "multicast_attack",
-    "nat_traversal_attack",
-    // Mobile (advanced_mobile_engines agent_required_ok)
-    "sim_swap_engine",
-    "bluetooth_mobile_attack",
-    "nfc_relay_attack",
-    // Social engineering (advanced_social_engines agent_required_ok)
-    "deepfake_voice_engine",
-    "pretexting_engine",
-    "insider_threat_engine",
-    "physical_social_eng",
-    // OT / physical bus-level (no remote HTTP/crypto stand-in)
-    "lorawan_attack",
-    "lora_attack",
-    "voltage_glitch_attack",
-    "tpm_firmware_attack",
-    "cold_boot_attack",
-    // Next-Gen Arsenal — host-resident collector (commodity infostealer blast-radius).
-    "infostealer_emulation",
-    // NOTE: chronos is NOT agent-only — server hybrid runs via chronos_engine::run_chronos_result
-];
-
-#[must_use]
-pub fn is_agent_required_engine(id: &str) -> bool {
-    AGENT_REQUIRED_ENGINES.iter().any(|&k| k == id)
-}
+pub use weissman_core::models::engine_agent::{
+    is_agent_required_engine, AGENT_REQUIRED_ENGINES,
+};
 
 /// Dispatch an agent-required engine to the endpoint fleet (or return a status finding).
 pub async fn run_agent_required_engine(

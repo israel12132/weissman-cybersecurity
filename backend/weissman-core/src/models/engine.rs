@@ -309,6 +309,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "chronos",
     "cognitive_starvation",
     "liquid_matrix",
+    "sovereign_active_defense_fusion",
     "adversarial_simulation",
     "dark_web_monitor",
     "passive_dns_forensics",
@@ -976,6 +977,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "risk_superposition_collapse",
     "chronos",
     "liquid_matrix",
+    "sovereign_active_defense_fusion",
     "cognitive_starvation",
     "adversarial_simulation",
     "dark_web_monitor",
@@ -1452,6 +1454,9 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "liquid-matrix" | "mtd_routing" | "moving_target_defense" => "liquid_matrix",
         "offensive_ai_poisoning" | "ai_starvation" | "cognitive_starvation_engine" => {
             "cognitive_starvation"
+        }
+        "sovereign-defense-fusion" | "active_defense_fusion" | "sovereign_defense_fusion" => {
+            "sovereign_active_defense_fusion"
         }
         other => other,
     }

@@ -14,7 +14,7 @@ use weissman_core::models::engine::{production_engine_ids, resolve_engine_id};
 
 /// Classify a single engine id (precedence: agent_required > alias > special > real_probe).
 pub fn classify(id: &str) -> &'static str {
-    if crate::engine_dispatch::AGENT_REQUIRED_ENGINES.contains(&id) {
+    if weissman_core::models::engine_agent::is_agent_required_engine(id) {
         return "agent_required";
     }
     let canonical = resolve_engine_id(id);
@@ -34,7 +34,7 @@ pub fn detects_remotely(kind: &str, id: &str) -> bool {
     }
     if kind == "alias" {
         let canonical = resolve_engine_id(id);
-        return !crate::engine_dispatch::AGENT_REQUIRED_ENGINES.contains(&canonical);
+        return !weissman_core::models::engine_agent::is_agent_required_engine(canonical);
     }
     matches!(kind, "real_probe" | "special")
 }

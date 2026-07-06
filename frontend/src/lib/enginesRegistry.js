@@ -3989,6 +3989,15 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'sovereign_active_defense_fusion',
+    label: 'Sovereign Active Defense Fusion',
+    group: 'defense',
+    mitre: 'T1599',
+    description:
+      'World-first fusion: MTD routing epochs + cognitive AI starvation + deception trigger hits + CHRONOS freeze telemetry → unified active-defense maturity grade and gap chains (live DB + probes only)',
+    requiresTarget: true,
+  },
+  {
     id: 'adversarial_simulation',
     label: 'Full Adversarial Simulation Engine',
     group: 'recon',

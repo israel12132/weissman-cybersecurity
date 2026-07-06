@@ -2,6 +2,9 @@
 # `fingerprint_engine serve` was removed — use `weissman-server` (see fingerprint_engine/src/main.rs).
 # Build: docker compose build backend
 #
+# OT/ICS critical-infra engines: enabled via `high_risk_engines` on the fingerprint_engine
+# dependency in weissman-server / weissman-worker Cargo.toml (transitive for this build).
+#
 # Compile-time paths (include_str!, workspace members) — ALL must be COPY'd before cargo build:
 #   Cargo.toml/Cargo.lock · fuzz_core · fingerprint_engine · backend · crates · scripts · shared
 #

@@ -136,21 +136,10 @@ __all__ = [
     "run_digital_twin",
     "run_zero_day_prediction",
     "run_threat_emulation",
+    "run_engine",
+    "ENGINE_IDS",
 ]
 
-ENGINE_IDS = [
-    "supply_chain", "ollama_fuzz", "bola_idor", "osint", "asm",
-    "graphql_attack", "jwt_attack", "oauth_oidc", "http_smuggling",
-    "prototype_pollution", "ssrf_advanced", "xxe", "ssti", "file_upload",
-    "websocket_attack", "cache_poisoning",
-    "llm_redteam", "adversarial_ml", "autonomous_pentest",
-    "aws_attack", "azure_attack", "gcp_attack", "k8s_container",
-    "iac_misconfig", "serverless_attack",
-    "scada_ics", "iot_firmware", "ble_rf",
-    "edr_evasion", "waf_bypass", "timing_sidechannel", "antiforensics",
-    "pki_tls", "pqc_scanner", "password_spray", "kerberoasting", "saml_attack",
-    "bgp_dns_hijacking", "ipv6_attack", "mtls_grpc", "smb_netbios",
-    "cicd_pipeline", "container_registry", "sbom_analyzer", "typosquatting_monitor",
-    "kill_chain", "oast_oob", "deception_honeypot", "digital_twin",
-    "zero_day_prediction", "threat_emulation",
-]
+from src.engines.registry import run_engine, ENGINE_IDS as _REGISTRY_ENGINE_IDS  # noqa: E402
+
+ENGINE_IDS = list(_REGISTRY_ENGINE_IDS)

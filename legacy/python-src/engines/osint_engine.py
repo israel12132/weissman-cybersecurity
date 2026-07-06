@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.engines._rust_runner import run_rust_engine
+from src.engines.registry import run_engine, warn_legacy_wrapper
+
+warn_legacy_wrapper("osint", __name__)
 
 
 def run_osint_crawl(target: str, scope: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run OSINT crawl via Rust. Returns { status, findings, message }."""
-    return run_rust_engine("osint", target)
+    _ = scope
+    return run_engine("osint", target)

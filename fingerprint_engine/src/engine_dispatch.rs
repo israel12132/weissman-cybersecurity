@@ -712,6 +712,12 @@ async fn dispatch_engine_match(
         "cognitive_starvation" => {
             crate::cognitive_starvation_engine::run_cognitive_starvation_result(target, ctx).await
         }
+        "sovereign_active_defense_fusion" => {
+            crate::sovereign_active_defense_fusion_engine::run_sovereign_active_defense_fusion_result(
+                target, ctx,
+            )
+            .await
+        }
         "adversarial_simulation" => crate::advanced_recon_engines::run_adversarial_simulation_result(target).await,
         "dark_web_monitor" => crate::advanced_recon_engines::run_dark_web_monitor_result(target).await,
         "passive_dns_forensics" => crate::advanced_recon_engines::run_passive_dns_forensics_result(target).await,

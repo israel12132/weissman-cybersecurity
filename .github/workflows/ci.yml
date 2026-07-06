@@ -240,6 +240,9 @@ jobs:
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
+      - name: Generate engine catalog snapshot
+        run: node scripts/generate_engine_catalog_snapshot.mjs
+
       - name: Verify engine scan wiring
         run: node scripts/verify_engine_scan_wiring.mjs
 

@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod engine;
+pub mod engine_agent;
 pub mod finding;
 pub mod finding_metadata;
 pub mod ids;

@@ -688,6 +688,13 @@ export const EXPLICIT_PARAM_DEFS = {
     { key:'port_pool_max', label:'Port Pool Max', type:'number', placeholder:'39999', defaultVal:'39999', min:1024, max:65535 },
     { key:'probe_gateway', label:'Probe Gateway Reachability', type:'select', options:['true','false'], defaultVal:'true' },
   ],
+  sovereign_active_defense_fusion: [
+    { key:'include_liquid_matrix', label:'Include LIQUID-MATRIX MTD', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_cognitive_starvation', label:'Include Cognitive Starvation', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_defense_telemetry', label:'Include DB Defense Telemetry', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'synthesize_defense_chains', label:'Synthesize Defense Gap Chains', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
   cognitive_starvation: [
     { key:'min_bot_score', label:'Min Bot Score Threshold', type:'number', placeholder:'0.55', defaultVal:'0.55', min:0, max:1 },
     { key:'deploy_shadow', label:'Deploy Shadow Endpoints', type:'select', options:['true','false'], defaultVal:'true' },
