@@ -14,7 +14,7 @@ import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 
 const ENGINE = 'digital_twin'
-const SIMULATION_SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
+const SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
 
 const SCENARIO_META = {
   xss: { mitre: 'T1059.007', color: '#ef4444', risk: 'high' },
@@ -425,7 +425,7 @@ export default function DigitalTwinSimulator() {
     }
   }, [t])
 
-  const handleSimulate = useCallback(async (scenarioId) => {
+  const handleRunScenario = useCallback(async (scenarioId) => {
     if (!selectedClientId) { showToast('error', t('pages.digitalTwinSimulator.select_client_first')); return }
     const body = buildScanBody(scenarioId)
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
@@ -480,10 +480,10 @@ export default function DigitalTwinSimulator() {
   })
 
   const handleRunAll = useCallback(async () => {
-    for (const id of SIMULATION_SCENARIO_IDS) {
-      await handleSimulate(id)
+    for (const id of SCENARIO_IDS) {
+      await handleRunScenario(id)
     }
-  }, [handleSimulate])
+  }, [handleRunScenario])
 
   const clearResults = useCallback(() => {
     setResults({})
@@ -496,7 +496,7 @@ export default function DigitalTwinSimulator() {
   const overview = useMemo(() => {
     const vals = Object.values(results)
     return {
-      simulated: vals.filter((r) => !r.pending).length,
+      scenariosCompleted: vals.filter((r) => !r.pending).length,
       vulnerable: vals.filter((r) => !r.pending && r.vulnerable).length,
       clear: vals.filter((r) => !r.pending && !r.vulnerable).length,
       running: vals.filter((r) => r.pending).length,
@@ -620,7 +620,7 @@ export default function DigitalTwinSimulator() {
       {hasAnyResult && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
-            { key: 'overview_simulated', value: overview.simulated, color: '#a78bfa' },
+            { key: 'overview_scenarios_completed', value: overview.scenariosCompleted, color: '#a78bfa' },
             { key: 'overview_vulnerable', value: overview.vulnerable, color: '#f43f5e' },
             { key: 'overview_clear', value: overview.clear, color: '#34d399' },
             { key: 'overview_running', value: overview.running, color: '#38bdf8' },
@@ -662,9 +662,9 @@ export default function DigitalTwinSimulator() {
         <div className="lg:col-span-2 space-y-4">
           <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.digitalTwinSimulator.attack_simulations')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {SIMULATION_SCENARIO_IDS.map((scenarioId) => (
+            {SCENARIO_IDS.map((scenarioId) => (
               <ScenarioCard key={scenarioId} scenarioId={scenarioId} result={results[scenarioId] ?? null}
-                onRun={handleSimulate} running={runningId === scenarioId} disabled={!selectedClientId} t={t} />
+                onRun={handleRunScenario} running={runningId === scenarioId} disabled={!selectedClientId} t={t} />
             ))}
           </div>
         </div>

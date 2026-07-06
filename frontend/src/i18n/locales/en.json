@@ -2653,7 +2653,7 @@
       "pending_status": "Simulation running — result pending",
       "job_ref": "Job {{jobId}}",
       "clear_results": "Clear results",
-      "overview_simulated": "Simulated",
+      "overview_scenarios_completed": "Probes completed",
       "overview_vulnerable": "Vulnerable",
       "overview_clear": "No paths",
       "overview_running": "Running",
@@ -4753,6 +4753,8 @@
         "loading": "Loading…",
         "noAssets": "No deception assets. Generate tokens, then deploy to AWS above.",
         "canaryAkia": "canary AKIA: {{id}}",
+        "liveOastBadge": "Live OAST",
+        "liveAwsBadge": "Live AWS",
         "refresh": "Refresh"
       },
       "containmentRules": {

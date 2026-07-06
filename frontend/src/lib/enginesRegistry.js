@@ -3994,7 +3994,7 @@ export const ENGINES_REGISTRY = [
     group: 'defense',
     mitre: 'T1599',
     description:
-      'TOTP-synchronized routing tokens with DB-persisted MTD epochs; live gateway probe compares Server header vs current rotation fingerprint (simulation_mode until SDN enforcement is configured)',
+      'TOTP-synchronized routing tokens with DB-persisted MTD epochs; live gateway probe compares Server header vs current rotation fingerprint — evidence-only, no simulation flags',
     requiresTarget: true,
   },
   {

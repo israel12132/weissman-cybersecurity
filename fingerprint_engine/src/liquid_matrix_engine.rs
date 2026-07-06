@@ -1,7 +1,7 @@
 //! **LIQUID-MATRIX** — Moving Target Defense via TOTP-synchronized routing tokens.
 //!
-//! Findings are tagged `simulation_mode: true` — routing rotation is persisted in DB; SDN
-//! dataplane injection is operator-configured separately via Sovereign Defense Matrix.
+//! Routing rotation is persisted in DB and gateway fingerprint is probed live. SDN dataplane
+//! enforcement is operator-configured via `WEISSMAN_LIQUID_MATRIX_SDN_ENFORCED` — never faked.
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get};
@@ -60,6 +60,13 @@ fn pbool(p: &Value, k: &str, d: bool) -> bool {
     p.get(k).and_then(Value::as_bool).unwrap_or(d)
 }
 
+fn sdn_dataplane_enforced() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_LIQUID_MATRIX_SDN_ENFORCED").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    )
+}
+
 pub async fn run_liquid_matrix_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
     let cfg = LiquidMatrixConfig::from_params(&ctx.job_params);
     let host = extract_host(target);
@@ -99,11 +106,16 @@ pub async fn run_liquid_matrix_result(target: &str, ctx: &EngineRunContext) -> E
         json!(rotation.rotation_step_secs),
     );
     ev.insert("expires_at".into(), json!(rotation.expires_at.to_rfc3339()));
-    ev.insert("simulation_mode".into(), json!(true));
-    ev.insert(
-        "simulation_note".into(),
-        json!("Routing epoch is persisted in DB; network MTD enforcement requires gateway/SDN integration — not yet applied to live infrastructure."),
-    );
+    ev.insert("routing_persisted".into(), json!(true));
+    ev.insert("live_gateway_probe".into(), json!(cfg.probe_gateway));
+    let sdn_enforced = sdn_dataplane_enforced();
+    ev.insert("sdn_dataplane_enforced".into(), json!(sdn_enforced));
+    if !sdn_enforced {
+        ev.insert(
+            "operator_note".into(),
+            json!("MTD routing epoch is live in DB. Set WEISSMAN_LIQUID_MATRIX_SDN_ENFORCED=1 after gateway/SDN integration is wired."),
+        );
+    }
     ev.insert(
         "legitimate_route".into(),
         json!(format!(

@@ -2724,7 +2724,7 @@
       "pending_status": "סימולציה רצה — תוצאה בהמתנה",
       "job_ref": "משימה {{jobId}}",
       "clear_results": "נקה תוצאות",
-      "overview_simulated": "סומלצו",
+      "overview_scenarios_completed": "בדיקות הושלמו",
       "overview_vulnerable": "פגיעים",
       "overview_clear": "ללא נתיבים",
       "overview_running": "רצים",
@@ -4761,6 +4761,8 @@
         "loading": "טוען…",
         "noAssets": "אין נכסי הטעיה. צור אסימונים, ואז פרוס ל-AWS למעלה.",
         "canaryAkia": "canary AKIA: {{id}}",
+        "liveOastBadge": "OAST חי",
+        "liveAwsBadge": "AWS חי",
         "refresh": "רענן"
       },
       "containmentRules": {
