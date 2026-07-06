@@ -7,13 +7,14 @@ import {
   Cpu,
   Layers,
   ListTodo,
-  RefreshCw,
   Search,
   Server,
   Shield,
   Zap,
 } from 'lucide-react'
 import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 
 const POLL_MS = 2000
@@ -82,7 +83,7 @@ function SupremeNerveCenterInner() {
   const [snap, setSnap] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [lifecycleFilter, setLifecycleFilter] = useState('all')
   const [clientBoot, setClientBoot] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
@@ -118,7 +119,7 @@ function SupremeNerveCenterInner() {
   const controls = snap?.control_parameters || {}
 
   const filteredEngines = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = searchQuery.trim().toLowerCase()
     return engines.filter((e) => {
       if (lifecycleFilter !== 'all' && e.lifecycle !== lifecycleFilter) return false
       if (!q) return true
@@ -128,12 +129,23 @@ function SupremeNerveCenterInner() {
         String(e.target || '').toLowerCase().includes(q)
       )
     })
-  }, [engines, query, lifecycleFilter])
+  }, [engines, searchQuery, lifecycleFilter])
 
   const stuckEngines = useMemo(
     () => engines.filter((e) => e.lifecycle === 'stuck'),
     [engines],
   )
+
+  const handleExport = useCallback(async () => {
+    if (!snap) return
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `supreme-nerve-center-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [snap])
 
   const sectionLabel = (id) => t(`supremeNerveCenter.sections.${id}`, id)
 
@@ -175,19 +187,13 @@ function SupremeNerveCenterInner() {
       </aside>
 
       <main className="flex-1 overflow-auto p-6">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <EvidenceNotice>{t('supremeNerveCenter.evidence_notice')}</EvidenceNotice>
+
+        <header className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-white">{sectionLabel(section)}</h1>
-            <p className="text-xs text-slate-500">{t('supremeNerveCenter.evidence_notice')}</p>
           </div>
-          <button
-            type="button"
-            onClick={load}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-mono text-slate-300 hover:bg-white/5"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {t('supremeNerveCenter.refresh')}
-          </button>
+          <ShellScanActions onRefresh={load} onExport={handleExport} exportDisabled={!snap} />
         </header>
 
         {error ? (
@@ -323,8 +329,8 @@ function SupremeNerveCenterInner() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input
                   type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('supremeNerveCenter.searchEngines')}
                   className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600"
                 />

@@ -5643,7 +5643,7 @@
   "supremeNerveCenter": {
     "title": "מרכז עצבים עליון",
     "ceoOnly": "מנכ\"ל / superadmin בלבד",
-    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 558 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 563 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
     "refresh": "רענון",
     "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
     "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",

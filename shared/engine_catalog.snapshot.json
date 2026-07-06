@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-06T04:43:51.812Z",
+  "generated_at": "2026-07-06T05:01:59.093Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",

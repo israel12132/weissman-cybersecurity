@@ -357,6 +357,22 @@
       }
     },
     {
+      "engine_id": "fair_exposure_fusion",
+      "route_paths": [
+        "/risk-graph"
+      ],
+      "evidence_i18n_key": "pages.riskGraphVisualization.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_kill_switch": false,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#10b981"
+      }
+    },
+    {
       "engine_id": "sovereign_active_defense_fusion",
       "route_paths": [
         "/sovereign-defense-matrix"

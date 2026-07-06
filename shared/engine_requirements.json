@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-07-03T20:20:33.559Z",
-  "production_engine_count": 558,
+  "generated_at": "2026-07-06T08:05:59.119Z",
+  "production_engine_count": 563,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 417
+      "engine_count": 420
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -255,7 +255,7 @@
         "endpoint_agent",
         "scope_domains"
       ],
-      "engine_count": 46
+      "engine_count": 48
     },
     "iac_supply_chain": {
       "id": "iac_supply_chain",
@@ -2670,6 +2670,16 @@
         "scope_domains"
       ]
     },
+    "fair_exposure_fusion": {
+      "id": "fair_exposure_fusion",
+      "group": "recon",
+      "kind": "real_probe",
+      "label": "Fair Exposure Fusion (Board Risk)",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
     "identity_attack_chain": {
       "id": "identity_attack_chain",
       "group": "crypto",
@@ -2716,6 +2726,26 @@
       "group": "defense",
       "kind": "real_probe",
       "label": "COGNITIVE STARVATION",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "liquid_matrix": {
+      "id": "liquid_matrix",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "LIQUID-MATRIX Moving Target Defense",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "sovereign_active_defense_fusion": {
+      "id": "sovereign_active_defense_fusion",
+      "group": "defense",
+      "kind": "real_probe",
+      "label": "Sovereign Active Defense Fusion",
       "requirements": [
         "contact_email",
         "scope_domains"
@@ -2910,6 +2940,28 @@
       "group": "stealth",
       "kind": "agent_required",
       "label": "Process Hollowing / Ghosting",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "process_inventory": {
+      "id": "process_inventory",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "Process Inventory (Agent)",
+      "requirements": [
+        "contact_email",
+        "endpoint_agent",
+        "scope_domains"
+      ]
+    },
+    "usb_enumeration": {
+      "id": "usb_enumeration",
+      "group": "stealth",
+      "kind": "agent_required",
+      "label": "USB Device Enumeration (Agent)",
       "requirements": [
         "contact_email",
         "endpoint_agent",
