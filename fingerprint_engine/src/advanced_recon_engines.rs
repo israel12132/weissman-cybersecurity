@@ -610,10 +610,19 @@ cli_wrapper!(
     run_attack_surface_quantify_result
 );
 
-// ── adversarial_simulation ────────────────────────────────────────────────────
-pub async fn run_adversarial_simulation_result(target: &str) -> EngineResult {
+// ── adversarial_threat_emulation ─────────────────────────────────────────────
+pub async fn run_adversarial_threat_emulation_result(target: &str) -> EngineResult {
     // Reuse the real threat emulation engine to drive an end-to-end live probe.
     crate::threat_emulation_engine::run_threat_emulation_result(target).await
+}
+cli_wrapper!(
+    run_adversarial_threat_emulation,
+    run_adversarial_threat_emulation_result
+);
+
+/// Legacy name — live threat emulation only.
+pub async fn run_adversarial_simulation_result(target: &str) -> EngineResult {
+    run_adversarial_threat_emulation_result(target).await
 }
 cli_wrapper!(
     run_adversarial_simulation,

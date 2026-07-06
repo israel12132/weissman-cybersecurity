@@ -2816,11 +2816,11 @@ export const ENGINES_REGISTRY = [
     requiresTarget: false,
   },
   {
-    id: 'rootkit_simulation',
-    label: 'Kernel Rootkit Simulation',
+    id: 'rootkit_surface_probe',
+    label: 'Kernel Rootkit Surface Probe',
     group: 'stealth',
     mitre: 'T1014',
-    description: 'Rootkit technique detection and simulation: DKOM (Direct Kernel Object Manipulation), SSDT hook detection, IDT manipulation, inline function hooking, bootkit persistence via MBR/VBR, eBPF rootkit simulation, UEFI firmware implant',
+    description: 'Live rootkit technique detection: DKOM indicators, SSDT/IDT hook signals, inline hooking, bootkit persistence via MBR/VBR, eBPF implant telemetry, UEFI firmware implant — agent endpoint evidence only',
     requiresTarget: false,
   },
   {
@@ -3096,11 +3096,11 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
-    id: 'ss7_attack_simulation',
-    label: 'SS7 Telecom Protocol Attack',
+    id: 'ss7_signaling_probe',
+    label: 'SS7 Telecom Signaling Probe',
     group: 'network',
     mitre: 'T1557',
-    description: 'SS7 signaling protocol exploitation simulation: SMS interception via HLR/VLR query spoofing, call forwarding hijack, subscriber location tracking, 2FA OTP interception via MAP protocol, SS7 firewall bypass techniques, SIM relocation',
+    description: 'Live SS7/SIGTRAN posture assessment from telco PCAP or gateway logs: MAP/HLR/VLR abuse indicators, SMS/call-forward hijack patterns, subscriber tracking, OTP interception paths — requires telco sensor ingest (no synthetic signaling)',
     requiresTarget: false,
   },
   {
@@ -4007,11 +4007,11 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
-    id: 'adversarial_simulation',
-    label: 'Full Adversarial Simulation Engine',
+    id: 'adversarial_threat_emulation',
+    label: 'Adversarial Threat Emulation',
     group: 'recon',
     mitre: 'T1591',
-    description: 'End-to-end adversarial simulation: automated kill chain execution from recon to exfiltration, MITRE ATT&CK coverage mapping, detection gap identification, TTPs chaining with realistic timing, purple team exercise automation',
+    description: 'Live end-to-end threat emulation: automated kill-chain probes from recon to exfiltration, MITRE ATT&CK coverage mapping, detection gap identification, TTP chaining with real network observations — evidence-only purple-team automation',
     requiresTarget: true,
   },
   {

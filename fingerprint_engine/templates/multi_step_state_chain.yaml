@@ -1,6 +1,6 @@
-id: multi_step_state_demo
-name: Multi-Step State Demo
-description: "Demonstrates stateful execution: extract Server header, reuse it in next step."
+id: multi_step_state_chain
+name: Multi-Step State Chain
+description: "Live stateful HTTP probe: extract Server header, reuse it in the next step."
 severity: info
 steps:
   - id: extract_server
@@ -28,4 +28,3 @@ steps:
     matchers:
       - type: status
         statuses: [200, 301, 302, 307, 308]
-

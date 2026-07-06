@@ -460,13 +460,19 @@ pub async fn run_voip_sip_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_voip_sip_attack, run_voip_sip_attack_result);
 
-pub async fn run_ss7_attack_simulation_result(t: &str) -> EngineResult {
+pub async fn run_ss7_signaling_probe_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
-        "ss7_attack_simulation",
+        "ss7_signaling_probe",
         t,
         "SS7/SIGTRAN detection requires telco PCAP or SS7 gateway logs",
         "M3UA/SCTP signaling is not observable via internet TCP connect probes; ingest PCAP from the SS7 gateway or deploy the telco sensor agent.",
     )
+}
+cli_wrapper!(run_ss7_signaling_probe, run_ss7_signaling_probe_result);
+
+/// Legacy CLI name — delegates to live probe (no simulated findings).
+pub async fn run_ss7_attack_simulation_result(t: &str) -> EngineResult {
+    run_ss7_signaling_probe_result(t).await
 }
 cli_wrapper!(run_ss7_attack_simulation, run_ss7_attack_simulation_result);
 

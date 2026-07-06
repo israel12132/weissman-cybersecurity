@@ -116,6 +116,29 @@ for (const rule of BROAD_FORBIDDEN) {
   }
 }
 
+/** Built-in YAML templates must not use *demo* ids (live-only policy). */
+const FORBIDDEN_TEMPLATE_GLOBS = ['fingerprint_engine/templates']
+const FORBIDDEN_TEMPLATE_NAME = /demo/i
+
+/** Production registry must not ship *_simulation engine ids. */
+function assertProductionIdsLiveOnly() {
+  const engineRs = read('backend/weissman-core/src/models/engine.rs')
+  if (!engineRs) return
+  const m = engineRs.match(/pub const PRODUCTION_ENGINE_IDS: &\[&str\] = &\[(.*?)\];/s)
+  if (!m) return
+  for (const id of m[1].matchAll(/"([^"]+)"/g)) {
+    if (/_simulation/.test(id[1])) {
+      violations.push({
+        file: 'backend/weissman-core/src/models/engine.rs',
+        detail: 'PRODUCTION_ENGINE_IDS must not contain *_simulation ids',
+        snippet: id[1],
+      })
+    }
+  }
+}
+
+assertProductionIdsLiveOnly()
+
 for (const relDir of FORBIDDEN_EXAMPLE_GLOBS) {
   const absDir = path.join(ROOT, relDir)
   if (!fs.existsSync(absDir)) continue
@@ -125,6 +148,20 @@ for (const relDir of FORBIDDEN_EXAMPLE_GLOBS) {
     violations.push({
       file: path.join(relDir, ent.name),
       detail: 'demo example file forbidden in production repo',
+      snippet: ent.name,
+    })
+  }
+}
+
+for (const relDir of FORBIDDEN_TEMPLATE_GLOBS) {
+  const absDir = path.join(ROOT, relDir)
+  if (!fs.existsSync(absDir)) continue
+  for (const ent of fs.readdirSync(absDir, { withFileTypes: true })) {
+    if (!ent.isFile()) continue
+    if (!FORBIDDEN_TEMPLATE_NAME.test(ent.name)) continue
+    violations.push({
+      file: path.join(relDir, ent.name),
+      detail: 'demo template forbidden in production repo',
       snippet: ent.name,
     })
   }

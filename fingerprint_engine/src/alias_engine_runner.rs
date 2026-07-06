@@ -1039,10 +1039,10 @@ pub async fn run_alias_engine(
         "telco_ss7_attack" => {
             run_alias_probe(
                 "telco_ss7_attack",
-                "ss7_attack_simulation",
+                "ss7_signaling_probe",
                 "",
                 "Specialized telco ss7 attack probe against live target",
-                "ss7-attack-simulation",
+                "ss7-signaling-probe",
                 "",
                 target,
                 ctx,

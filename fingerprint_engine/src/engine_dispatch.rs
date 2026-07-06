@@ -663,7 +663,7 @@ async fn dispatch_engine_match(
         "rdp_attack_engine" => crate::advanced_network_engines::run_rdp_attack_engine_result(target).await,
         "ldap_injection_engine" => crate::advanced_network_engines::run_ldap_injection_engine_result(target).await,
         "voip_sip_attack" => crate::advanced_network_engines::run_voip_sip_attack_result(target).await,
-        "ss7_attack_simulation" => crate::advanced_network_engines::run_ss7_attack_simulation_result(target).await,
+        "ss7_signaling_probe" => crate::advanced_network_engines::run_ss7_signaling_probe_result(target).await,
         "wifi_attack_engine" => crate::advanced_network_engines::run_wifi_attack_engine_result(target).await,
         "bluetooth_attack_engine" => crate::advanced_network_engines::run_bluetooth_attack_engine_result(target).await,
         "ospf_bgp_hijack" => crate::advanced_network_engines::run_ospf_bgp_hijack_result(target).await,
@@ -721,7 +721,7 @@ async fn dispatch_engine_match(
             )
             .await
         }
-        "adversarial_simulation" => crate::advanced_recon_engines::run_adversarial_simulation_result(target).await,
+        "adversarial_threat_emulation" => crate::advanced_recon_engines::run_adversarial_threat_emulation_result(target).await,
         "dark_web_monitor" => crate::advanced_recon_engines::run_dark_web_monitor_result(target).await,
         "passive_dns_forensics" => crate::advanced_recon_engines::run_passive_dns_forensics_result(target).await,
 
@@ -830,7 +830,7 @@ async fn dispatch_engine_match(
         // ── Advanced Stealth engines (new probes / agent_required) ─────────────
         "dll_hijacking_engine" => crate::advanced_stealth_engines::run_dll_hijacking_engine_result(target).await,
         "sandbox_evasion" => crate::advanced_stealth_engines::run_sandbox_evasion_result(target).await,
-        "rootkit_simulation" => crate::advanced_stealth_engines::run_rootkit_simulation_result(target).await,
+        "rootkit_surface_probe" => crate::advanced_stealth_engines::run_rootkit_surface_probe_result(target).await,
         "memory_forensics_evasion" => crate::advanced_stealth_engines::run_memory_forensics_evasion_result(target).await,
         "av_bypass_engine" => crate::advanced_stealth_engines::run_av_bypass_engine_result(target).await,
         "dns_tunneling_c2" => crate::advanced_stealth_engines::run_dns_tunneling_c2_result(target).await,

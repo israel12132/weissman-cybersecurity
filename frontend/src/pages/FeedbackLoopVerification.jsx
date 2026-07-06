@@ -11,7 +11,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 
-const DEFAULT_TEMPLATE = 'multi_step_state_demo'
+const DEFAULT_TEMPLATE = 'multi_step_state_chain'
 
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()
