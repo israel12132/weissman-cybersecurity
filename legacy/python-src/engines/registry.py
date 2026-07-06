@@ -70,6 +70,7 @@ _ENGINE_IDS_LEGACY = (
     "usb_enumeration",
     "liquid_matrix",
     "sovereign_active_defense_fusion",
+    "fair_exposure_fusion",
 )
 ENGINE_IDS: frozenset[str] = frozenset(_ENGINE_IDS_LEGACY)
 

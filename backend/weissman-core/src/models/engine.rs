@@ -303,6 +303,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "threat_intel_fusion",
     "attack_surface_quantify",
     "external_exposure_supreme",
+    "fair_exposure_fusion",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -972,6 +973,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "threat_intel_fusion",
     "attack_surface_quantify",
     "external_exposure_supreme",
+    "fair_exposure_fusion",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -1457,6 +1459,9 @@ pub fn resolve_engine_id(id: &str) -> &str {
         }
         "sovereign-defense-fusion" | "active_defense_fusion" | "sovereign_defense_fusion" => {
             "sovereign_active_defense_fusion"
+        }
+        "fair-exposure-fusion" | "business_risk_exposure" | "fair_blast_radius" => {
+            "fair_exposure_fusion"
         }
         other => other,
     }

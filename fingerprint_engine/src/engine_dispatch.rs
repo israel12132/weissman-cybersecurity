@@ -693,6 +693,9 @@ async fn dispatch_engine_match(
         "external_exposure_supreme" => {
             crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx).await
         }
+        "fair_exposure_fusion" => {
+            crate::fair_exposure_fusion_engine::run_fair_exposure_fusion_result(target, ctx).await
+        }
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
         }

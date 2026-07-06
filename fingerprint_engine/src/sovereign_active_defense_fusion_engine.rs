@@ -320,11 +320,12 @@ pub async fn run_sovereign_active_defense_fusion_result(
         return empty_ok(ENGINE_ID, target);
     }
 
+    let count = merged.len();
     EngineResult::ok(
         merged,
         format!(
             "{ENGINE_ID}: {} finding(s) from [{}] — maturity {grade}",
-            merged.len(),
+            count,
             sources.join(", ")
         ),
     )

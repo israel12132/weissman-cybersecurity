@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-07-06T04:03:46.123Z",
+  "generated_at": "2026-07-06T04:43:51.812Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",
     "frontend": "frontend/src/lib/enginesRegistry.js"
   },
   "counts": {
-    "production": 562,
-    "frontend": 562,
+    "production": 563,
+    "frontend": 563,
     "agent_required": 48,
     "groups": 15
   },
   "groups": {
-    "recon": 43,
+    "recon": 44,
     "web": 71,
     "ai": 46,
     "cloud": 48,

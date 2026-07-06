@@ -58,6 +58,7 @@ gate_g3_lint() {
 
 gate_g4_wiring() {
   node scripts/verify_engine_wiring.mjs >/dev/null
+  node scripts/generate_engine_catalog_snapshot.mjs >/dev/null
   local gaps
   gaps="$(node scripts/verify_engine_wiring.mjs | node -e "
     let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{

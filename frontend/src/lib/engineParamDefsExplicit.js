@@ -695,6 +695,11 @@ export const EXPLICIT_PARAM_DEFS = {
     { key:'synthesize_defense_chains', label:'Synthesize Defense Gap Chains', type:'select', options:['true','false'], defaultVal:'true' },
     { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
   ],
+  fair_exposure_fusion: [
+    { key:'include_external_exposure', label:'Include External Exposure Probes', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'include_fair_model', label:'Include FAIR ALE/SLE Model', type:'select', options:['true','false'], defaultVal:'true' },
+    { key:'intensity', label:'Scan Intensity', type:'select', options:['light','normal','aggressive'], defaultVal:'normal' },
+  ],
   cognitive_starvation: [
     { key:'min_bot_score', label:'Min Bot Score Threshold', type:'number', placeholder:'0.55', defaultVal:'0.55', min:0, max:1 },
     { key:'deploy_shadow', label:'Deploy Shadow Endpoints', type:'select', options:['true','false'], defaultVal:'true' },

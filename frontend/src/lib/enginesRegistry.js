@@ -3952,6 +3952,15 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'fair_exposure_fusion',
+    label: 'Fair Exposure Fusion (Board Risk)',
+    group: 'recon',
+    mitre: 'T1595',
+    description:
+      'World-first fusion: live external exposure grade × FAIR ALE/SLE dollar-at-risk from risk graph + KEV/EPSS — board-ready evidence, zero LLM',
+    requiresTarget: true,
+  },
+  {
     id: 'risk_superposition_collapse',
     label: 'Risk Superposition Collapse',
     group: 'recon',

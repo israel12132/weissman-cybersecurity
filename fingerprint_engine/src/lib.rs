@@ -106,6 +106,8 @@ pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
 pub mod liquid_matrix_engine;
 pub mod sovereign_active_defense_fusion_engine;
+pub mod fair_exposure_fusion_engine;
+pub mod engine_fusion;
 pub mod nl_query;
 pub mod notifications;
 pub mod nvd_cve;
