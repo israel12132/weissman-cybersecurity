@@ -66,11 +66,12 @@ const webChecks = [
   [
     'web_cache_poison_adv',
     [
-      'X-Forwarded-Host',
       'toxic_chain',
       'run_web_cache_poison_adv_result_ctx',
-      'http_surface_cache_poison',
-      'X-Forwarded-Proto',
+      'synthesize_cache_poison_vectors',
+      'synthetic_zero_day',
+      'probe_cache_poison_vectors_concurrent',
+      'categories_hit',
     ],
   ],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
@@ -158,6 +159,27 @@ const cloudMetaBlock =
   cloudMetaIdx >= 0 && cloudMetaEnd > cloudMetaIdx
     ? cloud.slice(cloudMetaIdx, cloudMetaEnd)
     : cloud.slice(cloud.indexOf('run_cloud_metadata_ssrf_result_ctx'))
+
+// Cache poison synthesis module
+const cacheSynth = read('fingerprint_engine/src/web_cache_poison_synthesis.rs')
+if (!cacheSynth.includes('fn synthesize_cache_poison_vectors')) {
+  failures.push('web_cache_poison_synthesis missing synthesize_cache_poison_vectors')
+}
+for (const n of ['host_override', 'url_override', 'fat_get_truncation', 'synthetic_dual_stack', 'query_unkeyed', 'accept_unkeyed', 'cdn_vendor']) {
+  if (!cacheSynth.includes(n)) {
+    failures.push(`web_cache_poison_synthesis missing poison category: ${n}`)
+  }
+}
+if (!cacheSynth.includes('MAX_VECTORS_PER_URL') || !cacheSynth.includes('220')) {
+  failures.push('web_cache_poison_synthesis missing high vector cap')
+}
+if (!cacheSynth.includes('X-Forwarded-Host')) {
+  failures.push('web_cache_poison_synthesis missing X-Forwarded-Host catalog')
+}
+const paramPushCount = (cacheSynth.match(/push_param\(/g) ?? []).length
+if (paramPushCount < 4) {
+  failures.push(`web_cache_poison_synthesis param catalog too small (${paramPushCount})`)
+}
 for (const n of [
   'toxic_chain',
   'X-Forwarded-Host',
