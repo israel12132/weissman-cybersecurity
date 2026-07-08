@@ -56,6 +56,11 @@
      dark is byte-identical; light gets a frosted-white panel. */
   --table-surface: rgba(0, 0, 0, 0.30);
 
+  /* Chrome surfaces — dark values match the legacy hardcoded glass exactly. */
+  --sidebar-surface: rgba(0, 0, 0, 0.50);
+  --header-surface: rgba(0, 0, 0, 0.45);
+  --scrim: rgba(0, 0, 0, 0.60);
+
   /* ── Borders ────────────────────────────────────────────────────────────── */
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-default: rgba(255, 255, 255, 0.08);
@@ -267,6 +272,9 @@
   --row-hover-bg: rgba(15, 23, 42, 0.05);
   --row-zebra-bg: rgba(15, 23, 42, 0.025);
   --table-surface: rgba(255, 255, 255, 0.9);
+  --sidebar-surface: rgba(255, 255, 255, 0.82);
+  --header-surface: rgba(255, 255, 255, 0.80);
+  --scrim: rgba(15, 23, 42, 0.35);
 }
 
 /* Flip the document background in light mode (higher specificity than the

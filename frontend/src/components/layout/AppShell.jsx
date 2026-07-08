@@ -20,11 +20,11 @@ function BreadcrumbTrail({ crumbs }) {
         const isLast = i === crumbs.length - 1
         return (
           <React.Fragment key={`${crumb.label}-${i}`}>
-            {i > 0 && <ChevronRight className="w-3 h-3 text-white/25 shrink-0" aria-hidden />}
+            {i > 0 && <ChevronRight className="w-3 h-3 text-[var(--text-muted)] shrink-0" aria-hidden />}
             {crumb.to && !isLast ? (
               <Link
                 to={crumb.to}
-                className="text-white/45 hover:text-white/75 transition-colors truncate max-w-[10rem]"
+                className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors truncate max-w-[10rem]"
               >
                 {crumb.label}
               </Link>
@@ -32,7 +32,7 @@ function BreadcrumbTrail({ crumbs }) {
               <span
                 className={[
                   'truncate max-w-[14rem]',
-                  isLast ? 'text-white/70' : 'text-white/45',
+                  isLast ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]',
                 ].join(' ')}
                 aria-current={isLast ? 'page' : undefined}
               >
@@ -71,15 +71,15 @@ export default function AppShell({
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100 flex"
+      className="min-h-[100dvh] text-[var(--text-secondary)] flex"
       style={{ background: SHELL_BG }}
     >
       <AppSidebar />
 
       <div className="flex-1 flex flex-col min-w-0 lg:pl-0">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-black/45 backdrop-blur-xl supports-[backdrop-filter]:bg-black/35">
+        <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--header-surface)] backdrop-blur-xl">
           <div className={`${maxWidth} mx-auto px-4 pt-14 lg:pt-0`}>
-            <div className="flex items-center justify-end gap-2 py-2 border-b border-white/5 min-h-[40px]">
+            <div className="flex items-center justify-end gap-2 py-2 border-b border-[var(--border-subtle)] min-h-[40px]">
               <div className="flex-1 min-w-0 mr-4">
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
@@ -91,7 +91,7 @@ export default function AppShell({
             <div className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 {icon && (
-                  <span className="shrink-0 text-white/70 [&>svg]:w-5 [&>svg]:h-5">{icon}</span>
+                  <span className="shrink-0 text-[var(--text-secondary)] [&>svg]:w-5 [&>svg]:h-5">{icon}</span>
                 )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -108,13 +108,13 @@ export default function AppShell({
                       </span>
                     )}
                     {title && (
-                      <h1 className="text-base sm:text-lg font-semibold text-white truncate">
+                      <h1 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] truncate">
                         {title}
                       </h1>
                     )}
                   </div>
                   {subtitle && (
-                    <p className="text-[11px] font-mono text-white/40 mt-0.5 truncate">
+                    <p className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5 truncate">
                       {subtitle}
                     </p>
                   )}
