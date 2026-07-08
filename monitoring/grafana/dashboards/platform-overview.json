@@ -19,7 +19,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "sum(rate(weissman_requests_total[1m])) by (endpoint)",
+          "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
           "legendFormat": "{{endpoint}}",
           "datasource": { "type": "prometheus", "uid": "DS_PROMETHEUS" }
         }
@@ -36,7 +36,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
-          "expr": "sum(rate(weissman_errors_total[5m])) / sum(rate(weissman_requests_total[5m])) * 100",
+          "expr": "sum(rate(weissman_errors_total[5m])) / sum(rate(http_requests_total[5m])) * 100",
           "legendFormat": "error %",
           "datasource": { "type": "prometheus", "uid": "DS_PROMETHEUS" }
         }
@@ -54,7 +54,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
       "targets": [
         {
-          "expr": "weissman_active_scans",
+          "expr": "weissman_orchestrator_active_tenant_cycles",
           "legendFormat": "active scans",
           "datasource": { "type": "prometheus", "uid": "DS_PROMETHEUS" }
         }
