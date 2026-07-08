@@ -314,6 +314,20 @@ pub fn spawn_pool_metrics_loop(
                     0.0
                 },
             );
+
+            // Dependency-health gauges (up=1 / down=0) — a first-class signal for
+            // SLO / error-budget alerting instead of inferring outages from request errors.
+            let pg_up = sqlx::query_scalar::<_, i32>("SELECT 1")
+                .fetch_one(app_pool.as_ref())
+                .await
+                .is_ok();
+            metrics::gauge!("weissman_dependency_up", "dep" => "postgres")
+                .set(if pg_up { 1.0 } else { 0.0 });
+            if crate::http::rate_limit_redis::distributed_state_required() {
+                let redis_up = crate::http::rate_limit_redis::ping_ok().await;
+                metrics::gauge!("weissman_dependency_up", "dep" => "redis")
+                    .set(if redis_up { 1.0 } else { 0.0 });
+            }
         }
     });
 }

@@ -1,15 +1,46 @@
+/// Timeout-bounded `SELECT 1`. A wedged DB must fail the probe fast (well under the probe
+/// window) instead of blocking up to the pool acquire timeout and starving connections.
+async fn db_ping_ok(pool: &sqlx::PgPool) -> bool {
+    matches!(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(pool),
+        )
+        .await,
+        Ok(Ok(_))
+    )
+}
+
+/// Dependency-aware readiness. Returns 503 when a hard dependency (Postgres, plus Redis when
+/// distributed state is required) is unreachable, so a load balancer stops routing to a replica
+/// that can't serve. Kept SEPARATE from `/api/health` (liveness = process up) on purpose: making
+/// the liveness path 503 on an external-DB outage would trigger pod-restart storms that can't fix
+/// an external dependency.
+async fn api_ready(State(state): State<Arc<AppState>>) -> Response {
+    let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
+    let redis_required = crate::http::rate_limit_redis::distributed_state_required();
+    let redis_ok = !redis_required || crate::http::rate_limit_redis::ping_ok().await;
+    let ready = postgres_ok && redis_ok;
+    let status = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        status,
+        Json(json!({
+            "ready": ready,
+            "postgres_ok": postgres_ok,
+            "redis_ok": redis_ok,
+            "redis_required": redis_required,
+        })),
+    )
+        .into_response()
+}
+
 async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let uptime_secs = state.started_at.elapsed().as_secs();
-    let postgres_ok = match sqlx::query_scalar::<_, i32>("SELECT 1")
-        .fetch_one(state.app_pool.as_ref())
-        .await
-    {
-        Ok(_) => true,
-        Err(e) => {
-            tracing::warn!(target: "api_health", error = %e, "app_pool SELECT 1 failed");
-            false
-        }
-    };
+    let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
     let scanning_enabled = crate::orchestrator::is_scanning_active();
     let scan_in_progress = crate::orchestrator::scan_in_progress();
     let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();

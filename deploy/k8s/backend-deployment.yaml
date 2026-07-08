@@ -97,8 +97,10 @@ spec:
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:
+            # Dependency-aware: 503 when Postgres/Redis are unreachable so traffic is
+            # withheld from a replica that can't serve. Liveness stays on /api/health.
             httpGet:
-              path: /api/health
+              path: /api/ready
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10

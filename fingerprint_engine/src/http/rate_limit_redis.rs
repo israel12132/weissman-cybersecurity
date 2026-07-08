@@ -10,8 +10,33 @@ use redis::AsyncCommands;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+/// Bound every Redis acquire/op. Without this, a Redis black-hole (packets dropped, no RST)
+/// makes each op await forever and wedges the whole API on the per-request rate-limit path —
+/// and the fail-closed paths (`StrictOp::Unavailable`) never fire because the await never returns.
+const REDIS_OP_TIMEOUT: Duration = Duration::from_secs(2);
+
 pub struct RedisRateLimiter {
     client: redis::Client,
+}
+
+impl RedisRateLimiter {
+    /// Multiplexed connection whose acquire and every command are bounded by
+    /// [`REDIS_OP_TIMEOUT`]; a hung Redis surfaces as an error (→ fail-closed) instead of a hang.
+    async fn conn(&self) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
+        // Bound the acquire with tokio::timeout, and bound every subsequent command with the
+        // connection's own response timeout — together these turn a hung Redis into an error
+        // (→ fail-closed) instead of an unbounded await on the per-request hot path.
+        let mut conn = tokio::time::timeout(
+            REDIS_OP_TIMEOUT,
+            self.client.get_multiplexed_async_connection(),
+        )
+        .await
+        .map_err(|_| {
+            redis::RedisError::from((redis::ErrorKind::IoError, "redis connect timeout"))
+        })??;
+        conn.set_response_timeout(REDIS_OP_TIMEOUT);
+        Ok(conn)
+    }
 }
 
 fn shared() -> Option<Arc<RedisRateLimiter>> {
@@ -29,7 +54,7 @@ fn shared() -> Option<Arc<RedisRateLimiter>> {
 
 async fn incr_window(key: &str, window: Duration) -> Option<u64> {
     let rl = shared()?;
-    let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
+    let mut conn = rl.conn().await.ok()?;
     let count: u64 = conn.incr(key, 1u64).await.ok()?;
     if count == 1 {
         let _: Result<(), _> = conn.expire(key, window.as_secs() as i64).await;
@@ -75,7 +100,7 @@ pub async fn incr_enroll_ip(client_ip: &str) -> Option<u64> {
 
 async fn get_count_and_ttl(key: &str) -> Option<(u64, u64)> {
     let rl = shared()?;
-    let mut conn = rl.client.get_multiplexed_async_connection().await.ok()?;
+    let mut conn = rl.conn().await.ok()?;
     let count: u64 = conn.get::<_, Option<u64>>(key).await.ok()?.unwrap_or(0);
     let ttl: i64 = conn.ttl(key).await.ok()?;
     let reset_in = if ttl > 0 { ttl as u64 } else { 0 };
@@ -110,7 +135,7 @@ pub async fn push_violation(tenant_id: i64, kind: &str, endpoint: &str) {
         "attempts": 1,
     })
     .to_string();
-    if let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await {
+    if let Ok(mut conn) = rl.conn().await {
         let _: Result<(), _> = conn.lpush(&key, payload).await;
         let _: Result<(), _> = conn.ltrim(&key, 0, 49).await;
         let _: Result<(), _> = conn.expire(&key, 7 * 24 * 3600).await;
@@ -123,7 +148,7 @@ pub async fn incr_endpoint_hit(tenant_id: i64, path: &str) {
         return;
     };
     let key = format!("weissman:rl:endpoints:{tenant_id}");
-    if let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await {
+    if let Ok(mut conn) = rl.conn().await {
         let _: Result<(), _> = conn.hincr(&key, path, 1i64).await;
         let _: Result<(), _> = conn.expire(&key, 7 * 24 * 3600).await;
     }
@@ -135,7 +160,7 @@ pub async fn list_violations(tenant_id: i64, limit: usize) -> Vec<serde_json::Va
         return Vec::new();
     };
     let key = format!("weissman:rl:violations:{tenant_id}");
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return Vec::new();
     };
     let rows: Vec<String> = conn
@@ -153,7 +178,7 @@ pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
         return Vec::new();
     };
     let key = format!("weissman:rl:endpoints:{tenant_id}");
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return Vec::new();
     };
     let map: std::collections::HashMap<String, i64> = conn.hgetall(&key).await.unwrap_or_default();
@@ -196,7 +221,7 @@ pub async fn lockout_check_strict(tenant_id: i64, email: &str) -> StrictOp<Optio
             StrictOp::Ok(None)
         };
     };
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return StrictOp::Unavailable;
     };
     let ttl: i64 = match conn.ttl(lockout_until_key(tenant_id, email)).await {
@@ -216,7 +241,7 @@ pub async fn lockout_record_failure(tenant_id: i64, email: &str) {
     let Some(rl) = shared() else {
         return;
     };
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return;
     };
     let fk = lockout_fail_key(tenant_id, email);
@@ -236,7 +261,7 @@ pub async fn lockout_clear(tenant_id: i64, email: &str) {
     let Some(rl) = shared() else {
         return;
     };
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return;
     };
     let _: Result<(), _> = conn.del(lockout_fail_key(tenant_id, email)).await;
@@ -252,6 +277,21 @@ pub fn is_enabled() -> bool {
 #[must_use]
 pub fn distributed_state_required() -> bool {
     crate::security_startup::production_distributed_state_required()
+}
+
+/// Timeout-bounded Redis PING. `true` iff Redis answered — used by readiness and the
+/// dependency-health gauge. Never hangs (the connection is bounded by [`REDIS_OP_TIMEOUT`]).
+pub async fn ping_ok() -> bool {
+    let Some(rl) = shared() else {
+        return false;
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return false;
+    };
+    redis::cmd("PING")
+        .query_async::<String>(&mut conn)
+        .await
+        .is_ok()
 }
 
 /// Tri-state result for strict distributed ops (distinguishes Redis outage from "not locked").
@@ -272,9 +312,7 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
                 .into(),
         );
     };
-    let mut conn = rl
-        .client
-        .get_multiplexed_async_connection()
+    let mut conn = rl.conn()
         .await
         .map_err(|e| format!("Redis PING failed at startup: {e}"))?;
     redis::cmd("PING")
@@ -306,7 +344,7 @@ async fn incr_window_strict(key: &str, window: Duration) -> StrictOp<u64> {
             StrictOp::Ok(0)
         };
     };
-    let Ok(mut conn) = rl.client.get_multiplexed_async_connection().await else {
+    let Ok(mut conn) = rl.conn().await else {
         return StrictOp::Unavailable;
     };
     let count: u64 = match conn.incr(key, 1u64).await {

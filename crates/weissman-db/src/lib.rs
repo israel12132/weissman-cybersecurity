@@ -129,12 +129,31 @@ pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(2)
         .min(max);
+    let stmt_ms = statement_timeout_ms("WEISSMAN_APP_STATEMENT_TIMEOUT_MS", 120_000);
     PgPoolOptions::new()
         .max_connections(max)
         .min_connections(min)
         .acquire_timeout(Duration::from_secs(30))
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                // Server-side statement timeout bulkheads a pathological/blocked query so it
+                // can't pin a pooled connection indefinitely and exhaust the pool.
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
         .connect(database_url)
         .await
+}
+
+/// Per-connection `statement_timeout` in milliseconds (0 disables). Tunable per pool via env.
+fn statement_timeout_ms(var: &str, default_ms: u64) -> u64 {
+    std::env::var(var)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(default_ms)
 }
 
 /// Connect app pool using `DATABASE_URL` from the environment.
@@ -156,10 +175,19 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
+    let stmt_ms = statement_timeout_ms("WEISSMAN_AUTH_STATEMENT_TIMEOUT_MS", 30_000);
     PgPoolOptions::new()
         .max_connections(max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(15))
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
         .connect(database_url)
         .await
 }
@@ -192,9 +220,13 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .max_connections(max)
         .min_connections(1)
         .acquire_timeout(Duration::from_secs(30))
-        .after_connect(|conn, _| {
+        .after_connect(move |conn, _| {
+            let stmt_ms = statement_timeout_ms("WEISSMAN_INTEL_STATEMENT_TIMEOUT_MS", 120_000);
             Box::pin(async move {
                 sqlx::query("SET search_path TO intel, public")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
                     .execute(&mut *conn)
                     .await?;
                 Ok(())

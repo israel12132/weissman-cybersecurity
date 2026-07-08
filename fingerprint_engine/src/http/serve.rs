@@ -217,6 +217,9 @@ async fn auth_guard(
     if path == "/api/health" && method == Method::GET {
         return next.run(request).await;
     }
+    if path == "/api/ready" && method == Method::GET {
+        return next.run(request).await;
+    }
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
@@ -1376,6 +1379,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
                 }
             }
         });
+        crate::audit_log::spawn_audit_checkpoint_worker(app_pool.clone(), auth_pool.clone());
         tokio::spawn(crate::payload_sync_worker::run_worker_loop(
             app_pool.clone(),
             intel_pool.clone(),

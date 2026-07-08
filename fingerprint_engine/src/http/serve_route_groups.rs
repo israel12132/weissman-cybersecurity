@@ -214,6 +214,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/auth/saml/begin", get(crate::saml_auth::saml_begin))
         .route("/api/auth/saml/acs", post(crate::saml_auth::saml_acs))
         .route("/api/health", get(api_health))
+        .route("/api/ready", get(api_ready))
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/audit/export", get(api_audit_export))
         .route("/api/auth/me", get(api_auth_me))

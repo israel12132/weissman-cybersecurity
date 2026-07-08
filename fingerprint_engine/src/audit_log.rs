@@ -35,6 +35,104 @@ pub fn digest_hex(input: &str) -> String {
     sha256_hex(input)
 }
 
+// ── Keyed chain checkpoints (non-repudiation beyond DB-superuser compromise) ────
+use hmac::{Hmac, Mac};
+type HmacSha256 = Hmac<Sha256>;
+
+/// HMAC key for audit checkpoints — held OUTSIDE the DB. Dedicated key preferred; JWT fallback.
+fn checkpoint_secret() -> Option<Vec<u8>> {
+    std::env::var("WEISSMAN_AUDIT_CHECKPOINT_SECRET")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("WEISSMAN_JWT_SECRET").ok())
+        .map(|s| s.trim().as_bytes().to_vec())
+        .filter(|b| !b.is_empty())
+}
+
+fn checkpoint_hmac_bytes(key: &[u8], canonical: &str) -> Vec<u8> {
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
+    mac.update(canonical.as_bytes());
+    mac.finalize().into_bytes().to_vec()
+}
+
+fn checkpoint_canonical(tenant_id: i64, head_id: i64, head_hash: &str) -> String {
+    format!("cpv1|{tenant_id}|{head_id}|{head_hash}")
+}
+
+/// Write a keyed checkpoint over the current audit-chain head for `tenant_id`.
+/// Returns `Ok(false)` when there is no hashed head yet or no checkpoint key is configured.
+/// The HMAC is keyed by a secret held outside the DB, so a superuser who rewrites history and
+/// recomputes every unkeyed SHA-256 `event_hash` still cannot forge a matching checkpoint.
+pub async fn write_chain_checkpoint(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let Some(key) = checkpoint_secret() else {
+        return Ok(false);
+    };
+    let head: Option<(i64, String)> = sqlx::query_as(
+        r#"SELECT id, event_hash FROM audit_logs
+           WHERE tenant_id = $1 AND event_hash IS NOT NULL
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((head_id, head_hash)) = head else {
+        return Ok(false);
+    };
+    let mac = hex::encode(checkpoint_hmac_bytes(
+        &key,
+        &checkpoint_canonical(tenant_id, head_id, &head_hash),
+    ));
+    sqlx::query(
+        r#"INSERT INTO audit_chain_checkpoints
+           (tenant_id, head_event_id, head_hash, checkpoint_hmac)
+           VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(tenant_id)
+    .bind(head_id)
+    .bind(&head_hash)
+    .bind(&mac)
+    .execute(&mut **tx)
+    .await?;
+    Ok(true)
+}
+
+/// Verify the latest checkpoint for `tenant_id`. `Ok(None)` = no checkpoint/key;
+/// `Ok(Some(true))` = checkpoint HMAC valid AND the referenced audit row still carries that
+/// `event_hash`; `Ok(Some(false))` = tamper detected (forged checkpoint or rewritten history).
+pub async fn verify_latest_checkpoint(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+) -> Result<Option<bool>, sqlx::Error> {
+    let Some(key) = checkpoint_secret() else {
+        return Ok(None);
+    };
+    let cp: Option<(i64, String, String)> = sqlx::query_as(
+        r#"SELECT head_event_id, head_hash, checkpoint_hmac FROM audit_chain_checkpoints
+           WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((head_id, head_hash, stored_mac)) = cp else {
+        return Ok(None);
+    };
+    let expected = checkpoint_hmac_bytes(&key, &checkpoint_canonical(tenant_id, head_id, &head_hash));
+    if !crate::security_hardening::constant_time_hmac_hex_eq(&expected, &stored_mac) {
+        return Ok(Some(false));
+    }
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT event_hash FROM audit_logs WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(head_id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .flatten();
+    Ok(Some(current.as_deref() == Some(head_hash.as_str())))
+}
+
 pub async fn insert_audit(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
@@ -214,12 +312,18 @@ pub struct AuditExportEntry {
 /// Verify hash chain for exported rows (ordered ascending by id).
 pub fn verify_chain(entries: &[AuditExportEntry]) -> bool {
     let mut expected_prev = String::new();
+    let mut chain_started = false;
     for entry in entries {
         if entry.prev_hash != expected_prev {
             return false;
         }
         let Some(ref event_hash) = entry.event_hash else {
-            // Legacy row without hash — chain breaks here unless genesis continues.
+            // A NULL event_hash is tolerated ONLY for legacy rows that precede any hashed row.
+            // Once the chain has started, a NULL hash is a truncation/tamper signal (an attacker
+            // could otherwise null a hash to make the verifier re-anchor and pass) — fail closed.
+            if chain_started {
+                return false;
+            }
             expected_prev.clear();
             continue;
         };
@@ -241,6 +345,7 @@ pub fn verify_chain(entries: &[AuditExportEntry]) -> bool {
             return false;
         }
         expected_prev = event_hash.clone();
+        chain_started = true;
     }
     true
 }
@@ -368,6 +473,41 @@ pub async fn user_email_for_id(auth_pool: &PgPool, user_id: i64) -> String {
         .unwrap_or_else(|_| format!("user_id:{}", user_id))
 }
 
+/// Periodically write a keyed checkpoint over each active tenant's audit-chain head.
+/// Spawn once, on the singleton leader only. No-op when no checkpoint key is configured.
+pub fn spawn_audit_checkpoint_worker(
+    app_pool: std::sync::Arc<PgPool>,
+    auth_pool: std::sync::Arc<PgPool>,
+) {
+    tokio::spawn(async move {
+        let interval_secs = std::env::var("WEISSMAN_AUDIT_CHECKPOINT_SECS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(3600)
+            .clamp(60, 86_400);
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        loop {
+            ticker.tick().await;
+            if checkpoint_secret().is_none() {
+                continue;
+            }
+            let tenants: Vec<i64> =
+                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
+                    .fetch_all(auth_pool.as_ref())
+                    .await
+                    .unwrap_or_default();
+            for tid in tenants {
+                if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool.as_ref(), tid).await {
+                    if let Err(e) = write_chain_checkpoint(&mut tx, tid).await {
+                        tracing::warn!(target: "audit_checkpoint", tenant_id = tid, error = %e, "checkpoint write failed");
+                    }
+                    let _ = tx.commit().await;
+                }
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,5 +540,46 @@ mod tests {
             chain_valid: true,
         };
         assert!(verify_chain(&[entry]));
+    }
+
+    fn make_entry(id: i64, prev: &str) -> AuditExportEntry {
+        let created = Utc::now();
+        let canonical = canonical_audit_payload(
+            prev, 1, None, "u", "a", "d", "127.0.0.1", created,
+        );
+        AuditExportEntry {
+            id,
+            tenant_id: 1,
+            created_at: created.to_rfc3339(),
+            actor_user_id: None,
+            user_label: "u".into(),
+            action_type: "a".into(),
+            details: "d".into(),
+            ip_address: "127.0.0.1".into(),
+            prev_hash: prev.to_string(),
+            event_hash: Some(sha256_hex(&canonical)),
+            chain_valid: true,
+        }
+    }
+
+    #[test]
+    fn null_hash_after_chain_started_is_rejected() {
+        let e1 = make_entry(1, "");
+        let head = e1.event_hash.clone().unwrap();
+        let mut e2 = make_entry(2, &head);
+        // Attacker nulls a hash mid-chain to force the verifier to re-anchor.
+        e2.event_hash = None;
+        assert!(
+            !verify_chain(&[e1, e2]),
+            "a NULL hash after the chain started must fail (truncation/tamper)"
+        );
+    }
+
+    #[test]
+    fn clean_two_row_chain_verifies() {
+        let e1 = make_entry(1, "");
+        let head = e1.event_hash.clone().unwrap();
+        let e2 = make_entry(2, &head);
+        assert!(verify_chain(&[e1, e2]));
     }
 }
