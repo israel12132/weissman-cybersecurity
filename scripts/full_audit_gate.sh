@@ -62,6 +62,7 @@ gate_g4_wiring() {
   node scripts/live_only_audit.mjs >/dev/null
   node scripts/engine_quality_audit.mjs >/dev/null
   node scripts/engine_intelligence_audit.mjs >/dev/null
+  node scripts/engine_depth_audit.mjs >/dev/null
   local gaps
   gaps="$(node scripts/verify_engine_wiring.mjs | node -e "
     let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{

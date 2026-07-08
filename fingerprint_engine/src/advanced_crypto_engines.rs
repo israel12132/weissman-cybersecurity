@@ -170,22 +170,57 @@ pub async fn run_mfa_bypass_engine_result(t: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    for path in ["/api/auth/login", "/login", "/api/login"] {
+    let paths = [
+        "/api/auth/login",
+        "/login",
+        "/api/login",
+        "/api/v1/auth",
+        "/oauth/token",
+        "/api/mfa/verify",
+    ];
+    let mfa_fields = ["mfa_token", "otp", "totp", "code", "verification_code", "two_factor"];
+    for path in paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let payload = serde_json::json!({"email":"test@example.com","password":"x","mfa_token":""});
-        if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
-            if p.status == 200 && p.body.contains("access_token") {
-                findings.push(finding(
-                    "mfa_bypass_engine",
-                    "Login endpoint may accept empty mfa_token",
-                    "high",
-                    "T1556",
-                    &format!(
-                        "POST {} returned access_token with empty mfa_token.",
-                        p.final_url
-                    ),
-                    t,
-                ));
+        for field in mfa_fields {
+            let mut payload = serde_json::json!({
+                "email": "probe@weissman.invalid",
+                "password": "invalid-probe-password",
+            });
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert(field.into(), serde_json::json!(""));
+            }
+            if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
+                let body_low = p.body.to_ascii_lowercase();
+                if p.status == 200
+                    && (body_low.contains("access_token")
+                        || body_low.contains("refresh_token")
+                        || body_low.contains("\"token\""))
+                {
+                    findings.push(crypto_finding(
+                        "mfa_bypass_engine",
+                        &format!("Auth endpoint may accept empty {field}"),
+                        "critical",
+                        "T1556",
+                        &format!(
+                            "POST {} with empty '{field}' returned HTTP 200 + token material — MFA bypass candidate.",
+                            p.final_url
+                        ),
+                        t,
+                    ));
+                }
+                if p.status == 200 && body_low.contains("mfa") && body_low.contains("disabled") {
+                    findings.push(crypto_finding(
+                        "mfa_bypass_engine",
+                        "MFA disabled flag in auth response",
+                        "high",
+                        "T1556",
+                        &format!(
+                            "POST {} returned MFA-disabled signal with field '{field}'.",
+                            p.final_url
+                        ),
+                        t,
+                    ));
+                }
             }
         }
     }
@@ -215,14 +250,15 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(t);
+    let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
+
+    if let Some(p) = http_get(&client, &base).await {
         if header_value(&p.headers, "strict-transport-security").is_none() {
-            findings.push(finding(
+            findings.push(crypto_finding(
                 "zero_trust_bypass",
                 "No HSTS on protected resource",
-                "low",
+                "medium",
                 "T1078",
                 &format!(
                     "Response from {} lacks Strict-Transport-Security — TLS downgrade possible.",
@@ -232,6 +268,61 @@ pub async fn run_zero_trust_bypass_result(t: &str) -> EngineResult {
             ));
         }
     }
+
+    let internal_paths = [
+        "/internal",
+        "/admin",
+        "/api/internal",
+        "/debug",
+        "/status",
+        "/.well-known/openid-configuration",
+    ];
+    for path in internal_paths {
+        let direct = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &direct).await {
+            if p.status == 200 && !p.body.is_empty() && p.body.len() > 32 {
+                findings.push(crypto_finding(
+                    "zero_trust_bypass",
+                    &format!("Internal path reachable without ZTNA headers: {path}"),
+                    "high",
+                    "T1078",
+                    &format!(
+                        "GET {} returned HTTP 200 ({}B) without device-trust headers — verify ZTNA enforcement.",
+                        p.final_url, p.body.len()
+                    ),
+                    t,
+                ));
+                break;
+            }
+        }
+        if let Some(p) = crate::engine_probes::http_get_with_headers(
+            &client,
+            &direct,
+            &[
+                ("X-Forwarded-For", "127.0.0.1"),
+                ("X-Original-URL", path),
+                ("X-Trusted-Device", "1"),
+            ],
+        )
+        .await
+        {
+            if p.status == 200 && p.body.len() > 32 {
+                findings.push(crypto_finding(
+                    "zero_trust_bypass",
+                    "Spoofed X-Forwarded-For may bypass ZTNA",
+                    "critical",
+                    "T1078",
+                    &format!(
+                        "GET {} with X-Forwarded-For:127.0.0.1 returned HTTP 200 — internal path trust may rely on spoofable headers.",
+                        p.final_url
+                    ),
+                    t,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("zero_trust_bypass", t)
     } else {

@@ -767,9 +767,15 @@ async fn dispatch_engine_match(
         "iac_supply_chain" => crate::advanced_supply_chain_engines::run_iac_supply_chain_result(target).await,
 
         // ── Advanced Web engines ───────────────────────────────────────────────
-        "cors_misconfiguration" => crate::advanced_web_engines::run_cors_misconfiguration_result(target).await,
-        "swagger_abuse" => crate::advanced_web_engines::run_swagger_abuse_result(target).await,
-        "soap_injection" => crate::advanced_web_engines::run_soap_injection_result(target).await,
+        "cors_misconfiguration" => {
+            crate::advanced_web_engines::run_cors_misconfiguration_result_ctx(target, ctx).await
+        }
+        "swagger_abuse" => {
+            crate::advanced_web_engines::run_swagger_abuse_result_ctx(target, ctx).await
+        }
+        "soap_injection" => {
+            crate::advanced_web_engines::run_soap_injection_result_ctx(target, ctx).await
+        }
         "odata_injection" => crate::advanced_web_engines::run_odata_injection_result(target).await,
         "css_injection" => crate::advanced_web_engines::run_css_injection_result(target).await,
         "template_injection_adv" => crate::advanced_web_engines::run_template_injection_adv_result(target).await,
@@ -779,19 +785,29 @@ async fn dispatch_engine_match(
         "subdomain_takeover" => crate::advanced_web_engines::run_subdomain_takeover_result(target).await,
         "file_inclusion_rfi" => crate::advanced_web_engines::run_file_inclusion_rfi_result(target).await,
         "deserialization_net" => crate::advanced_web_engines::run_deserialization_net_result(target).await,
-        "api_rate_limit_bypass" => crate::advanced_web_engines::run_api_rate_limit_bypass_result(target).await,
+        "api_rate_limit_bypass" => {
+            crate::advanced_web_engines::run_api_rate_limit_bypass_result_ctx(target, ctx).await
+        }
         "graphql_subscription_attack" => crate::advanced_web_engines::run_graphql_subscription_attack_result(target).await,
         "webrtc_attack" => crate::advanced_web_engines::run_webrtc_attack_result(target).await,
         "browser_extension_attack" => crate::advanced_web_engines::run_browser_extension_attack_result(target).await,
         "web3_dapp_attack" => crate::advanced_web_engines::run_web3_dapp_attack_result(target).await,
-        "api_gateway_bypass" => crate::advanced_web_engines::run_api_gateway_bypass_result(target).await,
-        "graphql_deep_attack" => crate::advanced_web_engines::run_graphql_deep_attack_result(target).await,
-        "grpc_reflection_attack" => crate::advanced_web_engines::run_grpc_reflection_attack_result(target).await,
+        "api_gateway_bypass" => {
+            crate::advanced_web_engines::run_api_gateway_bypass_result_ctx(target, ctx).await
+        }
+        "graphql_deep_attack" => {
+            crate::advanced_web_engines::run_graphql_deep_attack_result_ctx(target, ctx).await
+        }
+        "grpc_reflection_attack" => {
+            crate::advanced_web_engines::run_grpc_reflection_attack_result_ctx(target, ctx).await
+        }
         "http2_attack" => crate::advanced_web_engines::run_http2_attack_result(target).await,
         "idor_advanced" => crate::advanced_web_engines::run_idor_advanced_result(target).await,
         "jwt_advanced_attack" => crate::advanced_web_engines::run_jwt_advanced_attack_result(target).await,
         "nosql_deep_injection" => crate::advanced_web_engines::run_nosql_deep_injection_result(target).await,
-        "web_cache_poison_adv" => crate::advanced_web_engines::run_web_cache_poison_adv_result(target).await,
+        "web_cache_poison_adv" => {
+            crate::advanced_web_engines::run_web_cache_poison_adv_result_ctx(target, ctx).await
+        }
 
         // ── Advanced Recon engines (new live probes) ───────────────────────────
         "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
@@ -806,7 +822,9 @@ async fn dispatch_engine_match(
         "github_secret_scan" => crate::advanced_recon_engines::run_github_secret_scan_result(target).await,
 
         // ── Advanced Cloud engines (new live probes) ───────────────────────────
-        "cloud_metadata_ssrf" => crate::advanced_cloud_engines::run_cloud_metadata_ssrf_result(target).await,
+        "cloud_metadata_ssrf" => {
+            crate::advanced_cloud_engines::run_cloud_metadata_ssrf_result_ctx(target, ctx).await
+        }
         "s3_bucket_attack" => crate::advanced_cloud_engines::run_s3_bucket_attack_result(target).await,
         "cloud_iam_escalation" => crate::advanced_cloud_engines::run_cloud_iam_escalation_result(target).await,
         "kubernetes_rbac_escape" => crate::advanced_cloud_engines::run_kubernetes_rbac_escape_result(target).await,

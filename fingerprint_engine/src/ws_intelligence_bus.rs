@@ -63,6 +63,32 @@ impl IntelligenceBus {
         });
     }
 
+    /// HTTP engines publish live surface observations for downstream replay (GraphQL paths, tokens).
+    pub fn publish_http_surface(
+        &self,
+        kind: &str,
+        value: &str,
+        source_url: &str,
+        source_engine: &str,
+        proof: &str,
+    ) {
+        if value.trim().is_empty() {
+            return;
+        }
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        self.publish(IntelArtifact {
+            kind: kind.to_string(),
+            value: value.to_string(),
+            source_url: source_url.to_string(),
+            source_engine: source_engine.to_string(),
+            proof: proof.to_string(),
+            captured_unix_ms: ts,
+        });
+    }
+
     pub fn snapshot(&self) -> Vec<IntelArtifact> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
@@ -93,6 +119,8 @@ pub fn is_cross_protocol_eligible(artifact: &IntelArtifact) -> bool {
     }
     proof.starts_with("jwt_pattern")
         || proof.starts_with("json_key_")
+        || proof.starts_with("graphql_")
+        || proof.starts_with("http_surface_")
         || proof.contains("signalr")
         || proof.contains("negotiate")
         || proof.contains("socketio")

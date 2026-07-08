@@ -133,6 +133,35 @@ pub async fn tcp_open(host: &str, port: u16) -> bool {
     )
 }
 
+/// Live ICMP echo probe (single packet). Returns `Some(true/false)` when ping runs,
+/// `None` when the OS ping binary is unavailable or times out.
+pub async fn icmp_echo_reachable(host: &str) -> Option<bool> {
+    use tokio::process::Command;
+    let host = host.trim();
+    if host.is_empty() {
+        return None;
+    }
+    let fut = async {
+        #[cfg(target_os = "windows")]
+        let mut cmd = {
+            let mut c = Command::new("ping");
+            c.args(["-n", "1", "-w", "2000", host]);
+            c
+        };
+        #[cfg(not(target_os = "windows"))]
+        let mut cmd = {
+            let mut c = Command::new("ping");
+            c.args(["-c", "1", "-W", "2", host]);
+            c
+        };
+        cmd.output().await.ok().map(|o| o.status.success())
+    };
+    match timeout(Duration::from_secs(4), fut).await {
+        Ok(v) => v,
+        Err(_) => None,
+    }
+}
+
 /// Send a binary payload to a TCP port and read response (for protocol fingerprinting).
 pub async fn tcp_probe_response(host: &str, port: u16, payload: &[u8]) -> Option<Vec<u8>> {
     let addr = format!("{}:{}", host, port);
@@ -413,6 +442,25 @@ pub async fn dns_mx(host: &str) -> Vec<String> {
                 continue;
             };
             out.push(mx.exchange.to_string());
+        }
+    }
+    out
+}
+
+/// DNS NS (nameserver) record lookup.
+pub async fn dns_ns(host: &str) -> Vec<String> {
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(ns) = resolver.ns_lookup(host).await {
+        for record in ns.answers() {
+            let hickory_resolver::proto::rr::RData::NS(ns) = &record.data else {
+                continue;
+            };
+            out.push(ns.0.to_string());
         }
     }
     out
