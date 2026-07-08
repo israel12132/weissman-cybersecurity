@@ -23,20 +23,10 @@ import { useToast } from '../components/ui/Toaster'
 import { usePermissions } from '../context/AuthContext'
 import { confirmDialog } from '../utils/confirmDialog'
 import { apiFetch } from '../lib/apiBase'
+import { isExpired, isExpiringSoon } from '../lib/suppressionStatus'
 
 const NS = 'pages.findingSuppressions'
 const columnHelper = createColumnHelper()
-
-/** A suppression is expired when it has an expiry in the past. */
-function isExpired(s) {
-  return s.expires_at != null && new Date(s.expires_at).getTime() < Date.now()
-}
-/** …expiring soon = active with an expiry inside the next 7 days. */
-function isExpiringSoon(s) {
-  if (s.expires_at == null) return false
-  const ms = new Date(s.expires_at).getTime() - Date.now()
-  return ms > 0 && ms <= 7 * 86_400_000
-}
 
 function suppressionsCsv(rows) {
   const header = ['engine', 'signature_hash', 'target_glob', 'reason', 'hit_count', 'created_at', 'expires_at']

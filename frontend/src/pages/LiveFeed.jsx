@@ -16,12 +16,10 @@ import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
+import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 
 const NS = 'pages.liveFeed'
 const REFRESH_MS = 15000
-
-const SEV_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 }
-const SEV_COLOR = { critical: '#f43f5e', high: '#f97316', medium: '#facc15', low: '#38bdf8', info: '#94a3b8' }
 
 export default function LiveFeed() {
   const { t } = useTranslation()
