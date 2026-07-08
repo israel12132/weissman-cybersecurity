@@ -46,6 +46,9 @@ export default function ComplianceFrameworks() {
   const { toast } = useToast();
   const [pack, setPack] = useState(null);
   const [packLoading, setPackLoading] = useState(false);
+  const [soarOpenId, setSoarOpenId] = useState(null);
+  const [soarDetail, setSoarDetail] = useState(null);
+  const [soarLoading, setSoarLoading] = useState(false);
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
@@ -154,7 +157,32 @@ export default function ComplianceFrameworks() {
   // Fresh client selection invalidates a previously-generated pack.
   useEffect(() => {
     setPack(null);
+    setSoarOpenId(null);
+    setSoarDetail(null);
   }, [selectedClientId]);
+
+  // Expand a SOAR action to its full execution detail (blast radius, evidence,
+  // revert runbook). Wired to GET /api/soar/executions/:id (operator+).
+  const toggleSoar = useCallback(async (execId) => {
+    if (soarOpenId === execId) {
+      setSoarOpenId(null);
+      setSoarDetail(null);
+      return;
+    }
+    setSoarOpenId(execId);
+    setSoarDetail(null);
+    setSoarLoading(true);
+    try {
+      const r = await apiFetch(`/api/soar/executions/${encodeURIComponent(execId)}`);
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok !== false) setSoarDetail(d.execution || d);
+      else setSoarDetail({ _error: d.detail || `HTTP ${r.status}` });
+    } catch (e) {
+      setSoarDetail({ _error: e.message });
+    } finally {
+      setSoarLoading(false);
+    }
+  }, [soarOpenId]);
 
   const getComplianceColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -356,6 +384,90 @@ export default function ComplianceFrameworks() {
                       {fw} · {Array.isArray(items) ? items.length : 0}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {Array.isArray(pack.soar_executions) && pack.soar_executions.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+                    {t('pages.complianceFrameworks.soar_heading')}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {pack.soar_executions.map((ex) => {
+                      const open = soarOpenId === ex.id;
+                      const st = String(ex.status || '').toLowerCase();
+                      const stColor = st.includes('success') || st.includes('done') || st.includes('complete')
+                        ? '#4ade80'
+                        : st.includes('fail') || st.includes('error')
+                          ? '#f87171'
+                          : '#facc15';
+                      return (
+                        <li key={ex.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => toggleSoar(ex.id)}
+                            aria-expanded={open}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)] transition-colors"
+                          >
+                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/25 bg-cyan-500/5 text-cyan-300/85 shrink-0">
+                              {ex.action_kind || '—'}
+                            </span>
+                            <span
+                              className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0"
+                              style={{ color: stColor, background: `${stColor}12` }}
+                            >
+                              {ex.status || '—'}
+                            </span>
+                            <span className="text-[11px] text-[var(--text-tertiary)] font-mono truncate flex-1 min-w-0">
+                              {ex.target_id || ex.detail || '—'}
+                            </span>
+                            <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 hidden sm:inline">
+                              {ex.updated_at ? new Date(ex.updated_at).toLocaleString() : ''}
+                            </span>
+                          </button>
+                          {open && (
+                            <div className="px-3 pb-3 pt-1 border-t border-[var(--border-subtle)]">
+                              {soarLoading ? (
+                                <div className="text-[11px] font-mono text-[var(--text-muted)] py-2">
+                                  {t('pages.complianceFrameworks.soar_loading')}
+                                </div>
+                              ) : soarDetail?._error ? (
+                                <div className="text-[11px] font-mono text-rose-300 py-2">{soarDetail._error}</div>
+                              ) : soarDetail ? (
+                                <div className="space-y-2 pt-2">
+                                  {soarDetail.provider && (
+                                    <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
+                                      {t('pages.complianceFrameworks.soar_provider')}: {soarDetail.provider}
+                                    </div>
+                                  )}
+                                  {soarDetail.result_detail && (
+                                    <div className="text-[11px] text-[var(--text-secondary)]">{soarDetail.result_detail}</div>
+                                  )}
+                                  {soarDetail.blast_radius && Object.keys(soarDetail.blast_radius).length > 0 && (
+                                    <div>
+                                      <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                                        {t('pages.complianceFrameworks.soar_blast')}
+                                      </div>
+                                      <pre className="text-[10px] font-mono text-amber-200/80 bg-[var(--bg-3)] rounded-lg p-2 overflow-auto max-h-40 leading-relaxed">
+                                        {JSON.stringify(soarDetail.blast_radius, null, 2)}
+                                      </pre>
+                                    </div>
+                                  )}
+                                  {soarDetail.revert_runbook?.id && (
+                                    <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
+                                      {t('pages.complianceFrameworks.soar_revert', {
+                                        status: soarDetail.revert_runbook.status || '—',
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
 
