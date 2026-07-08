@@ -2,7 +2,7 @@
 
 use crate::engine_probes::{
     dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
-    http_get_with_headers, http_post_json_with_headers, normalize_url,
+    http_get_with_headers, http_post_json_with_headers, normalize_url, tcp_scan,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -434,13 +434,36 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
         }
     }
     if findings.is_empty() {
-        empty_ok("iot_shodan_scan", target)
-    } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("iot_shodan_scan: {}", findings.len()),
-        )
+        let open = tcp_scan(&host, &[554, 1883, 8883, 502, 102, 8080, 8443, 161], 8).await;
+        if !open.is_empty() {
+            findings.push(finding(
+                "iot_shodan_scan",
+                &format!("Passive IoT port surface: {:?}", open),
+                "medium",
+                "T1595.001",
+                &format!(
+                    "No Shodan API key configured — live TCP connect found open ports {:?} on {host}. Set WEISSMAN_SHODAN_API_KEY for full host metadata.",
+                    open
+                ),
+                target,
+            ));
+        } else {
+            findings.push(finding(
+                "iot_shodan_scan",
+                "Shodan API key not configured — no IoT ports observed",
+                "info",
+                "T1595.001",
+                &format!(
+                    "Set WEISSMAN_SHODAN_API_KEY for Shodan host metadata on {host}. Passive TCP scan of common IoT ports found no listeners from this vantage."
+                ),
+                target,
+            ));
+        }
     }
+    EngineResult::ok(
+        findings.clone(),
+        format!("iot_shodan_scan: {}", findings.len()),
+    )
 }
 cli_wrapper!(run_iot_shodan_scan, run_iot_shodan_scan_result);
 
@@ -509,7 +532,21 @@ pub async fn run_github_secret_scan_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let token = std::env::var("WEISSMAN_GITHUB_TOKEN").unwrap_or_default();
     if token.is_empty() {
-        return empty_ok("github_secret_scan", target);
+        let finding = finding(
+            "github_secret_scan",
+            "GitHub secret scan requires API token",
+            "info",
+            "T1552.001",
+            &format!(
+                "Set WEISSMAN_GITHUB_TOKEN (or tenant github_token in system_configs) to run live GitHub code search for leaked secrets referencing '{}'. Without a token, only public web UI search is available.",
+                host
+            ),
+            target,
+        );
+        return EngineResult::ok(
+            vec![finding],
+            format!("github_secret_scan: token required for live search on {host}"),
+        );
     }
     crate::leak_hunter_engine::github_leak_search(&host, Some(&token))
         .await
