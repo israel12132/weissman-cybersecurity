@@ -19,6 +19,7 @@ const WEB_PROBE_DEPTH: &str = "web_app_surface";
 const ENGINE_GRAPHQL_DEEP: &str = "graphql_deep_attack";
 const ENGINE_CORS: &str = "cors_misconfiguration";
 const ENGINE_GATEWAY: &str = "api_gateway_bypass";
+const ENGINE_RATE_LIMIT: &str = "api_rate_limit_bypass";
 
 fn web_finding(
     engine_id: &str,
@@ -1921,86 +1922,318 @@ pub async fn run_jwt_advanced_attack_result(target: &str) -> EngineResult {
 cli_wrapper!(run_jwt_advanced_attack, run_jwt_advanced_attack_result);
 
 // ── api_rate_limit_bypass ─────────────────────────────────────────────────────
+fn rate_limit_probe_urls(target: &str, ctx: &EngineRunContext) -> Vec<String> {
+    let root = normalize_url(target);
+    let mut urls = vec![root.clone()];
+    for p in &ctx.discovered_paths {
+        urls.push(join_url(&root, p));
+    }
+    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+        for art in bus.snapshot() {
+            if art.proof.starts_with("graphql_")
+                || art.proof.starts_with("http_surface_")
+                || art.kind.contains("gateway")
+            {
+                urls.push(art.source_url.clone());
+            }
+        }
+    }
+    urls.sort();
+    urls.dedup();
+    urls
+}
+
+fn rate_limit_spoof_ips() -> [&'static str; 9] {
+    [
+        "10.0.0.1",
+        "10.0.0.2",
+        "10.0.0.3",
+        "10.0.0.4",
+        "10.0.0.5",
+        "192.168.1.10",
+        "172.16.0.8",
+        "203.0.113.7",
+        "198.51.100.42",
+    ]
+}
+
+async fn rate_limit_burst_429(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &[(&str, &str)],
+    count: u32,
+) -> (u32, u32) {
+    let mut sent = 0u32;
+    let mut limited = 0u32;
+    for _ in 0..count {
+        let probe = if headers.is_empty() {
+            http_get(client, url).await
+        } else {
+            http_get_with_headers(client, url, headers).await
+        };
+        if let Some(p) = probe {
+            sent += 1;
+            if p.status == 429 {
+                limited += 1;
+            }
+        }
+    }
+    (sent, limited)
+}
+
 pub async fn run_api_rate_limit_bypass_result(target: &str) -> EngineResult {
+    run_api_rate_limit_bypass_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_api_rate_limit_bypass_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let urls = rate_limit_probe_urls(target, ctx);
+    let auth_pairs = graphql_auth_header_pairs(&ctx.job_params);
+    let auth_refs = auth_pairs_as_refs(&auth_pairs);
+    let has_auth = !auth_pairs.is_empty();
     let mut findings: Vec<Value> = Vec::new();
-    let mut baseline_limited = 0;
-    let mut baseline_sent = 0;
-    for _ in 0..12 {
-        if let Some(p) = http_get(&client, &url).await {
-            baseline_sent += 1;
-            if p.status == 429 {
-                baseline_limited += 1;
+    let mut flags = RateLimitProbeFlags::default();
+
+    for url in &urls {
+        let (baseline_sent, baseline_limited) = rate_limit_burst_429(&client, url, &[], 12).await;
+        if baseline_limited > 0 {
+            flags.baseline_429 = true;
+        }
+
+        for (i, ip) in rate_limit_spoof_ips().iter().enumerate() {
+            let spoof_hdrs = [
+                ("X-Forwarded-For", *ip),
+                ("X-Real-IP", *ip),
+                ("Client-IP", *ip),
+                ("X-Originating-IP", *ip),
+                ("True-Client-IP", *ip),
+                ("CF-Connecting-IP", *ip),
+            ];
+            if let Some(p) = http_get_with_headers(&client, url, &spoof_hdrs).await {
+                if p.status == 429 {
+                    flags.spoof_still_limited = true;
+                }
+                if i > 3 && p.status == 200 && baseline_limited > 0 {
+                    flags.ip_spoof_bypass = true;
+                    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                        bus.publish_http_surface(
+                            "rate_limit_ip_spoof_bypass",
+                            ip,
+                            &p.final_url,
+                            ENGINE_RATE_LIMIT,
+                            "http_surface_rate_limit_ip_spoof",
+                        );
+                    }
+                    findings.push(web_finding_sync(
+                        ENGINE_RATE_LIMIT,
+                        "Rate limit bypass via X-Forwarded-For rotation",
+                        "high",
+                        "T1499.003",
+                        &format!(
+                            "Baseline burst hit {baseline_limited}×429 but rotating X-Forwarded-For ({ip}) returns HTTP 200 on {} — per-IP limits are spoofable.",
+                            p.final_url
+                        ),
+                        target,
+                        &["api_gateway_bypass", "zero_trust_bypass"],
+                        &["risk_superposition_collapse"],
+                        json!({"endpoint": p.final_url, "spoof_ip": ip, "baseline_429": baseline_limited}),
+                    ));
+                    break;
+                }
             }
         }
-    }
 
-    let spoof_ips = [
-        "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5",
-        "192.168.1.10", "172.16.0.8", "203.0.113.7", "198.51.100.42",
-    ];
-    let mut spoof_limited = 0;
-    let mut spoof_sent = 0;
-    for (i, ip) in spoof_ips.iter().enumerate() {
-        if let Some(p) = http_get_with_headers(
-            &client,
-            &url,
-            &[
-                ("X-Forwarded-For", ip),
-                ("X-Real-IP", ip),
-                ("Client-IP", ip),
-                ("X-Originating-IP", ip),
-            ],
-        )
-        .await
-        {
-            spoof_sent += 1;
-            if p.status == 429 {
-                spoof_limited += 1;
-            }
-            if i > 3 && p.status == 200 && baseline_limited > 0 && spoof_limited == 0 {
-                findings.push(web_finding(
-                    "api_rate_limit_bypass",
-                    "Rate limit bypass via X-Forwarded-For rotation",
+        if baseline_sent > 0 && baseline_limited == 0 {
+            flags.no_limit_observed = true;
+            findings.push(web_finding_sync(
+                ENGINE_RATE_LIMIT,
+                "No 429 across baseline burst",
+                "medium",
+                "T1499.003",
+                &format!(
+                    "Sent {baseline_sent} baseline requests to {url} without HTTP 429 — verify per-user/API-key throttles."
+                ),
+                target,
+                &["graphql_deep_attack"],
+                &["external_exposure_supreme"],
+                json!({"endpoint": url, "baseline_sent": baseline_sent}),
+            ));
+        }
+
+        if has_auth {
+            let (auth_sent, auth_limited) =
+                rate_limit_burst_429(&client, url, &auth_refs, 8).await;
+            if baseline_limited > 0 && auth_limited == 0 && auth_sent > 0 {
+                flags.auth_differential = true;
+                findings.push(web_finding_sync(
+                    ENGINE_RATE_LIMIT,
+                    "Auth differential: credentialed burst evades rate limit",
                     "high",
                     "T1499.003",
                     &format!(
-                        "Baseline burst hit {}×429 but rotating X-Forwarded-For still returns HTTP 200 on {} — per-IP limits are spoofable.",
-                        baseline_limited, p.final_url
+                        "Unauthenticated burst hit {baseline_limited}×429 but authenticated burst on {url} returned 0×429 — throttle keys on session/API-key only."
                     ),
                     target,
+                    &["jwt_advanced_attack", "mfa_bypass_engine"],
+                    &["identity_attack_chain"],
+                    json!({"endpoint": url, "auth_sent": auth_sent}),
                 ));
-                break;
+            }
+        }
+
+        let case_url = if url.contains("/api/") {
+            url.replace("/api/", "/API/")
+        } else {
+            format!("{url}?_={}", Instant::now().elapsed().as_nanos())
+        };
+        if case_url != *url {
+            if let (Some(base_p), Some(alt_p)) = (
+                http_get(&client, url).await,
+                http_get(&client, &case_url).await,
+            ) {
+                if base_p.status == 429 && alt_p.status < 400 {
+                    flags.case_path_bypass = true;
+                    findings.push(web_finding_sync(
+                        ENGINE_RATE_LIMIT,
+                        "Rate limit bypass via path/query normalization",
+                        "high",
+                        "T1499.003",
+                        &format!(
+                            "{url} → HTTP 429 but variant {case_url} → HTTP {} — ACL normalizes differently.",
+                            alt_p.status
+                        ),
+                        target,
+                        &["api_gateway_bypass"],
+                        &[],
+                        json!({"base": url, "variant": case_url}),
+                    ));
+                }
+            }
+        }
+
+        if url.to_ascii_lowercase().contains("graphql") {
+            let batch = json!([
+                {"query": "{__typename}"},
+                {"query": "{__typename}"},
+                {"query": "{__typename}"},
+                {"query": "{__typename}"},
+                {"query": "{__typename}"}
+            ]);
+            let mut batch_limited = 0u32;
+            for _ in 0..6 {
+                if let Some(p) = http_post_json(&client, url, &batch).await {
+                    if p.status == 429 {
+                        batch_limited += 1;
+                    } else if p.status >= 200 && p.status < 300 && baseline_limited > 0 {
+                        flags.graphql_batch_bypass = true;
+                        findings.push(web_finding_sync(
+                            ENGINE_RATE_LIMIT,
+                            "GraphQL batching evades per-request rate limit",
+                            "high",
+                            "T1499.003",
+                            &format!(
+                                "Single-query burst hit {baseline_limited}×429 but batched POST on {url} still returns HTTP {} — pairs with graphql_deep_attack.",
+                                p.status
+                            ),
+                            target,
+                            &["graphql_deep_attack"],
+                            &["risk_superposition_collapse"],
+                            json!({"endpoint": url, "batch_size": 5}),
+                        ));
+                        break;
+                    }
+                }
+            }
+            if batch_limited == 0 && flags.graphql_batch_bypass {
+                if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                    bus.publish_http_surface(
+                        "rate_limit_graphql_batch",
+                        url,
+                        url,
+                        ENGINE_RATE_LIMIT,
+                        "http_surface_rate_limit_graphql_batch",
+                    );
+                }
+            }
+        }
+
+        let header_bypass_hdrs = [
+            ("X-Original-URL", "/"),
+            ("X-Forwarded-Host", "127.0.0.1"),
+            ("X-Request-Id", "bypass-probe"),
+        ];
+        if baseline_limited > 0 {
+            if let Some(p) = http_get_with_headers(&client, url, &header_bypass_hdrs).await {
+                if p.status < 400 && p.status != 429 {
+                    flags.header_bypass = true;
+                    findings.push(web_finding_sync(
+                        ENGINE_RATE_LIMIT,
+                        "Rate limit bypass via gateway header override",
+                        "high",
+                        "T1499.003",
+                        &format!(
+                            "Baseline 429 on {url} but X-Original-URL/X-Forwarded-Host probe → HTTP {} — edge throttle bypass.",
+                            p.status
+                        ),
+                        target,
+                        &["api_gateway_bypass"],
+                        &["risk_superposition_collapse"],
+                        json!({"endpoint": p.final_url}),
+                    ));
+                }
             }
         }
     }
 
-    if baseline_sent > 0 && baseline_limited == 0 && spoof_sent > 0 {
-        findings.push(web_finding(
-            "api_rate_limit_bypass",
-            "No 429 across baseline or spoofed bursts",
-            "medium",
+    if flags.baseline_429 && (flags.ip_spoof_bypass || flags.graphql_batch_bypass) {
+        findings.push(web_finding_sync(
+            ENGINE_RATE_LIMIT,
+            "Toxic chain: rate limit present but bypass vectors live",
+            "critical",
             "T1499.003",
             &format!(
-                "Sent {baseline_sent} baseline + {spoof_sent} X-Forwarded-For requests to {url} without HTTP 429 — verify per-user/API-key throttles."
+                "Live throttle fusion: baseline 429, ip_spoof={} graphql_batch={} header={} — DoS/brute-force amplification chain with graphql_deep_attack.",
+                flags.ip_spoof_bypass, flags.graphql_batch_bypass, flags.header_bypass
             ),
             target,
+            &["graphql_deep_attack", "api_gateway_bypass", "cors_misconfiguration"],
+            &["risk_superposition_collapse", "external_exposure_supreme"],
+            json!({"toxic_chain": true}),
         ));
     }
 
     if findings.is_empty() {
-        empty_ok("api_rate_limit_bypass", target)
+        empty_ok(ENGINE_RATE_LIMIT, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("api_rate_limit_bypass: {}", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_RATE_LIMIT}: {n} live finding(s) (spoof={} batch={} auth_diff={})",
+                flags.ip_spoof_bypass, flags.graphql_batch_bypass, flags.auth_differential
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct RateLimitProbeFlags {
+    baseline_429: bool,
+    ip_spoof_bypass: bool,
+    spoof_still_limited: bool,
+    no_limit_observed: bool,
+    auth_differential: bool,
+    case_path_bypass: bool,
+    graphql_batch_bypass: bool,
+    header_bypass: bool,
+}
+
 cli_wrapper!(run_api_rate_limit_bypass, run_api_rate_limit_bypass_result);
 
 // ── idor_advanced ─────────────────────────────────────────────────────────────

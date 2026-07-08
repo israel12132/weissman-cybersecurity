@@ -781,7 +781,9 @@ async fn dispatch_engine_match(
         "subdomain_takeover" => crate::advanced_web_engines::run_subdomain_takeover_result(target).await,
         "file_inclusion_rfi" => crate::advanced_web_engines::run_file_inclusion_rfi_result(target).await,
         "deserialization_net" => crate::advanced_web_engines::run_deserialization_net_result(target).await,
-        "api_rate_limit_bypass" => crate::advanced_web_engines::run_api_rate_limit_bypass_result(target).await,
+        "api_rate_limit_bypass" => {
+            crate::advanced_web_engines::run_api_rate_limit_bypass_result_ctx(target, ctx).await
+        }
         "graphql_subscription_attack" => crate::advanced_web_engines::run_graphql_subscription_attack_result(target).await,
         "webrtc_attack" => crate::advanced_web_engines::run_webrtc_attack_result(target).await,
         "browser_extension_attack" => crate::advanced_web_engines::run_browser_extension_attack_result(target).await,

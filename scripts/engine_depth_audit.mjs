@@ -52,7 +52,17 @@ const webChecks = [
       'http_surface_gateway',
     ],
   ],
-  ['api_rate_limit_bypass', ['X-Forwarded-For']],
+  [
+    'api_rate_limit_bypass',
+    [
+      'X-Forwarded-For',
+      'True-Client-IP',
+      'toxic_chain',
+      'run_api_rate_limit_bypass_result_ctx',
+      'GraphQL batching',
+      'http_surface_rate_limit',
+    ],
+  ],
   ['web_cache_poison_adv', ['X-Forwarded-Host']],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
   [
