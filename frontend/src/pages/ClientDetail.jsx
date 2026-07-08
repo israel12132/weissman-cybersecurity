@@ -1,8 +1,10 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { Download } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { useToast } from '../components/ui/Toaster'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import { SkeletonCard } from '../components/ui/Skeleton'
@@ -14,12 +16,66 @@ export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [launchingScan, setLaunchingScan] = useState(false)
   const [scanResult, setScanResult] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [exportingServer, setExportingServer] = useState(false)
+
+  // Authoritative server-side per-client findings CSV — every finding for this
+  // client, not just the rows loaded/filtered in the browser.
+  // Wired to GET /api/clients/:id/export/csv.
+  const exportServerCsv = useCallback(async () => {
+    setExportingServer(true)
+    try {
+      const r = await apiFetch(`/api/clients/${id}/export/csv`)
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const disposition = r.headers.get('content-disposition') || ''
+      const match = disposition.match(/filename="?([^";\s]+)"?/)
+      const filename = match?.[1] ?? `weissman-client${id}-findings-${new Date().toISOString().slice(0, 10)}.csv`
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(t('client_detail.export_server_ok'))
+    } catch (e) {
+      toast.error(e.message || t('client_detail.export_server_failed'))
+    } finally {
+      setExportingServer(false)
+    }
+  }, [id, t, toast])
+
+  // Findings workbench — declared before any early return so hook order is
+  // stable across renders (null-safe while the client is still loading).
+  const listFindings = useMemo(() => {
+    if (!client) return []
+    let domainStr = ''
+    try {
+      const parsed = typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
+      domainStr = Array.isArray(parsed) ? parsed.join(', ') : ''
+    } catch {
+      domainStr = ''
+    }
+    return [{
+      id: client.id,
+      severity: 'info',
+      title: client.name,
+      type: 'client',
+      description: client.contact_email || '',
+      resource: domainStr,
+    }]
+  }, [client])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-client-detail',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
 
   useEffect(() => {
     loadClient()
@@ -169,31 +225,29 @@ export default function ClientDetail() {
   const navBtnClass =
     'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
 
-  const listFindings = useMemo(() => [{
-    id: client.id,
-    severity: 'info',
-    title: client.name,
-    type: 'client',
-    description: client.contact_email || '',
-    resource: domains.join(', '),
-  }], [client, domains])
-
-  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
-    csvPrefix: 'weissman-client-detail',
-    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
-  })
-
   return (
     <PageShell
       title={client.name}
       subtitle={t('client_detail.subtitle')}
       actions={(
-        <ShellScanActions
-          onRefresh={loadClient}
-          onExport={exportCsv}
-          refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={exportServerCsv}
+            disabled={exportingServer}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={t('client_detail.export_server_hint')}
+          >
+            <Download className={`w-4 h-4 ${exportingServer ? 'animate-pulse' : ''}`} />
+            {exportingServer ? t('client_detail.export_server_running') : t('client_detail.export_server')}
+          </button>
+          <ShellScanActions
+            onRefresh={loadClient}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredFindings.length}
+          />
+        </div>
       )}
     >
       <div className="max-w-5xl mx-auto space-y-5">

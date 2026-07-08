@@ -770,6 +770,11 @@
   "client_detail": {
     "title": "Client Details",
     "subtitle": "Authorized scope, scan management, and quick actions",
+    "export_server": "Server CSV",
+    "export_server_hint": "Download every finding for this client server-side via GET /api/clients/:id/export/csv (not just the rows loaded in the browser).",
+    "export_server_running": "Exporting…",
+    "export_server_ok": "Client findings exported.",
+    "export_server_failed": "Server-side export failed.",
     "loading": "Loading client…",
     "not_found": "Client not found",
     "back": "← Back to Clients",
@@ -3251,6 +3256,8 @@
     },
     "riskGraphVisualization": {
       "title": "Risk Graph Visualization",
+      "export_json": "Export graph",
+      "export_json_hint": "Download the full nodes + edges + metadata graph as JSON via GET /api/clients/:id/risk-graph/export.",
       "total_assets": "Total Assets",
       "critical_paths": "Critical Paths",
       "high_risk_assets": "High Risk Assets",

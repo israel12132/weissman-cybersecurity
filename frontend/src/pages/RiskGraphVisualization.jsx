@@ -380,17 +380,48 @@ export default function RiskGraphVisualization() {
     if (clientId) fetchGraphData(clientId)
   }
 
+  // Full server-side graph export — the complete nodes+edges+metadata JSON
+  // (richer than the client-side node CSV), for interchange / offline analysis.
+  // Wired to GET /api/clients/:id/risk-graph/export.
+  const exportGraphJson = async () => {
+    if (clientId == null) return
+    try {
+      const data = await api.get(`/api/clients/${clientId}/risk-graph/export`)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-risk-graph-client${clientId}-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Risk-graph JSON export failed:', e)
+    }
+  }
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
       icon={<GitBranch />}
       actions={(
-        <ShellScanActions
-          onRefresh={reloadGraph}
-          onExport={() => exportNodesCsv(graphData.nodes)}
-          refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={exportGraphJson}
+            disabled={clientId == null || !graphData.nodes.length}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={t(`${NS}.export_json_hint`)}
+          >
+            <Download className="w-4 h-4" />
+            {t(`${NS}.export_json`)}
+          </button>
+          <ShellScanActions
+            onRefresh={reloadGraph}
+            onExport={() => exportNodesCsv(graphData.nodes)}
+            refreshLoading={loading}
+            exportDisabled={!filteredFindings.length}
+          />
+        </div>
       )}
     >
       <div className="space-y-6">

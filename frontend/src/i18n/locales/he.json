@@ -714,6 +714,11 @@
   "client_detail": {
     "title": "פרטי לקוח",
     "subtitle": "סקופ מורשה, ניהול סריקות ופעולות מהירות",
+    "export_server": "CSV משרת",
+    "export_server_hint": "הורדת כל הממצאים של הלקוח מצד השרת דרך GET /api/clients/:id/export/csv (לא רק השורות הטעונות בדפדפן).",
+    "export_server_running": "מייצא…",
+    "export_server_ok": "ממצאי הלקוח יוצאו.",
+    "export_server_failed": "הייצוא מצד השרת נכשל.",
     "loading": "טוען לקוח…",
     "not_found": "הלקוח לא נמצא",
     "back": "→ חזרה ללקוחות",
@@ -3259,6 +3264,8 @@
     },
     "riskGraphVisualization": {
       "title": "הדמיית גרף סיכון",
+      "export_json": "ייצוא גרף",
+      "export_json_hint": "הורדת הגרף המלא (צמתים + קשתות + מטא-דאטה) כ-JSON דרך GET /api/clients/:id/risk-graph/export.",
       "total_assets": "סה\"כ נכסים",
       "critical_paths": "נתיבים קריטיים",
       "high_risk_assets": "נכסים בסיכון גבוה",
