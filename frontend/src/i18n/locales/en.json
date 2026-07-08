@@ -561,7 +561,13 @@
     "evidence_notice": "Append-only audit rows from GET /api/audit-logs — tenant-scoped, no synthetic security events.",
     "kpi_shown": "Shown (this page)",
     "kpi_denied": "Denied / failed (page)",
-    "kpi_total": "Total matching"
+    "kpi_total": "Total matching",
+    "export_full": "Full export",
+    "export_full_hint": "Download the entire tamper-evident audit chain (up to 50k entries) as a signed JSON packet via GET /api/audit/export.",
+    "export_full_running": "Exporting…",
+    "export_full_ok": "Exported {{count}} audit entries — chain verified intact.",
+    "export_full_broken": "Exported, but the audit chain integrity check FAILED — investigate.",
+    "export_full_failed": "Full audit export failed."
   },
   "engines": {
     "title": "Engine Grid",

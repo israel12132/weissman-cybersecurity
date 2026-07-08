@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  FileJson,
   Search,
   Shield,
   User,
@@ -17,6 +18,7 @@ import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import { useToast } from '../components/ui/Toaster'
 
 const ACTION_PILLS = [
   { key: '', labelKey: 'audit.all_actions' },
@@ -124,10 +126,12 @@ function exportCsv(rows) {
 
 export default function AuditLog() {
   const { t, i18n } = useTranslation()
+  const { toast } = useToast()
   const [entries, setEntries] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [exportingFull, setExportingFull] = useState(false)
   const [actionFilter, setActionFilter] = useState('')
   const [actor, setActor] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -157,6 +161,34 @@ export default function AuditLog() {
   }, [actionFilter, actor, offset, pageSize, t])
 
   useEffect(() => { load() }, [load])
+
+  // Full tamper-evident export — the whole audit chain (not just this page),
+  // via GET /api/audit/export. The packet carries the SHA-256 chain-integrity
+  // flag so an auditor can verify no entry was altered or removed.
+  const exportFull = useCallback(async () => {
+    setExportingFull(true)
+    try {
+      const r = await apiFetch('/api/audit/export?format=json&limit=50000')
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-audit-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast[d.chain_intact ? 'success' : 'warning'](
+        d.chain_intact
+          ? t('audit.export_full_ok', { count: d.total ?? (d.entries?.length ?? 0) })
+          : t('audit.export_full_broken'),
+      )
+    } catch (e) {
+      toast.error(e.message || t('audit.export_full_failed'))
+    } finally {
+      setExportingFull(false)
+    }
+  }, [t, toast])
 
   const filteredEntries = useMemo(() => {
     if (!dateFrom && !dateTo) return entries
@@ -219,12 +251,24 @@ export default function AuditLog() {
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl">{t('audit.subtitle')}</p>
             </div>
           </div>
-          <ShellScanActions
-            onRefresh={load}
-            onExport={() => exportCsv(filteredEntries)}
-            refreshLoading={loading}
-            exportDisabled={filteredEntries.length === 0}
-          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={exportFull}
+              disabled={exportingFull}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={t('audit.export_full_hint')}
+            >
+              <FileJson className={`w-4 h-4 ${exportingFull ? 'animate-pulse' : ''}`} />
+              {exportingFull ? t('audit.export_full_running') : t('audit.export_full')}
+            </button>
+            <ShellScanActions
+              onRefresh={load}
+              onExport={() => exportCsv(filteredEntries)}
+              refreshLoading={loading}
+              exportDisabled={filteredEntries.length === 0}
+            />
+          </div>
         </div>
       </header>
 

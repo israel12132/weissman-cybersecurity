@@ -874,7 +874,13 @@
     "evidence_notice": "שורות audit append-only מ-GET /api/audit-logs — מוגבל ל-tenant, ללא אירועי אבטחה סינתטיים.",
     "kpi_shown": "מוצגים (עמוד זה)",
     "kpi_denied": "נדחו / נכשלו (עמוד)",
-    "kpi_total": "סה\"כ תואמים"
+    "kpi_total": "סה\"כ תואמים",
+    "export_full": "ייצוא מלא",
+    "export_full_hint": "הורדת שרשרת הביקורת המלאה העמידה-בפני-שינוי (עד 50 אלף רשומות) כחבילת JSON חתומה, דרך GET /api/audit/export.",
+    "export_full_running": "מייצא…",
+    "export_full_ok": "יוצאו {{count}} רשומות ביקורת — השרשרת אומתה כתקינה.",
+    "export_full_broken": "היצוא הושלם, אך בדיקת תקינות שרשרת הביקורת נכשלה — נדרשת בדיקה.",
+    "export_full_failed": "ייצוא הביקורת המלא נכשל."
   },
   "graphqlSec": {
     "title": "מרכז שליטה לאבטחת GraphQL ו-API",
