@@ -34,6 +34,7 @@ export default function IntegrationManager() {
   const [testingConnection, setTestingConnection] = useState(null);
   const [dryRunTests, setDryRunTests] = useState(true);
   const [addModal, setAddModal] = useState(false);
+  const [configureTarget, setConfigureTarget] = useState(null);
 
   const availableIntegrations = [
     { id: 'aws_ec2', name: 'AWS EC2 Isolate', category: 'SOAR', icon: '☁️', color: 'orange', fields: ['region', 'forensic_source_cidr'] },
@@ -320,7 +321,9 @@ export default function IntegrationManager() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {}}
+                      onClick={() => setConfigureTarget(integration)}
+                      title={t('pages.integrationManager.configure')}
+                      aria-label={t('pages.integrationManager.configure')}
                       className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                     >
                       <Settings className="w-4 h-4" />
@@ -377,6 +380,28 @@ export default function IntegrationManager() {
           }}
         />
       )}
+
+      {/* Configure existing integration modal */}
+      {configureTarget && (
+        <AddIntegrationModal
+          integration={
+            availableIntegrations.find(
+              (ai) => ai.id === (configureTarget.type || configureTarget.id)
+            ) || null
+          }
+          existing={configureTarget}
+          onClose={() => setConfigureTarget(null)}
+          onSave={(saved) => {
+            if (saved?.integrations) {
+              setIntegrations(saved.integrations);
+            } else {
+              fetchIntegrations();
+            }
+            setConfigureTarget(null);
+            toast.success(t('pages.integrationManager.configure_success'));
+          }}
+        />
+      )}
     </PageShell>
   );
 }
@@ -384,13 +409,21 @@ export default function IntegrationManager() {
 /**
  * Add Integration Modal
  */
-function AddIntegrationModal({ integration, onClose, onSave }) {
+function AddIntegrationModal({ integration, existing = null, onClose, onSave }) {
   const { t } = useTranslation();
-  const providerFields = integration?.fields || ['endpoint', 'api_key', 'webhook_url'];
-  const initialConfig = Object.fromEntries(providerFields.map((f) => [f, '']));
+  const isEdit = Boolean(existing);
+  // In edit mode, prefer the keys already stored on the integration so the
+  // form matches what the backend persisted; fall back to the catalog fields.
+  const existingConfigKeys = existing?.config ? Object.keys(existing.config) : [];
+  const providerFields =
+    (existingConfigKeys.length ? existingConfigKeys : integration?.fields) ||
+    ['endpoint', 'api_key', 'webhook_url'];
+  const initialConfig = Object.fromEntries(
+    providerFields.map((f) => [f, existing?.config?.[f] ?? ''])
+  );
   const [formData, setFormData] = useState({
-    type: integration?.id || '',
-    name: integration?.name || '',
+    type: existing?.type || existing?.id || integration?.id || '',
+    name: existing?.name || integration?.name || '',
     config: initialConfig,
   });
   const [saving, setSaving] = useState(false);
@@ -403,14 +436,21 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
       const payload = {
         id: formData.type,
         name: formData.name,
-        category: integration?.category || 'Custom',
+        category: existing?.category || integration?.category || 'Custom',
         config: formData.config,
       };
       const result = await api.post('/api/integrations', payload);
       onSave(result);
     } catch (error) {
-      console.error('Failed to add integration:', error);
-      setSaveResult({ status: 'error', message: error?.message || 'Failed to add integration.' });
+      console.error(isEdit ? 'Failed to update integration:' : 'Failed to add integration:', error);
+      setSaveResult({
+        status: 'error',
+        message:
+          error?.message ||
+          (isEdit
+            ? t('pages.integrationManager.configure_failed')
+            : 'Failed to add integration.'),
+      });
     } finally {
       setSaving(false);
     }
@@ -420,7 +460,11 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">{t('pages.integrationManager.add_integration_modal')}</h3>
+          <h3 className="text-lg font-bold text-white">
+            {isEdit
+              ? t('pages.integrationManager.configure_modal_title', { name: formData.name || formData.type })
+              : t('pages.integrationManager.add_integration_modal')}
+          </h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -497,7 +541,13 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
             disabled={saving || !formData.name || !formData.type}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? t('pages.integrationManager.adding') : t('pages.integrationManager.add_integration')}
+            {saving
+              ? isEdit
+                ? t('pages.integrationManager.saving')
+                : t('pages.integrationManager.adding')
+              : isEdit
+                ? t('pages.integrationManager.save_changes')
+                : t('pages.integrationManager.add_integration')}
           </button>
         </div>
       </div>

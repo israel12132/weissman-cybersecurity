@@ -2324,6 +2324,12 @@
       "no_integrations_hint": "אין אינטגרציות מוגדרות. לחץ \"הוסף אינטגרציה\" כדי להתחיל.",
       "add_integration_modal": "הוסף אינטגרציה",
       "adding": "מוסיף…",
+      "configure": "הגדרות",
+      "configure_modal_title": "הגדרת {{name}}",
+      "configure_success": "הגדרות האינטגרציה נשמרו",
+      "configure_failed": "שמירת הגדרות האינטגרציה נכשלה.",
+      "saving": "שומר…",
+      "save_changes": "שמור שינויים",
       "last_test": "נבדק לאחרונה: {{time}}",
       "evidence_notice": "אינטגרציות SIEM, ticketing ו-webhook מוגדרות ב-GET/PUT /api/integrations. בריאות delivery משקפת קריאה outbound אחרונה מוצלחת — credentials לא מוצגים ב-UI."
     },

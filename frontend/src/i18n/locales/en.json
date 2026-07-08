@@ -2253,6 +2253,12 @@
       "no_integrations_hint": "No integrations configured. Click \"Add Integration\" to get started.",
       "add_integration_modal": "Add Integration",
       "adding": "Adding…",
+      "configure": "Configure",
+      "configure_modal_title": "Configure {{name}}",
+      "configure_success": "Integration settings saved",
+      "configure_failed": "Failed to save integration settings.",
+      "saving": "Saving…",
+      "save_changes": "Save Changes",
       "last_test": "Last tested: {{time}}",
       "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI."
     },

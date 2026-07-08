@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
+import { useToast } from '../ui/Toaster'
 import CeoGenesisPanel from './CeoGenesisPanel'
 import CeoWarRoomDock from './CeoWarRoomDock'
 import CeoVaccineVault from './CeoVaccineVault'
@@ -33,6 +34,7 @@ function MetricCard({ label, value, sub, accent }) {
 
 export default function CeoIntegratedCommandDeck() {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const { refreshSession } = useAuth()
   const [tel, setTel] = useState(null)
   const [telErr, setTelErr] = useState('')
@@ -110,7 +112,7 @@ export default function CeoIntegratedCommandDeck() {
       await loadTelemetry()
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || t('components.ceo.integratedCommandDeck.globalSafeModeFailed'))
+      toast.error(e.message || t('components.ceo.integratedCommandDeck.globalSafeModeFailed'))
     }
     setSafeSaving(false)
   }
@@ -127,7 +129,7 @@ export default function CeoIntegratedCommandDeck() {
       if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || t('components.ceo.integratedCommandDeck.tenantEngineToggleFailed'))
+      toast.error(e.message || t('components.ceo.integratedCommandDeck.tenantEngineToggleFailed'))
     }
     setEngineToggleBusy(null)
   }
@@ -147,7 +149,7 @@ export default function CeoIntegratedCommandDeck() {
       if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadTelemetry()
     } catch (e) {
-      window.alert(e.message || t('components.ceo.integratedCommandDeck.genesisKillSwitchFailed'))
+      toast.error(e.message || t('components.ceo.integratedCommandDeck.genesisKillSwitchFailed'))
     }
     setKillSaving(false)
   }
@@ -155,7 +157,7 @@ export default function CeoIntegratedCommandDeck() {
   const saveScanInterval = async () => {
     const n = Math.floor(Number(intervalInput))
     if (!Number.isFinite(n) || n < 10 || n > 86400) {
-      window.alert(t('components.ceo.integratedCommandDeck.scanIntervalRange'))
+      toast.warning(t('components.ceo.integratedCommandDeck.scanIntervalRange'))
       return
     }
     setIntervalSaving(true)
@@ -170,7 +172,7 @@ export default function CeoIntegratedCommandDeck() {
       if (d.scan_interval_secs != null) setIntervalInput(String(d.scan_interval_secs))
       await loadGodSnapshot()
     } catch (e) {
-      window.alert(e.message || t('components.ceo.integratedCommandDeck.scanIntervalUpdateFailed'))
+      toast.error(e.message || t('components.ceo.integratedCommandDeck.scanIntervalUpdateFailed'))
     }
     setIntervalSaving(false)
   }

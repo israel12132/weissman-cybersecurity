@@ -27,6 +27,7 @@ import CockpitTabErrorBoundary from './CockpitTabErrorBoundary'
 const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../lib/apiBase'
+import { useToast } from '../ui/Toaster'
 
 const TAB_DEFS = [
   { id: 'overview', labelKey: 'overview', Component: OverviewTab },
@@ -65,6 +66,7 @@ function targetUrlFromClient(client) {
 
 export default function ClientCockpit({ ceoIntegrated = false }) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [neuralWrapRef, neuralSize] = useContainerChartSize(120)
   const { selectedClient, selectedClientId, refreshClients, setPoeJobId } = useClient()
   const [activeTab, setActiveTab] = useState(() =>
@@ -135,7 +137,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       const r = await apiFetch(`/api/reports/executive${q}`)
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        window.alert(err.detail || err.error || t('components.cockpit.board_failed'))
+        toast.error(err.detail || err.error || t('components.cockpit.board_failed'))
         return
       }
       const blob = await r.blob()
@@ -155,7 +157,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch {
-      window.alert(t('components.cockpit.board_network_error'))
+      toast.error(t('components.cockpit.board_network_error'))
     }
     setBoardReportLoading(false)
   }

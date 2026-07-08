@@ -31,6 +31,28 @@ export function apiUrl(path) {
 
 const ACCESS_TOKEN_KEY = 'weissman_access_token'
 
+/**
+ * In-memory primary store for the access token. This is the safest place to
+ * hold a bearer token: it is never persisted, so an XSS payload cannot read it
+ * from `localStorage`/`sessionStorage` after the fact. The HttpOnly refresh
+ * cookie + `tryRefreshToken()` rehydrate it on a full page reload.
+ */
+let inMemoryAccessToken = null
+
+/**
+ * Remove any access token left behind in `localStorage` by older builds that
+ * mirrored it there. The token must never live in `localStorage` — it persists
+ * across tabs/sessions and is a prime XSS-exfiltration target.
+ */
+function purgeLegacyLocalStorageToken() {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+  } catch {
+    /* storage access can throw in privacy modes — ignore */
+  }
+}
+
 let rateLimitToastCallback = null
 
 /** Register a callback for 429 responses (used by RateLimitToast in AppShell). */
@@ -57,37 +79,37 @@ function parseRetryAfter(retryAfterHeader) {
 }
 
 export function getStoredAccessToken() {
+  // Always clean up a token left in localStorage by an older build.
+  purgeLegacyLocalStorageToken()
+  if (inMemoryAccessToken) return inMemoryAccessToken
+  // sessionStorage fallback: tab-scoped, cleared on tab close. Lets the token
+  // survive same-tab reloads before the refresh cookie kicks in, without the
+  // cross-session persistence (and XSS blast radius) of localStorage.
   if (typeof sessionStorage === 'undefined') return null
   const t = sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  if (t && String(t).trim()) return String(t).trim()
-  // Survives Playwright context resets and tab restores when HttpOnly cookie isn't visible to JS.
-  if (typeof localStorage !== 'undefined') {
-    const legacy = localStorage.getItem(ACCESS_TOKEN_KEY)
-    if (legacy && String(legacy).trim()) {
-      const v = String(legacy).trim()
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
-      return v
-    }
+  if (t && String(t).trim()) {
+    inMemoryAccessToken = String(t).trim()
+    return inMemoryAccessToken
   }
   return null
 }
 
 export function setStoredAccessToken(token) {
-  if (typeof sessionStorage === 'undefined') return
+  purgeLegacyLocalStorageToken()
   if (token && String(token).trim()) {
     const v = String(token).trim()
-    sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
-    if (typeof localStorage !== 'undefined') localStorage.setItem(ACCESS_TOKEN_KEY, v)
+    inMemoryAccessToken = v
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
   } else {
-    sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
+    inMemoryAccessToken = null
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)
   }
 }
 
 export function clearStoredAccessToken() {
-  if (typeof sessionStorage === 'undefined') return
-  sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-  if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
+  inMemoryAccessToken = null
+  purgeLegacyLocalStorageToken()
+  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)
 }
 
 /** Merge Bearer token for APIs when cookies are blocked (e.g. legacy Secure cookies on http://127.0.0.1). */
