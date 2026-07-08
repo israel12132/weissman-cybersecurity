@@ -20,6 +20,45 @@
   }
 }
 
+/* Print: clean, ink-economical evidence/report output. App chrome (sidebar,
+   header, toolbars) opts out with Tailwind's `print:hidden`; here we flatten
+   the theme to black-on-white, drop effects, expand scroll containers so tables
+   print in full, and avoid breaking cards/rows across pages. */
+@media print {
+  :root {
+    --shell-bg: #ffffff;
+  }
+  html,
+  body,
+  #root {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .custom-scroll,
+  [class*='max-h-'] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .weissman-data-table thead th {
+    position: static !important;
+  }
+  section,
+  article,
+  li,
+  tr,
+  .rounded-2xl,
+  .rounded-xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
 /* ───────────────────────────────────────────────────────────────────────────────
  * RTL support — activated automatically by i18n/index.js when language === 'he'.
  * Most of our layout already uses Tailwind logical properties (ms-/me-/ps-/pe-).

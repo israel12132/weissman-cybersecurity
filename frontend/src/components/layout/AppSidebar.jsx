@@ -161,7 +161,7 @@ export default function AppSidebar() {
     <>
       <button
         type="button"
-        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-lg border border-[var(--border-strong)] bg-[var(--sidebar-surface)] backdrop-blur-md text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+        className="print:hidden lg:hidden fixed top-3 left-3 z-40 p-2 rounded-lg border border-[var(--border-strong)] bg-[var(--sidebar-surface)] backdrop-blur-md text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         onClick={() => setMobileOpen(true)}
         aria-label={t('nav.open_menu')}
       >
@@ -179,7 +179,7 @@ export default function AppSidebar() {
 
       <aside
         className={[
-          'fixed lg:sticky top-0 z-50 lg:z-10 h-[100dvh] w-[15.5rem] shrink-0',
+          'print:hidden fixed lg:sticky top-0 z-50 lg:z-10 h-[100dvh] w-[15.5rem] shrink-0',
           'bg-[var(--sidebar-surface)] backdrop-blur-xl border-r border-[var(--border-default)]',
           'transition-transform duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',

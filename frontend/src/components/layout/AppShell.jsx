@@ -77,7 +77,7 @@ export default function AppShell({
       <AppSidebar />
 
       <div className="flex-1 flex flex-col min-w-0 lg:pl-0">
-        <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--header-surface)] backdrop-blur-xl">
+        <header className="print:hidden sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--header-surface)] backdrop-blur-xl">
           <div className={`${maxWidth} mx-auto px-4 pt-14 lg:pt-0`}>
             <div className="flex items-center justify-end gap-2 py-2 border-b border-[var(--border-subtle)] min-h-[40px]">
               <div className="flex-1 min-w-0 mr-4">
