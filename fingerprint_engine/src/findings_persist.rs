@@ -225,6 +225,27 @@ pub async fn persist_engine_findings(
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
 
+    // Cap the batch so a single misbehaving/huge engine result can't open an unbounded write
+    // transaction (and a giant findings_json blob). Tunable; the excess is logged, not silently lost.
+    let max_persist = std::env::var("WEISSMAN_MAX_PERSIST_FINDINGS")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(5000);
+    let findings: &[Value] = if findings.len() > max_persist {
+        tracing::warn!(
+            target: "findings_persist",
+            engine = %engine,
+            tenant_id,
+            total = findings.len(),
+            cap = max_persist,
+            "truncating oversized finding batch before persistence"
+        );
+        &findings[..max_persist]
+    } else {
+        findings
+    };
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
