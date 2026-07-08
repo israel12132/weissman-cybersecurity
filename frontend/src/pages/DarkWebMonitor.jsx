@@ -5,16 +5,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  Eye, RefreshCw, Search, Download, ShieldAlert, Radio, Filter,
-} from 'lucide-react'
+import { Eye, Search, ShieldAlert, Radio, Filter } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+
+const columnHelper = createColumnHelper()
 
 const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 }
 const DARK_WEB_SOURCES = new Set([
@@ -121,6 +123,53 @@ export default function DarkWebMonitor() {
   const exportCsv = () => {
     if (filtered.length) exportWorkbenchCsv()
   }
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor((f) => (f.severity || 'info').toLowerCase(), {
+        id: 'severity',
+        header: t('pages.darkWebMonitor.col_severity'),
+        cell: (ctx) => (
+          <span className={severityBadgeClass(ctx.getValue())}>{String(ctx.getValue()).toUpperCase()}</span>
+        ),
+        sortingFn: (a, b) =>
+          (SEVERITY_ORDER[a.getValue('severity')] || 0) - (SEVERITY_ORDER[b.getValue('severity')] || 0),
+      }),
+      columnHelper.accessor((f) => f.title || '', {
+        id: 'title',
+        header: t('pages.darkWebMonitor.col_title'),
+        cell: (ctx) => (
+          <span className="text-white/85 max-w-md truncate block" title={ctx.getValue()}>
+            {ctx.getValue() || '—'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor((f) => f.source || f.engine || '', {
+        id: 'source',
+        header: t('pages.darkWebMonitor.col_source'),
+        cell: (ctx) => <span className="text-white/55">{ctx.getValue() || '—'}</span>,
+      }),
+      columnHelper.accessor((f) => f.target || '', {
+        id: 'target',
+        header: t('pages.darkWebMonitor.col_target'),
+        cell: (ctx) => (
+          <span className="text-white/55 max-w-xs truncate block" title={ctx.getValue()}>
+            {ctx.getValue() || '—'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor((f) => f.discovered_at || '', {
+        id: 'discovered',
+        header: t('pages.darkWebMonitor.col_discovered'),
+        cell: (ctx) => (
+          <span className="text-white/40 whitespace-nowrap">
+            {ctx.getValue() ? new Date(ctx.getValue()).toLocaleString() : '—'}
+          </span>
+        ),
+      }),
+    ],
+    [t],
+  )
 
   return (
     <PageShell
@@ -285,43 +334,19 @@ export default function DarkWebMonitor() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px] font-mono">
-                <thead>
-                  <tr className="text-left text-white/45 border-b border-white/10">
-                    <th className="py-2 px-4">{t('pages.darkWebMonitor.col_severity')}</th>
-                    <th className="py-2 px-4">{t('pages.darkWebMonitor.col_title')}</th>
-                    <th className="py-2 px-4">{t('pages.darkWebMonitor.col_source')}</th>
-                    <th className="py-2 px-4">{t('pages.darkWebMonitor.col_target')}</th>
-                    <th className="py-2 px-4">{t('pages.darkWebMonitor.col_discovered')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filtered.slice(0, 200).map((f) => (
-                    <tr
-                      key={f.id || f.finding_id || f.title}
-                      onClick={() => setSelected(f)}
-                      className="hover:bg-white/[0.04] cursor-pointer transition-colors"
-                    >
-                      <td className="py-2 px-4">
-                        <span className={severityBadgeClass(f.severity)}>{(f.severity || 'info').toUpperCase()}</span>
-                      </td>
-                      <td className="py-2 px-4 text-white/85 max-w-md truncate" title={f.title}>{f.title || '—'}</td>
-                      <td className="py-2 px-4 text-white/55">{f.source || f.engine || '—'}</td>
-                      <td className="py-2 px-4 text-white/55 max-w-xs truncate" title={f.target}>{f.target || '—'}</td>
-                      <td className="py-2 px-4 text-white/40 whitespace-nowrap">
-                        {f.discovered_at ? new Date(f.discovered_at).toLocaleString() : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filtered.length > 200 && (
-                <p className="text-center text-[10px] font-mono text-white/30 py-3">
-                  {t('pages.darkWebMonitor.showing_first', { count: filtered.length })}
-                </p>
-              )}
-            </div>
+            <DataTable
+              id="darkweb-table"
+              columns={columns}
+              data={filtered}
+              onRowClick={(row) => setSelected(row.original)}
+              getRowId={(f) => f.id || f.finding_id || f.title}
+              selectedRowId={selected ? selected.id || selected.finding_id || selected.title : null}
+              getRowAccentColor={(f) => {
+                const s = (f.severity || 'info').toLowerCase()
+                return s === 'critical' ? '#f43f5e' : s === 'high' ? '#f97316' : undefined
+              }}
+              animateRows={false}
+            />
           )}
         </section>
       </div>
