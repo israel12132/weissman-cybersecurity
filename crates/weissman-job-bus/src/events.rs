@@ -10,6 +10,8 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 pub const REDIS_STREAM_KEY: &str = "weissman:jobs:events";
+/// Approximate cap on retained Redis stream entries (Postgres is the durable source of truth).
+pub const REDIS_STREAM_MAXLEN: i64 = 50_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -179,7 +181,9 @@ pub async fn xadd_event(redis: &redis::aio::ConnectionManager, record: &JobEvent
     let mut conn = redis.clone();
     let payload_str = serde_json::to_string(&record.payload).unwrap_or_else(|_| "{}".into());
     let mut cmd = redis::cmd("XADD");
-    cmd.arg(REDIS_STREAM_KEY).arg("*");
+    // MAXLEN ~ N: approximate capped trim so the Redis stream (best-effort fan-out; Postgres
+    // is source of truth) can't grow without bound and OOM the shared Redis.
+    cmd.arg(REDIS_STREAM_KEY).arg("MAXLEN").arg("~").arg(REDIS_STREAM_MAXLEN).arg("*");
     cmd.arg("seq").arg(record.seq.to_string());
     cmd.arg("job_id").arg(record.job_id.to_string());
     cmd.arg("tenant_id").arg(record.tenant_id.to_string());

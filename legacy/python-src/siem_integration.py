@@ -206,6 +206,26 @@ def _send_to_elasticsearch(event: Dict[str, Any]):
         _write_to_file(event)
 
 
+def _splunk_tls_verify():
+    """TLS verification setting for the Splunk HEC POST.
+
+    Defaults to True (verify certificates) so security events cannot be intercepted
+    via MITM. Set WEISSMAN_SIEM_TLS_VERIFY to:
+      - a filesystem path -> use it as the CA bundle (custom/internal CA),
+      - 0/false/no/off    -> disable verification (isolated labs ONLY),
+      - anything else / unset -> verify with the system trust store.
+    """
+    v = os.environ.get("WEISSMAN_SIEM_TLS_VERIFY", "").strip()
+    if not v:
+        return True
+    low = v.lower()
+    if low in ("0", "false", "no", "off"):
+        return False
+    if low in ("1", "true", "yes", "on"):
+        return True
+    return v  # treat as a CA bundle path
+
+
 def _send_to_splunk(event: Dict[str, Any]):
     """Send event to Splunk HEC."""
     client = _get_splunk_client()
@@ -225,7 +245,7 @@ def _send_to_splunk(event: Dict[str, Any]):
         response = client["session"].post(
             client["url"],
             json=payload,
-            verify=False,
+            verify=_splunk_tls_verify(),
         )
 
         if response.status_code != 200:

@@ -14,6 +14,8 @@ use uuid::Uuid;
 
 const SWARM_REGISTRY_PREFIX: &str = "weissman:swarm:worker:";
 const SWARM_GOSSIP_STREAM: &str = "weissman:swarm:gossip";
+/// Approximate cap on retained gossip-stream entries so it can't grow without bound.
+const SWARM_GOSSIP_MAXLEN: i64 = 10_000;
 const LIVENESS_TTL_SECS: u64 = 2;
 const LIVENESS_REFRESH_MS: u64 = 400;
 
@@ -80,6 +82,7 @@ impl WorkerSwarm {
                 let _: Result<(), _> = conn.set_ex(&key, &payload, LIVENESS_TTL_SECS).await;
                 let mut xadd = redis::cmd("XADD");
                 xadd.arg(SWARM_GOSSIP_STREAM)
+                    .arg("MAXLEN").arg("~").arg(SWARM_GOSSIP_MAXLEN)
                     .arg("*")
                     .arg("kind")
                     .arg("heartbeat")
@@ -102,6 +105,7 @@ impl WorkerSwarm {
         let mut conn = self.redis.clone();
         let mut xadd = redis::cmd("XADD");
         xadd.arg(SWARM_GOSSIP_STREAM)
+            .arg("MAXLEN").arg("~").arg(SWARM_GOSSIP_MAXLEN)
             .arg("*")
             .arg("kind")
             .arg("job_claimed")
@@ -180,6 +184,7 @@ impl SwarmCoordinator {
         let mut conn = self.redis.clone();
         let mut xadd = redis::cmd("XADD");
         xadd.arg(SWARM_GOSSIP_STREAM)
+            .arg("MAXLEN").arg("~").arg(SWARM_GOSSIP_MAXLEN)
             .arg("*")
             .arg("kind")
             .arg("worker_down")
