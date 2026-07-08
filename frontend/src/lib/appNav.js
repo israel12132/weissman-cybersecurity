@@ -148,6 +148,7 @@ export const NAV_GROUPS = [
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
+      { to: '/reports', labelKey: 'nav.reports', icon: '🧾' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
   },

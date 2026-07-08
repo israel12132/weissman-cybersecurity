@@ -149,6 +149,7 @@
     "status": "Status",
     "reports": "Reports",
     "audit_log": "Audit Log",
+    "reports": "Report History",
     "ask_weissman": "Ask Weissman",
     "playbooks": "Playbooks",
     "threat_intel": "Threat Intel",
@@ -1182,6 +1183,25 @@
       "empty_body": "Findings appear here in real time as scans surface them.",
       "no_match_title": "No matches",
       "no_match_body": "No event matches your filter."
+    },
+    "reportHistory": {
+      "title": "Report History",
+      "subtitle": "Ledger of generated report runs and their artifacts",
+      "badge": "Reports",
+      "evidence_notice": "The run ledger comes from GET /api/reports — the 100 most recent report_runs (id, generation time, artifact path), tenant-scoped. It is the audit trail of when reports were produced.",
+      "load_failed": "Failed to load report history.",
+      "kpi_total": "Runs",
+      "kpi_artifacts": "With Artifact",
+      "kpi_latest": "Latest Run",
+      "search_placeholder": "Filter by run id, path, or date…",
+      "col_run": "Run",
+      "col_generated": "Generated",
+      "col_artifact": "Artifact Path",
+      "no_artifact": "no artifact",
+      "empty_title": "No reports generated",
+      "empty_body": "Report runs appear here once reports are generated from the compliance or executive surfaces.",
+      "no_match_title": "No matches",
+      "no_match_body": "No run matches your filter."
     },
     "financialRisk": {
       "title": "Financial Blast-Radius",
