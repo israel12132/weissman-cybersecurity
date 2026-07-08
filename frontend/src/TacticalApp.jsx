@@ -84,6 +84,7 @@ import {
   UebaAnomalies,
   FindingSuppressions,
   CryptoPosture,
+  LiveFeed,
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
@@ -255,6 +256,7 @@ export default function TacticalApp() {
           <Route path="ueba" element={<UebaAnomalies />} />
           <Route path="suppressions" element={<FindingSuppressions />} />
           <Route path="crypto-posture" element={<CryptoPosture />} />
+          <Route path="live-feed" element={<LiveFeed />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />

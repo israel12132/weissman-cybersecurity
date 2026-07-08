@@ -32,6 +32,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
       { to: '/overview', labelKey: 'nav.overview', icon: '▤' },
+      { to: '/live-feed', labelKey: 'nav.live_feed', icon: '📡' },
       { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
       { to: '/jobs', labelKey: 'nav.jobs', icon: '⏱' },
     ],

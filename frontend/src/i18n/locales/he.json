@@ -125,6 +125,7 @@
   "nav": {
     "cockpit": "תא הפיקוד",
     "overview": "סקירת מנהלים",
+    "live_feed": "הזנה חיה",
     "dashboard": "לוח בקרה",
     "engines": "חדר המנועים",
     "clients": "לקוחות",
@@ -1163,6 +1164,27 @@
       "top_risk_sub": "הסיכון הגבוה ביותר בנתיב יחיד",
       "search_placeholder": "סינון אותות…",
       "no_matches": "אין אותות התואמים את הסינון."
+    },
+    "liveFeed": {
+      "title": "הזנת ממצאים חיה",
+      "subtitle": "100 הממצאים האחרונים, משודרים כטיקר אירועים חי",
+      "badge_live": "חי",
+      "badge_paused": "מושהה",
+      "evidence_notice": "האירועים מגיעים מ-GET /api/command-center/ticker — 100 הממצאים האחרונים מטבלת החולשות החיה, החדשים תחילה. ההזנה מתרעננת אוטומטית כל 15 שניות; שום דבר אינו מדומה.",
+      "load_failed": "טעינת ההזנה החיה נכשלה.",
+      "kpi_total": "אירועים",
+      "kpi_crit_high": "קריטי / גבוה",
+      "kpi_severities": "רמות חומרה",
+      "search_placeholder": "סינון לפי הודעה, לקוח או מקור…",
+      "all_severities": "כל החומרות",
+      "pause": "השהה",
+      "resume": "חדש",
+      "updated": "עודכן {{time}}",
+      "client": "לקוח {{id}}",
+      "empty_title": "אין אירועים עדיין",
+      "empty_body": "ממצאים מופיעים כאן בזמן אמת כשסריקות חושפות אותם.",
+      "no_match_title": "אין התאמות",
+      "no_match_body": "אף אירוע לא תואם לסינון."
     },
     "financialRisk": {
       "title": "רדיוס הנזק הפיננסי",

@@ -130,6 +130,7 @@
   "nav": {
     "cockpit": "Cockpit",
     "overview": "Executive Overview",
+    "live_feed": "Live Feed",
     "dashboard": "Dashboard",
     "engines": "Engines",
     "clients": "Clients",
@@ -1155,6 +1156,27 @@
       "top_risk_sub": "Highest single-path risk",
       "search_placeholder": "Filter signals…",
       "no_matches": "No signals match your filter."
+    },
+    "liveFeed": {
+      "title": "Live Findings Feed",
+      "subtitle": "The 100 most recent findings, streamed as a live event ticker",
+      "badge_live": "Live",
+      "badge_paused": "Paused",
+      "evidence_notice": "Events come from GET /api/command-center/ticker — the 100 most recent findings from the live vulnerabilities table, newest first. The feed auto-refreshes every 15 seconds; nothing is simulated.",
+      "load_failed": "Failed to load the live feed.",
+      "kpi_total": "Events",
+      "kpi_crit_high": "Critical / High",
+      "kpi_severities": "Severity Levels",
+      "search_placeholder": "Filter by message, client, or source…",
+      "all_severities": "All severities",
+      "pause": "Pause",
+      "resume": "Resume",
+      "updated": "Updated {{time}}",
+      "client": "client {{id}}",
+      "empty_title": "No events yet",
+      "empty_body": "Findings appear here in real time as scans surface them.",
+      "no_match_title": "No matches",
+      "no_match_body": "No event matches your filter."
     },
     "financialRisk": {
       "title": "Financial Blast-Radius",
