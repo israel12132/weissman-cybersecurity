@@ -48,6 +48,14 @@
   /* App shell background (radial). Themeable so the frame flips with the theme. */
   --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%);
 
+  /* Row interaction overlays (data tables) — themeable so they read on light too. */
+  --row-hover-bg: rgba(255, 255, 255, 0.04);
+  --row-zebra-bg: rgba(255, 255, 255, 0.015);
+
+  /* Data-table container surface. Dark value == the legacy bg-black/30 glass, so
+     dark is byte-identical; light gets a frosted-white panel. */
+  --table-surface: rgba(0, 0, 0, 0.30);
+
   /* ── Borders ────────────────────────────────────────────────────────────── */
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-default: rgba(255, 255, 255, 0.08);
@@ -256,6 +264,9 @@
   --shadow-inner: inset 0 1px 0 rgba(15, 23, 42, 0.04), inset 0 -1px 0 rgba(15, 23, 42, 0.05);
 
   --selection-bg: rgba(8, 145, 178, 0.2);
+  --row-hover-bg: rgba(15, 23, 42, 0.05);
+  --row-zebra-bg: rgba(15, 23, 42, 0.025);
+  --table-surface: rgba(255, 255, 255, 0.9);
 }
 
 /* Flip the document background in light mode (higher specificity than the

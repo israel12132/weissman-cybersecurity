@@ -342,10 +342,10 @@ textarea:focus-visible {
   background: var(--card-bg);
 }
 .weissman-data-table tbody tr.weissman-row-hover:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--row-hover-bg);
 }
 .weissman-data-table tbody tr.weissman-row-zebra:nth-child(even) {
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--row-zebra-bg);
 }
 
 /* iOS-style toggle */

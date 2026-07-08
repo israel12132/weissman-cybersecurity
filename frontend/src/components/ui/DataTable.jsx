@@ -130,7 +130,7 @@ export default function DataTable({
   return (
     <div
       id={id}
-      className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden ${className}`}
+      className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md overflow-hidden ${className}`}
     >
       <div className="overflow-x-auto custom-scroll max-h-[70vh]">
         <table
@@ -202,7 +202,7 @@ export default function DataTable({
               const isSelected =
                 selectedRowId != null && rowId != null && String(selectedRowId) === String(rowId)
               const rowClasses = [
-                'border-b border-white/5 transition-colors duration-100',
+                'border-b border-[var(--border-subtle)] transition-colors duration-100',
                 onRowClick
                   ? 'cursor-pointer weissman-row-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60'
                   : 'weissman-row-hover',
@@ -266,15 +266,15 @@ export default function DataTable({
       </div>
 
       {/* Pagination bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-white/5 bg-white/[0.01]">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-subtle)] bg-[var(--bg-1)]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-white/35">Rows:</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">Rows:</span>
           <select
             value={pageSize}
             onChange={(e) =>
               effectiveOnPaginationChange({ pageIndex: 0, pageSize: Number(e.target.value) })
             }
-              className="bg-black/50 border border-white/10 rounded px-1.5 py-0.5 text-[11px] font-mono text-white/60 focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded px-1.5 py-0.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
             >
               {pageSizes.map((s) => (
                 <option key={s} value={s}>
@@ -282,7 +282,7 @@ export default function DataTable({
                 </option>
               ))}
             </select>
-            <span className="text-[10px] font-mono text-white/30 tabular-nums">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] tabular-nums">
               {totalFiltered === 0
                 ? '0'
                 : `${pageIndex * pageSize + 1}–${Math.min(
@@ -331,8 +331,8 @@ export default function DataTable({
                           backgroundColor: 'rgba(34, 211, 238, 0.1)',
                         }
                       : {
-                          borderColor: 'rgba(255,255,255,0.08)',
-                          color: 'rgba(255,255,255,0.35)',
+                          borderColor: 'var(--border-default)',
+                          color: 'var(--text-muted)',
                         }
                   }
                 >
@@ -368,7 +368,7 @@ function PaginationBtn({ children, onClick, disabled, label }) {
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="px-2 py-1 rounded text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="px-2 py-1 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
       {children}
     </button>
