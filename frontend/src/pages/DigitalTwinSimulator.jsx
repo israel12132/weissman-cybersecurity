@@ -218,7 +218,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
               {riskLabel}
             </span>
           </div>
-          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {meta.mitre}
           </span>
         </div>
@@ -519,7 +519,7 @@ export default function DigitalTwinSimulator() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#8b5cf6]/30 text-[#8b5cf6]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#8b5cf6]/30 text-[#8b5cf6]'}`}>
           {toast.msg}
         </div>
       )}

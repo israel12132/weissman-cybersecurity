@@ -372,14 +372,14 @@ export default function ComplianceFrameworks() {
                   description={t('pages.complianceFrameworks.no_filter_results')}
                 />
               ) : (
-                <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+                <div className="divide-y divide-[var(--border-subtle)] max-h-[600px] overflow-y-auto">
                   {filteredControls.map((control) => (
                     <div
                       key={control.id}
                       className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded shrink-0">
+                        <span className="text-xs font-mono text-gray-500 bg-[var(--row-hover-bg)] px-2 py-1 rounded shrink-0">
                           {control.id}
                         </span>
                         <div className="flex-1 min-w-0">

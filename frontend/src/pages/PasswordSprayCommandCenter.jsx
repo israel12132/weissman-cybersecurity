@@ -287,7 +287,7 @@ function CategoryScoresPanel({ scores, L }) {
                 <span>{label}</span>
                 <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${v}%`, backgroundColor: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
               </div>
             </div>
@@ -320,7 +320,7 @@ function PostureRadar({ radar, L }) {
                 <span>{label}</span>
                 <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${v}%`, backgroundColor: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }} />
               </div>
             </div>
@@ -573,7 +573,7 @@ export default function PasswordSprayCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-rose-500/30 text-rose-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-rose-500/30 text-rose-200'}`}>
           {toast.msg}
         </div>
       )}

@@ -416,7 +416,7 @@ export default function AIAnalysisEngine() {
               { label: t('pages.aiAnalysisEngine.kpi_correlations'), value: correlations.length, color: '#f97316' },
               { label: t('pages.aiAnalysisEngine.kpi_critical'), value: criticalCount, color: '#ef4444' },
             ].map((kpi) => (
-              <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-white/5 p-4 text-center">
+              <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 text-center">
                 <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
                 <div className="text-[11px] text-[var(--text-tertiary)] mt-1">{kpi.label}</div>
               </div>
@@ -435,7 +435,7 @@ export default function AIAnalysisEngine() {
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? 'bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/40'
-                    : 'bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)] hover:bg-[var(--row-hover-bg)]'
+                    : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {tab.label}
@@ -504,7 +504,7 @@ export default function AIAnalysisEngine() {
                       className={`w-full text-left rounded-2xl border p-4 transition-all ${
                         selectedPattern?.id === pattern.id
                           ? 'border-[#a78bfa]/50 bg-[#a78bfa]/10'
-                          : 'border-[var(--border-default)] bg-white/5 hover:bg-[var(--row-hover-bg)]'
+                          : 'border-[var(--border-default)] bg-[var(--row-hover-bg)] hover:bg-[var(--row-hover-bg)]'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -522,7 +522,7 @@ export default function AIAnalysisEngine() {
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-[11px] text-[var(--text-muted)]">{categoryLabel(pattern.category)}</span>
                         <div className="flex items-center gap-1">
-                          <div className="w-16 bg-white/10 rounded-full h-1">
+                          <div className="w-16 bg-[var(--row-hover-bg)] rounded-full h-1">
                             <div className="h-1 rounded-full bg-emerald-500" style={{ width: `${pattern.confidence * 100}%` }} />
                           </div>
                           <span className="text-[10px] font-mono text-emerald-400">{Math.round(pattern.confidence * 100)}%</span>
@@ -541,7 +541,7 @@ export default function AIAnalysisEngine() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="rounded-2xl border border-[var(--border-strong)] bg-white/5 p-6 space-y-5"
+                      className="rounded-2xl border border-[var(--border-strong)] bg-[var(--row-hover-bg)] p-6 space-y-5"
                     >
                       {(() => {
                         const sm = SEVERITY_COLORS[selectedPattern.severity] ?? SEVERITY_COLORS.medium
@@ -587,7 +587,7 @@ export default function AIAnalysisEngine() {
                                 <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.aiAnalysisEngine.affected_systems')}</div>
                                 <div className="flex flex-wrap gap-1">
                                   {selectedPattern.affectedSystems.length > 0 ? selectedPattern.affectedSystems.map((s) => (
-                                    <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-[var(--text-secondary)] border border-[var(--border-default)]">{s}</span>
+                                    <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-secondary)] border border-[var(--border-default)]">{s}</span>
                                   )) : <span className="text-[11px] text-[var(--text-muted)]">—</span>}
                                 </div>
                               </div>
@@ -620,18 +620,18 @@ export default function AIAnalysisEngine() {
                             {(selectedPattern.maxEpss != null || selectedPattern.maxCvss != null || selectedPattern.memberCount > 1) && (
                               <div className="grid grid-cols-3 gap-3 text-center">
                                 {selectedPattern.maxEpss != null && (
-                                  <div className="rounded-lg bg-white/5 border border-[var(--border-default)] p-3">
+                                  <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                     <div className="text-sm font-mono text-cyan-300">{(selectedPattern.maxEpss * 100).toFixed(1)}%</div>
                                     <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.max_epss')}</div>
                                   </div>
                                 )}
                                 {selectedPattern.maxCvss != null && (
-                                  <div className="rounded-lg bg-white/5 border border-[var(--border-default)] p-3">
+                                  <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                     <div className="text-sm font-mono text-orange-300">{Number(selectedPattern.maxCvss).toFixed(1)}</div>
                                     <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.max_cvss')}</div>
                                   </div>
                                 )}
-                                <div className="rounded-lg bg-white/5 border border-[var(--border-default)] p-3">
+                                <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                   <div className="text-sm font-mono text-violet-300">{selectedPattern.memberCount}</div>
                                   <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.correlated_signals')}</div>
                                 </div>
@@ -688,7 +688,7 @@ export default function AIAnalysisEngine() {
                   key={corr.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-[var(--border-default)] bg-white/5 p-5"
+                  className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>

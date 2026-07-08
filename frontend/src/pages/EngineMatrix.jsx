@@ -211,7 +211,7 @@ function EngineMatrixCard({
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <StatusDot status={status} />
-          <h3 className="text-sm font-semibold text-white/95 truncate tracking-tight">{engine.label}</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate tracking-tight">{engine.label}</h3>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 opacity-90 group-hover:opacity-100">
           <button
@@ -311,7 +311,7 @@ function GroupSection({
           >
             {GROUP_ICONS[groupDef.id] ?? '◆'} {groupDef.label}
           </h2>
-          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
             {enabledCount}/{engines.length}
             {runningCount > 0 && ` · ${runningCount} ${t('engines.status_running').toLowerCase()}`}
           </span>
@@ -710,11 +710,11 @@ export default function EngineMatrix() {
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-[var(--text-muted)]">
                 <Link to="/" className="hover:text-[var(--text-tertiary)] transition-colors">← Dashboard</Link>
-                <span className="text-white/15">|</span>
+                <span className="text-[var(--text-disabled)]">|</span>
                 <Link to="/engine-catalog" className="text-emerald-400/70 hover:text-emerald-300 transition-colors">
                   Client Catalog
                 </Link>
-                <span className="text-white/15">|</span>
+                <span className="text-[var(--text-disabled)]">|</span>
                 <Link to="/engines/top-tier" className="text-rose-400/70 hover:text-rose-300 transition-colors">
                   Top-Tier Hub
                 </Link>
@@ -784,7 +784,7 @@ export default function EngineMatrix() {
             className={`fixed top-20 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
               toast.severity === 'error'
                 ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-                : 'bg-black/85 border-cyan-500/30 text-cyan-200'
+                : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
             {toast.message}
@@ -826,8 +826,8 @@ export default function EngineMatrix() {
                 onClick={() => setTierFilter(tier)}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all border ${
                   tierFilter === tier
-                    ? 'bg-white/12 text-white border-white/25 shadow-[0_0_12px_rgba(255,255,255,0.04)]'
-                    : 'text-[var(--text-muted)] border-white/[0.08] hover:border-white/18 hover:text-[var(--text-tertiary)]'
+                    ? 'bg-white/12 text-white border-[var(--border-strong)] shadow-[0_0_12px_rgba(255,255,255,0.04)]'
+                    : 'text-[var(--text-muted)] border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
                 }`}
               >
                 {t(`engines.tier_${tier}`)} ({tierCounts[tier] ?? 0})
@@ -842,8 +842,8 @@ export default function EngineMatrix() {
             onClick={() => setActiveGroup('all')}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all ${
               activeGroup === 'all'
-                ? 'bg-white/12 text-white border border-white/25'
-                : 'text-[var(--text-tertiary)] border border-white/[0.08] hover:border-white/18 hover:text-[var(--text-secondary)]'
+                ? 'bg-white/12 text-white border border-[var(--border-strong)]'
+                : 'text-[var(--text-tertiary)] border border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t('engines.all_engines', { count: filteredEngines.length })}
@@ -859,7 +859,7 @@ export default function EngineMatrix() {
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all border ${
                   activeGroup === g.id
                     ? 'text-white'
-                    : 'text-[var(--text-tertiary)] border-white/[0.08] hover:border-white/18 hover:text-[var(--text-secondary)]'
+                    : 'text-[var(--text-tertiary)] border-white/[0.08] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
                 }`}
                 style={
                   activeGroup === g.id

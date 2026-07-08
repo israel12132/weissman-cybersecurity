@@ -316,7 +316,7 @@ export default function SBOMBrowser() {
                 description={t('weissmanFindings.filtered_body')}
               />
             ) : (
-              <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              <div className="divide-y divide-[var(--border-subtle)] max-h-[600px] overflow-y-auto">
                 {visibleComponents.map((component) => {
                   const vulns = component.vulnerabilities || [];
                   return (

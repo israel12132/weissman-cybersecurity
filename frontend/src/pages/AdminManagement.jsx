@@ -250,7 +250,7 @@ export default function AdminManagement() {
               id={`adminmgmt-edit-user-${user.id}-btn`}
               type="button"
               onClick={() => openEditModal(user)}
-              className="px-2 py-1 rounded text-xs border border-white/20 text-slate-400 hover:text-white hover:bg-[var(--row-hover-bg)]"
+              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-slate-400 hover:text-white hover:bg-[var(--row-hover-bg)]"
             >
               Edit
             </button>
@@ -398,7 +398,7 @@ export default function AdminManagement() {
                   type="checkbox"
                   checked={newIsSuperadmin}
                   onChange={(e) => setNewIsSuperadmin(e.target.checked)}
-                  className="rounded border-white/20 bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
+                  className="rounded border-[var(--border-strong)] bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
                 />
                 <span className="text-xs text-amber-400 uppercase tracking-widest">Superadmin</span>
               </label>
@@ -480,7 +480,7 @@ export default function AdminManagement() {
                     type="checkbox"
                     checked={editIsSuperadmin}
                     onChange={(e) => setEditIsSuperadmin(e.target.checked)}
-                    className="rounded border-white/20 bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
+                    className="rounded border-[var(--border-strong)] bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
                   />
                   <span className="text-sm text-amber-400">Grant Superadmin privileges</span>
                 </label>
@@ -490,7 +490,7 @@ export default function AdminManagement() {
                   id="adminmgmt-cancel-edit-btn"
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-white/20 text-slate-400 hover:bg-[var(--row-hover-bg)]"
+                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-[var(--border-strong)] text-slate-400 hover:bg-[var(--row-hover-bg)]"
                 >
                   Cancel
                 </button>
@@ -536,7 +536,7 @@ export default function AdminManagement() {
                 a.click()
                 URL.revokeObjectURL(url)
               }}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-white/5 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📄 Export Users (CSV)
             </button>
@@ -544,7 +544,7 @@ export default function AdminManagement() {
               id="adminmgmt-audit-log-btn"
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-white/5 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📋 View Audit Logs
             </button>
@@ -552,7 +552,7 @@ export default function AdminManagement() {
               id="adminmgmt-sso-config-btn"
               type="button"
               onClick={() => navigate('/sso-config')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-white/5 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               🔑 SSO Configuration
             </button>
@@ -560,7 +560,7 @@ export default function AdminManagement() {
               id="adminmgmt-system-settings-btn"
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-white/5 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               ⚙️ System Settings
             </button>

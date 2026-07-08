@@ -260,7 +260,7 @@ function CategoryScoresPanel({ scores, L }) {
                 <span style={{ color }}>{label}</span>
                 <span className="text-[var(--text-secondary)]">{v}</span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${v}%`, backgroundColor: c }} />
               </div>
             </div>
@@ -326,7 +326,7 @@ function PostureGauge({ score = 0 }) {
     <div className="flex items-center gap-3">
       <div className="text-4xl font-bold font-mono tabular-nums" style={{ color: c }}>{pct}</div>
       <div className="flex-1">
-        <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-2.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: c }} />
         </div>
         <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">100 = no observed external AD weakness</p>
@@ -454,8 +454,8 @@ function FindingCard({ finding, L }) {
   const standards = Array.isArray(finding.standards) ? finding.standards : []
 
   return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-white/[0.03] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -715,7 +715,7 @@ export default function KerberosSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-amber-500/30 text-amber-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-amber-500/30 text-amber-200'}`}>
           {toast.msg}
         </div>
       )}

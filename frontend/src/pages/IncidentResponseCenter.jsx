@@ -263,7 +263,7 @@ function IncidentRow({ incident, selected, onSelect, t, now }) {
       </div>
       <div className="flex flex-wrap gap-1">
         {incident.affectedAssets.map((a) => (
-          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-[var(--border-default)] rounded text-[var(--text-muted)]">
+          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded text-[var(--text-muted)]">
             {a}
           </span>
         ))}
@@ -279,12 +279,12 @@ function Timeline({ events }) {
         <div key={i} className="flex gap-3">
           <div className="flex flex-col items-center gap-0">
             <span className="w-2 h-2 rounded-full bg-cyan-400/70 shrink-0 mt-0.5" />
-            {i < events.length - 1 && <div className="w-px flex-1 bg-white/10 mt-1 min-h-[20px]" />}
+            {i < events.length - 1 && <div className="w-px flex-1 bg-[var(--row-hover-bg)] mt-1 min-h-[20px]" />}
           </div>
           <div className="pb-3 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="text-[10px] font-mono text-cyan-400/70">{e.t}</span>
-              <span className="text-[9px] font-mono bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">{e.actor}</span>
+              <span className="text-[9px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">{e.actor}</span>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{e.msg}</p>
           </div>
@@ -306,7 +306,7 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
         <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(pb.labelKey)}</span>
         <span className="text-[10px] font-mono" style={{ color: barColor }}>{done}/{steps.length} ({pct}%)</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 mb-4 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] mb-4 overflow-hidden">
         <motion.div
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.5 }}
@@ -347,7 +347,7 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
                     {phaseLabel}
                   </span>
                   {step.mitre && (
-                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {step.mitre}
                     </span>
                   )}
@@ -625,7 +625,7 @@ export default function IncidentResponseCenter() {
                     {severityLabel(selected.severity, t)}
                   </span>
                   {selected.mitre && (
-                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {selected.mitre}
                     </span>
                   )}

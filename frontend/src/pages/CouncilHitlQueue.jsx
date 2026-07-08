@@ -142,7 +142,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
           >
             <div>
               <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase mb-1">{t('pages.councilHitlQueue.chain_steps')}</p>
-              <div className="rounded-xl bg-white/5 border border-[var(--border-default)] p-3">
+              <div className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                 <ChainSteps steps={item.chain_steps} />
               </div>
             </div>
@@ -150,7 +150,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {item.payload_preview && (
               <div>
                 <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase mb-1">{t('pages.councilHitlQueue.payload_preview')}</p>
-                <pre className="rounded-xl bg-white/5 border border-[var(--border-default)] p-3 text-[11px] font-mono text-cyan-300/70 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                <pre className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3 text-[11px] font-mono text-cyan-300/70 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
                   {item.payload_preview}
                 </pre>
               </div>
@@ -183,7 +183,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             placeholder={t('pages.councilHitlQueue.operator_note')}
             value={note}
             onChange={e => setNote(e.target.value)}
-            className="flex-1 rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
           />
           <button
             type="button"
@@ -353,7 +353,7 @@ export default function CouncilHitlQueue() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pages.councilHitlQueue.search_placeholder')}
             aria-label={t('pages.councilHitlQueue.search_placeholder')}
-            className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
           />
         </div>
 

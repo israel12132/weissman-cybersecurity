@@ -267,7 +267,7 @@ export default function ThreatAnalysisCenter() {
               emptyTitle={t('pages.threatAnalysis.no_incidents', { })}
               emptyBody={t('pages.threatAnalysis.no_incidents', { })}
               renderFinding={(f) => (
-                <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] p-3">
+                <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-sm font-medium text-white">{f.title}</span>
                     <span className="flex items-center gap-2">

@@ -172,7 +172,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   placeholder={placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
-                  className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
                 />
               </div>
             )
@@ -187,7 +187,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
                   required={meta.required && (!initial || !form[key])}
-                  className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
                 {note && <p className="text-[10px] text-[var(--text-disabled)]">{note}</p>}
               </div>
@@ -499,7 +499,7 @@ export default function SsoDashboard() {
                 className="rounded-2xl border border-dashed border-[var(--border-default)] p-10 text-center"
               >
                 <p className="text-[var(--text-disabled)] text-[12px]">{t('pages.ssoDashboard.no_idps')}</p>
-                <p className="text-white/15 text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
+                <p className="text-[var(--text-disabled)] text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
               </motion.div>
             )}
             {!loading && idps.length > 0 && visibleIdps.length === 0 && (
@@ -525,7 +525,7 @@ export default function SsoDashboard() {
         </div>
 
         {/* SP Metadata info */}
-        <div className="rounded-2xl bg-white/[0.02] border border-[var(--border-subtle)] px-5 py-4 space-y-2">
+        <div className="rounded-2xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] px-5 py-4 space-y-2">
           <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.sp_metadata')}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[

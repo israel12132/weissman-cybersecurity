@@ -153,7 +153,7 @@ function Terminal({ lines }) {
           Copy
         </button>
       )}
-      <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-black/80 border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed">
+      <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-[var(--bg-1)] border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed">
         {lines.length === 0 ? (
           <span className="text-[var(--text-disabled)]">{t('engines.detail_terminal_idle')}</span>
         ) : (
@@ -573,13 +573,13 @@ export default function EngineDetail() {
       className="min-h-[100dvh] text-slate-100"
       style={{ background: 'radial-gradient(ellipse 120% 80% at 50% -5%, #1e293b 0%, #0f172a 40%, #020617 70%, #000 100%)' }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-black/65 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--bg-3)] backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap min-w-0">
           <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">
             {t('engines.detail_back_matrix')}
           </Link>
-          <span className="text-white/15 text-xs">|</span>
+          <span className="text-[var(--text-disabled)] text-xs">|</span>
           {groupDef && (
             <span
               className="text-[10px] font-mono px-2 py-0.5 rounded-md uppercase tracking-widest border"
@@ -645,7 +645,7 @@ export default function EngineDetail() {
         {toast && (
           <motion.div key={toast.id} initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-10 }}
             className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
-              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'
+              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}>
             {toast.msg}
           </motion.div>
@@ -691,7 +691,7 @@ export default function EngineDetail() {
               <p className="text-sm md:text-base text-[var(--text-tertiary)] leading-relaxed max-w-3xl">{engine.description}</p>
               <div className="flex flex-wrap gap-2">
                 {engine.requiresTarget && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] bg-white/[0.04]">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] bg-[var(--row-hover-bg)]">
                     {t('engines.detail_requires_target')}
                   </span>
                 )}
@@ -720,7 +720,7 @@ export default function EngineDetail() {
               <button
                 type="button"
                 onClick={() => setActiveTab('history')}
-                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-white/[0.04] transition-all"
+                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-all"
               >
                 {t('engines.detail_view_history')}
               </button>
@@ -861,7 +861,7 @@ export default function EngineDetail() {
                 }`}>
                 {tab.label}
                 {tab.badge !== null && (
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] ${tab.id === 'findings' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-[var(--text-muted)]'}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] ${tab.id === 'findings' ? 'bg-amber-500/20 text-amber-300' : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)]'}`}>
                     {tab.badge}
                   </span>
                 )}

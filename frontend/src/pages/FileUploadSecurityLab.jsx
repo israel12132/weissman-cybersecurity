@@ -205,7 +205,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 const ATTACK_REFERENCE = [
@@ -288,7 +288,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -376,7 +376,7 @@ function Scorecard({ summary, t }) {
                       <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{d.label}</span>
                       <span className="text-[10px] font-mono font-bold" style={{ color: barColor }}>{n}</span>
                     </div>
-                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-1 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${n}%`, backgroundColor: barColor }} />
                     </div>
                   </div>
@@ -436,7 +436,7 @@ function Scorecard({ summary, t }) {
         <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.fileUploadLab.weak_areas', 'Weak areas:')}</span>
           {cats.map((c) => (
-            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)]">
+            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">
               {(CATEGORY_META[c] || CATEGORY_META.other).icon} {(CATEGORY_META[c] || CATEGORY_META.other).label}
             </span>
           ))}
@@ -600,7 +600,7 @@ export default function FileUploadSecurityLab() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-orange-500/30 text-orange-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -657,7 +657,7 @@ export default function FileUploadSecurityLab() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.bypass_matrix', 'Bypass matrix')}</p>
                   {TOGGLES.map((tg) => (
-                    <label key={tg.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-white/5 border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--row-hover-bg)]">
+                    <label key={tg.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--row-hover-bg)]">
                       <span className="min-w-0">
                         <span className="block text-[11px] font-mono text-[var(--text-secondary)]">{tg.label}</span>
                         <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{tg.hint}</span>

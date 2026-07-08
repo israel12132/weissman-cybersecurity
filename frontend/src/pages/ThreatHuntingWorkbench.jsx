@@ -160,7 +160,7 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
       </div>
       <div className="flex flex-wrap gap-1">
         {campaign.mitre.map((m) => (
-          <span key={m} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-[var(--border-default)] rounded text-[var(--text-disabled)]">{m}</span>
+          <span key={m} className="text-[9px] font-mono px-1.5 py-0.5 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded text-[var(--text-disabled)]">{m}</span>
         ))}
       </div>
     </motion.button>
@@ -239,7 +239,7 @@ function QueryCard({ query, t }) {
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-cyan-400 border-cyan-500/30 bg-cyan-950/20 uppercase tracking-widest">
               {query.language}
             </span>
-            <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">{query.mitre}</span>
+            <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded">{query.mitre}</span>
           </div>
           <p className="text-xs font-semibold text-[var(--text-secondary)]">{query.name}</p>
           <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-0.5">{query.datasource}</div>
@@ -315,7 +315,7 @@ function IocTable({ iocs, t, onExport }) {
               <code className="text-[11px] font-mono text-[var(--text-secondary)] block truncate">{ioc.value}</code>
               <div className="flex gap-1 mt-0.5 flex-wrap">
                 {ioc.tags.map((tag) => (
-                  <span key={tag} className="text-[8px] font-mono bg-white/5 border border-[var(--border-default)] px-1 py-0.5 rounded text-[var(--text-disabled)]">{tag}</span>
+                  <span key={tag} className="text-[8px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1 py-0.5 rounded text-[var(--text-disabled)]">{tag}</span>
                 ))}
               </div>
             </div>

@@ -412,7 +412,7 @@ export default function EngineManagementConsole() {
               {t('pages.engineManagementConsole.empty')}
             </div>
           ) : (
-            <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+            <div className="divide-y divide-[var(--border-subtle)] max-h-[600px] overflow-y-auto">
               {filteredEngines.map((engine) => (
                 <div
                   key={engine.id}
@@ -554,7 +554,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <div>

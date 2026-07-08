@@ -254,7 +254,7 @@ export default function IdentityContextManager() {
           ) : visibleIdentities.length === 0 ? (
             <div className="p-12 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5 max-h-[70vh] overflow-y-auto">
+            <div className="divide-y divide-[var(--border-subtle)] max-h-[70vh] overflow-y-auto">
               {visibleIdentities.map((identity, index) => (
                 <motion.div
                   key={identity.id}
@@ -390,7 +390,7 @@ function IdentityDetailModal({ identity, onClose }) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+        className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm z-50"
         aria-hidden="true"
       />
 
@@ -470,7 +470,7 @@ function IdentityDetailModal({ identity, onClose }) {
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.35 + i * 0.05 }}
-                      className="text-xs text-gray-400 p-3 bg-white/5 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                      className="text-xs text-gray-400 p-3 bg-[var(--row-hover-bg)] rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <span>{activity.description}</span>

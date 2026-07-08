@@ -42,7 +42,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10' },
-  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]' },
 }
 
 function scoreColor(score) {
@@ -69,7 +69,7 @@ function extractScore(findings) {
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
+    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}

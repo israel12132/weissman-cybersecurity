@@ -113,7 +113,7 @@ export default function ClientDetail() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-white/[0.04] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
+            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -130,7 +130,7 @@ export default function ClientDetail() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-white/[0.04] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
+            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -167,7 +167,7 @@ export default function ClientDetail() {
   })()
 
   const navBtnClass =
-    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-white/[0.03] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
+    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
 
   const listFindings = useMemo(() => [{
     id: client.id,
@@ -388,7 +388,7 @@ export default function ClientDetail() {
               <Link
                 key={action.to}
                 to={action.to}
-                className="group p-4 rounded-xl border border-[var(--border-default)] bg-black/25 hover:border-[var(--border-strong)] hover:bg-black/35 transition-all text-center"
+                className="group p-4 rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)] hover:bg-[var(--table-surface)] transition-all text-center"
               >
                 <div className="text-white font-semibold text-sm group-hover:text-violet-200 transition-colors">
                   {action.title}

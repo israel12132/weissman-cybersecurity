@@ -305,7 +305,7 @@ function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, c
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
@@ -1011,7 +1011,7 @@ export default function GraphqlSecurityCommandCenter() {
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
             </div>

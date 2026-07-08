@@ -35,7 +35,7 @@ const columnHelper = createColumnHelper()
 
 function JsonBlock({ value }) {
   return (
-    <pre className="rounded-xl border border-[var(--border-default)] bg-black/70 p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
+    <pre className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -273,7 +273,7 @@ export default function TopTierEngineProfile() {
 
   return (
     <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 120% 78% at 50% 0%, #111827 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-black/55 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/engines/top-tier" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.back_hub')}</Link>
           <span className="text-[var(--text-disabled)] text-xs">|</span>
@@ -305,9 +305,9 @@ export default function TopTierEngineProfile() {
           engineId={engineId}
         />
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-black/35 p-5 space-y-3">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-[var(--text-secondary)]">{profile.id}</span>
+            <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{profile.id}</span>
             <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {profile.mitre || 'N/A'}</span>
             <span className="px-2 py-0.5 rounded border border-amber-500/30 text-[11px] font-mono text-amber-300">{t('pages.topTierEngineProfile.top_tier_badge')}</span>
           </div>

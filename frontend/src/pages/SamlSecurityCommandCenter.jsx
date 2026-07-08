@@ -296,7 +296,7 @@ export default function SamlSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-amber-500/30 text-amber-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-amber-500/30 text-amber-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -405,7 +405,7 @@ export default function SamlSecurityCommandCenter() {
               return (
                 <div key={k}>
                   <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1"><span>{label}</span><span>{v}</span></div>
-                  <div className="h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${v}%` }} /></div>
+                  <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)]"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${v}%` }} /></div>
                 </div>
               )
             })}

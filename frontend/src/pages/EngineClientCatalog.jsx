@@ -156,7 +156,7 @@ function profileEngines(profile) {
 function MitreBadge({ id }) {
   if (!id) return null
   return (
-    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)] tracking-wider">
+    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-muted)] tracking-wider">
       {id}
     </span>
   )
@@ -192,7 +192,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-all cursor-pointer ${
-        selected ? 'border-white/20 bg-white/5' : 'border-transparent hover:border-[var(--border-default)] hover:bg-white/3'
+        selected ? 'border-[var(--border-strong)] bg-[var(--row-hover-bg)]' : 'border-transparent hover:border-[var(--border-default)] hover:bg-white/3'
       }`}
       onClick={() => onSelect(engine.id)}
     >
@@ -682,7 +682,7 @@ export default function EngineClientCatalog() {
             className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
               toast.severity === 'error'
                 ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-                : 'bg-black/80 border-cyan-500/30 text-cyan-200'
+                : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
             {toast.message}
@@ -785,7 +785,7 @@ export default function EngineClientCatalog() {
                 </button>
               )}
             </div>
-            <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
               {t('engines.catalog_shown', { shown: filteredEngines.length, total: totalProfileEngines, selected: totalSelected })}
             </span>
             <button

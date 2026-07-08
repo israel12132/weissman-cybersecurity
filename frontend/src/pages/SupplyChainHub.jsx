@@ -28,7 +28,7 @@ const SEVERITY_COLORS = {
   high: { bg: 'bg-orange-950/30', border: 'border-orange-500/30', text: 'text-orange-300' },
   medium: { bg: 'bg-amber-950/30', border: 'border-amber-500/30', text: 'text-amber-300' },
   low: { bg: 'bg-blue-950/30', border: 'border-blue-500/30', text: 'text-blue-300' },
-  info: { bg: 'bg-white/5', border: 'border-[var(--border-default)]', text: 'text-[var(--text-tertiary)]' },
+  info: { bg: 'bg-[var(--row-hover-bg)]', border: 'border-[var(--border-default)]', text: 'text-[var(--text-tertiary)]' },
 }
 
 function sevClass(s) {
@@ -259,7 +259,7 @@ export default function SupplyChainHub() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#84cc16]/30 text-[#84cc16]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>
           {toast.msg}
         </div>
       )}

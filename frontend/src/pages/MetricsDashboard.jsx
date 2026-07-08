@@ -129,7 +129,7 @@ export default function MetricsDashboard() {
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-white/20 bg-[var(--bg-2)] text-cyan-500"
+              className="w-3.5 h-3.5 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500"
             />
             {t('pages.metricsDashboard.auto_refresh')}
           </label>

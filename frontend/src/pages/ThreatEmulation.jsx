@@ -171,7 +171,7 @@ function AptCard({ group, result, t }) {
 
       <div className="flex flex-wrap gap-1">
         {group.techniques.map((tech) => (
-          <span key={tech} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)]">
+          <span key={tech} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-muted)]">
             {tech}
           </span>
         ))}
@@ -183,14 +183,14 @@ function AptCard({ group, result, t }) {
             <span className="text-[var(--text-tertiary)]">{t('pages.threatEmulation.blocked')}</span>
             <span style={{ color: blockColor }}>{blockedPct ?? 0}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${blockPct}%`, backgroundColor: blockColor }} />
           </div>
           <div className="flex items-center justify-between text-[11px] font-mono">
             <span className="text-[var(--text-tertiary)]">{t('pages.threatEmulation.detected_not_blocked')}</span>
             <span className="text-amber-400">{detectedPct ?? 0}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
             <div className="h-full rounded-full bg-amber-500/70 transition-all" style={{ width: `${detectPct}%` }} />
           </div>
           <p className="text-[10px] font-mono text-[var(--text-disabled)]">
@@ -409,7 +409,7 @@ export default function ThreatEmulation() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}

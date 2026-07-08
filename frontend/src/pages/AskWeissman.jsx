@@ -63,7 +63,7 @@ function StatusBadge({ ok, error, t }) {
     )
   }
   return (
-    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-strong)] bg-white/10 text-[var(--text-tertiary)]">
+    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]">
       {t('ask_weissman.status_pending')}
     </span>
   )
@@ -241,7 +241,7 @@ export default function AskWeissman() {
 
       <div
         ref={transcriptRef}
-        className="flex-1 overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-black/35 backdrop-blur-md p-4 space-y-4"
+        className="flex-1 overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-4 space-y-4"
       >
         {visibleHistory.length === 0 && history.length > 0 ? (
           <div className="text-center text-[11px] font-mono text-[var(--text-muted)] py-12">
@@ -320,7 +320,7 @@ export default function AskWeissman() {
                           </thead>
                           <tbody>
                             {turn.rows.slice(0, 50).map((row, ri) => (
-                              <tr key={ri} className="text-[var(--text-secondary)] hover:bg-white/[0.03]">
+                              <tr key={ri} className="text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">
                                 {Object.values(row).map((v, ci) => (
                                   <td key={ci} className="px-2 py-1 border-b border-white/[0.04] whitespace-nowrap number-cell">
                                     {fmtCell(v)}

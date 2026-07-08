@@ -53,7 +53,7 @@ function UsageTile({ label, current, max, color }) {
         <span className="text-3xl font-bold tabular-nums" style={{ color }}>{current}</span>
         <span className="text-sm text-[var(--text-muted)] font-mono">/ {max}</span>
       </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden mt-3">
+      <div className="h-2 bg-[var(--row-hover-bg)] rounded-full overflow-hidden mt-3">
         <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: accent }} />
       </div>
     </div>

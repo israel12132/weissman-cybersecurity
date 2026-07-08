@@ -45,7 +45,7 @@ function statusBadgeClass(status) {
   if (s === 'past_due' || s === 'paused') {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
   }
-  return 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-strong)]'
+  return 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-strong)]'
 }
 
 function localeTag(language) {
@@ -300,7 +300,7 @@ export default function Billing() {
                       )}
                     </button>
                   ) : (
-                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-white/[0.03] text-[11px] font-mono text-[var(--text-tertiary)]">
+                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[11px] font-mono text-[var(--text-tertiary)]">
                       <Shield className="w-3.5 h-3.5" />
                       {t('pages.billing.highest_tier')}
                     </div>

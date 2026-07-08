@@ -344,7 +344,7 @@ export default function JobsDashboard() {
                     className={`px-3 py-1.5 rounded-full text-[11px] font-mono border transition-all ${
                       statusFilter === key
                         ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
-                        : 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)] hover:border-[var(--border-strong)]'
+                        : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)] hover:border-[var(--border-strong)]'
                     }`}
                   >
                     {t(`pages.jobsDashboard.filter_${key}`)}

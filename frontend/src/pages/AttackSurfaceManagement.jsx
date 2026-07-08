@@ -200,7 +200,7 @@ function AttackPathPanel({ paths }) {
           return (
             <div key={i} className="rounded-xl border border-rose-500/20 bg-[var(--bg-2)] px-4 py-3">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-white/95">{p.title}</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{p.title}</p>
                 <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded border" style={{ color: severityColor(sev), borderColor: `${severityColor(sev)}50` }}>{sev}</span>
               </div>
               {p.value && <p className="text-[10px] font-mono text-rose-200/50 mt-1">{p.value}</p>}
@@ -261,7 +261,7 @@ function FindingCard({ f }) {
         <div className="flex items-start gap-2 min-w-0">
           <span className="text-base shrink-0 mt-0.5">{assetIcon}</span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white/95 leading-snug">{f.title || f.value}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">{f.title || f.value}</p>
             {f.value && f.value !== f.title && (
               <p className="text-[11px] font-mono text-cyan-300/60 truncate">{f.value}</p>
             )}
@@ -281,7 +281,7 @@ function FindingCard({ f }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-[var(--text-muted)] border border-white/[0.06]">{assetLabel}</span>
+        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-white/[0.06]">{assetLabel}</span>
         {f.mitre_attack && (
           <a
             href={`https://attack.mitre.org/techniques/${String(f.mitre_attack).replace('.', '/')}`}
@@ -470,7 +470,7 @@ export default function AttackSurfaceManagement() {
             key={toast.id}
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
-              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/85 border-cyan-500/30 text-cyan-200'
+              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
             {toast.msg}
@@ -605,7 +605,7 @@ export default function AttackSurfaceManagement() {
             <button
               type="button"
               onClick={handleExport}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-white/30 transition-all"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
             >
               ↓ {t('pages.attackSurfaceManagement.btn_export_json')}
             </button>

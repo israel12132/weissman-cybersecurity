@@ -171,7 +171,7 @@ export default function StrategicEngineProgram() {
           </div>
         </div>
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-black/45 p-5">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5">
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-4 h-4 text-[var(--text-muted)]" />
             <h2 className="text-sm font-semibold text-white">{t('pages.strategicEngineProgram.priority_matrix')}</h2>
@@ -216,7 +216,7 @@ export default function StrategicEngineProgram() {
                               <span className={`px-2 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider ${
                                 live
                                   ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
-                                  : 'text-[var(--text-muted)] border-[var(--border-strong)] bg-white/5'
+                                  : 'text-[var(--text-muted)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'
                               }`}>
                                 {live ? t('pages.strategicEngineProgram.production') : t('pages.strategicEngineProgram.catalog')}
                               </span>
@@ -224,10 +224,10 @@ export default function StrategicEngineProgram() {
                             <div className="text-[11px] font-mono text-[var(--text-muted)]">{row.id}</div>
                           </td>
                           <td className="py-3 pr-3">
-                            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-[var(--text-secondary)]">{row.priority}</span>
+                            <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{row.priority}</span>
                           </td>
                           <td className="py-3 pr-3">
-                            <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${STATUS_COLOR[row.status] || 'text-[var(--text-secondary)] border-white/20 bg-white/10'}`}>
+                            <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${STATUS_COLOR[row.status] || 'text-[var(--text-secondary)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'}`}>
                               {STATUS_KEY[row.status] ? t(STATUS_KEY[row.status]) : row.status}
                             </span>
                           </td>

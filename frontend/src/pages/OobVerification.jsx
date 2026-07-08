@@ -244,7 +244,7 @@ export default function OobVerification() {
                 value={targetUrl}
                 onChange={(e) => setTargetUrl(e.target.value)}
                 placeholder={t('pages.oobVerification.target_placeholder')}
-                className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <select
@@ -260,7 +260,7 @@ export default function OobVerification() {
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder={t('pages.oobVerification.label_optional')}
-                  className="rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                  className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
               </div>
 
@@ -319,7 +319,7 @@ export default function OobVerification() {
                   />
                 </div>
 
-                <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-4 space-y-3">
+                <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 space-y-3">
                   <FieldRow label={t('pages.oobVerification.token_label')} value={probe.token} copy />
                   <FieldRow label={t('pages.oobVerification.callback_domain')} value={probe.callback_domain || '—'} copy />
                   {probe.callback_url && (
@@ -423,7 +423,7 @@ export default function OobVerification() {
 
 function StatBox({ label, value, confirmed }) {
   return (
-    <div className={`rounded-xl border p-3 text-center ${confirmed ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-[var(--border-default)] bg-white/5'}`}>
+    <div className={`rounded-xl border p-3 text-center ${confirmed ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-[var(--border-default)] bg-[var(--row-hover-bg)]'}`}>
       <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{label}</div>
       <div className={`text-sm font-bold mt-1 ${confirmed ? 'text-emerald-300' : 'text-[var(--text-tertiary)]'}`}>{value}</div>
     </div>

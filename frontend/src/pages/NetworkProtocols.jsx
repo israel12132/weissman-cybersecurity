@@ -360,7 +360,7 @@ export default function NetworkProtocols() {
               {t('pages.networkProtocols.no_search_results')}
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredProtocols.map((protocol) => (
                 <div key={protocol.name} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-center justify-between">

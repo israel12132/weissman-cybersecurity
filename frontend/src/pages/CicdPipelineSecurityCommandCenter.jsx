@@ -134,7 +134,7 @@ function Section({ title, icon, accent = '#84cc16', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
@@ -338,7 +338,7 @@ function RiskDimensionBar({ label, value, accent = '#84cc16' }) {
         <span className="text-[var(--text-muted)]">{label}</span>
         <span style={{ color: accent }}>{pct}%</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: accent, boxShadow: `0 0 8px ${accent}60` }} />
       </div>
     </div>
@@ -590,10 +590,10 @@ export default function CicdPipelineSecurityCommandCenter() {
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to="/supply-chain" className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
+              <Link to="/supply-chain" className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">
                 Supply Chain Hub →
               </Link>
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
             </div>

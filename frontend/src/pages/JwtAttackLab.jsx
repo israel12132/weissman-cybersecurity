@@ -122,7 +122,7 @@ const JWT_CATEGORY_AXES = [
 // ── small controls ────────────────────────────────────────────────────────────
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
+    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
@@ -254,7 +254,7 @@ function FindingRow({ f, t }) {
             <p className="text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>
             {f.remediation && <p className="mt-2 text-[10px] font-mono text-purple-300/80 leading-relaxed"><span className="text-[var(--text-muted)]">{t('pages.jwtLab.remediation')}: </span>{f.remediation}</p>}
             {Array.isArray(f.compliance) && f.compliance.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">{f.compliance.map((c) => <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)]">{c}</span>)}</div>
+              <div className="mt-2 flex flex-wrap gap-1">{f.compliance.map((c) => <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-muted)]">{c}</span>)}</div>
             )}
             <EvidenceView evidence={f.evidence} />
           </motion.div>
@@ -478,7 +478,7 @@ export default function JwtAttackLab() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#a855f7]/30 text-[#c084fc]'}`}>{toast.msg}</div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
@@ -634,7 +634,7 @@ export default function JwtAttackLab() {
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.jwtLab.attack_reference')}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ATTACK_REF_KEYS.map((a) => (
-                <div key={a.key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-[var(--border-subtle)]">
+                <div key={a.key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]">
                   <div className="min-w-0">
                     <p className="text-[12px] font-mono text-[var(--text-primary)] truncate">{t(`pages.jwtLab.attack_ref.${a.key}.id`)}</p>
                     <p className="text-[9px] font-mono text-[var(--text-muted)]">{t(`pages.jwtLab.attack_ref.${a.key}.desc`)}</p>

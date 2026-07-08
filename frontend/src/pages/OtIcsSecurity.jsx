@@ -64,7 +64,7 @@ function StatusBadge({ status, t }) {
     running: { label: t('pages.otIcsSecurity.status_running'), cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
     completed: { label: t('pages.otIcsSecurity.status_done'), cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
     error: { label: t('pages.otIcsSecurity.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-gray-400 border-[var(--border-default)] bg-white/5' },
+    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-gray-400 border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   };
   const { label, cls } = map[status] ?? map.idle;
   return (
@@ -142,7 +142,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
             <h3 className="text-sm font-semibold text-white">{t(engine.labelKey)}</h3>
             <StatusBadge status={status} t={t} />
           </div>
-          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {engine.id}
           </span>
         </div>
@@ -167,7 +167,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
             {t('pages.otIcsSecurity.findings_count', { count: findings.length })}
           </p>
           {findings.slice(0, 4).map((f, i) => (
-            <div key={f.id ?? i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-white/5 rounded px-2 py-1">
+            <div key={f.id ?? i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--row-hover-bg)] rounded px-2 py-1">
               <span className={`mr-2 uppercase text-[9px] ${
                 f.severity === 'critical' ? 'text-red-400' :
                 f.severity === 'high' ? 'text-orange-400' :
@@ -404,7 +404,7 @@ export default function OtIcsSecurity() {
           <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-              : 'bg-black/80 border-cyan-500/30 text-cyan-300'
+              : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
           }`}>
             {toast.msg}
           </div>
@@ -522,7 +522,7 @@ export default function OtIcsSecurity() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredDevices.map((device) => (
                 <div key={device.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start justify-between">

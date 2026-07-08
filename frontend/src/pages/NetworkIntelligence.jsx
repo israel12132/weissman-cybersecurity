@@ -191,7 +191,7 @@ function Section({ title, icon, accent = '#f97316', defaultOpen = true, children
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>{title}
@@ -250,7 +250,7 @@ function Toggle({ label, value, onChange }) {
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
         value ? 'border-[#f97316]/40 bg-[#f97316]/10 text-[#f97316]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}>
       <span>{label}</span>
-      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#f97316]/40' : 'bg-white/10'}`}>
+      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#f97316]/40' : 'bg-[var(--row-hover-bg)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? 'left-3.5' : 'left-0.5'}`} />
       </span>
     </button>
@@ -290,8 +290,8 @@ function PostureChip({ label, state }) {
     good: 'text-[#4ade80] bg-[#4ade80]/10 border-[#4ade80]/30',
     bad: 'text-red-300 bg-red-950/30 border-red-500/30',
     warn: 'text-amber-300 bg-amber-950/20 border-amber-500/30',
-    na: 'text-[var(--text-disabled)] bg-white/5 border-[var(--border-default)]',
-  }[state] ?? 'text-[var(--text-disabled)] bg-white/5 border-[var(--border-default)]'
+    na: 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]',
+  }[state] ?? 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]'
   const glyph = { good: '✓', bad: '✕', warn: '!', na: '–' }[state] ?? '–'
   return (
     <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono ${styles}`}>
@@ -316,7 +316,7 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.03]">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
         <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>}
@@ -348,7 +348,7 @@ function StatusBadge({ status, t }) {
     running: { label: t('pages.networkIntelligence.status_running'), cls: 'text-[#22d3ee] border-[#22d3ee]/30 bg-[#22d3ee]/10' },
     completed: { label: t('pages.networkIntelligence.status_done'), cls: 'text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10' },
     error: { label: t('pages.networkIntelligence.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: t('pages.networkIntelligence.status_idle'), cls: 'text-[var(--text-disabled)] border-[var(--border-default)] bg-white/5' },
+    idle: { label: t('pages.networkIntelligence.status_idle'), cls: 'text-[var(--text-disabled)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   }
   const { label, cls } = map[status] ?? map.idle
   return <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest ${cls}`}>{label}</span>
@@ -662,7 +662,7 @@ function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onF
             <h3 className="text-sm font-semibold text-white">{engine.label}</h3>
             <StatusBadge status={status} t={t} />
           </div>
-          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">{engine.mitre}</span>
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">{engine.mitre}</span>
         </div>
         <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#f97316]/30 text-[#f97316]/70 hover:bg-[#f97316]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
@@ -680,7 +680,7 @@ function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onF
         <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
           <p className="text-[10px] font-mono text-[var(--text-muted)]">{findings.length} findings</p>
           {findings.slice(0, 3).map((f, i) => (
-            <div key={i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-white/5 rounded px-2 py-1 truncate">{f.title ?? f.type}</div>
+            <div key={i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--row-hover-bg)] rounded px-2 py-1 truncate">{f.title ?? f.type}</div>
           ))}
         </div>
       )}
@@ -750,7 +750,7 @@ export default function NetworkIntelligence() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#f97316]/30 text-[#f97316]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>
           {toast.msg}
         </div>
       )}

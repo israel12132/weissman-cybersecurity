@@ -44,7 +44,7 @@ for (const row of strategicEnginesNeedingDedicatedPage()) {
 
 function JsonView({ value }) {
   return (
-    <pre className="rounded-xl border border-[var(--border-default)] bg-black/70 p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
+    <pre className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -291,7 +291,7 @@ export default function BusinessEngineProfile() {
 
   return (
     <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 120% 78% at 50% 0%, #1f2937 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-black/55 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/engines/strategic" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono">{t('pages.businessEngineProfile.back_strategic')}</Link>
           <span className="text-[var(--text-disabled)] text-xs">|</span>
@@ -322,9 +322,9 @@ export default function BusinessEngineProfile() {
           <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={kpi.failed.toLocaleString()} accent="#f87171" />
         </div>
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-black/35 p-5 space-y-3">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-[var(--text-secondary)]">{engineId}</span>
+            <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{engineId}</span>
             {reg?.mitre && <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {reg.mitre}</span>}
             <span className="px-2 py-0.5 rounded border border-emerald-500/30 text-[11px] font-mono text-emerald-300">{t('pages.businessEngineProfile.dedicated_badge')}</span>
           </div>
@@ -376,7 +376,7 @@ export default function BusinessEngineProfile() {
             <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>
           {liveJob && (
-            <div className="text-xs font-mono text-[var(--text-tertiary)] rounded-lg border border-[var(--border-default)] bg-black/45 p-2">
+            <div className="text-xs font-mono text-[var(--text-tertiary)] rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
               {t('pages.businessEngineProfile.live_job_status', { jobId: liveJob.id || activeJobId, status: liveJob.status || '-' })}
             </div>
           )}
@@ -423,7 +423,7 @@ export default function BusinessEngineProfile() {
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {visibleJobs.map((j) => (
-                <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-black/45 p-2 text-[var(--text-secondary)] font-mono">
+                <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)] font-mono">
                   <div>{j.created_at || '-'} | {j.status || '-'} | findings={j.findings_count || 0}</div>
                   <div className="text-[var(--text-muted)]">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
@@ -438,7 +438,7 @@ export default function BusinessEngineProfile() {
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {visibleFindings.map((f) => (
-                <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-black/45 p-2 text-[var(--text-secondary)]">
+                <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
                   <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
                   <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>

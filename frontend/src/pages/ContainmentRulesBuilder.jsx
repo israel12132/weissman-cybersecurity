@@ -199,7 +199,7 @@ export default function ContainmentRulesBuilder() {
           ) : visibleRules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
                 <div
                   key={rule.id}
@@ -357,7 +357,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">

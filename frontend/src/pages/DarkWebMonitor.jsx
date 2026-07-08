@@ -236,7 +236,7 @@ export default function DarkWebMonitor() {
                     .map(([src, count]) => (
                       <div key={src} className="flex items-center gap-3">
                         <span className="text-xs font-mono text-[var(--text-tertiary)] w-40 truncate">{src}</span>
-                        <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-[var(--row-hover-bg)] rounded-full overflow-hidden">
                           <div
                             className="h-full bg-rose-500/70 rounded-full"
                             style={{ width: `${stats.total ? (count / stats.total) * 100 : 0}%` }}

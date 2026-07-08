@@ -239,7 +239,7 @@ export default function ScanScheduler() {
           ) : visibleSchedules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSchedules.map((schedule) => (
                 <div
                   key={schedule.id}
@@ -368,7 +368,7 @@ export default function ScanScheduler() {
                   time: '02:00',
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Daily Scan</div>
               <div className="text-xs text-gray-400">Run comprehensive scan every day at 2 AM</div>
@@ -382,7 +382,7 @@ export default function ScanScheduler() {
                   day: 'sunday',
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Weekly Scan</div>
               <div className="text-xs text-gray-400">Deep scan every Sunday</div>
@@ -394,7 +394,7 @@ export default function ScanScheduler() {
                   name: 'Custom Schedule',
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Custom Cron</div>
               <div className="text-xs text-gray-400">Advanced cron expression</div>
@@ -478,7 +478,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">

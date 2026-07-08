@@ -74,7 +74,7 @@ const PLANE_STYLE = {
   healthy: { bd: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300' },
   degraded: { bd: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-300' },
   compromised: { bd: 'border-rose-500/40', bg: 'bg-rose-500/10', text: 'text-rose-300' },
-  unknown: { bd: 'border-[var(--border-default)]', bg: 'bg-white/5', text: 'text-[var(--text-muted)]' },
+  unknown: { bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', text: 'text-[var(--text-muted)]' },
 }
 
 const POSTURE_DIMS = [
@@ -132,7 +132,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeFromScore(score) {
@@ -219,7 +219,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -557,7 +557,7 @@ export default function DnsDomainPosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}

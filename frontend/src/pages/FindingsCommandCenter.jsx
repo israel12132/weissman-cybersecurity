@@ -117,7 +117,7 @@ function formatDate(val) {
 function MitreBadge({ id }) {
   if (!id) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   return (
-    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider">
+    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider">
       {id}
     </span>
   )
@@ -134,7 +134,7 @@ function ComplianceBadges({ compliance }) {
         return (
           <span
             key={`${label}-${idx}`}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider"
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider"
             title={sanitizeFindingPlainText(raw || '', 256)}
           >
             {label}
@@ -666,7 +666,7 @@ export default function FindingsCommandCenter() {
           <button
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-white/[0.03] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
           </button>

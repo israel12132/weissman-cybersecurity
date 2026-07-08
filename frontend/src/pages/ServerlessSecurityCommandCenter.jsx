@@ -116,7 +116,7 @@ function Section({ title, icon, accent = ACCENT, count, defaultOpen = true, chil
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>{title}{count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
@@ -375,7 +375,7 @@ export default function ServerlessSecurityCommandCenter() {
                 {t('serverlessSec.hero_desc', 'Evidence-only remote assessment: platform fingerprinting, env leaks, CORS, IaC exposure, event injection — every finding backed by a real HTTP signal.')}
               </p>
             </div>
-            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">Engine Detail →</Link>
+            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
           </div>
         </motion.div>
 
@@ -439,7 +439,7 @@ export default function ServerlessSecurityCommandCenter() {
                   {running ? t('common.running', 'Running…') : t('serverlessSec.run', 'Run Serverless Scan')}
                 </button>
                 <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
-                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 disabled:opacity-40 transition-all">
+                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] disabled:opacity-40 transition-all">
                   Dry Run
                 </button>
               </div>
@@ -463,7 +463,7 @@ export default function ServerlessSecurityCommandCenter() {
                     ['Admin open', metrics.unauthenticated_admin ? 'YES' : 'no'],
                     ['Cold start', metrics.cold_start_confirmed ? 'YES' : 'no'],
                   ].map(([k, v]) => (
-                    <div key={k} className="rounded-lg bg-white/5 border border-[var(--border-default)] px-2 py-1.5">
+                    <div key={k} className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-2 py-1.5">
                       <span className="text-[var(--text-muted)] block">{k}</span>
                       <span className="text-[var(--text-secondary)]">{String(v)}</span>
                     </div>
@@ -517,7 +517,7 @@ export default function ServerlessSecurityCommandCenter() {
                 {ATTACK_REFERENCE.map((r) => {
                   const m = SEV_META[r.sev] || SEV_META.info
                   return (
-                    <div key={r.id} className="rounded-lg border border-[var(--border-default)] bg-white/[0.02] px-3 py-2">
+                    <div key={r.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-3 py-2">
                       <span className={`text-[9px] font-mono uppercase ${m.text}`}>{r.sev}</span>
                       <p className="text-[11px] font-mono text-[var(--text-tertiary)] mt-0.5">{r.desc}</p>
                     </div>

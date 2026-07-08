@@ -146,7 +146,7 @@ function RiskMatrix({ matrix, t }) {
         return n > 0 ? (
           <span className="inline-block min-w-[1.25rem] px-1 rounded font-bold text-center" style={{ backgroundColor: `${SEV_MATRIX_COLORS[s]}22`, color: SEV_MATRIX_COLORS[s] }}>{n}</span>
         ) : (
-          <span className="text-white/15">·</span>
+          <span className="text-[var(--text-disabled)]">·</span>
         )
       },
     })),
@@ -224,7 +224,7 @@ function ComplianceMap({ map, t }) {
     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
       <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.compliance_map', 'Compliance mapping')}</div>
       <div className="flex flex-wrap gap-3 text-[10px] font-mono">
-        {mitre.map((m) => <span key={m} className="px-2 py-0.5 rounded bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)]">{m}</span>)}
+        {mitre.map((m) => <span key={m} className="px-2 py-0.5 rounded bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">{m}</span>)}
         {cwe.map((c) => <span key={c} className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-200/80">{c}</span>)}
         {owasp.map((o) => <span key={o} className="px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-sky-200/80">{o}</span>)}
       </div>
@@ -285,7 +285,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
@@ -358,7 +358,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -474,7 +474,7 @@ function Scorecard({ summary, t }) {
                       <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{d.label}</span>
                       <span className="text-[10px] font-mono font-bold" style={{ color: barColor }}>{n}</span>
                     </div>
-                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-1 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${n}%`, backgroundColor: barColor }} />
                     </div>
                   </div>
@@ -556,7 +556,7 @@ function Scorecard({ summary, t }) {
         <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.webCachePosture.weak_areas', 'Weak areas:')}</span>
           {cats.map((c) => (
-            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)]">
+            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">
               {(CATEGORY_META[c] || CATEGORY_META.other).icon} {(CATEGORY_META[c] || CATEGORY_META.other).label}
             </span>
           ))}
@@ -714,7 +714,7 @@ export default function WebCachePosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-rose-500/30 text-rose-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-rose-500/30 text-rose-200'}`}>
           {toast.msg}
         </div>
       )}

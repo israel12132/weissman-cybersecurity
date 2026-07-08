@@ -240,7 +240,7 @@ export default function AlertRulesEngine() {
           ) : visibleRules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
                 <div
                   key={rule.id}
@@ -363,7 +363,7 @@ export default function AlertRulesEngine() {
                   conditions: { severity: ['critical'] },
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Critical Findings</div>
               <div className="text-xs text-gray-400">Alert on all critical severity findings</div>
@@ -376,7 +376,7 @@ export default function AlertRulesEngine() {
                   conditions: { cve_pattern: 'CVE-2024-*' },
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">New CVE Detection</div>
               <div className="text-xs text-gray-400">Alert on newly published CVEs</div>
@@ -389,7 +389,7 @@ export default function AlertRulesEngine() {
                   conditions: { threshold: 50 },
                 })
               }
-              className="p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">High Volume</div>
               <div className="text-xs text-gray-400">Alert when findings exceed threshold</div>
@@ -457,7 +457,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">

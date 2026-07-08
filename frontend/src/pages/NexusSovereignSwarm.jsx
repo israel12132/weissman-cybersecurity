@@ -327,7 +327,7 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
@@ -600,7 +600,7 @@ function ThreatBar({ score = 0 }) {
         <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Threat Surface</span>
         <span className="text-sm font-bold" style={{ color }}>{pct}/100</span>
       </div>
-      <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+      <div className="h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color, boxShadow: `0 0 10px ${color}80` }} />
       </div>
     </div>
@@ -727,7 +727,7 @@ function ConfigCompletenessBadge({ parity, completeness }) {
 function ConfigSchemaPanel({ schema, onClose }) {
   if (!schema) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-3)]" onClick={onClose}>
       <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-zinc-950 p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
@@ -757,7 +757,7 @@ function SignalHeatmapPanel({ heatmap }) {
           return (
             <div key={r.prefix} className="flex items-center gap-2">
               <span className="text-[9px] font-mono text-[var(--text-muted)] w-20 truncate shrink-0">/{r.prefix}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${pct}%` }} />
               </div>
               <span className="text-[9px] font-mono text-violet-300/80 w-6 text-right">{r.signals}</span>
@@ -859,7 +859,7 @@ function StatusHistogramPanel({ histogram }) {
           return (
             <div key={status} className="flex items-center gap-2">
               <span className="text-[9px] font-mono w-8 text-right shrink-0" style={{ color }}>{status}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }} />
               </div>
               <span className="text-[9px] font-mono text-[var(--text-muted)] w-8 text-right">{r.count}</span>
@@ -938,7 +938,7 @@ function ArchetypeDistributionPanel({ distribution }) {
               <span className="text-[9px] font-mono w-16 shrink-0" style={{ color: meta?.color || '#a855f7' }}>
                 {meta?.icon} {arch}
               </span>
-              <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: meta?.color || '#a855f7', opacity: 0.75 }} />
               </div>
               <span className="text-[9px] font-mono text-[var(--text-tertiary)] w-10 text-right">{Number(count).toLocaleString()}</span>
@@ -1097,15 +1097,15 @@ function ExposureVelocityPanel({ velocity }) {
   if (!velocity) return null
   return (
     <div className="grid grid-cols-3 gap-2">
-      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-2 py-1.5 text-center">
         <p className="text-[9px] font-mono text-[var(--text-muted)]">Elapsed</p>
         <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.elapsed_ms ?? 0}ms</p>
       </div>
-      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-2 py-1.5 text-center">
         <p className="text-[9px] font-mono text-[var(--text-muted)]">RPS</p>
         <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.requests_per_second ?? 0}</p>
       </div>
-      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-2 py-1.5 text-center">
         <p className="text-[9px] font-mono text-[var(--text-muted)]">TTFC</p>
         <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.time_to_first_critical_ms != null ? `${velocity.time_to_first_critical_ms}ms` : '—'}</p>
       </div>
@@ -1641,7 +1641,7 @@ export default function NexusSovereignSwarm() {
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
               <Link to={`/engines/top-tier/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition-colors">
@@ -1748,7 +1748,7 @@ export default function NexusSovereignSwarm() {
                         key={a.id}
                         type="button"
                         onClick={() => toggleArchetype(a.id)}
-                        className={`flex items-center gap-2 text-left rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-white/[0.06]' : 'opacity-45 hover:opacity-80'}`}
+                        className={`flex items-center gap-2 text-left rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)]' : 'opacity-45 hover:opacity-80'}`}
                         style={{ borderColor: on ? `${a.color}66` : 'rgba(255,255,255,0.08)' }}
                       >
                         <span>{a.icon}</span>

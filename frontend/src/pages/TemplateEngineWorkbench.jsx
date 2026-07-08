@@ -191,7 +191,7 @@ function TemplateEngineWorkbenchBody() {
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
-              className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-blue-500/40"
+              className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-blue-500/40"
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
@@ -255,7 +255,7 @@ function TemplateEngineWorkbenchBody() {
               {t(`${NS}.result`)}
             </h3>
             {!runResult ? (
-              <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-4">
+              <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4">
                 <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {t(`${NS}.result_empty`)}
                 </p>
@@ -263,7 +263,7 @@ function TemplateEngineWorkbenchBody() {
             ) : (
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                     <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_status`)}</div>
                     <div className="flex items-center justify-center gap-1 mt-1">
                       {runResult?.verification?.verified ? (
@@ -279,13 +279,13 @@ function TemplateEngineWorkbenchBody() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                     <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_matched`)}</div>
                     <div className="text-lg font-semibold mt-1" style={{ color: runResult?.matched ? '#4ade80' : '#f87171' }}>
                       {runResult?.matched ? t(`${NS}.result_matched_yes`) : t(`${NS}.result_matched_no`)}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
                     <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_steps`)}</div>
                     <div className="text-lg font-semibold text-white mt-1">{stepCount}</div>
                     <div className="text-[10px] font-mono text-[var(--text-muted)]">

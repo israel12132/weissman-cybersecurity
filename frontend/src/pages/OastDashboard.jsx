@@ -38,7 +38,7 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
               </span>
             )}
           </div>
-          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {meta.mitre}
           </span>
         </div>
@@ -239,7 +239,7 @@ export default function OastDashboard() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -290,7 +290,7 @@ export default function OastDashboard() {
               placeholder={t('pages.oastDashboard.target_placeholder')}
               value={mintTarget}
               onChange={(e) => setMintTarget(e.target.value)}
-              className="rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
             />
             <select
               value={mintProbeType}
@@ -305,7 +305,7 @@ export default function OastDashboard() {
               placeholder={t('pages.oastDashboard.label_optional')}
               value={mintLabel}
               onChange={(e) => setMintLabel(e.target.value)}
-              className="rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
             />
             <button
               type="button"

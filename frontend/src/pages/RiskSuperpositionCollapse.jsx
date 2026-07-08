@@ -462,7 +462,7 @@ export default function RiskSuperpositionCollapse() {
                 type="checkbox"
                 checked={autoRunEnabled}
                 onChange={(e) => toggleAutoRun(e.target.checked)}
-                className="rounded border-white/25"
+                className="rounded border-[var(--border-strong)]"
               />
               {t('pages.superpositionCollapse.auto_run_label')}
             </label>
@@ -543,7 +543,7 @@ export default function RiskSuperpositionCollapse() {
                   type="checkbox"
                   checked={!!params[key]}
                   onChange={(e) => setP(key, e.target.checked)}
-                  className="rounded border-white/20"
+                  className="rounded border-[var(--border-strong)]"
                 />
                 {label}
               </label>
@@ -658,7 +658,7 @@ export default function RiskSuperpositionCollapse() {
             ) : (
               <div className="max-h-48 overflow-auto space-y-1.5">
                 {clusters.slice(0, 20).map((c) => (
-                  <div key={c.id} className="flex items-center justify-between text-[11px] font-mono py-1.5 px-2 rounded-lg bg-white/5">
+                  <div key={c.id} className="flex items-center justify-between text-[11px] font-mono py-1.5 px-2 rounded-lg bg-[var(--row-hover-bg)]">
                     <span className="text-[var(--text-secondary)] truncate flex-1">{c.title || c.vuln_signature}</span>
                     <span className="text-violet-300 mx-2">{c.member_count}×</span>
                     <span className={`uppercase text-[10px] ${

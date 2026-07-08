@@ -134,7 +134,7 @@ function StatTile({ label, value, hint, color = 'var(--accent-strong)', icon: Ic
         </div>
         {Icon && (
           <span
-            className="shrink-0 w-9 h-9 rounded-xl border border-[var(--border-default)] bg-white/[0.03] grid place-items-center"
+            className="shrink-0 w-9 h-9 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] grid place-items-center"
             style={{ color }}
           >
             <Icon className="w-4 h-4" strokeWidth={1.9} />
@@ -378,7 +378,7 @@ function SeverityDistribution({ kpis, t }) {
                 <span className="w-16 text-[10px] font-mono uppercase tracking-wider text-[var(--text-tertiary)]">
                   {t(`pages.threatIntelHub.sev_${k}`)}
                 </span>
-                <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+                <div className="flex-1 h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${pct}%` }}
@@ -443,7 +443,7 @@ function GroupBar({ group, engines, total, onClick, active }) {
           {engines.length}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}

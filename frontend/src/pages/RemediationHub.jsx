@@ -92,7 +92,7 @@ function StatusBadge({ status, t }) {
 function SeverityBar({ severities, total }) {
   if (!total) return null
   return (
-    <div className="flex h-1.5 w-full max-w-[220px] rounded-full overflow-hidden bg-white/5">
+    <div className="flex h-1.5 w-full max-w-[220px] rounded-full overflow-hidden bg-[var(--row-hover-bg)]">
       {SEVERITY_KEYS.map((k) => {
         const v = severities[k]
         if (!v) return null
@@ -236,7 +236,7 @@ export default function RemediationHub() {
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">{t('pages.remediationHub.open_findings')}</Link>
           </div>
 
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-[var(--border-subtle)]">
             {loading ? (
               <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
             ) : workflows.length === 0 ? (

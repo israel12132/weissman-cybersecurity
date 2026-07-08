@@ -240,7 +240,7 @@ export default function CeoVault() {
           ) : visibleSecrets.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSecrets.map((secret) => (
                 <div
                   key={secret.id}
@@ -278,7 +278,7 @@ export default function CeoVault() {
 
                         <button
                           onClick={() => toggleSecretVisibility(secret.id)}
-                          className="p-2 bg-white/5 border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
+                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {showSecret[secret.id] ? (
                             <EyeOff className="w-4 h-4" />
@@ -291,7 +291,7 @@ export default function CeoVault() {
                           onClick={() =>
                             copyToClipboard(secret.id, secret.value)
                           }
-                          className="p-2 bg-white/5 border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
+                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {copiedId === secret.id ? (
                             <Check className="w-4 h-4 text-green-400" />
@@ -394,7 +394,7 @@ function SecretModal({ secret, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">

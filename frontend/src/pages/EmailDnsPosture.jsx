@@ -78,7 +78,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 const SPOOF_STYLE = {
@@ -170,7 +170,7 @@ const STATE_STYLE = {
   pass: { sym: '✓', cls: 'border-emerald-500/30 bg-emerald-500/5', text: 'text-emerald-400' },
   warn: { sym: '!', cls: 'border-amber-500/30 bg-amber-500/5', text: 'text-amber-400' },
   fail: { sym: '✕', cls: 'border-rose-500/30 bg-rose-500/5', text: 'text-rose-400' },
-  unknown: { sym: '·', cls: 'border-[var(--border-default)] bg-white/5', text: 'text-[var(--text-muted)]' },
+  unknown: { sym: '·', cls: 'border-[var(--border-default)] bg-[var(--row-hover-bg)]', text: 'text-[var(--text-muted)]' },
 }
 
 function CopyButton({ text }) {
@@ -235,7 +235,7 @@ function ComplianceMatrix({ compliance }) {
             : g.group.startsWith('CIS') ? compliance.cis_controls_v8
               : { gdpr_art_32: compliance.gdpr_art_32, nis2_email_security: compliance.nis2_email_security }
           return (
-            <div key={g.group} className="rounded-lg border border-[var(--border-default)] bg-white/5 p-2.5">
+            <div key={g.group} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-2.5">
               <div className="text-[10px] font-mono text-[var(--text-tertiary)] mb-1.5">{t(g.groupKey)}</div>
               <div className="space-y-1">
                 {g.keys.map(([k, label]) => {
@@ -266,7 +266,7 @@ function SpfBlastPanel({ blast }) {
       </div>
       <div className="flex flex-wrap gap-1.5">
         {blast.vendors.map((v, i) => (
-          <span key={i} title={v.domain} className={`text-[10px] font-mono px-2 py-1 rounded border ${v.reachable ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-200' : 'border-[var(--border-default)] bg-white/5 text-[var(--text-muted)]'}`}>
+          <span key={i} title={v.domain} className={`text-[10px] font-mono px-2 py-1 rounded border ${v.reachable ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-200' : 'border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-muted)]'}`}>
             {v.vendor || v.domain}
           </span>
         ))}
@@ -301,7 +301,7 @@ function DmarcExternalPanel({ data }) {
       <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.dmarc_receivers_title')}</div>
       <div className="space-y-1">
         {data.receivers.map((r, i) => (
-          <div key={i} className="flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] bg-white/5">
+          <div key={i} className="flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)]">
             <span className="text-[var(--text-tertiary)]">{r.receiver}</span>
             <span className={r.authorized ? 'text-emerald-400' : 'text-rose-400'}>{r.internal ? t('pages.emailDnsPosture.dmarc_receiver_in_domain') : r.authorized ? t('pages.emailDnsPosture.dmarc_receiver_authorized') : t('pages.emailDnsPosture.dmarc_receiver_missing')}</span>
           </div>
@@ -380,7 +380,7 @@ const MANIFEST_STATUS = {
   pass: { sym: '✓', cls: 'border-emerald-500/30 bg-emerald-500/5', text: 'text-emerald-300' },
   warn: { sym: '⚠', cls: 'border-amber-500/30 bg-amber-500/5', text: 'text-amber-300' },
   fail: { sym: '✗', cls: 'border-rose-500/30 bg-rose-500/5', text: 'text-rose-300' },
-  skipped: { sym: '—', cls: 'border-[var(--border-default)] bg-white/5', text: 'text-[var(--text-muted)]' },
+  skipped: { sym: '—', cls: 'border-[var(--border-default)] bg-[var(--row-hover-bg)]', text: 'text-[var(--text-muted)]' },
 }
 
 function CoverageManifestPanel({ manifest, catalog }) {
@@ -495,7 +495,7 @@ function Scorecard({ summary }) {
             <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
             <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{summary.analyzed_domain || summary.target}</div>
             {summary.provider && (
-              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono text-[var(--text-tertiary)] px-2 py-0.5 rounded-md bg-white/5 border border-[var(--border-default)]">
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono text-[var(--text-tertiary)] px-2 py-0.5 rounded-md bg-[var(--row-hover-bg)] border border-[var(--border-default)]">
                 ✉ {summary.provider}
               </div>
             )}
@@ -612,7 +612,7 @@ function FindingCard({ f }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.standard && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)] border border-[var(--border-default)]">{f.standard}</span>}
+            {f.standard && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-[var(--border-default)]">{f.standard}</span>}
             {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
             {f.cwe && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.cwe}</span>}
           </div>
@@ -648,7 +648,7 @@ function FindingCard({ f }) {
             {refs.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {refs.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)] border border-[var(--border-default)]">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -802,7 +802,7 @@ export default function EmailDnsPosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-emerald-500/30 text-emerald-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-emerald-500/30 text-emerald-200'}`}>
           {toast.msg}
         </div>
       )}

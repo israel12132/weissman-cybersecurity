@@ -317,7 +317,7 @@ export default function EngineReliability() {
                 if (!r) return null
                 const h = r.health
                 return (
-                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-white/[0.03]">
+                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-[var(--row-hover-bg)]">
                     <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
                       <div className="min-w-[180px] flex-1 font-mono text-[var(--text-primary)] text-xs">
                         {r.id}

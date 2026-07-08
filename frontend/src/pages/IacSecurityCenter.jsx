@@ -899,7 +899,7 @@ function Section({ title, icon, accent = '#22d3ee', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
@@ -1026,7 +1026,7 @@ function AttackPathCard({ chain }) {
           {mitre.map((m, i) => (
             <React.Fragment key={m}>
               {i > 0 && <span className="text-[var(--text-disabled)] text-[10px]">→</span>}
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-cyan-200/80">{m}</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-cyan-200/80">{m}</span>
             </React.Fragment>
           ))}
         </div>
@@ -1049,7 +1049,7 @@ function SeverityBars({ bySeverity }) {
         return (
           <div key={s} className="flex items-center gap-2">
             <span className="w-16 text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[s] }}>{s}</span>
-            <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+            <div className="flex-1 h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${(n / total) * 100}%`, background: SEV_COLOR[s] }} />
             </div>
             <span className="w-8 text-right text-[11px] font-mono text-[var(--text-secondary)]">{n}</span>
@@ -1083,7 +1083,7 @@ function FrameworkCoverage({ coverage }) {
       {rows.map((r) => (
         <div key={r.framework} className="flex items-center gap-2">
           <span className="w-24 text-[10px] font-mono text-[var(--text-tertiary)] truncate">{r.framework}</span>
-          <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+          <div className="flex-1 h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
             <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${r.hit_rate_pct || 0}%` }} />
           </div>
           <span className="text-[10px] font-mono text-[var(--text-muted)] w-20 text-right">{r.policies_triggered}/{r.policies_total}</span>
@@ -1103,7 +1103,7 @@ function PolicyCatalog({ catalog, query, onQuery }) {
       <p className="text-[9px] font-mono text-[var(--text-muted)]">{triggered.length} triggered · {filtered.length} shown · {list.length} total</p>
       <div className="max-h-52 overflow-auto space-y-1 pr-1">
         {filtered.slice(0, 120).map((p) => (
-          <div key={p.id} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] font-mono ${p.triggered ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-white/[0.02] border border-[var(--border-subtle)]'}`}>
+          <div key={p.id} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] font-mono ${p.triggered ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]'}`}>
             <span className="text-[var(--text-secondary)] truncate">{p.id}</span>
             <span className="shrink-0 uppercase" style={{ color: SEV_COLOR[p.severity] || '#94a3b8' }}>{p.severity}</span>
           </div>
@@ -1117,7 +1117,7 @@ function FindingCard({ f }) {
   const sev = f.severity || 'info'
   return (
     <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-white/[0.03] transition-colors">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-[var(--row-hover-bg)] transition-colors">
         <div className="flex items-start gap-2">
           <span className="font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 uppercase" style={{ color: SEV_COLOR[sev], background: `${SEV_COLOR[sev]}1a` }}>{sev}</span>
           <span className="min-w-0 flex-1">
@@ -1147,7 +1147,7 @@ function FindingCard({ f }) {
           )}
           {Array.isArray(f.compliance) && f.compliance.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {f.compliance.map((c) => <span key={c} className="text-[8px] font-mono px-1 py-0.5 rounded bg-white/5 text-[var(--text-muted)]">{c}</span>)}
+              {f.compliance.map((c) => <span key={c} className="text-[8px] font-mono px-1 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)]">{c}</span>)}
             </div>
           )}
           {Array.isArray(f.references) && f.references.length > 0 && (
@@ -1431,7 +1431,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
         </div>
       )}
       {paths.slice(0, 3).map((p) => (
-        <div key={p.id} className="rounded-lg border border-[var(--border-default)] bg-black/25 px-3 py-2">
+        <div key={p.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
           <p className="text-[10px] font-bold text-[var(--text-secondary)]">{p.title}</p>
           <p className="text-[9px] font-mono text-amber-300/70">{p.toxic_class}</p>
           <p className="text-[9px] font-mono text-[var(--text-muted)] mt-1">{p.narrative}</p>
@@ -1627,7 +1627,7 @@ function WaiversPanel({ waivers }) {
   )
 }
 function Badge({ children }) {
-  return <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)] uppercase tracking-wide">{children}</span>
+  return <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] uppercase tracking-wide">{children}</span>
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -1930,7 +1930,7 @@ export default function IacSecurityCenter() {
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
               <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
             </div>
-            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">Engine Detail →</Link>
+            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
           </div>
         </motion.div>
 
@@ -1959,7 +1959,7 @@ export default function IacSecurityCenter() {
                   {MODES.map((m) => {
                     const on = params.scan_modes.includes(m.id)
                     return (
-                      <button key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-white/[0.06] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
+                      <button key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
                         <span>{m.icon}</span>
                         <span className="min-w-0 flex-1">
                           <span className="text-xs font-semibold text-white block">{m.label}</span>

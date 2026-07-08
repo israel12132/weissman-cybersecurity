@@ -191,12 +191,12 @@ export default function TopTierEngineHub() {
     if (status === 'pass') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
     if (status === 'fail') return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
     if (status === 'pending') return 'text-amber-300 border-amber-500/40 bg-amber-500/10'
-    return 'text-[var(--text-tertiary)] border-white/20 bg-white/5'
+    return 'text-[var(--text-tertiary)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'
   }
 
   return (
     <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 130% 80% at 50% 0%, #111827 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-black/55 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">{t('pages.topTierEngineHub.back_matrix')}</Link>
@@ -225,7 +225,7 @@ export default function TopTierEngineHub() {
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <EngineHubForensicHeader evidence={t('pages.topTierEngineHub.evidence_notice')} />
 
-        <section className="rounded-2xl border border-[var(--border-default)] bg-black/35 p-5">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5">
           <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
           <p className="text-sm text-[var(--text-tertiary)] leading-relaxed">
             {t('pages.topTierEngineHub.reality_body')}
@@ -338,7 +338,7 @@ export default function TopTierEngineHub() {
                   </Link>
                   <Link
                     to={`/engines/${id}`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-[var(--border-strong)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                   >
                     {t('pages.topTierEngineHub.open_engine_detail')}
                   </Link>

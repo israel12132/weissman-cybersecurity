@@ -272,7 +272,7 @@ function PipeMatrixPanel({ matrix, L }) {
         {PIPE_DEFS.map(({ key, label, critical }) => {
           const open = Boolean(matrix[key])
           return (
-            <div key={key} className={`rounded-lg border px-2 py-2 ${open ? (critical ? 'border-rose-500/40 bg-rose-500/10' : 'border-orange-500/30 bg-orange-500/10') : 'border-[var(--border-subtle)] bg-white/[0.02]'}`}>
+            <div key={key} className={`rounded-lg border px-2 py-2 ${open ? (critical ? 'border-rose-500/40 bg-rose-500/10' : 'border-orange-500/30 bg-orange-500/10') : 'border-[var(--border-subtle)] bg-[var(--row-hover-bg)]'}`}>
               <div className="text-[10px] font-mono text-[var(--text-tertiary)] truncate">{label}</div>
               <div className={`text-xs font-mono mt-0.5 ${open ? (critical ? 'text-rose-300' : 'text-orange-300') : 'text-emerald-400/80'}`}>
                 {open ? L.pipeOpen : L.pipeClosed}
@@ -456,7 +456,7 @@ function SmbExposureGraph({ graph, running }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-[var(--border-subtle)] hover:bg-white/[0.07] text-left">
+    <button type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
       <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-blue-500/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
@@ -551,8 +551,8 @@ function FindingCard({ finding, L }) {
   const standards = Array.isArray(finding.standards) ? finding.standards : []
 
   return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-white/[0.03] overflow-hidden mb-2">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden mb-2">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SEV_COLOR[sev] }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -781,7 +781,7 @@ export default function SmbNetbiosCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-blue-500/30 text-blue-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
           {toast.msg}
         </div>
       )}

@@ -328,7 +328,7 @@ export default function MobileSecurity() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredApps.map((app) => (
                 <div key={app.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start justify-between gap-3">
@@ -340,7 +340,7 @@ export default function MobileSecurity() {
                               ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
                               : app.platform === 'android'
                                 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                : 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)]'
+                                : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)]'
                           }`}
                         >
                           <Smartphone className="w-3 h-3" />
@@ -370,7 +370,7 @@ export default function MobileSecurity() {
                       </button>
                       <Link
                         to={`/findings?q=${encodeURIComponent(app.package_id || app.name || '')}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)] transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)] transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         {t('pages.mobileSecurity.view_findings')}

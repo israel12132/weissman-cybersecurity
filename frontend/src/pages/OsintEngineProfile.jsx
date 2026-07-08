@@ -45,7 +45,7 @@ function Terminal({ lines }) {
   return (
     <div
       ref={ref}
-      className="h-72 overflow-auto rounded-xl bg-black/80 border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed"
+      className="h-72 overflow-auto rounded-xl bg-[var(--bg-1)] border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed"
     >
       {lines.length === 0 ? (
         <span className="text-[var(--text-disabled)]">{t('pages.osintEngineProfile.terminal_idle')}</span>
@@ -329,7 +329,7 @@ export default function OsintEngineProfile() {
           className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.severity === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-              : 'bg-black/80 border-cyan-500/30 text-cyan-200'
+              : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
           }`}
         >
           {toast.message}
@@ -405,7 +405,7 @@ export default function OsintEngineProfile() {
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.output_schema')}</h3>
             <div className="flex flex-wrap gap-2">
               {OSINT_OUTPUT_FIELDS.map((field) => (
-                <span key={field} className="px-2 py-1 rounded border border-[var(--border-default)] bg-white/5 text-[11px] font-mono text-[var(--text-tertiary)]">
+                <span key={field} className="px-2 py-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[11px] font-mono text-[var(--text-tertiary)]">
                   {field}
                 </span>
               ))}

@@ -269,7 +269,7 @@ function SupremeNerveCenterInner() {
                     .map((e) => (
                       <div
                         key={`${e.engine_id}-${e.job_id}`}
-                        className="rounded border border-[var(--border-subtle)] bg-white/[0.02] px-3 py-2 text-xs"
+                        className="rounded border border-[var(--border-subtle)] bg-[var(--row-hover-bg)] px-3 py-2 text-xs"
                       >
                         <div className="flex justify-between gap-2">
                           <span className="font-mono text-cyan-300">{e.engine_id}</span>
@@ -350,7 +350,7 @@ function SupremeNerveCenterInner() {
 
             <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
               <table className="w-full min-w-[900px] text-left text-xs">
-                <thead className="bg-white/[0.03] text-[10px] uppercase tracking-wider text-slate-500">
+                <thead className="bg-[var(--row-hover-bg)] text-[10px] uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="px-3 py-2">{t('supremeNerveCenter.colEngine')}</th>
                     <th className="px-3 py-2">{t('supremeNerveCenter.colLifecycle')}</th>
@@ -363,7 +363,7 @@ function SupremeNerveCenterInner() {
                 </thead>
                 <tbody>
                   {filteredEngines.map((e) => (
-                    <tr key={e.engine_id} className="border-t border-[var(--border-subtle)] hover:bg-white/[0.02]">
+                    <tr key={e.engine_id} className="border-t border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)]">
                       <td className="px-3 py-2 font-mono text-cyan-300/90">{e.engine_id}</td>
                       <td className="px-3 py-2">
                         <span style={{ color: lifecycleTone(e.lifecycle) }}>{e.lifecycle}</span>
@@ -467,7 +467,7 @@ function SupremeNerveCenterInner() {
         {section === 'jobs' && (
           <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
             <table className="w-full min-w-[800px] text-left text-xs">
-              <thead className="bg-white/[0.03] text-[10px] uppercase tracking-wider text-slate-500">
+              <thead className="bg-[var(--row-hover-bg)] text-[10px] uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className="px-3 py-2">ID</th>
                   <th className="px-3 py-2">{t('supremeNerveCenter.colKind')}</th>

@@ -83,7 +83,7 @@ function extractTarget(entry) {
 
 function ActionBadge({ action }) {
   const a = (action || '').toLowerCase()
-  let color = 'border-[var(--border-strong)] text-[var(--text-secondary)] bg-white/5'
+  let color = 'border-[var(--border-strong)] text-[var(--text-secondary)] bg-[var(--row-hover-bg)]'
   if (a.includes('login') || a.includes('mfa')) color = 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
   if (a.includes('denied') || a.includes('reject') || a.includes('failed')) color = 'border-rose-500/40 text-rose-200 bg-rose-500/10'
   if (a.includes('created') || a.includes('updated')) color = 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
@@ -275,7 +275,7 @@ export default function AuditLog() {
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   active
                     ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
-                    : 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
+                    : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                 }`}
               >
                 {t(pill.labelKey)}
@@ -366,7 +366,7 @@ export default function AuditLog() {
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)] bg-white/[0.02]">
+                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)] bg-[var(--row-hover-bg)]">
                   <th className="py-3 px-4 w-10" />
                   <th className="py-3 px-4 w-44">{t('audit.col_when')}</th>
                   <th className="py-3 px-4 w-40">{t('audit.col_action')}</th>
@@ -375,14 +375,14 @@ export default function AuditLog() {
                   <th className="py-3 px-4 w-32">{t('audit.col_ip')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-[var(--border-subtle)]">
                 {filteredEntries.map((e) => {
                   const open = expandedId === e.id
                   const { text, json } = parseDetails(e.details)
                   return (
                     <React.Fragment key={e.id}>
                       <tr
-                        className={`align-top cursor-pointer transition-colors ${open ? 'bg-cyan-500/[0.04]' : 'hover:bg-white/[0.02]'}`}
+                        className={`align-top cursor-pointer transition-colors ${open ? 'bg-cyan-500/[0.04]' : 'hover:bg-[var(--row-hover-bg)]'}`}
                         onClick={() => setExpandedId(open ? null : e.id)}
                       >
                         <td className="py-3 px-4 text-[var(--text-muted)]">
@@ -432,7 +432,7 @@ export default function AuditLog() {
         )}
 
         {total > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-[var(--border-default)] bg-white/[0.02]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-[var(--border-default)] bg-[var(--row-hover-bg)]">
             <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>
               <select

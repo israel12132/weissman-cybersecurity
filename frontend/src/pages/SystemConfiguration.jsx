@@ -270,7 +270,7 @@ export default function SystemConfiguration() {
                   ) : (
                     <div className="space-y-2 max-h-[480px] overflow-y-auto">
                       {filteredFindings.map((item) => (
-                        <div key={item.id} className="rounded-lg border border-[var(--border-default)] bg-white/5 px-4 py-3">
+                        <div key={item.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-4 py-3">
                           <div className="text-[10px] font-mono uppercase text-cyan-400/70">{item.type}</div>
                           <div className="text-sm font-medium text-white mt-1">{item.title}</div>
                           <div className="text-xs text-gray-400 font-mono mt-1 break-all">{item.description}</div>
@@ -406,7 +406,7 @@ function SecuritySettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.security.title`)}</h3>
 
       <div className="space-y-4">
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -459,7 +459,7 @@ function SecuritySettings({ config, onChange }) {
           </div>
         </div>
 
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -483,7 +483,7 @@ function SecuritySettings({ config, onChange }) {
           </div>
         </div>
 
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
           <label className="flex items-center gap-2 text-sm text-gray-300 mb-3">
             <input
@@ -731,7 +731,7 @@ function IntegrationsSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
 
       <div className="space-y-4">
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
           <input
             type="text"
@@ -742,7 +742,7 @@ function IntegrationsSettings({ config, onChange }) {
           />
         </div>
 
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
           <div className="space-y-3">
             <select
@@ -768,7 +768,7 @@ function IntegrationsSettings({ config, onChange }) {
           </div>
         </div>
 
-        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
+        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
           <div className="space-y-3">
             <input
@@ -923,7 +923,7 @@ function ComplianceSettings({ config, onChange }) {
         {COMPLIANCE_FRAMEWORKS.map((framework) => (
           <label
             key={framework.configKey}
-            className="flex items-center gap-3 p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors"
+            className="flex items-center gap-3 p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors"
           >
             <input
               type="checkbox"

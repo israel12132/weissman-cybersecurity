@@ -264,7 +264,7 @@ function Gauge({ score = 0 }) {
     <div className="flex items-center gap-3">
       <div className="text-3xl font-bold font-mono" style={{ color: c }}>{pct}</div>
       <div className="flex-1">
-        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
           <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: c }} />
         </div>
       </div>
@@ -418,8 +418,8 @@ function FindingCard({ finding, L }) {
   const evKeys = Object.keys(ev).filter((k) => k !== 'checks' && k !== 'steps' && k !== 'kill_chain' && k !== 'graph')
   const conf = typeof finding.confidence === 'number' ? Math.round(finding.confidence * 100) : null
   return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-white/[0.03] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -730,7 +730,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
 
       {/* Results */}
       {findings.length === 0 && status !== 'running' && (
-        <div className="rounded-2xl bg-white/5 border border-[var(--border-subtle)] p-6 text-center">
+        <div className="rounded-2xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] p-6 text-center">
           <p className="text-[11px] font-mono text-[var(--text-disabled)]">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
         </div>
       )}

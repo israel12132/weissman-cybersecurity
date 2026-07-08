@@ -506,7 +506,7 @@ export default function KillChainOrchestrator() {
           { label: t('pages.killChainOrchestrator.kpi_techniques'), value: isLoading ? '…' : techniquesMapped, color: '#f97316' },
           { label: t('pages.killChainOrchestrator.kpi_phases_covered'), value: isLoading ? '…' : `${phasesCovered}/${PHASE_DEFS.length}`, color: '#10b981' },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-white/5 p-4 text-center">
+          <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 text-center">
             <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
             <div className="text-[11px] text-[var(--text-tertiary)] mt-1">{kpi.label}</div>
           </div>
@@ -514,7 +514,7 @@ export default function KillChainOrchestrator() {
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl border border-[var(--border-default)] bg-white/5 p-8 text-center text-sm text-[var(--text-muted)]">
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-8 text-center text-sm text-[var(--text-muted)]">
           {t('pages.killChainOrchestrator.loading')}
         </div>
       ) : chains.length === 0 ? (
@@ -580,7 +580,7 @@ export default function KillChainOrchestrator() {
                     className={`w-full text-left rounded-2xl border p-4 transition-all ${
                       activeChain?.id === chain.id
                         ? 'border-[#ef4444]/50 bg-[#ef4444]/10'
-                        : 'border-[var(--border-default)] bg-white/5 hover:bg-[var(--row-hover-bg)]'
+                        : 'border-[var(--border-default)] bg-[var(--row-hover-bg)] hover:bg-[var(--row-hover-bg)]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -593,7 +593,7 @@ export default function KillChainOrchestrator() {
                       </span>
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] mb-3 truncate">{chain.target}</div>
-                    <div className="w-full bg-white/10 rounded-full h-1.5 mb-1">
+                    <div className="w-full bg-[var(--row-hover-bg)] rounded-full h-1.5 mb-1">
                       <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: sm.color }} />
                     </div>
                     <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
@@ -612,7 +612,7 @@ export default function KillChainOrchestrator() {
           <div className="lg:col-span-2 space-y-4">
             {activeChain ? (
               <>
-                <div className="rounded-2xl border border-[var(--border-default)] bg-white/5 p-5 mb-2">
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 mb-2">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
                       <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
@@ -665,9 +665,9 @@ export default function KillChainOrchestrator() {
                         key={phase.id}
                         layout
                         className={`rounded-2xl border transition-all ${
-                          isExpanded ? 'border-white/20 bg-white/8' :
-                          isCompleted ? 'border-[var(--border-default)] bg-white/5' :
-                          isActive ? 'bg-white/5' :
+                          isExpanded ? 'border-[var(--border-strong)] bg-white/8' :
+                          isCompleted ? 'border-[var(--border-default)] bg-[var(--row-hover-bg)]' :
+                          isActive ? 'bg-[var(--row-hover-bg)]' :
                           'border-[var(--border-subtle)] bg-[var(--bg-1)] opacity-50'
                         }`}
                         style={isExpanded ? { borderColor: `${phase.color}40` } : {}}
@@ -731,7 +731,7 @@ export default function KillChainOrchestrator() {
                                             <Link
                                               key={e.id}
                                               to={`/engines/${e.id}`}
-                                              className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-white/10 text-[var(--text-tertiary)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)] transition-colors"
+                                              className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)] transition-colors"
                                             >
                                               <span>{e.label}</span>
                                               {st?.findingCount > 0 ? (

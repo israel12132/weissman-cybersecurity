@@ -416,7 +416,7 @@ export default function SocialEngineering() {
       </div>
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-3)] p-4">
           <div className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-gray-900 p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-white">{t('pages.socialEngineering.create_modal_title')}</h3>
             <div className="space-y-4">

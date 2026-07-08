@@ -157,7 +157,7 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
       className={`rounded-full px-3 py-1.5 text-[11px] font-medium ring-1 transition-all ${
         active
           ? activeCls
-          : 'bg-white/[0.03] ring-white/[0.08] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text-secondary)]'
+          : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
       }`}
     >
       {children}
@@ -202,13 +202,13 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
                 {index + 1}
               </span>
               <span className="text-[13px] font-medium text-[var(--text-primary)]">{label || action.kind}</span>
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">{action.kind}</span>
+              <span className="rounded bg-[var(--row-hover-bg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">{action.kind}</span>
             </div>
             <div className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveUpLabel}>
+              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveUpLabel}>
                 <ChevronUp className="h-4 w-4" />
               </button>
-              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveDownLabel}>
+              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveDownLabel}>
                 <ChevronDown className="h-4 w-4" />
               </button>
               <button type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
@@ -539,7 +539,7 @@ export default function PlaybookBuilder() {
             <button
               type="button"
               onClick={insertExample}
-              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-white/[0.04] hover:text-[var(--text-primary)]"
+              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
             >
               {t('playbooks.insert_example')}
             </button>
@@ -602,7 +602,7 @@ export default function PlaybookBuilder() {
                         className={`block w-full rounded-xl px-3 py-3 text-left transition-all ${
                           isActive
                             ? 'bg-gradient-to-r from-violet-500/15 to-cyan-500/10 ring-1 ring-violet-400/30 shadow-lg shadow-violet-500/5'
-                            : 'hover:bg-white/[0.04] ring-1 ring-transparent hover:ring-white/[0.06]'
+                            : 'hover:bg-[var(--row-hover-bg)] ring-1 ring-transparent hover:ring-white/[0.06]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -610,7 +610,7 @@ export default function PlaybookBuilder() {
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
                             pb.enabled
                               ? 'bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-500/30'
-                              : 'bg-white/[0.04] text-[var(--text-muted)] ring-1 ring-white/[0.08]'
+                              : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)] ring-1 ring-white/[0.08]'
                           }`}>
                             {pb.enabled ? t('common.on') : t('common.off')}
                           </span>
@@ -632,7 +632,7 @@ export default function PlaybookBuilder() {
         <main className="overflow-y-auto custom-scroll p-5 lg:p-6">
           {!draft ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.08]">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-white/[0.08]">
                 <Zap className="h-7 w-7 text-[var(--text-disabled)]" />
               </div>
               <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
@@ -646,7 +646,7 @@ export default function PlaybookBuilder() {
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}
-                  className="w-full rounded-xl bg-zinc-900/60 px-4 py-3 text-[16px] font-semibold text-white/95 ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
+                  className="w-full rounded-xl bg-zinc-900/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
                 />
                 <textarea
                   value={draft.description}
@@ -655,12 +655,12 @@ export default function PlaybookBuilder() {
                   rows={2}
                   className="w-full resize-none rounded-xl bg-zinc-900/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-white/[0.06] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
                 />
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/[0.08]">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--row-hover-bg)] px-3 py-1.5 ring-1 ring-white/[0.08]">
                   <input
                     type="checkbox"
                     checked={!!draft.enabled}
                     onChange={(e) => setDraft((d) => ({ ...d, enabled: e.target.checked }))}
-                    className="rounded border-white/30 bg-transparent text-violet-500 focus:ring-violet-500/30"
+                    className="rounded border-[var(--border-strong)] bg-transparent text-violet-500 focus:ring-violet-500/30"
                   />
                   <span className="text-[12px] font-medium text-[var(--text-secondary)]">{t('playbooks.enabled_label')}</span>
                 </label>
@@ -687,7 +687,7 @@ export default function PlaybookBuilder() {
                             className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider ring-1 transition-all ${
                               active
                                 ? `${colors.bg} ${colors.ring} ${colors.text}`
-                                : 'bg-white/[0.03] ring-white/[0.08] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
+                                : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
                             }`}
                           >
                             {t(`playbooks.severity.${s}`)}
@@ -752,7 +752,7 @@ export default function PlaybookBuilder() {
                       type="button"
                       key={a.kind}
                       onClick={() => addAction(a.kind)}
-                      className="rounded-lg bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
+                      className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
                     >
                       + {t(a.labelKey)}
                     </button>

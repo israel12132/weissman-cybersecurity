@@ -222,7 +222,7 @@ export default function IntegrationManager() {
               type="checkbox"
               checked={dryRunTests}
               onChange={(e) => setDryRunTests(e.target.checked)}
-              className="rounded border-white/20"
+              className="rounded border-[var(--border-strong)]"
             />
             Dry-run SOAR tests (recommended)
           </label>
@@ -292,7 +292,7 @@ export default function IntegrationManager() {
                             Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-white/5 text-gray-400">
+                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-gray-400">
                           Manual sync · test connection to verify
                         </span>
                         {integration.last_test && (
@@ -324,7 +324,7 @@ export default function IntegrationManager() {
                       onClick={() => setConfigureTarget(integration)}
                       title={t('pages.integrationManager.configure')}
                       aria-label={t('pages.integrationManager.configure')}
-                      className="p-2 bg-white/5 border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
+                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -352,7 +352,7 @@ export default function IntegrationManager() {
                 <button
                   key={integration.id}
                   onClick={() => setAddModal(integration)}
-                  className="flex items-center gap-3 p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
+                  className="flex items-center gap-3 p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
                 >
                   <span className="text-2xl">{integration.icon}</span>
                   <div>
@@ -457,7 +457,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">

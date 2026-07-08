@@ -489,7 +489,7 @@ export default function RiskGraphVisualization() {
             <button
               type="button"
               onClick={() => setSelectedNode(null)}
-              className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-[var(--border-default)] rounded-lg text-sm font-medium text-gray-300 hover:bg-[var(--row-hover-bg)] transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-sm font-medium text-gray-300 hover:bg-[var(--row-hover-bg)] transition-colors"
             >
               <Maximize2 className="w-4 h-4" />
               {t('pages.riskGraphVisualization.reset_view')}
@@ -525,7 +525,7 @@ export default function RiskGraphVisualization() {
           ) : (
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {attackPaths.paths.slice(0, 8).map((path, idx) => (
-                <div key={idx} className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] p-3">
+                <div key={idx} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3">
                   <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                     <span>{t(`${NS}.path_label`, { num: idx + 1, hops: path.hops })}</span>
                     <span className="text-red-300 font-mono">

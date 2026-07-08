@@ -284,7 +284,7 @@ export default function BaselineAndDrift() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5 max-h-[480px] overflow-y-auto">
+            <div className="divide-y divide-[var(--border-subtle)] max-h-[480px] overflow-y-auto">
               {filteredAnomalies.map((anomaly) => {
                 const sev = (anomaly.severity || 'medium').toLowerCase();
                 const sevColor = SEV_COLORS[sev] || SEV_COLORS.info;

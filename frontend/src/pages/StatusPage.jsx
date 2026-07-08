@@ -53,7 +53,7 @@ const STATUS = {
     labelKey: 'status.checking',
     icon: Activity,
     iconClass: 'text-[var(--text-muted)]',
-    badge: 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)]',
+    badge: 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)]',
   },
 }
 
@@ -100,14 +100,14 @@ function ServiceCard({ icon: Icon, name, description, level, detail, detailLink,
     <span className="text-xs font-mono text-[var(--text-secondary)] truncate">{detail || '—'}</span>
   )
   return (
-    <article className="rounded-2xl border border-[var(--border-default)] bg-black/35 backdrop-blur-md p-5 hover:border-[var(--border-strong)] transition-colors">
+    <article className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-5 hover:border-[var(--border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-white/5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)]">
             <Icon className="h-5 w-5 text-cyan-400/90" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-white/95 truncate">{name}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">{name}</h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{description}</p>
           </div>
         </div>

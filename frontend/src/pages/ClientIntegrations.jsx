@@ -348,7 +348,7 @@ export default function ClientIntegrations() {
             <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h3 className="text-xs font-mono uppercase text-[var(--text-muted)] mb-3">{t('pages.clientOnboarding.readiness')}</h3>
               <div className="text-2xl font-bold text-white mb-1">{readiness.percent}%</div>
-              <div className="h-1.5 rounded-full bg-white/10 mb-4 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] mb-4 overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all" style={{ width: `${readiness.percent}%` }} />
               </div>
               <ul className="space-y-2 text-xs">
