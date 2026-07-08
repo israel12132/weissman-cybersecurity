@@ -97,16 +97,22 @@ impl DistributedLease {
         let key = lease_key(job_id);
         let value = lease_value(worker_id, claim_token);
         let mut conn = redis.clone();
-        let acquired: bool = conn
-            .set_nx(&key, &value)
+        // Atomic `SET key value NX EX secs`. A separate `EXPIRE` after `SET NX` leaves the
+        // lease with no TTL — wedged forever — if the process dies between the two calls.
+        let acquired: Option<String> = redis::cmd("SET")
+            .arg(&key)
+            .arg(&value)
+            .arg("NX")
+            .arg("EX")
+            .arg(lock_secs.max(1))
+            .query_async(&mut conn)
             .await
             .map_err(|e| JobBusError::Redis(e.to_string()))?;
-        if !acquired {
+        if acquired.is_none() {
             return Err(JobBusError::LeaseDenied(format!(
                 "job {job_id} already leased"
             )));
         }
-        let _: () = conn.expire(&key, lock_secs.max(1)).await?;
         Ok(LeaseHandle {
             redis,
             job_id,

@@ -101,7 +101,7 @@ async fn emit_swarm(
         "ts": ts,
     })
     .to_string();
-    let _ = broadcast.send(msg);
+    let _ = broadcast.send(crate::http::tenant_stream::stamp(tenant_id, &msg));
     if let Err(e) = persist_swarm_event(pool, tenant_id, client_id, agent, event, detail, ts).await
     {
         tracing::error!(

@@ -58,6 +58,28 @@ impl AsyncJobChannels {
         }
     }
 
+    /// Broadcast a telemetry payload stamped for `tenant_id` so tenant-scoped SSE/WS
+    /// subscribers can filter it (fail-closed: unstamped payloads are dropped downstream).
+    pub fn emit_telemetry(&self, tenant_id: i64, raw: &str) {
+        let _ = self
+            .telemetry
+            .send(crate::http::tenant_stream::stamp(tenant_id, raw));
+    }
+
+    /// Broadcast a radar payload stamped for `tenant_id`.
+    pub fn emit_radar(&self, tenant_id: i64, raw: &str) {
+        let _ = self
+            .radar
+            .send(crate::http::tenant_stream::stamp(tenant_id, raw));
+    }
+
+    /// Broadcast a swarm payload stamped for `tenant_id`.
+    pub fn emit_swarm(&self, tenant_id: i64, raw: &str) {
+        let _ = self
+            .swarm
+            .send(crate::http::tenant_stream::stamp(tenant_id, raw));
+    }
+
     /// Worker/server channels with Redis cross-replica bridges when `REDIS_URL` is set.
     pub fn from_env() -> Self {
         fn bus(channel: &'static str) -> Arc<broadcast::Sender<String>> {
@@ -73,6 +95,27 @@ impl AsyncJobChannels {
             swarm: bus("swarm"),
             telemetry: bus("telemetry"),
         }
+    }
+}
+
+/// Wraps a broadcast sender so every emitted payload is stamped for one tenant.
+/// Lets existing `telemetry.send(msg)` call sites stay unchanged while gaining
+/// tenant scoping (subscribers drop anything not stamped for their tenant).
+#[derive(Clone)]
+struct TenantEmitter {
+    tx: Arc<broadcast::Sender<String>>,
+    tenant_id: i64,
+}
+
+impl TenantEmitter {
+    fn new(tx: Arc<broadcast::Sender<String>>, tenant_id: i64) -> Self {
+        Self { tx, tenant_id }
+    }
+
+    fn send(&self, raw: String) {
+        let _ = self
+            .tx
+            .send(crate::http::tenant_stream::stamp(self.tenant_id, &raw));
     }
 }
 
@@ -559,7 +602,7 @@ async fn execute_job_unscoped(
             .await
             .ok();
 
-            let _ = channels.telemetry.send(
+            channels.emit_telemetry(tid, &
                 json!({
                     "job_id": job.id.to_string(),
                     "message": format!("Top-tier health probe started for {} engines", TOP_TIER_ENGINES.len()),
@@ -670,7 +713,7 @@ async fn execute_job_unscoped(
                     "duration_ms": duration_ms,
                 }));
 
-                let _ = channels.telemetry.send(
+                channels.emit_telemetry(tid, &
                     json!({
                         "job_id": job.id.to_string(),
                         "engine_id": engine_id,
@@ -685,7 +728,7 @@ async fn execute_job_unscoped(
                 );
             }
 
-            let _ = channels.telemetry.send(
+            channels.emit_telemetry(tid, &
                 json!({
                     "job_id": job.id.to_string(),
                     "message": format!("Top-tier health probe completed: {}/{} passed", passed, TOP_TIER_ENGINES.len()),
@@ -722,6 +765,8 @@ async fn execute_job_unscoped(
                     json!({ "message": "Tenant scan cycle started (orchestrator)" }),
                 );
             }
+            // Passed through to the orchestrator as a raw Arc; that path stamps its own
+            // telemetry with `tid` (it already receives the tenant id).
             let telemetry = channels.telemetry.clone();
             let fut = async move {
                 crate::orchestrator::run_single_tenant_scan_cycle(
@@ -779,7 +824,7 @@ async fn execute_job_unscoped(
                 })
                 .unwrap_or_default();
 
-            let telemetry = channels.telemetry.clone();
+            let telemetry = TenantEmitter::new(channels.telemetry.clone(), tid);
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Starting scan-all-engines: {} engines for client {}","status":"running"}}"#, job.id, engines.len(), client_id));
 
@@ -919,7 +964,7 @@ async fn execute_job_unscoped(
                     vec!["osint".to_string(), "asm".to_string(), "recon".to_string()]
                 });
 
-            let telemetry = channels.telemetry.clone();
+            let telemetry = TenantEmitter::new(channels.telemetry.clone(), tid);
             let app = app_pool.clone();
             let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Scanning {} domains with {} engines","status":"running"}}"#, job.id, domains.len(), engines.len()));
 
@@ -1652,7 +1697,7 @@ async fn execute_job_unscoped(
             tokio::spawn(async move {
                 while let Some(ev) = rx_stream.recv().await {
                     if serde_json::to_string(&ev)
-                        .map(|s| radar.send(s).is_ok())
+                        .map(|s| radar.send(crate::http::tenant_stream::stamp(tid, &s)).is_ok())
                         .unwrap_or(false)
                     {}
                 }
@@ -1763,7 +1808,7 @@ async fn execute_job_unscoped(
                 "ts": chrono::Utc::now().timestamp_millis(),
             }))
             .unwrap_or_default();
-            let _ = channels.swarm.send(payload_str);
+            channels.emit_swarm(tid, &payload_str);
             // Detached: spawn_swarm_run already tokio::spawns the work internally and
             // returns a JoinHandle. Drop the handle explicitly to detach the task so the
             // worker dequeues the next job immediately (an ambiguous `let _ = <future>`

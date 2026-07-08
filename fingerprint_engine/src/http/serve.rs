@@ -902,9 +902,12 @@ async fn handle_ws_command_center(
             }
             telemetry_msg = rx.recv() => {
                 if let Ok(raw) = telemetry_msg {
-                    if let Some(normalized) = normalize_cc_event(&raw) {
-                        if socket.send(Message::Text(normalized)).await.is_err() {
-                            break;
+                    // Tenant isolation: only forward events stamped for this socket's tenant.
+                    if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                        if let Some(normalized) = normalize_cc_event(&scoped) {
+                            if socket.send(Message::Text(normalized)).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }

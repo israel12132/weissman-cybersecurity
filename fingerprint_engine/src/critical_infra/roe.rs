@@ -432,9 +432,26 @@ fn contract_canonical_payload(contract: &Value, targets: &[String]) -> String {
 }
 
 fn signing_secret() -> Option<String> {
-    std::env::var("WEISSMAN_ROE_CONTRACT_SECRET")
+    // Prefer a dedicated RoE contract key so a leak of the auth-token secret cannot forge
+    // authorization contracts (key separation).
+    if let Ok(s) = std::env::var("WEISSMAN_ROE_CONTRACT_SECRET") {
+        let t = s.trim().to_string();
+        if !t.is_empty() {
+            return Some(t);
+        }
+    }
+    // Fallback to the JWT secret keeps an operator who only set WEISSMAN_JWT_SECRET working,
+    // but reusing it for authorization-contract signing breaks key separation — warn once.
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| {
+        tracing::warn!(
+            target: "critical_infra_roe",
+            "WEISSMAN_ROE_CONTRACT_SECRET not set — falling back to WEISSMAN_JWT_SECRET for RoE \
+             contract signing. Set a dedicated key to isolate authorization signing from auth tokens."
+        );
+    });
+    std::env::var("WEISSMAN_JWT_SECRET")
         .ok()
-        .or_else(|| std::env::var("WEISSMAN_JWT_SECRET").ok())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
 }
@@ -470,8 +487,14 @@ pub fn target_in_whitelist(target: &str, whitelist: &[String]) -> bool {
     if whitelist.iter().any(|e| e == "*" || e == "0.0.0.0/0") {
         return true;
     }
+    // All matching is done against the extracted host only — never against a
+    // substring/suffix of the full target URL. A substring/suffix match on the raw
+    // target lets an attacker smuggle a whitelisted host into the path/query of an
+    // out-of-scope URL (e.g. whitelist `grid.example.com` would authorize
+    // `http://evil.com/?ref=grid.example.com`, or `*.hospital.internal` would match
+    // `http://evil.com/x.hospital.internal`). Host-equality and true subdomain
+    // suffix are the only safe predicates.
     let host = extract_host(target).to_ascii_lowercase();
-    let target_lc = target.trim().to_ascii_lowercase();
     for entry in whitelist {
         let e = entry.trim();
         if e.is_empty() {
@@ -483,15 +506,15 @@ pub fn target_in_whitelist(target: &str, whitelist: &[String]) -> bool {
             }
             continue;
         }
-        if e.starts_with("*.") {
-            let suffix = e[1..].to_ascii_lowercase();
-            if host.ends_with(&suffix) || target_lc.ends_with(&suffix) {
+        if let Some(bare) = e.strip_prefix("*.") {
+            let suffix = format!(".{}", bare.to_ascii_lowercase());
+            if host.ends_with(&suffix) {
                 return true;
             }
             continue;
         }
         let el = e.to_ascii_lowercase();
-        if host == el || target_lc.contains(&el) {
+        if host == el || host.ends_with(&format!(".{el}")) {
             return true;
         }
     }
@@ -509,16 +532,32 @@ fn cidr_contains_host(cidr: &str, host: &str) -> bool {
 }
 
 fn dev_override_allowed(job_params: &Value) -> bool {
-    if !std::env::var("WEISSMAN_CRITICAL_INFRA_DEV_OVERRIDE")
-        .ok()
-        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+    // Hard compile-time guard: the RoE scope bypass can NEVER exist in a release
+    // build, regardless of environment variables. Production images are built in
+    // release mode, so this branch compiles the override out entirely.
+    #[cfg(not(debug_assertions))]
     {
-        return false;
+        let _ = job_params;
+        false
     }
-    job_params
-        .get("critical_infra_roe_dev_override")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
+    #[cfg(debug_assertions)]
+    {
+        // Belt-and-suspenders: even in a debug build, refuse the override if the
+        // process considers itself production.
+        if weissman_core::tls_policy::is_production_environment() {
+            return false;
+        }
+        if !std::env::var("WEISSMAN_CRITICAL_INFRA_DEV_OVERRIDE")
+            .ok()
+            .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        {
+            return false;
+        }
+        job_params
+            .get("critical_infra_roe_dev_override")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
 }
 
 /// Compute HMAC signature for a contract payload (operator tooling / tests).
@@ -548,6 +587,24 @@ mod tests {
         let wl = vec!["*.hospital.internal".to_string()];
         assert!(target_in_whitelist("icu.hospital.internal", &wl));
         assert!(!target_in_whitelist("evil.com", &wl));
+    }
+
+    #[test]
+    fn substring_smuggling_is_rejected() {
+        // A whitelisted host must not be matchable as a substring/suffix of an
+        // out-of-scope target's path, query, or hostname.
+        let wl = vec!["grid.example.com".to_string()];
+        assert!(!target_in_whitelist("http://evil.com/?ref=grid.example.com", &wl));
+        assert!(!target_in_whitelist("http://grid.example.com.evil.com/", &wl));
+        assert!(target_in_whitelist("https://grid.example.com/status", &wl));
+        assert!(target_in_whitelist("https://sub.grid.example.com/", &wl));
+
+        let wc = vec!["*.hospital.internal".to_string()];
+        assert!(!target_in_whitelist(
+            "http://evil.com/x.hospital.internal",
+            &wc
+        ));
+        assert!(target_in_whitelist("https://icu.hospital.internal/", &wc));
     }
 
     #[test]

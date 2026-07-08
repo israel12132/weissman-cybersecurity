@@ -990,7 +990,10 @@ async fn nssi_emit(ctx: &EngineRunContext, event: &str, detail: Value) {
         "client_id": ctx.client_id,
         "ts": ts,
     });
-    let msg = envelope.to_string();
+    let tid = ctx
+        .tenant_id
+        .unwrap_or(crate::http::tenant_stream::SYSTEM_TENANT);
+    let msg = crate::http::tenant_stream::stamp_value(tid, envelope);
     if let Some(tx) = ctx.swarm_broadcast.as_ref() {
         let _ = tx.send(msg.clone());
     }

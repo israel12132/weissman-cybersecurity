@@ -433,7 +433,7 @@ fn emit_critical_edge_region_alert(
             "region_nodes": total,
             "blast_radius_km": blast_radius_km,
         });
-        let _ = tx.send(j.to_string());
+        let _ = tx.send(crate::http::tenant_stream::stamp_value(tenant_id, j));
     }
 }
 

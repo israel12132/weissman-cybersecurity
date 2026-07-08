@@ -112,16 +112,49 @@ fn headers_to_json(headers: &HeaderMap) -> serde_json::Value {
     serde_json::to_value(m).unwrap_or(json!({}))
 }
 
+/// Production detection mirroring `weissman_core::tls_policy::is_production_environment`
+/// (kept local to avoid pulling the whole core crate into the standalone listener).
+fn is_production_environment() -> bool {
+    for var in ["WEISSMAN_ENV", "RUST_ENV", "NODE_ENV", "APP_ENV", "RAILS_ENV"] {
+        if env::var(var)
+            .ok()
+            .map(|v| {
+                let t = v.trim();
+                t.eq_ignore_ascii_case("production") || t.eq_ignore_ascii_case("prod")
+            })
+            .unwrap_or(false)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Constant-time byte equality — avoids leaking the API key via response timing.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn check_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), StatusCode> {
+    // Fail closed: a missing API key must NEVER expose interaction data (source IPs,
+    // request headers). In production the startup gate guarantees a key is present,
+    // so reaching this branch means a misconfigured non-prod deploy — deny, don't leak.
     let Some(ref expected) = state.api_key else {
-        return Ok(());
+        return Err(StatusCode::UNAUTHORIZED);
     };
     let got = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     let token = got.strip_prefix("Bearer ").unwrap_or("").trim();
-    if token == expected {
+    if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
         Ok(())
     } else {
         Err(StatusCode::UNAUTHORIZED)
@@ -486,6 +519,13 @@ async fn run() -> Result<(), String> {
     if database_url.is_empty() {
         return Err("DATABASE_URL is empty".into());
     }
+    // Production startup gates — fail visibly rather than silently defaulting.
+    if is_production_environment() && base_domain_from_env().is_empty() {
+        return Err(
+            "WEISSMAN_OAST_DOMAIN must be set in production (refusing to default to a shared public suffix)"
+                .into(),
+        );
+    }
     let base = base_domain_effective();
 
     let pool = PgPoolOptions::new()
@@ -498,6 +538,12 @@ async fn run() -> Result<(), String> {
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    if is_production_environment() && api_key.is_none() {
+        return Err(
+            "WEISSMAN_OAST_API_KEY must be set in production (the OAST read API must not be unauthenticated)"
+                .into(),
+        );
+    }
 
     let state = AppState {
         pool: pool.clone(),

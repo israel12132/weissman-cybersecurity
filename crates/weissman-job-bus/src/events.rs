@@ -99,6 +99,18 @@ pub async fn append_event(
     kind: JobEventKind,
     payload: Value,
 ) -> Result<JobEventRecord, JobBusError> {
+    // Serialize appends per job inside one transaction. Two concurrent producers
+    // (e.g. a heartbeat's `lease_extended` racing `job_completed`) would otherwise read the
+    // same `prev_hash` and insert sibling events, silently forking the tamper-evident chain.
+    // A per-job advisory xact lock makes read-prev-hash + insert atomic against each other.
+    let mut tx = pool.begin().await?;
+    if !job_id.is_nil() {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+            .bind(job_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+    }
+
     let prev_hash: Option<String> = if job_id.is_nil() {
         None
     } else {
@@ -107,7 +119,7 @@ pub async fn append_event(
                WHERE job_id = $1 ORDER BY seq DESC LIMIT 1"#,
         )
         .bind(job_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await?
     };
 
@@ -134,10 +146,11 @@ pub async fn append_event(
     .bind(occurred_at)
     .bind(&event_hash)
     .bind(&prev_hash)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     let seq: i64 = row.try_get("seq")?;
+    tx.commit().await?;
 
     Ok(JobEventRecord {
         seq,

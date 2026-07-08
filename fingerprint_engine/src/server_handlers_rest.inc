@@ -1438,37 +1438,60 @@ async fn api_scan(
     }
 }
 
-async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_timing(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
-async fn ws_ai_redteam(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_ai_redteam(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
-async fn ws_threat_intel(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_threat_intel(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.radar_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
 async fn api_telemetry_stream(
     State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    let viewer_tid = auth.tenant_id;
     let want_job: Option<String> = q
         .get("job_id")
         .map(|s| s.trim().to_string())
@@ -1476,6 +1499,10 @@ async fn api_telemetry_stream(
     let filter_job = want_job.clone();
     let rx = state.telemetry_broadcast_tx.subscribe();
     let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
+        // Tenant isolation: drop events not stamped for this viewer's tenant.
+        if crate::http::tenant_stream::visible_to(payload, viewer_tid).is_none() {
+            return false;
+        }
         if let Some(ref want) = filter_job {
             let matches = serde_json::from_str::<serde_json::Value>(payload)
                 .ok()
