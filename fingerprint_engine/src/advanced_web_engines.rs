@@ -18,6 +18,7 @@ use std::time::Instant;
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
 const ENGINE_GRAPHQL_DEEP: &str = "graphql_deep_attack";
 const ENGINE_CORS: &str = "cors_misconfiguration";
+const ENGINE_GATEWAY: &str = "api_gateway_bypass";
 
 fn web_finding(
     engine_id: &str,
@@ -2273,40 +2274,8 @@ pub async fn run_web3_dapp_attack_result(target: &str) -> EngineResult {
 cli_wrapper!(run_web3_dapp_attack, run_web3_dapp_attack_result);
 
 // ── api_gateway_bypass ────────────────────────────────────────────────────────
-pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let client = http_client().await;
-    let base = normalize_url(target);
-    let mut findings: Vec<Value> = Vec::new();
-
-    if let Some(p) = http_get(&client, &base).await {
-        let server = header_value(&p.headers, "server").unwrap_or_default();
-        let vendor = header_value(&p.headers, "x-amz-apigw-id")
-            .or_else(|| header_value(&p.headers, "x-azure-ref"))
-            .or_else(|| header_value(&p.headers, "x-envoy-upstream-service-time"));
-        let srv = server.to_ascii_lowercase();
-        if srv.contains("kong")
-            || srv.contains("apigee")
-            || srv.contains("envoy")
-            || vendor.is_some()
-        {
-            findings.push(web_finding(
-                "api_gateway_bypass",
-                "API gateway / mesh detected",
-                "info",
-                "T1190",
-                &format!(
-                    "Server='{server}' gateway-marker={vendor:?} on {} — test direct-backend bypass paths.",
-                    p.final_url
-                ),
-                target,
-            ));
-        }
-    }
-
-    let bypass_paths = [
+fn gateway_bypass_paths() -> Vec<&'static str> {
+    vec![
         "/api/../admin",
         "/api/v1/../internal",
         "/%2e%2e/admin",
@@ -2315,67 +2284,300 @@ pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
         "/api/internal",
         "/backend/api",
         "/_gateway_bypass_probe",
-    ];
-    let probes = probe_paths_concurrent(&client, &base, &bypass_paths, DEFAULT_PROBE_CONCURRENCY).await;
+        "/api/v2/users/../admin",
+        "/api;/admin",
+        "/api%2f..%2fadmin",
+    ]
+}
+
+fn gateway_dynamic_paths(ctx: &EngineRunContext) -> Vec<String> {
+    let mut out = Vec::new();
+    for p in &ctx.discovered_paths {
+        let pl = p.to_ascii_lowercase();
+        if pl.contains("api") || pl.contains("admin") || pl.contains("internal") {
+            out.push(format!("{p}/../admin"));
+            out.push(format!("{p}/..;/internal"));
+        }
+    }
+    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+        for art in bus.snapshot() {
+            if art.kind.contains("graphql") || art.source_url.contains("/api") {
+                let u = art.source_url.trim_end_matches('/');
+                out.push(format!("{u}/../admin"));
+                out.push(format!("{u}/..;/internal"));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn gateway_vendor_signal(headers: &[(String, String)]) -> Option<&'static str> {
+    let server = header_value(headers, "server")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if server.contains("kong") {
+        return Some("kong");
+    }
+    if server.contains("apigee") {
+        return Some("apigee");
+    }
+    if server.contains("envoy") {
+        return Some("envoy");
+    }
+    if header_value(headers, "x-amz-apigw-id").is_some() {
+        return Some("aws_api_gateway");
+    }
+    if header_value(headers, "x-azure-ref").is_some() {
+        return Some("azure_api_management");
+    }
+    if header_value(headers, "x-envoy-upstream-service-time").is_some() {
+        return Some("envoy_mesh");
+    }
+    if header_value(headers, "x-kong-upstream-latency").is_some() {
+        return Some("kong");
+    }
+    None
+}
+
+pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
+    run_api_gateway_bypass_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_api_gateway_bypass_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let auth_pairs = graphql_auth_header_pairs(&ctx.job_params);
+    let auth_refs = auth_pairs_as_refs(&auth_pairs);
+    let has_auth = !auth_pairs.is_empty();
+    let mut findings: Vec<Value> = Vec::new();
+    let mut flags = GatewayProbeFlags::default();
+
+    if let Some(p) = http_get(&client, &base).await {
+        if let Some(vendor) = gateway_vendor_signal(&p.headers) {
+            flags.gateway_detected = true;
+            flags.vendor = Some(vendor);
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "api_gateway_vendor",
+                    vendor,
+                    &p.final_url,
+                    ENGINE_GATEWAY,
+                    "http_surface_gateway_vendor",
+                );
+            }
+            findings.push(web_finding_sync(
+                ENGINE_GATEWAY,
+                "API gateway / mesh detected",
+                "info",
+                "T1190",
+                &format!(
+                    "Vendor={vendor} on {} (HTTP {}) — path normalization and header override probes executed.",
+                    p.final_url, p.status
+                ),
+                target,
+                &["api_rate_limit_bypass", "zero_trust_bypass"],
+                &["external_exposure_supreme"],
+                json!({"vendor": vendor, "endpoint": p.final_url}),
+            ));
+        }
+    }
+
+    let static_paths = gateway_bypass_paths();
+    let probes =
+        probe_paths_concurrent(&client, &base, &static_paths, DEFAULT_PROBE_CONCURRENCY).await;
     for p in probes {
+        let body_low = p.body.to_ascii_lowercase();
         if p.status == 200
             && !p.body.is_empty()
-            && (p.body.to_ascii_lowercase().contains("admin")
-                || p.body.to_ascii_lowercase().contains("dashboard")
-                || p.body.to_ascii_lowercase().contains("internal"))
+            && (body_low.contains("admin")
+                || body_low.contains("dashboard")
+                || body_low.contains("internal"))
         {
-            findings.push(web_finding(
-                "api_gateway_bypass",
+            flags.path_bypass = true;
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "gateway_path_bypass",
+                    &p.final_url,
+                    &p.final_url,
+                    ENGINE_GATEWAY,
+                    "http_surface_gateway_path_bypass",
+                );
+            }
+            findings.push(web_finding_sync(
+                ENGINE_GATEWAY,
                 "Path normalization may bypass gateway ACL",
                 "high",
                 "T1190",
                 &format!(
-                    "{} returned HTTP 200 with privileged keywords — gateway path normalization bypass candidate.",
+                    "{} returned HTTP 200 with privileged keywords — gateway path normalization bypass.",
                     p.final_url
                 ),
                 target,
+                &["idor_advanced", "api_mass_assignment", "graphql_deep_attack"],
+                &["risk_superposition_collapse", "pipeline_to_runtime_risk"],
+                json!({"endpoint": p.final_url, "status": p.status}),
             ));
             break;
         }
     }
 
-    if let Some(p) = http_get_with_headers(
-        &client,
-        &base,
-        &[
-            ("X-Original-URL", "/admin"),
-            ("X-Rewrite-URL", "/internal/config"),
-        ],
-    )
-    .await
-    {
+    let dynamic = gateway_dynamic_paths(ctx);
+    if !dynamic.is_empty() {
+        let drefs: Vec<&str> = dynamic.iter().map(String::as_str).collect();
+        let dprobes =
+            probe_paths_concurrent(&client, &base, &drefs, DEFAULT_PROBE_CONCURRENCY).await;
+        for p in dprobes {
+            if p.status >= 200 && p.status < 300 && !p.body.is_empty() {
+                flags.discovered_path_bypass = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GATEWAY,
+                    "Discovered-path gateway bypass candidate",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "Bus/discovered path variant {} → HTTP {} — ACL may not cover intel-derived routes.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                    &["graphql_deep_attack", "cors_misconfiguration"],
+                    &["threat_surface_intelligence_fusion"],
+                    json!({"endpoint": p.final_url, "intel_derived": true}),
+                ));
+                break;
+            }
+        }
+    }
+
+    let header_overrides: [(&str, &str); 6] = [
+        ("X-Original-URL", "/admin"),
+        ("X-Rewrite-URL", "/internal/config"),
+        ("X-Forwarded-Prefix", "/api"),
+        ("X-Forwarded-Path", "/admin"),
+        ("X-Original-Host", "internal.local"),
+        ("Forwarded", "for=127.0.0.1;host=internal.local"),
+    ];
+    for (hdr, val) in header_overrides {
+        let probe = if has_auth {
+            let mut hdrs = vec![(hdr, val)];
+            for (k, v) in &auth_refs {
+                hdrs.push((k, v));
+            }
+            http_get_with_headers(&client, &base, &hdrs).await
+        } else {
+            http_get_with_headers(&client, &base, &[(hdr, val)]).await
+        };
+        let Some(p) = probe else { continue };
+        let bl = p.body.to_ascii_lowercase();
         if p.status < 500
-            && (p.body.to_ascii_lowercase().contains("admin")
-                || p.body.to_ascii_lowercase().contains("config"))
+            && (bl.contains("admin")
+                || bl.contains("config")
+                || bl.contains("internal")
+                || bl.contains("dashboard"))
         {
-            findings.push(web_finding(
-                "api_gateway_bypass",
-                "X-Original-URL / X-Rewrite-URL routing override signal",
+            flags.header_override = true;
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "gateway_header_override",
+                    hdr,
+                    &p.final_url,
+                    ENGINE_GATEWAY,
+                    "http_surface_gateway_header_override",
+                );
+            }
+            findings.push(web_finding_sync(
+                ENGINE_GATEWAY,
+                "Gateway routing override via request header",
                 "high",
                 "T1190",
                 &format!(
-                    "Headers X-Original-URL/X-Rewrite-URL altered routing on {} (HTTP {}) — reverse-proxy bypass risk.",
+                    "Header {hdr}={val} altered routing on {} (HTTP {}, auth={has_auth}) — reverse-proxy/gateway bypass.",
                     p.final_url, p.status
                 ),
                 target,
+                &["api_rate_limit_bypass", "zero_trust_bypass"],
+                &["risk_superposition_collapse"],
+                json!({"header": hdr, "value": val, "endpoint": p.final_url}),
             ));
         }
     }
 
+    if let Some(p) = http_method_with_headers(
+        &client,
+        "POST",
+        &base,
+        None,
+        &[
+            ("X-HTTP-Method-Override", "DELETE"),
+            ("Content-Type", "application/json"),
+        ],
+    )
+    .await
+    {
+        if p.status < 500 && p.status != 405 && p.status != 404 {
+            flags.method_override = true;
+            findings.push(web_finding_sync(
+                ENGINE_GATEWAY,
+                "HTTP method override accepted at gateway edge",
+                "medium",
+                "T1190",
+                &format!(
+                    "X-HTTP-Method-Override DELETE on {} → HTTP {} — ACL may key only on outer verb.",
+                    p.final_url, p.status
+                ),
+                target,
+                &["api_mass_assignment"],
+                &[],
+                json!({"endpoint": p.final_url, "status": p.status}),
+            ));
+        }
+    }
+
+    if flags.gateway_detected && flags.path_bypass && flags.header_override {
+        findings.push(web_finding_sync(
+            ENGINE_GATEWAY,
+            "Toxic chain: gateway detected + path bypass + header override",
+            "critical",
+            "T1190",
+            "Live gateway fusion: vendor identified, path normalization reaches privileged surface, header override reroutes — full edge-to-backend bypass chain.",
+            target,
+            &["api_rate_limit_bypass", "graphql_deep_attack", "cors_misconfiguration"],
+            &["risk_superposition_collapse", "external_exposure_supreme"],
+            json!({"toxic_chain": true, "vendor": flags.vendor}),
+        ));
+    }
+
     if findings.is_empty() {
-        empty_ok("api_gateway_bypass", target)
+        empty_ok(ENGINE_GATEWAY, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("api_gateway_bypass: {}", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_GATEWAY}: {n} live finding(s) (vendor={:?} path={} header={})",
+                flags.vendor, flags.path_bypass, flags.header_override
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct GatewayProbeFlags {
+    gateway_detected: bool,
+    vendor: Option<&'static str>,
+    path_bypass: bool,
+    discovered_path_bypass: bool,
+    header_override: bool,
+    method_override: bool,
+}
+
 cli_wrapper!(run_api_gateway_bypass, run_api_gateway_bypass_result);
 
 // ── browser_extension_attack ──────────────────────────────────────────────────

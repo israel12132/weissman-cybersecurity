@@ -38,7 +38,17 @@ if (!web.includes('publish_http_surface')) {
 // Web — military vectors (Wave 1 complete — all 25 canonical web engines)
 const webChecks = [
   ['http2_attack', ['http1_client', 'http2_client', 'Connection']],
-  ['api_gateway_bypass', ['probe_paths_concurrent', 'X-Original-URL']],
+  [
+    'api_gateway_bypass',
+    [
+      'probe_paths_concurrent',
+      'X-Original-URL',
+      'X-Forwarded-Prefix',
+      'toxic_chain',
+      'run_api_gateway_bypass_result_ctx',
+      'http_surface_gateway',
+    ],
+  ],
   ['api_rate_limit_bypass', ['X-Forwarded-For']],
   ['web_cache_poison_adv', ['X-Forwarded-Host']],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
