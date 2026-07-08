@@ -49,6 +49,10 @@ export default function ComplianceFrameworks() {
   const [soarOpenId, setSoarOpenId] = useState(null);
   const [soarDetail, setSoarDetail] = useState(null);
   const [soarLoading, setSoarLoading] = useState(false);
+  const [mappings, setMappings] = useState(null);
+  const [mappingsOpen, setMappingsOpen] = useState(false);
+  const [mappingsLoading, setMappingsLoading] = useState(false);
+  const [mappingsSearch, setMappingsSearch] = useState('');
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
@@ -183,6 +187,43 @@ export default function ComplianceFrameworks() {
       setSoarLoading(false);
     }
   }, [soarOpenId]);
+
+  // Control → evidence mapping matrix. Wired to GET /api/compliance/control-mappings.
+  const toggleMappings = useCallback(async () => {
+    if (mappingsOpen) {
+      setMappingsOpen(false);
+      return;
+    }
+    setMappingsOpen(true);
+    if (mappings != null) return; // already loaded
+    setMappingsLoading(true);
+    try {
+      const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
+      const r = await apiFetch(`/api/compliance/control-mappings${fw}`);
+      const d = await r.json().catch(() => ({}));
+      let list = Array.isArray(d.mappings) ? d.mappings : [];
+      // If the framework filter returned nothing (naming mismatch), fall back to all.
+      if (list.length === 0 && fw) {
+        const rAll = await apiFetch('/api/compliance/control-mappings');
+        const dAll = await rAll.json().catch(() => ({}));
+        list = Array.isArray(dAll.mappings) ? dAll.mappings : [];
+      }
+      setMappings(list);
+    } catch {
+      setMappings([]);
+    } finally {
+      setMappingsLoading(false);
+    }
+  }, [mappingsOpen, mappings, selectedFramework]);
+
+  const filteredMappings = useMemo(() => {
+    if (!Array.isArray(mappings)) return [];
+    const q = mappingsSearch.trim().toLowerCase();
+    if (!q) return mappings;
+    return mappings.filter((m) =>
+      `${m.framework} ${m.control_id} ${m.control_title} ${m.engine_id} ${m.evidence_type}`.toLowerCase().includes(q),
+    );
+  }, [mappings, mappingsSearch]);
 
   const getComplianceColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -484,6 +525,83 @@ export default function ComplianceFrameworks() {
                     </span>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Control → evidence mapping matrix (lazy) */}
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+          <button
+            type="button"
+            onClick={toggleMappings}
+            aria-expanded={mappingsOpen}
+            className="w-full flex items-center justify-between gap-2 text-left"
+          >
+            <span className="text-sm font-semibold text-white flex items-center gap-2">
+              <FileText className="w-4 h-4 text-cyan-400" />
+              {t('pages.complianceFrameworks.mappings_title')}
+              {Array.isArray(mappings) && (
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">({mappings.length})</span>
+              )}
+            </span>
+            <span className="text-[11px] font-mono text-cyan-400/80">
+              {mappingsOpen ? t('pages.complianceFrameworks.mappings_hide') : t('pages.complianceFrameworks.mappings_show')}
+            </span>
+          </button>
+          {mappingsOpen && (
+            <div className="mt-3">
+              {mappingsLoading ? (
+                <SkeletonTable rows={4} cols={4} />
+              ) : !Array.isArray(mappings) || mappings.length === 0 ? (
+                <div className="text-[12px] font-mono text-[var(--text-muted)] py-3">
+                  {t('pages.complianceFrameworks.mappings_empty')}
+                </div>
+              ) : (
+                <>
+                  <div className="relative max-w-md mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
+                    <input
+                      type="search"
+                      value={mappingsSearch}
+                      onChange={(e) => setMappingsSearch(e.target.value)}
+                      placeholder={t('pages.complianceFrameworks.mappings_search')}
+                      className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </div>
+                  <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-lg border border-[var(--border-subtle)]">
+                    <table className="w-full text-[12px]">
+                      <thead className="sticky top-0 bg-[var(--bg-2)]">
+                        <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)]">
+                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_framework')}</th>
+                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_control')}</th>
+                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_engine')}</th>
+                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_evidence')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border-subtle)]">
+                        {filteredMappings.map((m) => (
+                          <tr key={m.id} className="hover:bg-[var(--row-hover-bg)]">
+                            <td className="py-2 px-3 font-mono text-[var(--text-muted)] whitespace-nowrap uppercase">{m.framework}</td>
+                            <td className="py-2 px-3">
+                              <span className="font-mono text-cyan-300/85">{m.control_id}</span>
+                              {m.control_title && <span className="text-[var(--text-tertiary)]"> · {m.control_title}</span>}
+                            </td>
+                            <td className="py-2 px-3 font-mono text-violet-300/85 whitespace-nowrap">{m.engine_id || '—'}</td>
+                            <td className="py-2 px-3 text-[var(--text-tertiary)] whitespace-nowrap">
+                              {m.evidence_type || '—'}
+                              {m.live_only && (
+                                <span className="ml-1.5 text-[9px] font-mono px-1 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 uppercase">
+                                  {t('pages.complianceFrameworks.map_live')}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           )}
