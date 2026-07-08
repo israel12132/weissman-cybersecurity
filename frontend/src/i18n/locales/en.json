@@ -1132,7 +1132,9 @@
       "paths_sub": "{{entries}} entries → {{jewels}} jewels",
       "open_paths": "Open attack paths",
       "top_risk": "Top Path Risk",
-      "top_risk_sub": "Highest single-path risk"
+      "top_risk_sub": "Highest single-path risk",
+      "search_placeholder": "Filter signals…",
+      "no_matches": "No signals match your filter."
     },
     "financialRisk": {
       "title": "Financial Blast-Radius",
@@ -1238,7 +1240,14 @@
       "checks_hint": "Failed checks first, then by weight — your platform hardening worklist.",
       "weight": "wt {{weight}}",
       "pass": "Pass",
-      "fail": "Fail"
+      "fail": "Fail",
+      "search_placeholder": "Search checks by id or detail…",
+      "filter_status": "Filter by status",
+      "filter_all": "All",
+      "filter_failed": "Failed",
+      "filter_passed": "Passed",
+      "showing_count": "Showing {{shown}} of {{total}} checks",
+      "no_matches": "No checks match the current filter."
     },
     "iocFeed": {
       "title": "IOC Feed",

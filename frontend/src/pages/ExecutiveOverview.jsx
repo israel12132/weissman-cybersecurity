@@ -7,10 +7,10 @@
  *            threat-intel feed freshness (KEV/EPSS).
  *   Client:  financial ALE (FAIR) + attack-path count/top-risk.
  */
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, ArrowRight } from 'lucide-react'
+import { LayoutDashboard, ArrowRight, Search } from 'lucide-react'
 import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -95,6 +95,13 @@ export default function ExecutiveOverview() {
 
   const [global, setGlobal] = useState({ loading: true, posture: null, coverage: null, iocs: null, intel: null })
   const [client, setClient] = useState({ loading: false, financial: null, attack: null })
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Live tile filter — narrows the signal wall to matching labels/subtitles.
+  const tileMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return (...parts) => !q || parts.some((p) => String(p || '').toLowerCase().includes(q))
+  }, [searchQuery])
 
   const loadGlobal = useCallback(async () => {
     setGlobal((g) => ({ ...g, loading: true }))
@@ -140,6 +147,17 @@ export default function ExecutiveOverview() {
   const paths = Array.isArray(atk?.paths) ? atk.paths : []
   const topRisk = paths.length ? Math.max(...paths.map((p) => Number(p.risk) || 0)) : null
 
+  // Which tiles survive the live label/subtitle filter.
+  const showPosture = tileMatches(t(`${NS}.posture`), t(`${NS}.posture_sub`))
+  const showCoverage = tileMatches(t(`${NS}.coverage`))
+  const showIocs = tileMatches(t(`${NS}.iocs`), t(`${NS}.iocs_sub`))
+  const showIntel = tileMatches(t(`${NS}.intel`))
+  const platformVisible = showPosture || showCoverage || showIocs || showIntel
+  const showAle = tileMatches(t(`${NS}.ale`))
+  const showPaths = tileMatches(t(`${NS}.paths`))
+  const showTopRisk = tileMatches(t(`${NS}.top_risk`))
+  const clientVisible = showAle || showPaths || showTopRisk
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
@@ -149,6 +167,17 @@ export default function ExecutiveOverview() {
       icon={<LayoutDashboard className="w-5 h-5" />}
       actions={
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-[var(--text-muted)]" aria-hidden />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t(`${NS}.search_placeholder`)}
+              aria-label={t(`${NS}.search_placeholder`)}
+              className="w-40 sm:w-52 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg ltr:pl-8 rtl:pr-8 ltr:pr-2.5 rtl:pl-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
+            />
+          </div>
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
@@ -174,8 +203,13 @@ export default function ExecutiveOverview() {
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t(`${NS}.platform_heading`)}</h2>
           {global.loading ? (
             <SkeletonWidgetGrid count={4} />
+          ) : !platformVisible ? (
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)] px-4 py-6 text-center text-[12px] font-mono text-[var(--text-muted)]">
+              {t(`${NS}.no_matches`)}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {showPosture && (
               <Tile
                 to="/security-posture"
                 label={t(`${NS}.posture`)}
@@ -184,6 +218,8 @@ export default function ExecutiveOverview() {
                 accent={gradeColor(posture?.grade)}
                 linkLabel={t(`${NS}.open_posture`)}
               />
+              )}
+              {showCoverage && (
               <Tile
                 to="/attack-coverage"
                 label={t(`${NS}.coverage`)}
@@ -192,6 +228,8 @@ export default function ExecutiveOverview() {
                 accent="#f43f5e"
                 linkLabel={t(`${NS}.open_coverage`)}
               />
+              )}
+              {showIocs && (
               <Tile
                 to="/iocs"
                 label={t(`${NS}.iocs`)}
@@ -200,6 +238,8 @@ export default function ExecutiveOverview() {
                 accent="#a78bfa"
                 linkLabel={t(`${NS}.open_iocs`)}
               />
+              )}
+              {showIntel && (
               <Tile
                 to="/threat-intel"
                 label={t(`${NS}.intel`)}
@@ -217,6 +257,7 @@ export default function ExecutiveOverview() {
                 accent="#22d3ee"
                 linkLabel={t(`${NS}.open_intel`)}
               />
+              )}
             </div>
           )}
         </div>
@@ -232,8 +273,13 @@ export default function ExecutiveOverview() {
             </div>
           ) : client.loading ? (
             <SkeletonWidgetGrid count={3} />
+          ) : !clientVisible ? (
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)] px-4 py-6 text-center text-[12px] font-mono text-[var(--text-muted)]">
+              {t(`${NS}.no_matches`)}
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {showAle && (
               <Tile
                 to="/financial-risk"
                 label={t(`${NS}.ale`)}
@@ -242,6 +288,8 @@ export default function ExecutiveOverview() {
                 accent="#ef4444"
                 linkLabel={t(`${NS}.open_financial`)}
               />
+              )}
+              {showPaths && (
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.paths`)}
@@ -250,6 +298,8 @@ export default function ExecutiveOverview() {
                 accent="#f97316"
                 linkLabel={t(`${NS}.open_paths`)}
               />
+              )}
+              {showTopRisk && (
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.top_risk`)}
@@ -258,6 +308,7 @@ export default function ExecutiveOverview() {
                 accent={riskColor(topRisk)}
                 linkLabel={t(`${NS}.open_paths`)}
               />
+              )}
             </div>
           )}
         </div>

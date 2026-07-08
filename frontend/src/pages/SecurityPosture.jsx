@@ -7,7 +7,7 @@
  */
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, Check, X } from 'lucide-react'
+import { ShieldCheck, Check, X, Search } from 'lucide-react'
 import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
@@ -67,6 +67,8 @@ export default function SecurityPosture() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all') // all | failed | passed
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -100,6 +102,20 @@ export default function SecurityPosture() {
     () => [...checks].sort((a, b) => (a.passed === b.passed ? (b.weight || 0) - (a.weight || 0) : a.passed ? 1 : -1)),
     [checks],
   )
+
+  // Live filter over the worklist: free-text (id/detail) + pass/fail status.
+  const visibleChecks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return orderedChecks.filter((c) => {
+      if (statusFilter === 'failed' && c.passed) return false
+      if (statusFilter === 'passed' && !c.passed) return false
+      if (!q) return true
+      return (
+        String(c.id || '').toLowerCase().includes(q) ||
+        String(c.detail || '').toLowerCase().includes(q)
+      )
+    })
+  }, [orderedChecks, searchQuery, statusFilter])
 
   const generatedAt = data?.generated_at ? new Date(data.generated_at).toLocaleString() : null
 
@@ -164,8 +180,50 @@ export default function SecurityPosture() {
                 {t(`${NS}.checks_heading`)}
               </h2>
               <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.checks_hint`)}</p>
+
+              {/* Live worklist filter — free-text over id/detail + pass/fail status */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-[var(--text-muted)]" aria-hidden />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t(`${NS}.search_placeholder`)}
+                    aria-label={t(`${NS}.search_placeholder`)}
+                    className="w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg ltr:pl-8 rtl:pr-8 ltr:pr-2.5 rtl:pl-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
+                  />
+                </div>
+                <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_status`)}>
+                  {['all', 'failed', 'passed'].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setStatusFilter(f)}
+                      aria-pressed={statusFilter === f}
+                      className={[
+                        'px-2.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors',
+                        statusFilter === f
+                          ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                          : 'text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-secondary)]',
+                      ].join(' ')}
+                    >
+                      {t(`${NS}.filter_${f}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="text-[10px] font-mono text-[var(--text-muted)] mb-2" aria-live="polite">
+                {t(`${NS}.showing_count`, { shown: visibleChecks.length, total: orderedChecks.length })}
+              </div>
+
+              {visibleChecks.length === 0 ? (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] px-4 py-6 text-center text-[12px] font-mono text-[var(--text-muted)]">
+                  {t(`${NS}.no_matches`)}
+                </div>
+              ) : (
               <ul className="space-y-2">
-                {orderedChecks.map((c) => (
+                {visibleChecks.map((c) => (
                   <li
                     key={c.id}
                     className="flex items-start gap-3 rounded-xl border bg-[var(--table-surface)] p-3"
@@ -202,6 +260,7 @@ export default function SecurityPosture() {
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           </>
         )}

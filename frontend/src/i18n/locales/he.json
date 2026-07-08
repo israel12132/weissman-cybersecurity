@@ -1140,7 +1140,9 @@
       "paths_sub": "{{entries}} כניסות → {{jewels}} כתרים",
       "open_paths": "פתח נתיבי תקיפה",
       "top_risk": "סיכון הנתיב המוביל",
-      "top_risk_sub": "הסיכון הגבוה ביותר בנתיב יחיד"
+      "top_risk_sub": "הסיכון הגבוה ביותר בנתיב יחיד",
+      "search_placeholder": "סינון אותות…",
+      "no_matches": "אין אותות התואמים את הסינון."
     },
     "financialRisk": {
       "title": "רדיוס הנזק הפיננסי",
@@ -1246,7 +1248,14 @@
       "checks_hint": "בדיקות שנכשלו קודם, ואז לפי משקל — רשימת ההקשחה שלך.",
       "weight": "משקל {{weight}}",
       "pass": "עבר",
-      "fail": "נכשל"
+      "fail": "נכשל",
+      "search_placeholder": "חיפוש בדיקות לפי מזהה או פירוט…",
+      "filter_status": "סינון לפי סטטוס",
+      "filter_all": "הכול",
+      "filter_failed": "נכשלו",
+      "filter_passed": "עברו",
+      "showing_count": "מוצגות {{shown}} מתוך {{total}} בדיקות",
+      "no_matches": "אין בדיקות התואמות את הסינון הנוכחי."
     },
     "iocFeed": {
       "title": "הזנת IOC",
