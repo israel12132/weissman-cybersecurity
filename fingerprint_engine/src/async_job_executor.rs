@@ -242,11 +242,18 @@ pub async fn execute_job(
             .unwrap_or(true),
     };
     let channels = channels.clone();
-    crate::fleet_shaping::with_scope(
+    // Real scan-duration telemetry: time every job end-to-end and record it as a
+    // histogram labelled by kind (feeds the Grafana scan-latency panels + SlowScans alert).
+    let kind = job.kind.clone();
+    let started = std::time::Instant::now();
+    let out = crate::fleet_shaping::with_scope(
         scope,
         execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
     )
-    .await
+    .await;
+    metrics::histogram!("weissman_scan_duration_seconds", "kind" => kind)
+        .record(started.elapsed().as_secs_f64());
+    out
 }
 
 async fn execute_job_unscoped(
