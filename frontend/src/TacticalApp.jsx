@@ -77,6 +77,7 @@ import {
   FinancialRisk,
   AttackPaths,
   AttackCoverage,
+  SecurityPosture,
   AgentManagement,
   DarkWebMonitor,
   ThreatHuntingWorkbench,
@@ -242,6 +243,7 @@ export default function TacticalApp() {
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
+          <Route path="security-posture" element={<SecurityPosture />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />

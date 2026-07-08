@@ -228,6 +228,7 @@
     "risk_graph": "Risk Graph",
     "financial_risk": "Financial Risk",
     "attack_coverage": "ATT&CK Coverage",
+    "security_posture": "Platform Posture",
     "baseline_drift": "Baseline & Drift",
     "rate_limits": "Rate Limit Analytics",
     "mobile_security": "Mobile Security",
@@ -1179,6 +1180,22 @@
       "showing": "{{techniques}} techniques across {{tactics}} tactics",
       "no_match_title": "No matches",
       "no_match_body": "No technique or engine matches your filter."
+    },
+    "securityPosture": {
+      "title": "Platform Security Posture",
+      "subtitle": "Self-audit score and weighted hardening checks",
+      "badge": "Posture",
+      "grade": "Grade",
+      "evidence_notice": "Score and checks come from GET /api/security/posture-score — the platform grades its own hardening from a set of weighted checks evaluated live against the running deployment.",
+      "load_failed": "Failed to load security posture.",
+      "checks_passed": "Checks Passed",
+      "weight_passed": "Weight Passed",
+      "generated_at": "Generated {{time}}",
+      "checks_heading": "Hardening Checks",
+      "checks_hint": "Failed checks first, then by weight — your platform hardening worklist.",
+      "weight": "wt {{weight}}",
+      "pass": "Pass",
+      "fail": "Fail"
     },
     "jobsDashboard": {
       "title": "Jobs Dashboard",

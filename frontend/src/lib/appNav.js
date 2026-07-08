@@ -111,6 +111,7 @@ export const NAV_GROUPS = [
     id: 'governance',
     labelKey: 'nav.groups.governance',
     items: [
+      { to: '/security-posture', labelKey: 'nav.security_posture', icon: '🛡' },
       { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
       { to: '/attack-coverage', labelKey: 'nav.attack_coverage', icon: '▦' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },

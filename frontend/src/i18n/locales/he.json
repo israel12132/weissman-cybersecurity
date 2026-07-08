@@ -226,6 +226,7 @@
     "risk_graph": "Risk Graph",
     "financial_risk": "סיכון פיננסי",
     "attack_coverage": "כיסוי ATT&CK",
+    "security_posture": "מצב אבטחת הפלטפורמה",
     "baseline_drift": "Baseline & Drift",
     "rate_limits": "Rate Limit Analytics",
     "mobile_security": "אבטחת מובייל",
@@ -1187,6 +1188,22 @@
       "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
       "no_match_title": "אין התאמות",
       "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
+    },
+    "securityPosture": {
+      "title": "מצב אבטחת הפלטפורמה",
+      "subtitle": "ציון ביקורת עצמית ובדיקות הקשחה משוקללות",
+      "badge": "מצב",
+      "grade": "ציון",
+      "evidence_notice": "הציון והבדיקות מגיעים מ-GET /api/security/posture-score — הפלטפורמה מדרגת את ההקשחה של עצמה מתוך בדיקות משוקללות המוערכות בזמן אמת מול הפריסה הרצה.",
+      "load_failed": "טעינת מצב האבטחה נכשלה.",
+      "checks_passed": "בדיקות שעברו",
+      "weight_passed": "משקל שעבר",
+      "generated_at": "נוצר {{time}}",
+      "checks_heading": "בדיקות הקשחה",
+      "checks_hint": "בדיקות שנכשלו קודם, ואז לפי משקל — רשימת ההקשחה שלך.",
+      "weight": "משקל {{weight}}",
+      "pass": "עבר",
+      "fail": "נכשל"
     },
     "jobsDashboard": {
       "title": "לוח משימות",

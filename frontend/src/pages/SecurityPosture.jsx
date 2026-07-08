@@ -1,0 +1,211 @@
+/**
+ * Platform Security Posture — self-audit score + weighted checks.
+ *
+ * Wired to the live GET /api/security/posture-score endpoint, which scores the
+ * platform's own hardening (0–100 + letter grade) from a set of weighted
+ * checks. Platform-wide — no client selection. Route: /security-posture
+ */
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ShieldCheck, Check, X } from 'lucide-react'
+import PageShell from './PageShell'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { apiFetch } from '../lib/apiBase'
+
+const NS = 'pages.securityPosture'
+
+function gradeColor(grade) {
+  return { A: '#4ade80', B: '#84cc16', C: '#facc15', D: '#f97316', F: '#ef4444' }[String(grade || '').toUpperCase()] || '#22d3ee'
+}
+function scoreColor(score) {
+  const s = Number(score) || 0
+  if (s >= 90) return '#4ade80'
+  if (s >= 75) return '#84cc16'
+  if (s >= 60) return '#facc15'
+  if (s >= 40) return '#f97316'
+  return '#ef4444'
+}
+
+/** Circular score gauge. */
+function ScoreRing({ score, grade }) {
+  const s = Math.max(0, Math.min(100, Number(score) || 0))
+  const color = scoreColor(s)
+  const R = 54
+  const C = 2 * Math.PI * R
+  const dash = (s / 100) * C
+  return (
+    <div className="relative w-40 h-40 shrink-0">
+      <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
+        <circle cx="64" cy="64" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+        <circle
+          cx="64"
+          cy="64"
+          r={R}
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${C}`}
+          style={{ transition: 'stroke-dasharray 0.6s ease' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-4xl font-bold tabular-nums" style={{ color }}>{s}</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">/ 100</span>
+        {grade && (
+          <span className="mt-1 text-lg font-black" style={{ color: gradeColor(grade) }}>{String(grade).toUpperCase()}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function SecurityPosture() {
+  const { t } = useTranslation()
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const r = await apiFetch('/api/security/posture-score')
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) throw new Error(d.error || d.detail || `HTTP ${r.status}`)
+      setData(d)
+    } catch (e) {
+      setError(e.message || t(`${NS}.load_failed`))
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const checks = useMemo(() => (Array.isArray(data?.checks) ? data.checks : []), [data])
+  const summary = useMemo(() => {
+    const passed = checks.filter((c) => c.passed)
+    const passedWeight = passed.reduce((s, c) => s + (Number(c.weight) || 0), 0)
+    const totalWeight = checks.reduce((s, c) => s + (Number(c.weight) || 0), 0)
+    return { passed: passed.length, total: checks.length, passedWeight, totalWeight }
+  }, [checks])
+
+  // Failed first, then by descending weight — the remediation worklist.
+  const orderedChecks = useMemo(
+    () => [...checks].sort((a, b) => (a.passed === b.passed ? (b.weight || 0) - (a.weight || 0) : a.passed ? 1 : -1)),
+    [checks],
+  )
+
+  const generatedAt = data?.generated_at ? new Date(data.generated_at).toLocaleString() : null
+
+  return (
+    <PageShell
+      title={t(`${NS}.title`)}
+      subtitle={t(`${NS}.subtitle`)}
+      badge={data?.grade ? `${t(`${NS}.grade`)} ${String(data.grade).toUpperCase()}` : t(`${NS}.badge`)}
+      badgeColor={gradeColor(data?.grade)}
+      icon={<ShieldCheck className="w-5 h-5" />}
+      actions={<ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />}
+    >
+      <div className="space-y-6">
+        <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {loading && (
+          <>
+            <SkeletonWidgetGrid count={2} />
+            <SkeletonCard lines={8} />
+          </>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && data && (
+          <>
+            <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6 flex flex-col sm:flex-row items-center gap-6">
+              <ScoreRing score={data.score} grade={data.grade} />
+              <div className="flex-1 min-w-0 space-y-3 w-full">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-black/30 border border-white/8 p-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-1">
+                      {t(`${NS}.checks_passed`)}
+                    </div>
+                    <div className="text-xl font-bold text-emerald-300 tabular-nums">
+                      {summary.passed}/{summary.total}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-black/30 border border-white/8 p-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-1">
+                      {t(`${NS}.weight_passed`)}
+                    </div>
+                    <div className="text-xl font-bold text-cyan-300 tabular-nums">
+                      {summary.passedWeight}/{summary.totalWeight}
+                    </div>
+                  </div>
+                </div>
+                {generatedAt && (
+                  <div className="text-[11px] font-mono text-white/40">
+                    {t(`${NS}.generated_at`, { time: generatedAt })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-1">
+                {t(`${NS}.checks_heading`)}
+              </h2>
+              <p className="text-[11px] text-white/40 mb-3">{t(`${NS}.checks_hint`)}</p>
+              <ul className="space-y-2">
+                {orderedChecks.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-start gap-3 rounded-xl border bg-black/30 p-3"
+                    style={{ borderColor: c.passed ? 'rgba(74,222,128,0.2)' : 'rgba(239,68,68,0.28)' }}
+                  >
+                    <span
+                      className="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: c.passed ? 'rgba(74,222,128,0.15)' : 'rgba(239,68,68,0.15)' }}
+                    >
+                      {c.passed ? (
+                        <Check className="w-3 h-3 text-emerald-400" aria-hidden />
+                      ) : (
+                        <X className="w-3 h-3 text-rose-400" aria-hidden />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[12px] font-mono text-white/80">{c.id}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-white/45">
+                          {t(`${NS}.weight`, { weight: c.weight })}
+                        </span>
+                        <span
+                          className="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase tracking-wider"
+                          style={{
+                            color: c.passed ? '#4ade80' : '#f87171',
+                            background: c.passed ? 'rgba(74,222,128,0.1)' : 'rgba(239,68,68,0.1)',
+                          }}
+                        >
+                          {c.passed ? t(`${NS}.pass`) : t(`${NS}.fail`)}
+                        </span>
+                      </div>
+                      {c.detail && <p className="text-[12px] text-white/55 mt-1 leading-relaxed">{c.detail}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+      </div>
+    </PageShell>
+  )
+}
