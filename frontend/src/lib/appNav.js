@@ -41,6 +41,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-intel', labelKey: 'nav.threat_intel', icon: '🎯' },
       { to: '/threat-hunting', labelKey: 'nav.threat_hunting', icon: '🔭' },
+      { to: '/iocs', labelKey: 'nav.iocs', icon: '🎯' },
       { to: '/threat-analysis', labelKey: 'nav.threat_analysis', icon: '🧩' },
       { to: '/dark-web', labelKey: 'nav.dark_web', icon: '🕸' },
       { to: '/intel-map', labelKey: 'nav.intel_map', icon: '🌐' },

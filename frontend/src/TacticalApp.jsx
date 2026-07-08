@@ -78,6 +78,7 @@ import {
   AttackPaths,
   AttackCoverage,
   SecurityPosture,
+  IocFeed,
   AgentManagement,
   DarkWebMonitor,
   ThreatHuntingWorkbench,
@@ -244,6 +245,7 @@ export default function TacticalApp() {
           <Route path="attack-paths" element={<AttackPaths />} />
           <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="security-posture" element={<SecurityPosture />} />
+          <Route path="iocs" element={<IocFeed />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
