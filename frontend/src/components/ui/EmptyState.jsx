@@ -53,7 +53,7 @@ export default function EmptyState({
       role="status"
     >
       <div
-        className={`mb-4 flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] ${
+        className={`mb-4 flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] ${
           compact ? 'w-11 h-11' : 'w-14 h-14'
         }`}
         aria-hidden="true"
@@ -106,14 +106,14 @@ export default function EmptyState({
             (secondary.to ? (
               <Link
                 to={secondary.to}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
               </Link>
             ) : secondary.href ? (
               <a
                 href={secondary.href}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
               </a>
@@ -121,7 +121,7 @@ export default function EmptyState({
               <button
                 type="button"
                 onClick={secondary.onClick}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
               </button>

@@ -60,6 +60,7 @@
   --sidebar-surface: rgba(0, 0, 0, 0.50);
   --header-surface: rgba(0, 0, 0, 0.45);
   --scrim: rgba(0, 0, 0, 0.60);
+  --skeleton-bg: rgba(255, 255, 255, 0.05);
 
   /* ── Borders ────────────────────────────────────────────────────────────── */
   --border-subtle: rgba(255, 255, 255, 0.04);
@@ -275,6 +276,7 @@
   --sidebar-surface: rgba(255, 255, 255, 0.82);
   --header-surface: rgba(255, 255, 255, 0.80);
   --scrim: rgba(15, 23, 42, 0.35);
+  --skeleton-bg: rgba(15, 23, 42, 0.07);
 }
 
 /* Flip the document background in light mode (higher specificity than the

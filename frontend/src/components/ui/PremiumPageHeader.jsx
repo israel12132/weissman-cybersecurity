@@ -50,23 +50,23 @@ export default function PremiumPageHeader({
               </span>
             )}
             {count != null && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full border border-white/12 bg-white/[0.04] text-white/70 tabular-nums">
-                <span className="text-white/40">{countLabel || t('common.count')}</span>
-                <span className="font-semibold text-white">{loading ? '—' : count.toLocaleString()}</span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-full border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] tabular-nums">
+                <span className="text-[var(--text-muted)]">{countLabel || t('common.count')}</span>
+                <span className="font-semibold text-[var(--text-primary)]">{loading ? '—' : count.toLocaleString()}</span>
               </span>
             )}
             {formattedTime && (
-              <span className="text-[10px] font-mono text-white/35">
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t('common.last_updated')} {formattedTime}
               </span>
             )}
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight font-display">
+            <h1 className="text-xl sm:text-2xl font-semibold text-[var(--text-primary)] tracking-tight font-display">
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">{subtitle}</p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{subtitle}</p>
             )}
           </div>
         </div>
@@ -77,7 +77,7 @@ export default function PremiumPageHeader({
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 hover:bg-white/[0.06] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span className={loading ? 'inline-block animate-spin' : ''} aria-hidden="true">↻</span>
               {refreshLabel || t('common.refresh')}

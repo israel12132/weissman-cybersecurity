@@ -6,7 +6,7 @@ import React from 'react'
 export function SkeletonBar({ className = '', style, shimmer = true }) {
   return (
     <div
-      className={`rounded ${shimmer ? 'skeleton-shimmer' : 'bg-white/5 animate-pulse'} ${className}`}
+      className={`rounded ${shimmer ? 'skeleton-shimmer' : 'bg-[var(--skeleton-bg)] animate-pulse'} ${className}`}
       style={style}
       aria-hidden="true"
     />
@@ -36,7 +36,7 @@ export function SkeletonTable({ rows = 6, cols = 4, className = '' }) {
 export function SkeletonCard({ className = '', lines = 4 }) {
   return (
     <div
-      className={`rounded-2xl border border-white/10 p-5 bg-[var(--card-bg)]/60 ${className}`}
+      className={`rounded-2xl border border-[var(--border-default)] p-5 bg-[var(--bg-2)] ${className}`}
       aria-busy="true"
     >
       <SkeletonBar className="h-5 w-40 mb-4" />
@@ -67,7 +67,7 @@ export function SkeletonWidgetGrid({ count = 4, className = '' }) {
   return (
     <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${className}`} aria-busy="true">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-2xl border border-white/8 p-5 bg-black/30">
+        <div key={i} className="rounded-2xl border border-[var(--border-subtle)] p-5 bg-[var(--table-surface)]">
           <SkeletonBar className="h-3 w-24 mb-4" />
           <SkeletonBar className="h-8 w-32 mb-2" />
           <SkeletonBar className="h-3 w-full" />

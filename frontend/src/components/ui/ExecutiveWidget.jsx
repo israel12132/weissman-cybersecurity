@@ -13,7 +13,7 @@ export default function ExecutiveWidget({
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-white/20 ${className}`}
+      className={`relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-[var(--border-strong)] ${className}`}
       style={{
         borderColor: `${accent}35`,
         background: `linear-gradient(145deg, ${accent}08 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.5) 100%)`,
@@ -32,16 +32,16 @@ export default function ExecutiveWidget({
         {label}
       </div>
       <div
-        className="text-2xl sm:text-[1.75rem] font-bold tabular-nums tracking-tight text-white"
+        className="text-2xl sm:text-[1.75rem] font-bold tabular-nums tracking-tight text-[var(--text-primary)]"
         style={{ textShadow: `0 0 40px ${accent}25` }}
       >
         {value}
       </div>
       {hint && (
-        <div className="text-[10px] font-mono text-white/40 mt-1.5 leading-relaxed">{hint}</div>
+        <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1.5 leading-relaxed">{hint}</div>
       )}
       {footer && (
-        <div className="text-[10px] font-mono text-white/35 mt-2 pt-2 border-t border-white/8">{footer}</div>
+        <div className="text-[10px] font-mono text-[var(--text-muted)] mt-2 pt-2 border-t border-[var(--border-subtle)]">{footer}</div>
       )}
     </div>
   )
