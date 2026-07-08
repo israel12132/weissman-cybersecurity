@@ -296,6 +296,23 @@ impl CouncilConfig {
             .or_else(|| supreme.then(|| "meta-llama/Meta-Llama-3.1-70B-Instruct".to_string()))
             .unwrap_or_else(|| coder.clone());
 
+        // Single-model ("lite") mode — collapse all three council roles onto ONE model so the
+        // entire debate runs against a single loaded model. Lets an operator run the full council
+        // on one 7-8B model instead of three large ones, cutting VRAM ~4-8x and removing the need
+        // for a multi-model GPU host. Accepts "1"/"true"/"yes" (reuse the resolved coder model) or
+        // an explicit model id. Overrides supreme/per-slot defaults.
+        let (coder, generalist, synthesizer) = match std::env::var("WEISSMAN_COUNCIL_SINGLE_MODEL")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+        {
+            Some(v) if matches!(v.as_str(), "1" | "true" | "yes") => {
+                (coder.clone(), coder.clone(), coder)
+            }
+            Some(model) => (model.clone(), model.clone(), model),
+            None => (coder, generalist, synthesizer),
+        };
+
         let http_timeout_secs: u64 = std::env::var("WEISSMAN_COUNCIL_TIMEOUT_SECS")
             .ok()
             .and_then(|s| s.parse().ok())

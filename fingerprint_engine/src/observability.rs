@@ -226,10 +226,18 @@ pub async fn http_metrics_middleware(
     metrics::counter!(
         "http_requests_total",
         "method" => method_s,
-        "path" => bucket,
+        "path" => bucket.clone(),
         "status" => status_s,
     )
     .increment(1);
+    // Dedicated reliability/security signals consumed by the Grafana dashboards +
+    // application alerts (5xx error rate, rate-limit pressure).
+    if status >= 500 {
+        metrics::counter!("weissman_errors_total", "path" => bucket.clone()).increment(1);
+    }
+    if status == 429 {
+        metrics::counter!("weissman_rate_limit_violations_total", "path" => bucket).increment(1);
+    }
     response
 }
 

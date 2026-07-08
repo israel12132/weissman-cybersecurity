@@ -242,11 +242,18 @@ pub async fn execute_job(
             .unwrap_or(true),
     };
     let channels = channels.clone();
-    crate::fleet_shaping::with_scope(
+    // Real scan-duration telemetry: time every job end-to-end and record it as a
+    // histogram labelled by kind (feeds the Grafana scan-latency panels + SlowScans alert).
+    let kind = job.kind.clone();
+    let started = std::time::Instant::now();
+    let out = crate::fleet_shaping::with_scope(
         scope,
         execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
     )
-    .await
+    .await;
+    metrics::histogram!("weissman_scan_duration_seconds", "kind" => kind)
+        .record(started.elapsed().as_secs_f64());
+    out
 }
 
 async fn execute_job_unscoped(
@@ -2111,6 +2118,25 @@ async fn execute_job_unscoped(
                 "findings_count": findings.len(),
                 "findings_persisted": persisted,
                 "message": "feedback fuzz completed; findings persisted via findings_persist",
+            }))
+        }
+        "self_improvement_apply" => {
+            // An approved self-improvement proposal. Opening the pull request is performed
+            // out-of-process by an external PR bot (which has git/GitHub credentials); the
+            // Rust worker never writes to a repo. This arm simply acknowledges the job so it
+            // is not treated as a failure, leaving the queue row APPROVED until the PR bot
+            // records the pr_url. `open_pr_only` is always true — never a direct commit.
+            let improvement_id = p.get("improvement_id").and_then(Value::as_i64);
+            tracing::info!(
+                target: "self_improve",
+                improvement_id = ?improvement_id,
+                "self_improvement_apply acknowledged; awaiting external PR bot (PR-only, main untouched)"
+            );
+            Ok(json!({
+                "ok": true,
+                "improvement_id": improvement_id,
+                "open_pr_only": true,
+                "message": "approved; PR creation handled out-of-process by the PR bot",
             }))
         }
         _ => Err(format!("unknown job kind: {}", job.kind)),

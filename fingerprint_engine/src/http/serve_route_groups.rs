@@ -333,6 +333,19 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/council/hitl/:id/reject",
             post(api_council_hitl_reject),
         )
+        // ── Autonomous self-improvement engine console ───────────────────────
+        .route("/api/self-improve/status", get(api_self_improve_status))
+        .route("/api/self-improve/queue", get(api_self_improve_queue))
+        .route("/api/self-improve/toggle", post(api_self_improve_toggle))
+        .route("/api/self-improve/run-now", post(api_self_improve_run_now))
+        .route(
+            "/api/self-improve/:id/approve",
+            post(api_self_improve_approve),
+        )
+        .route(
+            "/api/self-improve/:id/reject",
+            post(api_self_improve_reject),
+        )
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))
         .route("/api/oast/callbacks", get(api_oast_callbacks))

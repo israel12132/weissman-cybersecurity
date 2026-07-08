@@ -55,6 +55,7 @@ export const NAV_GROUPS = [
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
+      { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
