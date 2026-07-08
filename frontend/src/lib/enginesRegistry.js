@@ -3961,6 +3961,15 @@ export const ENGINES_REGISTRY = [
     requiresTarget: true,
   },
   {
+    id: 'threat_surface_intelligence_fusion',
+    label: 'Threat Surface Intelligence Fusion',
+    group: 'recon',
+    mitre: 'T1597',
+    description:
+      'Live fusion: URLhaus + ThreatFox + CT footprint + ASM quantification + passive DNS + typosquat monitor with toxic-chain synthesis and unified A+–F grade — evidence-only',
+    requiresTarget: true,
+  },
+  {
     id: 'risk_superposition_collapse',
     label: 'Risk Superposition Collapse',
     group: 'recon',

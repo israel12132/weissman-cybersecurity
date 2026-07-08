@@ -56,7 +56,7 @@ const ENGINE_TYPE_MAP = {
     'wpa3_attack_engine','tor_exit_attack','protocol_downgrade','network_baseline_anomaly',
     'packet_injection_engine','network_tap_advanced','multicast_attack','nat_traversal_attack',
     'dnp3_attack','bacnet_attack','zigbee_attack','iec61850_attack','satellite_comm_attack','rfid_nfc_attack',
-    'threat_intel_fusion','attack_surface_quantify','passive_dns_forensics','dark_web_monitor',
+    'threat_intel_fusion','attack_surface_quantify','threat_surface_intelligence_fusion','external_exposure_supreme','fair_exposure_fusion','passive_dns_forensics','dark_web_monitor',
     'lambda_escape','terraform_state_attack','cloudformation_injection','service_mesh_attack',
     'cloud_audit_evasion','ecr_registry_attack','multi_cloud_pivot','cloud_worm_propagation',
     'serverless_injection','cloud_data_exfil','cloud_network_attack','cloud_privilege_persistence',

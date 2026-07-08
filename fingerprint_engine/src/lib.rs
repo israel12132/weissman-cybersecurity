@@ -108,6 +108,7 @@ pub mod liquid_matrix_engine;
 pub mod sovereign_active_defense_fusion_engine;
 pub mod fair_exposure_fusion_engine;
 pub mod engine_fusion;
+pub mod threat_surface_intelligence_fusion_engine;
 pub mod nl_query;
 pub mod notifications;
 pub mod nvd_cve;

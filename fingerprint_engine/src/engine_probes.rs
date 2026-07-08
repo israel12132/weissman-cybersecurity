@@ -46,35 +46,53 @@ pub fn extract_host(target: &str) -> String {
         .to_string()
 }
 
-pub async fn http_client() -> Client {
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+static HTTP1_CLIENT: OnceLock<Client> = OnceLock::new();
+static HTTP2_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn shared_client_builder(user_agent: &str) -> reqwest::ClientBuilder {
     Client::builder()
         .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
+        .pool_max_idle_per_host(16)
+        .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Some(Duration::from_secs(30)))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .user_agent("Weissman-Probe/1.0")
+        .user_agent(user_agent)
+}
+
+fn init_http_client() -> Client {
+    shared_client_builder("Weissman-Probe/1.0")
         .build()
         .unwrap_or_else(|_| Client::new())
 }
 
-/// HTTP/1.1-only client — used to compare against HTTP/2 ALPN on the same URL.
-pub async fn http1_client() -> Client {
-    Client::builder()
-        .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .user_agent("Weissman-LiminalProbe/1.0 h1")
+fn init_http1_client() -> Client {
+    shared_client_builder("Weissman-LiminalProbe/1.0 h1")
         .http1_only()
         .build()
         .unwrap_or_else(|_| Client::new())
 }
 
-/// HTTP/2-capable client (ALPN negotiates h2 on TLS). Pair with [`http1_client`].
-pub async fn http2_client() -> Client {
-    Client::builder()
-        .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
-        .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .user_agent("Weissman-LiminalProbe/1.0 h2")
+fn init_http2_client() -> Client {
+    shared_client_builder("Weissman-LiminalProbe/1.0 h2")
         .http2_adaptive_window(true)
         .build()
         .unwrap_or_else(|_| Client::new())
+}
+
+/// Shared pooled HTTP client — reused across all engine probes (connection pooling).
+pub async fn http_client() -> Client {
+    HTTP_CLIENT.get_or_init(init_http_client).clone()
+}
+
+/// HTTP/1.1-only client — used to compare against HTTP/2 ALPN on the same URL.
+pub async fn http1_client() -> Client {
+    HTTP1_CLIENT.get_or_init(init_http1_client).clone()
+}
+
+/// HTTP/2-capable client (ALPN negotiates h2 on TLS). Pair with [`http1_client`].
+pub async fn http2_client() -> Client {
+    HTTP2_CLIENT.get_or_init(init_http2_client).clone()
 }
 
 /// Attempt a TCP connect+banner read. Returns banner string if the port is open.

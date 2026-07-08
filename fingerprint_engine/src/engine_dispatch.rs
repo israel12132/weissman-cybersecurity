@@ -696,6 +696,12 @@ async fn dispatch_engine_match(
         "fair_exposure_fusion" => {
             crate::fair_exposure_fusion_engine::run_fair_exposure_fusion_result(target, ctx).await
         }
+        "threat_surface_intelligence_fusion" => {
+            crate::threat_surface_intelligence_fusion_engine::run_threat_surface_intelligence_fusion_result(
+                target, ctx,
+            )
+            .await
+        }
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
         }

@@ -564,18 +564,14 @@ pub async fn run_github_secret_scan_result(target: &str) -> EngineResult {
 cli_wrapper!(run_github_secret_scan, run_github_secret_scan_result);
 
 // ── threat_intel_fusion ───────────────────────────────────────────────────────
-pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let host = extract_host(target);
-    let client = http_client().await;
-    let mut findings: Vec<Value> = Vec::new();
+
+async fn probe_urlhaus_host(client: &reqwest::Client, host: &str, target: &str) -> Vec<Value> {
+    let mut out = Vec::new();
     let url = format!(
         "https://urlhaus.abuse.ch/api/v1/hostinfo/{}/",
-        urlencoding::encode(&host)
+        urlencoding::encode(host)
     );
-    if let Some(p) = http_get(&client, &url).await {
+    if let Some(p) = http_get(client, &url).await {
         if p.status == 200 {
             if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
                 let listed = v
@@ -589,7 +585,7 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
                     .map(|a| a.len())
                     .unwrap_or(0);
                 if listed && url_count > 0 {
-                    findings.push(finding(
+                    out.push(finding(
                         "threat_intel_fusion",
                         &format!("URLhaus lists {} malicious URL(s) for host", url_count),
                         "high",
@@ -604,12 +600,139 @@ pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
             }
         }
     }
+    out
+}
+
+async fn probe_threatfox_domain(client: &reqwest::Client, host: &str, target: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    let payload = serde_json::json!({
+        "query": "search_ioc",
+        "search_term": host,
+    });
+    if let Some(p) = http_post_json_with_headers(
+        client,
+        "https://threatfox-api.abuse.ch/api/v1/",
+        &payload,
+        &[("Content-Type", "application/json")],
+    )
+    .await
+    {
+        if p.status == 200 {
+            if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
+                let ok = v
+                    .get("query_status")
+                    .and_then(Value::as_str)
+                    .map(|s| s.eq_ignore_ascii_case("ok"))
+                    .unwrap_or(false);
+                let ioc_count = v
+                    .get("data")
+                    .and_then(Value::as_array)
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if ok && ioc_count > 0 {
+                    let threat_types: Vec<String> = v
+                        .get("data")
+                        .and_then(Value::as_array)
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|row| {
+                                    row.get("threat_type")
+                                        .and_then(Value::as_str)
+                                        .map(str::to_string)
+                                })
+                                .take(4)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let type_hint = if threat_types.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" Types: {}.", threat_types.join(", "))
+                    };
+                    out.push(finding(
+                        "threat_intel_fusion",
+                        &format!("ThreatFox lists {} IOC(s) for domain", ioc_count),
+                        if ioc_count >= 5 { "critical" } else { "high" },
+                        "T1597",
+                        &format!(
+                            "Abuse.ch ThreatFox returned {} live IOC(s) referencing {host}.{type_hint} Correlate with SIEM and block at perimeter.",
+                            ioc_count
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+async fn probe_crt_sh_footprint(client: &reqwest::Client, host: &str, target: &str) -> Vec<Value> {
+    let mut out = Vec::new();
+    let url = format!("https://crt.sh/?q=%25.{}&output=json", urlencoding::encode(host));
+    if let Some(p) = http_get(client, &url).await {
+        if p.status == 200 {
+            if let Ok(rows) = serde_json::from_str::<Vec<Value>>(&p.body) {
+                let mut names = std::collections::HashSet::new();
+                for row in rows.iter().take(500) {
+                    if let Some(n) = row.get("name_value").and_then(Value::as_str) {
+                        for part in n.split('\n') {
+                            let s = part.trim().to_lowercase();
+                            if s.ends_with(host) {
+                                names.insert(s);
+                            }
+                        }
+                    }
+                }
+                let distinct = names.len();
+                if distinct >= 25 {
+                    out.push(finding(
+                        "threat_intel_fusion",
+                        &format!(
+                            "Certificate Transparency footprint: {} distinct names",
+                            distinct
+                        ),
+                        if distinct >= 100 { "medium" } else { "low" },
+                        "T1590.002",
+                        &format!(
+                            "crt.sh passive inventory shows {distinct} hostname(s) under {host} — expanded recon surface for threat actors and shadow IT review."
+                        ),
+                        target,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+pub async fn run_threat_intel_fusion_result(target: &str) -> EngineResult {
+    if target.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(target);
+    let client = http_client().await;
+
+    let (urlhaus, threatfox, crt) = tokio::join!(
+        probe_urlhaus_host(&client, &host, target),
+        probe_threatfox_domain(&client, &host, target),
+        probe_crt_sh_footprint(&client, &host, target),
+    );
+
+    let mut findings: Vec<Value> = Vec::new();
+    findings.extend(urlhaus);
+    findings.extend(threatfox);
+    findings.extend(crt);
+
     if findings.is_empty() {
         empty_ok("threat_intel_fusion", target)
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("threat_intel_fusion: {}", findings.len()),
+            format!(
+                "threat_intel_fusion: {} finding(s) from URLhaus+ThreatFox+CT",
+                findings.len()
+            ),
         )
     }
 }
