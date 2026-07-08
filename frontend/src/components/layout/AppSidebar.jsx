@@ -11,6 +11,7 @@ function NavLink({ item, label, active, onNavigate, betaLabel }) {
     <Link
       to={item.to}
       onClick={onNavigate}
+      aria-current={active ? 'page' : undefined}
       className={[
         'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[11px] font-mono transition-colors',
         active
