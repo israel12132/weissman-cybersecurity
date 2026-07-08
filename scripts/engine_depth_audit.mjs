@@ -96,8 +96,9 @@ const webChecks = [
       'synthesize_swagger_abuse_vectors',
       'toxic_chain',
       'run_swagger_abuse_result_ctx',
-      'probe_openapi_followup_paths',
-      'synthetic_hit',
+      'probe_openapi_operations',
+      'documented_auth_bypass',
+      'alternate_server_spec',
     ],
   ],
   ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
@@ -222,6 +223,11 @@ for (const n of [
   'swagger_ui',
   'synthetic_bus_artifact',
   'extract_sample_paths',
+  'extract_operations',
+  'probe_openapi_operations',
+  'probe_alternate_servers',
+  'knife4j_ui',
+  'postman_export',
   'MAX_VECTORS_PER_BASE',
   'analyze_openapi_body',
 ]) {
@@ -229,8 +235,8 @@ for (const n of [
     failures.push(`swagger_abuse_synthesis missing: ${n}`)
   }
 }
-if (!swaggerSynth.includes('180')) {
-  failures.push('swagger_abuse_synthesis missing 180 vector cap')
+if (!swaggerSynth.includes('280')) {
+  failures.push('swagger_abuse_synthesis missing 280 vector cap')
 }
 for (const n of [
   'toxic_chain',

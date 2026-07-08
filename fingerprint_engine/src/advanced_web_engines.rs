@@ -6,8 +6,9 @@
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::swagger_abuse_synthesis::{
-    probe_openapi_followup_paths, probe_swagger_vectors_concurrent,
-    synthesize_swagger_abuse_vectors, swagger_probe_bases,
+    probe_alternate_servers, probe_openapi_followup_paths, probe_openapi_operations,
+    probe_swagger_vectors_concurrent, probe_ui_spec_urls, synthesize_swagger_abuse_vectors,
+    swagger_probe_bases,
 };
 use crate::grpc_reflection_synthesis::{
     grpc_probe_bases, probe_grpc_vectors_concurrent, synthesize_grpc_reflection_vectors,
@@ -1125,12 +1126,15 @@ pub async fn run_swagger_abuse_result_ctx(
     let host = extract_host(target);
     let client = http_client().await;
     let bases = swagger_probe_bases(target, ctx);
+    let auth_pairs = graphql_auth_header_pairs(&ctx.job_params);
+    let auth_refs = auth_pairs_as_refs(&auth_pairs);
     let mut findings: Vec<Value> = Vec::new();
     let mut flags = SwaggerAbuseFlags::default();
     let mut total_vectors = 0usize;
     let mut total_synthetic = 0usize;
     let mut categories_hit: Vec<String> = Vec::new();
     let mut followup_probed = 0usize;
+    let mut operations_probed = 0usize;
 
     for base in &bases {
         let (vectors, stats) = synthesize_swagger_abuse_vectors(&host, ctx);
@@ -1154,10 +1158,16 @@ pub async fn run_swagger_abuse_result_ctx(
             if hit.signal.sensitive_hints {
                 flags.sensitive_operations = true;
             }
+            if hit.signal.pii_hints {
+                flags.pii_documented = true;
+            }
+            if hit.signal.has_write_ops {
+                flags.write_ops_documented = true;
+            }
             if hit.vector.synthetic {
                 flags.synthetic_hit = true;
             }
-            if hit.signal.operation_count > 10 {
+            if hit.signal.operation_count > 20 {
                 flags.large_surface = true;
             }
             if !categories_hit.iter().any(|c| c == hit.vector.category) {
@@ -1202,13 +1212,15 @@ pub async fn run_swagger_abuse_result_ctx(
                 severity,
                 "T1190",
                 &format!(
-                    "{} → HTTP {} ({}B, ops~{}, paths~{}, auth={}, synthetic={}, version={:?}) — API map abuse surface.",
+                    "{} → HTTP {} ({}B, ops~{}, write~{}, paths~{}, auth={}, pii={}, synthetic={}, version={:?}) — API map abuse surface.",
                     hit.final_url,
                     hit.status,
                     hit.body_len,
                     hit.signal.operation_count,
+                    hit.signal.write_op_count,
                     hit.signal.path_estimate,
                     hit.signal.has_auth_schemes,
+                    hit.signal.pii_hints,
                     hit.vector.synthetic,
                     hit.signal.version
                 ),
@@ -1229,14 +1241,16 @@ pub async fn run_swagger_abuse_result_ctx(
                     "synthetic": hit.vector.synthetic,
                     "endpoint": hit.final_url,
                     "operations": hit.signal.operation_count,
+                    "write_ops": hit.signal.write_op_count,
                     "oauth": hit.signal.has_oauth,
                     "bearer": hit.signal.has_bearer,
                     "sensitive": hit.signal.sensitive_hints
                 }),
             ));
 
-            if !hit.sample_paths.is_empty() {
-                let followups = probe_openapi_followup_paths(&client, base, &hit.sample_paths).await;
+            if !hit.extraction.paths.is_empty() {
+                let followups =
+                    probe_openapi_followup_paths(&client, base, &hit.extraction.paths).await;
                 for (path, probe) in followups {
                     followup_probed += 1;
                     if probe.status >= 200 && probe.status < 300 {
@@ -1254,6 +1268,138 @@ pub async fn run_swagger_abuse_result_ctx(
                             &["api_mass_assignment", "idor_advanced"],
                             &["pipeline_to_runtime_risk"],
                             json!({"spec_url": hit.final_url, "abused_path": path, "status": probe.status}),
+                        ));
+                    }
+                }
+            }
+
+            if !hit.extraction.operations.is_empty() {
+                let op_hits = probe_openapi_operations(
+                    &client,
+                    base,
+                    &hit.extraction.operations,
+                    &auth_refs,
+                )
+                .await;
+                for oph in op_hits {
+                    operations_probed += 1;
+                    let write = matches!(oph.operation.method, "POST" | "PUT" | "DELETE" | "PATCH");
+                    if oph.without_auth {
+                        flags.auth_bypass_live = true;
+                        if write {
+                            flags.write_op_live = true;
+                        }
+                        if oph.operation.requires_auth_hint {
+                            flags.documented_auth_bypass = true;
+                        }
+                    }
+                    findings.push(web_finding_sync(
+                        ENGINE_SWAGGER,
+                        &format!(
+                            "OpenAPI operation {} {} {}",
+                            oph.operation.method,
+                            oph.operation.path,
+                            if oph.without_auth { "without auth" } else { "with auth" }
+                        ),
+                        if oph.without_auth && oph.operation.requires_auth_hint {
+                            "critical"
+                        } else if write && oph.without_auth {
+                            "high"
+                        } else {
+                            "medium"
+                        },
+                        "T1190",
+                        &format!(
+                            "Spec {} documents {} {} → HTTP {} ({}B) — live operation abuse.",
+                            hit.final_url,
+                            oph.operation.method,
+                            oph.operation.path,
+                            oph.status,
+                            oph.body_len
+                        ),
+                        target,
+                        &["api_mass_assignment", "api_rate_limit_bypass"],
+                        &["pipeline_to_runtime_risk", "identity_attack_chain"],
+                        json!({
+                            "spec_url": hit.final_url,
+                            "method": oph.operation.method,
+                            "path": oph.operation.path,
+                            "without_auth": oph.without_auth,
+                            "auth_hint": oph.operation.requires_auth_hint
+                        }),
+                    ));
+                }
+            }
+
+            if !hit.extraction.ui_spec_urls.is_empty() {
+                let ui_hits = probe_ui_spec_urls(&client, base, &hit.extraction.ui_spec_urls).await;
+                for ui in ui_hits {
+                    flags.ui_embedded_spec = true;
+                    findings.push(web_finding_sync(
+                        ENGINE_SWAGGER,
+                        "Swagger UI embeds fetchable OpenAPI URL",
+                        "high",
+                        "T1190",
+                        &format!(
+                            "UI at {} references spec {} → HTTP {} — chained spec disclosure.",
+                            hit.final_url, ui.final_url, ui.status
+                        ),
+                        target,
+                        &["cors_misconfiguration"],
+                        &["external_exposure_supreme"],
+                        json!({"ui_url": hit.final_url, "embedded_spec": ui.final_url}),
+                    ));
+                }
+            }
+
+            for group in &hit.extraction.spring_groups {
+                let group_path = format!("/v3/api-docs/{group}");
+                if let Some(p) = http_get(&client, &format!("{base}{group_path}")).await {
+                    if p.status == 200 && p.body.contains("paths") {
+                        flags.spring_group_exposed = true;
+                        findings.push(web_finding_sync(
+                            ENGINE_SWAGGER,
+                            &format!("Spring doc group '{group}' exposes OpenAPI"),
+                            "high",
+                            "T1190",
+                            &format!(
+                                "swagger-config/swagger-ui revealed group → {group_path} HTTP {} ({}B).",
+                                p.status, p.body.len()
+                            ),
+                            target,
+                            &["api_gateway_bypass"],
+                            &["risk_superposition_collapse"],
+                            json!({"group": group, "endpoint": p.final_url}),
+                        ));
+                    }
+                }
+            }
+
+            if !hit.extraction.servers.is_empty() {
+                let alt = probe_alternate_servers(
+                    &client,
+                    &hit.extraction.servers,
+                    "/openapi.json",
+                )
+                .await;
+                for (url, probe) in alt {
+                    if probe.status == 200
+                        && (probe.body.contains("paths") || probe.body.contains("openapi"))
+                    {
+                        flags.alternate_server_spec = true;
+                        findings.push(web_finding_sync(
+                            ENGINE_SWAGGER,
+                            "Alternate server URL from spec exposes OpenAPI",
+                            "critical",
+                            "T1190",
+                            &format!(
+                                "Spec servers[] entry {url} → HTTP {} — cross-host API map leak.",
+                                probe.status
+                            ),
+                            target,
+                            &["cloud_metadata_ssrf", "cors_misconfiguration"],
+                            &["external_exposure_supreme"],
+                            json!({"alternate_server": url, "status": probe.status}),
                         ));
                     }
                 }
@@ -1292,6 +1438,22 @@ pub async fn run_swagger_abuse_result_ctx(
         ));
     }
 
+    if flags.documented_auth_bypass && flags.write_op_live {
+        findings.push(web_finding_sync(
+            ENGINE_SWAGGER,
+            "Toxic chain: documented auth + live write without credentials",
+            "critical",
+            "T1190",
+            &format!(
+                "Spec marks security on operations but {operations_probed} live probes succeeded without auth including write verbs — broken enforcement chain."
+            ),
+            target,
+            &["mfa_bypass_engine", "jwt_advanced_attack"],
+            &["identity_attack_chain", "pipeline_to_runtime_risk"],
+            json!({"toxic_chain": true, "auth_bypass_write": true}),
+        ));
+    }
+
     if flags.synthetic_hit && flags.followup_live {
         findings.push(web_finding_sync(
             ENGINE_SWAGGER,
@@ -1299,12 +1461,26 @@ pub async fn run_swagger_abuse_result_ctx(
             "critical",
             "T1190",
             &format!(
-                "Zero-day synthesis: runtime-generated OpenAPI path yielded spec and {followup_probed} follow-up probes confirmed live routes.",
+                "Zero-day synthesis: runtime-generated OpenAPI path yielded spec; {followup_probed} path + {operations_probed} operation follow-ups confirmed live routes."
             ),
             target,
             &["graphql_deep_attack", "api_rate_limit_bypass"],
             &["threat_surface_intelligence_fusion"],
             json!({"toxic_chain": true, "synthetic_abuse": true}),
+        ));
+    }
+
+    if flags.alternate_server_spec && flags.pii_documented {
+        findings.push(web_finding_sync(
+            ENGINE_SWAGGER,
+            "Toxic chain: alternate server spec + PII fields documented",
+            "critical",
+            "T1190",
+            "OpenAPI servers[] points to additional host with PII-bearing schema — cross-origin data map leak.",
+            target,
+            &["cloud_metadata_ssrf", "api_mass_assignment"],
+            &["external_exposure_supreme"],
+            json!({"toxic_chain": true, "alternate_pii": true}),
         ));
     }
 
@@ -1315,7 +1491,7 @@ pub async fn run_swagger_abuse_result_ctx(
         EngineResult::ok(
             findings,
             format!(
-                "{ENGINE_SWAGGER}: {n} finding(s) vectors={total_vectors} synthetic={total_synthetic} followups={followup_probed}"
+                "{ENGINE_SWAGGER}: {n} finding(s) vectors={total_vectors} synthetic={total_synthetic} paths={followup_probed} ops={operations_probed}"
             ),
         )
     }
@@ -1328,9 +1504,17 @@ struct SwaggerAbuseFlags {
     auth_schemes_leaked: bool,
     unauthenticated_spec: bool,
     sensitive_operations: bool,
+    pii_documented: bool,
+    write_ops_documented: bool,
     synthetic_hit: bool,
     large_surface: bool,
     followup_live: bool,
+    write_op_live: bool,
+    auth_bypass_live: bool,
+    documented_auth_bypass: bool,
+    ui_embedded_spec: bool,
+    spring_group_exposed: bool,
+    alternate_server_spec: bool,
 }
 
 cli_wrapper!(run_swagger_abuse, run_swagger_abuse_result);
