@@ -2,13 +2,16 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search,
+  Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search, FileCheck, ShieldCheck,
 } from 'lucide-react';
 import PageShell from './PageShell';
 import ShellScanActions from '../components/engine/ShellScanActions';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
+import CopyButton from '../components/ui/CopyButton';
 import { SkeletonWidgetGrid, SkeletonTable } from '../components/ui/Skeleton';
+import { useClient } from '../context/ClientContext';
+import { useToast } from '../components/ui/Toaster';
 import { api } from '../utils/apiFetch';
 import { apiFetch } from '../lib/apiBase';
 
@@ -39,6 +42,10 @@ function statusLabel(status, t) {
 
 export default function ComplianceFrameworks() {
   const { t } = useTranslation();
+  const { selectedClientId, selectedClient } = useClient();
+  const { toast } = useToast();
+  const [pack, setPack] = useState(null);
+  const [packLoading, setPackLoading] = useState(false);
   const [frameworks, setFrameworks] = useState([]);
   const [selectedFramework, setSelectedFramework] = useState(null);
   const [controls, setControls] = useState([]);
@@ -112,6 +119,42 @@ export default function ComplianceFrameworks() {
       setExporting(false);
     }
   };
+
+  // Auditor evidence pack — a tamper-evident (sha256-stamped) packet aggregating
+  // live findings-by-framework, control mappings, SOAR actions, and audit-chain
+  // integrity for the selected client. Wired to GET /api/compliance/evidence-pack/:id.
+  const generateEvidencePack = useCallback(async () => {
+    if (selectedClientId == null) return;
+    setPackLoading(true);
+    try {
+      const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
+      const r = await apiFetch(`/api/compliance/evidence-pack/${encodeURIComponent(selectedClientId)}${fw}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.error) throw new Error(d.error || d.detail || `HTTP ${r.status}`);
+      setPack(d);
+      toast.success(t('pages.complianceFrameworks.pack_ready'));
+    } catch (err) {
+      toast.error(err?.message || t('pages.complianceFrameworks.pack_failed'));
+    } finally {
+      setPackLoading(false);
+    }
+  }, [selectedClientId, selectedFramework, t, toast]);
+
+  const downloadPack = useCallback(() => {
+    if (!pack) return;
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `weissman-evidence-pack-client${pack.client_id}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [pack]);
+
+  // Fresh client selection invalidates a previously-generated pack.
+  useEffect(() => {
+    setPack(null);
+  }, [selectedClientId]);
 
   const getComplianceColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -204,6 +247,134 @@ export default function ComplianceFrameworks() {
 
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70">
           {t('pages.complianceFrameworks.evidence_notice')}
+        </div>
+
+        {/* Auditor evidence pack — tamper-evident, client-scoped */}
+        <div className="rounded-xl border border-violet-500/25 bg-violet-950/15 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30">
+                <FileCheck className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.pack_title')}</h3>
+                <p className="text-xs text-gray-400 mt-0.5 max-w-xl">{t('pages.complianceFrameworks.pack_subtitle')}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {pack && (
+                <button
+                  type="button"
+                  onClick={downloadPack}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-sm font-medium hover:bg-violet-500/20 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  {t('pages.complianceFrameworks.pack_download')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={generateEvidencePack}
+                disabled={packLoading || selectedClientId == null}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-medium hover:bg-violet-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${packLoading ? 'animate-spin' : ''}`} />
+                {packLoading
+                  ? t('pages.complianceFrameworks.pack_generating')
+                  : pack
+                    ? t('pages.complianceFrameworks.pack_regenerate')
+                    : t('pages.complianceFrameworks.pack_generate')}
+              </button>
+            </div>
+          </div>
+
+          {selectedClientId == null ? (
+            <div className="mt-3 text-xs font-mono text-amber-300/80">
+              {t('pages.complianceFrameworks.pack_pick_client')}
+            </div>
+          ) : (
+            <div className="mt-2 text-xs font-mono text-gray-500">
+              {t('pages.complianceFrameworks.pack_scope', {
+                client: selectedClient?.name || selectedClient?.domain || `#${selectedClientId}`,
+                framework: selectedFramework?.name || t('pages.complianceFrameworks.pack_all_frameworks'),
+              })}
+            </div>
+          )}
+
+          {pack && (
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                    {t('pages.complianceFrameworks.pack_findings')}
+                  </div>
+                  <div className="text-xl font-bold text-white tabular-nums">{pack.findings_total ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                    {t('pages.complianceFrameworks.pack_soar')}
+                  </div>
+                  <div className="text-xl font-bold text-cyan-300 tabular-nums">
+                    {Array.isArray(pack.soar_executions) ? pack.soar_executions.length : 0}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                    {t('pages.complianceFrameworks.pack_audit_chain')}
+                  </div>
+                  <div
+                    className="text-sm font-bold flex items-center gap-1.5"
+                    style={{ color: pack.live_evidence?.audit_log_chain_intact ? '#4ade80' : '#f87171' }}
+                  >
+                    {pack.live_evidence?.audit_log_chain_intact ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {pack.live_evidence?.audit_log_chain_intact
+                      ? t('pages.complianceFrameworks.pack_intact')
+                      : t('pages.complianceFrameworks.pack_broken')}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                    {t('pages.complianceFrameworks.pack_ready_label')}
+                  </div>
+                  <div
+                    className="text-sm font-bold flex items-center gap-1.5"
+                    style={{ color: pack.audit_ready ? '#4ade80' : '#facc15' }}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {pack.audit_ready ? t('pages.complianceFrameworks.pack_yes') : t('pages.complianceFrameworks.pack_no')}
+                  </div>
+                </div>
+              </div>
+
+              {pack.frameworks && Object.keys(pack.frameworks).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(pack.frameworks).map(([fw, items]) => (
+                    <span
+                      key={fw}
+                      className="text-[10px] font-mono px-2 py-1 rounded border border-violet-500/25 bg-violet-500/5 text-violet-200/85"
+                    >
+                      {fw} · {Array.isArray(items) ? items.length : 0}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {pack.pack_sha256 && (
+                <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] flex-wrap">
+                  <span className="uppercase tracking-widest">{t('pages.complianceFrameworks.pack_hash')}</span>
+                  <code className="text-[var(--text-tertiary)] truncate max-w-[22rem]" title={pack.pack_sha256}>
+                    {pack.pack_sha256}
+                  </code>
+                  <CopyButton value={pack.pack_sha256} />
+                  {pack.snapshot_id != null && (
+                    <span className="text-[var(--text-disabled)]">
+                      · {t('pages.complianceFrameworks.pack_snapshot', { id: pack.snapshot_id })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
