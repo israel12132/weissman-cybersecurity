@@ -131,18 +131,18 @@ export default function AttackCoverage() {
             </div>
 
             <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t(`${NS}.search_placeholder`)}
-                className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-sm text-white/85 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
+                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
               />
             </div>
 
             {search && (
-              <div className="text-[11px] font-mono text-white/40">
+              <div className="text-[11px] font-mono text-[var(--text-muted)]">
                 {t(`${NS}.showing`, { techniques: shownTechniques, tactics: filteredTactics.length })}
               </div>
             )}
@@ -158,7 +158,7 @@ export default function AttackCoverage() {
                   return (
                     <section
                       key={tac.tactic}
-                      className="rounded-2xl border bg-black/30 backdrop-blur-md p-4"
+                      className="rounded-2xl border bg-[var(--table-surface)] backdrop-blur-md p-4"
                       style={{ borderColor: `${color}30` }}
                     >
                       <div className="flex items-center justify-between mb-3">
@@ -174,12 +174,12 @@ export default function AttackCoverage() {
                       </div>
                       <ul className="space-y-2">
                         {(tac.techniques || []).map((tech) => (
-                          <li key={tech.id} className="rounded-lg border border-white/8 bg-black/30 p-2.5">
+                          <li key={tech.id} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] p-2.5">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/60">
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">
                                 {tech.id}
                               </span>
-                              <span className="text-[12px] text-white/85 truncate" title={tech.name}>
+                              <span className="text-[12px] text-[var(--text-primary)] truncate" title={tech.name}>
                                 {tech.name}
                               </span>
                             </div>

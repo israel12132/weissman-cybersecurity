@@ -65,7 +65,7 @@ function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading })
   return (
     <Link
       to={to}
-      className="group relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-white/25 block"
+      className="group relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-[var(--border-strong)] block"
       style={{
         borderColor: `${accent}30`,
         background: `linear-gradient(145deg, ${accent}08 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.5) 100%)`,
@@ -76,11 +76,11 @@ function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading })
         {label}
       </div>
       <div className="text-3xl font-bold tabular-nums tracking-tight text-white">
-        {loading ? <span className="text-white/30">—</span> : value}
+        {loading ? <span className="text-[var(--text-disabled)]">—</span> : value}
       </div>
-      {sub && <div className="text-[11px] font-mono text-white/45 mt-1">{sub}</div>}
+      {sub && <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{sub}</div>}
       {linkLabel && (
-        <div className="mt-3 inline-flex items-center gap-1 text-[10px] font-mono text-white/40 group-hover:text-white/70 transition-colors">
+        <div className="mt-3 inline-flex items-center gap-1 text-[10px] font-mono text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors">
           {linkLabel}
           <ArrowRight className="w-3 h-3" aria-hidden />
         </div>
@@ -152,7 +152,7 @@ export default function ExecutiveOverview() {
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
-            className="bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 focus:outline-none focus:border-cyan-500/40"
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
             aria-label={t(`${NS}.select_client`)}
           >
             <option value="">{t(`${NS}.all_clients`)}</option>
@@ -171,7 +171,7 @@ export default function ExecutiveOverview() {
 
         {/* Global posture row */}
         <div>
-          <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-3">{t(`${NS}.platform_heading`)}</h2>
+          <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t(`${NS}.platform_heading`)}</h2>
           {global.loading ? (
             <SkeletonWidgetGrid count={4} />
           ) : (
@@ -179,7 +179,7 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/security-posture"
                 label={t(`${NS}.posture`)}
-                value={posture ? <span style={{ color: scoreColor(posture.score) }}>{posture.score}<span className="text-sm text-white/40"> / 100 </span><span style={{ color: gradeColor(posture.grade) }}>{String(posture.grade || '').toUpperCase()}</span></span> : t(`${NS}.na`)}
+                value={posture ? <span style={{ color: scoreColor(posture.score) }}>{posture.score}<span className="text-sm text-[var(--text-muted)]"> / 100 </span><span style={{ color: gradeColor(posture.grade) }}>{String(posture.grade || '').toUpperCase()}</span></span> : t(`${NS}.na`)}
                 sub={t(`${NS}.posture_sub`)}
                 accent={gradeColor(posture?.grade)}
                 linkLabel={t(`${NS}.open_posture`)}
@@ -203,7 +203,7 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/threat-intel"
                 label={t(`${NS}.intel`)}
-                value={kev ? <span>{kev.rows}<span className="text-sm text-white/40"> KEV</span></span> : t(`${NS}.na`)}
+                value={kev ? <span>{kev.rows}<span className="text-sm text-[var(--text-muted)]"> KEV</span></span> : t(`${NS}.na`)}
                 sub={
                   <span className="flex flex-col gap-0.5">
                     <span style={{ color: freshnessColor(kev?.last_refresh) }}>
@@ -223,11 +223,11 @@ export default function ExecutiveOverview() {
 
         {/* Per-client row */}
         <div>
-          <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-3">
+          <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
             {selectedClientId == null ? t(`${NS}.client_heading_none`) : t(`${NS}.client_heading`)}
           </h2>
           {selectedClientId == null ? (
-            <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-6 text-center text-[12px] font-mono text-white/40">
+            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)] px-4 py-6 text-center text-[12px] font-mono text-[var(--text-muted)]">
               {t(`${NS}.pick_client_hint`)}
             </div>
           ) : client.loading ? (
@@ -253,7 +253,7 @@ export default function ExecutiveOverview() {
               <Tile
                 to="/attack-paths"
                 label={t(`${NS}.top_risk`)}
-                value={topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-white/40"> / 10</span></span> : t(`${NS}.no_snapshot`)}
+                value={topRisk != null ? <span style={{ color: riskColor(topRisk) }}>{topRisk.toFixed(1)}<span className="text-sm text-[var(--text-muted)]"> / 10</span></span> : t(`${NS}.no_snapshot`)}
                 sub={t(`${NS}.top_risk_sub`)}
                 accent={riskColor(topRisk)}
                 linkLabel={t(`${NS}.open_paths`)}

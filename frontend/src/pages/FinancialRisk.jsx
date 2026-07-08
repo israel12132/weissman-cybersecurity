@@ -119,7 +119,7 @@ export default function FinancialRisk() {
         cell: (ctx) => (
           <span className="flex items-center gap-2">
             {ctx.row.original.crown_jewel && <span title={t(`${NS}.crown_jewel`)}>👑</span>}
-            <span className="text-white/85 truncate max-w-[16rem]" title={ctx.getValue()}>
+            <span className="text-[var(--text-primary)] truncate max-w-[16rem]" title={ctx.getValue()}>
               {ctx.getValue() || '—'}
             </span>
           </span>
@@ -127,20 +127,20 @@ export default function FinancialRisk() {
       }),
       columnHelper.accessor('node_type', {
         header: t(`${NS}.col_type`),
-        cell: (ctx) => <span className="text-white/55 font-mono text-[11px]">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)] font-mono text-[11px]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor('business_value_usd', {
         header: t(`${NS}.col_value`),
-        cell: (ctx) => <span className="tabular-nums text-white/80">{fmtUsd(ctx.getValue())}</span>,
+        cell: (ctx) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtUsd(ctx.getValue())}</span>,
       }),
       columnHelper.accessor('max_cvss', {
         header: 'CVSS',
-        cell: (ctx) => <span className="tabular-nums text-white/70">{(Number(ctx.getValue()) || 0).toFixed(1)}</span>,
+        cell: (ctx) => <span className="tabular-nums text-[var(--text-secondary)]">{(Number(ctx.getValue()) || 0).toFixed(1)}</span>,
       }),
       columnHelper.accessor('max_epss', {
         header: 'EPSS',
         cell: (ctx) => (
-          <span className="tabular-nums text-white/70">{`${((Number(ctx.getValue()) || 0) * 100).toFixed(1)}%`}</span>
+          <span className="tabular-nums text-[var(--text-secondary)]">{`${((Number(ctx.getValue()) || 0) * 100).toFixed(1)}%`}</span>
         ),
       }),
       columnHelper.accessor('kev_present', {
@@ -151,7 +151,7 @@ export default function FinancialRisk() {
               KEV
             </span>
           ) : (
-            <span className="text-white/25">—</span>
+            <span className="text-[var(--text-disabled)]">—</span>
           ),
       }),
       columnHelper.accessor('sle_usd', {
@@ -182,7 +182,7 @@ export default function FinancialRisk() {
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
-            className="bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 focus:outline-none focus:border-emerald-500/40"
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-emerald-500/40"
             aria-label={t(`${NS}.select_client`)}
           >
             <option value="">{t(`${NS}.select_client`)}</option>
@@ -273,7 +273,7 @@ export default function FinancialRisk() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-white/40">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-mono text-[var(--text-muted)]">
               {computedAt && <span>{t(`${NS}.computed_at`, { time: computedAt })}</span>}
               <span>
                 {t(`${NS}.ale_full`, { value: fmtUsdFull(snapshot.ale_annualised_usd) })}
@@ -282,7 +282,7 @@ export default function FinancialRisk() {
             </div>
 
             <div>
-              <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-3">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
                 {t(`${NS}.top_contributors`)}
               </h2>
               {contributors.length === 0 ? (

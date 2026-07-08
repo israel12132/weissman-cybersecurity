@@ -124,7 +124,7 @@ export default function IocFeed() {
         header: t(`${NS}.col_value`),
         cell: (ctx) => (
           <span className="flex items-center gap-1.5 min-w-0">
-            <code className="text-[12px] text-white/85 font-mono truncate max-w-[22rem]" title={ctx.getValue()}>
+            <code className="text-[12px] text-[var(--text-primary)] font-mono truncate max-w-[22rem]" title={ctx.getValue()}>
               {ctx.getValue() || '—'}
             </code>
             {ctx.getValue() && <CopyButton value={ctx.getValue()} />}
@@ -151,13 +151,13 @@ export default function IocFeed() {
       columnHelper.accessor((i) => i.source || '', {
         id: 'source',
         header: t(`${NS}.col_source`),
-        cell: (ctx) => <span className="text-white/55 text-[12px]">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)] text-[12px]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((i) => i.added || '', {
         id: 'added',
         header: t(`${NS}.col_added`),
         cell: (ctx) => (
-          <span className="text-white/40 whitespace-nowrap text-[11px]">
+          <span className="text-[var(--text-muted)] whitespace-nowrap text-[11px]">
             {ctx.getValue() ? new Date(ctx.getValue()).toLocaleString() : '—'}
           </span>
         ),
@@ -217,13 +217,13 @@ export default function IocFeed() {
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-[220px] max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t(`${NS}.search_placeholder`)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-sm text-white/85 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-rose-500/40"
                 />
               </div>
               {types.length > 0 && <FilterPills pills={typePills} />}

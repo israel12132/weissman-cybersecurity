@@ -54,7 +54,7 @@ function chokeCsv(rows) {
 function PathCard({ path, t }) {
   const color = riskColor(path.risk)
   return (
-    <div className="rounded-xl border border-white/8 bg-black/30 p-4">
+    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span
@@ -63,21 +63,21 @@ function PathCard({ path, t }) {
           >
             {t(`${NS}.risk`)} {(Number(path.risk) || 0).toFixed(1)}
           </span>
-          <span className="text-[10px] font-mono text-white/45">{t(`${NS}.hops`, { count: path.hops })}</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.hops`, { count: path.hops })}</span>
           {path.kev_hops > 0 && (
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/10 text-rose-300">
               {t(`${NS}.kev_hops`, { count: path.kev_hops })}
             </span>
           )}
         </div>
-        <span className="text-[10px] font-mono text-white/30">{t(`${NS}.cost`, { cost: (Number(path.cost) || 0).toFixed(1) })}</span>
+        <span className="text-[10px] font-mono text-[var(--text-disabled)]">{t(`${NS}.cost`, { cost: (Number(path.cost) || 0).toFixed(1) })}</span>
       </div>
       <div className="flex items-center gap-1 flex-wrap">
         {(path.steps || []).map((step, i) => (
           <React.Fragment key={`${step.node_id}-${i}`}>
-            {i > 0 && <ChevronRight className="w-3 h-3 text-white/25 shrink-0" aria-hidden />}
+            {i > 0 && <ChevronRight className="w-3 h-3 text-[var(--text-disabled)] shrink-0" aria-hidden />}
             <span
-              className="text-[11px] font-mono px-2 py-1 rounded border border-white/10 bg-white/5 text-white/75 truncate max-w-[12rem]"
+              className="text-[11px] font-mono px-2 py-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] truncate max-w-[12rem]"
               title={`${step.label} (${step.node_type})`}
             >
               {i === 0 ? '🌐 ' : ''}
@@ -149,14 +149,14 @@ export default function AttackPaths() {
       columnHelper.accessor('label', {
         header: t(`${NS}.col_node`),
         cell: (ctx) => (
-          <span className="text-white/85 truncate max-w-[16rem] block" title={ctx.getValue()}>
+          <span className="text-[var(--text-primary)] truncate max-w-[16rem] block" title={ctx.getValue()}>
             {ctx.getValue() || ctx.row.original.graph_key || '—'}
           </span>
         ),
       }),
       columnHelper.accessor('node_type', {
         header: t(`${NS}.col_type`),
-        cell: (ctx) => <span className="text-white/55 font-mono text-[11px]">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)] font-mono text-[11px]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor('coverage_pct', {
         header: t(`${NS}.col_coverage`),
@@ -165,7 +165,7 @@ export default function AttackPaths() {
           const color = pct >= 66 ? '#ef4444' : pct >= 33 ? '#f59e0b' : '#22d3ee'
           return (
             <div className="flex items-center gap-2 min-w-[120px]">
-              <div className="h-1.5 flex-1 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-1.5 flex-1 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
               </div>
               <span className="tabular-nums text-[11px]" style={{ color }}>{pct}%</span>
@@ -175,11 +175,11 @@ export default function AttackPaths() {
       }),
       columnHelper.accessor('coverage', {
         header: t(`${NS}.col_paths`),
-        cell: (ctx) => <span className="tabular-nums text-white/70">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="tabular-nums text-[var(--text-secondary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor('max_finding_cvss', {
         header: 'CVSS',
-        cell: (ctx) => <span className="tabular-nums text-white/70">{(Number(ctx.getValue()) || 0).toFixed(1)}</span>,
+        cell: (ctx) => <span className="tabular-nums text-[var(--text-secondary)]">{(Number(ctx.getValue()) || 0).toFixed(1)}</span>,
       }),
       columnHelper.accessor('kev_present', {
         header: 'KEV',
@@ -189,7 +189,7 @@ export default function AttackPaths() {
               KEV
             </span>
           ) : (
-            <span className="text-white/25">—</span>
+            <span className="text-[var(--text-disabled)]">—</span>
           ),
       }),
     ],
@@ -212,7 +212,7 @@ export default function AttackPaths() {
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
-            className="bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/80 focus:outline-none focus:border-orange-500/40"
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40"
             aria-label={t(`${NS}.select_client`)}
           >
             <option value="">{t(`${NS}.select_client`)}</option>
@@ -284,14 +284,14 @@ export default function AttackPaths() {
             </div>
 
             {computedAt && (
-              <div className="text-[11px] font-mono text-white/40">{t(`${NS}.computed_at`, { time: computedAt })}</div>
+              <div className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.computed_at`, { time: computedAt })}</div>
             )}
 
             <div>
-              <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-1">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
                 {t(`${NS}.choke_points`)}
               </h2>
-              <p className="text-[11px] text-white/40 mb-3">{t(`${NS}.choke_points_hint`)}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.choke_points_hint`)}</p>
               {chokePoints.length === 0 ? (
                 <EmptyState icon="📊" title={t(`${NS}.no_choke_title`)} body={t(`${NS}.no_choke_body`)} />
               ) : (
@@ -307,7 +307,7 @@ export default function AttackPaths() {
             </div>
 
             <div>
-              <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-3">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
                 {t(`${NS}.top_paths`)}
               </h2>
               {paths.length === 0 ? (

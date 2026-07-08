@@ -38,7 +38,7 @@ function ScoreRing({ score, grade }) {
   return (
     <div className="relative w-40 h-40 shrink-0">
       <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
-        <circle cx="64" cy="64" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+        <circle cx="64" cy="64" r={R} fill="none" stroke="var(--border-strong)" strokeWidth="10" />
         <circle
           cx="64"
           cy="64"
@@ -53,7 +53,7 @@ function ScoreRing({ score, grade }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-4xl font-bold tabular-nums" style={{ color }}>{s}</span>
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">/ 100</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">/ 100</span>
         {grade && (
           <span className="mt-1 text-lg font-black" style={{ color: gradeColor(grade) }}>{String(grade).toUpperCase()}</span>
         )}
@@ -130,20 +130,20 @@ export default function SecurityPosture() {
 
         {!loading && !error && data && (
           <>
-            <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-6 flex flex-col sm:flex-row items-center gap-6">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-6 flex flex-col sm:flex-row items-center gap-6">
               <ScoreRing score={data.score} grade={data.grade} />
               <div className="flex-1 min-w-0 space-y-3 w-full">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-black/30 border border-white/8 p-3">
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-1">
+                  <div className="rounded-xl bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
                       {t(`${NS}.checks_passed`)}
                     </div>
                     <div className="text-xl font-bold text-emerald-300 tabular-nums">
                       {summary.passed}/{summary.total}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-black/30 border border-white/8 p-3">
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-1">
+                  <div className="rounded-xl bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
                       {t(`${NS}.weight_passed`)}
                     </div>
                     <div className="text-xl font-bold text-cyan-300 tabular-nums">
@@ -152,7 +152,7 @@ export default function SecurityPosture() {
                   </div>
                 </div>
                 {generatedAt && (
-                  <div className="text-[11px] font-mono text-white/40">
+                  <div className="text-[11px] font-mono text-[var(--text-muted)]">
                     {t(`${NS}.generated_at`, { time: generatedAt })}
                   </div>
                 )}
@@ -160,15 +160,15 @@ export default function SecurityPosture() {
             </div>
 
             <div>
-              <h2 className="text-[11px] font-mono uppercase tracking-widest text-white/40 mb-1">
+              <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
                 {t(`${NS}.checks_heading`)}
               </h2>
-              <p className="text-[11px] text-white/40 mb-3">{t(`${NS}.checks_hint`)}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.checks_hint`)}</p>
               <ul className="space-y-2">
                 {orderedChecks.map((c) => (
                   <li
                     key={c.id}
-                    className="flex items-start gap-3 rounded-xl border bg-black/30 p-3"
+                    className="flex items-start gap-3 rounded-xl border bg-[var(--table-surface)] p-3"
                     style={{ borderColor: c.passed ? 'rgba(74,222,128,0.2)' : 'rgba(239,68,68,0.28)' }}
                   >
                     <span
@@ -183,8 +183,8 @@ export default function SecurityPosture() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[12px] font-mono text-white/80">{c.id}</span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-white/45">
+                        <span className="text-[12px] font-mono text-[var(--text-secondary)]">{c.id}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-muted)]">
                           {t(`${NS}.weight`, { weight: c.weight })}
                         </span>
                         <span
@@ -197,7 +197,7 @@ export default function SecurityPosture() {
                           {c.passed ? t(`${NS}.pass`) : t(`${NS}.fail`)}
                         </span>
                       </div>
-                      {c.detail && <p className="text-[12px] text-white/55 mt-1 leading-relaxed">{c.detail}</p>}
+                      {c.detail && <p className="text-[12px] text-[var(--text-tertiary)] mt-1 leading-relaxed">{c.detail}</p>}
                     </div>
                   </li>
                 ))}
