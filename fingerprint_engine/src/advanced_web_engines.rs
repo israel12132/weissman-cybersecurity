@@ -5,6 +5,10 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_dispatch::EngineRunContext;
+use crate::grpc_reflection_synthesis::{
+    grpc_probe_bases, probe_grpc_vectors_concurrent, synthesize_grpc_reflection_vectors,
+    GrpcProbeTransport,
+};
 use crate::web_cache_poison_synthesis::{
     probe_cache_poison_vectors_concurrent, synthesize_cache_poison_vectors,
     CachePoisonTransport,
@@ -25,6 +29,7 @@ const ENGINE_CORS: &str = "cors_misconfiguration";
 const ENGINE_GATEWAY: &str = "api_gateway_bypass";
 const ENGINE_RATE_LIMIT: &str = "api_rate_limit_bypass";
 const ENGINE_CACHE_POISON: &str = "web_cache_poison_adv";
+const ENGINE_GRPC_REFLECTION: &str = "grpc_reflection_attack";
 
 fn web_finding(
     engine_id: &str,
@@ -542,81 +547,206 @@ cli_wrapper!(run_graphql_deep_attack, run_graphql_deep_attack_result);
 
 // ── grpc_reflection_attack ────────────────────────────────────────────────────
 pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
+    run_grpc_reflection_attack_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_grpc_reflection_attack_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let base = normalize_url(target);
-    let client = http_client().await;
+    let host = extract_host(target);
+    let h2 = http2_client().await;
+    let h1 = http_client().await;
+    let bases = grpc_probe_bases(target, ctx);
     let mut findings: Vec<Value> = Vec::new();
-    let grpc_paths = [
-        "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
-        "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
-        "/grpc.health.v1.Health/Check",
-        "/grpc.health.v1.Health/Watch",
-        "/envoy.service.auth.v3.Authorization/Check",
-    ];
-    let grpc_headers = [
-        ("Content-Type", "application/grpc"),
-        ("TE", "trailers"),
-    ];
-    for path in grpc_paths {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = crate::engine_probes::http_post_json_with_headers(
-            &client,
-            &url,
-            &serde_json::json!({}),
-            &grpc_headers,
-        )
-        .await
-        {
-            let grpc_status = header_value(&p.headers, "grpc-status");
-            let grpc_message = header_value(&p.headers, "grpc-message");
-            if grpc_status.is_some() || grpc_message.is_some() {
-                findings.push(web_finding(
-                    "grpc_reflection_attack",
-                    "gRPC endpoint responded with grpc-status headers",
-                    "medium",
-                    "T1190",
-                    &format!(
-                        "POST {} returned gRPC framing (grpc-status={:?}, grpc-message={:?}) — reflection/schema enumeration may be reachable over HTTP/2.",
-                        p.final_url, grpc_status, grpc_message
-                    ),
-                    target,
-                ));
+    let mut flags = GrpcReflectionFlags::default();
+    let mut total_vectors = 0usize;
+    let mut total_synthetic = 0usize;
+    let mut categories_hit: Vec<String> = Vec::new();
+
+    for base in &bases {
+        let (vectors, stats) = synthesize_grpc_reflection_vectors(&host, ctx);
+        total_vectors += stats.vectors_generated;
+        total_synthetic += stats.synthetic_generated;
+
+        let hits = probe_grpc_vectors_concurrent(&h2, &h1, base, vectors).await;
+        for hit in hits {
+            if hit.reflection_likely {
+                flags.reflection_exposed = true;
             }
+            if hit.grpc_web {
+                flags.grpc_web = true;
+            }
+            if hit.connect_rpc {
+                flags.connect_rpc = true;
+            }
+            if hit.services_hint {
+                flags.services_enumerated = true;
+            }
+            if hit.vector.synthetic {
+                flags.synthetic_hit = true;
+            }
+            if hit.vector.transport == GrpcProbeTransport::GatewayGet {
+                flags.gateway_surface = true;
+            }
+            if !categories_hit.iter().any(|c| c == hit.vector.category) {
+                categories_hit.push(hit.vector.category.to_string());
+            }
+
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "grpc_reflection_surface",
+                    &hit.vector.path,
+                    &hit.final_url,
+                    ENGINE_GRPC_REFLECTION,
+                    if hit.vector.synthetic {
+                        "http_surface_grpc_reflection_synthetic"
+                    } else if hit.reflection_likely {
+                        "http_surface_grpc_reflection_live"
+                    } else {
+                        "http_surface_grpc_detected"
+                    },
+                );
+            }
+
+            let severity = if hit.reflection_likely && !hit.vector.synthetic {
+                "critical"
+            } else if hit.reflection_likely {
+                "high"
+            } else if hit.grpc_web || hit.connect_rpc {
+                "high"
+            } else {
+                "medium"
+            };
+
+            findings.push(web_finding_sync(
+                ENGINE_GRPC_REFLECTION,
+                &format!(
+                    "gRPC surface [{}] {} on {}",
+                    hit.vector.category,
+                    if hit.reflection_likely {
+                        "reflection exposed"
+                    } else if hit.grpc_web {
+                        "grpc-web transport"
+                    } else if hit.connect_rpc {
+                        "Connect-RPC transport"
+                    } else {
+                        "service responded"
+                    },
+                    hit.vector.path
+                ),
+                severity,
+                "T1190",
+                &format!(
+                    "POST/GET {} → HTTP {} (grpc-status={:?}, {}B, synthetic={}, transport={:?}) — protobuf service enumeration surface.",
+                    hit.final_url,
+                    hit.status,
+                    hit.grpc_status,
+                    hit.body_len,
+                    hit.vector.synthetic,
+                    hit.vector.transport
+                ),
+                target,
+                &[
+                    "api_gateway_bypass",
+                    "mtls_grpc",
+                    "api_rate_limit_bypass",
+                    "graphql_deep_attack",
+                ],
+                &[
+                    "risk_superposition_collapse",
+                    "external_exposure_supreme",
+                    "threat_surface_intelligence_fusion",
+                ],
+                json!({
+                    "category": hit.vector.category,
+                    "synthetic": hit.vector.synthetic,
+                    "reflection": hit.reflection_likely,
+                    "grpc_web": hit.grpc_web,
+                    "connect_rpc": hit.connect_rpc,
+                    "content_type": hit.vector.content_type,
+                    "endpoint": hit.final_url,
+                    "grpc_status": hit.grpc_status
+                }),
+            ));
         }
     }
 
-    // grpc-web transport (common behind API gateways)
-    let web_paths = ["/grpc", "/api/grpc", "/grpc-web"];
-    let probes = probe_paths_concurrent(&client, &base, &web_paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if p.status < 500 {
-            let ct = header_value(&p.headers, "content-type").unwrap_or_default();
-            if ct.contains("application/grpc-web") || p.body.contains("grpc-status") {
-                findings.push(web_finding(
-                    "grpc_reflection_attack",
-                    "grpc-web transport detected",
-                    "medium",
-                    "T1190",
-                    &format!(
-                        "{} ({}) — grpc-web may expose services without mTLS; enumerate protobuf services.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
-                break;
-            }
-        }
+    if flags.reflection_exposed && flags.grpc_web {
+        findings.push(web_finding_sync(
+            ENGINE_GRPC_REFLECTION,
+            "Toxic chain: gRPC reflection + grpc-web browser plane",
+            "critical",
+            "T1190",
+            &format!(
+                "Live gRPC fusion: server reflection reachable AND grpc-web/Connect transport active — browser-exploitable protobuf enumeration ({} vectors, {} synthetic).",
+                total_vectors, total_synthetic
+            ),
+            target,
+            &["cors_misconfiguration", "api_gateway_bypass"],
+            &["risk_superposition_collapse", "identity_attack_chain"],
+            json!({"toxic_chain": true, "reflection_web": true}),
+        ));
+    }
+
+    if flags.reflection_exposed && flags.gateway_surface {
+        findings.push(web_finding_sync(
+            ENGINE_GRPC_REFLECTION,
+            "Toxic chain: reflection behind API gateway surface",
+            "critical",
+            "T1190",
+            "Gateway-exposed gRPC reflection — edge ACL may not cover /grpc paths; full RPC map leak chain.",
+            target,
+            &["api_gateway_bypass", "zero_trust_bypass"],
+            &["external_exposure_supreme"],
+            json!({"toxic_chain": true, "gateway_reflection": true}),
+        ));
+    }
+
+    if flags.synthetic_hit && flags.reflection_exposed {
+        findings.push(web_finding_sync(
+            ENGINE_GRPC_REFLECTION,
+            "Toxic chain: runtime-synthesized reflection path confirmed",
+            "critical",
+            "T1190",
+            &format!(
+                "Zero-day synthesis: dynamically computed service path returned reflection frame — novel RPC surface (categories={:?}).",
+                categories_hit
+            ),
+            target,
+            &["mtls_grpc", "api_mass_assignment"],
+            &["threat_surface_intelligence_fusion"],
+            json!({"toxic_chain": true, "synthetic_reflection": true}),
+        ));
     }
 
     if findings.is_empty() {
-        empty_ok("grpc_reflection_attack", target)
+        empty_ok(ENGINE_GRPC_REFLECTION, target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("grpc_reflection_attack: {} signal(s)", n))
+        EngineResult::ok(
+            findings,
+            format!(
+                "{ENGINE_GRPC_REFLECTION}: {n} signal(s) vectors={total_vectors} synthetic={total_synthetic} reflect={}",
+                flags.reflection_exposed
+            ),
+        )
     }
 }
+
+#[derive(Default)]
+struct GrpcReflectionFlags {
+    reflection_exposed: bool,
+    grpc_web: bool,
+    connect_rpc: bool,
+    services_enumerated: bool,
+    synthetic_hit: bool,
+    gateway_surface: bool,
+}
+
 cli_wrapper!(
     run_grpc_reflection_attack,
     run_grpc_reflection_attack_result

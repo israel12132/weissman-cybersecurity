@@ -88,7 +88,7 @@ const webChecks = [
       'run_graphql_deep_attack_result_ctx',
     ],
   ],
-  ['grpc_reflection_attack', ['grpc-web', 'grpc.reflection.v1']],
+  ['grpc_reflection_attack', ['synthesize_grpc_reflection_vectors', 'toxic_chain', 'run_grpc_reflection_attack_result_ctx', 'grpc-web', 'Connect-RPC']],
   ['cors_misconfiguration', ['OPTIONS', 'null', 'toxic_chain', 'run_cors_misconfiguration_result_ctx']],
   ['swagger_abuse', ['probe_paths_concurrent', 'openapi']],
   ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
@@ -179,6 +179,28 @@ if (!cacheSynth.includes('X-Forwarded-Host')) {
 const paramPushCount = (cacheSynth.match(/push_param\(/g) ?? []).length
 if (paramPushCount < 4) {
   failures.push(`web_cache_poison_synthesis param catalog too small (${paramPushCount})`)
+}
+
+// gRPC reflection synthesis module
+const grpcSynth = read('fingerprint_engine/src/grpc_reflection_synthesis.rs')
+if (!grpcSynth.includes('fn synthesize_grpc_reflection_vectors')) {
+  failures.push('grpc_reflection_synthesis missing synthesize_grpc_reflection_vectors')
+}
+for (const n of [
+  'reflection_v1',
+  'grpc_web_proto',
+  'connect_proto',
+  'envoy_auth',
+  'synthetic_bus_artifact',
+  'reflection_list_services_frame',
+  'MAX_VECTORS_PER_BASE',
+]) {
+  if (!grpcSynth.includes(n)) {
+    failures.push(`grpc_reflection_synthesis missing: ${n}`)
+  }
+}
+if (!grpcSynth.includes('200')) {
+  failures.push('grpc_reflection_synthesis missing 200 vector cap')
 }
 for (const n of [
   'toxic_chain',
