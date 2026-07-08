@@ -65,7 +65,7 @@ function collectClientBootModules() {
 
 function SummaryCard({ label, value, tone, icon: Icon }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/50 p-4 backdrop-blur-md">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4 backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs uppercase tracking-wider text-slate-500">{label}</span>
         {Icon ? <Icon className="h-4 w-4 text-slate-500" /> : null}
@@ -151,8 +151,8 @@ function SupremeNerveCenterInner() {
 
   return (
     <div className="flex min-h-screen bg-[#020617] text-slate-100">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-white/10 bg-[#030712]/90">
-        <div className="border-b border-white/10 p-4">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--border-default)] bg-[#030712]/90">
+        <div className="border-b border-[var(--border-default)] p-4">
           <div className="flex items-center gap-2 text-emerald-400">
             <Zap className="h-5 w-5" />
             <span className="text-sm font-semibold tracking-wide">
@@ -172,14 +172,14 @@ function SupremeNerveCenterInner() {
               className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                 section === id
                   ? 'bg-emerald-500/15 text-emerald-300'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  : 'text-slate-400 hover:bg-[var(--row-hover-bg)] hover:text-slate-200'
               }`}
             >
               {sectionLabel(id)}
             </button>
           ))}
         </nav>
-        <div className="border-t border-white/10 p-3 text-[10px] font-mono text-slate-600">
+        <div className="border-t border-[var(--border-default)] p-3 text-[10px] font-mono text-slate-600">
           {lastRefresh ? lastRefresh.toLocaleTimeString() : '—'}
           <br />
           {t('supremeNerveCenter.pollInterval', { sec: POLL_MS / 1000 })}
@@ -258,7 +258,7 @@ function SupremeNerveCenterInner() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+              <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <h2 className="mb-3 text-sm font-medium text-slate-300">
                   {t('supremeNerveCenter.activeRuns')}
                 </h2>
@@ -269,7 +269,7 @@ function SupremeNerveCenterInner() {
                     .map((e) => (
                       <div
                         key={`${e.engine_id}-${e.job_id}`}
-                        className="rounded border border-white/5 bg-white/[0.02] px-3 py-2 text-xs"
+                        className="rounded border border-[var(--border-subtle)] bg-white/[0.02] px-3 py-2 text-xs"
                       >
                         <div className="flex justify-between gap-2">
                           <span className="font-mono text-cyan-300">{e.engine_id}</span>
@@ -290,7 +290,7 @@ function SupremeNerveCenterInner() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+              <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                 <h2 className="mb-3 text-sm font-medium text-slate-300">
                   {t('supremeNerveCenter.clientBoot')}
                 </h2>
@@ -332,13 +332,13 @@ function SupremeNerveCenterInner() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('supremeNerveCenter.searchEngines')}
-                  className="w-full rounded-lg border border-white/10 bg-black/40 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600"
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600"
                 />
               </div>
               <select
                 value={lifecycleFilter}
                 onChange={(e) => setLifecycleFilter(e.target.value)}
-                className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-300"
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-slate-300"
               >
                 <option value="all">{t('supremeNerveCenter.filterAll')}</option>
                 <option value="running">{t('supremeNerveCenter.filterRunning')}</option>
@@ -348,7 +348,7 @@ function SupremeNerveCenterInner() {
               </select>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
               <table className="w-full min-w-[900px] text-left text-xs">
                 <thead className="bg-white/[0.03] text-[10px] uppercase tracking-wider text-slate-500">
                   <tr>
@@ -363,7 +363,7 @@ function SupremeNerveCenterInner() {
                 </thead>
                 <tbody>
                   {filteredEngines.map((e) => (
-                    <tr key={e.engine_id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                    <tr key={e.engine_id} className="border-t border-[var(--border-subtle)] hover:bg-white/[0.02]">
                       <td className="px-3 py-2 font-mono text-cyan-300/90">{e.engine_id}</td>
                       <td className="px-3 py-2">
                         <span style={{ color: lifecycleTone(e.lifecycle) }}>{e.lifecycle}</span>
@@ -392,7 +392,7 @@ function SupremeNerveCenterInner() {
                   ))}
                 </tbody>
               </table>
-              <p className="border-t border-white/5 px-3 py-2 text-[10px] text-slate-600">
+              <p className="border-t border-[var(--border-subtle)] px-3 py-2 text-[10px] text-slate-600">
                 {t('supremeNerveCenter.engineCount', {
                   shown: filteredEngines.length,
                   total: engines.length,
@@ -407,7 +407,7 @@ function SupremeNerveCenterInner() {
             {modules.map((m) => (
               <div
                 key={m.id}
-                className="rounded-xl border border-white/10 bg-black/40 p-4 backdrop-blur-sm"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 backdrop-blur-sm"
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
@@ -436,7 +436,7 @@ function SupremeNerveCenterInner() {
                   </div>
                 </dl>
                 {m.metrics && Object.keys(m.metrics).length > 0 ? (
-                  <pre className="mt-3 max-h-24 overflow-auto rounded bg-black/50 p-2 text-[10px] text-slate-500">
+                  <pre className="mt-3 max-h-24 overflow-auto rounded bg-[var(--bg-3)] p-2 text-[10px] text-slate-500">
                     {JSON.stringify(m.metrics, null, 2)}
                   </pre>
                 ) : null}
@@ -444,7 +444,7 @@ function SupremeNerveCenterInner() {
             ))}
 
             {clientBoot?.script_chunks?.length ? (
-              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 md:col-span-2 xl:col-span-3">
+              <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-1)] p-4 md:col-span-2 xl:col-span-3">
                 <h3 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
                   <Box className="h-4 w-4" />
                   {t('supremeNerveCenter.frontendChunks')}
@@ -465,7 +465,7 @@ function SupremeNerveCenterInner() {
         )}
 
         {section === 'jobs' && (
-          <div className="overflow-x-auto rounded-xl border border-white/10">
+          <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
             <table className="w-full min-w-[800px] text-left text-xs">
               <thead className="bg-white/[0.03] text-[10px] uppercase tracking-wider text-slate-500">
                 <tr>
@@ -479,7 +479,7 @@ function SupremeNerveCenterInner() {
               </thead>
               <tbody>
                 {jobs.map((j) => (
-                  <tr key={j.id} className="border-t border-white/5">
+                  <tr key={j.id} className="border-t border-[var(--border-subtle)]">
                     <td className="px-3 py-2 font-mono text-[10px]">{j.id?.slice(0, 8)}…</td>
                     <td className="px-3 py-2">{j.kind}</td>
                     <td className="px-3 py-2">{j.status}</td>
@@ -508,21 +508,21 @@ function SupremeNerveCenterInner() {
 
         {section === 'controls' && (
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h2 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
                 <Shield className="h-4 w-4" />
                 {t('supremeNerveCenter.controlParams')}
               </h2>
               <dl className="space-y-2 text-xs">
                 {Object.entries(controls).map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-4 border-b border-white/5 py-1.5">
+                  <div key={k} className="flex justify-between gap-4 border-b border-[var(--border-subtle)] py-1.5">
                     <dt className="font-mono text-slate-500">{k}</dt>
                     <dd className="font-mono text-slate-300">{String(v)}</dd>
                   </div>
                 ))}
               </dl>
             </div>
-            <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
               <h2 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
                 <Server className="h-4 w-4" />
                 {t('supremeNerveCenter.ceoTelemetry')}

@@ -229,8 +229,8 @@ export default function SystemConfiguration() {
           </div>
         )}
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="flex overflow-x-auto border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="flex overflow-x-auto border-b border-[var(--border-default)]">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -238,7 +238,7 @@ export default function SystemConfiguration() {
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/10'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {tab.icon}
@@ -270,7 +270,7 @@ export default function SystemConfiguration() {
                   ) : (
                     <div className="space-y-2 max-h-[480px] overflow-y-auto">
                       {filteredFindings.map((item) => (
-                        <div key={item.id} className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                        <div key={item.id} className="rounded-lg border border-[var(--border-default)] bg-white/5 px-4 py-3">
                           <div className="text-[10px] font-mono uppercase text-cyan-400/70">{item.type}</div>
                           <div className="text-sm font-medium text-white mt-1">{item.title}</div>
                           <div className="text-xs text-gray-400 font-mono mt-1 break-all">{item.description}</div>
@@ -339,7 +339,7 @@ function GeneralSettings({ config, onChange }) {
             type="text"
             value={config.org_name || ''}
             onChange={(e) => onChange('org_name', e.target.value)}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -350,7 +350,7 @@ function GeneralSettings({ config, onChange }) {
           <select
             value={config.timezone || 'UTC'}
             onChange={(e) => onChange('timezone', e.target.value)}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {TIMEZONE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -367,7 +367,7 @@ function GeneralSettings({ config, onChange }) {
           <select
             value={config.language || 'en'}
             onChange={(e) => onChange('language', e.target.value)}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {LANGUAGE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -384,7 +384,7 @@ function GeneralSettings({ config, onChange }) {
           <select
             value={config.date_format || 'YYYY-MM-DD'}
             onChange={(e) => onChange('date_format', e.target.value)}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {DATE_FORMAT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -406,7 +406,7 @@ function SecuritySettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.security.title`)}</h3>
 
       <div className="space-y-4">
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -415,7 +415,7 @@ function SecuritySettings({ config, onChange }) {
                 type="number"
                 value={config.password_min_length || 12}
                 onChange={(e) => onChange('password_min_length', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
             <div>
@@ -424,7 +424,7 @@ function SecuritySettings({ config, onChange }) {
                 type="number"
                 value={config.password_max_age || 90}
                 onChange={(e) => onChange('password_max_age', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           </div>
@@ -459,7 +459,7 @@ function SecuritySettings({ config, onChange }) {
           </div>
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -468,7 +468,7 @@ function SecuritySettings({ config, onChange }) {
                 type="number"
                 value={config.session_timeout || 60}
                 onChange={(e) => onChange('session_timeout', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
             <div>
@@ -477,13 +477,13 @@ function SecuritySettings({ config, onChange }) {
                 type="number"
                 value={config.max_concurrent_sessions || 3}
                 onChange={(e) => onChange('max_concurrent_sessions', parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
           <label className="flex items-center gap-2 text-sm text-gray-300 mb-3">
             <input
@@ -582,12 +582,12 @@ function MfaSelfServicePanel() {
   };
 
   if (!status) {
-    return <p className="text-[11px] text-white/40">{t(`${NS}.mfa.loading_status`)}</p>;
+    return <p className="text-[11px] text-[var(--text-muted)]">{t(`${NS}.mfa.loading_status`)}</p>;
   }
 
   return (
-    <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-      <div className="text-[11px] font-mono text-white/60">
+    <div className="mt-3 space-y-2 border-t border-[var(--border-default)] pt-3">
+      <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
         {t(`${NS}.mfa.account_label`)}{' '}
         {status.mfa_enabled ? (
           <span className="text-emerald-400">{t(`${NS}.mfa.status_enabled`)}</span>
@@ -611,8 +611,8 @@ function MfaSelfServicePanel() {
       )}
       {setup && (
         <div className="space-y-2">
-          <p className="text-[11px] text-white/60">{t(`${NS}.mfa.scan_uri_instructions`)}</p>
-          <code className="block break-all text-[10px] font-mono text-cyan-300 bg-black/40 p-2 rounded">
+          <p className="text-[11px] text-[var(--text-tertiary)]">{t(`${NS}.mfa.scan_uri_instructions`)}</p>
+          <code className="block break-all text-[10px] font-mono text-cyan-300 bg-[var(--bg-2)] p-2 rounded">
             {setup.otpauth_url}
           </code>
           <div className="flex items-center gap-2">
@@ -623,7 +623,7 @@ function MfaSelfServicePanel() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder={t(`${NS}.mfa.code_placeholder`)}
-              className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-sm font-mono w-28"
             />
             <button
               type="button"
@@ -645,7 +645,7 @@ function MfaSelfServicePanel() {
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
             placeholder={t(`${NS}.mfa.code_placeholder`)}
-            className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-sm font-mono w-28"
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-sm font-mono w-28"
           />
           <button
             type="button"
@@ -677,7 +677,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.default_timeout || 300}
             onChange={(e) => onChange('default_timeout', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -689,7 +689,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.max_concurrency || 10}
             onChange={(e) => onChange('max_concurrency', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -700,7 +700,7 @@ function ScanningSettings({ config, onChange }) {
           <select
             value={String(config.auto_retry ?? false)}
             onChange={(e) => onChange('auto_retry', e.target.value === 'true')}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             <option value="true">{t(`${NS}.common.enabled`)}</option>
             <option value="false">{t(`${NS}.common.disabled`)}</option>
@@ -715,7 +715,7 @@ function ScanningSettings({ config, onChange }) {
             type="number"
             value={config.max_retries || 3}
             onChange={(e) => onChange('max_retries', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
       </div>
@@ -731,24 +731,24 @@ function IntegrationsSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
 
       <div className="space-y-4">
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
           <input
             type="text"
             value={config.webhook_url || ''}
             onChange={(e) => onChange('webhook_url', e.target.value)}
             placeholder={t(`${NS}.placeholders.webhook_url`)}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
           <div className="space-y-3">
             <select
               value={config.siem_type || 'none'}
               onChange={(e) => onChange('siem_type', e.target.value)}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               {SIEM_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -762,13 +762,13 @@ function IntegrationsSettings({ config, onChange }) {
                 value={config.siem_endpoint || ''}
                 onChange={(e) => onChange('siem_endpoint', e.target.value)}
                 placeholder={t(`${NS}.placeholders.siem_endpoint`)}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             )}
           </div>
         </div>
 
-        <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="bg-white/5 border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
           <div className="space-y-3">
             <input
@@ -776,14 +776,14 @@ function IntegrationsSettings({ config, onChange }) {
               value={config.smtp_server || ''}
               onChange={(e) => onChange('smtp_server', e.target.value)}
               placeholder={t(`${NS}.placeholders.smtp_server`)}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
             <input
               type="number"
               value={config.smtp_port || 587}
               onChange={(e) => onChange('smtp_port', parseInt(e.target.value, 10))}
               placeholder={t(`${NS}.placeholders.smtp_port`)}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>
@@ -808,7 +808,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.scan_results_retention || 90}
             onChange={(e) => onChange('scan_results_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -820,7 +820,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.audit_logs_retention || 365}
             onChange={(e) => onChange('audit_logs_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -832,7 +832,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.findings_retention || 180}
             onChange={(e) => onChange('findings_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -844,7 +844,7 @@ function RetentionSettings({ config, onChange }) {
             type="number"
             value={config.metrics_retention || 30}
             onChange={(e) => onChange('metrics_retention', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
       </div>
@@ -868,7 +868,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.worker_threads || 4}
             onChange={(e) => onChange('worker_threads', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -880,7 +880,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.cache_ttl || 300}
             onChange={(e) => onChange('cache_ttl', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -892,7 +892,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.max_memory || 2048}
             onChange={(e) => onChange('max_memory', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
 
@@ -904,7 +904,7 @@ function PerformanceSettings({ config, onChange }) {
             type="number"
             value={config.db_pool_size || 20}
             onChange={(e) => onChange('db_pool_size', parseInt(e.target.value, 10))}
-            className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
         </div>
       </div>
@@ -923,7 +923,7 @@ function ComplianceSettings({ config, onChange }) {
         {COMPLIANCE_FRAMEWORKS.map((framework) => (
           <label
             key={framework.configKey}
-            className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+            className="flex items-center gap-3 p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors"
           >
             <input
               type="checkbox"

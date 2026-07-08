@@ -121,7 +121,7 @@ function Toggle({ checked, onChange, disabled }) {
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative shrink-0 w-10 h-5 rounded-full transition-all duration-300 disabled:opacity-40 ${
-        checked ? 'bg-cyan-500/40 shadow-[inset_0_0_8px_rgba(34,211,238,0.3)]' : 'bg-black/60 border border-white/10'
+        checked ? 'bg-cyan-500/40 shadow-[inset_0_0_8px_rgba(34,211,238,0.3)]' : 'bg-[var(--scrim)] border border-[var(--border-default)]'
       }`}
     >
       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-300 ${checked ? 'left-[22px]' : 'left-0.5'}`} />
@@ -135,9 +135,9 @@ function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
       <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}60, transparent)` }} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1.5">{label}</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1.5">{label}</p>
           <p className="text-2xl font-bold text-white tracking-tight truncate">{value}</p>
-          {sub && <p className="text-[10px] font-mono text-white/35 mt-1 truncate">{sub}</p>}
+          {sub && <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1 truncate">{sub}</p>}
         </div>
         {icon && <span className="text-lg opacity-70 shrink-0">{icon}</span>}
       </div>
@@ -155,9 +155,9 @@ function ScoreRing({ score, grade }) {
         className="absolute inset-0 rounded-full"
         style={{ background: `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.06) ${deg}deg)` }}
       />
-      <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-white/10 flex flex-col items-center justify-center">
+      <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-[var(--border-default)] flex flex-col items-center justify-center">
         <span className="text-4xl font-black" style={{ color }}>{grade}</span>
-        <span className="text-[11px] font-mono text-white/55">{score}/100</span>
+        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{score}/100</span>
       </div>
     </div>
   )
@@ -169,7 +169,7 @@ function SeverityBar({ counts }) {
   const total = order.reduce((a, k) => a + (counts?.[k] ?? 0), 0) || 1
   return (
     <div className="space-y-2 w-full">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-black/50">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-3)]">
         {order.map((k) => {
           const c = counts?.[k] ?? 0
           if (!c) return null
@@ -198,7 +198,7 @@ function AttackPathPanel({ paths }) {
         {paths.map((p, i) => {
           const sev = (p.severity || 'critical').toLowerCase()
           return (
-            <div key={i} className="rounded-xl border border-rose-500/20 bg-black/40 px-4 py-3">
+            <div key={i} className="rounded-xl border border-rose-500/20 bg-[var(--bg-2)] px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-white/95">{p.title}</p>
                 <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded border" style={{ color: severityColor(sev), borderColor: `${severityColor(sev)}50` }}>{sev}</span>
@@ -216,15 +216,15 @@ function RemediationPanel({ queue }) {
   const { t } = useTranslation()
   if (!queue?.length) return null
   return (
-    <div className="rounded-2xl border border-emerald-500/20 bg-black/40 p-5">
+    <div className="rounded-2xl border border-emerald-500/20 bg-[var(--bg-2)] p-5">
       <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/70 mb-3">→ {t('pages.attackSurfaceManagement.header_remediation_queue')}</p>
       <ol className="space-y-2">
         {queue.map((item, i) => (
           <li key={i} className="flex gap-3 text-[12px] font-mono">
             <span className="text-emerald-400/80 shrink-0 w-5">{i + 1}.</span>
             <div className="min-w-0">
-              <p className="text-white/85">{item.title}</p>
-              {item.remediation && <p className="text-white/45 text-[11px] mt-0.5">{item.remediation}</p>}
+              <p className="text-[var(--text-primary)]">{item.title}</p>
+              {item.remediation && <p className="text-[var(--text-muted)] text-[11px] mt-0.5">{item.remediation}</p>}
             </div>
             <span className="text-[9px] uppercase shrink-0 ml-auto" style={{ color: severityColor(item.severity) }}>{item.severity}</span>
           </li>
@@ -238,8 +238,8 @@ function SubdomainInventory({ hosts }) {
   const { t } = useTranslation()
   if (!hosts?.length) return null
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-5">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">🗂 {t('pages.attackSurfaceManagement.header_subdomain_inventory')} ({hosts.length})</p>
+    <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">🗂 {t('pages.attackSurfaceManagement.header_subdomain_inventory')} ({hosts.length})</p>
       <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
         {hosts.map((h) => (
           <span key={h} className="text-[10px] font-mono px-2 py-1 rounded-lg bg-cyan-500/[0.06] border border-cyan-500/15 text-cyan-200/80">{h}</span>
@@ -256,7 +256,7 @@ function FindingCard({ f }) {
   const assetIcon = assetMeta?.icon ?? '◆'
   const assetLabel = assetMeta ? t(assetMeta.labelKey) : (f.asset || t('pages.attackSurfaceManagement.finding_default_label'))
   return (
-    <div className="rounded-xl bg-black/40 border border-white/10 p-3.5 space-y-2 hover:border-white/20 transition-colors">
+    <div className="rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] p-3.5 space-y-2 hover:border-[var(--border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 min-w-0">
           <span className="text-base shrink-0 mt-0.5">{assetIcon}</span>
@@ -274,14 +274,14 @@ function FindingCard({ f }) {
           {sev}
         </span>
       </div>
-      {f.description && <p className="text-[11px] text-white/55 font-mono leading-relaxed">{f.description}</p>}
+      {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
       {f.remediation && (
         <p className="text-[11px] text-emerald-300/70 font-mono leading-relaxed">
           <span className="text-emerald-400/90">→ {t('pages.attackSurfaceManagement.finding_fix_label')}: </span>{f.remediation}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-white/40 border border-white/[0.06]">{assetLabel}</span>
+        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-[var(--text-muted)] border border-white/[0.06]">{assetLabel}</span>
         {f.mitre_attack && (
           <a
             href={`https://attack.mitre.org/techniques/${String(f.mitre_attack).replace('.', '/')}`}
@@ -479,31 +479,31 @@ export default function AttackSurfaceManagement() {
       </AnimatePresence>
 
       {/* ── Control bar ─────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-4 mb-5">
+      <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-4 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.attackSurfaceManagement.label_client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_client')}</label>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
             >
               <option value="">{t('pages.attackSurfaceManagement.select_client_placeholder')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.attackSurfaceManagement.label_target')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_target')}</label>
             <input
               type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder="example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <button
             type="button"
             onClick={() => setShowConfig((s) => !s)}
-            className="px-3 py-2 rounded-lg text-xs font-mono border border-white/12 text-white/55 hover:text-white/85 hover:border-white/25 transition-all"
+            className="px-3 py-2 rounded-lg text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
             {showConfig ? `▾ ${t('pages.attackSurfaceManagement.btn_hide_config')}` : `▸ ${t('pages.attackSurfaceManagement.btn_scan_config')}`}
           </button>
@@ -530,19 +530,19 @@ export default function AttackSurfaceManagement() {
             >
               <div className="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3 max-h-[520px] overflow-y-auto pr-1">
                 <div className="space-y-2.5">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">{t('pages.attackSurfaceManagement.header_modules')}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.header_modules')}</p>
                   {TOGGLES.map((tg) => (
                     <div key={tg.key} className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[12px] text-white/80">{t(tg.labelKey)}</p>
-                        <p className="text-[10px] font-mono text-white/35">{t(tg.hintKey)}</p>
+                        <p className="text-[12px] text-[var(--text-secondary)]">{t(tg.labelKey)}</p>
+                        <p className="text-[10px] font-mono text-[var(--text-muted)]">{t(tg.hintKey)}</p>
                       </div>
                       <Toggle checked={!!params[tg.key]} onChange={(v) => setParam(tg.key, v)} disabled={status === 'running'} />
                     </div>
                   ))}
                 </div>
                 <div className="space-y-3">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">{t('pages.attackSurfaceManagement.header_parameters')}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.header_parameters')}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={t('pages.attackSurfaceManagement.field_ports')}>
                       <input className={inputCls} value={params.ports} onChange={(e) => setParam('ports', e.target.value)}
@@ -594,7 +594,7 @@ export default function AttackSurfaceManagement() {
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
-            <p className="text-sm font-mono text-white/50">{t('pages.attackSurfaceManagement.empty_running')}</p>
+            <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
           </div>
         </div>
       )}
@@ -605,7 +605,7 @@ export default function AttackSurfaceManagement() {
             <button
               type="button"
               onClick={handleExport}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 transition-all"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-white/30 transition-all"
             >
               ↓ {t('pages.attackSurfaceManagement.btn_export_json')}
             </button>
@@ -617,7 +617,7 @@ export default function AttackSurfaceManagement() {
               <div className="flex-1 w-full space-y-3">
                 <div>
                   <h2 className="text-lg font-bold text-white">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>
-                  <p className="text-[12px] text-white/50 font-mono">{report.description}</p>
+                  <p className="text-[12px] text-[var(--text-tertiary)] font-mono">{report.description}</p>
                 </div>
                 <SeverityBar counts={severityCounts} />
               </div>
@@ -640,8 +640,8 @@ export default function AttackSurfaceManagement() {
 
           {/* Exposure by asset */}
           {Object.keys(exposureByAsset).length > 0 && (
-            <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-5">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{t('pages.attackSurfaceManagement.header_exposure_by_category')}</p>
+            <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t('pages.attackSurfaceManagement.header_exposure_by_category')}</p>
               <div className="space-y-2">
                 {Object.entries(exposureByAsset).sort((a, b) => b[1] - a[1]).map(([asset, n]) => {
                   const max = Math.max(...Object.values(exposureByAsset))
@@ -650,11 +650,11 @@ export default function AttackSurfaceManagement() {
                   const metaLabel = meta ? t(meta.labelKey) : asset
                   return (
                     <div key={asset} className="flex items-center gap-3">
-                      <span className="text-[11px] font-mono text-white/60 w-44 shrink-0 truncate">{metaIcon} {metaLabel}</span>
-                      <div className="flex-1 h-2 rounded-full bg-black/50 overflow-hidden">
+                      <span className="text-[11px] font-mono text-[var(--text-tertiary)] w-44 shrink-0 truncate">{metaIcon} {metaLabel}</span>
+                      <div className="flex-1 h-2 rounded-full bg-[var(--bg-3)] overflow-hidden">
                         <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${(n / max) * 100}%` }} />
                       </div>
-                      <span className="text-[11px] font-mono text-white/50 w-8 text-right">{n}</span>
+                      <span className="text-[11px] font-mono text-[var(--text-tertiary)] w-8 text-right">{n}</span>
                     </div>
                   )
                 })}
@@ -667,7 +667,7 @@ export default function AttackSurfaceManagement() {
               {assetTypes.map((a) => (
                 <button key={a} type="button" onClick={() => setAssetFilter(a)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${
-                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/[0.08] hover:text-white/70'
+                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-white/[0.08] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {a === 'all' ? t('pages.attackSurfaceManagement.filter_all_categories') : `${ASSET_META[a]?.icon ?? '◆'} ${ASSET_META[a] ? t(ASSET_META[a].labelKey) : a}`}
@@ -699,22 +699,22 @@ export default function AttackSurfaceManagement() {
       )}
 
       {!report && status !== 'running' && (
-        <div className="rounded-2xl border border-white/[0.08] bg-black/30 px-6 py-16 text-center">
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
           <p className="text-4xl mb-3">🛰️</p>
-          <p className="text-sm font-mono text-white/50">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>
-          <p className="text-[11px] font-mono text-white/30 mt-1">{t('pages.attackSurfaceManagement.empty_bottom_body')}</p>
+          <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>
+          <p className="text-[11px] font-mono text-[var(--text-disabled)] mt-1">{t('pages.attackSurfaceManagement.empty_bottom_body')}</p>
         </div>
       )}
     </PageShell>
   )
 }
 
-const inputCls = 'w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40'
+const inputCls = 'w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40'
 
 function Field({ label, children }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{label}</label>
+      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{label}</label>
       {children}
     </div>
   )

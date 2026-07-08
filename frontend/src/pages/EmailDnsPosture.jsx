@@ -78,7 +78,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
 }
 
 const SPOOF_STYLE = {
@@ -170,7 +170,7 @@ const STATE_STYLE = {
   pass: { sym: '✓', cls: 'border-emerald-500/30 bg-emerald-500/5', text: 'text-emerald-400' },
   warn: { sym: '!', cls: 'border-amber-500/30 bg-amber-500/5', text: 'text-amber-400' },
   fail: { sym: '✕', cls: 'border-rose-500/30 bg-rose-500/5', text: 'text-rose-400' },
-  unknown: { sym: '·', cls: 'border-white/10 bg-white/5', text: 'text-white/40' },
+  unknown: { sym: '·', cls: 'border-[var(--border-default)] bg-white/5', text: 'text-[var(--text-muted)]' },
 }
 
 function CopyButton({ text }) {
@@ -184,7 +184,7 @@ function CopyButton({ text }) {
   }, [text])
   return (
     <button type="button" onClick={onCopy}
-      className="shrink-0 text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/15 text-white/40 hover:text-cyan-300 hover:border-cyan-400/40 transition-colors">
+      className="shrink-0 text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-muted)] hover:text-cyan-300 hover:border-cyan-400/40 transition-colors">
       {copied ? `${t('pages.emailDnsPosture.copy_done')} ✓` : t('pages.emailDnsPosture.copy_action')}
     </button>
   )
@@ -194,8 +194,8 @@ function ToxicCombinationsPanel({ combos }) {
   const { t } = useTranslation()
   if (!Array.isArray(combos) || combos.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.toxic_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.toxic_title')}</div>
       <div className="space-y-2">
         {combos.map((c, i) => {
           const sev = (c.severity || 'medium').toLowerCase()
@@ -204,10 +204,10 @@ function ToxicCombinationsPanel({ combos }) {
             <div key={c.id || i} className={`rounded-xl border ${st.bd} ${st.bg} px-3 py-2.5`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-[10px] font-mono uppercase ${st.text}`}>{sev}</span>
-                <span className="text-sm font-medium text-white/90">{c.title}</span>
+                <span className="text-sm font-medium text-[var(--text-primary)]">{c.title}</span>
               </div>
-              {c.attack_path && <p className="text-[11px] font-mono text-white/55 mt-1">{c.attack_path}</p>}
-              {c.impact && <p className="text-[10px] text-white/40 mt-0.5">{t('pages.emailDnsPosture.toxic_impact_label')} {c.impact}</p>}
+              {c.attack_path && <p className="text-[11px] font-mono text-[var(--text-tertiary)] mt-1">{c.attack_path}</p>}
+              {c.impact && <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{t('pages.emailDnsPosture.toxic_impact_label')} {c.impact}</p>}
             </div>
           )
         })}
@@ -220,9 +220,9 @@ function ComplianceMatrix({ compliance }) {
   const { t } = useTranslation()
   if (!compliance || typeof compliance !== 'object') return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.emailDnsPosture.compliance_title')}</div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.emailDnsPosture.compliance_title')}</div>
         {compliance.overall_pass != null && (
           <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${compliance.overall_pass ? 'border-emerald-500/30 text-emerald-400' : 'border-rose-500/30 text-rose-400'}`}>
             {compliance.overall_pass ? t('pages.emailDnsPosture.compliance_overall_pass') : t('pages.emailDnsPosture.compliance_gaps_remain')}
@@ -235,14 +235,14 @@ function ComplianceMatrix({ compliance }) {
             : g.group.startsWith('CIS') ? compliance.cis_controls_v8
               : { gdpr_art_32: compliance.gdpr_art_32, nis2_email_security: compliance.nis2_email_security }
           return (
-            <div key={g.group} className="rounded-lg border border-white/10 bg-white/5 p-2.5">
-              <div className="text-[10px] font-mono text-white/50 mb-1.5">{t(g.groupKey)}</div>
+            <div key={g.group} className="rounded-lg border border-[var(--border-default)] bg-white/5 p-2.5">
+              <div className="text-[10px] font-mono text-[var(--text-tertiary)] mb-1.5">{t(g.groupKey)}</div>
               <div className="space-y-1">
                 {g.keys.map(([k, label]) => {
                   const pass = src?.[k] === true
                   return (
                     <div key={k} className="flex items-center justify-between text-[10px] font-mono">
-                      <span className="text-white/60">{t(label)}</span>
+                      <span className="text-[var(--text-tertiary)]">{t(label)}</span>
                       <span className={pass ? 'text-emerald-400' : 'text-rose-400'}>{pass ? '✓' : '✕'}</span>
                     </div>
                   )
@@ -260,13 +260,13 @@ function SpfBlastPanel({ blast }) {
   const { t } = useTranslation()
   if (!blast || !Array.isArray(blast.vendors) || blast.vendors.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">
         {t('pages.emailDnsPosture.spf_blast_title', { count: blast.count || blast.vendors.length })}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {blast.vendors.map((v, i) => (
-          <span key={i} title={v.domain} className={`text-[10px] font-mono px-2 py-1 rounded border ${v.reachable ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-200' : 'border-white/10 bg-white/5 text-white/40'}`}>
+          <span key={i} title={v.domain} className={`text-[10px] font-mono px-2 py-1 rounded border ${v.reachable ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-200' : 'border-[var(--border-default)] bg-white/5 text-[var(--text-muted)]'}`}>
             {v.vendor || v.domain}
           </span>
         ))}
@@ -281,14 +281,14 @@ function AutodiscoverPanel({ data }) {
   const surface = Array.isArray(data.surface) ? data.surface : []
   if (surface.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.autodiscover_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.autodiscover_title')}</div>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {surface.map((s) => (
           <span key={s} className="text-[10px] font-mono px-2 py-1 rounded border border-violet-500/30 bg-violet-500/5 text-violet-200">{s}</span>
         ))}
       </div>
-      {data.cname && <p className="text-[10px] font-mono text-white/45">CNAME → {data.cname}</p>}
+      {data.cname && <p className="text-[10px] font-mono text-[var(--text-muted)]">CNAME → {data.cname}</p>}
     </div>
   )
 }
@@ -297,12 +297,12 @@ function DmarcExternalPanel({ data }) {
   const { t } = useTranslation()
   if (!data?.checked || !Array.isArray(data.receivers) || data.receivers.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.dmarc_receivers_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.dmarc_receivers_title')}</div>
       <div className="space-y-1">
         {data.receivers.map((r, i) => (
-          <div key={i} className="flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded border border-white/10 bg-white/5">
-            <span className="text-white/65">{r.receiver}</span>
+          <div key={i} className="flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] bg-white/5">
+            <span className="text-[var(--text-tertiary)]">{r.receiver}</span>
             <span className={r.authorized ? 'text-emerald-400' : 'text-rose-400'}>{r.internal ? t('pages.emailDnsPosture.dmarc_receiver_in_domain') : r.authorized ? t('pages.emailDnsPosture.dmarc_receiver_authorized') : t('pages.emailDnsPosture.dmarc_receiver_missing')}</span>
           </div>
         ))}
@@ -316,13 +316,13 @@ function SmtpAuditPanel({ audit }) {
   const probes = audit?.probes
   if (!Array.isArray(probes) || probes.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.smtp_probes_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.smtp_probes_title')}</div>
       <div className="space-y-1.5">
         {probes.map((p, i) => (
-          <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] font-mono">
-            <div className="flex justify-between text-white/70"><span>{p.host}:{p.port}</span><span className={p.starttls ? 'text-emerald-400' : 'text-amber-400'}>{p.starttls ? 'STARTTLS' : t('pages.emailDnsPosture.smtp_no_tls')}</span></div>
-            {p.banner && <div className="text-white/40 truncate mt-0.5">{p.banner}</div>}
+          <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-2.5 py-1.5 text-[10px] font-mono">
+            <div className="flex justify-between text-[var(--text-secondary)]"><span>{p.host}:{p.port}</span><span className={p.starttls ? 'text-emerald-400' : 'text-amber-400'}>{p.starttls ? 'STARTTLS' : t('pages.emailDnsPosture.smtp_no_tls')}</span></div>
+            {p.banner && <div className="text-[var(--text-muted)] truncate mt-0.5">{p.banner}</div>}
           </div>
         ))}
       </div>
@@ -337,16 +337,16 @@ function SpfIpInventoryPanel({ inv }) {
   const v6 = inv.ipv6_count ?? 0
   if (v4 === 0 && v6 === 0 && !inv.world_open) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.spf_ip_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.spf_ip_title')}</div>
       <div className="flex flex-wrap gap-2 text-[10px] font-mono mb-2">
         <span className="px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/5 text-cyan-200">{v4} IPv4</span>
         <span className="px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/5 text-cyan-200">{v6} IPv6</span>
-        {inv.resolved_from_amx > 0 && <span className="text-white/40">{t('pages.emailDnsPosture.spf_ip_from_amx', { count: inv.resolved_from_amx })}</span>}
+        {inv.resolved_from_amx > 0 && <span className="text-[var(--text-muted)]">{t('pages.emailDnsPosture.spf_ip_from_amx', { count: inv.resolved_from_amx })}</span>}
         {inv.world_open && <span className="text-rose-400 font-bold">⚠ {t('pages.emailDnsPosture.spf_ip_world_open')}</span>}
       </div>
       {Array.isArray(inv.ipv4_sample) && inv.ipv4_sample.length > 0 && (
-        <p className="text-[10px] font-mono text-white/40 truncate">v4: {inv.ipv4_sample.join(', ')}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] truncate">v4: {inv.ipv4_sample.join(', ')}</p>
       )}
     </div>
   )
@@ -356,14 +356,14 @@ function MxTlsCertsPanel({ data }) {
   const { t } = useTranslation()
   if (!data?.checked || !Array.isArray(data.certs) || data.certs.length === 0) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.mx_certs_title')}</div>
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.mx_certs_title')}</div>
       <div className="space-y-1.5">
         {data.certs.map((c, i) => (
-          <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] font-mono">
-            <div className="flex justify-between text-white/75"><span>{c.host}:{c.port}</span><span className={c.expired ? 'text-rose-400' : c.days_until_expiry < 30 ? 'text-amber-400' : 'text-emerald-400'}>{c.expired ? t('pages.emailDnsPosture.cert_expired') : `${c.days_until_expiry}d`}</span></div>
-            <div className="text-white/40 truncate">{c.issuer}</div>
-            <div className="flex flex-wrap gap-2 mt-0.5 text-white/35">
+          <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-2.5 py-1.5 text-[10px] font-mono">
+            <div className="flex justify-between text-[var(--text-secondary)]"><span>{c.host}:{c.port}</span><span className={c.expired ? 'text-rose-400' : c.days_until_expiry < 30 ? 'text-amber-400' : 'text-emerald-400'}>{c.expired ? t('pages.emailDnsPosture.cert_expired') : `${c.days_until_expiry}d`}</span></div>
+            <div className="text-[var(--text-muted)] truncate">{c.issuer}</div>
+            <div className="flex flex-wrap gap-2 mt-0.5 text-[var(--text-muted)]">
               <span>{t('pages.emailDnsPosture.cert_bits', { bits: c.public_key_bits })}</span>
               <span>{c.san_match ? t('pages.emailDnsPosture.cert_san_ok') : t('pages.emailDnsPosture.cert_san_mismatch')}</span>
               {c.tls_version && <span className={/^TLSv1\.[01]/i.test(c.tls_version) ? 'text-rose-400' : 'text-emerald-400/80'}>{c.tls_version}</span>}
@@ -380,7 +380,7 @@ const MANIFEST_STATUS = {
   pass: { sym: '✓', cls: 'border-emerald-500/30 bg-emerald-500/5', text: 'text-emerald-300' },
   warn: { sym: '⚠', cls: 'border-amber-500/30 bg-amber-500/5', text: 'text-amber-300' },
   fail: { sym: '✗', cls: 'border-rose-500/30 bg-rose-500/5', text: 'text-rose-300' },
-  skipped: { sym: '—', cls: 'border-white/10 bg-white/5', text: 'text-white/35' },
+  skipped: { sym: '—', cls: 'border-[var(--border-default)] bg-white/5', text: 'text-[var(--text-muted)]' },
 }
 
 function CoverageManifestPanel({ manifest, catalog }) {
@@ -391,16 +391,16 @@ function CoverageManifestPanel({ manifest, catalog }) {
   const tierColor = { enterprise: '#34d399', advanced: '#a3e635', standard: '#fbbf24', baseline: '#fb923c' }[tier] || '#94a3b8'
   const layers = catalog?.probe_layers ?? catalog?.categories?.length
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
           {t('pages.emailDnsPosture.coverage_title')}
-          {catalog?.version && <span className="text-white/25 normal-case ml-2">v{catalog.version}{layers ? ` · ${t('pages.emailDnsPosture.coverage_layers', { count: layers })}` : ''}</span>}
+          {catalog?.version && <span className="text-[var(--text-disabled)] normal-case ml-2">v{catalog.version}{layers ? ` · ${t('pages.emailDnsPosture.coverage_layers', { count: layers })}` : ''}</span>}
         </div>
         <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="text-white/50">{t('pages.emailDnsPosture.coverage_passing', { passing: manifest.probes_passing, count: manifest.probe_count })}</span>
+          <span className="text-[var(--text-tertiary)]">{t('pages.emailDnsPosture.coverage_passing', { passing: manifest.probes_passing, count: manifest.probe_count })}</span>
           <span style={{ color: tierColor }} className="uppercase tracking-wider">{tier}</span>
-          <span className="text-white/70">{pct}%</span>
+          <span className="text-[var(--text-secondary)]">{pct}%</span>
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
@@ -409,10 +409,10 @@ function CoverageManifestPanel({ manifest, catalog }) {
           return (
             <div key={p.id} className={`rounded-lg border px-2 py-1.5 ${st.cls}`} title={p.standard}>
               <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-mono text-white/75 truncate">{p.name}</span>
+                <span className="text-[10px] font-mono text-[var(--text-secondary)] truncate">{p.name}</span>
                 <span className={`${st.text} text-xs shrink-0`}>{st.sym}</span>
               </div>
-              <div className="text-[8px] font-mono text-white/30 truncate">{p.standard}</div>
+              <div className="text-[8px] font-mono text-[var(--text-disabled)] truncate">{p.standard}</div>
             </div>
           )
         })}
@@ -425,9 +425,9 @@ function TlsRptPanel({ data }) {
   const { t } = useTranslation()
   if (!data?.present) return null
   return (
-    <div className="mt-5 pt-5 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.tls_rpt_title')}</div>
-      <div className="text-[10px] font-mono text-white/55">
+    <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.tls_rpt_title')}</div>
+      <div className="text-[10px] font-mono text-[var(--text-tertiary)]">
         {(data.rua_uris || []).length > 0 ? data.rua_uris.join(', ') : t('pages.emailDnsPosture.tls_rpt_no_rua')}
       </div>
     </div>
@@ -440,7 +440,7 @@ function SubScoreBar({ label, value }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-mono text-white/55">{label}</span>
+        <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -476,7 +476,7 @@ function Scorecard({ summary }) {
   const soaPosture = summary.soa_posture || null
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Grade gauge */}
         <div className="flex items-center gap-5">
@@ -487,15 +487,15 @@ function Scorecard({ summary }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t('pages.emailDnsPosture.trust_grade')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.emailDnsPosture.trust_grade')}</div>
             <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
-            <div className="text-[11px] font-mono text-white/40 mt-1">{summary.analyzed_domain || summary.target}</div>
+            <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{summary.analyzed_domain || summary.target}</div>
             {summary.provider && (
-              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono text-white/50 px-2 py-0.5 rounded-md bg-white/5 border border-white/10">
+              <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-mono text-[var(--text-tertiary)] px-2 py-0.5 rounded-md bg-white/5 border border-[var(--border-default)]">
                 ✉ {summary.provider}
               </div>
             )}
@@ -517,7 +517,7 @@ function Scorecard({ summary }) {
           <span className="text-sm font-bold" style={{ color: spoof.color }}>{t('pages.emailDnsPosture.spoofability_label')} {t(spoof.labelKey)}</span>
         </div>
         {summary.spoofability_reason && (
-          <p className="text-[12px] text-white/65 font-mono leading-relaxed mt-1.5">{summary.spoofability_reason}</p>
+          <p className="text-[12px] text-[var(--text-tertiary)] font-mono leading-relaxed mt-1.5">{summary.spoofability_reason}</p>
         )}
       </div>
 
@@ -532,8 +532,8 @@ function Scorecard({ summary }) {
       <CoverageManifestPanel manifest={coverageManifest} catalog={probeCatalog} />
 
       {consensus?.checked && (
-        <div className="mt-5 pt-5 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.consensus_title')}</div>
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.consensus_title')}</div>
           <div className={`text-[11px] font-mono px-3 py-2 rounded-lg border ${consensus.consensus ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300' : 'border-rose-500/30 bg-rose-500/5 text-rose-300'}`}>
             {consensus.consensus
               ? t('pages.emailDnsPosture.consensus_agree')
@@ -549,22 +549,22 @@ function Scorecard({ summary }) {
       <TlsRptPanel data={tlsRptDetails} />
 
       {mtaStsDrift?.checked && Array.isArray(mtaStsDrift.missing_from_policy) && mtaStsDrift.missing_from_policy.length > 0 && (
-        <div className="mt-5 pt-5 border-t border-white/5">
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
           <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400/80 mb-2">{t('pages.emailDnsPosture.mta_sts_drift_title')}</div>
-          <p className="text-[11px] font-mono text-white/55">{t('pages.emailDnsPosture.mta_sts_drift_body', { hosts: mtaStsDrift.missing_from_policy.join(', ') })}</p>
+          <p className="text-[11px] font-mono text-[var(--text-tertiary)]">{t('pages.emailDnsPosture.mta_sts_drift_body', { hosts: mtaStsDrift.missing_from_policy.join(', ') })}</p>
         </div>
       )}
 
       {soaPosture?.checked && soaPosture.minimum_ttl != null && (
-        <div className="mt-5 pt-5 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.soa_title')}</div>
-          <p className="text-[11px] font-mono text-white/55">{soaPosture.minimum_ttl}s — {soaPosture.record || t('pages.emailDnsPosture.soa_no_record')}</p>
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.soa_title')}</div>
+          <p className="text-[11px] font-mono text-[var(--text-tertiary)]">{soaPosture.minimum_ttl}s — {soaPosture.record || t('pages.emailDnsPosture.soa_no_record')}</p>
         </div>
       )}
 
       {/* Per-standard status grid */}
       <div className="mt-5">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.control_coverage')}</div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.control_coverage')}</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
           {STANDARDS.map((std) => {
             const st = standardStatus(details, std.key, t)
@@ -572,10 +572,10 @@ function Scorecard({ summary }) {
             return (
               <div key={std.key} className={`rounded-lg border px-2.5 py-1.5 ${style.cls}`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-white/75">{std.label}</span>
+                  <span className="text-[11px] font-mono text-[var(--text-secondary)]">{std.label}</span>
                   <span className={`${style.text} text-xs`}>{style.sym}</span>
                 </div>
-                <div className="text-[9px] font-mono text-white/40 mt-0.5 truncate">{st.detail}</div>
+                <div className="text-[9px] font-mono text-[var(--text-muted)] mt-0.5 truncate">{st.detail}</div>
               </div>
             )
           })}
@@ -584,11 +584,11 @@ function Scorecard({ summary }) {
 
       {/* Remediation roadmap */}
       {roadmap.length > 0 && (
-        <div className="mt-5 pt-5 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.roadmap_title')}</div>
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.roadmap_title')}</div>
           <ol className="space-y-1.5">
             {roadmap.map((r, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-white/65 leading-relaxed">
+              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">
                 <span className="text-cyan-400 shrink-0">{i + 1}.</span>{r}
               </li>
             ))}
@@ -612,22 +612,22 @@ function FindingCard({ f }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.standard && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/45 border border-white/10">{f.standard}</span>}
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
-            {f.cwe && <span className="text-[10px] font-mono text-white/30">· {f.cwe}</span>}
+            {f.standard && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)] border border-[var(--border-default)]">{f.standard}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
+            {f.cwe && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.cwe}</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.evidence && (
-              <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-2.5">
-                <div className="text-[9px] font-mono uppercase text-white/30 mb-1">{t('pages.emailDnsPosture.finding_observed')}</div>
-                <code className="text-[11px] font-mono text-white/70 break-all">{f.evidence}</code>
+              <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-2.5">
+                <div className="text-[9px] font-mono uppercase text-[var(--text-disabled)] mb-1">{t('pages.emailDnsPosture.finding_observed')}</div>
+                <code className="text-[11px] font-mono text-[var(--text-secondary)] break-all">{f.evidence}</code>
               </div>
             )}
             {f.remediation && (
@@ -648,7 +648,7 @@ function FindingCard({ f }) {
             {refs.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {refs.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/45 border border-white/10">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -807,31 +807,31 @@ export default function EmailDnsPosture() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.emailDnsPosture.label_client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.emailDnsPosture.label_client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40 min-w-[180px]">
               <option value="">{t('pages.emailDnsPosture.select_client_placeholder')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.emailDnsPosture.label_target_domain')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.emailDnsPosture.label_target_domain')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #22d3ee' : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{t(`pages.emailDnsPosture.state_${status}`, status)}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`pages.emailDnsPosture.state_${status}`, status)}</span>
           </div>
           <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? `⟳ ${t('pages.emailDnsPosture.btn_scanning')}` : `▶ ${t('pages.emailDnsPosture.btn_run_scan')}`}
           </button>
           <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? '▾' : '▸'} {t('pages.emailDnsPosture.params_label')}
           </button>
         </div>
@@ -839,12 +839,12 @@ export default function EmailDnsPosture() {
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.emailDnsPosture.probe_categories')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.emailDnsPosture.probe_categories')}</div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {TOGGLES.map((tg) => (
-                      <label key={tg.key} title={t(tg.hintKey)} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={tg.key} title={t(tg.hintKey)} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-emerald-500" />
                         {t(tg.labelKey)}
                       </label>
@@ -853,45 +853,45 @@ export default function EmailDnsPosture() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.dns_resolver')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.dns_resolver')}</label>
                     <select value={resolver} onChange={(e) => setResolver(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40">
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40">
                       {['system', 'cloudflare', 'google', 'quad9'].map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.extra_dkim_selectors')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.extra_dkim_selectors')}</label>
                     <input type="text" value={dkimSelectors} onChange={(e) => setDkimSelectors(e.target.value)} placeholder="selector1, google, k1"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.smtp_ports')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.smtp_ports')}</label>
                     <input type="text" value={smtpPorts} onChange={(e) => setSmtpPorts(e.target.value)} placeholder="25,465,587"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.mail_subdomains')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.mail_subdomains')}</label>
                     <input type="text" value={mailSubdomains} onChange={(e) => setMailSubdomains(e.target.value)} placeholder="mail,autodiscover,webmail"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.min_dkim_bits')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.min_dkim_bits')}</label>
                       <input type="number" min="1024" max="4096" step="1024" value={minDkimBits} onChange={(e) => setMinDkimBits(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.spf_lookup_limit')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.spf_lookup_limit')}</label>
                       <input type="number" min="1" max="20" step="1" value={spfLookupLimit} onChange={(e) => setSpfLookupLimit(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.emailDnsPosture.per_probe_timeout')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.emailDnsPosture.per_probe_timeout')}</label>
                     <input type="number" min="1000" max="20000" step="500" value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                 </div>
               </div>
@@ -899,7 +899,7 @@ export default function EmailDnsPosture() {
           )}
         </AnimatePresence>
 
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.emailDnsPosture.last_completed', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.emailDnsPosture.last_completed', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (

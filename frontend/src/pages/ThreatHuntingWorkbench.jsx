@@ -103,14 +103,14 @@ function MetricCard({ label, value, sub, color, icon }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/8 p-4 flex flex-col gap-1"
+      className="rounded-xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-subtle)] p-4 flex flex-col gap-1"
     >
       <div className="flex items-center gap-2">
         {icon && <span className="text-lg">{icon}</span>}
         <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: `${color}99` }}>{label}</span>
       </div>
       <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-white/30 font-mono">{sub}</div>}
+      {sub && <div className="text-[10px] text-[var(--text-disabled)] font-mono">{sub}</div>}
     </motion.div>
   )
 }
@@ -135,7 +135,7 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-[10px] font-mono text-white/30">{campaign.id}</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)]">{campaign.id}</span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
@@ -149,18 +149,18 @@ function CampaignCard({ campaign, selected, onSelect, t }) {
               {severityLabel(campaign.priority, t, 'priority')}
             </span>
           </div>
-          <p className="text-xs font-semibold text-white/85 leading-snug">{campaign.title}</p>
+          <p className="text-xs font-semibold text-[var(--text-primary)] leading-snug">{campaign.title}</p>
         </div>
         <div className="text-right shrink-0">
           <div className="text-xl font-bold font-mono" style={{ color: campaign.hitsFound > 0 ? '#ef4444' : '#4ade80' }}>
             {campaign.hitsFound}
           </div>
-          <div className="text-[9px] font-mono text-white/25">{t(`${NS}.hits`)}</div>
+          <div className="text-[9px] font-mono text-[var(--text-disabled)]">{t(`${NS}.hits`)}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
         {campaign.mitre.map((m) => (
-          <span key={m} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/30">{m}</span>
+          <span key={m} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-[var(--border-default)] rounded text-[var(--text-disabled)]">{m}</span>
         ))}
       </div>
     </motion.button>
@@ -176,11 +176,11 @@ function CampaignDetail({ campaign, t }) {
       key={campaign.id}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 p-6 space-y-4"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] p-6 space-y-4"
     >
       <div>
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-[10px] font-mono text-white/30">{campaign.id}</span>
+          <span className="text-[10px] font-mono text-[var(--text-disabled)]">{campaign.id}</span>
           <span
             className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
             style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
@@ -189,7 +189,7 @@ function CampaignDetail({ campaign, t }) {
           </span>
         </div>
         <h3 className="text-sm font-bold text-white mb-2">{campaign.title}</h3>
-        <p className="text-xs text-white/50 leading-relaxed italic">"{campaign.hypothesis}"</p>
+        <p className="text-xs text-[var(--text-tertiary)] leading-relaxed italic">"{campaign.hypothesis}"</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {[
@@ -198,14 +198,14 @@ function CampaignDetail({ campaign, t }) {
           { label: t(`${NS}.hits_found`), value: campaign.hitsFound > 0 ? `🔴 ${campaign.hitsFound}` : '✅ 0' },
           { label: t(`${NS}.data_sources`), value: campaign.dataSources.join(', ') },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
-            <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-0.5">{label}</div>
-            <div className="text-xs font-semibold text-white/70">{value}</div>
+          <div key={label} className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+            <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-0.5">{label}</div>
+            <div className="text-xs font-semibold text-[var(--text-secondary)]">{value}</div>
           </div>
         ))}
       </div>
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/25 mb-2">{t(`${NS}.mitre_techniques`)}</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-2">{t(`${NS}.mitre_techniques`)}</div>
         <div className="flex flex-wrap gap-1.5">
           {campaign.mitre.map((m) => (
             <span
@@ -227,7 +227,7 @@ function QueryCard({ query, t }) {
   return (
     <motion.div
       layout
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/10 overflow-hidden"
+      className="rounded-xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] overflow-hidden"
     >
       <button
         type="button"
@@ -239,14 +239,14 @@ function QueryCard({ query, t }) {
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-cyan-400 border-cyan-500/30 bg-cyan-950/20 uppercase tracking-widest">
               {query.language}
             </span>
-            <span className="text-[9px] font-mono text-white/30 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">{query.mitre}</span>
+            <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">{query.mitre}</span>
           </div>
-          <p className="text-xs font-semibold text-white/80">{query.name}</p>
-          <div className="text-[10px] font-mono text-white/30 mt-0.5">{query.datasource}</div>
+          <p className="text-xs font-semibold text-[var(--text-secondary)]">{query.name}</p>
+          <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-0.5">{query.datasource}</div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-lg font-bold font-mono" style={{ color: query.hits > 0 ? '#ef4444' : '#4ade80' }}>{query.hits}</div>
-          <div className="text-[9px] font-mono text-white/25">{t(`${NS}.hits`)}</div>
+          <div className="text-[9px] font-mono text-[var(--text-disabled)]">{t(`${NS}.hits`)}</div>
         </div>
       </button>
       <AnimatePresence>
@@ -258,7 +258,7 @@ function QueryCard({ query, t }) {
             className="overflow-hidden"
           >
             <div className="px-4 pb-4">
-              <pre className="bg-black/60 border border-white/10 rounded-lg p-3 text-[10px] font-mono text-green-400/80 overflow-x-auto leading-relaxed whitespace-pre-wrap">
+              <pre className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg p-3 text-[10px] font-mono text-green-400/80 overflow-x-auto leading-relaxed whitespace-pre-wrap">
                 {query.query}
               </pre>
             </div>
@@ -281,9 +281,9 @@ function IocTable({ iocs, t, onExport }) {
     )
   }
   return (
-    <div className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/30">{t(`${NS}.ioc_heading`)}</span>
+    <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">{t(`${NS}.ioc_heading`)}</span>
         <button
           type="button"
           onClick={onExport}
@@ -293,7 +293,7 @@ function IocTable({ iocs, t, onExport }) {
           {t(`${NS}.export_csv`)}
         </button>
       </div>
-      <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-white/8 text-[9px] font-mono uppercase tracking-widest text-white/25">
+      <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-[var(--border-subtle)] text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">
         <span>{t(`${NS}.col_type`)}</span>
         <span>{t(`${NS}.col_indicator`)}</span>
         <span>{t(`${NS}.col_source`)}</span>
@@ -308,25 +308,25 @@ function IocTable({ iocs, t, onExport }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: i * 0.03 }}
-            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-white/5 hover:bg-white/2 transition-colors items-center"
+            className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 border-b border-[var(--border-subtle)] hover:bg-white/2 transition-colors items-center"
           >
             <span className="text-sm">{IOC_TYPE_ICON[ioc.type] ?? '?'}</span>
             <div className="min-w-0">
-              <code className="text-[11px] font-mono text-white/75 block truncate">{ioc.value}</code>
+              <code className="text-[11px] font-mono text-[var(--text-secondary)] block truncate">{ioc.value}</code>
               <div className="flex gap-1 mt-0.5 flex-wrap">
                 {ioc.tags.map((tag) => (
-                  <span key={tag} className="text-[8px] font-mono bg-white/5 border border-white/10 px-1 py-0.5 rounded text-white/30">{tag}</span>
+                  <span key={tag} className="text-[8px] font-mono bg-white/5 border border-[var(--border-default)] px-1 py-0.5 rounded text-[var(--text-disabled)]">{tag}</span>
                 ))}
               </div>
             </div>
-            <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">{ioc.source}</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)] whitespace-nowrap">{ioc.source}</span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest whitespace-nowrap"
               style={{ color: sc, borderColor: `${sc}40`, background: `${sc}10` }}
             >
               {severityLabel(ioc.severity, t)}
             </span>
-            <span className="text-[10px] font-mono text-white/25 whitespace-nowrap">{ioc.added}</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)] whitespace-nowrap">{ioc.added}</span>
           </motion.div>
         )
       })}
@@ -495,14 +495,14 @@ export default function ThreatHuntingWorkbench() {
           <AnimatePresence mode="wait">
             {activeTab === 'campaigns' && (
               <motion.div key="campaigns" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t(`${NS}.campaigns_heading`)}</h2>
+                <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-3">{t(`${NS}.campaigns_heading`)}</h2>
                 {campaigns.length === 0 ? (
-                  <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center">
-                    <p className="text-sm text-white/40 font-mono">{t(`${NS}.no_campaigns`)}</p>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-8 text-center">
+                    <p className="text-sm text-[var(--text-muted)] font-mono">{t(`${NS}.no_campaigns`)}</p>
                     {campaignsError ? (
                       <p className="text-[11px] text-rose-400/70 font-mono mt-2">{campaignsError}</p>
                     ) : (
-                      <p className="text-[11px] text-white/25 font-mono mt-2">
+                      <p className="text-[11px] text-[var(--text-disabled)] font-mono mt-2">
                         {t(`${NS}.no_campaigns_hint`)}
                       </p>
                     )}
@@ -532,7 +532,7 @@ export default function ThreatHuntingWorkbench() {
 
             {activeTab === 'queries' && (
               <motion.div key="queries" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-                <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">{t(`${NS}.detection_queries_heading`)}</h2>
+                <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-3">{t(`${NS}.detection_queries_heading`)}</h2>
                 {queries.length === 0 ? (
                   <EmptyState
                     icon="search"

@@ -179,7 +179,7 @@ export default function SBOMBrowser() {
 
         {showClientEmpty ? (
           <EmptyState
-            icon={<Database className="w-8 h-8 text-white/20" />}
+            icon={<Database className="w-8 h-8 text-[var(--text-disabled)]" />}
             title={t('pages.sbomBrowser.no_client_title')}
             description={t('pages.sbomBrowser.no_client')}
           />
@@ -188,7 +188,7 @@ export default function SBOMBrowser() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400">{t('pages.sbomBrowser.total_components')}</span>
                   <Package className="w-4 h-4 text-cyan-400" />
@@ -241,7 +241,7 @@ export default function SBOMBrowser() {
               resultCount={visibleComponents.length}
               totalCount={categoryFilteredComponents.length}
             >
-              <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 flex-wrap">
+              <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
                 {FILTER_KEYS.map((f) => (
                   <button
                     key={f}
@@ -250,7 +250,7 @@ export default function SBOMBrowser() {
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       filter === f
                         ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
                     }`}
                   >
                     {t(`pages.sbomBrowser.filter_${f}`)}
@@ -261,7 +261,7 @@ export default function SBOMBrowser() {
                 <select
                   value={ecosystemFilter}
                   onChange={(e) => setEcosystemFilter(e.target.value)}
-                  className="px-3 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 >
                   <option value="all">{t('pages.sbomBrowser.all_ecosystems')}</option>
                   {ecosystems.map((eco) => (
@@ -295,8 +295,8 @@ export default function SBOMBrowser() {
         )}
 
         {!showClientEmpty && (
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-white/10">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-[var(--border-default)]">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Package className="w-4 h-4 text-cyan-400" />
                 {t('pages.sbomBrowser.components_heading', { count: visibleComponents.length })}
@@ -305,7 +305,7 @@ export default function SBOMBrowser() {
 
             {showDataEmpty ? (
               <EmptyState
-                icon={<Package className="w-8 h-8 text-white/20" />}
+                icon={<Package className="w-8 h-8 text-[var(--text-disabled)]" />}
                 title={t('pages.sbomBrowser.empty_data_title')}
                 description={t('pages.sbomBrowser.empty_data')}
               />
@@ -322,7 +322,7 @@ export default function SBOMBrowser() {
                   return (
                     <div
                       key={component.id}
-                      className="p-4 hover:bg-white/5 transition-colors"
+                      className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
                         <div className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg shrink-0">
@@ -360,7 +360,7 @@ export default function SBOMBrowser() {
                               </span>
                             )}
                             {component.source && (
-                              <span className="font-mono text-white/35">{component.source}</span>
+                              <span className="font-mono text-[var(--text-muted)]">{component.source}</span>
                             )}
                             {component.created_at && (
                               <span>{t('pages.sbomBrowser.ingested_at', { date: new Date(component.created_at).toLocaleDateString() })}</span>

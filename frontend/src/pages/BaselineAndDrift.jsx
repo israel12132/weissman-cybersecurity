@@ -179,7 +179,7 @@ export default function BaselineAndDrift() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['24h', '7d', '30d'].map((range) => (
               <button
                 key={range}
@@ -188,7 +188,7 @@ export default function BaselineAndDrift() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   timeRange === range
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.baselineAndDrift.range_${range}`)}
@@ -239,13 +239,13 @@ export default function BaselineAndDrift() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.baselineAndDrift.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-black/40 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/40"
             />
           </div>
           <div className="flex items-center gap-1 flex-wrap">
@@ -255,7 +255,7 @@ export default function BaselineAndDrift() {
                 type="button"
                 onClick={() => setSeverityFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase ${
-                  severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-white/45'
+                  severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-[var(--text-muted)]'
                 }`}
               >
                 {s === 'all' ? t('pages.baselineAndDrift.filter_all') : `${s} (${severityCounts[s] || 0})`}
@@ -264,8 +264,8 @@ export default function BaselineAndDrift() {
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
               {t('pages.baselineAndDrift.anomalies_heading', { count: filteredAnomalies.length })}
@@ -289,7 +289,7 @@ export default function BaselineAndDrift() {
                 const sev = (anomaly.severity || 'medium').toLowerCase();
                 const sevColor = SEV_COLORS[sev] || SEV_COLORS.info;
                 return (
-                  <div key={anomaly.id} className="p-4 hover:bg-white/5 transition-colors">
+                  <div key={anomaly.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -302,14 +302,14 @@ export default function BaselineAndDrift() {
                               {anomaly.severity}
                             </span>
                           )}
-                          <span className="text-[10px] font-mono text-white/35">
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
                             {t('pages.baselineAndDrift.score_label', { score: anomaly.score ?? '—' })}
                           </span>
                         </div>
                         {anomaly.description && (
                           <p className="text-xs text-gray-400 mb-2">{anomaly.description}</p>
                         )}
-                        <div className="flex flex-wrap gap-3 text-[10px] font-mono text-white/40">
+                        <div className="flex flex-wrap gap-3 text-[10px] font-mono text-[var(--text-muted)]">
                           {anomaly.agent_id && (
                             <span>{t('pages.baselineAndDrift.agent_label')}: {anomaly.agent_id}</span>
                           )}
@@ -352,7 +352,7 @@ export default function BaselineAndDrift() {
 }
 
 function StatCard({ label, value, sub, icon, valueClass, variant, small }) {
-  const bg = variant === 'danger' ? 'bg-red-500/10 border-red-500/30' : 'bg-black/40 border-white/10';
+  const bg = variant === 'danger' ? 'bg-red-500/10 border-red-500/30' : 'bg-[var(--bg-2)] border-[var(--border-default)]';
   return (
     <div className={`backdrop-blur-md border rounded-xl p-4 ${bg}`}>
       <div className="flex items-center justify-between mb-2">
@@ -360,14 +360,14 @@ function StatCard({ label, value, sub, icon, valueClass, variant, small }) {
         {icon}
       </div>
       <div className={`font-bold text-white ${small ? 'text-sm' : 'text-2xl'} ${valueClass || ''}`}>{value}</div>
-      {sub && <div className="text-[10px] text-white/35 mt-1 font-mono">{sub}</div>}
+      {sub && <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">{sub}</div>}
     </div>
   );
 }
 
 function ChartPanel({ title, icon, children }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         {icon}
         <h3 className="text-sm font-semibold text-white">{title}</h3>

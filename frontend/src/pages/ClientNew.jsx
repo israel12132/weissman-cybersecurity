@@ -73,7 +73,7 @@ export default function ClientNew() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t('pages.clientNew.search_placeholder')}
-          className="w-full max-w-md px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/30"
+          className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />
         <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
         <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />
@@ -81,7 +81,7 @@ export default function ClientNew() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="text-sm text-white/40 hover:text-white/70"
+            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
             disabled={submitting}
           >
             {t('pages.clientNew.cancel')}

@@ -35,7 +35,7 @@ const columnHelper = createColumnHelper()
 
 function JsonBlock({ value }) {
   return (
-    <pre className="rounded-xl border border-white/10 bg-black/70 p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
+    <pre className="rounded-xl border border-[var(--border-default)] bg-black/70 p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -273,20 +273,20 @@ export default function TopTierEngineProfile() {
 
   return (
     <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 120% 78% at 50% 0%, #111827 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/55 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-black/55 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/engines/top-tier" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.back_hub')}</Link>
-          <span className="text-white/20 text-xs">|</span>
+          <Link to="/engines/top-tier" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.back_hub')}</Link>
+          <span className="text-[var(--text-disabled)] text-xs">|</span>
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono transition-colors">{t('pages.topTierEngineProfile.engine_detail')}</Link>
           {TOP_TIER_PARAM_ROUTES[engineId] && (
             <>
-              <span className="text-white/20 text-xs">|</span>
+              <span className="text-[var(--text-disabled)] text-xs">|</span>
               <Link to={TOP_TIER_PARAM_ROUTES[engineId]} className="text-violet-400/80 hover:text-violet-300 text-xs font-mono transition-colors">
                 {t('pages.topTierEngineProfile.command_center')}
               </Link>
             </>
           )}
-          <span className="text-white/20 text-xs">|</span>
+          <span className="text-[var(--text-disabled)] text-xs">|</span>
           <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineProfile.strategic_page', { label: profile.label })}</h1>
           <div className="ms-auto">
             <ShellScanActions
@@ -305,29 +305,29 @@ export default function TopTierEngineProfile() {
           engineId={engineId}
         />
 
-        <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-black/35 p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-white/70">{profile.id}</span>
+            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-[var(--text-secondary)]">{profile.id}</span>
             <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {profile.mitre || 'N/A'}</span>
             <span className="px-2 py-0.5 rounded border border-amber-500/30 text-[11px] font-mono text-amber-300">{t('pages.topTierEngineProfile.top_tier_badge')}</span>
           </div>
           <p className="text-lg font-semibold text-white">{profile.mission}</p>
-          <p className="text-sm text-white/60">{profile.description}</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{profile.description}</p>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4 lg:col-span-2">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 lg:col-span-2">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.deep_profile')}</h2>
-            <p className="text-sm text-white/60 mb-3"><span className="text-white/75">{t('pages.topTierEngineProfile.focus')}</span> {profile.intelligenceFocus}</p>
+            <p className="text-sm text-[var(--text-tertiary)] mb-3"><span className="text-[var(--text-secondary)]">{t('pages.topTierEngineProfile.focus')}</span> {profile.intelligenceFocus}</p>
             <div className="space-y-2">
               {profile.expectedOutputs.map((item) => (
-                <div key={item} className="text-sm text-white/65">- {item}</div>
+                <div key={item} className="text-sm text-[var(--text-tertiary)]">- {item}</div>
               ))}
             </div>
           </article>
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.reality_status')}</h2>
-            <div className="space-y-2 text-[12px] font-mono text-white/65">
+            <div className="space-y-2 text-[12px] font-mono text-[var(--text-tertiary)]">
               <div>{t('pages.topTierEngineProfile.catalog', { value: audit?.known_in_catalog ? t('pages.topTierEngineProfile.connected') : t('pages.topTierEngineProfile.missing') })}</div>
               <div>{t('pages.topTierEngineProfile.canonical', { value: audit?.canonical_engine || '-' })}</div>
               <div>{t('pages.topTierEngineProfile.execution_path', { value: audit?.execution_path || '-' })}</div>
@@ -338,13 +338,13 @@ export default function TopTierEngineProfile() {
           </article>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
+        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.run_live')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             >
               <option value="">{t('pages.topTierEngineProfile.select_client')}</option>
               {clients.map((c) => (
@@ -355,7 +355,7 @@ export default function TopTierEngineProfile() {
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={profile.requiresTarget ? t('pages.topTierEngineProfile.target_required') : t('pages.topTierEngineProfile.target_optional')}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             />
             <button
               type="button"
@@ -391,11 +391,11 @@ export default function TopTierEngineProfile() {
             >
               {t('pages.topTierEngineProfile.export_pdf')}
             </button>
-            {activeJobId && <span className="text-[11px] font-mono text-white/50">{t('pages.topTierEngineProfile.job_id', { id: activeJobId })}</span>}
+            {activeJobId && <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{t('pages.topTierEngineProfile.job_id', { id: activeJobId })}</span>}
           </div>
-          {runState.msg && <div className="text-[12px] font-mono text-white/65">{runState.msg}</div>}
+          {runState.msg && <div className="text-[12px] font-mono text-[var(--text-tertiary)]">{runState.msg}</div>}
           {liveJob && (
-            <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-[12px] font-mono text-white/70">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3 text-[12px] font-mono text-[var(--text-secondary)]">
               <div>{t('pages.topTierEngineProfile.status_label', { value: liveJob.status || '-' })}</div>
               <div>{t('pages.topTierEngineProfile.attempts', { count: liveJob.attempt_count || 0 })}</div>
               <div>{t('pages.topTierEngineProfile.updated', { value: liveJob.updated_at || '-' })}</div>
@@ -406,7 +406,7 @@ export default function TopTierEngineProfile() {
               {Array.isArray(liveJob?.result?.findings) && liveJob.result.findings.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {liveJob.result.findings.slice(0, 8).map((f, idx) => (
-                    <div key={idx} className="text-[11px] text-white/60">
+                    <div key={idx} className="text-[11px] text-[var(--text-tertiary)]">
                       - {(f?.title || f?.type || t('pages.topTierEngineProfile.finding_fallback')).toString().slice(0, 120)}
                     </div>
                   ))}
@@ -417,7 +417,7 @@ export default function TopTierEngineProfile() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4 h-[280px]">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={statusChartData}>
@@ -429,7 +429,7 @@ export default function TopTierEngineProfile() {
               </BarChart>
             </ResponsiveContainer>
           </article>
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4 h-[280px]">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.findings_trend')}</h2>
             <ResponsiveContainer width="100%" height="90%">
               <LineChart data={findingsTrendData}>
@@ -444,13 +444,13 @@ export default function TopTierEngineProfile() {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.sample_payload')}</h2>
             <JsonBlock value={effectivePayload} />
           </article>
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.operator_notes')}</h2>
-            <div className="space-y-2 text-sm text-white/65">
+            <div className="space-y-2 text-sm text-[var(--text-tertiary)]">
               <div>{t('pages.topTierEngineProfile.note_tactical')}</div>
               <div>{t('pages.topTierEngineProfile.note_catalog')}</div>
               <div>{t('pages.topTierEngineProfile.note_monitor')}</div>
@@ -459,7 +459,7 @@ export default function TopTierEngineProfile() {
           </article>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
+        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.topTierEngineProfile.recent_jobs')}</h2>
           {jobs.length > 0 && (
             <WeissmanListToolbar

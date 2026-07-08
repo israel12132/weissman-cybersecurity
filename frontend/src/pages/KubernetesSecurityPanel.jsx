@@ -280,9 +280,9 @@ function PostureCard({ finding, L }) {
   const tools = Array.isArray(ev.platform_tools) ? ev.platform_tools : []
   const podStats = ev.dangerous_pod_stats || null
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-violet-950/30 to-black/40 p-5 mb-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-violet-950/30 to-black/40 p-5 mb-5">
       {(ev.managed_provider || ev.git_version) && (
-        <div className="flex flex-wrap gap-2 mb-4 pb-3 border-b border-white/10">
+        <div className="flex flex-wrap gap-2 mb-4 pb-3 border-b border-[var(--border-default)]">
           {ev.managed_provider && <Chip color="#22d3ee">{L.provider}: {ev.managed_provider}</Chip>}
           {ev.git_version && <Chip color={ACCENT}>{L.gitVersion}: {ev.git_version}</Chip>}
           {ev.cis_failed_controls > 0 && (
@@ -292,12 +292,12 @@ function PostureCard({ finding, L }) {
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.exposure}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.exposure}</div>
           <Gauge score={ev.exposure_score} />
-          <div className="mt-2 text-xs font-mono text-white/60">{ev.posture_grade}</div>
+          <div className="mt-2 text-xs font-mono text-[var(--text-tertiary)]">{ev.posture_grade}</div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">Severity</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">Severity</div>
           <div className="flex flex-wrap gap-1.5">
             {['critical', 'high', 'medium', 'low'].map((s) => (
               <span key={s} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono"
@@ -306,13 +306,13 @@ function PostureCard({ finding, L }) {
               </span>
             ))}
           </div>
-          <div className="mt-3 text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.surfacesFound}</div>
+          <div className="mt-3 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.surfacesFound}</div>
           <div className="flex flex-wrap gap-1.5">
-            {surfaces.length ? surfaces.map((s) => <Chip key={s} color={ACCENT}>{s}</Chip>) : <span className="text-white/30 text-xs">—</span>}
+            {surfaces.length ? surfaces.map((s) => <Chip key={s} color={ACCENT}>{s}</Chip>) : <span className="text-[var(--text-disabled)] text-xs">—</span>}
           </div>
           {tools.length > 0 && (
             <>
-              <div className="mt-3 text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.platformTools}</div>
+              <div className="mt-3 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.platformTools}</div>
               <div className="flex flex-wrap gap-1.5">
                 {tools.map((t) => <Chip key={t} color="#a78bfa">{t}</Chip>)}
               </div>
@@ -320,13 +320,13 @@ function PostureCard({ finding, L }) {
           )}
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.openPorts}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.openPorts}</div>
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {ports.length ? ports.map((p) => <Chip key={p} color="#38bdf8">{p}</Chip>) : <span className="text-white/30 text-xs">—</span>}
+            {ports.length ? ports.map((p) => <Chip key={p} color="#38bdf8">{p}</Chip>) : <span className="text-[var(--text-disabled)] text-xs">—</span>}
           </div>
           {podStats && (
             <>
-              <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.dangerousPods}</div>
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.dangerousPods}</div>
               <div className="text-[11px] font-mono text-rose-300/80 space-y-0.5">
                 {podStats.privileged > 0 && <div>privileged: {podStats.privileged}</div>}
                 {podStats.host_pid > 0 && <div>hostPID: {podStats.host_pid}</div>}
@@ -337,8 +337,8 @@ function PostureCard({ finding, L }) {
         </div>
       </div>
       {ev.graph && (ev.graph.nodes || []).length > 0 && (
-        <div className="mt-5 border-t border-white/10 pt-4">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{L.graph}</div>
+        <div className="mt-5 border-t border-[var(--border-default)] pt-4">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{L.graph}</div>
           <GraphView graph={ev.graph} />
         </div>
       )}
@@ -356,14 +356,14 @@ function CisBenchmarkCard({ finding, L }) {
         <h3 className="text-sm font-bold text-amber-200">{L.cisTitle}</h3>
         <Chip color="#fbbf24">{ev.failed_controls ?? controls.length} {L.cisFailed}</Chip>
       </div>
-      <p className="text-xs text-white/50 mb-3">{finding.description}</p>
+      <p className="text-xs text-[var(--text-tertiary)] mb-3">{finding.description}</p>
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {controls.map((c, i) => (
-          <div key={i} className="flex items-start gap-2 rounded-lg bg-black/30 border border-white/5 px-3 py-2 text-xs">
+          <div key={i} className="flex items-start gap-2 rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] px-3 py-2 text-xs">
             <span className="shrink-0 font-mono text-amber-300">{c.id}</span>
             <div className="min-w-0">
-              <div className="text-white/80 font-medium">{c.title}</div>
-              <div className="text-white/40 mt-0.5">{c.detail}</div>
+              <div className="text-[var(--text-secondary)] font-medium">{c.title}</div>
+              <div className="text-[var(--text-muted)] mt-0.5">{c.detail}</div>
             </div>
             <SeverityPill sev={c.severity} />
           </div>
@@ -397,7 +397,7 @@ function AttackPathCard({ finding }) {
         {steps.map((s, i) => (
           <li key={i} className="flex gap-2 text-xs">
             <span className="shrink-0 w-5 h-5 rounded-full bg-rose-500/20 text-rose-300 flex items-center justify-center font-mono text-[10px]">{s.order ?? i + 1}</span>
-            <span className="text-white/80"><b className="text-rose-200">{s.stage}:</b> {s.detail}</span>
+            <span className="text-[var(--text-secondary)]"><b className="text-rose-200">{s.stage}:</b> {s.detail}</span>
           </li>
         ))}
       </ol>
@@ -418,7 +418,7 @@ function FindingCard({ finding, L }) {
   const evKeys = Object.keys(ev).filter((k) => k !== 'checks' && k !== 'steps' && k !== 'kill_chain' && k !== 'graph')
   const conf = typeof finding.confidence === 'number' ? Math.round(finding.confidence * 100) : null
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+    <div className="rounded-xl border border-[var(--border-default)] bg-white/[0.03] overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
@@ -427,23 +427,23 @@ function FindingCard({ finding, L }) {
             {finding.mitre_attack && <Chip color="#a78bfa">{finding.mitre_attack}</Chip>}
             {conf !== null && <Chip color="#22d3ee">{L.confidence} {conf}%</Chip>}
           </div>
-          <div className="text-sm text-white/85 mt-1 font-medium">{finding.title}</div>
+          <div className="text-sm text-[var(--text-primary)] mt-1 font-medium">{finding.title}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '−' : '+'}</span>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '−' : '+'}</span>
       </button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="px-4 pb-4 pt-1 space-y-3 text-xs">
-              {finding.description && <p className="text-white/60 leading-relaxed">{finding.description}</p>}
+              {finding.description && <p className="text-[var(--text-tertiary)] leading-relaxed">{finding.description}</p>}
               {evKeys.length > 0 && (
-                <div className="rounded-lg bg-black/40 border border-white/5 p-2">
-                  <div className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{L.evidence}</div>
+                <div className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-2">
+                  <div className="text-[10px] uppercase tracking-widest text-[var(--text-disabled)] mb-1">{L.evidence}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 font-mono">
                     {evKeys.map((k) => (
                       <div key={k} className="flex gap-2 min-w-0">
-                        <span className="text-white/40 shrink-0">{k}:</span>
-                        <span className="text-white/75 truncate">{renderEvidenceValue(ev[k])}</span>
+                        <span className="text-[var(--text-muted)] shrink-0">{k}:</span>
+                        <span className="text-[var(--text-secondary)] truncate">{renderEvidenceValue(ev[k])}</span>
                       </div>
                     ))}
                   </div>
@@ -454,8 +454,8 @@ function FindingCard({ finding, L }) {
                   {checks.map((c, i) => (
                     <div key={i} className="flex items-center gap-2 font-mono">
                       <span style={{ color: c.observed ? '#22c55e' : '#64748b' }}>{c.observed ? '✓' : '○'}</span>
-                      <span className="text-white/70">{c.name}</span>
-                      <span className="text-white/35 truncate">{renderEvidenceValue(c.detail)}</span>
+                      <span className="text-[var(--text-secondary)]">{c.name}</span>
+                      <span className="text-[var(--text-muted)] truncate">{renderEvidenceValue(c.detail)}</span>
                     </div>
                   ))}
                 </div>
@@ -489,7 +489,7 @@ function Toggle({ on, onClick, label }) {
 
 function Segmented({ value, onChange, options }) {
   return (
-    <div className="inline-flex rounded-lg border border-white/10 p-0.5 bg-black/30">
+    <div className="inline-flex rounded-lg border border-[var(--border-default)] p-0.5 bg-[var(--table-surface)]">
       {options.map((o) => (
         <button key={o.value} type="button" onClick={() => onChange(o.value)}
           className="px-3 py-1 rounded-md text-xs font-mono transition-all"
@@ -602,20 +602,20 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
       <EvidenceNotice className="text-[10px] leading-snug">{L.evidence_notice}</EvidenceNotice>
       {/* Header + run */}
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl" style={{ color: ACCENT }}>⎈</span>
             <div>
               <h2 className="text-lg font-bold text-white">{L.title}</h2>
-              <p className="text-sm text-white/50">{L.subtitle}</p>
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">k8s_container</span>
+              <p className="text-sm text-[var(--text-tertiary)]">{L.subtitle}</p>
+              <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">k8s_container</span>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
-              <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
             <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
               className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -627,14 +627,14 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
 
         {/* Target */}
         <label className="block mb-4">
-          <span className="text-[11px] font-mono text-white/40">{L.target}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.target}</span>
           <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={L.targetPh}
-            className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 font-mono focus:outline-none focus:border-violet-500/40" />
+            className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40" />
         </label>
 
         {/* Scan profile */}
         <div className="mb-4">
-          <div className="text-[11px] font-mono text-white/40 mb-1">{L.profile}</div>
+          <div className="text-[11px] font-mono text-[var(--text-muted)] mb-1">{L.profile}</div>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(SCAN_PROFILES).map(([key, prof]) => (
               <button key={key} type="button" onClick={() => applyProfile(key)}
@@ -646,22 +646,22 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-white/30 mt-1">{L.profileHint}</p>
+          <p className="text-[10px] text-[var(--text-disabled)] mt-1">{L.profileHint}</p>
         </div>
 
         {/* Intensity */}
         <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="text-[11px] font-mono text-white/40">{L.intensity}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.intensity}</span>
           <Segmented value={params.intensity} onChange={(v) => set('intensity', v)}
             options={[{ value: 'light', label: L.light }, { value: 'normal', label: L.normal }, { value: 'aggressive', label: L.aggressive }]} />
         </div>
 
         {/* Surfaces */}
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-mono text-white/40">{L.surfaces}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.surfaces}</span>
           <div className="flex gap-1">
-            <button type="button" onClick={() => toggleAll(true)} className="text-[10px] font-mono text-white/40 hover:text-white/70 px-2 py-0.5 rounded border border-white/10">{L.selectAll}</button>
-            <button type="button" onClick={() => toggleAll(false)} className="text-[10px] font-mono text-white/40 hover:text-white/70 px-2 py-0.5 rounded border border-white/10">{L.selectNone}</button>
+            <button type="button" onClick={() => toggleAll(true)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectAll}</button>
+            <button type="button" onClick={() => toggleAll(false)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectNone}</button>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
@@ -670,7 +670,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
               <div className="flex-1"><Toggle on={!!params[k]} onClick={() => set(k, !params[k])} label={label} /></div>
               {pk && (
                 <input value={params[pk]} onChange={(e) => set(pk, e.target.value)} placeholder={defPorts} disabled={!params[k]}
-                  className="w-36 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-white/70 font-mono focus:outline-none focus:border-violet-500/40 disabled:opacity-30" />
+                  className="w-36 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-violet-500/40 disabled:opacity-30" />
               )}
             </div>
           ))}
@@ -686,52 +686,52 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
               <div className="pt-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
-                    <span className="text-[11px] font-mono text-white/40">{L.timeout}</span>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.timeout}</span>
                     <input type="number" value={params.timeout_ms} onChange={(e) => set('timeout_ms', e.target.value)}
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 font-mono focus:outline-none focus:border-violet-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40" />
                   </label>
                   <label className="block">
-                    <span className="text-[11px] font-mono text-white/40">{L.concurrency}</span>
+                    <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.concurrency}</span>
                     <input type="number" value={params.concurrency} onChange={(e) => set('concurrency', e.target.value)}
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 font-mono focus:outline-none focus:border-violet-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40" />
                   </label>
                 </div>
                 <div>
-                  <span className="text-[11px] font-mono text-white/40">{L.auth}</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.auth}</span>
                   <label className="block mt-1">
-                    <span className="text-[10px] font-mono text-white/35">{L.bearer}</span>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">{L.bearer}</span>
                     <input type="password" value={params.bearer_token} onChange={(e) => set('bearer_token', e.target.value)} placeholder={L.bearerPh} autoComplete="off"
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 font-mono focus:outline-none focus:border-violet-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40" />
                   </label>
                 </div>
                 <label className="block">
-                  <span className="text-[11px] font-mono text-white/40">{L.extraPaths}</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.extraPaths}</span>
                   <textarea value={params.extra_paths} onChange={(e) => set('extra_paths', e.target.value)} rows={2} placeholder={'/api/v1/namespaces/kube-system/secrets\n/apis/...'}
-                    className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/85 font-mono focus:outline-none focus:border-violet-500/40" />
+                    className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-violet-500/40" />
                 </label>
                 <div className="flex flex-col gap-2">
-                  <span className="text-[11px] font-mono text-white/40">{L.analysis}</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.analysis}</span>
                   <Toggle on={params.synthesize_attack_paths} onClick={() => set('synthesize_attack_paths', !params.synthesize_attack_paths)} label={L.attackPaths} />
                   <Toggle on={params.include_posture_summary} onClick={() => set('include_posture_summary', !params.include_posture_summary)} label={L.posture} />
                   <Toggle on={params.include_cis_benchmark} onClick={() => set('include_cis_benchmark', !params.include_cis_benchmark)} label={L.cisTitle} />
                 </div>
                 <label className="block">
-                  <span className="text-[11px] font-mono text-white/40">{L.minConf}: {Math.round(Number(params.min_confidence) * 100)}%</span>
+                  <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.minConf}: {Math.round(Number(params.min_confidence) * 100)}%</span>
                   <input type="range" min="0" max="1" step="0.05" value={params.min_confidence} onChange={(e) => set('min_confidence', e.target.value)} className="mt-1 w-full accent-violet-500" />
                 </label>
-                <button type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-white/40 hover:text-white/70 underline">{L.reset}</button>
+                <button type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">{L.reset}</button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{lastRun}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{lastRun}</p>}
       </div>
 
       {/* Results */}
       {findings.length === 0 && status !== 'running' && (
-        <div className="rounded-2xl bg-white/5 border border-white/5 p-6 text-center">
-          <p className="text-[11px] font-mono text-white/25">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
+        <div className="rounded-2xl bg-white/5 border border-[var(--border-subtle)] p-6 text-center">
+          <p className="text-[11px] font-mono text-[var(--text-disabled)]">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
         </div>
       )}
 
@@ -748,7 +748,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
 
       {regular.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-white/70 flex items-center gap-2">{L.findingsTitle} <Chip color={ACCENT}>{regular.length}</Chip></h3>
+          <h3 className="text-sm font-bold text-[var(--text-secondary)] flex items-center gap-2">{L.findingsTitle} <Chip color={ACCENT}>{regular.length}</Chip></h3>
           {regular.map((f, i) => <FindingCard key={i} finding={f} L={L} />)}
         </div>
       )}

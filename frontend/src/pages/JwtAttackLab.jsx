@@ -55,12 +55,12 @@ function exportFindingsCsv(findings, filenamePrefix) {
 function KpiStrip({ counts, total, jobId, lastUpdated, t }) {
   const sevs = ['critical', 'high', 'medium', 'low', 'info']
   return (
-    <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 space-y-3">
+    <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
           {t('pages.jwtLab.kpi_title')}
         </p>
-        <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-white/35">
+        <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-[var(--text-muted)]">
           {jobId && <span>{t('pages.jwtLab.job')}: {jobId}</span>}
           {lastUpdated && (
             <span>{t('pages.jwtLab.last_updated', { time: new Date(lastUpdated).toLocaleString() })}</span>
@@ -70,12 +70,12 @@ function KpiStrip({ counts, total, jobId, lastUpdated, t }) {
       <div className="flex flex-wrap gap-2">
         <div className="px-4 py-2 rounded-xl border border-[#a855f7]/30 bg-[#a855f7]/10 text-center min-w-[80px]">
           <p className="text-xl font-bold font-mono text-[#c084fc]">{total}</p>
-          <p className="text-[9px] font-mono text-white/40 uppercase">{t('pages.jwtLab.kpi_total')}</p>
+          <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jwtLab.kpi_total')}</p>
         </div>
         {sevs.filter((s) => counts[s] > 0).map((sev) => (
           <div key={sev} className={`px-4 py-2 rounded-xl border ${SEVERITY_META[sev].border} ${SEVERITY_META[sev].bg} text-center min-w-[72px]`}>
             <p className="text-xl font-bold font-mono" style={{ color: SEVERITY_META[sev].color }}>{counts[sev]}</p>
-            <p className="text-[9px] font-mono text-white/40 uppercase">{sev}</p>
+            <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase">{sev}</p>
           </div>
         ))}
       </div>
@@ -122,10 +122,10 @@ const JWT_CATEGORY_AXES = [
 // ── small controls ────────────────────────────────────────────────────────────
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-all text-left">
+    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
-        <span className="block text-[12px] font-mono text-white/85 truncate">{label}</span>
-        {hint && <span className="block text-[10px] font-mono text-white/35 truncate">{hint}</span>}
+        <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
+        {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
       </span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-[#a855f7]/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
@@ -137,10 +137,10 @@ function Toggle({ label, hint, checked, onChange }) {
 function Segmented({ label, value, options, onChange }) {
   return (
     <div>
-      {label && <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1.5">{label}</p>}
-      <div className="flex rounded-lg bg-black/40 border border-white/10 p-0.5 gap-0.5">
+      {label && <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1.5">{label}</p>}
+      <div className="flex rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-0.5 gap-0.5">
         {options.map((o) => (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)} className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-mono transition-all ${value === o.value ? 'bg-[#a855f7]/20 text-[#c084fc] border border-[#a855f7]/40' : 'text-white/45 hover:text-white/70 border border-transparent'}`}>{o.label}</button>
+          <button key={o.value} type="button" onClick={() => onChange(o.value)} className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-mono transition-all ${value === o.value ? 'bg-[#a855f7]/20 text-[#c084fc] border border-[#a855f7]/40' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-transparent'}`}>{o.label}</button>
         ))}
       </div>
     </div>
@@ -151,7 +151,7 @@ function Slider({ label, value, min, max, step = 1, suffix = '', onChange }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{label}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</p>
         <span className="text-[11px] font-mono text-[#c084fc]">{value}{suffix}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[#a855f7] cursor-pointer" />
@@ -162,7 +162,7 @@ function Slider({ label, value, min, max, step = 1, suffix = '', onChange }) {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">{label}</span>
+      <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{label}</span>
       {children}
     </label>
   )
@@ -176,7 +176,7 @@ function ListEditor({ label, value, onChange, placeholder }) {
         onChange={(e) => onChange(e.target.value.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))}
         rows={Math.min(6, Math.max(2, value.length))}
         placeholder={placeholder}
-        className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40 resize-y"
+        className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[#a855f7]/40 resize-y"
       />
     </Field>
   )
@@ -210,9 +210,9 @@ function EvidenceView({ evidence }) {
       {entries.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {entries.map(([k, v]) => (
-            <div key={k} className="flex items-start justify-between gap-2 text-[10px] font-mono border-b border-white/5 py-0.5">
-              <span className="text-white/40 shrink-0">{k}</span>
-              <span className="text-white/70 text-right break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+            <div key={k} className="flex items-start justify-between gap-2 text-[10px] font-mono border-b border-[var(--border-subtle)] py-0.5">
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] text-right break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
@@ -221,9 +221,9 @@ function EvidenceView({ evidence }) {
         <div className="space-y-1">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[10px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '○'}</span>
-              <span className="text-white/55">{c.name}</span>
-              {c.detail !== undefined && c.detail !== '' && <span className="text-white/35 truncate">— {typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>}
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '○'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
+              {c.detail !== undefined && c.detail !== '' && <span className="text-[var(--text-muted)] truncate">— {typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>}
             </div>
           ))}
         </div>
@@ -239,22 +239,22 @@ function FindingRow({ f, t }) {
   const conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null
   return (
     <div className={`rounded-xl border ${meta.border} ${meta.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-white/5 transition-colors">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className={`mt-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${meta.text} ${meta.border}`}>{sev}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-mono text-white/90">{f.title || f.type}</span>
-          {!open && <span className="block text-[10px] font-mono text-white/40 truncate mt-0.5">{f.description}</span>}
+          <span className="block text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
+          {!open && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate mt-0.5">{f.description}</span>}
         </span>
-        {conf !== null && <span className="text-[10px] font-mono text-white/35 shrink-0">{conf}%</span>}
-        <span className="text-white/30 text-xs shrink-0">{open ? '▾' : '▸'}</span>
+        {conf !== null && <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">{conf}%</span>}
+        <span className="text-[var(--text-disabled)] text-xs shrink-0">{open ? '▾' : '▸'}</span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
-            <p className="text-[11px] font-mono text-white/55 leading-relaxed">{f.description}</p>
-            {f.remediation && <p className="mt-2 text-[10px] font-mono text-purple-300/80 leading-relaxed"><span className="text-white/40">{t('pages.jwtLab.remediation')}: </span>{f.remediation}</p>}
+            <p className="text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>
+            {f.remediation && <p className="mt-2 text-[10px] font-mono text-purple-300/80 leading-relaxed"><span className="text-[var(--text-muted)]">{t('pages.jwtLab.remediation')}: </span>{f.remediation}</p>}
             {Array.isArray(f.compliance) && f.compliance.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">{f.compliance.map((c) => <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/45">{c}</span>)}</div>
+              <div className="mt-2 flex flex-wrap gap-1">{f.compliance.map((c) => <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)]">{c}</span>)}</div>
             )}
             <EvidenceView evidence={f.evidence} />
           </motion.div>
@@ -461,18 +461,18 @@ export default function JwtAttackLab() {
       <div className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-end gap-3 flex-wrap">
           <Field label={t('pages.jwtLab.client_label')}>
-            <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[180px]">
+            <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[180px]">
               <option value="">{t('pages.jwtLab.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
           <Field label={t('pages.jwtLab.target_label')}>
-            <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://api.example.com" className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[240px]" />
+            <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://api.example.com" className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#a855f7]/40 min-w-[240px]" />
           </Field>
         </div>
         <div className="flex items-center gap-2">
-          {jobStatus && scanning && <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{jobStatus}</span>}
-          <button type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done')) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/5 transition-all">{t('pages.jwtLab.reset')}</button>
+          {jobStatus && scanning && <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{jobStatus}</span>}
+          <button type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done')) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-all">{t('pages.jwtLab.reset')}</button>
           <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-[#a855f7]/40 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{scanning ? t('pages.jwtLab.scanning') : t('pages.jwtLab.run_scan')}</button>
         </div>
       </div>
@@ -483,25 +483,25 @@ export default function JwtAttackLab() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Control panel */}
-        <motion.aside initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="xl:col-span-4 space-y-5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 self-start">
+        <motion.aside initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="xl:col-span-4 space-y-5 rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 self-start">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-mono text-white/55 uppercase tracking-widest">{t('pages.jwtLab.control_panel')}</h3>
-            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-white/35 hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json') : t('pages.jwtLab.show_json')}</button>
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.jwtLab.control_panel')}</h3>
+            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json') : t('pages.jwtLab.show_json')}</button>
           </div>
 
           <Field label={t('pages.jwtLab.sample_jwt')}>
-            <textarea value={params.sample_jwt} onChange={(e) => set({ sample_jwt: e.target.value })} rows={3} placeholder="eyJhbGciOi..." className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[10px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40 resize-y break-all" />
+            <textarea value={params.sample_jwt} onChange={(e) => set({ sample_jwt: e.target.value })} rows={3} placeholder="eyJhbGciOi..." className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[10px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[#a855f7]/40 resize-y break-all" />
           </Field>
           {decoded && (
             <div className="rounded-lg border border-[#a855f7]/20 bg-[#a855f7]/5 p-2 space-y-1">
-              <p className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.decoded')}</p>
+              <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('pages.jwtLab.decoded')}</p>
               <pre className="text-[9px] font-mono text-emerald-300/80 overflow-x-auto">{JSON.stringify(decoded.header)}</pre>
               <pre className="text-[9px] font-mono text-sky-300/80 overflow-x-auto max-h-24">{JSON.stringify(decoded.payload, null, 1)}</pre>
             </div>
           )}
 
           <div className="space-y-2">
-            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('pages.jwtLab.section_attacks')}</p>
+            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('pages.jwtLab.section_attacks')}</p>
             <Toggle label={t('pages.jwtLab.test_alg_none')} hint={t('pages.jwtLab.test_alg_none_hint')} checked={params.test_alg_none} onChange={(v) => set({ test_alg_none: v })} />
             <Toggle label={t('pages.jwtLab.test_alg_confusion')} hint={t('pages.jwtLab.test_alg_confusion_hint')} checked={params.test_alg_confusion} onChange={(v) => set({ test_alg_confusion: v })} />
             <Toggle label={t('pages.jwtLab.test_weak_hmac')} hint={t('pages.jwtLab.test_weak_hmac_hint')} checked={params.test_weak_hmac} onChange={(v) => set({ test_weak_hmac: v })} />
@@ -517,7 +517,7 @@ export default function JwtAttackLab() {
           <ListEditor label={t('pages.jwtLab.harvest_paths')} value={params.harvest_paths} onChange={(v) => set({ harvest_paths: v })} placeholder="/login" />
           <ListEditor label={t('pages.jwtLab.jwks_paths')} value={params.jwks_paths} onChange={(v) => set({ jwks_paths: v })} placeholder="/.well-known/jwks.json" />
           <Field label={t('pages.jwtLab.jwks_url')}>
-            <input value={params.jwks_url} onChange={(e) => set({ jwks_url: e.target.value })} placeholder="https://idp.example.com/jwks.json" className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40" />
+            <input value={params.jwks_url} onChange={(e) => set({ jwks_url: e.target.value })} placeholder="https://idp.example.com/jwks.json" className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[#a855f7]/40" />
           </Field>
           <ListEditor label={t('pages.jwtLab.hmac_wordlist')} value={params.hmac_wordlist} onChange={(v) => set({ hmac_wordlist: v })} placeholder="company-name-2024" />
           <ListEditor label={t('pages.jwtLab.sensitive_claims')} value={params.sensitive_claims} onChange={(v) => set({ sensitive_claims: v })} placeholder="role" />
@@ -529,21 +529,21 @@ export default function JwtAttackLab() {
             <Slider label={t('pages.jwtLab.max_lifetime')} value={params.max_token_lifetime_minutes} min={5} max={10080} step={5} suffix="m" onChange={(v) => set({ max_token_lifetime_minutes: v })} />
             <div className="grid grid-cols-2 gap-3">
               <Field label={t('pages.jwtLab.min_rsa_bits')}>
-                <select value={params.min_rsa_bits} onChange={(e) => set({ min_rsa_bits: Number(e.target.value) })} className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40">{[1024, 2048, 3072, 4096].map((b) => <option key={b} value={b}>{b}</option>)}</select>
+                <select value={params.min_rsa_bits} onChange={(e) => set({ min_rsa_bits: Number(e.target.value) })} className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[#a855f7]/40">{[1024, 2048, 3072, 4096].map((b) => <option key={b} value={b}>{b}</option>)}</select>
               </Field>
               <Field label={t('pages.jwtLab.oast_host')}>
-                <input value={params.oast_host} onChange={(e) => set({ oast_host: e.target.value })} placeholder="oast.example" className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-[#a855f7]/40" />
+                <input value={params.oast_host} onChange={(e) => set({ oast_host: e.target.value })} placeholder="oast.example" className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[#a855f7]/40" />
               </Field>
             </div>
           </div>
 
-          {showPreview && <pre className="text-[9px] font-mono text-white/50 bg-black/60 border border-white/10 rounded-lg p-3 overflow-x-auto max-h-60">{JSON.stringify(requestBody, null, 2)}</pre>}
+          {showPreview && <pre className="text-[9px] font-mono text-[var(--text-tertiary)] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg p-3 overflow-x-auto max-h-60">{JSON.stringify(requestBody, null, 2)}</pre>}
         </motion.aside>
 
         {/* Results */}
         <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="xl:col-span-8 space-y-6">
           {historyLoading && !scanResult && (
-            <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4">
+            <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-4">
               <SkeletonBar className="h-4 w-40" />
               <SkeletonWidgetGrid count={4} />
             </div>
@@ -560,9 +560,9 @@ export default function JwtAttackLab() {
           )}
 
           {scanResult?.pending && (
-            <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4">
+            <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-4">
               <p className="text-[11px] font-mono text-[#c084fc] animate-pulse">{t('pages.jwtLab.scanning_live')}</p>
-              <p className="text-[10px] font-mono text-white/30">{t('pages.jwtLab.job')} {scanResult.job_id}</p>
+              <p className="text-[10px] font-mono text-[var(--text-disabled)]">{t('pages.jwtLab.job')} {scanResult.job_id}</p>
               <SkeletonWidgetGrid count={3} />
             </div>
           )}
@@ -574,20 +574,20 @@ export default function JwtAttackLab() {
                 labels={supremeLabels}
                 categoryAxes={JWT_CATEGORY_AXES}
               />
-            <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+            <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-                <h3 className="text-xs font-mono text-white/55 uppercase tracking-widest">
+                <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
                   {t('pages.jwtLab.findings')} ({filteredDisplayFindings.length}/{displayFindings.length})
                 </h3>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
                     <input
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={t('pages.jwtLab.search_placeholder')}
-                      className="pl-8 pr-3 py-1.5 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-white/80 placeholder-white/25 focus:outline-none focus:border-[#a855f7]/40 min-w-[200px]"
+                      className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-[#a855f7]/40 min-w-[200px]"
                     />
                   </div>
                   <div className="flex gap-1 flex-wrap">
@@ -596,7 +596,7 @@ export default function JwtAttackLab() {
                         key={s}
                         type="button"
                         onClick={() => setSeverityFilter(s)}
-                        className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${severityFilter === s ? 'border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10' : 'border-white/10 text-white/40 hover:text-white/60'}`}
+                        className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${severityFilter === s ? 'border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}
                       >
                         {s === 'all' ? t('pages.jwtLab.filter_all') : s}
                       </button>
@@ -630,14 +630,14 @@ export default function JwtAttackLab() {
             />
           )}
 
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-xs font-mono text-white/55 uppercase tracking-widest">{t('pages.jwtLab.attack_reference')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.jwtLab.attack_reference')}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ATTACK_REF_KEYS.map((a) => (
-                <div key={a.key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                <div key={a.key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-[var(--border-subtle)]">
                   <div className="min-w-0">
-                    <p className="text-[12px] font-mono text-white/90 truncate">{t(`pages.jwtLab.attack_ref.${a.key}.id`)}</p>
-                    <p className="text-[9px] font-mono text-white/40">{t(`pages.jwtLab.attack_ref.${a.key}.desc`)}</p>
+                    <p className="text-[12px] font-mono text-[var(--text-primary)] truncate">{t(`pages.jwtLab.attack_ref.${a.key}.id`)}</p>
+                    <p className="text-[9px] font-mono text-[var(--text-muted)]">{t(`pages.jwtLab.attack_ref.${a.key}.desc`)}</p>
                   </div>
                   <span className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase tracking-widest shrink-0 ${SEVERITY_META[a.sev].text} ${SEVERITY_META[a.sev].border}`}>{a.sev}</span>
                 </div>

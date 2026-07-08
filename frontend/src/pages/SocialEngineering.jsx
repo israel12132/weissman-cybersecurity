@@ -255,14 +255,14 @@ export default function SocialEngineering() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.socialEngineering.active_campaigns')}</span>
               <Mail className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{statValue('active')}</div>
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.socialEngineering.total_campaigns')}</span>
               <Users className="w-4 h-4 text-purple-400" />
@@ -276,7 +276,7 @@ export default function SocialEngineering() {
             </div>
             <div className="text-2xl font-bold text-red-400">{statValue('critical_findings')}</div>
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.socialEngineering.assessments_loaded')}</span>
               <Shield className="w-4 h-4 text-emerald-400" />
@@ -286,8 +286,8 @@ export default function SocialEngineering() {
         </div>
 
         {campaigns.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-            <div className="text-[10px] font-mono text-white/40 uppercase mb-2">{t('pages.socialEngineering.severity_distribution')}</div>
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+            <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{t('pages.socialEngineering.severity_distribution')}</div>
             <div className="flex h-2 rounded-full overflow-hidden">
               {['critical', 'high', 'medium', 'low', 'info'].map((sev) => {
                 const count = severityDistribution[sev] || 0;
@@ -310,7 +310,7 @@ export default function SocialEngineering() {
               <select
                 value={scanClientId}
                 onChange={(e) => setScanClientId(e.target.value)}
-                className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white font-mono"
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-white font-mono"
               >
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -360,7 +360,7 @@ export default function SocialEngineering() {
             const statusMatch = f.remediation?.match(/Status:\s*(.+)/i);
             const status = statusMatch?.[1];
             return (
-              <div key={i} className="p-4 rounded-lg border border-white/10 bg-black/30 hover:bg-white/5 transition-colors">
+              <div key={i} className="p-4 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] hover:bg-[var(--row-hover-bg)] transition-colors">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -395,16 +395,16 @@ export default function SocialEngineering() {
           }}
         />
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.templates_heading')}</h3>
-          <p className="text-xs text-white/40 mb-4">{t('pages.socialEngineering.templates_notice')}</p>
+          <p className="text-xs text-[var(--text-muted)] mb-4">{t('pages.socialEngineering.templates_notice')}</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {TEMPLATES.map((template) => (
               <button
                 key={template}
                 type="button"
                 onClick={() => openCreateModal(template)}
-                className="p-4 text-left bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-white/10 rounded-lg hover:border-purple-500/30 transition-colors"
+                className="p-4 text-left bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-[var(--border-default)] rounded-lg hover:border-purple-500/30 transition-colors"
               >
                 <Mail className="w-5 h-5 text-purple-400 mb-2" />
                 <h4 className="text-sm font-medium text-white mb-1">{templateLabel(template)}</h4>
@@ -417,16 +417,16 @@ export default function SocialEngineering() {
 
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-gray-900 p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-gray-900 p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-white">{t('pages.socialEngineering.create_modal_title')}</h3>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs text-gray-400">{t('pages.socialEngineering.campaign_name_label')}</label>
-                <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white" />
+                <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white" />
               </div>
               <div>
                 <label className="mb-1 block text-xs text-gray-400">{t('pages.socialEngineering.template_label')}</label>
-                <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)} className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white">
+                <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
                   {TEMPLATES.map((template) => (
                     <option key={template} value={template}>{templateLabel(template)}</option>
                   ))}
@@ -434,7 +434,7 @@ export default function SocialEngineering() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-gray-400">{t('common.client')}</label>
-                <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white">
+                <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
                   {clients.length === 0 ? (
                     <option value="">{t('pages.socialEngineering.no_clients')}</option>
                   ) : (
@@ -447,7 +447,7 @@ export default function SocialEngineering() {
               {createError && <p className="text-sm text-red-400">{createError}</p>}
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5">{t('common.cancel')}</button>
+              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-[var(--border-default)] px-4 py-2 text-sm text-gray-300 hover:bg-[var(--row-hover-bg)]">{t('common.cancel')}</button>
               <button type="button" onClick={createCampaign} disabled={creating || clients.length === 0} className="rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:opacity-50">
                 {creating ? t('pages.socialEngineering.creating') : t('pages.socialEngineering.create_campaign')}
               </button>

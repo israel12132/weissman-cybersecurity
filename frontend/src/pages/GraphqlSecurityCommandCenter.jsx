@@ -301,7 +301,7 @@ function buildScanBody(params, clientId, target) {
 function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -310,24 +310,24 @@ function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, c
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
-          {count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
       </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
 
 function Hint({ children }) {
   if (!children) return null
-  return <span className="block text-[9px] font-mono text-white/25 mt-0.5 leading-snug">{children}</span>
+  return <span className="block text-[9px] font-mono text-[var(--text-disabled)] mt-0.5 leading-snug">{children}</span>
 }
 
 function Num({ label, value, onChange, min, max, step, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input
         type="number"
         min={min}
@@ -335,7 +335,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -345,11 +345,11 @@ function Num({ label, value, onChange, min, max, step, hint }) {
 function Sel({ label, value, onChange, options, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
       >
         {options.map((o) => (
           <option key={o} value={o}>{o}</option>
@@ -363,12 +363,12 @@ function Sel({ label, value, onChange, options, hint }) {
 function Txt({ label, value, onChange, placeholder, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -378,13 +378,13 @@ function Txt({ label, value, onChange, placeholder, hint }) {
 function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea
         rows={rows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -395,7 +395,7 @@ function Toggle({ label, value, onChange, hint }) {
   return (
     <div className="flex items-start justify-between gap-3 py-0.5">
       <div className="min-w-0">
-        <span className="text-[11px] font-mono text-white/70">{label}</span>
+        <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
       <button
@@ -403,7 +403,7 @@ function Toggle({ label, value, onChange, hint }) {
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-pink-500/40' : 'bg-black/60 border border-white/10'}`}
+        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-pink-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
       </button>
@@ -523,7 +523,7 @@ function ExposureGauge({ score }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{pct || '—'}</span>
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">Exposure</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
     </div>
   )
@@ -531,8 +531,8 @@ function ExposureGauge({ score }) {
 
 function MetricTile({ label, value, accent = '#f472b6' }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{label}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
     </div>
   )
@@ -566,17 +566,17 @@ function OwaspBreakdownPanel({ posture, findings }) {
         {buckets.map(([key, count]) => (
           <div key={key} className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-mono text-white/70">{key}</span>
+              <span className="text-[10px] font-mono text-[var(--text-secondary)]">{key}</span>
               <span className="text-[10px] font-mono text-pink-300">{count}</span>
             </div>
-            <div className="h-1.5 rounded-full bg-black/50 overflow-hidden">
+            <div className="h-1.5 rounded-full bg-[var(--bg-3)] overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-pink-500/60 to-fuchsia-400/80"
                 style={{ width: `${Math.round((count / max) * 100)}%` }}
               />
             </div>
             {OWASP_API_LABELS[key] && (
-              <p className="text-[9px] text-white/35 leading-snug">{OWASP_API_LABELS[key]}</p>
+              <p className="text-[9px] text-[var(--text-muted)] leading-snug">{OWASP_API_LABELS[key]}</p>
             )}
           </div>
         ))}
@@ -593,8 +593,8 @@ function SchemaTypeExplorer({ schemaGraph }) {
   if (!types.length) return null
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
-      <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Schema Type Explorer</p>
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
+      <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Schema Type Explorer</p>
       <div className="flex flex-wrap gap-1.5 max-h-24 overflow-auto">
         {types.map((t) => {
           const sensitive = (t.fields || []).some((f) => /pass|secret|token|key|ssn|card|cred|hash|otp|pin/i.test(f))
@@ -604,7 +604,7 @@ function SchemaTypeExplorer({ schemaGraph }) {
               key={t.type}
               type="button"
               onClick={() => setSelected(t.type)}
-              className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${isSel ? 'border-pink-400/50 bg-pink-500/15 text-pink-200' : 'border-white/10 text-white/50 hover:border-white/25'}`}
+              className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${isSel ? 'border-pink-400/50 bg-pink-500/15 text-pink-200' : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)]'}`}
             >
               {sensitive ? '⚠ ' : ''}{t.type}
             </button>
@@ -612,10 +612,10 @@ function SchemaTypeExplorer({ schemaGraph }) {
         })}
       </div>
       {active && (
-        <div className="rounded-lg border border-white/10 bg-black/50 p-3">
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-3">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm font-semibold text-white">{active.type}</span>
-            <span className="text-[9px] font-mono text-white/40">{active.kind}</span>
+            <span className="text-[9px] font-mono text-[var(--text-muted)]">{active.kind}</span>
             <span className="text-[9px] font-mono text-cyan-400/70">{active.field_count ?? (active.fields || []).length} fields</span>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -624,7 +624,7 @@ function SchemaTypeExplorer({ schemaGraph }) {
               return (
                 <span
                   key={f}
-                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${hot ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-white/10 text-white/55'}`}
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${hot ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-[var(--border-default)] text-[var(--text-tertiary)]'}`}
                 >
                   {f}
                 </span>
@@ -658,7 +658,7 @@ function ExecutiveSummaryStrip({ summary, onExportPdf, onExportJson }) {
         </p>
         <div className="flex items-center gap-2">
           {summary.owasp_grade && (
-            <span className="text-[10px] font-mono text-white/50">OWASP {summary.owasp_grade}</span>
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)]">OWASP {summary.owasp_grade}</span>
           )}
           {onExportPdf && (
             <button type="button" onClick={onExportPdf} className="text-[9px] font-mono px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
@@ -676,7 +676,7 @@ function ExecutiveSummaryStrip({ summary, onExportPdf, onExportJson }) {
         <p className="text-sm font-semibold text-white leading-snug">{summary.headline}</p>
       )}
       {summary.recommended_first_action && (
-        <p className="text-[11px] text-white/55 leading-relaxed border-t border-white/10 pt-2">
+        <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed border-t border-[var(--border-default)] pt-2">
           <span className="text-cyan-300/80 font-mono text-[10px] uppercase tracking-wide">First fix → </span>
           {summary.recommended_first_action}
         </p>
@@ -703,7 +703,7 @@ function ComplianceScorecardPanel({ scorecard }) {
           >
             {scorecard.overall_grade || '—'}
           </span>
-          <span className="text-[10px] font-mono text-white/40">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {scorecard.overall_score ?? '—'}/100 overall
           </span>
         </div>
@@ -712,13 +712,13 @@ function ComplianceScorecardPanel({ scorecard }) {
         {categories.map((c) => (
           <div
             key={c.category}
-            className="rounded-lg border border-white/10 bg-black/40 p-2.5 text-center"
+            className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-2.5 text-center"
             title={c.label}
           >
             <p className="text-lg font-bold font-mono" style={{ color: gradeColor(c.grade) }}>
               {c.grade}
             </p>
-            <p className="text-[9px] font-mono text-white/50">{c.category}</p>
+            <p className="text-[9px] font-mono text-[var(--text-tertiary)]">{c.category}</p>
           </div>
         ))}
       </div>
@@ -736,7 +736,7 @@ function RemediationPanel({ items }) {
         Prioritized Remediation ({list.length})
       </p>
       {list.map((item, i) => (
-        <div key={i} className="rounded-lg border border-white/10 bg-black/40 p-3 space-y-1">
+        <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-1">
           <div className="flex items-start gap-2">
             <span className={`text-[10px] font-mono shrink-0 ${sevColor(item.severity)}`}>
               [{item.severity || 'info'}]
@@ -747,7 +747,7 @@ function RemediationPanel({ items }) {
             <p className="text-[10px] text-cyan-200/70 leading-snug pl-1">{item.remediation}</p>
           )}
           {item.owasp_api && (
-            <span className="text-[9px] font-mono text-white/35">{item.owasp_api}</span>
+            <span className="text-[9px] font-mono text-[var(--text-muted)]">{item.owasp_api}</span>
           )}
         </div>
       ))}
@@ -1006,12 +1006,12 @@ export default function GraphqlSecurityCommandCenter() {
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {engine?.label || 'GraphQL & API Security'}
               </h1>
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {t('graphqlSec.hero_desc', 'Evidence-only remote assessment: every finding is backed by a real HTTP observation. No mutations are ever executed.')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
                 Engine Detail →
               </Link>
             </div>
@@ -1025,13 +1025,13 @@ export default function GraphqlSecurityCommandCenter() {
               key={p.id}
               type="button"
               onClick={() => loadProfile(p.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-left transition-all ${activeProfile === p.id ? 'border-pink-400/50 bg-pink-500/10' : 'border-white/10 bg-black/40 hover:border-white/25'}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-left transition-all ${activeProfile === p.id ? 'border-pink-400/50 bg-pink-500/10' : 'border-[var(--border-default)] bg-[var(--bg-2)] hover:border-[var(--border-strong)]'}`}
               style={activeProfile === p.id ? { boxShadow: `0 0 20px ${p.color}25` } : undefined}
             >
               <span className="text-lg">{p.icon}</span>
               <div>
                 <p className="text-xs font-semibold text-white">{p.label}</p>
-                <p className="text-[10px] text-white/40 max-w-xs leading-snug">{p.desc}</p>
+                <p className="text-[10px] text-[var(--text-muted)] max-w-xs leading-snug">{p.desc}</p>
               </div>
             </button>
           ))}
@@ -1049,7 +1049,7 @@ export default function GraphqlSecurityCommandCenter() {
                 <button
                   type="button"
                   onClick={resetParams}
-                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors"
+                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('common.reset', 'Reset')}
                 </button>
@@ -1058,11 +1058,11 @@ export default function GraphqlSecurityCommandCenter() {
               {/* Target Binding */}
               <Section title={t('graphqlSec.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{t('common.client', 'Client')}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
                   <select
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40"
                   >
                     <option value="">—</option>
                     {clients.map((c) => (
@@ -1209,22 +1209,22 @@ export default function GraphqlSecurityCommandCenter() {
                 <Toggle label="Verify TLS" value={params.verify_tls} onChange={(v) => setField('verify_tls', v)} hint="Off = accept invalid certs" />
                 <Txt label="User-Agent" value={params.user_agent} onChange={(v) => setField('user_agent', v)} placeholder="(default GraphQLSec UA)" />
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">Auth / Custom Headers</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">Auth / Custom Headers</span>
                   {params.extra_headers.map((h, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <input
                         value={h.name}
                         onChange={(e) => setHeader(i, 'name', e.target.value)}
                         placeholder="Header"
-                        className="w-2/5 rounded-lg bg-black/50 border border-white/10 px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
                       />
                       <input
                         value={h.value}
                         onChange={(e) => setHeader(i, 'value', e.target.value)}
                         placeholder="Value (e.g. Bearer …)"
-                        className="flex-1 rounded-lg bg-black/50 border border-white/10 px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
+                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
                       />
-                      <button type="button" onClick={() => removeHeader(i)} className="text-white/30 hover:text-rose-400 text-sm px-1">✕</button>
+                      <button type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</button>
                     </div>
                   ))}
                   <button type="button" onClick={addHeader} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">+ {t('graphqlSec.add_header', 'add header')}</button>
@@ -1248,7 +1248,7 @@ export default function GraphqlSecurityCommandCenter() {
                   {showPreview ? t('graphqlSec.hide_json', 'hide JSON') : t('graphqlSec.show_json', 'show exact request JSON')}
                 </button>
                 {showPreview && (
-                  <pre className="max-h-60 overflow-auto rounded-lg bg-black/60 border border-white/10 p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
+                  <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
                   </pre>
                 )}
@@ -1285,9 +1285,9 @@ export default function GraphqlSecurityCommandCenter() {
           {/* ───────── Live theatre ───────── */}
           <div className="space-y-6 min-w-0">
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
-              <div className="2xl:col-span-2 rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+              <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     {t('graphqlSec.schema_viz', 'Live Schema Graph')}
                   </span>
                   {running && (
@@ -1303,8 +1303,8 @@ export default function GraphqlSecurityCommandCenter() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-5 text-center">
-                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
+                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('graphqlSec.exposure_score', 'API Exposure Score')}
                   </p>
                   <ExposureGauge score={metrics?.exposure_score} />
@@ -1318,8 +1318,8 @@ export default function GraphqlSecurityCommandCenter() {
                   <MetricTile label="High / Crit" value={metrics ? `${metrics.highs ?? 0} / ${metrics.criticals ?? 0}` : null} accent="#fb7185" />
                 </div>
                 {metrics?.implementation && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">Implementation</p>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 text-center">
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Implementation</p>
                     <p className="text-sm font-bold text-pink-300">{metrics.implementation}</p>
                   </div>
                 )}
@@ -1352,7 +1352,7 @@ export default function GraphqlSecurityCommandCenter() {
                     {t('graphqlSec.attack_paths', 'Attack Paths (Toxic Combinations)')} · {attackPaths.length}
                   </p>
                   {attackPaths.map((p, i) => (
-                    <div key={i} className="rounded-lg border border-white/10 bg-black/40 p-3">
+                    <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-[10px] font-mono ${sevColor(p.severity)}`}>[{p.severity}]</span>
                         <span className="text-sm font-semibold text-white">{p.title}</span>
@@ -1360,7 +1360,7 @@ export default function GraphqlSecurityCommandCenter() {
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         {(p.path_steps || []).map((step, j) => (
                           <React.Fragment key={j}>
-                            <span className="text-[10px] font-mono text-white/60 rounded border border-white/10 bg-black/40 px-1.5 py-0.5">{step}</span>
+                            <span className="text-[10px] font-mono text-[var(--text-tertiary)] rounded border border-[var(--border-default)] bg-[var(--bg-2)] px-1.5 py-0.5">{step}</span>
                             {j < (p.path_steps.length - 1) && <span className="text-fuchsia-400/60 text-xs">→</span>}
                           </React.Fragment>
                         ))}
@@ -1372,8 +1372,8 @@ export default function GraphqlSecurityCommandCenter() {
             </AnimatePresence>
 
             {/* Telemetry */}
-            <div className="rounded-2xl border border-white/10 bg-black/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-white/5 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
+              <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
                 {t('graphqlSec.telemetry', 'Scan Telemetry')}
               </div>
               <pre className="h-44 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">
@@ -1398,16 +1398,16 @@ export default function GraphqlSecurityCommandCenter() {
               accent="#f472b6"
               showEmptyReady={!running && realFindings.length === 0}
               renderFinding={(f, i) => (
-                <div key={i} className="text-[11px] border-b border-white/5 pb-2 last:border-0">
+                <div key={i} className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
                   <div className="flex items-start gap-2">
                     <span className={`font-mono shrink-0 ${sevColor(f.severity)}`}>[{f.severity || 'info'}]</span>
-                    <span className="text-white/80 min-w-0 font-semibold">{f.title}</span>
+                    <span className="text-[var(--text-secondary)] min-w-0 font-semibold">{f.title}</span>
                   </div>
-                  {f.description && <p className="text-[10px] text-white/40 ml-1 mt-0.5 leading-snug">{f.description}</p>}
+                  {f.description && <p className="text-[10px] text-[var(--text-muted)] ml-1 mt-0.5 leading-snug">{f.description}</p>}
                   <div className="flex flex-wrap gap-1.5 ml-1 mt-1">
                     {f.owasp_api && <span className="text-[9px] font-mono text-pink-300/70 rounded border border-pink-500/20 px-1.5 py-0.5">{f.owasp_api}</span>}
-                    {f.component && <span className="text-[9px] font-mono text-white/40 rounded border border-white/10 px-1.5 py-0.5">{f.component}</span>}
-                    {f.mitre_attack && <span className="text-[9px] font-mono text-white/30 rounded border border-white/10 px-1.5 py-0.5">{f.mitre_attack}</span>}
+                    {f.component && <span className="text-[9px] font-mono text-[var(--text-muted)] rounded border border-[var(--border-default)] px-1.5 py-0.5">{f.component}</span>}
+                    {f.mitre_attack && <span className="text-[9px] font-mono text-[var(--text-disabled)] rounded border border-[var(--border-default)] px-1.5 py-0.5">{f.mitre_attack}</span>}
                   </div>
                 </div>
               )}

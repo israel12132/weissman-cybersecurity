@@ -258,7 +258,7 @@ export default function EngineManagementConsole() {
         <>
         {/* Stats Header */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">
                 {t('pages.engineManagementConsole.total_engines')}
@@ -268,7 +268,7 @@ export default function EngineManagementConsole() {
             <div className="text-2xl font-bold text-white">{stats.total}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">
                 {t('pages.engineManagementConsole.enabled')}
@@ -278,7 +278,7 @@ export default function EngineManagementConsole() {
             <div className="text-2xl font-bold text-green-400">{stats.enabled}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">
                 {t('pages.engineManagementConsole.disabled')}
@@ -288,7 +288,7 @@ export default function EngineManagementConsole() {
             <div className="text-2xl font-bold text-gray-400">{stats.disabled}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">
                 {t('pages.engineManagementConsole.categories')}
@@ -309,7 +309,7 @@ export default function EngineManagementConsole() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.engineManagementConsole.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -317,7 +317,7 @@ export default function EngineManagementConsole() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -329,7 +329,7 @@ export default function EngineManagementConsole() {
           </select>
 
           {/* Status Filter */}
-          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'enabled', 'disabled'].map((status) => (
               <button
                 key={status}
@@ -337,7 +337,7 @@ export default function EngineManagementConsole() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   statusFilter === status
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {status === 'all'
@@ -387,8 +387,8 @@ export default function EngineManagementConsole() {
         )}
 
         {/* Engines List */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
               {t(`${NS}.engines_heading`, {
@@ -416,7 +416,7 @@ export default function EngineManagementConsole() {
               {filteredEngines.map((engine) => (
                 <div
                   key={engine.id}
-                  className="p-4 hover:bg-white/5 transition-colors"
+                  className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -555,7 +555,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
+      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-bold text-white">{engine.name}</h3>
@@ -583,7 +583,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, timeout: parseInt(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -598,7 +598,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, concurrency: parseInt(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -613,7 +613,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({ ...config, max_retries: parseInt(e.target.value) })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -631,7 +631,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
                   resource_limit_cpu: parseInt(e.target.value),
                 })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -649,7 +649,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
                   resource_limit_memory: parseInt(e.target.value),
                 })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
         </div>

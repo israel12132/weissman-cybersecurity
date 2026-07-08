@@ -145,8 +145,8 @@ export default function FeedbackLoopVerification() {
       )}
     >
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+        <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
             {t('pages.feedbackLoopVerification.chain_runner')}
           </h3>
 
@@ -154,7 +154,7 @@ export default function FeedbackLoopVerification() {
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-violet-500/40"
+              className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40"
             >
               <option value="">{t('pages.feedbackLoopVerification.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -165,7 +165,7 @@ export default function FeedbackLoopVerification() {
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t('pages.feedbackLoopVerification.target_placeholder')}
-            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-violet-500/40"
+            className="w-full rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-violet-500/40"
           />
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -173,7 +173,7 @@ export default function FeedbackLoopVerification() {
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               disabled={loadingYaml}
-              className="flex-1 min-w-[180px] rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-violet-500/40 disabled:opacity-50"
+              className="flex-1 min-w-[180px] rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40 disabled:opacity-50"
             >
               {templates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>{tpl.name || tpl.id}</option>
@@ -204,9 +204,9 @@ export default function FeedbackLoopVerification() {
             </div>
           )}
 
-          <div className="rounded-xl border border-white/10 bg-black/50 p-4">
+          <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-mono text-white/30">
+              <div className="text-[10px] font-mono text-[var(--text-disabled)]">
                 {t('pages.feedbackLoopVerification.template_editable')}
               </div>
               {loadingYaml && (
@@ -227,36 +227,36 @@ export default function FeedbackLoopVerification() {
                 value={yaml}
                 onChange={(e) => setYaml(e.target.value)}
                 rows={14}
-                className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/70 font-mono focus:outline-none focus:border-violet-500/40"
+                className="w-full rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-violet-500/40"
               />
             )}
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
             {t('pages.feedbackLoopVerification.state_evidence')}
           </h3>
 
           {!result ? (
             <EmptyState
-              icon={<Layers className="w-8 h-8 text-white/20" />}
+              icon={<Layers className="w-8 h-8 text-[var(--text-disabled)]" />}
               title={t('pages.feedbackLoopVerification.result_empty_title')}
               description={t('pages.feedbackLoopVerification.result_empty')}
             />
           ) : (
             <>
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.steps_total')}</div>
+                <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_total')}</div>
                   <div className="text-xl font-semibold text-white">{stepCount}</div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.steps_passed')}</div>
+                <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.steps_passed')}</div>
                   <div className="text-xl font-semibold text-emerald-300">{passedSteps}</div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                  <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.feedbackLoopVerification.verification')}</div>
+                <div className="rounded-xl border border-[var(--border-default)] bg-white/5 p-3 text-center">
+                  <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.feedbackLoopVerification.verification')}</div>
                   <div className="flex items-center justify-center gap-1 mt-1">
                     {result?.verification?.verified ? (
                       <>
@@ -265,8 +265,8 @@ export default function FeedbackLoopVerification() {
                       </>
                     ) : (
                       <>
-                        <XCircle className="w-4 h-4 text-white/40" />
-                        <span className="text-[11px] font-mono text-white/40">{t('pages.feedbackLoopVerification.not_verified')}</span>
+                        <XCircle className="w-4 h-4 text-[var(--text-muted)]" />
+                        <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.feedbackLoopVerification.not_verified')}</span>
                       </>
                     )}
                   </div>
@@ -274,7 +274,7 @@ export default function FeedbackLoopVerification() {
               </div>
 
               {result?.verification?.message && (
-                <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white/60 font-mono">
+                <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] px-3 py-2 text-[11px] text-[var(--text-tertiary)] font-mono">
                   {String(result.verification.message)}
                 </div>
               )}
@@ -297,25 +297,25 @@ export default function FeedbackLoopVerification() {
             emptyReadyTitle={t('pages.feedbackLoopVerification.result_empty_title')}
             emptyReadyBody={t('pages.feedbackLoopVerification.result_empty')}
             renderFinding={(f, i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+              <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 space-y-1">
                 <div className="flex items-start gap-2">
                   <span
                     className={`text-[9px] font-mono uppercase shrink-0 ${f.severity === 'info' ? 'text-emerald-300' : 'text-orange-300'}`}
                   >
                     [{f.severity}]
                   </span>
-                  <span className="text-[12px] font-mono text-white/90 min-w-0">{f.title}</span>
+                  <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title}</span>
                   {f.type && (
-                    <span className="text-[9px] font-mono text-white/35 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                    <span className="text-[9px] font-mono text-[var(--text-muted)] border border-[var(--border-default)] px-1.5 py-0.5 rounded shrink-0">
                       {f.type}
                     </span>
                   )}
                 </div>
                 {f.description && (
-                  <p className="text-[10px] font-mono text-white/45 leading-relaxed">{f.description}</p>
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>
                 )}
                 {(f.remediation || f.component) && (
-                  <div className="flex flex-wrap gap-2 text-[9px] font-mono text-white/30">
+                  <div className="flex flex-wrap gap-2 text-[9px] font-mono text-[var(--text-disabled)]">
                     {f.remediation && <span>{f.remediation}</span>}
                     {f.component && <span>{f.component}</span>}
                   </div>

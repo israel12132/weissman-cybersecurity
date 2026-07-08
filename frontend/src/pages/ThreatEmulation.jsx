@@ -109,7 +109,7 @@ function renderEmulationFinding(f, i) {
   const sev = (f.severity || 'info').toLowerCase()
   const color = SEV_COLORS[sev] || SEV_COLORS.info
   return (
-    <div key={f.id || f.finding_id || i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 space-y-1">
+    <div key={f.id || f.finding_id || i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2.5 space-y-1">
       <div className="flex items-start gap-2">
         <span
           className="text-[9px] font-mono uppercase shrink-0 px-1.5 py-0.5 rounded border"
@@ -117,10 +117,10 @@ function renderEmulationFinding(f, i) {
         >
           {sev}
         </span>
-        <span className="text-[12px] font-mono text-white/90 min-w-0 flex-1">{f.title || 'Finding'}</span>
+        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0 flex-1">{f.title || 'Finding'}</span>
       </div>
       {f.description && (
-        <p className="text-[10px] font-mono text-white/45 leading-relaxed pl-0.5">{f.description}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed pl-0.5">{f.description}</p>
       )}
     </div>
   )
@@ -141,7 +141,7 @@ function AptCard({ group, result, t }) {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4 hover:border-white/20 transition-all"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4 hover:border-[var(--border-strong)] transition-all"
       style={{ borderColor: `${group.color}25` }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -153,12 +153,12 @@ function AptCard({ group, result, t }) {
             />
             <h3 className="text-sm font-bold text-white">{name}</h3>
             {!result?.has_data && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/10 text-white/35">
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)]">
                 {t('pages.threatEmulation.no_surface')}
               </span>
             )}
           </div>
-          <p className="text-[10px] font-mono text-white/40">{alias} · {nation}</p>
+          <p className="text-[10px] font-mono text-[var(--text-muted)]">{alias} · {nation}</p>
         </div>
         {result?.has_data && result.gaps > 0 && (
           <span className="shrink-0 text-[10px] font-mono px-2 py-0.5 rounded border border-red-500/30 text-red-300 bg-red-950/30">
@@ -167,47 +167,47 @@ function AptCard({ group, result, t }) {
         )}
       </div>
 
-      <p className="text-xs text-white/50 leading-relaxed">{description}</p>
+      <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{description}</p>
 
       <div className="flex flex-wrap gap-1">
         {group.techniques.map((tech) => (
-          <span key={tech} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/40">
+          <span key={tech} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)]">
             {tech}
           </span>
         ))}
       </div>
 
       {result?.has_data ? (
-        <div className="space-y-2 pt-2 border-t border-white/5">
+        <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-white/50">{t('pages.threatEmulation.blocked')}</span>
+            <span className="text-[var(--text-tertiary)]">{t('pages.threatEmulation.blocked')}</span>
             <span style={{ color: blockColor }}>{blockedPct ?? 0}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${blockPct}%`, backgroundColor: blockColor }} />
           </div>
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="text-white/50">{t('pages.threatEmulation.detected_not_blocked')}</span>
+            <span className="text-[var(--text-tertiary)]">{t('pages.threatEmulation.detected_not_blocked')}</span>
             <span className="text-amber-400">{detectedPct ?? 0}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full bg-amber-500/70 transition-all" style={{ width: `${detectPct}%` }} />
           </div>
-          <p className="text-[10px] font-mono text-white/30">
+          <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.threatEmulation.results_summary', {
               tested: result.techniques_tested,
               gaps: result.gaps,
             })}
           </p>
           {result.findings?.slice(0, 2).map((f) => (
-            <div key={f.id || f.finding_id || f.title} className="text-[10px] text-white/45 truncate font-mono">
+            <div key={f.id || f.finding_id || f.title} className="text-[10px] text-[var(--text-muted)] truncate font-mono">
               {findingBlocked(f) ? '✓' : '⚠'} {f.title}
             </div>
           ))}
         </div>
       ) : (
-        <div className="pt-2 border-t border-white/5">
-          <p className="text-[11px] font-mono text-white/25">{t('pages.threatEmulation.no_data')}</p>
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
+          <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('pages.threatEmulation.no_data')}</p>
         </div>
       )}
     </motion.div>
@@ -378,11 +378,11 @@ export default function ThreatEmulation() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-mono text-white/40">{t('pages.threatEmulation.target_client')}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.threatEmulation.target_client')}</span>
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('pages.threatEmulation.select_placeholder')}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -416,7 +416,7 @@ export default function ThreatEmulation() {
 
       {!selectedClientId && (
         <EmptyState
-          icon={<Target className="w-8 h-8 text-white/20" />}
+          icon={<Target className="w-8 h-8 text-[var(--text-disabled)]" />}
           title={t('pages.threatEmulation.select_client_warning_title')}
           description={t('pages.threatEmulation.select_client_warning')}
         />
@@ -427,8 +427,8 @@ export default function ThreatEmulation() {
       ) : selectedClientId && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-              <div className="flex items-center gap-2 text-[11px] text-white/45 mb-1">
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+              <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mb-1">
                 <Shield className="w-3.5 h-3.5 text-cyan-400" />
                 {t('pages.threatEmulation.kpi_scenarios')}
               </div>
@@ -454,7 +454,7 @@ export default function ThreatEmulation() {
                 {t('pages.threatEmulation.kpi_coverage')}
               </div>
               <div className="text-2xl font-bold text-purple-300">{aggregate.coveragePct}%</div>
-              <div className="text-[10px] text-white/35 mt-1">
+              <div className="text-[10px] text-[var(--text-muted)] mt-1">
                 {t('pages.threatEmulation.kpi_coverage_detail', { count: aggregate.groupsWithSurface, total: APT_GROUPS.length })}
               </div>
             </div>
@@ -486,15 +486,15 @@ export default function ThreatEmulation() {
           />
 
           {history.length > 0 && (
-            <section className="rounded-2xl border border-white/10 bg-black/40 p-5">
+            <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
               <div className="flex items-center gap-2 mb-4">
-                <History className="w-4 h-4 text-white/40" />
+                <History className="w-4 h-4 text-[var(--text-muted)]" />
                 <h3 className="text-sm font-semibold text-white">{t('pages.threatEmulation.history_heading')}</h3>
               </div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {history.slice(0, 10).map((job) => (
-                  <div key={job.id || job.job_id} className="flex items-center justify-between gap-3 text-xs font-mono border border-white/5 rounded-lg px-3 py-2">
-                    <span className="text-white/50 truncate">{job.created_at?.slice(0, 19) || job.id}</span>
+                  <div key={job.id || job.job_id} className="flex items-center justify-between gap-3 text-xs font-mono border border-[var(--border-subtle)] rounded-lg px-3 py-2">
+                    <span className="text-[var(--text-tertiary)] truncate">{job.created_at?.slice(0, 19) || job.id}</span>
                     <span className={`px-2 py-0.5 rounded border ${
                       job.status === 'completed' ? 'text-green-400 border-green-500/30' : 'text-amber-300 border-amber-500/30'
                     }`}>

@@ -19,12 +19,12 @@ import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngine
 
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 const inputCls =
-  'w-full px-3 py-2 bg-black/50 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40 text-sm'
+  'w-full px-3 py-2 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg text-white placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40 text-sm'
 const textareaCls = `${inputCls} font-mono`
 
 function Section({ icon: Icon, title, children }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/40 p-5 space-y-4">
+    <section className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-white/[0.04] to-black/40 p-5 space-y-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-white">
         <Icon className="w-4 h-4 text-cyan-400" />
         {title}
@@ -37,12 +37,12 @@ function Section({ icon: Icon, title, children }) {
 function Field({ label, hint, required, children }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-white/65 mb-1.5 block">
+      <span className="text-xs font-medium text-[var(--text-tertiary)] mb-1.5 block">
         {label}
         {required && <span className="text-red-400 ms-1">*</span>}
       </span>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-white/35">{hint}</p>}
+      {hint && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{hint}</p>}
     </label>
   )
 }
@@ -225,7 +225,7 @@ export default function ClientIntegrations() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t('pages.clientIntegrations.search_placeholder')}
-          className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/30"
+          className="w-full px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />
       </div>
       <ClientReadinessBanner clientId={id} />
@@ -244,7 +244,7 @@ export default function ClientIntegrations() {
       )}
 
       {loading ? (
-        <p className="text-white/50 text-sm animate-pulse">{t('common.loading')}</p>
+        <p className="text-[var(--text-tertiary)] text-sm animate-pulse">{t('common.loading')}</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-5">
@@ -290,11 +290,11 @@ export default function ClientIntegrations() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
                       form.agent_platforms.includes(p)
                         ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-                        : 'border-white/10 text-white/50'
+                        : 'border-[var(--border-default)] text-[var(--text-tertiary)]'
                     }`}>{p}</button>
                 ))}
               </div>
-              <label className="flex items-center gap-2 text-sm text-white/70 mb-3 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3 cursor-pointer">
                 <input type="checkbox" checked={form.industrial_ot_enabled}
                   onChange={(e) => patch({ industrial_ot_enabled: e.target.checked })} />
                 {label(catalog?.requirements?.industrial_ot)}
@@ -309,7 +309,7 @@ export default function ClientIntegrations() {
 
             <Section icon={KeyRound} title={t('pages.clientIntegrations.llm_client')}>
               {form.llm_endpoints.map((ep, i) => (
-                <div key={i} className="grid sm:grid-cols-3 gap-2 mb-2 p-3 rounded-xl border border-white/5 bg-black/30">
+                <div key={i} className="grid sm:grid-cols-3 gap-2 mb-2 p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)]">
                   <input className={inputCls} placeholder="https://api.example.com/v1/chat" value={ep.url}
                     onChange={(e) => {
                       const next = [...form.llm_endpoints]
@@ -345,15 +345,15 @@ export default function ClientIntegrations() {
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-              <h3 className="text-xs font-mono uppercase text-white/40 mb-3">{t('pages.clientOnboarding.readiness')}</h3>
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+              <h3 className="text-xs font-mono uppercase text-[var(--text-muted)] mb-3">{t('pages.clientOnboarding.readiness')}</h3>
               <div className="text-2xl font-bold text-white mb-1">{readiness.percent}%</div>
               <div className="h-1.5 rounded-full bg-white/10 mb-4 overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all" style={{ width: `${readiness.percent}%` }} />
               </div>
               <ul className="space-y-2 text-xs">
                 {readiness.items.filter((i) => i.hard).map((item) => (
-                  <li key={item.id} className={`flex gap-2 ${item.satisfied ? 'text-white/55' : 'text-amber-200/90'}`}>
+                  <li key={item.id} className={`flex gap-2 ${item.satisfied ? 'text-[var(--text-tertiary)]' : 'text-amber-200/90'}`}>
                     {item.satisfied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
                     {label(item.def)}
                   </li>
@@ -361,15 +361,15 @@ export default function ClientIntegrations() {
               </ul>
             </div>
             {tenantStatus && (
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-xs space-y-2">
-                <div className="font-mono uppercase text-white/40">{t('pages.clientOnboarding.tenant_status')}</div>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 text-xs space-y-2">
+                <div className="font-mono uppercase text-[var(--text-muted)]">{t('pages.clientOnboarding.tenant_status')}</div>
                 <div className="flex justify-between"><span>LLM</span><span className={tenantStatus.llm_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.llm_configured ? '✓' : '—'}</span></div>
                 <div className="flex justify-between"><span>OAST</span><span className={tenantStatus.oast_configured ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.oast_configured ? '✓' : '—'}</span></div>
                 <div className="flex justify-between"><span>AI entitlement</span><span className={tenantStatus.ai_heavy_entitled !== false ? 'text-emerald-400' : 'text-amber-400'}>{tenantStatus.ai_heavy_entitled !== false ? '✓' : '—'}</span></div>
                 <Link to="/system-core" className="block text-cyan-400 mt-2">{t('pages.clientIntegrations.tenant_settings')}</Link>
               </div>
             )}
-            <Link to={`/clients/${id}`} className="block text-center text-xs text-white/45 hover:text-white/70">
+            <Link to={`/clients/${id}`} className="block text-center text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
               ← {t('pages.clientIntegrations.back_client')}
             </Link>
           </aside>

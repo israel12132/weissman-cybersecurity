@@ -52,8 +52,8 @@ const STATUS = {
     glow: '',
     labelKey: 'status.checking',
     icon: Activity,
-    iconClass: 'text-white/40',
-    badge: 'bg-white/5 text-white/50 border-white/10',
+    iconClass: 'text-[var(--text-muted)]',
+    badge: 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)]',
   },
 }
 
@@ -97,18 +97,18 @@ function ServiceCard({ icon: Icon, name, description, level, detail, detailLink,
       {detail || '—'}
     </Link>
   ) : (
-    <span className="text-xs font-mono text-white/70 truncate">{detail || '—'}</span>
+    <span className="text-xs font-mono text-[var(--text-secondary)] truncate">{detail || '—'}</span>
   )
   return (
-    <article className="rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-5 hover:border-white/15 transition-colors">
+    <article className="rounded-2xl border border-[var(--border-default)] bg-black/35 backdrop-blur-md p-5 hover:border-[var(--border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-white/5">
             <Icon className="h-5 w-5 text-cyan-400/90" />
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-white/95 truncate">{name}</h3>
-            <p className="text-xs text-white/45 mt-0.5 line-clamp-2">{description}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{description}</p>
           </div>
         </div>
         <div className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full border text-[10px] font-mono uppercase tracking-wide ${meta.badge}`}>
@@ -116,13 +116,13 @@ function ServiceCard({ icon: Icon, name, description, level, detail, detailLink,
           {t(meta.labelKey)}
         </div>
       </div>
-      <div className="flex items-end justify-between gap-3 pt-3 border-t border-white/5">
+      <div className="flex items-end justify-between gap-3 pt-3 border-t border-[var(--border-subtle)]">
         <div className="flex items-center gap-2 min-w-0">
           <StatusIcon className={`h-4 w-4 shrink-0 ${meta.iconClass}`} />
           {detailContent}
         </div>
         {checkedAt && (
-          <span className="text-[10px] font-mono text-white/30 whitespace-nowrap flex items-center gap-1">
+          <span className="text-[10px] font-mono text-[var(--text-disabled)] whitespace-nowrap flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {fmtChecked(checkedAt, locale)}
           </span>
@@ -461,11 +461,11 @@ export default function StatusPage() {
             </div>
             <LanguageSwitcher />
           </div>
-          <p className="text-sm text-white/55 leading-relaxed max-w-2xl">{t('status.subtitle')}</p>
+          <p className="text-sm text-[var(--text-tertiary)] leading-relaxed max-w-2xl">{t('status.subtitle')}</p>
           <EvidenceNotice className="mt-4">{t('status.evidence_notice')}</EvidenceNotice>
         </header>
 
-        <section className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-6 mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className={`flex h-12 w-12 items-center justify-center rounded-full border ${overallMeta.badge}`}>
@@ -482,7 +482,7 @@ export default function StatusPage() {
                     : t('status.service_degraded')}
                 </h2>
                 {state.health?.uptime_secs != null && (
-                  <p className="text-xs font-mono text-white/40 mt-1">
+                  <p className="text-xs font-mono text-[var(--text-muted)] mt-1">
                     {t('status.platform_uptime')}: {fmtUptime(state.health.uptime_secs, t)}
                   </p>
                 )}
@@ -490,7 +490,7 @@ export default function StatusPage() {
             </div>
             <div className="flex items-center gap-3">
               {state.ts && (
-                <span className="text-[11px] font-mono text-white/35 flex items-center gap-1.5">
+                <span className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
                   {t('status.last_checked')} {fmtChecked(state.ts, i18n.language)}
                 </span>
@@ -520,7 +520,7 @@ export default function StatusPage() {
             resultCount={filteredServices.length}
             totalCount={services.length}
           />
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/40 mb-4">
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-4">
             {t('status.components')}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -556,11 +556,11 @@ export default function StatusPage() {
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-rose-500/15 last:border-0"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm text-white/90 font-medium font-mono">{probe.engine_id}</p>
-                    <p className="text-xs text-white/55 mt-0.5">{probe.message || t('status.health_probe_failed')}</p>
+                    <p className="text-sm text-[var(--text-primary)] font-medium font-mono">{probe.engine_id}</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{probe.message || t('status.health_probe_failed')}</p>
                   </div>
                   {probe.checked_at && (
-                    <span className="text-[10px] font-mono text-white/35 shrink-0">
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">
                       {fmtChecked(probe.checked_at, i18n.language)}
                     </span>
                   )}
@@ -571,8 +571,8 @@ export default function StatusPage() {
         )}
 
         {visibleIncidents.length > 0 && (
-          <section className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-6 mb-8">
-            <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-white/40 mb-4">
+          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-6 mb-8">
+            <h3 className="text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-4">
               {t('status.incident_history')}
             </h3>
             <ul className="space-y-3">
@@ -582,16 +582,16 @@ export default function StatusPage() {
                   return (
                     <li
                       key={inc.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-white/5 last:border-0"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--border-subtle)] last:border-0"
                     >
                       <div className="flex items-start gap-3 min-w-0">
                         <StatusIndicator level={inc.level} />
                         <div>
-                          <p className="text-sm text-white/85 font-medium">{name}</p>
-                          <p className="text-xs font-mono text-white/45 mt-0.5">{inc.detail || '—'}</p>
+                          <p className="text-sm text-[var(--text-primary)] font-medium">{name}</p>
+                          <p className="text-xs font-mono text-[var(--text-muted)] mt-0.5">{inc.detail || '—'}</p>
                         </div>
                       </div>
-                      <div className="text-[10px] font-mono text-white/35 sm:text-right shrink-0">
+                      <div className="text-[10px] font-mono text-[var(--text-muted)] sm:text-right shrink-0">
                         <div>{fmtChecked(inc.startedAt, i18n.language)}</div>
                         {inc.resolvedAt ? (
                           <div className="text-emerald-400/70">{t('status.resolved_at', { time: fmtChecked(inc.resolvedAt, i18n.language) })}</div>
@@ -606,10 +606,10 @@ export default function StatusPage() {
           </section>
         )}
 
-        <footer className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-5 text-[12px] text-white/45 leading-relaxed">
+        <footer className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-5 text-[12px] text-[var(--text-muted)] leading-relaxed">
           <p>{t('status.lightweight_notice')}</p>
           {state.health?.active_engines?.length > 0 && (
-            <p className="mt-2 font-mono text-[11px] text-white/30">
+            <p className="mt-2 font-mono text-[11px] text-[var(--text-disabled)]">
               {t('status.active_engines', { count: state.health.active_engines.length })}
             </p>
           )}

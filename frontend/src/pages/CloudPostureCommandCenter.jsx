@@ -124,7 +124,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-slate-300', bd: 'border-[var(--border-default)]', bg: 'bg-white/5', dot: '#94a3b8' },
 }
 
 function gradeColor(grade) {
@@ -152,7 +152,7 @@ function SubScoreBar({ label, value }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-mono text-white/55">{label}</span>
+        <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -182,7 +182,7 @@ function Scorecard({ summary }) {
     columnHelper.accessor('risk_score', {
       header: () => t('pages.cloudPostureCommandCenter.table_risk'),
       cell: (ctx) => (
-        <span className={SEV_STYLE[ctx.row.original.peak_severity]?.text || 'text-white/50'}>{ctx.row.original.risk_score}</span>
+        <span className={SEV_STYLE[ctx.row.original.peak_severity]?.text || 'text-[var(--text-tertiary)]'}>{ctx.row.original.risk_score}</span>
       ),
     }),
   ], [t])
@@ -205,7 +205,7 @@ function Scorecard({ summary }) {
   const rulesTriggered = summary.rules_triggered ?? 0
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex items-center gap-5">
           <div className="relative w-28 h-28 shrink-0">
@@ -216,17 +216,17 @@ function Scorecard({ summary }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
-              <span className="text-[10px] font-mono text-white/40">{score}/100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{score}/100</span>
             </div>
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-orange-400/80 mb-1">{t('pages.cloudPostureCommandCenter.scorecard_eyebrow')}</div>
             <h3 className="text-lg font-bold text-white">{t('pages.cloudPostureCommandCenter.scorecard_title')}</h3>
             {summary.account_id && (
-              <p className="text-[11px] font-mono text-white/45 mt-1">{t('pages.cloudPostureCommandCenter.scorecard_account', { accountId: summary.account_id })}</p>
+              <p className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{t('pages.cloudPostureCommandCenter.scorecard_account', { accountId: summary.account_id })}</p>
             )}
             {rulesTriggered > 0 && (
-              <p className="text-[10px] font-mono text-white/35 mt-1">{t('pages.cloudPostureCommandCenter.scorecard_rules_triggered', { count: rulesTriggered })}</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{t('pages.cloudPostureCommandCenter.scorecard_rules_triggered', { count: rulesTriggered })}</p>
             )}
             {catalog.catalog_status === 'complete' && (
               <p className="text-[10px] font-mono text-emerald-400/70 mt-1">
@@ -250,12 +250,12 @@ function Scorecard({ summary }) {
       </div>
 
       {(Object.keys(compliance).length > 0 || graph.node_count > 0 || exposure.blast_radius_index != null) && (
-        <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-4">
           {exposure.blast_radius_index != null && (
             <div className="rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-rose-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_blast_radius')}</div>
               <div className="text-2xl font-bold text-rose-300">{exposure.blast_radius_index}</div>
-              <div className="text-[10px] font-mono text-white/40 mt-1">
+              <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
                 {t('pages.cloudPostureCommandCenter.metric_blast_radius_detail', { internet: exposure.internet_exposed ?? 0, privileged: exposure.privileged_assets ?? 0, total: exposure.total_assets ?? 0 })}
               </div>
             </div>
@@ -264,21 +264,21 @@ function Scorecard({ summary }) {
             <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_detective_coverage')}</div>
               <div className="text-2xl font-bold text-cyan-300">{detective.score}%</div>
-              <div className="text-[10px] font-mono text-white/40 mt-1">
+              <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
                 {t('pages.cloudPostureCommandCenter.detective_sources')}
               </div>
             </div>
           )}
           {Object.keys(compliance).length > 0 && (
             <div className="lg:col-span-2">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.cloudPostureCommandCenter.section_frameworks')}</div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.section_frameworks')}</div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {Object.entries(compliance).map(([fw, data]) => (
-                  <div key={fw} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-                    <div className="text-[10px] font-mono text-white/40">{fw}</div>
+                  <div key={fw} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)]">{fw}</div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-sm font-bold" style={{ color: gradeColor(data.grade) }}>{data.grade}</span>
-                      <span className="text-[10px] font-mono text-white/35">{data.score}/100</span>
+                      <span className="text-[10px] font-mono text-[var(--text-muted)]">{data.score}/100</span>
                     </div>
                     {data.failed_controls > 0 && (
                       <div className="text-[9px] font-mono text-rose-400/70">{t('pages.cloudPostureCommandCenter.compliance_failed', { count: data.failed_controls })}</div>
@@ -290,8 +290,8 @@ function Scorecard({ summary }) {
           )}
           {graph.node_count > 0 && (
             <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.cloudPostureCommandCenter.metric_security_graph')}</div>
-              <div className="flex gap-4 text-sm font-mono text-white/60">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.metric_security_graph')}</div>
+              <div className="flex gap-4 text-sm font-mono text-[var(--text-tertiary)]">
                 <span>{t('pages.cloudPostureCommandCenter.graph_assets', { count: graph.node_count })}</span>
                 <span>{t('pages.cloudPostureCommandCenter.graph_relationships', { count: graph.edge_count })}</span>
                 {Array.isArray(graph.nodes) && (
@@ -306,17 +306,17 @@ function Scorecard({ summary }) {
                     .filter((n) => n.exposure === 'internet' || (n.risk_tags && n.risk_tags.length > 0))
                     .slice(0, 12)
                     .map((n) => (
-                      <div key={n.id} className="flex items-center gap-2 text-[10px] font-mono text-white/45">
-                        <span className={n.exposure === 'internet' ? 'text-rose-400' : 'text-white/30'}>●</span>
+                      <div key={n.id} className="flex items-center gap-2 text-[10px] font-mono text-[var(--text-muted)]">
+                        <span className={n.exposure === 'internet' ? 'text-rose-400' : 'text-[var(--text-disabled)]'}>●</span>
                         <span className="truncate flex-1">{n.id}</span>
                         {n.risk_tags?.slice(0, 2).map((tag) => (
-                          <span key={tag} className="text-[9px] px-1 rounded bg-white/5 text-white/35">{tag}</span>
+                          <span key={tag} className="text-[9px] px-1 rounded bg-white/5 text-[var(--text-muted)]">{tag}</span>
                         ))}
                       </div>
                     ))}
                 </div>
               )}
-              <p className="text-[10px] text-white/35 mt-2 leading-relaxed">
+              <p className="text-[10px] text-[var(--text-muted)] mt-2 leading-relaxed">
                 {t('pages.cloudPostureCommandCenter.graph_description')}
               </p>
             </div>
@@ -325,14 +325,14 @@ function Scorecard({ summary }) {
       )}
 
       {roadmap.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
           <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/80 mb-2">{t('pages.cloudPostureCommandCenter.roadmap_title')}</div>
           <ol className="space-y-2 list-decimal list-inside">
             {roadmap.slice(0, 8).map((item, i) => (
-              <li key={i} className="text-[11px] text-white/65 leading-relaxed">
-                <span className={`font-mono uppercase text-[10px] mr-2 ${SEV_STYLE[item.severity]?.text || 'text-white/50'}`}>{item.severity}</span>
-                <span className="text-white/85">{item.title}</span>
-                {item.remediation && <span className="block text-white/45 mt-0.5 ml-5">{item.remediation}</span>}
+              <li key={i} className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">
+                <span className={`font-mono uppercase text-[10px] mr-2 ${SEV_STYLE[item.severity]?.text || 'text-[var(--text-tertiary)]'}`}>{item.severity}</span>
+                <span className="text-[var(--text-primary)]">{item.title}</span>
+                {item.remediation && <span className="block text-[var(--text-muted)] mt-0.5 ml-5">{item.remediation}</span>}
               </li>
             ))}
           </ol>
@@ -340,7 +340,7 @@ function Scorecard({ summary }) {
       )}
 
       {(riskRegister.length > 0 || perimeter.perimeter_status || warehouse.public_redshift > 0 || observability.waf_no_rules > 0) && (
-        <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-2 gap-4">
           {perimeter.perimeter_status && (
             <div className={`rounded-lg border px-3 py-3 ${
               perimeter.perimeter_status === 'contained'
@@ -349,11 +349,11 @@ function Scorecard({ summary }) {
                   ? 'border-rose-500/30 bg-rose-950/30'
                   : 'border-amber-500/25 bg-amber-950/20'
             }`}>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-white/50 mb-1">{t('pages.cloudPostureCommandCenter.metric_data_perimeter')}</div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-tertiary)] mb-1">{t('pages.cloudPostureCommandCenter.metric_data_perimeter')}</div>
               <div className={`text-lg font-bold ${
                 perimeter.perimeter_status === 'contained' ? 'text-emerald-300' : perimeter.perimeter_status === 'breached' ? 'text-rose-300' : 'text-amber-300'
               }`}>{perimeter.perimeter_status}</div>
-              <div className="text-[10px] font-mono text-white/40 mt-1">
+              <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
                 {t('pages.cloudPostureCommandCenter.perimeter_detail', { external: perimeter.access_analyzer_external ?? 0, findings: perimeter.high_severity_data_findings ?? 0 })}
               </div>
             </div>
@@ -361,7 +361,7 @@ function Scorecard({ summary }) {
           {(observability.waf_no_rules > 0 || observability.logs_no_retention > 0 || observability.waf_no_logging > 0) && (
             <div className="rounded-lg border border-indigo-500/20 bg-indigo-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-indigo-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_observability')}</div>
-              <div className="text-[10px] font-mono text-white/50 space-y-0.5">
+              <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-0.5">
                 {(observability.waf_no_rules ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.obs_waf_no_rules', { count: observability.waf_no_rules })}</div>}
                 {(observability.waf_no_logging ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.obs_waf_no_logging', { count: observability.waf_no_logging })}</div>}
                 {(observability.logs_no_retention ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.obs_logs_no_retention', { count: observability.logs_no_retention })}</div>}
@@ -372,7 +372,7 @@ function Scorecard({ summary }) {
           {(warehouse.public_redshift > 0 || warehouse.public_documentdb > 0 || warehouse.public_rds > 0 || warehouse.public_neptune > 0 || warehouse.memorydb_open_acl > 0) && (
             <div className="rounded-lg border border-orange-500/20 bg-orange-950/20 px-3 py-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-orange-300/70 mb-1">{t('pages.cloudPostureCommandCenter.metric_warehouse')}</div>
-              <div className="text-[10px] font-mono text-white/50 space-y-0.5">
+              <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-0.5">
                 {(warehouse.public_redshift ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.wh_public_redshift', { count: warehouse.public_redshift })}</div>}
                 {(warehouse.public_documentdb ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.wh_public_documentdb', { count: warehouse.public_documentdb })}</div>}
                 {(warehouse.public_rds ?? 0) > 0 && <div>{t('pages.cloudPostureCommandCenter.wh_public_rds', { count: warehouse.public_rds })}</div>}
@@ -416,26 +416,26 @@ function FindingCard({ f }) {
           <div className="flex items-center gap-2 flex-wrap">
             {isPath && <span className="text-[10px] font-mono uppercase text-fuchsia-300">☣ {t('pages.cloudPostureCommandCenter.finding_toxic_path')}</span>}
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.domain && <span className="text-[10px] font-mono text-white/30">· {f.domain}</span>}
-            {f.rule_id && <span className="text-[10px] font-mono text-white/25">· {f.rule_id}</span>}
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
+            {f.domain && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.domain}</span>}
+            {f.rule_id && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.rule_id}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
           {f.resource_id && (
-            <div className="text-[10px] font-mono text-white/35 mt-0.5 truncate">{f.resource_type}: {f.resource_id}{f.region ? ` · ${f.region}` : ''}</div>
+            <div className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5 truncate">{f.resource_type}: {f.resource_id}{f.region ? ` · ${f.region}` : ''}</div>
           )}
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.toxic_combination && (
               <div className="mt-2 text-[10px] font-mono text-fuchsia-300/80">{t('pages.cloudPostureCommandCenter.finding_combo', { combo: f.toxic_combination })}</div>
             )}
             {steps.length > 0 && (
-              <ol className="mt-2 space-y-1 list-decimal list-inside text-[11px] text-white/55 font-mono">
+              <ol className="mt-2 space-y-1 list-decimal list-inside text-[11px] text-[var(--text-tertiary)] font-mono">
                 {steps.map((s, i) => <li key={i}>{s}</li>)}
               </ol>
             )}
@@ -448,7 +448,7 @@ function FindingCard({ f }) {
             {Object.keys(compliance).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {Object.entries(compliance).filter(([, v]) => v).map(([k, v]) => (
-                  <span key={k} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">{k}: {v}</span>
+                  <span key={k} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-tertiary)] border border-[var(--border-default)]">{k}: {v}</span>
                 ))}
               </div>
             )}
@@ -631,32 +631,32 @@ export default function CloudPostureCommandCenter() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.cloudPostureCommandCenter.field_client_label')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.cloudPostureCommandCenter.field_client_label')}</label>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
               <option value="">{t('pages.cloudPostureCommandCenter.select_client_placeholder')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[280px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.cloudPostureCommandCenter.field_role_arn_label')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.cloudPostureCommandCenter.field_role_arn_label')}</label>
             <input type="text" value={roleArn} onChange={(e) => setRoleArn(e.target.value)}
               placeholder="arn:aws:iam::123456789012:role/WeissmanReadOnly"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #f97316' : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{t(`pages.cloudPostureCommandCenter.status_${status}`)}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`pages.cloudPostureCommandCenter.status_${status}`)}</span>
           </div>
           <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? `⟳ ${t('pages.cloudPostureCommandCenter.btn_scanning')}` : `▶ ${t('pages.cloudPostureCommandCenter.btn_run_scan')}`}
           </button>
           <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {`${showParams ? '▾' : '▸'} ${t('pages.cloudPostureCommandCenter.parameters')}`}
           </button>
         </div>
@@ -664,30 +664,30 @@ export default function CloudPostureCommandCenter() {
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 space-y-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_external_id_label')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_external_id_label')}</label>
                     <input type="text" value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder={t('pages.cloudPostureCommandCenter.field_external_id_placeholder')}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_session_name_label')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_session_name_label')}</label>
                     <input type="text" value={sessionName} onChange={(e) => setSessionName(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_regions_label')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_regions_label')}</label>
                     <input type="text" value={regions} onChange={(e) => setRegions(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.cloudPostureCommandCenter.section_services')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.section_services')}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
                     {SERVICE_TOGGLES.map((s) => (
-                      <label key={s.key} title={t(s.hintKey)} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={s.key} title={t(s.hintKey)} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!services[s.key]} onChange={(e) => setServices((p) => ({ ...p, [s.key]: e.target.checked }))} className="accent-orange-500" />
                         {t(s.labelKey)}
                       </label>
@@ -697,10 +697,10 @@ export default function CloudPostureCommandCenter() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.cloudPostureCommandCenter.section_deep_checks')}</div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.section_deep_checks')}</div>
                     <div className="grid grid-cols-1 gap-1.5">
                       {CHECK_TOGGLES.map((tg) => (
-                        <label key={tg.key} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                        <label key={tg.key} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                           <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-orange-500" />
                           {t(tg.labelKey)}
                         </label>
@@ -709,11 +709,11 @@ export default function CloudPostureCommandCenter() {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.cloudPostureCommandCenter.section_frameworks')}</div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.section_frameworks')}</div>
                       <div className="flex flex-wrap gap-2">
                         {FRAMEWORKS.map((fw) => (
                           <button key={fw} type="button" onClick={() => toggleFramework(fw)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${frameworks.includes(fw) ? 'border-orange-500/40 bg-orange-500/10 text-orange-300' : 'border-white/10 text-white/40'}`}>
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${frameworks.includes(fw) ? 'border-orange-500/40 bg-orange-500/10 text-orange-300' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>
                             {fw}
                           </button>
                         ))}
@@ -721,35 +721,35 @@ export default function CloudPostureCommandCenter() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_min_severity_label')}</label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_min_severity_label')}</label>
                         <select value={minSeverity} onChange={(e) => setMinSeverity(e.target.value)}
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono">
+                          className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono">
                           {['info', 'low', 'medium', 'high', 'critical'].map((s) => <option key={s} value={s}>{t(`pages.cloudPostureCommandCenter.sev_${s}`)}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_intensity_label')}</label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_intensity_label')}</label>
                         <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono">
+                          className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono">
                           <option value="light">{t('pages.cloudPostureCommandCenter.intensity_light')}</option>
                           <option value="normal">{t('pages.cloudPostureCommandCenter.intensity_normal')}</option>
                           <option value="aggressive">{t('pages.cloudPostureCommandCenter.intensity_aggressive')}</option>
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_max_resources_label')}</label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_max_resources_label')}</label>
                         <input type="number" min="10" max="5000" value={maxResources} onChange={(e) => setMaxResources(e.target.value)}
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                          className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_access_key_age_label')}</label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_access_key_age_label')}</label>
                         <input type="number" min="1" max="3650" value={accessKeyMaxAge} onChange={(e) => setAccessKeyMaxAge(e.target.value)}
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                          className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.cloudPostureCommandCenter.field_acm_expiry_label')}</label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.cloudPostureCommandCenter.field_acm_expiry_label')}</label>
                         <input type="number" min="1" max="365" value={acmExpiryDays} onChange={(e) => setAcmExpiryDays(e.target.value)}
-                          className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                          className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                       </div>
                     </div>
                   </div>
@@ -757,10 +757,10 @@ export default function CloudPostureCommandCenter() {
 
                 <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/15 p-4">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70 mb-2">{t('pages.cloudPostureCommandCenter.connector_title')}</div>
-                  <p className="text-[11px] text-white/50 leading-relaxed mb-2">
+                  <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed mb-2">
                     {t('pages.cloudPostureCommandCenter.connector_desc')}
                   </p>
-                  <pre className="text-[10px] font-mono text-white/45 bg-black/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{`{
+                  <pre className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-3)] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{`{
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
@@ -775,7 +775,7 @@ export default function CloudPostureCommandCenter() {
           )}
         </AnimatePresence>
 
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.cloudPostureCommandCenter.last_completed', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.cloudPostureCommandCenter.last_completed', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (
@@ -787,11 +787,11 @@ export default function CloudPostureCommandCenter() {
       <Scorecard summary={summary} />
 
       {attackPaths.length > 0 && (
-        <div className="rounded-2xl bg-black/30 border border-fuchsia-500/20 p-4 mb-6">
+        <div className="rounded-2xl bg-[var(--table-surface)] border border-fuchsia-500/20 p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">☣</span>
             <h3 className="text-sm font-bold text-fuchsia-200">{t('pages.cloudPostureCommandCenter.attack_paths_title')}</h3>
-            <span className="text-[10px] font-mono text-white/30">({attackPaths.length})</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)]">({attackPaths.length})</span>
           </div>
           <div className="space-y-2">
             {attackPaths.map((f, i) => <FindingCard key={i} f={f} />)}

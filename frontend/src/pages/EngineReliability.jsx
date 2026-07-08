@@ -39,7 +39,7 @@ function severityFromRow(r) {
 
 function StatCard({ label, value, tone, icon, hint }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4" title={hint}>
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4" title={hint}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-400">{label}</span>
         {icon}
@@ -181,7 +181,7 @@ export default function EngineReliability() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={8} />
           </div>
         ) : (
@@ -241,7 +241,7 @@ export default function EngineReliability() {
             )}
 
             {Object.keys(legend).length > 0 && (
-              <details className="bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-xs text-gray-400">
+              <details className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-4 py-3 text-xs text-gray-400">
                 <summary className="cursor-pointer font-mono uppercase tracking-wider text-gray-500 select-none">
                   {t('pages.engineReliability.legend')}
                 </summary>
@@ -257,7 +257,7 @@ export default function EngineReliability() {
             )}
 
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg p-1">
+              <div className="flex items-center gap-1.5 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
                 {KIND_FILTERS.map((k) => (
                   <button
                     key={k}
@@ -317,9 +317,9 @@ export default function EngineReliability() {
                 if (!r) return null
                 const h = r.health
                 return (
-                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-black/30 px-4 py-2.5 hover:bg-white/[0.03]">
+                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-white/[0.03]">
                     <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                      <div className="min-w-[180px] flex-1 font-mono text-white/85 text-xs">
+                      <div className="min-w-[180px] flex-1 font-mono text-[var(--text-primary)] text-xs">
                         {r.id}
                         {r.canonical && (
                           <span className="text-gray-500"> → {r.canonical}</span>
@@ -335,7 +335,7 @@ export default function EngineReliability() {
                           <WifiOff className="w-3.5 h-3.5 text-amber-500/80 inline-block" title="Agent required" />
                         )}
                       </div>
-                      <div className="font-mono text-xs text-white/70 text-right w-12">{h?.total_runs ?? '—'}</div>
+                      <div className="font-mono text-xs text-[var(--text-secondary)] text-right w-12">{h?.total_runs ?? '—'}</div>
                       <div className="font-mono text-xs text-right w-12" style={{ color: h?.recovered_runs ? '#34d399' : '#6b7280' }}>
                         {h?.recovered_runs ?? '—'}
                       </div>
@@ -350,7 +350,7 @@ export default function EngineReliability() {
                                 className="inline-block w-2 h-2 rounded-full shrink-0"
                                 style={{ backgroundColor: statusColor(h.last_status) }}
                               />
-                              <span className="text-xs text-white/60">{h.last_status}</span>
+                              <span className="text-xs text-[var(--text-tertiary)]">{h.last_status}</span>
                               <span className="text-[10px] font-mono text-gray-500">
                                 {h.last_attempts}× · {h.last_elapsed_ms}ms
                               </span>

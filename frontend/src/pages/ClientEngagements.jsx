@@ -304,7 +304,7 @@ export default function ClientEngagements() {
             ) : (
             <div className="mt-4 space-y-3">
               {visibleEngagements.map((e) => (
-                <div key={e.id} className="p-4 border border-slate-800 rounded-lg bg-black/20">
+                <div key={e.id} className="p-4 border border-slate-800 rounded-lg bg-[var(--bg-1)]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-white font-medium truncate">{e.name}</div>

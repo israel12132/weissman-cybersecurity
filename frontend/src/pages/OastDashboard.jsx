@@ -24,8 +24,8 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
   const { t } = useTranslation()
   const meta = PROBE_META[probeId] || { mitre: '—' }
   return (
-    <div className={`rounded-2xl bg-black/40 backdrop-blur-md border p-5 space-y-3 transition-all ${
-      active ? 'border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.1)]' : 'border-white/10 hover:border-white/20'
+    <div className={`rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border p-5 space-y-3 transition-all ${
+      active ? 'border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.1)]' : 'border-[var(--border-default)] hover:border-[var(--border-strong)]'
     }`}>
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -38,7 +38,7 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
               </span>
             )}
           </div>
-          <span className="text-[9px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {meta.mitre}
           </span>
         </div>
@@ -51,7 +51,7 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
           {active ? t('pages.oastDashboard.running') : t('pages.oastDashboard.probe_btn')}
         </button>
       </div>
-      <p className="text-[11px] text-white/45 leading-relaxed">{t(`pages.oastDashboard.probes.${probeId}.description`)}</p>
+      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t(`pages.oastDashboard.probes.${probeId}.description`)}</p>
     </div>
   )
 }
@@ -227,11 +227,11 @@ export default function OastDashboard() {
       </div>
 
       <div className="flex items-center gap-2 mb-8">
-        <span className="text-[11px] font-mono text-white/40">{t('pages.oastDashboard.client')}</span>
+        <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
         >
           <option value="">{t('pages.oastDashboard.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -246,7 +246,7 @@ export default function OastDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.oastDashboard.oob_probes')}</h3>
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.oastDashboard.oob_probes')}</h3>
           <div className="space-y-4">
             {PROBE_IDS.map((probeId) => (
               <ProbeCard
@@ -278,24 +278,24 @@ export default function OastDashboard() {
 
       <div className="mt-12 space-y-4">
         <div>
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.oastDashboard.structured_tokens')}</h3>
-          <p className="text-[11px] text-white/30 mt-1">{t('pages.oastDashboard.structured_body')}</p>
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.oastDashboard.structured_tokens')}</h3>
+          <p className="text-[11px] text-[var(--text-disabled)] mt-1">{t('pages.oastDashboard.structured_body')}</p>
         </div>
 
-        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
-          <h4 className="text-[11px] font-mono text-white/40 uppercase">{t('pages.oastDashboard.mint_new')}</h4>
+        <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
+          <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.oastDashboard.mint_new')}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               type="text"
               placeholder={t('pages.oastDashboard.target_placeholder')}
               value={mintTarget}
               onChange={(e) => setMintTarget(e.target.value)}
-              className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
             />
             <select
               value={mintProbeType}
               onChange={(e) => setMintProbeType(e.target.value)}
-              className="rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
             >
               {PROBE_IDS.map((id) => <option key={id} value={id}>{probeLabel(id)}</option>)}
               <option value="generic">{t('pages.oastDashboard.probe_generic')}</option>
@@ -305,7 +305,7 @@ export default function OastDashboard() {
               placeholder={t('pages.oastDashboard.label_optional')}
               value={mintLabel}
               onChange={(e) => setMintLabel(e.target.value)}
-              className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+              className="rounded-xl bg-white/5 border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
             />
             <button
               type="button"
@@ -325,19 +325,19 @@ export default function OastDashboard() {
                 key={tok.token}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 space-y-2"
+                className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-4 space-y-2"
               >
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="space-y-0.5 min-w-0">
                     <p className="text-[11px] font-mono text-cyan-400/80 break-all">{tok.token}</p>
-                    <p className="text-[10px] text-white/30">{probeLabel(tok.probe_type)} · {tok.target_url}</p>
-                    {tok.label && <p className="text-[10px] text-white/25 italic">{tok.label}</p>}
+                    <p className="text-[10px] text-[var(--text-disabled)]">{probeLabel(tok.probe_type)} · {tok.target_url}</p>
+                    {tok.label && <p className="text-[10px] text-[var(--text-disabled)] italic">{tok.label}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                       tok.oob_confirmed
                         ? 'border-green-500/30 text-green-400 bg-green-900/10'
-                        : 'border-white/10 text-white/30'
+                        : 'border-[var(--border-default)] text-[var(--text-disabled)]'
                     }`}>
                       {tok.oob_confirmed
                         ? t('pages.oastDashboard.hit_confirmed')
@@ -346,13 +346,13 @@ export default function OastDashboard() {
                     <button
                       type="button"
                       onClick={() => handlePollToken(tok.token)}
-                      className="text-[10px] font-mono border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 px-2 py-0.5 rounded transition-all"
+                      className="text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] px-2 py-0.5 rounded transition-all"
                     >
                       {t('pages.oastDashboard.poll')}
                     </button>
                   </div>
                 </div>
-                <p className="text-[10px] font-mono text-white/20">
+                <p className="text-[10px] font-mono text-[var(--text-disabled)]">
                   {t('pages.oastDashboard.callback_label')}{' '}
                   <code className="text-cyan-400/50">{tok.callback_domain ?? '—'}</code>
                 </p>

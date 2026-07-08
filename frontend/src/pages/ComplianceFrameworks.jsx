@@ -229,7 +229,7 @@ export default function ComplianceFrameworks() {
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
                     isSelected
                       ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-                      : 'bg-black/40 text-gray-400 border-white/10 hover:bg-white/5 hover:text-white'
+                      : 'bg-[var(--bg-2)] text-gray-400 border-[var(--border-default)] hover:bg-[var(--row-hover-bg)] hover:text-white'
                   }`}
                 >
                   <span className="text-xl">{FRAMEWORK_ICONS[fw.id] || '🛡️'}</span>
@@ -252,7 +252,7 @@ export default function ComplianceFrameworks() {
             ) : controls.length > 0 && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+                  <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-400">{t('pages.complianceFrameworks.total_controls')}</span>
                       <FileText className="w-4 h-4 text-cyan-400" />
@@ -290,13 +290,13 @@ export default function ComplianceFrameworks() {
                 </div>
 
                 {stats.total > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
                     <div className="flex h-3 rounded-full overflow-hidden">
                       <div className="bg-green-500/70" style={{ width: `${(stats.compliant / stats.total) * 100}%` }} />
                       <div className="bg-yellow-500/70" style={{ width: `${(stats.partial / stats.total) * 100}%` }} />
                       <div className="bg-red-500/70" style={{ width: `${(stats.nonCompliant / stats.total) * 100}%` }} />
                     </div>
-                    <div className="flex gap-4 mt-2 text-[10px] font-mono text-white/40">
+                    <div className="flex gap-4 mt-2 text-[10px] font-mono text-[var(--text-muted)]">
                       <span>{t('pages.complianceFrameworks.status_compliant')} {stats.compliant}</span>
                       <span>{t('pages.complianceFrameworks.status_partial')} {stats.partial}</span>
                       <span>{t('pages.complianceFrameworks.status_non_compliant')} {stats.nonCompliant}</span>
@@ -309,16 +309,16 @@ export default function ComplianceFrameworks() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t('pages.complianceFrameworks.search_placeholder')}
-                    className="pl-10 pr-4 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    className="pl-10 pr-4 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+                <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
                   {FILTER_KEYS.map((f) => (
                     <button
                       key={f}
@@ -327,7 +327,7 @@ export default function ComplianceFrameworks() {
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                         filter === f
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
                       }`}
                     >
                       {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}
@@ -347,8 +347,8 @@ export default function ComplianceFrameworks() {
               </button>
             </div>
 
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-              <div className="p-4 border-b border-white/10">
+            <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+              <div className="p-4 border-b border-[var(--border-default)]">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <FileText className="w-4 h-4 text-cyan-400" />
                   {t('pages.complianceFrameworks.controls_heading')} — {selectedFramework.name}
@@ -376,7 +376,7 @@ export default function ComplianceFrameworks() {
                   {filteredControls.map((control) => (
                     <div
                       key={control.id}
-                      className="p-4 hover:bg-white/5 transition-colors"
+                      className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
                         <span className="text-xs font-mono text-gray-500 bg-white/5 px-2 py-1 rounded shrink-0">

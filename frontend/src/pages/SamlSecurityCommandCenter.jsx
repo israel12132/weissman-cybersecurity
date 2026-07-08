@@ -302,10 +302,10 @@ export default function SamlSecurityCommandCenter() {
       )}
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <label className="flex items-center gap-2 text-xs font-mono text-white/50">
+        <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
           {L.client}
           <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value || null)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white/80">
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)]">
             <option value="">{L.selectClient}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -313,22 +313,22 @@ export default function SamlSecurityCommandCenter() {
         <Link to="/identity-security" className="text-[11px] font-mono text-violet-300/80 hover:text-violet-200 border border-violet-500/25 rounded-lg px-3 py-1.5">{L.relatedIdentity} →</Link>
       </div>
 
-      <div className="rounded-2xl bg-black/40 border border-white/10 p-6 mb-6">
-        <label className="block text-xs font-mono text-white/50 mb-3">
+      <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 mb-6">
+        <label className="block text-xs font-mono text-[var(--text-tertiary)] mb-3">
           {L.target}
           <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={L.targetPh}
-            className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white/85" />
+            className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-[var(--text-primary)]" />
         </label>
 
-        <p className="text-[10px] font-mono text-white/35 uppercase mb-2">{L.presets}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{L.presets}</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {IDP_PRESETS.map((p) => (
             <button key={p.id} type="button" onClick={() => setTarget(p.hint)}
-              className="px-3 py-1 rounded-lg text-xs font-mono border border-white/15 text-white/55 hover:text-amber-200 hover:border-amber-500/30">{p.label}</button>
+              className="px-3 py-1 rounded-lg text-xs font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-amber-200 hover:border-amber-500/30">{p.label}</button>
           ))}
         </div>
 
-        <p className="text-[10px] font-mono text-white/35 uppercase mb-2">{L.layers}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{L.layers}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
           <Toggle on={params.check_metadata} onClick={() => set('check_metadata', !params.check_metadata)} label={L.checkMetadata} />
           <Toggle on={params.check_relaystate} onClick={() => set('check_relaystate', !params.check_relaystate)} label={L.checkRelaystate} />
@@ -342,8 +342,8 @@ export default function SamlSecurityCommandCenter() {
           <Toggle on={params.emit_agent_guidance} onClick={() => set('emit_agent_guidance', !params.emit_agent_guidance)} label={L.emitAgent} />
         </div>
 
-        <div className="flex justify-between items-center pt-2 border-t border-white/5">
-          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-white/40">{showAdvanced ? '▾' : '▸'} {L.advanced}</button>
+        <div className="flex justify-between items-center pt-2 border-t border-[var(--border-subtle)]">
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)]">{showAdvanced ? '▾' : '▸'} {L.advanced}</button>
           <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-amber-500/40 text-amber-200 bg-amber-500/15 disabled:opacity-40">
             {status === 'running' ? L.scanning : L.run}
@@ -351,60 +351,60 @@ export default function SamlSecurityCommandCenter() {
         </div>
 
         {showAdvanced && (
-          <div className="mt-4 pt-4 border-t border-white/5 grid md:grid-cols-2 gap-3">
-            <label className="text-xs font-mono text-white/45 col-span-full">{L.metadataUrl}
-              <input value={params.metadata_url} onChange={(e) => set('metadata_url', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80" />
+          <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] grid md:grid-cols-2 gap-3">
+            <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">{L.metadataUrl}
+              <input value={params.metadata_url} onChange={(e) => set('metadata_url', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]" />
             </label>
-            <label className="text-xs font-mono text-white/45">{L.intensity}
-              <select value={params.intensity} onChange={(e) => set('intensity', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80">
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.intensity}
+              <select value={params.intensity} onChange={(e) => set('intensity', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]">
                 <option value="light">{L.light}</option><option value="normal">{L.normal}</option><option value="aggressive">{L.aggressive}</option>
               </select>
             </label>
-            <label className="text-xs font-mono text-white/45">{L.relayCanary}
-              <input value={params.relaystate_canary} onChange={(e) => set('relaystate_canary', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.relayCanary}
+              <input value={params.relaystate_canary} onChange={(e) => set('relaystate_canary', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <label className="text-xs font-mono text-white/45 col-span-full">{L.metadataPaths}
-              <textarea value={params.metadata_paths} onChange={(e) => set('metadata_paths', e.target.value)} rows={2} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">{L.metadataPaths}
+              <textarea value={params.metadata_paths} onChange={(e) => set('metadata_paths', e.target.value)} rows={2} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <label className="text-xs font-mono text-white/45 col-span-full">{L.ssoPaths}
-              <textarea value={params.sso_paths} onChange={(e) => set('sso_paths', e.target.value)} rows={2} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">{L.ssoPaths}
+              <textarea value={params.sso_paths} onChange={(e) => set('sso_paths', e.target.value)} rows={2} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-white/40 border border-white/10 rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
+            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
           </div>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6 text-[11px] font-mono">
-        <span className="text-white/30">{L.related}:</span>
+        <span className="text-[var(--text-disabled)]">{L.related}:</span>
         <Link to="/identity-security" className="text-violet-300/80">{L.relatedIdentity}</Link>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--text-disabled)]">·</span>
         <Link to="/kerberos-security" className="text-amber-300/80">{L.relatedKerberos}</Link>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--text-disabled)]">·</span>
         <Link to="/password-spray" className="text-rose-300/80">{L.relatedSpray}</Link>
       </div>
 
       {findings.length === 0 && status !== 'running' && (
-        <p className="text-sm font-mono text-white/40 text-center py-12">{L.runToPopulate}</p>
+        <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
       {posture && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-amber-500/30 bg-amber-950/15 p-5 mb-6">
           <p className="text-[10px] font-mono text-amber-300/70 uppercase mb-1">{L.posture}</p>
-          <p className="text-3xl font-bold font-mono text-amber-200">{posture.posture_score ?? posture.evidence?.score ?? '—'}<span className="text-lg text-white/30">/100</span></p>
-          <p className="text-xs font-mono text-white/50 mt-1">{L.grade}: {posture.grade ?? posture.evidence?.grade} · {L.vendor}: {posture.vendor ?? posture.evidence?.vendor}</p>
+          <p className="text-3xl font-bold font-mono text-amber-200">{posture.posture_score ?? posture.evidence?.score ?? '—'}<span className="text-lg text-[var(--text-disabled)]">/100</span></p>
+          <p className="text-xs font-mono text-[var(--text-tertiary)] mt-1">{L.grade}: {posture.grade ?? posture.evidence?.grade} · {L.vendor}: {posture.vendor ?? posture.evidence?.vendor}</p>
         </motion.div>
       )}
 
       {categoryScores && (
-        <div className="rounded-xl border border-white/10 bg-black/30 p-4 mb-4">
-          <p className="text-[10px] font-mono text-white/40 uppercase mb-3">{L.categoryScores}</p>
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-4">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-3">{L.categoryScores}</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {SCORE_AXES.map(([k, label]) => {
               const v = Number(categoryScores[k] ?? 0)
               return (
                 <div key={k}>
-                  <div className="flex justify-between text-[10px] font-mono text-white/45 mb-1"><span>{label}</span><span>{v}</span></div>
+                  <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1"><span>{label}</span><span>{v}</span></div>
                   <div className="h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${v}%` }} /></div>
                 </div>
               )
@@ -426,7 +426,7 @@ export default function SamlSecurityCommandCenter() {
           <p className="text-[10px] font-mono text-emerald-300/70 uppercase mb-2">{L.roadmapTitle}</p>
           <ul className="space-y-1">
             {roadmap.evidence.roadmap.map((s, i) => (
-              <li key={i} className="text-[11px] font-mono text-white/75"><span className="text-emerald-400">{s.tier || s.priority}</span> · {s.action}: {s.detail}</li>
+              <li key={i} className="text-[11px] font-mono text-[var(--text-secondary)]"><span className="text-emerald-400">{s.tier || s.priority}</span> · {s.action}: {s.detail}</li>
             ))}
           </ul>
         </div>
@@ -435,13 +435,13 @@ export default function SamlSecurityCommandCenter() {
       {agentGaps.length > 0 && (
         <div className="rounded-xl border border-violet-500/25 bg-violet-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.agentGapTitle}</p>
-          {agentGaps.map((f, i) => <p key={i} className="text-[11px] font-mono text-white/65">{f.title}</p>)}
+          {agentGaps.map((f, i) => <p key={i} className="text-[11px] font-mono text-[var(--text-tertiary)]">{f.title}</p>)}
         </div>
       )}
 
       {paths.length > 0 && (
         <div className="mb-6">
-          <p className="text-[10px] font-mono text-white/40 uppercase mb-2">{L.pathsTitle}</p>
+          <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{L.pathsTitle}</p>
           {paths.map((f, i) => <div key={i} className="rounded-lg border border-red-500/25 bg-red-950/10 px-3 py-2 text-xs font-mono text-red-200 mb-2">{f.title}</div>)}
         </div>
       )}
@@ -465,9 +465,9 @@ export default function SamlSecurityCommandCenter() {
         emptyReadyTitle={L.runToPopulate}
         emptyReadyBody={L.runToPopulate}
         renderFinding={(f, i) => (
-          <div key={i} className="rounded-xl border border-white/8 bg-black/30 px-4 py-3">
-            <p className="text-sm font-mono text-white/85">{f.title}</p>
-            {f.description && <p className="text-xs font-mono text-white/40 mt-1">{f.description}</p>}
+          <div key={i} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] px-4 py-3">
+            <p className="text-sm font-mono text-[var(--text-primary)]">{f.title}</p>
+            {f.description && <p className="text-xs font-mono text-[var(--text-muted)] mt-1">{f.description}</p>}
           </div>
         )}
       />

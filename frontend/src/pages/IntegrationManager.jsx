@@ -182,7 +182,7 @@ export default function IntegrationManager() {
         )}
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">Total Integrations</span>
               <Plug className="w-4 h-4 text-cyan-400" />
@@ -256,7 +256,7 @@ export default function IntegrationManager() {
             return (
               <div
                 key={integration.id}
-                className="p-4 rounded-lg border border-white/10 bg-black/30 hover:bg-white/5 transition-colors"
+                className="p-4 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] hover:bg-[var(--row-hover-bg)] transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -292,7 +292,7 @@ export default function IntegrationManager() {
                             Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">
+                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-white/5 text-gray-400">
                           Manual sync · test connection to verify
                         </span>
                         {integration.last_test && (
@@ -324,7 +324,7 @@ export default function IntegrationManager() {
                       onClick={() => setConfigureTarget(integration)}
                       title={t('pages.integrationManager.configure')}
                       aria-label={t('pages.integrationManager.configure')}
-                      className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                      className="p-2 bg-white/5 border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -343,7 +343,7 @@ export default function IntegrationManager() {
         />
 
         {/* Available Integrations */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4">Available Integrations</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {availableIntegrations
@@ -352,7 +352,7 @@ export default function IntegrationManager() {
                 <button
                   key={integration.id}
                   onClick={() => setAddModal(integration)}
-                  className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+                  className="flex items-center gap-3 p-3 bg-white/5 border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
                 >
                   <span className="text-2xl">{integration.icon}</span>
                   <div>
@@ -458,7 +458,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
+      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {isEdit
@@ -482,7 +482,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               type="text"
               value={formData.type}
               disabled
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none"
             />
           </div>
 
@@ -494,7 +494,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Production Splunk"
             />
           </div>
@@ -513,7 +513,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
                     config: { ...formData.config, [field]: e.target.value },
                   })
                 }
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           ))}

@@ -140,7 +140,7 @@ export default function RoeApprovals() {
         </div>
 
         {loading && !requests.length ? (
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={3} />
           </div>
         ) : (
@@ -161,20 +161,20 @@ export default function RoeApprovals() {
               const req = requests.find((r) => r.id === f.id)
               if (!req) return null
               return (
-                <div key={req.id} className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+                <div key={req.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 space-y-3">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-mono text-white/30">#{req.id}</span>
+                        <span className="text-[11px] font-mono text-[var(--text-disabled)]">#{req.id}</span>
                         <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-amber-400/30 text-amber-300 bg-amber-900/10">
                           {req.status}
                         </span>
-                        <span className="text-[11px] font-mono text-white/50">
+                        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">
                           {t('pages.roeApprovals.approvals_count', { count: approvalsHave(req) })}
                         </span>
                       </div>
                       <p className="mt-2 text-sm font-medium text-white">{f.title}</p>
-                      <p className="mt-1 text-[11px] font-mono text-white/35">{f.description}</p>
+                      <p className="mt-1 text-[11px] font-mono text-[var(--text-muted)]">{f.description}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button

@@ -180,7 +180,7 @@ export default function ThreatAnalysisCenter() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={4} />
           </div>
         ) : clientId == null ? (
@@ -231,7 +231,7 @@ export default function ThreatAnalysisCenter() {
 
             {/* Attack chain */}
             {chain?.reached_goal && Array.isArray(chain.steps) && chain.steps.length > 0 && (
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-5">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-5">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
                   <GitBranch className="w-4 h-4 text-red-400" />
                   {t('pages.threatAnalysis.attack_chain')}
@@ -267,12 +267,12 @@ export default function ThreatAnalysisCenter() {
               emptyTitle={t('pages.threatAnalysis.no_incidents', { })}
               emptyBody={t('pages.threatAnalysis.no_incidents', { })}
               renderFinding={(f) => (
-                <div key={f.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-sm font-medium text-white">{f.title}</span>
                     <span className="flex items-center gap-2">
                       {f.type && (
-                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-white/10 text-white/40">
+                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)]">
                           {f.type}
                         </span>
                       )}
@@ -282,7 +282,7 @@ export default function ThreatAnalysisCenter() {
                   {f.target && (
                     <div className="text-[11px] text-gray-400 mb-2">
                       {t('pages.threatAnalysis.target')}:{' '}
-                      <span className="font-mono text-white/70">{f.target}</span>
+                      <span className="font-mono text-[var(--text-secondary)]">{f.target}</span>
                     </div>
                   )}
                   {f.description && (
@@ -312,7 +312,7 @@ export default function ThreatAnalysisCenter() {
 
 function SummaryCard({ label, value, valueClass, icon }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-gray-400">{label}</span>
         {icon}

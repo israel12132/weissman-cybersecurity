@@ -71,8 +71,8 @@ function ReadinessRow({ ok, label, detail }) {
     <div className="flex items-start gap-2 text-[11px] font-mono">
       <span className={ok ? 'text-emerald-400' : 'text-amber-400'} aria-hidden>{ok ? '✓' : '○'}</span>
       <div>
-        <span className={ok ? 'text-white/85' : 'text-white/55'}>{label}</span>
-        {detail && <p className="text-white/35 text-[10px] mt-0.5">{detail}</p>}
+        <span className={ok ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}>{label}</span>
+        {detail && <p className="text-[var(--text-muted)] text-[10px] mt-0.5">{detail}</p>}
       </div>
     </div>
   )
@@ -150,17 +150,17 @@ function CollapseChainCard({ finding }) {
         <p className="text-[11px] font-mono text-cyan-300/90 break-all">{String(ev.mitre_path)}</p>
       )}
       {steps.length > 0 && (
-        <ol className="space-y-1.5 text-[11px] font-mono text-white/70">
+        <ol className="space-y-1.5 text-[11px] font-mono text-[var(--text-secondary)]">
           {steps.map((s, i) => (
             <li key={i} className="flex gap-2">
               <span className="text-violet-400 shrink-0">{i + 1}.</span>
-              <span>{s.name} <span className="text-white/40">({s.mitre})</span></span>
+              <span>{s.name} <span className="text-[var(--text-muted)]">({s.mitre})</span></span>
             </li>
           ))}
         </ol>
       )}
       {ev.weak_signals && (
-        <p className="text-[10px] text-amber-300/80 border-t border-white/5 pt-2">
+        <p className="text-[10px] text-amber-300/80 border-t border-[var(--border-subtle)] pt-2">
           Weak signals: {String(ev.weak_signals)}
         </p>
       )}
@@ -171,16 +171,16 @@ function CollapseChainCard({ finding }) {
 function ParamSection({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--row-hover-bg)] transition-colors"
       >
-        <span className="text-xs font-semibold text-white/90 uppercase tracking-wider">{title}</span>
-        <span className="text-white/40 text-sm">{open ? '−' : '+'}</span>
+        <span className="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider">{title}</span>
+        <span className="text-[var(--text-muted)] text-sm">{open ? '−' : '+'}</span>
       </button>
-      {open && <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">{children}</div>}
+      {open && <div className="px-4 pb-4 space-y-3 border-t border-[var(--border-subtle)] pt-3">{children}</div>}
     </div>
   )
 }
@@ -188,9 +188,9 @@ function ParamSection({ title, children, defaultOpen = true }) {
 function Field({ label, hint, children }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[11px] font-mono text-white/60">{label}</span>
+      <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{label}</span>
       {children}
-      {hint && <span className="text-[10px] text-white/35 block">{hint}</span>}
+      {hint && <span className="text-[10px] text-[var(--text-muted)] block">{hint}</span>}
     </label>
   )
 }
@@ -425,10 +425,10 @@ export default function RiskSuperpositionCollapse() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Controls */}
         <div className="xl:col-span-4 space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-violet-950/30 to-black/40 p-4 space-y-4">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-violet-950/30 to-black/40 p-4 space-y-4">
             <h3 className="text-sm font-semibold text-white">{t('pages.superpositionCollapse.controls')}</h3>
 
-            <div className="rounded-lg border border-white/10 bg-black/40 p-3 space-y-2">
+            <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-2">
               <p className="text-[10px] uppercase tracking-wider text-violet-300/80 font-mono">
                 {t('pages.superpositionCollapse.readiness_title')}
               </p>
@@ -457,7 +457,7 @@ export default function RiskSuperpositionCollapse() {
               ))}
             </div>
 
-            <label className="flex items-center gap-2 text-[11px] text-white/75 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={autoRunEnabled}
@@ -471,7 +471,7 @@ export default function RiskSuperpositionCollapse() {
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
               >
                 <option value="">{t('pages.superpositionCollapse.select_client')}</option>
                 {clients.map((c) => (
@@ -484,7 +484,7 @@ export default function RiskSuperpositionCollapse() {
                 type="url"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white font-mono"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white font-mono"
                 placeholder="https://"
               />
             </Field>
@@ -498,7 +498,7 @@ export default function RiskSuperpositionCollapse() {
               <select
                 value={params.fusion_mode}
                 onChange={(e) => setP('fusion_mode', e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm"
               >
                 {FUSION_MODES.map((m) => (
                   <option key={m} value={m}>{m}</option>
@@ -513,17 +513,17 @@ export default function RiskSuperpositionCollapse() {
             <Field label={t('pages.superpositionCollapse.weak_threshold')}>
               <input type="number" min="0" max="10" step="0.5" value={params.weak_signal_threshold}
                 onChange={(e) => setP('weak_signal_threshold', e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm" />
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm" />
             </Field>
             <Field label={t('pages.superpositionCollapse.min_engines')}>
               <input type="number" min="1" max="20" value={params.min_corroboration_engines}
                 onChange={(e) => setP('min_corroboration_engines', e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm" />
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm" />
             </Field>
             <Field label={t('pages.superpositionCollapse.decay_halflife')}>
               <input type="number" min="0" max="8760" value={params.temporal_decay_halflife_hours}
                 onChange={(e) => setP('temporal_decay_halflife_hours', e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm" />
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm" />
             </Field>
           </ParamSection>
 
@@ -538,7 +538,7 @@ export default function RiskSuperpositionCollapse() {
               ['require_weak_for_collapse', t('pages.superpositionCollapse.mod_require_weak')],
               ['emit_choke_points', t('pages.superpositionCollapse.mod_choke')],
             ].map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-white/80 cursor-pointer">
+              <label key={key} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={!!params[key]}
@@ -568,7 +568,7 @@ export default function RiskSuperpositionCollapse() {
                   type="text"
                   value={params[key]}
                   onChange={(e) => setP(key, e.target.value)}
-                  className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm font-mono"
+                  className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm font-mono"
                 />
               </Field>
             ))}
@@ -577,17 +577,17 @@ export default function RiskSuperpositionCollapse() {
                 rows={3}
                 value={params.planner_goals}
                 onChange={(e) => setP('planner_goals', e.target.value)}
-                className="w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm font-mono"
+                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm font-mono"
               />
             </Field>
           </ParamSection>
 
           {scanPreview && (
-            <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowPayload((s) => !s)}
-                className="w-full px-4 py-2 text-left text-[10px] font-mono text-white/50 hover:bg-white/5"
+                className="w-full px-4 py-2 text-left text-[10px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
               >
                 {showPayload ? '▼' : '▶'} {t('pages.superpositionCollapse.payload_preview')}
               </button>
@@ -601,7 +601,7 @@ export default function RiskSuperpositionCollapse() {
 
           <Link
             to={`/engines/${ENGINE_ID}`}
-            className="block text-center text-[11px] font-mono text-white/40 hover:text-cyan-400 transition-colors"
+            className="block text-center text-[11px] font-mono text-[var(--text-muted)] hover:text-cyan-400 transition-colors"
           >
             {t('pages.superpositionCollapse.generic_engine_page')}
           </Link>
@@ -623,9 +623,9 @@ export default function RiskSuperpositionCollapse() {
                   <span className="text-5xl font-bold font-mono" style={{ color: gradeColor }}>
                     {posture.grade !== '—' ? posture.grade : '…'}
                   </span>
-                  <span className="text-2xl font-mono text-white/50">{posture.score}/100</span>
+                  <span className="text-2xl font-mono text-[var(--text-tertiary)]">{posture.score}/100</span>
                 </div>
-                <p className="text-xs text-white/45 mt-2 font-mono">
+                <p className="text-xs text-[var(--text-muted)] mt-2 font-mono">
                   {t('pages.superpositionCollapse.posture_meta', {
                     chains: posture.chains,
                     clusters: posture.clusters || clusters.length,
@@ -633,19 +633,19 @@ export default function RiskSuperpositionCollapse() {
                 </p>
               </div>
               <div className="flex gap-4 text-center">
-                <div className="px-4 py-2 rounded-xl bg-black/40 border border-white/10">
+                <div className="px-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
                   <p className="text-2xl font-mono text-cyan-300">{clusters.length}</p>
-                  <p className="text-[10px] text-white/40 uppercase">{t('pages.superpositionCollapse.live_clusters')}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase">{t('pages.superpositionCollapse.live_clusters')}</p>
                 </div>
-                <div className="px-4 py-2 rounded-xl bg-black/40 border border-white/10">
+                <div className="px-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
                   <p className="text-2xl font-mono text-amber-300">{collapseFindings.length}</p>
-                  <p className="text-[10px] text-white/40 uppercase">{t('pages.superpositionCollapse.collapses')}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] uppercase">{t('pages.superpositionCollapse.collapses')}</p>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white">{t('pages.superpositionCollapse.cluster_feed')}</h3>
               <button type="button" onClick={loadClusters} disabled={clustersLoading}
@@ -654,16 +654,16 @@ export default function RiskSuperpositionCollapse() {
               </button>
             </div>
             {clusters.length === 0 ? (
-              <p className="text-xs text-white/40 font-mono">{t('pages.superpositionCollapse.no_clusters')}</p>
+              <p className="text-xs text-[var(--text-muted)] font-mono">{t('pages.superpositionCollapse.no_clusters')}</p>
             ) : (
               <div className="max-h-48 overflow-auto space-y-1.5">
                 {clusters.slice(0, 20).map((c) => (
                   <div key={c.id} className="flex items-center justify-between text-[11px] font-mono py-1.5 px-2 rounded-lg bg-white/5">
-                    <span className="text-white/80 truncate flex-1">{c.title || c.vuln_signature}</span>
+                    <span className="text-[var(--text-secondary)] truncate flex-1">{c.title || c.vuln_signature}</span>
                     <span className="text-violet-300 mx-2">{c.member_count}×</span>
                     <span className={`uppercase text-[10px] ${
                       c.max_severity === 'critical' ? 'text-red-400' :
-                      c.max_severity === 'high' ? 'text-orange-400' : 'text-white/50'
+                      c.max_severity === 'high' ? 'text-orange-400' : 'text-[var(--text-tertiary)]'
                     }`}>{c.max_severity}</span>
                   </div>
                 ))}

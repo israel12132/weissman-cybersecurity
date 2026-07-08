@@ -276,14 +276,14 @@ function CategoryScoresPanel({ scores, L }) {
     ['transport_session', 'Transport / session'],
   ]
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-4 mb-4">
-      <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">{L.categoryScores}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-4">
+      <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-3">{L.categoryScores}</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {axes.map(([k, label]) => {
           const v = Number(scores[k] ?? 0)
           return (
             <div key={k}>
-              <div className="flex justify-between text-[10px] font-mono text-white/45 mb-1">
+              <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
                 <span>{label}</span>
                 <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
               </div>
@@ -309,14 +309,14 @@ function PostureRadar({ radar, L }) {
     ['automation_resistance', 'Anti-automation'],
   ]
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-4 mb-4">
-      <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">{L.radar}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-4">
+      <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-3">{L.radar}</p>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {axes.map(([k, label]) => {
           const v = Number(radar[k] ?? 0)
           return (
             <div key={k}>
-              <div className="flex justify-between text-[10px] font-mono text-white/45 mb-1">
+              <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
                 <span>{label}</span>
                 <span style={{ color: v >= 80 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171' }}>{v}</span>
               </div>
@@ -341,20 +341,20 @@ function PostureCard({ finding, L, pathCount }) {
       className="rounded-2xl border p-5 mb-6 grid md:grid-cols-4 gap-4"
       style={{ borderColor: `${ACCENT}35`, background: `linear-gradient(135deg, ${ACCENT}12, transparent)` }}>
       <div>
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">{L.posture}</p>
-        <p className="text-4xl font-bold font-mono" style={{ color: ACCENT }}>{score}<span className="text-lg text-white/30">/100</span></p>
-        <p className="text-xs font-mono text-white/50 mt-1">{L.grade}: <span className="text-white/80">{grade}</span></p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{L.posture}</p>
+        <p className="text-4xl font-bold font-mono" style={{ color: ACCENT }}>{score}<span className="text-lg text-[var(--text-disabled)]">/100</span></p>
+        <p className="text-xs font-mono text-[var(--text-tertiary)] mt-1">{L.grade}: <span className="text-[var(--text-secondary)]">{grade}</span></p>
       </div>
       <div>
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">{L.friction}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{L.friction}</p>
         <p className="text-3xl font-bold font-mono text-sky-300">{friction != null ? `${friction}%` : '—'}</p>
-        <p className="text-[10px] font-mono text-white/35 mt-1">{L.graphHint}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{L.graphHint}</p>
       </div>
       <div>
-        <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">{L.pathsTitle}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{L.pathsTitle}</p>
         <p className="text-3xl font-bold font-mono text-amber-300">{pathCount}</p>
       </div>
-      <div className="text-[11px] font-mono text-white/45 leading-relaxed">{finding?.description}</div>
+      <div className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">{finding?.description}</div>
     </motion.div>
   )
 }
@@ -579,10 +579,10 @@ export default function PasswordSprayCommandCenter() {
       )}
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <label className="flex items-center gap-2 text-xs font-mono text-white/50">
+        <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
           {L.client}
           <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value || null)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white/80 focus:outline-none focus:border-rose-500/40">
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)] focus:outline-none focus:border-rose-500/40">
             <option value="">{L.selectClient}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -592,22 +592,22 @@ export default function PasswordSprayCommandCenter() {
         </Link>
       </div>
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
         <div className="grid lg:grid-cols-2 gap-4 mb-4">
-          <label className="block text-xs font-mono text-white/50">
+          <label className="block text-xs font-mono text-[var(--text-tertiary)]">
             {L.target}
             <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={L.targetPh}
-              className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white/85 focus:outline-none focus:border-rose-500/40" />
+              className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-rose-500/40" />
           </label>
-          <label className="block text-xs font-mono text-white/50">
+          <label className="block text-xs font-mono text-[var(--text-tertiary)]">
             {L.domain}
             <input value={params.domain} onChange={(e) => set('domain', e.target.value)} placeholder={L.domainPh}
-              className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white/85 focus:outline-none focus:border-rose-500/40" />
+              className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-rose-500/40" />
           </label>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-4 items-center">
-          <span className="text-[10px] font-mono text-white/40 uppercase">{L.profile}</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{L.profile}</span>
           {Object.entries(L.profiles).map(([k, label]) => (
             <button key={k} type="button" onClick={() => set('scan_profile', k)}
               className="px-3 py-1 rounded-lg text-xs font-mono border transition-all"
@@ -617,7 +617,7 @@ export default function PasswordSprayCommandCenter() {
           ))}
         </div>
 
-        <p className="text-[10px] font-mono text-white/35 uppercase tracking-widest mb-2">{L.layers}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{L.layers}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
           <Toggle on={params.check_m365_realm} onClick={() => set('check_m365_realm', !params.check_m365_realm)} label={L.checkM365} />
           <Toggle on={params.check_oidc_ropc} onClick={() => set('check_oidc_ropc', !params.check_oidc_ropc)} label={L.checkOidcRopc} />
@@ -651,13 +651,13 @@ export default function PasswordSprayCommandCenter() {
           <Toggle on={params.dry_run} onClick={() => set('dry_run', !params.dry_run)} label={L.dryRun} />
         </div>
 
-        <div className="flex items-center justify-between gap-4 pt-2 border-t border-white/5">
-          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-white/40 hover:text-white/70">
+        <div className="flex items-center justify-between gap-4 pt-2 border-t border-[var(--border-subtle)]">
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
             {showAdvanced ? '▾' : '▸'} {L.advanced}
           </button>
           <div className="flex gap-2">
             {findings.length > 0 && (
-              <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/15 text-white/60 hover:text-white/90">{L.export}</button>
+              <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">{L.export}</button>
             )}
             <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
               className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40"
@@ -668,47 +668,47 @@ export default function PasswordSprayCommandCenter() {
         </div>
 
         {showAdvanced && (
-          <div className="mt-4 pt-4 border-t border-white/5 grid md:grid-cols-2 gap-3">
-            <label className="text-xs font-mono text-white/45">{L.delay}
-              <input type="number" value={params.delay_ms} onChange={(e) => set('delay_ms', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80" />
+          <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] grid md:grid-cols-2 gap-3">
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.delay}
+              <input type="number" value={params.delay_ms} onChange={(e) => set('delay_ms', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]" />
             </label>
-            <label className="text-xs font-mono text-white/45">{L.maxAttempts}
-              <input type="number" value={params.max_attempts} onChange={(e) => set('max_attempts', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.maxAttempts}
+              <input type="number" value={params.max_attempts} onChange={(e) => set('max_attempts', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]" />
             </label>
-            <label className="text-xs font-mono text-white/45 col-span-full">{L.paths}
-              <textarea value={params.paths} onChange={(e) => set('paths', e.target.value)} rows={3} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">{L.paths}
+              <textarea value={params.paths} onChange={(e) => set('paths', e.target.value)} rows={3} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <label className="text-xs font-mono text-white/45">{L.usernames}
-              <textarea value={params.usernames} onChange={(e) => set('usernames', e.target.value)} rows={2} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.usernames}
+              <textarea value={params.usernames} onChange={(e) => set('usernames', e.target.value)} rows={2} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <label className="text-xs font-mono text-white/45">{L.passwords}
-              <textarea value={params.passwords} onChange={(e) => set('passwords', e.target.value)} rows={2} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">{L.passwords}
+              <textarea value={params.passwords} onChange={(e) => set('passwords', e.target.value)} rows={2} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <label className="text-xs font-mono text-white/45">Timing samples
-              <input type="number" value={params.timing_samples} onChange={(e) => set('timing_samples', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">Timing samples
+              <input type="number" value={params.timing_samples} onChange={(e) => set('timing_samples', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]" />
             </label>
-            <label className="text-xs font-mono text-white/45">Lockout decay wait (ms)
-              <input type="number" value={params.lockout_decay_ms} onChange={(e) => set('lockout_decay_ms', e.target.value)} className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80" />
+            <label className="text-xs font-mono text-[var(--text-muted)]">Lockout decay wait (ms)
+              <input type="number" value={params.lockout_decay_ms} onChange={(e) => set('lockout_decay_ms', e.target.value)} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)]" />
             </label>
-            <label className="text-xs font-mono text-white/45 col-span-full">Subdomain prefixes (comma-sep)
-              <input value={params.subdomain_prefixes} onChange={(e) => set('subdomain_prefixes', e.target.value)} placeholder="login,sso,idp,owa,auth" className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-2 py-1.5 text-white/80 font-mono text-[11px]" />
+            <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">Subdomain prefixes (comma-sep)
+              <input value={params.subdomain_prefixes} onChange={(e) => set('subdomain_prefixes', e.target.value)} placeholder="login,sso,idp,owa,auth" className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-white/40 hover:text-white/70 border border-white/10 rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
+            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
           </div>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6 text-[11px] font-mono">
-        <span className="text-white/30">{L.related}:</span>
+        <span className="text-[var(--text-disabled)]">{L.related}:</span>
         <Link to="/identity-security" className="text-violet-300/80 hover:text-violet-200">{L.relatedIdentity}</Link>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--text-disabled)]">·</span>
         <Link to="/kerberos-security" className="text-amber-300/80 hover:text-amber-200">{L.relatedKerberos}</Link>
-        <span className="text-white/20">·</span>
-        <Link to={`/engines/${ENGINE_ID}`} className="text-white/50 hover:text-white/80">{L.relatedEngine}</Link>
+        <span className="text-[var(--text-disabled)]">·</span>
+        <Link to={`/engines/${ENGINE_ID}`} className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{L.relatedEngine}</Link>
       </div>
 
       {findings.length === 0 && status !== 'running' && (
-        <p className="text-sm font-mono text-white/40 text-center py-12">{L.runToPopulate}</p>
+        <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
       {posture && <PostureCard finding={posture} L={L} pathCount={paths.length} />}
@@ -737,10 +737,10 @@ export default function PasswordSprayCommandCenter() {
           {Array.isArray(roadmap.evidence?.roadmap) && (
             <ul className="space-y-2">
               {roadmap.evidence.roadmap.map((step, i) => (
-                <li key={i} className="text-[11px] font-mono text-white/80">
+                <li key={i} className="text-[11px] font-mono text-[var(--text-secondary)]">
                   <span className="text-amber-400">{step.tier || `P${step.priority}`}</span>
-                  {' · '}{step.action}: <span className="text-white/55">{step.detail}</span>
-                  {step.effort && <span className="text-white/35"> ({step.effort})</span>}
+                  {' · '}{step.action}: <span className="text-[var(--text-tertiary)]">{step.detail}</span>
+                  {step.effort && <span className="text-[var(--text-muted)]"> ({step.effort})</span>}
                 </li>
               ))}
             </ul>
@@ -753,7 +753,7 @@ export default function PasswordSprayCommandCenter() {
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.agentGapTitle}</p>
           <ul className="space-y-1">
             {agentGaps.map((f, i) => (
-              <li key={i} className="text-[11px] font-mono text-white/65">{f.title}</li>
+              <li key={i} className="text-[11px] font-mono text-[var(--text-tertiary)]">{f.title}</li>
             ))}
           </ul>
         </div>
@@ -763,7 +763,7 @@ export default function PasswordSprayCommandCenter() {
         <div className="rounded-xl border border-violet-500/35 bg-violet-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-violet-300/70 uppercase mb-2">{L.entra}</p>
           {entra.map((f, i) => (
-            <p key={i} className="text-sm font-mono text-white/85">{f.title}</p>
+            <p key={i} className="text-sm font-mono text-[var(--text-primary)]">{f.title}</p>
           ))}
         </div>
       )}
@@ -782,11 +782,11 @@ export default function PasswordSprayCommandCenter() {
       {remediation && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/10 p-4 mb-4">
           <p className="text-[10px] font-mono text-emerald-300/70 uppercase mb-2">{L.remediation}</p>
-          <p className="text-xs font-mono text-white/60">{remediation.description}</p>
+          <p className="text-xs font-mono text-[var(--text-tertiary)]">{remediation.description}</p>
           {Array.isArray(remediation.evidence?.actions) && (
             <ul className="mt-2 space-y-1">
               {remediation.evidence.actions.map((a, i) => (
-                <li key={i} className="text-[11px] font-mono text-white/75">
+                <li key={i} className="text-[11px] font-mono text-[var(--text-secondary)]">
                   <span className="text-emerald-400">{a.priority}</span> · {a.control}: {a.action}
                 </li>
               ))}
@@ -804,8 +804,8 @@ export default function PasswordSprayCommandCenter() {
       {m365.length > 0 && (
         <div className="rounded-xl border border-sky-500/30 bg-sky-950/15 p-4 mb-4">
           <p className="text-[10px] font-mono text-sky-300/70 uppercase mb-2">{L.m365Title}</p>
-          <p className="text-sm font-mono text-white/80">{m365[0].title}</p>
-          <p className="text-xs font-mono text-white/45 mt-1">{m365[0].description}</p>
+          <p className="text-sm font-mono text-[var(--text-secondary)]">{m365[0].title}</p>
+          <p className="text-xs font-mono text-[var(--text-muted)] mt-1">{m365[0].description}</p>
         </div>
       )}
 
@@ -822,7 +822,7 @@ export default function PasswordSprayCommandCenter() {
 
       {paths.length > 0 && (
         <div className="mb-6">
-          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">{L.pathsTitle}</p>
+          <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{L.pathsTitle}</p>
           <div className="space-y-2">
             {paths.map((f, i) => (
               <div key={i} className="rounded-lg border border-red-500/25 bg-red-950/10 px-3 py-2 text-xs font-mono text-red-200">{f.title}</div>
@@ -852,12 +852,12 @@ export default function PasswordSprayCommandCenter() {
         emptyTitle={L.noFindings}
         emptyBody={L.noFindings}
         renderFinding={(f, i) => (
-          <div key={i} className="rounded-xl border border-white/8 bg-black/30 px-4 py-3">
+          <div key={i} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-mono text-white/85">{f.title}</p>
+              <p className="text-sm font-mono text-[var(--text-primary)]">{f.title}</p>
               <span className="text-[10px] font-mono uppercase shrink-0" style={{ color: { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#38bdf8', info: '#4ade80' }[(f.severity || 'info').toLowerCase()] }}>{f.severity}</span>
             </div>
-            {f.description && <p className="text-xs font-mono text-white/40 mt-1">{f.description}</p>}
+            {f.description && <p className="text-xs font-mono text-[var(--text-muted)] mt-1">{f.description}</p>}
           </div>
         )}
       />

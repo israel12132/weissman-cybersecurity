@@ -257,18 +257,18 @@ export default function NetworkProtocols() {
         <EvidenceNotice>{t('pages.networkProtocols.evidence_notice')}</EvidenceNotice>
 
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[11px] font-mono text-white/40">{t('pages.networkProtocols.client_scope')}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.networkProtocols.client_scope')}</span>
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('pages.networkProtocols.all_clients')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <span className="text-[10px] font-mono text-white/30">
+          <span className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>
           <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">{t('pages.networkProtocols.open_findings')}</Link>
@@ -276,13 +276,13 @@ export default function NetworkProtocols() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
               value={protocolSearch}
               onChange={(e) => setProtocolSearch(e.target.value)}
               placeholder={t('pages.networkProtocols.search_placeholder')}
-              className="w-full bg-black/60 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-sm text-white/90 font-mono placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
           <button
@@ -303,7 +303,7 @@ export default function NetworkProtocols() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
@@ -311,7 +311,7 @@ export default function NetworkProtocols() {
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.scanned}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.networkProtocols.critical_issues')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
@@ -319,7 +319,7 @@ export default function NetworkProtocols() {
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.critical}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.networkProtocols.warnings')}</span>
               <Activity className="w-4 h-4 text-yellow-400" />
@@ -327,7 +327,7 @@ export default function NetworkProtocols() {
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.warning}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.networkProtocols.secure')}</span>
               <Shield className="w-4 h-4 text-green-400" />
@@ -336,8 +336,8 @@ export default function NetworkProtocols() {
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Globe className="w-4 h-4 text-cyan-400" />
               {t('pages.networkProtocols.heading')}
@@ -345,24 +345,24 @@ export default function NetworkProtocols() {
           </div>
 
           {loading ? (
-            <div className="p-6 text-sm text-white/40">{t('pages.networkProtocols.loading')}</div>
+            <div className="p-6 text-sm text-[var(--text-muted)]">{t('pages.networkProtocols.loading')}</div>
           ) : protocols.length === 0 ? (
-            <div className="p-6 space-y-3 text-sm text-white/50">
+            <div className="p-6 space-y-3 text-sm text-[var(--text-tertiary)]">
               <p>{t('pages.networkProtocols.empty_title')}</p>
-              <p className="text-xs text-white/35">
+              <p className="text-xs text-[var(--text-muted)]">
                 {t('pages.networkProtocols.empty_hint')}{' '}
                 <Link to="/network" className="text-cyan-300 hover:text-cyan-200">{t('pages.networkProtocols.network_intel_link')}</Link>
                 {' '}{t('pages.networkProtocols.empty_suffix')}
               </p>
             </div>
           ) : filteredProtocols.length === 0 ? (
-            <div className="p-6 text-sm text-white/50 text-center">
+            <div className="p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.networkProtocols.no_search_results')}
             </div>
           ) : (
             <div className="divide-y divide-white/5">
               {filteredProtocols.map((protocol) => (
-                <div key={protocol.name} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={protocol.name} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">

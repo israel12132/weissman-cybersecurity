@@ -124,12 +124,12 @@ export default function MetricsDashboard() {
       icon={<Activity />}
       actions={
         <>
-          <label className="flex items-center gap-2 text-[11px] font-mono text-white/55">
+          <label className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-white/20 bg-black/40 text-cyan-500"
+              className="w-3.5 h-3.5 rounded border-white/20 bg-[var(--bg-2)] text-cyan-500"
             />
             {t('pages.metricsDashboard.auto_refresh')}
           </label>
@@ -148,7 +148,7 @@ export default function MetricsDashboard() {
         </div>
 
         {lastUpdated && (
-          <p className="text-[11px] font-mono text-white/40">
+          <p className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.metricsDashboard.last_updated', {
               time: lastUpdated.toLocaleTimeString(i18n.language),
             })}
@@ -255,7 +255,7 @@ export default function MetricsDashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-white">{t('pages.metricsDashboard.findings_by_severity')}</h3>
                   <span className="text-xs text-gray-400">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
@@ -295,7 +295,7 @@ export default function MetricsDashboard() {
                 )}
               </div>
 
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <h3 className="text-sm font-semibold text-white mb-4">{t('pages.metricsDashboard.severity_breakdown')}</h3>
                 <div className="space-y-3">
                   {severityChartData.map(({ severity, count, label }) => (
@@ -305,7 +305,7 @@ export default function MetricsDashboard() {
                         style={{ backgroundColor: SEVERITY_COLORS[severity] }}
                       />
                       <span className="text-sm text-gray-300 w-20">{label}</span>
-                      <div className="flex-1 h-2 bg-black/30 rounded-full overflow-hidden">
+                      <div className="flex-1 h-2 bg-[var(--table-surface)] rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-300"
                           style={{
@@ -318,7 +318,7 @@ export default function MetricsDashboard() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap gap-3">
+                <div className="mt-6 pt-4 border-t border-[var(--border-default)] flex flex-wrap gap-3">
                   <Link to="/jobs" className="text-[11px] font-mono text-cyan-400 hover:underline">
                     {t('pages.metricsDashboard.link_jobs')} →
                   </Link>

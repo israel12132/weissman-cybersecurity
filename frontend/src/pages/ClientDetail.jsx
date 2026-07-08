@@ -113,7 +113,7 @@ export default function ClientDetail() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
+            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-white/[0.04] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -126,11 +126,11 @@ export default function ClientDetail() {
     return (
       <PageShell title={t('client_detail.title')} subtitle={t('client_detail.not_found')}>
         <div className="max-w-2xl mx-auto text-center py-12">
-          <p className="text-white/45">{t('client_detail.not_found')}</p>
+          <p className="text-[var(--text-muted)]">{t('client_detail.not_found')}</p>
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 rounded-xl border border-white/12 bg-white/[0.04] text-white/70 hover:text-white font-mono text-sm transition-colors"
+            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-white/[0.04] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -167,7 +167,7 @@ export default function ClientDetail() {
   })()
 
   const navBtnClass =
-    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all whitespace-nowrap'
+    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-white/[0.03] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
 
   const listFindings = useMemo(() => [{
     id: client.id,
@@ -252,10 +252,10 @@ export default function ClientDetail() {
           >
             <p className="font-medium text-sm">{scanResult.message}</p>
             {Array.isArray(scanResult.jobs) && scanResult.jobs.length > 0 && (
-              <div className="mt-3 text-xs text-white/55 space-y-1 max-h-48 overflow-y-auto font-mono custom-scroll">
+              <div className="mt-3 text-xs text-[var(--text-tertiary)] space-y-1 max-h-48 overflow-y-auto font-mono custom-scroll">
                 {scanResult.jobs.slice(0, 12).map((j) => (
                   <div key={j.job_id} className="flex justify-between gap-3">
-                    <span className="text-white/40 truncate" title={j.target}>
+                    <span className="text-[var(--text-muted)] truncate" title={j.target}>
                       {j.engine} → {j.target}
                     </span>
                     <Link to="/jobs" className="text-cyan-300 hover:text-cyan-200 underline shrink-0">
@@ -264,7 +264,7 @@ export default function ClientDetail() {
                   </div>
                 ))}
                 {scanResult.jobs.length > 12 && (
-                  <div className="text-white/35">+{scanResult.jobs.length - 12} more queued</div>
+                  <div className="text-[var(--text-muted)]">+{scanResult.jobs.length - 12} more queued</div>
                 )}
               </div>
             )}
@@ -272,29 +272,29 @@ export default function ClientDetail() {
         )}
 
         <section className="glass-panel rounded-2xl p-6">
-          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
             {t('client_detail.overview')}
           </h3>
           <dl className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.client_name')}</dt>
+              <dt className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('client_detail.client_name')}</dt>
               <dd className="mt-1 text-white font-semibold">{client.name}</dd>
             </div>
             {client.contact_email && (
               <div>
-                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.contact_email')}</dt>
+                <dt className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('client_detail.contact_email')}</dt>
                 <dd className="mt-1 text-white font-mono text-sm">{client.contact_email}</dd>
               </div>
             )}
             {client.created_at && (
               <div>
-                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.created')}</dt>
+                <dt className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('client_detail.created')}</dt>
                 <dd className="mt-1 text-white font-mono text-sm">{new Date(client.created_at).toLocaleString()}</dd>
               </div>
             )}
             {client.updated_at && (
               <div>
-                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.last_updated')}</dt>
+                <dt className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('client_detail.last_updated')}</dt>
                 <dd className="mt-1 text-white font-mono text-sm">{new Date(client.updated_at).toLocaleString()}</dd>
               </div>
             )}
@@ -302,16 +302,16 @@ export default function ClientDetail() {
         </section>
 
         <section className="glass-panel rounded-2xl p-6">
-          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
             {t('client_detail.scope')}
           </h3>
           <div className="space-y-6">
             <div>
-              <h4 className="text-[11px] font-mono text-white/50 uppercase tracking-wide mb-2">
+              <h4 className="text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wide mb-2">
                 {t('client_detail.domains')} ({domains.length})
               </h4>
               {domains.length > 0 ? (
-                <ul className="rounded-xl border border-white/8 bg-black/30 p-4 space-y-1.5">
+                <ul className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 space-y-1.5">
                   {domains.map((domain, idx) => (
                     <li key={idx} className="text-emerald-300/90 font-mono text-sm flex items-center gap-2">
                       <span className="text-emerald-500/60" aria-hidden="true">✓</span>
@@ -320,16 +320,16 @@ export default function ClientDetail() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-white/35 text-sm font-mono">{t('client_detail.no_domains')}</p>
+                <p className="text-[var(--text-muted)] text-sm font-mono">{t('client_detail.no_domains')}</p>
               )}
             </div>
 
             {ipRanges.length > 0 && (
               <div>
-                <h4 className="text-[11px] font-mono text-white/50 uppercase tracking-wide mb-2">
+                <h4 className="text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wide mb-2">
                   {t('client_detail.ip_ranges')} ({ipRanges.length})
                 </h4>
-                <ul className="rounded-xl border border-white/8 bg-black/30 p-4 space-y-1.5">
+                <ul className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 space-y-1.5">
                   {ipRanges.map((range, idx) => (
                     <li key={idx} className="text-cyan-300/90 font-mono text-sm flex items-center gap-2">
                       <span className="text-cyan-500/60" aria-hidden="true">✓</span>
@@ -344,7 +344,7 @@ export default function ClientDetail() {
 
         {techStack.length > 0 && (
           <section className="glass-panel rounded-2xl p-6">
-            <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+            <h3 className="text-sm font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
               {t('client_detail.tech_stack')}
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -361,7 +361,7 @@ export default function ClientDetail() {
         )}
 
         <section className="glass-panel rounded-2xl p-6">
-          <h3 className="text-sm font-mono uppercase tracking-widest text-white/45 mb-4">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
             {t('client_detail.quick_actions')}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -388,12 +388,12 @@ export default function ClientDetail() {
               <Link
                 key={action.to}
                 to={action.to}
-                className="group p-4 rounded-xl border border-white/10 bg-black/25 hover:border-white/20 hover:bg-black/35 transition-all text-center"
+                className="group p-4 rounded-xl border border-[var(--border-default)] bg-black/25 hover:border-[var(--border-strong)] hover:bg-black/35 transition-all text-center"
               >
                 <div className="text-white font-semibold text-sm group-hover:text-violet-200 transition-colors">
                   {action.title}
                 </div>
-                <div className="text-white/40 text-xs mt-1 font-mono">{action.desc}</div>
+                <div className="text-[var(--text-muted)] text-xs mt-1 font-mono">{action.desc}</div>
               </Link>
             ))}
           </div>

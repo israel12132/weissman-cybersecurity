@@ -191,16 +191,16 @@ export default function TopTierEngineHub() {
     if (status === 'pass') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
     if (status === 'fail') return 'text-rose-300 border-rose-500/40 bg-rose-500/10'
     if (status === 'pending') return 'text-amber-300 border-amber-500/40 bg-amber-500/10'
-    return 'text-white/60 border-white/20 bg-white/5'
+    return 'text-[var(--text-tertiary)] border-white/20 bg-white/5'
   }
 
   return (
     <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 130% 80% at 50% 0%, #111827 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/55 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-black/55 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">{t('pages.topTierEngineHub.back_matrix')}</Link>
-            <span className="text-white/20 text-xs">|</span>
+            <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">{t('pages.topTierEngineHub.back_matrix')}</Link>
+            <span className="text-[var(--text-disabled)] text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.topTierEngineHub.title')}</h1>
           </div>
           <div className="flex items-center gap-3">
@@ -210,7 +210,7 @@ export default function TopTierEngineHub() {
               refreshLoading={loading}
               exportDisabled={loading || !audit?.engines?.length}
             />
-            <div className="text-[11px] font-mono text-white/50">
+            <div className="text-[11px] font-mono text-[var(--text-tertiary)]">
             {loading
               ? t('pages.topTierEngineHub.auditing')
               : t('pages.topTierEngineHub.connected', {
@@ -225,16 +225,16 @@ export default function TopTierEngineHub() {
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <EngineHubForensicHeader evidence={t('pages.topTierEngineHub.evidence_notice')} />
 
-        <section className="rounded-2xl border border-white/10 bg-black/35 p-5">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-black/35 p-5">
           <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineHub.reality_heading')}</h2>
-          <p className="text-sm text-white/60 leading-relaxed">
+          <p className="text-sm text-[var(--text-tertiary)] leading-relaxed">
             {t('pages.topTierEngineHub.reality_body')}
           </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             >
               <option value="">{t('pages.topTierEngineHub.client_optional')}</option>
               {clients.map((c) => (
@@ -245,7 +245,7 @@ export default function TopTierEngineHub() {
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={t('pages.topTierEngineHub.target_placeholder')}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 md:col-span-2"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] md:col-span-2"
             />
             <button
               type="button"
@@ -256,21 +256,21 @@ export default function TopTierEngineHub() {
               {probeRunning ? t('pages.topTierEngineHub.running_probe') : t('pages.topTierEngineHub.run_health_probe')}
             </button>
           </div>
-          {probeSummary && <div className="mt-3 text-xs font-mono text-white/65">{probeSummary}</div>}
+          {probeSummary && <div className="mt-3 text-xs font-mono text-[var(--text-tertiary)]">{probeSummary}</div>}
         </section>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
               value={engineSearch}
               onChange={(e) => setEngineSearch(e.target.value)}
               placeholder={t('pages.topTierEngineHub.search_placeholder')}
-              className="w-full bg-black/60 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-sm text-white/90 font-mono placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <span className="text-[11px] font-mono text-white/40">
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.topTierEngineHub.showing_count', { count: filteredEngineIds.length, total: TOP_TIER_ENGINE_IDS.length })}
           </span>
         </div>
@@ -280,7 +280,7 @@ export default function TopTierEngineHub() {
         ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredEngineIds.length === 0 ? (
-            <div className="col-span-full rounded-xl border border-white/10 bg-black/40 p-6 text-sm text-white/50 text-center">
+            <div className="col-span-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.topTierEngineHub.no_search_results')}
             </div>
           ) : filteredEngineIds.map((id, idx) => {
@@ -289,27 +289,27 @@ export default function TopTierEngineHub() {
             const path = row?.execution_path || 'unknown'
             const probe = probeByEngine[id] || null
             return (
-              <article key={id} className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
+              <article key={id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-mono text-white/40">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
+                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.topTierEngineHub.top_tier_num', { num: idx + 1 })}</div>
                     <h3 className="text-base font-semibold text-white">{engine?.label || id}</h3>
-                    <div className="text-[11px] font-mono text-white/40">{id}</div>
+                    <div className="text-[11px] font-mono text-[var(--text-muted)]">{id}</div>
                   </div>
                   <span className={`px-2 py-1 rounded border text-[10px] font-mono uppercase tracking-wider ${badgeClass(path)}`}>
                     {path}
                   </span>
                 </div>
 
-                <p className="text-sm text-white/55 min-h-[40px]">{engine?.description || t('pages.topTierEngineHub.no_description')}</p>
+                <p className="text-sm text-[var(--text-tertiary)] min-h-[40px]">{engine?.description || t('pages.topTierEngineHub.no_description')}</p>
 
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-white/60">
-                  <div className="rounded border border-white/10 bg-black/30 p-2">
-                    <div className="text-white/35">{t('pages.topTierEngineHub.canonical_label')}</div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
+                  <div className="rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
+                    <div className="text-[var(--text-muted)]">{t('pages.topTierEngineHub.canonical_label')}</div>
                     <div>{row?.canonical_engine || '-'}</div>
                   </div>
-                  <div className="rounded border border-white/10 bg-black/30 p-2">
-                    <div className="text-white/35">{t('pages.topTierEngineHub.production_label')}</div>
+                  <div className="rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
+                    <div className="text-[var(--text-muted)]">{t('pages.topTierEngineHub.production_label')}</div>
                     <div>{row?.is_production_runnable ? t('common.yes') : t('common.no')}</div>
                   </div>
                 </div>
@@ -319,7 +319,7 @@ export default function TopTierEngineHub() {
                     {t('pages.topTierEngineHub.probe_label', { status: probe?.status || 'pending' })}
                   </span>
                   {probe && (
-                    <span className="text-white/50">
+                    <span className="text-[var(--text-tertiary)]">
                       {t('pages.topTierEngineHub.findings_duration', {
                         count: probe.findings_count,
                         ms: probe.duration_ms,
@@ -327,7 +327,7 @@ export default function TopTierEngineHub() {
                     </span>
                   )}
                 </div>
-                {probe?.message && <div className="text-[11px] text-white/50">{probe.message}</div>}
+                {probe?.message && <div className="text-[11px] text-[var(--text-tertiary)]">{probe.message}</div>}
 
                 <div className="flex items-center gap-2">
                   <Link
@@ -338,7 +338,7 @@ export default function TopTierEngineHub() {
                   </Link>
                   <Link
                     to={`/engines/${id}`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20 text-white/70 hover:bg-white/5 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/20 text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                   >
                     {t('pages.topTierEngineHub.open_engine_detail')}
                   </Link>

@@ -248,17 +248,17 @@ const CATEGORY_META = [
 function CategoryScoresPanel({ scores, L }) {
   if (!scores || typeof scores !== 'object') return null
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-4 mb-5">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{L.categoryScores}</div>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-5">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{L.categoryScores}</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {CATEGORY_META.map(({ key, label, color }) => {
           const v = Number(scores[key] ?? 0)
           const c = v >= 85 ? '#22c55e' : v >= 60 ? '#eab308' : v >= 40 ? '#f97316' : '#ef4444'
           return (
-            <div key={key} className="rounded-lg border border-white/5 p-2">
+            <div key={key} className="rounded-lg border border-[var(--border-subtle)] p-2">
               <div className="flex justify-between text-[10px] font-mono mb-1">
                 <span style={{ color }}>{label}</span>
-                <span className="text-white/70">{v}</span>
+                <span className="text-[var(--text-secondary)]">{v}</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${v}%`, backgroundColor: c }} />
@@ -277,7 +277,7 @@ function ToxicBanner({ finding, L }) {
     <div className="rounded-2xl border-2 border-rose-500/50 bg-gradient-to-r from-rose-950/50 via-red-950/30 to-black/40 p-4 mb-5">
       <div className="text-[10px] font-mono uppercase tracking-widest text-rose-300 mb-1">{L.toxicTitle}</div>
       <h3 className="text-sm font-bold text-rose-100 leading-snug">{finding.title}</h3>
-      {finding.description && <p className="text-xs text-white/55 mt-2 leading-relaxed">{finding.description}</p>}
+      {finding.description && <p className="text-xs text-[var(--text-tertiary)] mt-2 leading-relaxed">{finding.description}</p>}
     </div>
   )
 }
@@ -292,7 +292,7 @@ function RoadmapCard({ finding, L }) {
         {steps.map((s, i) => (
           <li key={i} className="flex gap-2 text-xs font-mono">
             <span className="shrink-0 text-emerald-400 font-bold">{s.priority ?? i + 1}.</span>
-            <span className="text-white/80"><b className="text-emerald-200">{s.action}</b> — {s.detail} <span className="text-white/35">({s.effort})</span></span>
+            <span className="text-[var(--text-secondary)]"><b className="text-emerald-200">{s.action}</b> — {s.detail} <span className="text-[var(--text-muted)]">({s.effort})</span></span>
           </li>
         ))}
       </ol>
@@ -329,7 +329,7 @@ function PostureGauge({ score = 0 }) {
         <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: c }} />
         </div>
-        <p className="text-[10px] font-mono text-white/35 mt-1">100 = no observed external AD weakness</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">100 = no observed external AD weakness</p>
       </div>
     </div>
   )
@@ -375,10 +375,10 @@ function PostureCard({ finding, L, pathCount = 0 }) {
     <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/25 via-violet-950/15 to-black/40 p-5 mb-5">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{L.posture}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{L.posture}</div>
           <PostureGauge score={score} />
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-[10px] font-mono text-white/40">{L.grade}:</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">{L.grade}:</span>
             <span className="text-2xl font-bold font-mono text-white">{grade}</span>
           </div>
           {verdict && (
@@ -386,7 +386,7 @@ function PostureCard({ finding, L, pathCount = 0 }) {
           )}
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{L.counts}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{L.counts}</div>
           <div className="flex flex-wrap gap-1.5">
             {['critical', 'high', 'medium', 'low', 'info'].map((s) => (
               <span key={s} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono"
@@ -397,18 +397,18 @@ function PostureCard({ finding, L, pathCount = 0 }) {
           </div>
           {ev.domain && (
             <div className="mt-4 text-xs font-mono">
-              <span className="text-white/40">{L.domain}: </span>
+              <span className="text-[var(--text-muted)]">{L.domain}: </span>
               <span className="text-amber-200">{ev.domain}</span>
             </div>
           )}
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.graphTitle}</div>
-          <p className="text-[10px] text-white/35 mb-2">{L.graphHint}</p>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.graphTitle}</div>
+          <p className="text-[10px] text-[var(--text-muted)] mb-2">{L.graphHint}</p>
           <AdGraph domain={ev.domain} spnCount={spnCount} pathCount={pathCount} />
         </div>
       </div>
-      {finding.description && <p className="text-xs text-white/55 mt-4 leading-relaxed border-t border-white/10 pt-3">{finding.description}</p>}
+      {finding.description && <p className="text-xs text-[var(--text-tertiary)] mt-4 leading-relaxed border-t border-[var(--border-default)] pt-3">{finding.description}</p>}
     </div>
   )
 }
@@ -426,12 +426,12 @@ function AttackPathCard({ finding }) {
         </div>
       </div>
       {finding.mitre_attack && <Chip color="#a78bfa">{finding.mitre_attack}</Chip>}
-      {finding.description && <p className="text-xs text-white/55 mt-2 mb-3 leading-relaxed">{finding.description}</p>}
+      {finding.description && <p className="text-xs text-[var(--text-tertiary)] mt-2 mb-3 leading-relaxed">{finding.description}</p>}
       <ol className="space-y-2">
         {steps.map((step, i) => (
           <li key={i} className="flex gap-2.5 text-xs">
             <span className="shrink-0 w-6 h-6 rounded-full bg-rose-500/20 text-rose-200 flex items-center justify-center font-mono text-[10px] font-bold">{i + 1}</span>
-            <span className="text-white/80 leading-relaxed pt-0.5">{step}</span>
+            <span className="text-[var(--text-secondary)] leading-relaxed pt-0.5">{step}</span>
           </li>
         ))}
       </ol>
@@ -454,7 +454,7 @@ function FindingCard({ finding, L }) {
   const standards = Array.isArray(finding.standards) ? finding.standards : []
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+    <div className="rounded-xl border border-[var(--border-default)] bg-white/[0.03] overflow-hidden">
       <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
@@ -464,29 +464,29 @@ function FindingCard({ finding, L }) {
             {finding.mitre_attack && <Chip color="#a78bfa">{finding.mitre_attack}</Chip>}
             {conf !== null && <Chip color="#22d3ee">{L.confidence} {conf}%</Chip>}
           </div>
-          <div className="text-sm text-white/85 mt-1 font-medium">{finding.title}</div>
+          <div className="text-sm text-[var(--text-primary)] mt-1 font-medium">{finding.title}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '−' : '+'}</span>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '−' : '+'}</span>
       </button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="px-4 pb-4 pt-1 space-y-3 text-xs">
-              {finding.description && <p className="text-white/60 leading-relaxed">{finding.description}</p>}
+              {finding.description && <p className="text-[var(--text-tertiary)] leading-relaxed">{finding.description}</p>}
               {standards.length > 0 && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{L.standards}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-[var(--text-disabled)] mb-1">{L.standards}</div>
                   <div className="flex flex-wrap gap-1">{standards.map((s) => <Chip key={s} color="#38bdf8">{s}</Chip>)}</div>
                 </div>
               )}
               {evKeys.length > 0 && (
-                <div className="rounded-lg bg-black/40 border border-white/5 p-2">
-                  <div className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{L.evidence}</div>
+                <div className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-2">
+                  <div className="text-[10px] uppercase tracking-widest text-[var(--text-disabled)] mb-1">{L.evidence}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 font-mono">
                     {evKeys.map((k) => (
                       <div key={k} className="flex gap-2 min-w-0">
-                        <span className="text-white/40 shrink-0">{k}:</span>
-                        <span className="text-white/75 truncate">{renderEvidenceValue(ev[k])}</span>
+                        <span className="text-[var(--text-muted)] shrink-0">{k}:</span>
+                        <span className="text-[var(--text-secondary)] truncate">{renderEvidenceValue(ev[k])}</span>
                       </div>
                     ))}
                   </div>
@@ -497,8 +497,8 @@ function FindingCard({ finding, L }) {
                   {checks.map((c, i) => (
                     <div key={i} className="flex items-center gap-2 font-mono">
                       <span style={{ color: c.observed ? '#22c55e' : '#64748b' }}>{c.observed ? '✓' : '○'}</span>
-                      <span className="text-white/70">{c.name}</span>
-                      <span className="text-white/35 truncate">{renderEvidenceValue(c.detail)}</span>
+                      <span className="text-[var(--text-secondary)]">{c.name}</span>
+                      <span className="text-[var(--text-muted)] truncate">{renderEvidenceValue(c.detail)}</span>
                     </div>
                   ))}
                 </div>
@@ -532,7 +532,7 @@ function Toggle({ on, onClick, label }) {
 
 function Segmented({ value, onChange, options }) {
   return (
-    <div className="inline-flex rounded-lg border border-white/10 p-0.5 bg-black/30">
+    <div className="inline-flex rounded-lg border border-[var(--border-default)] p-0.5 bg-[var(--table-surface)]">
       {options.map((o) => (
         <button key={o.value} type="button" onClick={() => onChange(o.value)}
           className="px-3 py-1 rounded-md text-xs font-mono transition-all"
@@ -721,10 +721,10 @@ export default function KerberosSecurityCommandCenter() {
       )}
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <label className="flex items-center gap-2 text-xs font-mono text-white/50">
+        <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)]">
           {L.client}
           <select value={clientId ?? ''} onChange={(e) => setClientId(e.target.value || null)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-white/80 focus:outline-none focus:border-amber-500/40">
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[var(--text-secondary)] focus:outline-none focus:border-amber-500/40">
             <option value="">{L.selectClient}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -734,24 +734,24 @@ export default function KerberosSecurityCommandCenter() {
         </Link>
       </div>
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl">🏰</span>
             <div>
               <h2 className="text-lg font-bold text-white">{ENGINE_ID}</h2>
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">MITRE T1558 · CIS 5 · NIST AC-2/IA-2</span>
+              <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">MITRE T1558 · CIS 5 · NIST AC-2/IA-2</span>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
-              <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
-              {lastRun && <span className="text-[10px] font-mono text-white/25">· {lastRun}</span>}
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
+              {lastRun && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {lastRun}</span>}
             </div>
             <div className="flex gap-2">
               {findings.length > 0 && (
-                <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/15 text-white/60 hover:text-white/90">
+                <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
                 </button>
               )}
@@ -765,24 +765,24 @@ export default function KerberosSecurityCommandCenter() {
         </div>
 
         <label className="block mb-3">
-          <span className="text-[11px] font-mono text-white/40">{L.target}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.target}</span>
           <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={L.targetPh}
-            className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 font-mono focus:outline-none focus:border-amber-500/40" />
+            className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-amber-500/40" />
         </label>
 
         <label className="block mb-4">
-          <span className="text-[11px] font-mono text-white/40">{L.domain}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.domain}</span>
           <input value={params.domain} onChange={(e) => set('domain', e.target.value)} placeholder={L.domainPh}
-            className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 font-mono focus:outline-none focus:border-amber-500/40" />
+            className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-amber-500/40" />
         </label>
 
         <div className="mb-4">
-          <span className="text-[11px] font-mono text-white/40 block mb-2">{L.presets}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)] block mb-2">{L.presets}</span>
           <div className="flex flex-wrap gap-1.5">
             {AD_PRESETS.map((p) => (
               <button key={p.id} type="button" title={p.hint}
                 onClick={() => { set('domain', p.domain); if (!target.trim()) setTarget(p.hint) }}
-                className="text-[10px] font-mono px-2.5 py-1 rounded-lg border border-white/10 text-white/55 hover:border-amber-500/40 hover:text-amber-200 transition-colors">
+                className="text-[10px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-amber-500/40 hover:text-amber-200 transition-colors">
                 {p.label}
               </button>
             ))}
@@ -790,13 +790,13 @@ export default function KerberosSecurityCommandCenter() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4 mb-4">
-          <span className="text-[11px] font-mono text-white/40">{L.intensity}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.intensity}</span>
           <Segmented value={params.intensity} onChange={(v) => set('intensity', v)}
             options={[{ value: 'light', label: L.light }, { value: 'normal', label: L.normal }, { value: 'aggressive', label: L.aggressive }]} />
         </div>
 
         <div className="mb-4">
-          <span className="text-[11px] font-mono text-white/40 block mb-2">{L.layers}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)] block mb-2">{L.layers}</span>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             <Toggle on={params.check_ports} onClick={() => set('check_ports', !params.check_ports)} label={L.checkPorts} />
             <Toggle on={params.check_srv} onClick={() => set('check_srv', !params.check_srv)} label={L.checkSrv} />
@@ -820,64 +820,64 @@ export default function KerberosSecurityCommandCenter() {
         </div>
 
         <button type="button" onClick={() => setShowAdvanced((s) => !s)}
-          className="text-[11px] font-mono text-white/40 hover:text-white/70 mb-3">
+          className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] mb-3">
           {showAdvanced ? '▼' : '▶'} {L.advanced}
         </button>
 
         {showAdvanced && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-default)]">
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.adPorts}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.adPorts}</span>
               <input value={params.ad_ports} onChange={(e) => set('ad_ports', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.resolver}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.resolver}</span>
               <select value={params.resolver} onChange={(e) => set('resolver', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono">
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono">
                 {RESOLVER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
             <label className="block md:col-span-2">
-              <span className="text-[11px] font-mono text-white/40">{L.probeUsers}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.probeUsers}</span>
               <textarea value={params.probe_usernames} onChange={(e) => set('probe_usernames', e.target.value)} rows={3}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block md:col-span-2">
-              <span className="text-[11px] font-mono text-white/40">{L.extraPaths}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.extraPaths}</span>
               <textarea value={params.extra_http_paths} onChange={(e) => set('extra_http_paths', e.target.value)} rows={2}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.dcHosts}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.dcHosts}</span>
               <input value={params.dc_hosts} onChange={(e) => set('dc_hosts', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.ldapBase}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.ldapBase}</span>
               <input value={params.ldap_base_dn} onChange={(e) => set('ldap_base_dn', e.target.value)} placeholder="DC=corp,DC=local"
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.maxLdap}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.maxLdap}</span>
               <input type="number" min={4} max={128} value={params.max_ldap_entries} onChange={(e) => set('max_ldap_entries', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.timeout}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.timeout}</span>
               <input type="number" min={1000} max={20000} value={params.timeout_ms} onChange={(e) => set('timeout_ms', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <label className="block">
-              <span className="text-[11px] font-mono text-white/40">{L.concurrency}</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.concurrency}</span>
               <input type="number" min={1} max={64} value={params.concurrency} onChange={(e) => set('concurrency', e.target.value)}
-                className="mt-1 w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+                className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
             </label>
             <div className="flex items-end">
               <Toggle on={params.strict_mode} onClick={() => set('strict_mode', !params.strict_mode)} label={L.strictMode} />
             </div>
             <div className="flex items-end">
-              <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-white/40 hover:text-white/70 border border-white/10 rounded-lg px-3 py-2">
+              <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2">
                 {L.reset}
               </button>
             </div>
@@ -886,18 +886,18 @@ export default function KerberosSecurityCommandCenter() {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6 text-[11px] font-mono">
-        <span className="text-white/30">{L.related}:</span>
+        <span className="text-[var(--text-disabled)]">{L.related}:</span>
         <Link to="/identity-security" className="text-violet-300/80 hover:text-violet-200">{L.relatedIdentity}</Link>
-        <span className="text-white/20">·</span>
-        <Link to={`/engines/${ENGINE_ID}`} className="text-white/50 hover:text-white/80">{L.relatedEngine}</Link>
-        <span className="text-white/20">·</span>
-        <Link to="/password-spray" className="text-white/50 hover:text-white/80">{L.relatedSpray}</Link>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--text-disabled)]">·</span>
+        <Link to={`/engines/${ENGINE_ID}`} className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{L.relatedEngine}</Link>
+        <span className="text-[var(--text-disabled)]">·</span>
+        <Link to="/password-spray" className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{L.relatedSpray}</Link>
+        <span className="text-[var(--text-disabled)]">·</span>
         <Link to="/saml-security" className="text-amber-300/80 hover:text-amber-200">{L.relatedSaml}</Link>
       </div>
 
       {findings.length === 0 && status !== 'running' && (
-        <p className="text-sm font-mono text-white/40 text-center py-12">{L.runToPopulate}</p>
+        <p className="text-sm font-mono text-[var(--text-muted)] text-center py-12">{L.runToPopulate}</p>
       )}
 
       {toxic && <ToxicBanner finding={toxic} L={L} />}
@@ -910,7 +910,7 @@ export default function KerberosSecurityCommandCenter() {
 
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
-          <span className="text-[10px] font-mono text-white/35">{L.categories}:</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{L.categories}:</span>
           {categories.map((c) => <Chip key={c} color={ACCENT}>{c}</Chip>)}
         </div>
       )}
@@ -920,7 +920,7 @@ export default function KerberosSecurityCommandCenter() {
           <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/60 mb-2">{L.agentGapTitle}</div>
           <div className="space-y-1">
             {agentGaps.map((f, i) => (
-              <p key={i} className="text-[11px] font-mono text-white/50">{f.title}</p>
+              <p key={i} className="text-[11px] font-mono text-[var(--text-tertiary)]">{f.title}</p>
             ))}
           </div>
         </div>

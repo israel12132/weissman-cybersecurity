@@ -149,13 +149,13 @@ function Terminal({ lines }) {
     <div className="relative">
       {lines.length > 0 && (
         <button type="button" onClick={copyAll}
-          className="absolute top-2 right-2 z-10 text-[10px] font-mono text-white/30 hover:text-cyan-400 bg-black/60 px-2 py-1 rounded border border-white/10 transition-colors">
+          className="absolute top-2 right-2 z-10 text-[10px] font-mono text-[var(--text-disabled)] hover:text-cyan-400 bg-[var(--scrim)] px-2 py-1 rounded border border-[var(--border-default)] transition-colors">
           Copy
         </button>
       )}
-      <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-black/80 border border-white/5 p-3 font-mono text-[11px] leading-relaxed">
+      <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-black/80 border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed">
         {lines.length === 0 ? (
-          <span className="text-white/20">{t('engines.detail_terminal_idle')}</span>
+          <span className="text-[var(--text-disabled)]">{t('engines.detail_terminal_idle')}</span>
         ) : (
           lines.map((line, i) => (
             <div key={i} className={
@@ -201,18 +201,18 @@ function FindingsTable({ findings }) {
   return (
     <div className="space-y-2 max-h-96 overflow-auto">
       {findings.map((f, i) => (
-        <div key={i} className="rounded-lg bg-black/40 border border-white/10 p-3 space-y-1">
+        <div key={i} className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-3 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <span className="text-sm font-semibold text-white/90">{f.title || f.type || 'Finding'}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{f.title || f.type || 'Finding'}</span>
             <FindingBadge severity={f.severity} />
           </div>
-          {f.description && <p className="text-[11px] text-white/55 font-mono leading-relaxed">{f.description}</p>}
+          {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
           <div className="flex flex-wrap gap-3 mt-1">
             {f.mitre_attack && (
               <a href={`https://attack.mitre.org/techniques/${(f.mitre_attack||'').replace('.','/')}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-cyan-400 hover:underline">{f.mitre_attack}</a>
             )}
-            {f.url && <span className="text-[10px] font-mono text-white/40 truncate max-w-xs">{f.url}</span>}
-            {f.target && <span className="text-[10px] font-mono text-white/40">{f.target}</span>}
+            {f.url && <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-xs">{f.url}</span>}
+            {f.target && <span className="text-[10px] font-mono text-[var(--text-muted)]">{f.target}</span>}
           </div>
         </div>
       ))}
@@ -249,15 +249,15 @@ function saveRun(engineId, { target, status, findingsCount, jobId }) {
 function StatCard({ label, value, sub, accent = '#22d3ee', icon }) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 backdrop-blur-xl p-4 transition-all duration-300 hover:border-white/15"
+      className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-black/50 backdrop-blur-xl p-4 transition-all duration-300 hover:border-[var(--border-strong)]"
       style={{ boxShadow: `inset 0 1px 0 ${accent}15` }}
     >
       <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}50, transparent)` }} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1.5">{label}</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1.5">{label}</p>
           <p className="text-xl font-bold text-white tracking-tight truncate">{value}</p>
-          {sub && <p className="text-[10px] font-mono text-white/35 mt-1 truncate">{sub}</p>}
+          {sub && <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1 truncate">{sub}</p>}
         </div>
         {icon && <span className="text-lg opacity-60 shrink-0">{icon}</span>}
       </div>
@@ -307,20 +307,20 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
     return () => { cancelled = true }
   }, [engineId])
 
-  if (loading) return <p className="text-[11px] font-mono text-white/25">Loading run history…</p>
-  if (!history.length) return <p className="text-[11px] font-mono text-white/25">{emptyLabel}</p>
+  if (loading) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">Loading run history…</p>
+  if (!history.length) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">{emptyLabel}</p>
   return (
     <div className="space-y-2">
       {!fromServer && (
-        <p className="text-[10px] font-mono text-white/20 mb-2">Showing local browser history (server unavailable).</p>
+        <p className="text-[10px] font-mono text-[var(--text-disabled)] mb-2">Showing local browser history (server unavailable).</p>
       )}
       {history.map((r, i) => (
-        <div key={i} className="flex items-center gap-3 text-[11px] font-mono text-white/50 flex-wrap">
+        <div key={i} className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)] flex-wrap">
           <span className={r.status === 'completed' ? 'text-[#4ade80]' : 'text-red-400'}>{r.status}</span>
-          <span className="text-white/30">{new Date(r.ts).toLocaleString()}</span>
+          <span className="text-[var(--text-disabled)]">{new Date(r.ts).toLocaleString()}</span>
           {r.target && <span className="text-cyan-400/60 truncate max-w-[200px]">{r.target}</span>}
           {r.findingsCount > 0 && <span className="text-amber-300">{r.findingsCount} finding{r.findingsCount !== 1 ? 's' : ''}</span>}
-          {r.jobId && <span className="text-white/20 truncate max-w-[100px]">{r.jobId}</span>}
+          {r.jobId && <span className="text-[var(--text-disabled)] truncate max-w-[100px]">{r.jobId}</span>}
         </div>
       ))}
     </div>
@@ -342,12 +342,12 @@ export default function EngineDetail() {
     columnHelper.accessor('k', {
       header: '',
       enableSorting: false,
-      cell: (info) => <span className="text-white/35">{info.getValue()}</span>,
+      cell: (info) => <span className="text-[var(--text-muted)]">{info.getValue()}</span>,
     }),
     columnHelper.accessor('v', {
       header: '',
       enableSorting: false,
-      cell: (info) => <span className="text-white/75">{info.getValue()}</span>,
+      cell: (info) => <span className="text-[var(--text-secondary)]">{info.getValue()}</span>,
     }),
   ], [])
   const [runHistory, setRunHistory] = useState([])
@@ -576,7 +576,7 @@ export default function EngineDetail() {
       <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-black/65 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <Link to="/engines" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+          <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">
             {t('engines.detail_back_matrix')}
           </Link>
           <span className="text-white/15 text-xs">|</span>
@@ -673,7 +673,7 @@ export default function EngineDetail() {
             <div className="space-y-4 min-w-0 flex-1">
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">{engine.label}</h1>
-                <code className="text-[11px] font-mono text-white/35 bg-black/40 px-2 py-0.5 rounded-md border border-white/[0.08]">{engine.id}</code>
+                <code className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-2)] px-2 py-0.5 rounded-md border border-white/[0.08]">{engine.id}</code>
                 {running && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 animate-pulse">
                     ⟳ {t('engines.running')}
@@ -688,10 +688,10 @@ export default function EngineDetail() {
                   </span>
                 )}
               </div>
-              <p className="text-sm md:text-base text-white/55 leading-relaxed max-w-3xl">{engine.description}</p>
+              <p className="text-sm md:text-base text-[var(--text-tertiary)] leading-relaxed max-w-3xl">{engine.description}</p>
               <div className="flex flex-wrap gap-2">
                 {engine.requiresTarget && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10 text-white/40 bg-white/[0.04]">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] bg-white/[0.04]">
                     {t('engines.detail_requires_target')}
                   </span>
                 )}
@@ -700,7 +700,7 @@ export default function EngineDetail() {
                     href={`https://attack.mitre.org/techniques/${engine.mitre.replace('.', '/')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10 text-cyan-400/80 hover:text-cyan-300 bg-cyan-500/[0.04]"
+                    className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-cyan-400/80 hover:text-cyan-300 bg-cyan-500/[0.04]"
                   >
                     {engine.mitre}
                   </a>
@@ -720,7 +720,7 @@ export default function EngineDetail() {
               <button
                 type="button"
                 onClick={() => setActiveTab('history')}
-                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-white/12 text-white/55 hover:text-white/85 hover:border-white/25 hover:bg-white/[0.04] transition-all"
+                className="px-4 py-2.5 rounded-xl font-mono text-sm border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-white/[0.04] transition-all"
               >
                 {t('engines.detail_view_history')}
               </button>
@@ -764,18 +764,18 @@ export default function EngineDetail() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/[0.08] p-6 space-y-5"
+          className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-white/[0.08] p-6 space-y-5"
         >
-          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('engines.detail_run_config')}</h2>
+          <h2 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('engines.detail_run_config')}</h2>
 
           {/* Client */}
           <div>
-            <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">Client</label>
+            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
               disabled={running}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               <option value="">{t('engines.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -784,21 +784,21 @@ export default function EngineDetail() {
 
           {/* Target */}
           <div>
-            <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
+            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
               {t('engines.detail_target_optional')}
             </label>
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder={engine.requiresTarget ? 'https://target.com' : 'Optional — uses client scope'}
               disabled={running}
-              className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
           </div>
 
           {/* Timeout */}
           <div>
-            <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('engines.detail_timeout')}</label>
+            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('engines.detail_timeout')}</label>
             <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Number(e.target.value))}
               min={10} max={3600} disabled={running}
-              className="w-36 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
+              className="w-36 bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
           </div>
 
           {/* Dynamic engine parameters */}
@@ -835,7 +835,7 @@ export default function EngineDetail() {
             )}
             {lines.length > 0 && !running && (
               <button type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null) }}
-                className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/30 hover:text-white/60 transition-all">
+                className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-all">
                 {t('engines.detail_clear')}
               </button>
             )}
@@ -847,9 +847,9 @@ export default function EngineDetail() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden"
+          className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] overflow-hidden"
         >
-          <div className="flex border-b border-white/10">
+          <div className="flex border-b border-[var(--border-default)]">
             {[
               { id:'output',   label: t('engines.live_output'),  badge: lines.length > 0 ? lines.length : null },
               { id:'findings', label: t('engines.findings_tab'), badge: findings.length > 0 ? findings.length : null },
@@ -857,11 +857,11 @@ export default function EngineDetail() {
             ].map((tab) => (
               <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-[11px] font-mono uppercase tracking-widest transition-colors flex items-center gap-2 ${
-                  activeTab === tab.id ? 'text-cyan-400 border-b-2 border-cyan-500 bg-cyan-500/5' : 'text-white/40 hover:text-white/60'
+                  activeTab === tab.id ? 'text-cyan-400 border-b-2 border-cyan-500 bg-cyan-500/5' : 'text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
                 }`}>
                 {tab.label}
                 {tab.badge !== null && (
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] ${tab.id === 'findings' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-white/40'}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] ${tab.id === 'findings' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-[var(--text-muted)]'}`}>
                     {tab.badge}
                   </span>
                 )}
@@ -885,17 +885,17 @@ export default function EngineDetail() {
                     accent={groupDef?.color ?? '#22d3ee'}
                     title={t('engines.findings_tab')}
                     renderFinding={(f, i) => (
-                      <div key={i} className="rounded-lg bg-black/40 border border-white/10 p-3 space-y-1">
+                      <div key={i} className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-3 space-y-1">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-semibold text-white/90">{f.title || f.type || 'Finding'}</span>
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">{f.title || f.type || 'Finding'}</span>
                           <FindingBadge severity={f.severity} />
                         </div>
-                        {f.description && <p className="text-[11px] text-white/55 font-mono leading-relaxed">{f.description}</p>}
+                        {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
                       </div>
                     )}
                   />
                 )
-                : <p className="text-[11px] font-mono text-white/25">{t('engines.detail_no_findings')}</p>
+                : <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('engines.detail_no_findings')}</p>
             )}
             {activeTab === 'history'  && <RunHistoryPanel engineId={engineId} emptyLabel={t('engines.detail_no_history')} />}
           </div>
@@ -908,8 +908,8 @@ export default function EngineDetail() {
           transition={{ delay: 0.14 }}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_metadata')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
+            <h3 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('engines.detail_metadata')}</h3>
             <DataTable
               columns={metadataColumns}
               data={[
@@ -924,17 +924,17 @@ export default function EngineDetail() {
               getRowId={(item) => item.k}
             />
           </div>
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_api_ref')}</h3>
-            <p className="text-[10px] font-mono text-white/30">Trigger via REST API:</p>
-            <pre className="text-[10px] font-mono text-cyan-300/80 bg-black/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap border border-white/5">{`POST /api/command-center/scan
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
+            <h3 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('engines.detail_api_ref')}</h3>
+            <p className="text-[10px] font-mono text-[var(--text-disabled)]">Trigger via REST API:</p>
+            <pre className="text-[10px] font-mono text-cyan-300/80 bg-[var(--bg-3)] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap border border-[var(--border-subtle)]">{`POST /api/command-center/scan
 {
   "engine": "${engine.id}",
   "client_id": 1,
   "target": "https://target.com"${extraParamDefs.length > 0 ? '\n  // + engine params above' : ''}
 }`}</pre>
-            <p className="text-[10px] font-mono text-white/30 mt-2">Stream output:</p>
-            <pre className="text-[10px] font-mono text-cyan-300/80 bg-black/50 rounded-lg p-2 overflow-x-auto border border-white/5">{`GET /api/telemetry/stream?job_id={id}`}</pre>
+            <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-2">Stream output:</p>
+            <pre className="text-[10px] font-mono text-cyan-300/80 bg-[var(--bg-3)] rounded-lg p-2 overflow-x-auto border border-[var(--border-subtle)]">{`GET /api/telemetry/stream?job_id={id}`}</pre>
           </div>
         </motion.section>
 

@@ -79,7 +79,7 @@ function SubScoreBar({ label, value }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-mono text-white/55">{label}</span>
+        <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{label}</span>
         <span className="text-[10px] font-mono" style={{ color }}>{v}</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -101,7 +101,7 @@ function Scorecard({ summary, t }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex items-center gap-5">
           <div className="relative w-28 h-28 shrink-0">
@@ -112,11 +112,11 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold" style={{ color }}>{grade}</span>
-              <span className="text-[10px] font-mono text-white/40">{score}/100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{score}/100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
               {t('pages.digitalTwinSimulator.posture_grade')}
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono"
@@ -136,13 +136,13 @@ function Scorecard({ summary, t }) {
         </div>
       </div>
       {roadmap.length > 0 && (
-        <div className="mt-5 pt-5 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">
+        <div className="mt-5 pt-5 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
             {t('pages.digitalTwinSimulator.roadmap_heading')}
           </div>
           <ol className="space-y-2">
             {roadmap.slice(0, 6).map((step, i) => (
-              <li key={i} className="flex gap-2 text-[11px] font-mono text-white/55 leading-relaxed">
+              <li key={i} className="flex gap-2 text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">
                 <span className="text-violet-400 shrink-0">{i + 1}.</span>
                 <span>{step}</span>
               </li>
@@ -157,7 +157,7 @@ function Scorecard({ summary, t }) {
 function TwinProfilePanel({ profile, t }) {
   if (!profile) {
     return (
-      <p className="text-[11px] font-mono text-white/25 text-center py-4">
+      <p className="text-[11px] font-mono text-[var(--text-disabled)] text-center py-4">
         {t('pages.digitalTwinSimulator.env_empty')}
       </p>
     )
@@ -179,13 +179,13 @@ function TwinProfilePanel({ profile, t }) {
     <div className="space-y-3">
       {rows.map((r) => (
         <div key={r.label} className="flex justify-between gap-2 text-[11px] font-mono">
-          <span className="text-white/40">{r.label}</span>
-          <span className="text-white/70 truncate text-right">{r.value}</span>
+          <span className="text-[var(--text-muted)]">{r.label}</span>
+          <span className="text-[var(--text-secondary)] truncate text-right">{r.value}</span>
         </div>
       ))}
       {Array.isArray(profile.discovered_paths) && profile.discovered_paths.length > 0 && (
-        <div className="pt-2 border-t border-white/5">
-          <p className="text-[10px] font-mono text-white/40 mb-1">{t('pages.digitalTwinSimulator.profile_paths')}</p>
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] mb-1">{t('pages.digitalTwinSimulator.profile_paths')}</p>
           <p className="text-[10px] font-mono text-cyan-300/70">{profile.discovered_paths.length} paths</p>
         </div>
       )}
@@ -207,7 +207,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4 hover:border-white/20 transition-all"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4 hover:border-[var(--border-strong)] transition-all"
       style={state === 'vulnerable' ? { borderColor: `${riskColor}40` } : {}}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -218,7 +218,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
               {riskLabel}
             </span>
           </div>
-          <span className="text-[9px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {meta.mitre}
           </span>
         </div>
@@ -233,10 +233,10 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
                 : t('pages.digitalTwinSimulator.simulate')}
         </button>
       </div>
-      <p className="text-[11px] text-white/45 leading-relaxed">{description}</p>
-      <div className="pt-3 border-t border-white/5 space-y-2">
+      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{description}</p>
+      <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
         {state === 'idle' && (
-          <p className="text-[10px] font-mono text-white/30">{t('pages.digitalTwinSimulator.not_run_hint')}</p>
+          <p className="text-[10px] font-mono text-[var(--text-disabled)]">{t('pages.digitalTwinSimulator.not_run_hint')}</p>
         )}
         {isPending && (
           <div className="flex items-center gap-2">
@@ -256,7 +256,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
               </span>
             </div>
             {result.details && (
-              <p className="text-[10px] font-mono text-white/35 leading-relaxed">{result.details}</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{result.details}</p>
             )}
           </>
         )}
@@ -524,27 +524,27 @@ export default function DigitalTwinSimulator() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.digitalTwinSimulator.client_label')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.client_label')}</label>
             <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#8b5cf6]/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#8b5cf6]/40 min-w-[180px]">
               <option value="">{t('pages.digitalTwinSimulator.select_client')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.digitalTwinSimulator.target_label')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.digitalTwinSimulator.target_label')}</label>
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-[#8b5cf6]/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#8b5cf6]/40" />
           </div>
           <button type="button" onClick={handleBuildTwin} disabled={!selectedClientId || !!runningId}
             className="px-4 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 transition-all">
             {t('pages.digitalTwinSimulator.build_full_twin')}
           </button>
           <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 transition-all">
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-all">
             {showParams ? t('pages.digitalTwinSimulator.hide_params') : t('pages.digitalTwinSimulator.show_params')}
           </button>
         </div>
@@ -552,12 +552,12 @@ export default function DigitalTwinSimulator() {
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.digitalTwinSimulator.probe_categories')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.digitalTwinSimulator.probe_categories')}</div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {TOGGLES.map((tg) => (
-                      <label key={tg.key} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={tg.key} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!toggles[tg.key]}
                           onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-violet-500" />
                         {t(`pages.digitalTwinSimulator.${tg.labelKey}`)}
@@ -567,31 +567,31 @@ export default function DigitalTwinSimulator() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.digitalTwinSimulator.probe_depth_label')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.digitalTwinSimulator.probe_depth_label')}</label>
                     <select value={probeDepth} onChange={(e) => setProbeDepth(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono">
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono">
                       {['quick', 'standard', 'deep'].map((o) => (
                         <option key={o} value={o}>{t(`pages.digitalTwinSimulator.depth_${o}`)}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.digitalTwinSimulator.extra_paths_label')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.digitalTwinSimulator.extra_paths_label')}</label>
                     <input type="text" value={probePaths} onChange={(e) => setProbePaths(e.target.value)} placeholder="/api,/search"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.digitalTwinSimulator.max_urls_label')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.digitalTwinSimulator.max_urls_label')}</label>
                       <input type="number" min={4} max={64} value={maxProbeUrls} onChange={(e) => setMaxProbeUrls(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.digitalTwinSimulator.timeout_label')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.digitalTwinSimulator.timeout_label')}</label>
                       <input type="number" min={2000} max={30000} step={500} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono" />
                     </div>
                   </div>
                 </div>
@@ -606,7 +606,7 @@ export default function DigitalTwinSimulator() {
       <div className="flex flex-wrap items-center justify-end gap-2 mb-8">
         {hasAnyResult && (
           <button type="button" onClick={clearResults}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/55 hover:text-white/85 transition-all">
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-all">
             <Trash2 className="w-3.5 h-3.5" />
             {t('pages.digitalTwinSimulator.clear_results')}
           </button>
@@ -625,8 +625,8 @@ export default function DigitalTwinSimulator() {
             { key: 'overview_clear', value: overview.clear, color: '#34d399' },
             { key: 'overview_running', value: overview.running, color: '#38bdf8' },
           ].map((s) => (
-            <div key={s.key} className="rounded-2xl bg-black/40 border border-white/10 p-4">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t(`pages.digitalTwinSimulator.${s.key}`)}</div>
+            <div key={s.key} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-4">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(`pages.digitalTwinSimulator.${s.key}`)}</div>
               <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color: s.color }}>{s.value}</div>
             </div>
           ))}
@@ -635,17 +635,17 @@ export default function DigitalTwinSimulator() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="space-y-4">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.digitalTwinSimulator.env_profile')}</h3>
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.digitalTwinSimulator.env_profile')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
             {envProfile && (
               <>
                 <div>
-                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">{t('pages.digitalTwinSimulator.client_heading')}</p>
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('pages.digitalTwinSimulator.client_heading')}</p>
                   <p className="text-sm font-semibold text-white">{envProfile.name}</p>
                 </div>
                 {envProfile.domains.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">{t('pages.digitalTwinSimulator.domains_heading')}</p>
+                    <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{t('pages.digitalTwinSimulator.domains_heading')}</p>
                     <div className="space-y-1">
                       {envProfile.domains.map((d, i) => (
                         <p key={i} className="text-[11px] font-mono text-cyan-300/80 truncate">{d}</p>
@@ -660,7 +660,7 @@ export default function DigitalTwinSimulator() {
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.digitalTwinSimulator.attack_simulations')}</h3>
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.digitalTwinSimulator.attack_simulations')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {SIMULATION_SCENARIO_IDS.map((scenarioId) => (
               <ScenarioCard key={scenarioId} scenarioId={scenarioId} result={results[scenarioId] ?? null}

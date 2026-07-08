@@ -323,7 +323,7 @@ function saveCustomPreset(name, params) {
 function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -332,24 +332,24 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
-          {count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
       </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
 
 function Hint({ children }) {
   if (!children) return null
-  return <span className="block text-[9px] font-mono text-white/25 mt-0.5 leading-snug">{children}</span>
+  return <span className="block text-[9px] font-mono text-[var(--text-disabled)] mt-0.5 leading-snug">{children}</span>
 }
 
 function Num({ label, value, onChange, min, max, step, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input
         type="number"
         min={min}
@@ -357,7 +357,7 @@ function Num({ label, value, onChange, min, max, step, hint }) {
         step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-violet-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -367,11 +367,11 @@ function Num({ label, value, onChange, min, max, step, hint }) {
 function Sel({ label, value, onChange, options, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
       >
         {options.map((o) => (
           <option key={o} value={o}>{o}</option>
@@ -385,12 +385,12 @@ function Sel({ label, value, onChange, options, hint }) {
 function Txt({ label, value, onChange, placeholder, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -400,13 +400,13 @@ function Txt({ label, value, onChange, placeholder, hint }) {
 function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea
         rows={rows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40 resize-y"
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40 resize-y"
       />
       <Hint>{hint}</Hint>
     </label>
@@ -417,7 +417,7 @@ function Toggle({ label, value, onChange, hint }) {
   return (
     <div className="flex items-start justify-between gap-3 py-0.5">
       <div className="min-w-0">
-        <span className="text-[11px] font-mono text-white/70">{label}</span>
+        <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
       <button
@@ -425,7 +425,7 @@ function Toggle({ label, value, onChange, hint }) {
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-violet-500/40' : 'bg-black/60 border border-white/10'}`}
+        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-violet-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
       </button>
@@ -543,7 +543,7 @@ function SiqGauge({ score }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{pct || '—'}</span>
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">SIQ</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">SIQ</span>
       </div>
     </div>
   )
@@ -551,8 +551,8 @@ function SiqGauge({ score }) {
 
 function MetricTile({ label, value, accent = '#a855f7' }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{label}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
     </div>
   )
@@ -569,13 +569,13 @@ function GradeBadge({ grade }) {
       style={{ borderColor: color, color, background: `${color}12`, boxShadow: `0 0 18px ${color}30` }}
     >
       <span className="text-3xl leading-none">{g}</span>
-      <span className="text-[7px] font-mono uppercase tracking-widest text-white/40 mt-0.5">grade</span>
+      <span className="text-[7px] font-mono uppercase tracking-widest text-[var(--text-muted)] mt-0.5">grade</span>
     </div>
   )
 }
 
 function Chips({ items, color = '#22d3ee', empty }) {
-  if (!items || items.length === 0) return <span className="text-[10px] font-mono text-white/25">{empty}</span>
+  if (!items || items.length === 0) return <span className="text-[10px] font-mono text-[var(--text-disabled)]">{empty}</span>
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((it, i) => (
@@ -597,7 +597,7 @@ function ThreatBar({ score = 0 }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Threat Surface</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Threat Surface</span>
         <span className="text-sm font-bold" style={{ color }}>{pct}/100</span>
       </div>
       <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
@@ -611,7 +611,7 @@ function WaveTimeline({ waves }) {
   if (!Array.isArray(waves) || waves.length === 0) return null
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Adaptive Wave Telemetry</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Adaptive Wave Telemetry</p>
       <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
         {waves.map((w) => (
           <div key={w.wave} className="shrink-0 rounded-lg border border-violet-500/20 bg-violet-950/20 px-3 py-2 min-w-[120px]">
@@ -619,13 +619,13 @@ function WaveTimeline({ waves }) {
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
               <span className="text-[10px] font-mono text-violet-200">Wave {w.wave}</span>
             </div>
-            <p className="text-[10px] font-mono text-white/50">{(w.agents ?? 0).toLocaleString()} agents</p>
-            <p className="text-[10px] font-mono text-white/40">{w.surface_points ?? 0} surface · {w.signals ?? 0} signals</p>
+            <p className="text-[10px] font-mono text-[var(--text-tertiary)]">{(w.agents ?? 0).toLocaleString()} agents</p>
+            <p className="text-[10px] font-mono text-[var(--text-muted)]">{w.surface_points ?? 0} surface · {w.signals ?? 0} signals</p>
             {(w.extracted_paths ?? 0) > 0 && (
               <p className="text-[10px] font-mono text-cyan-400/80">+{w.extracted_paths} live paths</p>
             )}
             {w.directive && (
-              <p className="text-[9px] font-mono text-white/30 mt-0.5 truncate">{w.directive}</p>
+              <p className="text-[9px] font-mono text-[var(--text-disabled)] mt-0.5 truncate">{w.directive}</p>
             )}
           </div>
         ))}
@@ -639,7 +639,7 @@ function AttackChainsPanel({ chains, summary }) {
   if (!items || items.length === 0) return null
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Emergent Attack Chains</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Emergent Attack Chains</p>
       <div className="space-y-1.5">
         {items.map((c, i) => (
           <div key={i} className="rounded-lg border border-rose-500/25 bg-rose-950/20 px-3 py-2">
@@ -647,7 +647,7 @@ function AttackChainsPanel({ chains, summary }) {
               <span className="text-[10px] font-mono text-rose-200 truncate">{c.title || c.chain}</span>
               <span className={`text-[9px] font-mono uppercase shrink-0 ${c.severity === 'critical' ? 'text-red-400' : 'text-orange-400'}`}>{c.severity}</span>
             </div>
-            {c.url && <p className="text-[9px] font-mono text-white/35 truncate mt-0.5">{c.url}</p>}
+            {c.url && <p className="text-[9px] font-mono text-[var(--text-muted)] truncate mt-0.5">{c.url}</p>}
           </div>
         ))}
       </div>
@@ -662,7 +662,7 @@ function AuthPerimeterPanel({ perimeter }) {
   if (open.length + auth.length === 0) return null
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Auth Perimeter</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Auth Perimeter</p>
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/15 p-2">
           <p className="text-[9px] font-mono text-emerald-300/70 mb-1">Open ({perimeter.open_count ?? open.length})</p>
@@ -684,12 +684,12 @@ function TlsIntelPanel({ tls }) {
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/15 p-3 space-y-1.5">
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-emerald-300/70">TLS Certificate (live :443)</p>
-      <p className="text-[10px] font-mono text-white/60 truncate">CN: {tls.subject || '—'}</p>
-      <p className="text-[10px] font-mono text-white/50 truncate">Issuer: {tls.issuer || '—'}</p>
+      <p className="text-[10px] font-mono text-[var(--text-tertiary)] truncate">CN: {tls.subject || '—'}</p>
+      <p className="text-[10px] font-mono text-[var(--text-tertiary)] truncate">Issuer: {tls.issuer || '—'}</p>
       <div className="flex gap-3 text-[10px] font-mono">
         <span style={{ color }}>{tls.expired ? 'EXPIRED' : `${days}d left`}</span>
         {tls.self_signed && <span className="text-amber-400">self-signed</span>}
-        <span className="text-white/40">{tls.public_key_bits ?? 0}-bit</span>
+        <span className="text-[var(--text-muted)]">{tls.public_key_bits ?? 0}-bit</span>
       </div>
     </div>
   )
@@ -699,7 +699,7 @@ function BodySurfacePanel({ surface }) {
   if (!surface?.markers?.length) return null
   return (
     <div className="space-y-1.5">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Body Surface Markers</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Body Surface Markers</p>
       <Chips items={surface.markers} color="#38bdf8" empty="—" />
     </div>
   )
@@ -731,7 +731,7 @@ function ConfigSchemaPanel({ schema, onClose }) {
       <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-zinc-950 p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
-          <button type="button" onClick={onClose} className="text-white/40 hover:text-white">✕</button>
+          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-white">✕</button>
         </div>
         {schema.completeness && (
           <p className="text-[10px] font-mono text-emerald-400/80 mb-2">
@@ -750,13 +750,13 @@ function SignalHeatmapPanel({ heatmap }) {
   const max = Math.max(...rows.map((r) => r.signals ?? 0), 1)
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Signal Heatmap (path prefix)</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Signal Heatmap (path prefix)</p>
       <div className="space-y-1">
         {rows.slice(0, 12).map((r) => {
           const pct = Math.round(((r.signals ?? 0) / max) * 100)
           return (
             <div key={r.prefix} className="flex items-center gap-2">
-              <span className="text-[9px] font-mono text-white/45 w-20 truncate shrink-0">/{r.prefix}</span>
+              <span className="text-[9px] font-mono text-[var(--text-muted)] w-20 truncate shrink-0">/{r.prefix}</span>
               <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${pct}%` }} />
               </div>
@@ -786,7 +786,7 @@ function LiveWaveProgress({ events, running }) {
         {running && <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />}
       </div>
       {!dryRun && (
-        <p className="text-xs font-mono text-white/60">
+        <p className="text-xs font-mono text-[var(--text-tertiary)]">
           Wave {active ?? '—'} / {total}
           {progress?.detail && (
             <span className="text-cyan-400/80"> · {progress.detail.completed}/{progress.detail.total} agents</span>
@@ -798,7 +798,7 @@ function LiveWaveProgress({ events, running }) {
       )}
       <div className="max-h-24 overflow-auto space-y-0.5">
         {events.slice(-8).map((e, i) => (
-          <p key={`${e.ts}-${i}`} className="text-[9px] font-mono text-white/35 truncate">
+          <p key={`${e.ts}-${i}`} className="text-[9px] font-mono text-[var(--text-muted)] truncate">
             [{e.event}] {e.detail?.wave != null ? `W${e.detail.wave}` : ''}{' '}
             {e.detail?.signals != null ? `${e.detail.signals} sig` : ''}{' '}
             {e.detail?.requests_total != null ? `${e.detail.requests_total} req` : ''}
@@ -813,7 +813,7 @@ function EngineRecsPanel({ recs, onLaunch, launching }) {
   if (!Array.isArray(recs) || recs.length === 0) return null
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Next-Engine Routing</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Next-Engine Routing</p>
       <div className="space-y-1.5">
         {recs.slice(0, 8).map((r) => (
           <div
@@ -825,9 +825,9 @@ function EngineRecsPanel({ recs, onLaunch, launching }) {
               className="flex-1 min-w-0 hover:text-cyan-100 transition-colors"
             >
               <span className="text-[10px] font-mono text-cyan-200 block truncate">{r.engine_id}</span>
-              {r.reason && <span className="text-[9px] font-mono text-white/35 block truncate">{r.reason}</span>}
+              {r.reason && <span className="text-[9px] font-mono text-[var(--text-muted)] block truncate">{r.reason}</span>}
             </Link>
-            <span className="text-[9px] font-mono text-white/40 shrink-0">P{r.priority}</span>
+            <span className="text-[9px] font-mono text-[var(--text-muted)] shrink-0">P{r.priority}</span>
             {onLaunch && (
               <button
                 type="button"
@@ -851,7 +851,7 @@ function StatusHistogramPanel({ histogram }) {
   const max = Math.max(...rows.map((r) => r.count ?? 0), 1)
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">HTTP Status Histogram (live)</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">HTTP Status Histogram (live)</p>
       <div className="space-y-1">
         {rows.slice(0, 10).map((r) => {
           const pct = Math.round(((r.count ?? 0) / max) * 100)
@@ -862,7 +862,7 @@ function StatusHistogramPanel({ histogram }) {
               <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }} />
               </div>
-              <span className="text-[9px] font-mono text-white/45 w-8 text-right">{r.count}</span>
+              <span className="text-[9px] font-mono text-[var(--text-muted)] w-8 text-right">{r.count}</span>
             </div>
           )
         })}
@@ -877,12 +877,12 @@ function SurfaceLineagePanel({ lineage }) {
   if (!rows.length) return null
   return (
     <div className="space-y-1.5">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
         Surface Lineage ({lineage.total_unique ?? '—'} unique points)
       </p>
       <div className="flex flex-wrap gap-1.5">
         {rows.map(([k, v]) => (
-          <span key={k} className="text-[9px] font-mono px-2 py-0.5 rounded-md border border-white/10 text-white/50">
+          <span key={k} className="text-[9px] font-mono px-2 py-0.5 rounded-md border border-[var(--border-default)] text-[var(--text-tertiary)]">
             {k}: <span className="text-cyan-300/80">{v}</span>
           </span>
         ))}
@@ -894,8 +894,8 @@ function SurfaceLineagePanel({ lineage }) {
 function DeploymentFingerprintPanel({ fp }) {
   if (!fp) return null
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">Deployment Fingerprint (SHA-256)</p>
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Deployment Fingerprint (SHA-256)</p>
       <p className="text-[10px] font-mono text-emerald-300/70 break-all select-all">{fp}</p>
     </div>
   )
@@ -906,7 +906,7 @@ function ConsensusFindingsPanel({ findings }) {
   if (!items.length) return null
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Hive Emergent Findings</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Hive Emergent Findings</p>
       <div className="space-y-1 max-h-32 overflow-auto">
         {items.slice(0, 8).map((f, i) => (
           <div key={i} className="rounded-lg border border-purple-500/20 bg-purple-950/15 px-2 py-1.5">
@@ -928,7 +928,7 @@ function ArchetypeDistributionPanel({ distribution }) {
   const max = Math.max(...rows.map(([, n]) => Number(n) || 0), 1)
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Agent Archetype Distribution</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Agent Archetype Distribution</p>
       <div className="space-y-1">
         {rows.map(([arch, count]) => {
           const meta = ARCHETYPES.find((a) => a.id === arch)
@@ -941,7 +941,7 @@ function ArchetypeDistributionPanel({ distribution }) {
               <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: meta?.color || '#a855f7', opacity: 0.75 }} />
               </div>
-              <span className="text-[9px] font-mono text-white/50 w-10 text-right">{Number(count).toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-[var(--text-tertiary)] w-10 text-right">{Number(count).toLocaleString()}</span>
             </div>
           )
         })}
@@ -955,9 +955,9 @@ function ConsensusEmergencePanel({ count, strategy }) {
   return (
     <div className="rounded-lg border border-purple-500/25 bg-purple-950/20 px-3 py-2">
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-purple-300/70">Hive-Mind Consensus</p>
-      <p className="text-xs font-mono text-white/60 mt-1">
+      <p className="text-xs font-mono text-[var(--text-tertiary)] mt-1">
         {count} emergent consensus finding{count === 1 ? '' : 's'}
-        {strategy && <span className="text-white/35"> · strategy: {strategy}</span>}
+        {strategy && <span className="text-[var(--text-muted)]"> · strategy: {strategy}</span>}
       </p>
     </div>
   )
@@ -980,13 +980,13 @@ function OraclePanel({ oracle }) {
         </span>
       </div>
       {oracle.swarm_iq != null && (
-        <p className="text-xs font-mono text-white/70">Oracle SIQ estimate: <span className="text-amber-300">{oracle.swarm_iq}</span>/100</p>
+        <p className="text-xs font-mono text-[var(--text-secondary)]">Oracle SIQ estimate: <span className="text-amber-300">{oracle.swarm_iq}</span>/100</p>
       )}
       {oracle.priority_vector && (
-        <p className="text-[10px] font-mono text-white/55 leading-relaxed">{oracle.priority_vector}</p>
+        <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">{oracle.priority_vector}</p>
       )}
       {oracle.operator_brief && (
-        <p className="text-[10px] font-mono text-white/50 leading-relaxed italic">{oracle.operator_brief}</p>
+        <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed italic">{oracle.operator_brief}</p>
       )}
       {Array.isArray(engines) && engines.length > 0 && (
         <Chips items={engines.map(String)} color="#f59e0b" empty="—" />
@@ -999,7 +999,7 @@ function ApiSurfacePanel({ map }) {
   if (!map?.api_paths?.length) return null
   return (
     <div className="space-y-1.5">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
         API Surface ({map.total ?? map.api_paths.length} paths)
       </p>
       <Chips items={map.api_paths.slice(0, 16)} color="#38bdf8" empty="—" />
@@ -1012,7 +1012,7 @@ function CookieIntelPanel({ intel }) {
   const items = Object.entries(intel.issue_counts).map(([k, v]) => `${k} ×${v}`)
   return (
     <div className="space-y-1.5">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Cookie Security Audit</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Cookie Security Audit</p>
       <Chips items={items} color="#fb923c" empty="—" />
     </div>
   )
@@ -1023,20 +1023,20 @@ function FindingRow({ finding }) {
   const f = finding
   const evidence = f.evidence || f.swarm_metrics
   return (
-    <div className="text-[11px] border-b border-white/5 pb-2 last:border-0">
+    <div className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
       <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
         <div className="flex items-start gap-2">
           <span className={`font-mono shrink-0 ${f.severity === 'critical' ? 'text-red-400' : f.severity === 'high' ? 'text-orange-400' : f.severity === 'medium' ? 'text-amber-400' : 'text-cyan-400'}`}>
             [{f.severity || 'info'}]
           </span>
-          <span className="text-white/70 min-w-0 flex-1">{f.title}</span>
-          {evidence && <span className="text-[9px] font-mono text-white/25 shrink-0">{open ? '▼' : '▶'}</span>}
+          <span className="text-[var(--text-secondary)] min-w-0 flex-1">{f.title}</span>
+          {evidence && <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{open ? '▼' : '▶'}</span>}
         </div>
         {f.signal_type && <span className="block text-[9px] font-mono text-violet-400/60 ml-1 mt-0.5">{f.signal_type}</span>}
-        {f.url && <span className="block text-[10px] font-mono text-white/30 truncate ml-1 mt-0.5">{f.url}</span>}
+        {f.url && <span className="block text-[10px] font-mono text-[var(--text-disabled)] truncate ml-1 mt-0.5">{f.url}</span>}
       </button>
       {open && evidence && (
-        <pre className="mt-1.5 ml-1 max-h-40 overflow-auto rounded bg-black/50 border border-white/10 p-2 text-[9px] font-mono text-emerald-300/70">
+        <pre className="mt-1.5 ml-1 max-h-40 overflow-auto rounded bg-[var(--bg-3)] border border-[var(--border-default)] p-2 text-[9px] font-mono text-emerald-300/70">
           {JSON.stringify(evidence, null, 2)}
         </pre>
       )}
@@ -1046,14 +1046,14 @@ function FindingRow({ finding }) {
 
 function MissionPresetsBar({ onApply, onSave, onExport, onImport, onWaveReplay, customPresets, onShowSchema }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-2.5 space-y-2">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-2.5 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">Mission Presets</p>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Mission Presets</p>
         <div className="flex gap-1 flex-wrap justify-end">
           <button type="button" onClick={onShowSchema} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-500/30 text-violet-300">Schema</button>
-          <button type="button" onClick={onSave} className="text-[9px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/70">Save</button>
-          <button type="button" onClick={onExport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/70">Export</button>
-          <button type="button" onClick={onImport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/70">Import</button>
+          <button type="button" onClick={onSave} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Save</button>
+          <button type="button" onClick={onExport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Export</button>
+          <button type="button" onClick={onImport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Import</button>
         </div>
       </div>
       <div className="flex gap-1 flex-wrap">
@@ -1069,21 +1069,21 @@ function MissionPresetsBar({ onApply, onSave, onExport, onImport, onWaveReplay, 
             key={id}
             type="button"
             onClick={() => onApply(p.patch)}
-            className="flex items-center gap-2 text-left rounded-lg border border-white/10 px-2.5 py-2 hover:border-violet-400/30 hover:bg-violet-500/5 transition-colors"
+            className="flex items-center gap-2 text-left rounded-lg border border-[var(--border-default)] px-2.5 py-2 hover:border-violet-400/30 hover:bg-violet-500/5 transition-colors"
           >
             <span>{p.icon}</span>
             <span className="min-w-0 flex-1">
               <span className="text-[11px] font-semibold text-white block">{p.label}</span>
-              <span className="text-[9px] text-white/40 block truncate">{p.desc}</span>
+              <span className="text-[9px] text-[var(--text-muted)] block truncate">{p.desc}</span>
             </span>
           </button>
         ))}
       </div>
       {Object.keys(customPresets || {}).length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
-          <p className="text-[9px] font-mono text-white/30 uppercase">Saved</p>
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
+          <p className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">Saved</p>
           {Object.entries(customPresets).map(([id, p]) => (
-            <button key={id} type="button" onClick={() => onApply(p.patch)} className="w-full text-left text-[10px] font-mono px-2 py-1 rounded border border-white/10 text-white/50 hover:text-white/80">
+            <button key={id} type="button" onClick={() => onApply(p.patch)} className="w-full text-left text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               💾 {p.label || id}
             </button>
           ))}
@@ -1097,17 +1097,17 @@ function ExposureVelocityPanel({ velocity }) {
   if (!velocity) return null
   return (
     <div className="grid grid-cols-3 gap-2">
-      <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-center">
-        <p className="text-[9px] font-mono text-white/35">Elapsed</p>
-        <p className="text-xs font-mono text-white/70">{velocity.elapsed_ms ?? 0}ms</p>
+      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+        <p className="text-[9px] font-mono text-[var(--text-muted)]">Elapsed</p>
+        <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.elapsed_ms ?? 0}ms</p>
       </div>
-      <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-center">
-        <p className="text-[9px] font-mono text-white/35">RPS</p>
-        <p className="text-xs font-mono text-white/70">{velocity.requests_per_second ?? 0}</p>
+      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+        <p className="text-[9px] font-mono text-[var(--text-muted)]">RPS</p>
+        <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.requests_per_second ?? 0}</p>
       </div>
-      <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-center">
-        <p className="text-[9px] font-mono text-white/35">TTFC</p>
-        <p className="text-xs font-mono text-white/70">{velocity.time_to_first_critical_ms != null ? `${velocity.time_to_first_critical_ms}ms` : '—'}</p>
+      <div className="rounded-lg border border-[var(--border-default)] bg-white/[0.03] px-2 py-1.5 text-center">
+        <p className="text-[9px] font-mono text-[var(--text-muted)]">TTFC</p>
+        <p className="text-xs font-mono text-[var(--text-secondary)]">{velocity.time_to_first_critical_ms != null ? `${velocity.time_to_first_critical_ms}ms` : '—'}</p>
       </div>
     </div>
   )
@@ -1123,9 +1123,9 @@ function IntelligencePanel({ metrics, findings, oracle, onLaunchEngine, launchin
   const stack = [...(tech.servers || []), ...(tech.frameworks || [])]
   const chainSummary = findings?.find((f) => f.signal_type === 'attack_chain_summary')
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-950/30 to-black/50 p-5 space-y-4">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-indigo-950/30 to-black/50 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Hive Intelligence Synthesis</p>
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Hive Intelligence Synthesis</p>
         {waf && (
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-amber-400/30 text-amber-300 bg-amber-500/10">
             WAF/CDN: {waf.vendor}
@@ -1146,12 +1146,12 @@ function IntelligencePanel({ metrics, findings, oracle, onLaunchEngine, launchin
         </div>
       </div>
       <div className="space-y-1.5">
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Technology Stack</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Technology Stack</span>
         <Chips items={stack} color="#22d3ee" empty="no stack fingerprinted" />
       </div>
       {mitre.length > 0 && (
         <div className="space-y-1.5">
-          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">MITRE ATT&CK Coverage</span>
+          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">MITRE ATT&CK Coverage</span>
           <Chips items={mitre.map((m) => `${m.technique} ×${m.count}`)} color="#f43f5e" empty="—" />
         </div>
       )}
@@ -1631,17 +1631,17 @@ export default function NexusSovereignSwarm() {
                   {paramCount} {t('nexusSwarm.params_badge', 'live parameters')}
                 </span>
                 <ConfigCompletenessBadge parity={schemaParity} completeness={completeness} />
-                <span className="text-[10px] font-mono text-white/30">MITRE T1595</span>
+                <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1595</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">
                 {engine?.label || 'Nexus Sovereign Swarm Intelligence'}
               </h1>
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {engine?.description}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-white/30 transition-colors">
                 Engine Detail →
               </Link>
               <Link to={`/engines/top-tier/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition-colors">
@@ -1663,7 +1663,7 @@ export default function NexusSovereignSwarm() {
                 <button
                   type="button"
                   onClick={resetParams}
-                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors"
+                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('nexusSwarm.reset', 'Reset')}
                 </button>
@@ -1684,11 +1684,11 @@ export default function NexusSovereignSwarm() {
               {/* Target binding */}
               <Section title={t('nexusSwarm.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{t('common.client', 'Client')}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
                   <select
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
                   >
                     <option value="">—</option>
                     {clients.map((c) => (
@@ -1754,9 +1754,9 @@ export default function NexusSovereignSwarm() {
                         <span>{a.icon}</span>
                         <span className="min-w-0 flex-1">
                           <span className="text-xs font-semibold text-white block">{a.label}</span>
-                          <span className="text-[9px] text-white/40 block leading-tight truncate">{a.desc}</span>
+                          <span className="text-[9px] text-[var(--text-muted)] block leading-tight truncate">{a.desc}</span>
                         </span>
-                        <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-white/25'}`}>{on ? 'ON' : 'OFF'}</span>
+                        <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
                       </button>
                     )
                   })}
@@ -1776,22 +1776,22 @@ export default function NexusSovereignSwarm() {
                 <Toggle label="Verify TLS" value={params.verify_tls} onChange={(v) => setField('verify_tls', v)} hint="Off = accept invalid certs" />
                 <Txt label="User-Agent" value={params.user_agent} onChange={(v) => setField('user_agent', v)} placeholder="(default NSSI UA)" />
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">Custom Headers</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">Custom Headers</span>
                   {params.extra_headers.map((h, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <input
                         value={h.name}
                         onChange={(e) => setHeader(i, 'name', e.target.value)}
                         placeholder="Header"
-                        className="w-2/5 rounded-lg bg-black/50 border border-white/10 px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+                        className="w-2/5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
                       />
                       <input
                         value={h.value}
                         onChange={(e) => setHeader(i, 'value', e.target.value)}
                         placeholder="Value"
-                        className="flex-1 rounded-lg bg-black/50 border border-white/10 px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
+                        className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
                       />
-                      <button type="button" onClick={() => removeHeader(i)} className="text-white/30 hover:text-rose-400 text-sm px-1">✕</button>
+                      <button type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</button>
                     </div>
                   ))}
                   <button type="button" onClick={addHeader} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">+ {t('nexusSwarm.add_header', 'add header')}</button>
@@ -1849,7 +1849,7 @@ export default function NexusSovereignSwarm() {
                   {showPreview ? t('nexusSwarm.hide_json', 'hide JSON') : t('nexusSwarm.show_json', 'show exact request JSON')}
                 </button>
                 {showPreview && (
-                  <pre className="max-h-60 overflow-auto rounded-lg bg-black/60 border border-white/10 p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
+                  <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
                   </pre>
                 )}
@@ -1886,9 +1886,9 @@ export default function NexusSovereignSwarm() {
           {/* ───────── Live theatre ───────── */}
           <div className="space-y-6 min-w-0">
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
-              <div className="2xl:col-span-2 rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+              <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     {t('nexusSwarm.hive_viz', 'Live Hive Visualization')}
                   </span>
                   {running && (
@@ -1904,8 +1904,8 @@ export default function NexusSovereignSwarm() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-5 text-center">
-                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
+                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('nexusSwarm.siq', 'Swarm Intelligence Quotient')}
                   </p>
                   <SiqGauge score={metrics?.swarm_iq} />
@@ -1931,26 +1931,26 @@ export default function NexusSovereignSwarm() {
             />
 
             {/* Endpoint fleet */}
-            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   {t('nexusSwarm.endpoint_fleet', 'Endpoint Agent Fleet')}
                 </p>
                 <div className="flex items-center gap-3">
                   {swarmWsLive && <span className="text-[9px] font-mono text-emerald-400">{t('nexusSwarm.swarm_ws_live', 'swarm ws live')}</span>}
-                  <span className="text-[10px] font-mono text-white/40">
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
                     {metrics?.endpoint_agents_bridged ?? fleetOnline} {t('nexusSwarm.bridged', 'bridged')}
                   </span>
                 </div>
               </div>
-              <p className="text-[11px] text-white/50">
+              <p className="text-[11px] text-[var(--text-tertiary)]">
                 {fleetForClient.length
                   ? t('nexusSwarm.fleet_online', { online: fleetOnline, total: fleetForClient.length })
                   : t('nexusSwarm.no_agents', 'No endpoint agents enrolled for this client.')}
               </p>
               <div className="flex flex-wrap gap-2">
                 {fleetForClient.slice(0, 8).map((a) => (
-                  <span key={a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-white/45 rounded-lg border border-white/10 px-2 py-1">
+                  <span key={a.agent_uuid} className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] rounded-lg border border-[var(--border-default)] px-2 py-1">
                     <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'online' || a.live ? 'bg-emerald-400' : 'bg-white/20'}`} />
                     {a.hostname || a.device_name || a.agent_uuid?.slice(0, 8)}
                   </span>
@@ -1965,15 +1965,15 @@ export default function NexusSovereignSwarm() {
                 >
                   {fleetBusy ? t('nexusSwarm.fleet_broadcasting', 'Broadcasting…') : t('nexusSwarm.fleet_broadcast', 'Broadcast Fleet')}
                 </button>
-                <Link to="/agents" className="py-2 px-3 rounded-lg text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70">
+                <Link to="/agents" className="py-2 px-3 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                   Agents →
                 </Link>
               </div>
             </div>
 
             {/* Telemetry */}
-            <div className="rounded-2xl border border-white/10 bg-black/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-white/5 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
+              <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
                 Swarm Telemetry
               </div>
               <pre className="h-44 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">

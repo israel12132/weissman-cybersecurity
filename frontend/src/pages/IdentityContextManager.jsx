@@ -168,7 +168,7 @@ export default function IdentityContextManager() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4"
+            className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">{t('pages.identityContextManager.total_identities')}</span>
@@ -218,8 +218,8 @@ export default function IdentityContextManager() {
         </div>
 
         {/* Identities List */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 space-y-3">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
               {t('pages.identityContextManager.identities_heading', { count: identities.length })}
@@ -261,7 +261,7 @@ export default function IdentityContextManager() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05, duration: 0.3 }}
-                  className="p-4 hover:bg-white/5 transition-all cursor-pointer group"
+                  className="p-4 hover:bg-[var(--row-hover-bg)] transition-all cursor-pointer group"
                   onClick={() => setSelectedIdentity(identity)}
                   role="button"
                   tabIndex={0}
@@ -401,7 +401,7 @@ function IdentityDetailModal({ identity, onClose }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: "spring", duration: 0.5 }}
-          className="bg-gray-900 border border-white/10 rounded-xl max-w-2xl w-full p-6 pointer-events-auto shadow-2xl"
+          className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6 pointer-events-auto shadow-2xl"
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
@@ -410,7 +410,7 @@ function IdentityDetailModal({ identity, onClose }) {
             <h3 id="modal-title" className="text-lg font-bold text-white">{identity.username}</h3>
             <button
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+              className="p-1 text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
               aria-label={t('pages.identityContextManager.close_modal')}
             >
               <X className="w-5 h-5" />
@@ -470,7 +470,7 @@ function IdentityDetailModal({ identity, onClose }) {
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.35 + i * 0.05 }}
-                      className="text-xs text-gray-400 p-3 bg-white/5 rounded-lg border border-white/5 hover:bg-white/10 transition-colors"
+                      className="text-xs text-gray-400 p-3 bg-white/5 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <span>{activity.description}</span>

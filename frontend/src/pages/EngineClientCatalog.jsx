@@ -156,7 +156,7 @@ function profileEngines(profile) {
 function MitreBadge({ id }) {
   if (!id) return null
   return (
-    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 border border-white/10 text-white/45 tracking-wider">
+    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-muted)] tracking-wider">
       {id}
     </span>
   )
@@ -192,7 +192,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-all cursor-pointer ${
-        selected ? 'border-white/20 bg-white/5' : 'border-transparent hover:border-white/10 hover:bg-white/3'
+        selected ? 'border-white/20 bg-white/5' : 'border-transparent hover:border-[var(--border-default)] hover:bg-white/3'
       }`}
       onClick={() => onSelect(engine.id)}
     >
@@ -200,7 +200,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
       <div className="mt-0.5 shrink-0">
         <div
           className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-            selected ? 'border-cyan-400/60 bg-cyan-500/20' : 'border-white/15'
+            selected ? 'border-cyan-400/60 bg-cyan-500/20' : 'border-[var(--border-strong)]'
           }`}
         >
           {selected && <span className="text-cyan-400 text-[10px]">✓</span>}
@@ -215,7 +215,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
       {/* Info */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-white/85">{engine.label}</span>
+          <span className="text-xs font-semibold text-[var(--text-primary)]">{engine.label}</span>
           <MitreBadge id={engine.mitre} />
           <span
             className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
@@ -246,7 +246,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
             </span>
           )}
           {telemetry?.last_status && (
-            <span className="text-[9px] font-mono text-white/35" title={telemetry.last_error || ''}>
+            <span className="text-[9px] font-mono text-[var(--text-muted)]" title={telemetry.last_error || ''}>
               {telemetry.last_status} · {telemetry.total_runs ?? 0} runs
             </span>
           )}
@@ -258,7 +258,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
             Profile
           </Link>
         </div>
-        <p className="text-[10px] text-white/35 mt-0.5 leading-relaxed">{engine.description}</p>
+        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">{engine.description}</p>
       </div>
     </motion.div>
   )
@@ -291,7 +291,7 @@ function ProfileCard({ profile, count, active, onClick, enginesLabel }) {
           </div>
         </div>
       </div>
-      <p className="text-[10px] text-white/40 leading-relaxed line-clamp-2">{profile.description}</p>
+      <p className="text-[10px] text-[var(--text-muted)] leading-relaxed line-clamp-2">{profile.description}</p>
     </motion.button>
   )
 }
@@ -624,11 +624,11 @@ export default function EngineClientCatalog() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-mono text-white/40">{t('engines.client_label')}:</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
           <select
             value={selectedClientId ?? ''}
             onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40"
+            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('engines.select_client')}</option>
             {clients.map((c) => (
@@ -693,7 +693,7 @@ export default function EngineClientCatalog() {
       <div className="grid xl:grid-cols-[300px_1fr] gap-6">
         {/* ── Left: Client Profile Cards ─────────────────────────────── */}
         <div className="space-y-2.5">
-          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/35 mb-3 px-1">
+          <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3 px-1">
             {t('engines.catalog_profiles')}
           </h2>
           {CLIENT_PROFILES.map((profile) => (
@@ -710,13 +710,13 @@ export default function EngineClientCatalog() {
           <div className="pt-4 space-y-2 px-1">
             <Link
               to="/engines"
-              className="flex items-center gap-2 text-[11px] font-mono text-white/40 hover:text-cyan-300 transition-colors"
+              className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] hover:text-cyan-300 transition-colors"
             >
               ⚡ {t('engines.catalog_matrix_link')}
             </Link>
             <Link
               to="/threat-intel"
-              className="flex items-center gap-2 text-[11px] font-mono text-white/40 hover:text-cyan-300 transition-colors"
+              className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] hover:text-cyan-300 transition-colors"
             >
               🗺️ {t('engines.catalog_threat_intel_link')}
             </Link>
@@ -744,7 +744,7 @@ export default function EngineClientCatalog() {
                 <h2 className="text-base font-bold" style={{ color: activeProfile.color }}>
                   {activeProfile.label}
                 </h2>
-                <p className="text-xs text-white/45 mt-0.5 max-w-lg">{activeProfile.description}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5 max-w-lg">{activeProfile.description}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 mt-3">
@@ -773,32 +773,32 @@ export default function EngineClientCatalog() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('engines.catalog_search_placeholder')}
-                className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
+                className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                 >
                   ✕
                 </button>
               )}
             </div>
-            <span className="text-[10px] font-mono text-white/35 whitespace-nowrap px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
               {t('engines.catalog_shown', { shown: filteredEngines.length, total: totalProfileEngines, selected: totalSelected })}
             </span>
             <button
               type="button"
               onClick={handleSelectAll}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/45 hover:text-white/75 hover:border-white/20 transition-colors"
+              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
             >
               {t('engines.catalog_select_all')}
             </button>
             <button
               type="button"
               onClick={handleDeselectAll}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/45 hover:text-white/75 hover:border-white/20 transition-colors"
+              className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
             >
               {t('engines.catalog_clear_selection')}
             </button>
@@ -806,7 +806,7 @@ export default function EngineClientCatalog() {
               type="button"
               onClick={() => setProductionOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
-                productionOnly ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-white/10 text-white/45'
+                productionOnly ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'
               }`}
             >
               {t('engines.catalog_production_only')}
@@ -815,7 +815,7 @@ export default function EngineClientCatalog() {
               type="button"
               onClick={() => setRemoteOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
-                remoteOnly ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-white/10 text-white/45'
+                remoteOnly ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'
               }`}
             >
               {t('engines.catalog_remote_only')}
@@ -830,7 +830,7 @@ export default function EngineClientCatalog() {
                   key="empty"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="py-12 text-center text-white/25 text-xs font-mono"
+                  className="py-12 text-center text-[var(--text-disabled)] text-xs font-mono"
                 >
                   {t('engines.catalog_no_match')}
                 </motion.div>
@@ -842,7 +842,7 @@ export default function EngineClientCatalog() {
                     return (
                       <section key={gId}>
                         {/* Group header */}
-                        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/5">
+                        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-[var(--border-subtle)]">
                           <div className="flex items-center gap-2">
                             <span
                               className="w-2 h-2 rounded-full shrink-0"
@@ -857,7 +857,7 @@ export default function EngineClientCatalog() {
                             >
                               {GROUP_ICONS[gId] ?? '◆'} {gDef?.label ?? gId}
                             </span>
-                            <span className="text-[10px] font-mono text-white/35">
+                            <span className="text-[10px] font-mono text-[var(--text-muted)]">
                               {t('engines.catalog_group_selected', { selected: selectedCount, total: engines.length })}
                             </span>
                           </div>
@@ -871,7 +871,7 @@ export default function EngineClientCatalog() {
                                   return next
                                 })
                               }}
-                              className="px-2 py-0.5 rounded text-[9px] font-mono border border-white/10 text-white/35 hover:text-white/60 hover:border-white/20 transition-colors"
+                              className="px-2 py-0.5 rounded text-[9px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] transition-colors"
                             >
                               All
                             </button>
@@ -884,7 +884,7 @@ export default function EngineClientCatalog() {
                                   return next
                                 })
                               }}
-                              className="px-2 py-0.5 rounded text-[9px] font-mono border border-white/10 text-white/35 hover:text-white/60 hover:border-white/20 transition-colors"
+                              className="px-2 py-0.5 rounded text-[9px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] transition-colors"
                             >
                               None
                             </button>

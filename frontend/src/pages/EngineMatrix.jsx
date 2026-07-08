@@ -222,7 +222,7 @@ function EngineMatrixCard({
             disabled={loading}
             onClick={handleToggle}
             className={`relative shrink-0 w-9 h-5 rounded-full transition-all duration-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
-              enabled ? 'bg-cyan-500/30 shadow-[inset_0_0_8px_rgba(34,211,238,0.2)]' : 'bg-black/60 border border-white/10'
+              enabled ? 'bg-cyan-500/30 shadow-[inset_0_0_8px_rgba(34,211,238,0.2)]' : 'bg-[var(--scrim)] border border-[var(--border-default)]'
             }`}
           >
             <span
@@ -257,12 +257,12 @@ function EngineMatrixCard({
         <RealityBadge kind={realityKind} />
       </div>
 
-      <p className="text-[11px] text-white/50 leading-relaxed line-clamp-2 min-h-[2.5rem]">
+      <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed line-clamp-2 min-h-[2.5rem]">
         {engine.description}
       </p>
 
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/[0.06]">
-        <span className="text-[10px] font-mono text-white/30">
+        <span className="text-[10px] font-mono text-[var(--text-disabled)]">
           {lastRun ? t('engines.last_run_label', { time: lastRun }) : t('engines.never_run')}
         </span>
         {findingsDelta > 0 && (
@@ -311,7 +311,7 @@ function GroupSection({
           >
             {GROUP_ICONS[groupDef.id] ?? '◆'} {groupDef.label}
           </h2>
-          <span className="text-[10px] font-mono text-white/35 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">
             {enabledCount}/{engines.length}
             {runningCount > 0 && ` · ${runningCount} ${t('engines.status_running').toLowerCase()}`}
           </span>
@@ -332,7 +332,7 @@ function GroupSection({
             type="button"
             onClick={() => onEnableAll(engines.map((e) => e.id))}
             disabled={loading}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {t('engines.enable_all')}
           </button>
@@ -341,7 +341,7 @@ function GroupSection({
             type="button"
             onClick={() => onDisableAll(engines.map((e) => e.id))}
             disabled={loading}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {t('engines.disable_all')}
           </button>
@@ -704,12 +704,12 @@ export default function EngineMatrix() {
         background: 'radial-gradient(ellipse 130% 90% at 50% -10%, #1e293b 0%, #0f172a 35%, #020617 65%, #000 100%)',
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-black/60 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--scrim)] backdrop-blur-xl">
         <div className="max-w-screen-2xl mx-auto px-4 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-white/35">
-                <Link to="/" className="hover:text-white/60 transition-colors">← Dashboard</Link>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-[var(--text-muted)]">
+                <Link to="/" className="hover:text-[var(--text-tertiary)] transition-colors">← Dashboard</Link>
                 <span className="text-white/15">|</span>
                 <Link to="/engine-catalog" className="text-emerald-400/70 hover:text-emerald-300 transition-colors">
                   Client Catalog
@@ -725,7 +725,7 @@ export default function EngineMatrix() {
                   {t('engines.live_engines', { count: liveCount })}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-white/40">
+              <p className="text-[11px] font-mono text-[var(--text-muted)]">
                 {t('engines.matrix_subtitle', {
                   live: liveCount,
                   catalog: catalogCount,
@@ -735,11 +735,11 @@ export default function EngineMatrix() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-mono text-white/40">{t('engines.client_label')}:</span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
               <select
                 value={selectedClientId ?? ''}
                 onChange={(e) => setSelectedClientId(e.target.value || null)}
-                className="bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
               >
                 <option value="">{t('engines.select_client')}</option>
                 {clients.map((c) => (
@@ -750,7 +750,7 @@ export default function EngineMatrix() {
                 <div className="w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
               )}
               {selectedClientId && (
-                <span className="text-[10px] font-mono text-white/40">
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
                   {t('engines.enabled_short', { count: totalEnabled })}
                 </span>
               )}
@@ -795,7 +795,7 @@ export default function EngineMatrix() {
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
         <EngineHubForensicHeader evidence={t('engines.evidence_notice')} />
         {lastMatrixSync && (
-          <p className="text-[10px] font-mono text-white/35 -mt-3">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] -mt-3">
             {t('weissmanFindings.last_updated', { time: lastMatrixSync.toLocaleString() })}
           </p>
         )}
@@ -806,13 +806,13 @@ export default function EngineMatrix() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('engines.search_placeholder')}
-              className="w-full bg-black/40 border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm font-mono text-white/85 placeholder-white/25 focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
+              className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
               >
                 ✕
               </button>
@@ -827,7 +827,7 @@ export default function EngineMatrix() {
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-mono uppercase tracking-wider transition-all border ${
                   tierFilter === tier
                     ? 'bg-white/12 text-white border-white/25 shadow-[0_0_12px_rgba(255,255,255,0.04)]'
-                    : 'text-white/45 border-white/[0.08] hover:border-white/18 hover:text-white/65'
+                    : 'text-[var(--text-muted)] border-white/[0.08] hover:border-white/18 hover:text-[var(--text-tertiary)]'
                 }`}
               >
                 {t(`engines.tier_${tier}`)} ({tierCounts[tier] ?? 0})
@@ -843,7 +843,7 @@ export default function EngineMatrix() {
             className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all ${
               activeGroup === 'all'
                 ? 'bg-white/12 text-white border border-white/25'
-                : 'text-white/50 border border-white/[0.08] hover:border-white/18 hover:text-white/70'
+                : 'text-[var(--text-tertiary)] border border-white/[0.08] hover:border-white/18 hover:text-[var(--text-secondary)]'
             }`}
           >
             {t('engines.all_engines', { count: filteredEngines.length })}
@@ -859,7 +859,7 @@ export default function EngineMatrix() {
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all border ${
                   activeGroup === g.id
                     ? 'text-white'
-                    : 'text-white/50 border-white/[0.08] hover:border-white/18 hover:text-white/70'
+                    : 'text-[var(--text-tertiary)] border-white/[0.08] hover:border-white/18 hover:text-[var(--text-secondary)]'
                 }`}
                 style={
                   activeGroup === g.id
@@ -883,12 +883,12 @@ export default function EngineMatrix() {
           <div className="flex items-center justify-center py-20">
             <div className="text-center space-y-3">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
-              <p className="text-sm font-mono text-white/50">{t('engines.loading_engines')}</p>
+              <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('engines.loading_engines')}</p>
             </div>
           </div>
         ) : filteredEngines.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.08] bg-black/30 px-6 py-16 text-center">
-            <p className="text-sm font-mono text-white/35">{t('engines.no_results')}</p>
+          <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
+            <p className="text-sm font-mono text-[var(--text-muted)]">{t('engines.no_results')}</p>
           </div>
         ) : (
           <div className="space-y-14">
