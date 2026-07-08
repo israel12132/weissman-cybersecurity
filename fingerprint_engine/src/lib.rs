@@ -266,6 +266,7 @@ pub mod serverless_attack_engine;
 pub mod sigma_rules;
 pub mod smb_netbios_engine;
 pub mod sovereign_c2;
+pub mod self_improve;
 pub mod sovereign_phantom_factory;
 pub mod sovereign_self_scan;
 pub mod supreme_nerve_center;

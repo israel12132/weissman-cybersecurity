@@ -2113,6 +2113,25 @@ async fn execute_job_unscoped(
                 "message": "feedback fuzz completed; findings persisted via findings_persist",
             }))
         }
+        "self_improvement_apply" => {
+            // An approved self-improvement proposal. Opening the pull request is performed
+            // out-of-process by an external PR bot (which has git/GitHub credentials); the
+            // Rust worker never writes to a repo. This arm simply acknowledges the job so it
+            // is not treated as a failure, leaving the queue row APPROVED until the PR bot
+            // records the pr_url. `open_pr_only` is always true — never a direct commit.
+            let improvement_id = p.get("improvement_id").and_then(Value::as_i64);
+            tracing::info!(
+                target: "self_improve",
+                improvement_id = ?improvement_id,
+                "self_improvement_apply acknowledged; awaiting external PR bot (PR-only, main untouched)"
+            );
+            Ok(json!({
+                "ok": true,
+                "improvement_id": improvement_id,
+                "open_pr_only": true,
+                "message": "approved; PR creation handled out-of-process by the PR bot",
+            }))
+        }
         _ => Err(format!("unknown job kind: {}", job.kind)),
     }
 }

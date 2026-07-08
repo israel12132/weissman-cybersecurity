@@ -1413,6 +1413,12 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
         );
+        // Autonomous self-improvement engine — hourly, toggled live from the Command Center
+        // (`self_improve_enabled`). Proposes improvements; approval opens a PR, never touches main.
+        crate::self_improve::spawn_self_improve_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
         crate::predictive_analyzer::spawn_security_events_llm_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
