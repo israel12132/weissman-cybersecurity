@@ -934,28 +934,35 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     "smuggle_confirmed",
                 ));
             } else if !rejected {
+                // "Conflict accepted" alone is only a PREREQUISITE, not proof of a desync: an
+                // RFC 7230 back-end that prioritizes Transfer-Encoding (ignoring Content-Length)
+                // and returns 200 is behaving correctly and is NOT vulnerable. Report as medium
+                // posture; the co-located timing / dual-response / fingerprint-divergence probes
+                // (below) escalate to high/critical only when a real desync is demonstrated.
                 posture.cl_te_surfaces.push(ep.url.clone());
-                posture.bump_worst("high");
+                posture.bump_worst("medium");
                 let ev = Evidence::new()
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "CL.TE")
-                    .check("conflict_accepted", true, "CL+TE not rejected with 400");
+                    .check("conflict_accepted", true, "CL+TE not rejected with 400 (prerequisite only)");
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
-                        &format!("CL.TE header conflict accepted on {}", ep.path),
-                        "high",
+                        &format!("CL.TE header conflict accepted on {} (posture)", ep.path),
+                        "medium",
                         MITRE,
                         &format!(
                             "The target {} accepted a POST with both Content-Length and \
-                             Transfer-Encoding: chunked and responded HTTP {} (expected 400 from a \
-                             strict RFC 7230 parser). This is the prerequisite for CL.TE request \
-                             smuggling when a back-end honours the other header.",
+                             Transfer-Encoding: chunked and responded HTTP {} (a strict RFC 7230 \
+                             parser would return 400). This is a PREREQUISITE for CL.TE smuggling, \
+                             not proof of one — a back-end that correctly prioritizes \
+                             Transfer-Encoding is not vulnerable. Treated as confirmed only if a \
+                             co-located timing/dual-response/fingerprint-divergence signal fires.",
                             ep.url, status
                         ),
                         target,
-                        0.75,
+                        0.4,
                         ev,
                     ),
                     "smuggle_cl_te",
@@ -1052,27 +1059,29 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     "smuggle_confirmed",
                 ));
             } else if !rejected {
+                // Prerequisite only — see the CL.TE branch. A correct back-end here is not
+                // vulnerable; report medium posture and let the desync signals escalate.
                 posture.te_cl_surfaces.push(ep.url.clone());
-                posture.bump_worst("high");
+                posture.bump_worst("medium");
                 let ev = Evidence::new()
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "TE.CL")
-                    .check("conflict_accepted", true, "TE+CL not rejected");
+                    .check("conflict_accepted", true, "TE+CL not rejected (prerequisite only)");
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
-                        &format!("TE.CL header conflict accepted on {}", ep.path),
-                        "high",
+                        &format!("TE.CL header conflict accepted on {} (posture)", ep.path),
+                        "medium",
                         MITRE,
                         &format!(
                             "{} accepted Transfer-Encoding: chunked together with Content-Length \
-                             (HTTP {}). TE.CL smuggling is possible when the front-end uses CL and \
-                             the back-end uses TE.",
+                             (HTTP {}). This is a PREREQUISITE for TE.CL smuggling, not proof of \
+                             one — confirmed only if a co-located timing/dual-response signal fires.",
                             ep.url, status
                         ),
                         target,
-                        0.72,
+                        0.4,
                         ev,
                     ),
                     "smuggle_te_cl",
@@ -1135,26 +1144,28 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     "smuggle_confirmed",
                 ));
             } else if !rejected {
+                // Prerequisite only — see the CL.TE branch. Medium posture; desync signals escalate.
                 posture.zero_cl_surfaces.push(ep.url.clone());
-                posture.bump_worst("high");
+                posture.bump_worst("medium");
                 let ev = Evidence::new()
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "0.CL")
-                    .check("zero_cl_accepted", true, "CL:0 + TE accepted");
+                    .check("zero_cl_accepted", true, "CL:0 + TE accepted (prerequisite only)");
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
-                        &format!("0.CL header conflict accepted on {}", ep.path),
-                        "high",
+                        &format!("0.CL header conflict accepted on {} (posture)", ep.path),
+                        "medium",
                         MITRE,
                         &format!(
                             "{} accepted Content-Length: 0 together with Transfer-Encoding: chunked \
-                             and a non-empty chunked body (HTTP {}). Classic 0.CL smuggling surface.",
+                             and a non-empty chunked body (HTTP {}). PREREQUISITE for 0.CL smuggling, \
+                             not proof — confirmed only if a co-located timing/dual-response signal fires.",
                             ep.url, status
                         ),
                         target,
-                        0.78,
+                        0.4,
                         ev,
                     ),
                     "smuggle_zero_cl",

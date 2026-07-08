@@ -225,11 +225,21 @@ export class SseStream {
     }
 
     if (response.status === 401 && getStoredAccessToken()) {
-      const refreshed = await refreshAccessToken()
-      if (refreshed && !this._closed) {
-        this._connect()
-        return
+      // Refresh at most once per connection cycle; if still unauthorized, fall through to the
+      // backoff-scheduled reconnect below instead of recursing into a tight
+      // 401 → refresh → reconnect loop that would hammer the backend.
+      if (!this._refreshedThisCycle) {
+        this._refreshedThisCycle = true
+        const refreshed = await refreshAccessToken()
+        if (refreshed && !this._closed) {
+          this._connect()
+          return
+        }
       }
+      if (this._closed) return
+      this._dispatch('error', new Error('SSE unauthorized'))
+      this._scheduleReconnect()
+      return
     }
 
     if (!response.ok || !response.body) {
@@ -241,6 +251,7 @@ export class SseStream {
 
     this.readyState = SSE_OPEN
     this._backoffMs = this._minBackoff
+    this._refreshedThisCycle = false // a healthy connection re-arms the single-refresh guard
     this._dispatch('open', { type: 'open' })
 
     const reader = response.body.getReader()

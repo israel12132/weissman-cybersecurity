@@ -608,6 +608,47 @@ mod tests {
     }
 
     #[test]
+    fn scope_invariant_over_adversarial_targets() {
+        // Systematic invariant sweep: a target is authorized IFF its extracted host equals a
+        // plain entry, is a true dot-subdomain of one, matches a wildcard suffix, or is inside a
+        // CIDR — NEVER via substring/path/query/userinfo/fragment smuggling.
+        let wl = vec![
+            "approved.example.com".to_string(),
+            "*.wild.example.org".to_string(),
+            "10.0.0.0/8".to_string(),
+        ];
+        for t in [
+            "approved.example.com",
+            "https://approved.example.com/x",
+            "http://approved.example.com:8443/",
+            "sub.approved.example.com",
+            "deep.sub.approved.example.com",
+            "icu.wild.example.org",
+            "10.0.0.1",
+            "10.255.255.254",
+        ] {
+            assert!(target_in_whitelist(t, &wl), "should be IN scope: {t}");
+        }
+        for t in [
+            "evil.com",
+            "approved.example.com.evil.com",
+            "http://evil.com/?x=approved.example.com",
+            "http://evil.com/approved.example.com",
+            "http://evil.com#approved.example.com",
+            "http://approved.example.com@evil.com/",
+            "http://evil.com/wild.example.org",
+            "wild.example.org.evil.com",
+            "notapproved.example.com",
+            "xapproved.example.com",
+            "192.168.1.1",
+            "11.0.0.1",
+            "9.255.255.255",
+        ] {
+            assert!(!target_in_whitelist(t, &wl), "must be OUT of scope: {t}");
+        }
+    }
+
+    #[test]
     fn contract_canonical_stable() {
         let c = json!({"v": 1, "expires_unix": 1893456000});
         let t = vec!["b.example.com".to_string(), "10.0.0.1".to_string()];

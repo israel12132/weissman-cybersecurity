@@ -384,8 +384,36 @@ fn field(v: &serde_json::Value, key: &str) -> String {
 
 /// Convenience: plan from real findings toward a goal using the default technique library.
 pub fn plan_from_findings(findings: &[serde_json::Value], goal: &str) -> Option<AttackChain> {
-    let facts = facts_from_findings(findings);
-    plan(&facts, &default_technique_library(), goal, 50_000)
+    // Group findings by asset (normalized host) and plan PER ASSET. Merging every finding into
+    // one global fact set would collapse, e.g., SSRF on host A + RCE on host B + a leaked cred on
+    // host C into a single fabricated cross-host kill chain that exists on no real system and
+    // crosses hosts with no proven connectivity. Return the strongest grounded per-asset chain.
+    let mut by_asset: std::collections::HashMap<String, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for f in findings {
+        by_asset
+            .entry(finding_asset_key(f))
+            .or_default()
+            .push(f.clone());
+    }
+    let lib = default_technique_library();
+    by_asset
+        .values()
+        .filter_map(|group| plan(&facts_from_findings(group), &lib, goal, 50_000))
+        .max_by_key(|chain| (chain.reached_goal, chain.steps.len()))
+}
+
+/// Normalized host a finding pertains to, so attack-chain planning stays within one asset.
+/// Empty string groups findings with no locatable host together (a conservative shared bucket).
+fn finding_asset_key(f: &serde_json::Value) -> String {
+    for key in ["target", "url", "host", "asset", "evidence_url"] {
+        let v = field(f, key);
+        let t = v.trim();
+        if !t.is_empty() {
+            return crate::engine_probes::extract_host(t);
+        }
+    }
+    String::new()
 }
 
 #[cfg(test)]
