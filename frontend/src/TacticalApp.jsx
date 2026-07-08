@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import { ProtectedProviders } from './providers/ProtectedProviders'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -304,11 +305,14 @@ export default function TacticalApp() {
 export function TacticalProviders({ children }) {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <RateLimitProvider>{children}</RateLimitProvider>
-        </ToastProvider>
-      </AuthProvider>
+      {/* Respect the OS "reduce motion" setting across all framer-motion animations. */}
+      <MotionConfig reducedMotion="user">
+        <AuthProvider>
+          <ToastProvider>
+            <RateLimitProvider>{children}</RateLimitProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </MotionConfig>
     </ThemeProvider>
   )
 }

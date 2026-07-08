@@ -5,6 +5,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Respect the OS "reduce motion" preference (WCAG 2.3.3). framer-motion is
+   handled separately via <MotionConfig reducedMotion="user">; this neutralizes
+   CSS animations/transitions and smooth scrolling for everything else. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ───────────────────────────────────────────────────────────────────────────────
  * RTL support — activated automatically by i18n/index.js when language === 'he'.
  * Most of our layout already uses Tailwind logical properties (ms-/me-/ps-/pe-).
