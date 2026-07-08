@@ -34,6 +34,9 @@ if (!web.includes('fn web_finding_sync') || !web.includes('"correlation_hints"')
 if (!web.includes('publish_http_surface')) {
   failures.push('ws_intelligence_bus or web engines missing publish_http_surface integration')
 }
+if (!cloud.includes('fn cloud_finding_sync') || !cloud.includes('"correlation_hints"')) {
+  failures.push('advanced_cloud_engines missing cloud_finding_sync / correlation_hints')
+}
 
 // Web — military vectors (Wave 1 complete — all 25 canonical web engines)
 const webChecks = [
@@ -126,9 +129,25 @@ for (const [engine, needles] of cryptoChecks) {
 }
 
 // Cloud
-const ssrfBlock = cloud.slice(cloud.indexOf('try_ssrf_metadata'))
-if (!ssrfBlock.includes('http_post_json') && !ssrfBlock.includes('POST body')) {
+const ssrfBlock = cloud.slice(cloud.indexOf('try_ssrf_metadata_ctx'))
+if (!ssrfBlock.includes('http_post_json')) {
   failures.push('cloud_metadata_ssrf missing POST-body SSRF vectors')
+}
+const cloudMetaIdx = cloud.indexOf('try_ssrf_metadata_ctx')
+const cloudMetaEnd = cloud.indexOf('// ── s3_bucket_attack')
+const cloudMetaBlock =
+  cloudMetaIdx >= 0 && cloudMetaEnd > cloudMetaIdx
+    ? cloud.slice(cloudMetaIdx, cloudMetaEnd)
+    : cloud.slice(cloud.indexOf('run_cloud_metadata_ssrf_result_ctx'))
+for (const n of [
+  'toxic_chain',
+  'X-Forwarded-Host',
+  'run_cloud_metadata_ssrf_result_ctx',
+  'http_surface_metadata',
+]) {
+  if (!cloudMetaBlock.includes(n)) {
+    failures.push(`cloud_metadata_ssrf missing military probe pattern: ${n}`)
+  }
 }
 if (!cloud.slice(cloud.indexOf('run_lambda_escape_result')).includes('2015-03-31')) {
   failures.push('lambda_escape missing Lambda runtime API path probes')
