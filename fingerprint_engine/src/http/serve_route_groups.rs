@@ -54,6 +54,12 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/threat-analysis/:client_id",
             get(api_threat_analysis_for_client),
         )
+        // Global remediation priority: one ranked, root-cause-deduplicated "fix-first" program
+        // fusing effective_risk (EPSS/KEV) + attack-graph choke points across all findings.
+        .route(
+            "/api/remediation/priority/:client_id",
+            get(api_remediation_priority_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),

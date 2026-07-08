@@ -125,6 +125,7 @@ pub mod pipeline_to_runtime_risk_engine;
 pub mod poc_sandbox;
 pub mod recon;
 pub mod regex_util;
+pub mod remediation_priority;
 pub mod remediation_verify;
 pub mod reporter;
 pub mod request_trace;
