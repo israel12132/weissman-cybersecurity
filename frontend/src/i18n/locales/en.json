@@ -567,7 +567,18 @@
     "export_full_running": "Exporting…",
     "export_full_ok": "Exported {{count}} audit entries — chain verified intact.",
     "export_full_broken": "Exported, but the audit chain integrity check FAILED — investigate.",
-    "export_full_failed": "Full audit export failed."
+    "export_full_failed": "Full audit export failed.",
+    "verify_title": "Tamper-Evidence Verifier",
+    "verify_subtitle": "Paste a report's audit root hash to prove it corresponds to a real, unaltered run in the ledger. Resolves via GET /api/verify-audit/:hash.",
+    "verify_placeholder": "Paste audit_root_hash (SHA-256)…",
+    "verify_btn": "Verify",
+    "verify_running": "Verifying…",
+    "verify_ok": "Verified — this hash matches a genuine report run.",
+    "verify_run": "Run #{{id}}",
+    "verify_created": "Generated {{time}}",
+    "verify_fail": "Not verified — no run matches this hash.",
+    "verify_fail_hint": "The hash was not found in the ledger. The artifact may be altered, forged, or from a different tenant.",
+    "verify_error": "Verification request failed."
   },
   "engines": {
     "title": "Engine Grid",

@@ -7,9 +7,11 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  BadgeCheck,
   FileJson,
   Search,
   Shield,
+  ShieldAlert,
   User,
 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
@@ -132,6 +134,9 @@ export default function AuditLog() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [exportingFull, setExportingFull] = useState(false)
+  const [verifyHash, setVerifyHash] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState(null) // { verified, run_id, created_at } | { verified:false }
   const [actionFilter, setActionFilter] = useState('')
   const [actor, setActor] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -189,6 +194,29 @@ export default function AuditLog() {
       setExportingFull(false)
     }
   }, [t, toast])
+
+  // Tamper-evidence verifier — resolve a report's audit_root_hash against the
+  // live ledger via GET /api/verify-audit/:hash. Proves a report artifact
+  // corresponds to a real, unaltered run (or exposes a forgery).
+  const verify = useCallback(async () => {
+    const h = verifyHash.trim()
+    if (!h) return
+    setVerifying(true)
+    setVerifyResult(null)
+    try {
+      const r = await apiFetch(`/api/verify-audit/${encodeURIComponent(h)}`)
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.verified) {
+        setVerifyResult({ verified: true, ...d })
+      } else {
+        setVerifyResult({ verified: false, error: d.error || `HTTP ${r.status}` })
+      }
+    } catch (e) {
+      setVerifyResult({ verified: false, error: e.message || t('audit.verify_error') })
+    } finally {
+      setVerifying(false)
+    }
+  }, [verifyHash, t])
 
   const filteredEntries = useMemo(() => {
     if (!dateFrom && !dateTo) return entries
@@ -291,6 +319,61 @@ export default function AuditLog() {
             accent="#a78bfa"
             className="col-span-2 lg:col-span-1"
           />
+        </div>
+
+        {/* Tamper-evidence verifier — resolve a report's audit_root_hash */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <BadgeCheck className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-white">{t('audit.verify_title')}</h3>
+          </div>
+          <p className="text-xs text-[var(--text-tertiary)] mb-3 max-w-2xl">{t('audit.verify_subtitle')}</p>
+          <form
+            className="flex flex-col sm:flex-row gap-2"
+            onSubmit={(e) => { e.preventDefault(); verify() }}
+          >
+            <input
+              type="text"
+              value={verifyHash}
+              onChange={(e) => setVerifyHash(e.target.value)}
+              placeholder={t('audit.verify_placeholder')}
+              spellCheck={false}
+              className="flex-1 min-w-0 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/40"
+            />
+            <button
+              type="submit"
+              disabled={verifying || !verifyHash.trim()}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/90 text-black text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <BadgeCheck className={`w-4 h-4 ${verifying ? 'animate-pulse' : ''}`} />
+              {verifying ? t('audit.verify_running') : t('audit.verify_btn')}
+            </button>
+          </form>
+
+          {verifyResult && (
+            verifyResult.verified ? (
+              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 text-emerald-300 text-sm font-semibold">
+                  <BadgeCheck className="w-4 h-4" />
+                  {t('audit.verify_ok')}
+                </div>
+                <div className="mt-1.5 text-[11px] font-mono text-emerald-200/80 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>{t('audit.verify_run', { id: verifyResult.run_id })}</span>
+                  {verifyResult.created_at && (
+                    <span>{t('audit.verify_created', { time: fmtTime(verifyResult.created_at, i18n.language) })}</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 text-rose-300 text-sm font-semibold">
+                  <ShieldAlert className="w-4 h-4" />
+                  {t('audit.verify_fail')}
+                </div>
+                <div className="mt-1 text-[11px] font-mono text-rose-200/70">{t('audit.verify_fail_hint')}</div>
+              </div>
+            )
+          )}
         </div>
       </div>
 

@@ -880,7 +880,18 @@
     "export_full_running": "מייצא…",
     "export_full_ok": "יוצאו {{count}} רשומות ביקורת — השרשרת אומתה כתקינה.",
     "export_full_broken": "היצוא הושלם, אך בדיקת תקינות שרשרת הביקורת נכשלה — נדרשת בדיקה.",
-    "export_full_failed": "ייצוא הביקורת המלא נכשל."
+    "export_full_failed": "ייצוא הביקורת המלא נכשל.",
+    "verify_title": "מאמת עמידות-בפני-שינוי",
+    "verify_subtitle": "הדבק את גיבוב-השורש של דוח כדי להוכיח שהוא תואם לריצה אמיתית ולא-משונה בספר החשבונות. נפתר דרך GET /api/verify-audit/:hash.",
+    "verify_placeholder": "הדבק audit_root_hash‏ (SHA-256)…",
+    "verify_btn": "אמת",
+    "verify_running": "מאמת…",
+    "verify_ok": "אומת — הגיבוב תואם לריצת דוח אמיתית.",
+    "verify_run": "ריצה #{{id}}",
+    "verify_created": "נוצר {{time}}",
+    "verify_fail": "לא אומת — אף ריצה אינה תואמת לגיבוב זה.",
+    "verify_fail_hint": "הגיבוב לא נמצא בספר החשבונות. ייתכן שהתוצר שונה, זויף, או שייך ל-tenant אחר.",
+    "verify_error": "בקשת האימות נכשלה."
   },
   "graphqlSec": {
     "title": "מרכז שליטה לאבטחת GraphQL ו-API",
