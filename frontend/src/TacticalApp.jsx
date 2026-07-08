@@ -76,6 +76,7 @@ import {
   VulnIntelDashboard,
   FinancialRisk,
   AttackPaths,
+  AttackCoverage,
   AgentManagement,
   DarkWebMonitor,
   ThreatHuntingWorkbench,
@@ -240,6 +241,7 @@ export default function TacticalApp() {
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
           <Route path="financial-risk" element={<FinancialRisk />} />
           <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="attack-coverage" element={<AttackCoverage />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />

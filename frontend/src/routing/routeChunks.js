@@ -72,6 +72,7 @@ export const IncidentResponseCenter = React.lazy(() => import('../pages/Incident
 export const VulnIntelDashboard = React.lazy(() => import('../pages/VulnIntelDashboard.jsx'))
 export const FinancialRisk = React.lazy(() => import('../pages/FinancialRisk.jsx'))
 export const AttackPaths = React.lazy(() => import('../pages/AttackPaths.jsx'))
+export const AttackCoverage = React.lazy(() => import('../pages/AttackCoverage.jsx'))
 export const AgentManagement = React.lazy(() => import('../pages/AgentManagement'))
 export const DarkWebMonitor = React.lazy(() => import('../pages/DarkWebMonitor'))
 export const ThreatHuntingWorkbench = React.lazy(() => import('../pages/ThreatHuntingWorkbench'))

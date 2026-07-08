@@ -227,6 +227,7 @@
     "sbom": "SBOM Browser",
     "risk_graph": "Risk Graph",
     "financial_risk": "Financial Risk",
+    "attack_coverage": "ATT&CK Coverage",
     "baseline_drift": "Baseline & Drift",
     "rate_limits": "Rate Limit Analytics",
     "mobile_security": "Mobile Security",
@@ -1162,6 +1163,22 @@
       "no_choke_body": "No shared choke-points across the computed paths.",
       "no_paths_title": "No attack paths",
       "no_paths_body": "No internet → crown-jewel path was found in the current graph."
+    },
+    "attackCoverage": {
+      "title": "ATT&CK Coverage Matrix",
+      "subtitle": "Which MITRE ATT&CK techniques the engine fleet covers",
+      "evidence_notice": "Coverage comes from GET /api/attack-coverage — the live technique→engine mapping compiled into the platform. Each technique lists the real engines that detect it.",
+      "load_failed": "Failed to load ATT&CK coverage.",
+      "kpi_techniques": "Techniques Covered",
+      "kpi_techniques_hint": "Distinct ATT&CK techniques",
+      "kpi_tactics": "Tactics Covered",
+      "kpi_tactics_hint": "ATT&CK tactic columns",
+      "kpi_engine_refs": "Engine References",
+      "kpi_engine_refs_hint": "Technique→engine mappings",
+      "search_placeholder": "Filter by technique, ID, or engine…",
+      "showing": "{{techniques}} techniques across {{tactics}} tactics",
+      "no_match_title": "No matches",
+      "no_match_body": "No technique or engine matches your filter."
     },
     "jobsDashboard": {
       "title": "Jobs Dashboard",

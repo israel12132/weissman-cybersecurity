@@ -225,6 +225,7 @@
     "sbom": "SBOM Browser",
     "risk_graph": "Risk Graph",
     "financial_risk": "סיכון פיננסי",
+    "attack_coverage": "כיסוי ATT&CK",
     "baseline_drift": "Baseline & Drift",
     "rate_limits": "Rate Limit Analytics",
     "mobile_security": "אבטחת מובייל",
@@ -1170,6 +1171,22 @@
       "no_choke_body": "אין צווארי בקבוק משותפים בין הנתיבים שחושבו.",
       "no_paths_title": "אין נתיבי תקיפה",
       "no_paths_body": "לא נמצא נתיב אינטרנט → נכס כתר בגרף הנוכחי."
+    },
+    "attackCoverage": {
+      "title": "מטריצת כיסוי ATT&CK",
+      "subtitle": "אילו טכניקות MITRE ATT&CK צי המנועים מכסה",
+      "evidence_notice": "הכיסוי מגיע מ-GET /api/attack-coverage — מיפוי טכניקה→מנוע חי המקומפל לתוך הפלטפורמה. כל טכניקה מציגה את המנועים האמיתיים שמזהים אותה.",
+      "load_failed": "טעינת כיסוי ATT&CK נכשלה.",
+      "kpi_techniques": "טכניקות מכוסות",
+      "kpi_techniques_hint": "טכניקות ATT&CK ייחודיות",
+      "kpi_tactics": "טקטיקות מכוסות",
+      "kpi_tactics_hint": "עמודות טקטיקה של ATT&CK",
+      "kpi_engine_refs": "הפניות מנוע",
+      "kpi_engine_refs_hint": "מיפויי טכניקה→מנוע",
+      "search_placeholder": "סינון לפי טכניקה, מזהה או מנוע…",
+      "showing": "{{techniques}} טכניקות ב-{{tactics}} טקטיקות",
+      "no_match_title": "אין התאמות",
+      "no_match_body": "אף טכניקה או מנוע לא תואמים לסינון."
     },
     "jobsDashboard": {
       "title": "לוח משימות",
