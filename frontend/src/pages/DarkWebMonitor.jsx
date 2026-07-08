@@ -139,7 +139,7 @@ export default function DarkWebMonitor() {
         id: 'title',
         header: t('pages.darkWebMonitor.col_title'),
         cell: (ctx) => (
-          <span className="text-white/85 max-w-md truncate block" title={ctx.getValue()}>
+          <span className="text-[var(--text-primary)] max-w-md truncate block" title={ctx.getValue()}>
             {ctx.getValue() || '—'}
           </span>
         ),
@@ -147,13 +147,13 @@ export default function DarkWebMonitor() {
       columnHelper.accessor((f) => f.source || f.engine || '', {
         id: 'source',
         header: t('pages.darkWebMonitor.col_source'),
-        cell: (ctx) => <span className="text-white/55">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((f) => f.target || '', {
         id: 'target',
         header: t('pages.darkWebMonitor.col_target'),
         cell: (ctx) => (
-          <span className="text-white/55 max-w-xs truncate block" title={ctx.getValue()}>
+          <span className="text-[var(--text-tertiary)] max-w-xs truncate block" title={ctx.getValue()}>
             {ctx.getValue() || '—'}
           </span>
         ),
@@ -162,7 +162,7 @@ export default function DarkWebMonitor() {
         id: 'discovered',
         header: t('pages.darkWebMonitor.col_discovered'),
         cell: (ctx) => (
-          <span className="text-white/40 whitespace-nowrap">
+          <span className="text-[var(--text-muted)] whitespace-nowrap">
             {ctx.getValue() ? new Date(ctx.getValue()).toLocaleString() : '—'}
           </span>
         ),
@@ -186,7 +186,7 @@ export default function DarkWebMonitor() {
             className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
               autoRefresh
                 ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
-                : 'border-white/10 text-white/50 hover:text-white/80'
+                : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
             }`}
           >
             <Radio className={`w-3 h-3 inline mr-1 ${autoRefresh ? 'animate-pulse' : ''}`} />
@@ -208,7 +208,7 @@ export default function DarkWebMonitor() {
         </div>
 
         {lastRefresh && (
-          <p className="text-[10px] font-mono text-white/30">
+          <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.darkWebMonitor.last_updated', { time: lastRefresh.toLocaleTimeString() })}
           </p>
         )}
@@ -226,8 +226,8 @@ export default function DarkWebMonitor() {
             </div>
 
             {Object.keys(stats.bySource).length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-                <h3 className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">
+              <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <h3 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
                   {t('pages.darkWebMonitor.source_breakdown')}
                 </h3>
                 <div className="space-y-2">
@@ -235,14 +235,14 @@ export default function DarkWebMonitor() {
                     .sort((a, b) => b[1] - a[1])
                     .map(([src, count]) => (
                       <div key={src} className="flex items-center gap-3">
-                        <span className="text-xs font-mono text-white/60 w-40 truncate">{src}</span>
+                        <span className="text-xs font-mono text-[var(--text-tertiary)] w-40 truncate">{src}</span>
                         <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-rose-500/70 rounded-full"
                             style={{ width: `${stats.total ? (count / stats.total) * 100 : 0}%` }}
                           />
                         </div>
-                        <span className="text-xs font-mono text-white/40 w-8 text-right">{count}</span>
+                        <span className="text-xs font-mono text-[var(--text-muted)] w-8 text-right">{count}</span>
                       </div>
                     ))}
                 </div>
@@ -259,16 +259,16 @@ export default function DarkWebMonitor() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.darkWebMonitor.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-black/40 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40"
             />
           </div>
-          <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg p-1 flex-wrap">
+          <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
             {['all', ...SEV_KEYS].map((s) => (
               <button
                 key={s}
@@ -277,7 +277,7 @@ export default function DarkWebMonitor() {
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase transition-all ${
                   severityFilter === s
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                    : 'text-white/45 hover:text-white/70'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}
@@ -288,7 +288,7 @@ export default function DarkWebMonitor() {
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-xs text-white font-mono"
+              className="px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-xs text-white font-mono"
             >
               <option value="all">{t('pages.darkWebMonitor.all_sources')}</option>
               {sources.map((s) => (
@@ -298,12 +298,12 @@ export default function DarkWebMonitor() {
           )}
         </div>
 
-        <section className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <section className="bg-[var(--bg-2)] border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4 text-rose-400" />
               {t('pages.darkWebMonitor.findings_heading')}
-              <span className="text-white/40 font-mono text-xs">({filtered.length})</span>
+              <span className="text-[var(--text-muted)] font-mono text-xs">({filtered.length})</span>
             </h3>
             <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200">
               {t('pages.darkWebMonitor.open_findings')}
@@ -321,7 +321,7 @@ export default function DarkWebMonitor() {
                 cta={{ label: t('pages.darkWebMonitor.empty_step_scan_link'), to: '/clients' }}
                 secondary={{ label: t('pages.darkWebMonitor.empty_step_engine_link'), to: '/engines' }}
               />
-              <p className="text-xs text-white/40 text-center mt-4 max-w-lg mx-auto">
+              <p className="text-xs text-[var(--text-muted)] text-center mt-4 max-w-lg mx-auto">
                 {t('pages.darkWebMonitor.empty_step_keys')}
               </p>
             </div>
@@ -358,8 +358,8 @@ export default function DarkWebMonitor() {
 
 function KpiCard({ label, value, accent }) {
   return (
-    <div className="rounded-2xl bg-black/40 border border-white/10 p-4">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{label}</div>
+    <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-4">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</div>
       <div className={`text-3xl font-bold mt-1 ${accent || 'text-white'}`}>{value}</div>
     </div>
   )

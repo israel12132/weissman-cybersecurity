@@ -117,7 +117,7 @@ function StatTile({ label, value, hint, color = 'var(--accent-strong)', icon: Ic
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-white/10 bg-[var(--card-bg)]/80 backdrop-blur-md p-5"
+      className="rounded-2xl border border-[var(--border-default)] bg-[var(--card-bg)]/80 backdrop-blur-md p-5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -130,11 +130,11 @@ function StatTile({ label, value, hint, color = 'var(--accent-strong)', icon: Ic
           >
             {loading ? '—' : value}
           </div>
-          {hint && <p className="text-[11px] text-white/40 mt-1.5 leading-snug">{hint}</p>}
+          {hint && <p className="text-[11px] text-[var(--text-muted)] mt-1.5 leading-snug">{hint}</p>}
         </div>
         {Icon && (
           <span
-            className="shrink-0 w-9 h-9 rounded-xl border border-white/10 bg-white/[0.03] grid place-items-center"
+            className="shrink-0 w-9 h-9 rounded-xl border border-[var(--border-default)] bg-white/[0.03] grid place-items-center"
             style={{ color }}
           >
             <Icon className="w-4 h-4" strokeWidth={1.9} />
@@ -147,7 +147,7 @@ function StatTile({ label, value, hint, color = 'var(--accent-strong)', icon: Ic
 
 function DeltaPill({ delta }) {
   if (delta == null || delta === 0) {
-    return <span className="text-[10px] font-mono text-white/30">±0</span>
+    return <span className="text-[10px] font-mono text-[var(--text-disabled)]">±0</span>
   }
   const up = delta > 0
   return (
@@ -191,7 +191,7 @@ function FeedRow({ item, expanded, onToggle, t }) {
   const id = item.external_id || ''
   const url = nvdUrl(id)
   return (
-    <div className="border-b border-white/5 last:border-0">
+    <div className="border-b border-[var(--border-subtle)] last:border-0">
       <button
         type="button"
         onClick={onToggle}
@@ -203,28 +203,28 @@ function FeedRow({ item, expanded, onToggle, t }) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs font-semibold text-white/90">{id || '—'}</span>
+            <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">{id || '—'}</span>
             <span
               className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border"
               style={{ color, borderColor: `${color}55`, background: `${color}14` }}
             >
               {sev}
             </span>
-            <span className="text-[10px] font-mono text-white/30">{item.source || 'NVD'}</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)]">{item.source || 'NVD'}</span>
             {item.published_at && (
-              <span className="text-[10px] font-mono text-white/30">
+              <span className="text-[10px] font-mono text-[var(--text-disabled)]">
                 {t('pages.threatIntelHub.published', { date: fmtDate(item.published_at) })}
               </span>
             )}
           </div>
           <p
-            className={`text-[11px] text-white/45 mt-1 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}
+            className={`text-[11px] text-[var(--text-muted)] mt-1 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}
           >
             {item.description || '—'}
           </p>
         </div>
         <ChevronDown
-          className={`w-4 h-4 text-white/25 shrink-0 mt-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-[var(--text-disabled)] shrink-0 mt-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
         />
       </button>
       <AnimatePresence initial={false}>
@@ -294,7 +294,7 @@ function LiveFeed({ feed, t, workbench }) {
 
   if (feed.loading && !total) {
     return (
-      <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
         <SkeletonWidgetGrid count={4} />
       </div>
     )
@@ -356,12 +356,12 @@ function SeverityDistribution({ kpis, t }) {
   const max = Math.max(1, ...SEVERITY_KEYS.map((k) => Number(sev[k] || 0)))
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[var(--card-bg)]/70 p-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--card-bg)]/70 p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-semibold text-white/80">
+        <h3 className="text-xs font-semibold text-[var(--text-secondary)]">
           {t('pages.threatIntelHub.severity_distribution')}
         </h3>
-        <span className="text-[10px] font-mono text-white/30">
+        <span className="text-[10px] font-mono text-[var(--text-disabled)]">
           {t('pages.threatIntelHub.severity_distribution_hint')}
         </span>
       </div>
@@ -375,7 +375,7 @@ function SeverityDistribution({ kpis, t }) {
             const color = SEVERITY_META[k].color
             return (
               <div key={k} className="flex items-center gap-3">
-                <span className="w-16 text-[10px] font-mono uppercase tracking-wider text-white/55">
+                <span className="w-16 text-[10px] font-mono uppercase tracking-wider text-[var(--text-tertiary)]">
                   {t(`pages.threatIntelHub.sev_${k}`)}
                 </span>
                 <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
@@ -404,15 +404,15 @@ function SeverityDistribution({ kpis, t }) {
 
 function TopList({ title, hint, emptyLabel, rows, loading, renderRow }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[var(--card-bg)]/70 p-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--card-bg)]/70 p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-semibold text-white/80">{title}</h3>
-        {hint && <span className="text-[10px] font-mono text-white/30">{hint}</span>}
+        <h3 className="text-xs font-semibold text-[var(--text-secondary)]">{title}</h3>
+        {hint && <span className="text-[10px] font-mono text-[var(--text-disabled)]">{hint}</span>}
       </div>
       {loading ? (
         <SkeletonTable rows={5} cols={2} />
       ) : rows.length === 0 ? (
-        <div className="py-6 text-center text-white/25 text-[11px] font-mono">{emptyLabel}</div>
+        <div className="py-6 text-center text-[var(--text-disabled)] text-[11px] font-mono">{emptyLabel}</div>
       ) : (
         <div className="space-y-1.5">{rows.map(renderRow)}</div>
       )}
@@ -436,7 +436,7 @@ function GroupBar({ group, engines, total, onClick, active }) {
       }}
     >
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-semibold text-white/80">
+        <span className="text-xs font-semibold text-[var(--text-secondary)]">
           {GROUP_ICONS[group.id] ?? '◆'} {group.label}
         </span>
         <span className="text-[10px] font-mono" style={{ color: group.color }}>
@@ -462,7 +462,7 @@ function EngineListItem({ engine, groupColor, index, t }) {
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(index * 0.015, 0.4), duration: 0.15 }}
-      className="flex items-start gap-3 py-2.5 border-b border-white/5"
+      className="flex items-start gap-3 py-2.5 border-b border-[var(--border-subtle)]"
     >
       <span
         className="mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -470,7 +470,7 @@ function EngineListItem({ engine, groupColor, index, t }) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-white/85">{engine.label}</span>
+          <span className="text-xs font-semibold text-[var(--text-primary)]">{engine.label}</span>
           <MitreBadge id={engine.mitre} />
           {!engine.requiresTarget && (
             <span className="text-[9px] font-mono text-emerald-400/70 border border-emerald-500/20 px-1.5 rounded">
@@ -478,7 +478,7 @@ function EngineListItem({ engine, groupColor, index, t }) {
             </span>
           )}
         </div>
-        <p className="text-[10px] text-white/35 mt-0.5 leading-relaxed">{engine.description}</p>
+        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">{engine.description}</p>
       </div>
     </motion.div>
   )
@@ -545,7 +545,7 @@ function CoveragePanel({ t }) {
 
       <div className="grid lg:grid-cols-[320px_1fr] gap-6">
         <div className="space-y-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-3">
             {t('pages.threatIntelHub.groups_heading')}
           </h2>
           {ENGINE_GROUP_DEFS.map((group) => (
@@ -562,14 +562,14 @@ function CoveragePanel({ t }) {
             <button
               type="button"
               onClick={() => setActiveGroup(null)}
-              className="w-full text-center text-[10px] font-mono text-white/30 hover:text-white/60 mt-2 transition-colors"
+              className="w-full text-center text-[10px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] mt-2 transition-colors"
             >
               ✕ {t('pages.threatIntelHub.clear_filter')}
             </button>
           )}
 
           <div className="mt-6">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30 mb-3">
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-3">
               {t('pages.threatIntelHub.mitre_coverage_heading')}
             </h2>
             <MitreCoverage engines={ENGINES_REGISTRY} />
@@ -579,32 +579,32 @@ function CoveragePanel({ t }) {
         <div className="min-w-0">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('pages.threatIntelHub.search_placeholder')}
-                className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
-            <span className="text-[10px] font-mono text-white/30 whitespace-nowrap">
+            <span className="text-[10px] font-mono text-[var(--text-disabled)] whitespace-nowrap">
               {t('pages.threatIntelHub.engines_count', { count: filteredEngines.length })}
             </span>
           </div>
 
-          <div className="rounded-xl bg-black/30 border border-white/6 px-4 max-h-[62vh] overflow-y-auto">
+          <div className="rounded-xl bg-[var(--table-surface)] border border-[var(--border-subtle)] px-4 max-h-[62vh] overflow-y-auto">
             {filteredEngines.length === 0 ? (
-              <div className="py-12 text-center text-white/25 text-xs font-mono">
+              <div className="py-12 text-center text-[var(--text-disabled)] text-xs font-mono">
                 {t('pages.threatIntelHub.no_match')}
               </div>
             ) : (
@@ -688,7 +688,7 @@ export default function ThreatIntelHub() {
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       {updatedAt > 0 && (
-        <span className="text-[10px] font-mono text-white/35 hidden sm:inline">
+        <span className="text-[10px] font-mono text-[var(--text-muted)] hidden sm:inline">
           {t('pages.threatIntelHub.last_updated', {
             time: new Date(updatedAt).toLocaleTimeString(),
           })}
@@ -700,7 +700,7 @@ export default function ThreatIntelHub() {
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
           auto
             ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-            : 'border-white/10 text-white/50 hover:text-white/80'
+            : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
         }`}
         title={t('pages.threatIntelHub.auto_refresh_hint')}
       >
@@ -771,21 +771,21 @@ export default function ThreatIntelHub() {
           renderRow={(c) => {
             const url = nvdUrl(c.cve)
             return (
-              <div key={c.cve} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+              <div key={c.cve} className="flex items-center gap-2 py-1.5 border-b border-[var(--border-subtle)] last:border-0">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sevColor(c.severity) }} />
                 {url ? (
                   <a
                     href={url}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-[11px] text-white/80 hover:text-cyan-300 truncate flex-1"
+                    className="font-mono text-[11px] text-[var(--text-secondary)] hover:text-cyan-300 truncate flex-1"
                   >
                     {c.cve}
                   </a>
                 ) : (
-                  <span className="font-mono text-[11px] text-white/80 truncate flex-1">{c.cve}</span>
+                  <span className="font-mono text-[11px] text-[var(--text-secondary)] truncate flex-1">{c.cve}</span>
                 )}
-                <span className="text-[10px] font-mono text-white/35">
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
                   {t('pages.threatIntelHub.hits', { count: c.hits })}
                 </span>
               </div>
@@ -799,13 +799,13 @@ export default function ThreatIntelHub() {
           rows={mitreTop}
           loading={kpis.loading}
           renderRow={(m) => (
-            <div key={m.id} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+            <div key={m.id} className="flex items-center gap-2 py-1.5 border-b border-[var(--border-subtle)] last:border-0">
               <Crosshair className="w-3 h-3 text-cyan-400/60 shrink-0" />
-              <span className="font-mono text-[11px] text-white/80">{m.id}</span>
-              <span className="text-[10px] font-mono text-white/35 truncate flex-1">
+              <span className="font-mono text-[11px] text-[var(--text-secondary)]">{m.id}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] truncate flex-1">
                 {String(m.tactic || '').replace(/_/g, ' ')}
               </span>
-              <span className="text-[10px] font-mono text-white/35">
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t('pages.threatIntelHub.hits', { count: m.hits })}
               </span>
             </div>
@@ -814,7 +814,7 @@ export default function ThreatIntelHub() {
       </div>
 
       {/* Tabs: live feed vs detection capability */}
-      <div className="flex items-center gap-1 mb-5 border-b border-white/8">
+      <div className="flex items-center gap-1 mb-5 border-b border-[var(--border-subtle)]">
         <TabButton active={tab === 'feed'} onClick={() => setTab('feed')} icon={Target}>
           {t('pages.threatIntelHub.tab_feed')}
         </TabButton>
@@ -822,7 +822,7 @@ export default function ThreatIntelHub() {
           {t('pages.threatIntelHub.tab_coverage')}
         </TabButton>
         {tab === 'coverage' && (
-          <span className="ml-auto text-[10px] font-mono text-white/30">
+          <span className="ml-auto text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.threatIntelHub.subtitle', { engines: ENGINES_REGISTRY.length, mitre: uniqueMitre })}
           </span>
         )}
@@ -842,7 +842,7 @@ export default function ThreatIntelHub() {
             <div className="text-xs font-semibold mb-1" style={{ color: link.color }}>
               {t(`pages.threatIntelHub.${link.key}`)} →
             </div>
-            <div className="text-[10px] text-white/35">{t(`pages.threatIntelHub.${link.desc}`)}</div>
+            <div className="text-[10px] text-[var(--text-muted)]">{t(`pages.threatIntelHub.${link.desc}`)}</div>
           </Link>
         ))}
       </div>
@@ -858,7 +858,7 @@ function TabButton({ active, onClick, icon: Icon, children }) {
       className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 -mb-px transition-colors ${
         active
           ? 'border-cyan-400 text-cyan-300'
-          : 'border-transparent text-white/45 hover:text-white/75'
+          : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
       }`}
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}

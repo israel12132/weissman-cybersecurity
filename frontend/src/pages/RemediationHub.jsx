@@ -174,7 +174,7 @@ export default function RemediationHub() {
       )}
     >
       <div className="space-y-6">
-        <p className="text-xs text-white/45 font-mono">{t('pages.remediationHub.intro')}</p>
+        <p className="text-xs text-[var(--text-muted)] font-mono">{t('pages.remediationHub.intro')}</p>
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">
@@ -195,16 +195,16 @@ export default function RemediationHub() {
         {/* Filters */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.remediationHub.search_placeholder')}
-              className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
             />
             {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -227,8 +227,8 @@ export default function RemediationHub() {
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-cyan-400" />
               {t('pages.remediationHub.families_heading', { count: workflows.length })}
@@ -250,7 +250,7 @@ export default function RemediationHub() {
               </div>
             ) : (
               workflows.map((w) => (
-                <div key={w.id} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={w.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1.5 flex-wrap">
@@ -259,7 +259,7 @@ export default function RemediationHub() {
                       </div>
                       <div className="flex items-center gap-3 mb-2">
                         <SeverityBar severities={w.severities} total={w.total} />
-                        <span className="text-[10px] font-mono text-white/35 whitespace-nowrap">
+                        <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap">
                           {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
                         </span>
                       </div>
@@ -310,7 +310,7 @@ function Pill({ active, color = '#22d3ee', onClick, children }) {
 
 function StatCard({ label, value, icon, color, loading }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-400">{label}</span>
         {icon}

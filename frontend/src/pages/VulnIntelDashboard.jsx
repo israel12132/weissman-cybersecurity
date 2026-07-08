@@ -65,7 +65,7 @@ function buildColumns(t) {
       header: t('common.name'),
       size: 320,
       cell: ({ getValue }) => (
-        <span className="text-white/85 text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
+        <span className="text-[var(--text-primary)] text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
       ),
     }),
     columnHelper.accessor((row) => row.source || row.engine || '—', {
@@ -73,7 +73,7 @@ function buildColumns(t) {
       header: t('findings.source'),
       size: 140,
       cell: ({ getValue }) => (
-        <span className="text-white/55 font-mono text-[11px] truncate">{getValue()}</span>
+        <span className="text-[var(--text-tertiary)] font-mono text-[11px] truncate">{getValue()}</span>
       ),
     }),
     columnHelper.accessor((row) => (row.status || 'OPEN').toUpperCase(), {
@@ -98,7 +98,7 @@ function buildColumns(t) {
       header: t('findings.discovered'),
       size: 160,
       cell: ({ getValue }) => (
-        <span className="text-white/45 font-mono text-[11px] whitespace-nowrap">
+        <span className="text-[var(--text-muted)] font-mono text-[11px] whitespace-nowrap">
           {formatDate(getValue())}
         </span>
       ),
@@ -255,7 +255,7 @@ export default function VulnIntelDashboard() {
           <button
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-white/[0.03] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
           </button>
@@ -346,7 +346,7 @@ export default function VulnIntelDashboard() {
             />
 
             <div className="relative max-w-xl">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] text-xs pointer-events-none">
                 ⌕
               </span>
               <input
@@ -354,7 +354,7 @@ export default function VulnIntelDashboard() {
                 placeholder={t('findings.search_placeholder')}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </div>
@@ -396,14 +396,14 @@ export default function VulnIntelDashboard() {
               stickyHeader
             />
             {!loading && filtered.length > 200 && (
-              <p className="text-[11px] font-mono text-white/35 text-center">
+              <p className="text-[11px] font-mono text-[var(--text-muted)] text-center">
                 {t('vuln_intel.showing_first', { count: filtered.length })}
               </p>
             )}
           </>
         )}
 
-        <p className="text-[10px] font-mono text-white/30 text-center">
+        <p className="text-[10px] font-mono text-[var(--text-disabled)] text-center">
           {t('findings.shown_of_total', { shown: filtered.length, total })}
         </p>
       </div>

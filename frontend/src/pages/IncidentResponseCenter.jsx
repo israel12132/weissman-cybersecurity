@@ -207,14 +207,14 @@ function MetricCard({ label, value, sub, color, icon }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/8 p-4 flex flex-col gap-1"
+      className="rounded-xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-subtle)] p-4 flex flex-col gap-1"
     >
       <div className="flex items-center gap-2">
         {icon && <span className="text-lg">{icon}</span>}
         <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: `${color}99` }}>{label}</span>
       </div>
       <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-white/30 font-mono">{sub}</div>}
+      {sub && <div className="text-[10px] text-[var(--text-disabled)] font-mono">{sub}</div>}
     </motion.div>
   )
 }
@@ -239,7 +239,7 @@ function IncidentRow({ incident, selected, onSelect, t, now }) {
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[10px] font-mono text-white/35">{incident.id}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">{incident.id}</span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
@@ -254,16 +254,16 @@ function IncidentRow({ incident, selected, onSelect, t, now }) {
             </span>
             <SlaBadge incident={incident} now={now} t={t} showLabel={false} />
           </div>
-          <p className="text-xs font-semibold text-white/85 leading-snug">{incident.title}</p>
+          <p className="text-xs font-semibold text-[var(--text-primary)] leading-snug">{incident.title}</p>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[10px] font-mono text-white/30">{incident.source}</div>
-          <div className="text-[10px] font-mono text-white/20">{durationHuman(incident.created, incident.updated, t)}</div>
+          <div className="text-[10px] font-mono text-[var(--text-disabled)]">{incident.source}</div>
+          <div className="text-[10px] font-mono text-[var(--text-disabled)]">{durationHuman(incident.created, incident.updated, t)}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
         {incident.affectedAssets.map((a) => (
-          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/45">
+          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-[var(--border-default)] rounded text-[var(--text-muted)]">
             {a}
           </span>
         ))}
@@ -284,9 +284,9 @@ function Timeline({ events }) {
           <div className="pb-3 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="text-[10px] font-mono text-cyan-400/70">{e.t}</span>
-              <span className="text-[9px] font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/40">{e.actor}</span>
+              <span className="text-[9px] font-mono bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">{e.actor}</span>
             </div>
-            <p className="text-xs text-white/65 leading-relaxed">{e.msg}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{e.msg}</p>
           </div>
         </div>
       ))}
@@ -303,7 +303,7 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t(pb.labelKey)}</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(pb.labelKey)}</span>
         <span className="text-[10px] font-mono" style={{ color: barColor }}>{done}/{steps.length} ({pct}%)</span>
       </div>
       <div className="h-1.5 rounded-full bg-white/5 mb-4 overflow-hidden">
@@ -322,7 +322,7 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
             <motion.div
               key={step.id}
               layout
-              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-white/20"
+              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-[var(--border-strong)]"
               style={{
                 borderColor: step.done ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.07)',
                 background: step.done ? 'rgba(34,211,238,0.04)' : 'rgba(0,0,0,0.2)',
@@ -347,12 +347,12 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
                     {phaseLabel}
                   </span>
                   {step.mitre && (
-                    <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {step.mitre}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-white/70 mt-0.5" style={{ textDecoration: step.done ? 'line-through' : 'none', opacity: step.done ? 0.4 : 0.85 }}>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5" style={{ textDecoration: step.done ? 'line-through' : 'none', opacity: step.done ? 0.4 : 0.85 }}>
                   {t(step.actionKey)}
                 </p>
               </div>
@@ -558,7 +558,7 @@ export default function IncidentResponseCenter() {
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30">{t(`${NS}.incident_queue`)}</h2>
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">{t(`${NS}.incident_queue`)}</h2>
             <button
               type="button"
               onClick={() => exportIncidentsCsv(incidents)}
@@ -596,12 +596,12 @@ export default function IncidentResponseCenter() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 p-6 space-y-6"
+              className="rounded-2xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] p-6 space-y-6"
             >
               {/* Header */}
               <div>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[10px] font-mono text-white/30">{selected.id}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-disabled)]">{selected.id}</span>
                   <span
                     className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
                     style={{
@@ -625,13 +625,13 @@ export default function IncidentResponseCenter() {
                     {severityLabel(selected.severity, t)}
                   </span>
                   {selected.mitre && (
-                    <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-white/5 border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {selected.mitre}
                     </span>
                   )}
                 </div>
                 <h2 className="text-sm font-bold text-white mb-2">{selected.title}</h2>
-                <p className="text-xs text-white/50 leading-relaxed">{selected.description}</p>
+                <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{selected.description}</p>
               </div>
 
               {/* Meta row */}
@@ -641,17 +641,17 @@ export default function IncidentResponseCenter() {
                   { label: t('pages.incidentResponseCenter.source'), value: selected.source },
                   { label: t(`${NS}.duration`), value: durationHuman(selected.created, selected.updated, t) },
                 ].map(({ label, value }) => (
-                  <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">{label}</div>
-                    <div className="text-xs font-semibold text-white/75">{value}</div>
+                  <div key={label} className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-1">{label}</div>
+                    <div className="text-xs font-semibold text-[var(--text-secondary)]">{value}</div>
                   </div>
                 ))}
                 {(() => {
                   const sla = computeSla(selected, now)
                   const color = SLA_BAND_COLOR[slaBand(sla)]
                   return (
-                    <div className="rounded-lg bg-black/30 border border-white/8 p-3">
-                      <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">
+                    <div className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                      <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-1">
                         {t(`${NS}.sla_prefix`, { defaultValue: 'SLA' })}
                       </div>
                       <div className="text-xs font-semibold" style={{ color }}>
@@ -663,7 +663,7 @@ export default function IncidentResponseCenter() {
               </div>
 
               {/* Tabs */}
-              <div className="flex gap-2 border-b border-white/10 pb-2">
+              <div className="flex gap-2 border-b border-[var(--border-default)] pb-2">
                 {['timeline', 'playbook'].map((tabKey) => (
                   <button
                     key={tabKey}
@@ -685,7 +685,7 @@ export default function IncidentResponseCenter() {
                 selected.timeline.length > 0 ? (
                   <Timeline events={selected.timeline} />
                 ) : (
-                  <p className="text-xs text-white/35 font-mono">
+                  <p className="text-xs text-[var(--text-muted)] font-mono">
                     {t(`${NS}.no_timeline`)}
                   </p>
                 )

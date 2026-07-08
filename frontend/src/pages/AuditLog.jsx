@@ -83,7 +83,7 @@ function extractTarget(entry) {
 
 function ActionBadge({ action }) {
   const a = (action || '').toLowerCase()
-  let color = 'border-white/15 text-white/70 bg-white/5'
+  let color = 'border-[var(--border-strong)] text-[var(--text-secondary)] bg-white/5'
   if (a.includes('login') || a.includes('mfa')) color = 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
   if (a.includes('denied') || a.includes('reject') || a.includes('failed')) color = 'border-rose-500/40 text-rose-200 bg-rose-500/10'
   if (a.includes('created') || a.includes('updated')) color = 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
@@ -216,7 +216,7 @@ export default function AuditLog() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{t('audit.title')}</h1>
-              <p className="text-sm text-white/55 mt-1 max-w-2xl">{t('audit.subtitle')}</p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl">{t('audit.subtitle')}</p>
             </div>
           </div>
           <ShellScanActions
@@ -250,9 +250,9 @@ export default function AuditLog() {
         </div>
       </div>
 
-      <section className="max-w-7xl mx-auto rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-4 sm:p-5 mb-4 space-y-4">
+      <section className="max-w-7xl mx-auto rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-4 sm:p-5 mb-4 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/40">{t('audit.filters')}</span>
+          <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('audit.filters')}</span>
           {hasFilters && (
             <button
               type="button"
@@ -275,7 +275,7 @@ export default function AuditLog() {
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   active
                     ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
-                    : 'bg-white/5 text-white/55 border-white/10 hover:text-white/80 hover:border-white/20'
+                    : 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                 }`}
               >
                 {t(pill.labelKey)}
@@ -286,33 +286,33 @@ export default function AuditLog() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_auto] gap-3">
           <label className="relative block">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
               aria-label={t('audit.date_from')}
             />
           </label>
           <label className="relative block">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="date"
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
               aria-label={t('audit.date_to')}
             />
           </label>
           <label className="relative block">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
               placeholder={t('audit.actor_placeholder')}
               value={actor}
               onChange={(e) => { setActor(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </label>
           <div className="flex gap-2">
@@ -325,7 +325,7 @@ export default function AuditLog() {
                 key={r.days}
                 type="button"
                 onClick={() => setQuickRange(r.days)}
-                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-white/10 text-white/50 hover:text-white hover:border-white/25 whitespace-nowrap"
+                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] whitespace-nowrap"
               >
                 {r.label}
               </button>
@@ -333,7 +333,7 @@ export default function AuditLog() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] font-mono text-white/40 pt-1 border-t border-white/5">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] pt-1 border-t border-[var(--border-subtle)]">
           <Search className="h-3.5 w-3.5" />
           <span>
             {t('audit.summary', {
@@ -346,7 +346,7 @@ export default function AuditLog() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md overflow-hidden">
+      <section className="max-w-7xl mx-auto rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md overflow-hidden">
         {error && (
           <div className="px-5 pt-4 text-sm text-rose-300 font-mono">{error}</div>
         )}
@@ -366,7 +366,7 @@ export default function AuditLog() {
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-white/40 border-b border-white/10 bg-white/[0.02]">
+                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)] bg-white/[0.02]">
                   <th className="py-3 px-4 w-10" />
                   <th className="py-3 px-4 w-44">{t('audit.col_when')}</th>
                   <th className="py-3 px-4 w-40">{t('audit.col_action')}</th>
@@ -385,10 +385,10 @@ export default function AuditLog() {
                         className={`align-top cursor-pointer transition-colors ${open ? 'bg-cyan-500/[0.04]' : 'hover:bg-white/[0.02]'}`}
                         onClick={() => setExpandedId(open ? null : e.id)}
                       >
-                        <td className="py-3 px-4 text-white/35">
+                        <td className="py-3 px-4 text-[var(--text-muted)]">
                           <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180 text-cyan-400' : ''}`} />
                         </td>
-                        <td className="py-3 px-4 font-mono text-white/65 whitespace-nowrap">
+                        <td className="py-3 px-4 font-mono text-[var(--text-tertiary)] whitespace-nowrap">
                           {fmtTime(e.created_at, i18n.language)}
                         </td>
                         <td className="py-3 px-4">
@@ -404,16 +404,16 @@ export default function AuditLog() {
                             </span>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-white/60 font-mono truncate max-w-[20rem]" title={extractTarget(e)}>
+                        <td className="py-3 px-4 text-[var(--text-tertiary)] font-mono truncate max-w-[20rem]" title={extractTarget(e)}>
                           {extractTarget(e)}
                         </td>
-                        <td className="py-3 px-4 font-mono text-white/40">{e.client_ip || '—'}</td>
+                        <td className="py-3 px-4 font-mono text-[var(--text-muted)]">{e.client_ip || '—'}</td>
                       </tr>
                       {open && (
-                        <tr className="bg-black/30">
+                        <tr className="bg-[var(--table-surface)]">
                           <td colSpan={6} className="px-4 pb-4 pt-0">
-                            <div className="rounded-xl border border-white/10 bg-black/50 p-4">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-2">
+                            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
+                              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
                                 {t('audit.detail_payload')}
                               </div>
                               <pre className="text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-64 overflow-auto leading-relaxed">
@@ -432,19 +432,19 @@ export default function AuditLog() {
         )}
 
         {total > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-white/10 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-[11px] font-mono text-white/45">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-[var(--border-default)] bg-white/[0.02]">
+            <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>
               <select
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setOffset(0) }}
-                className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-cyan-500/40"
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
               >
                 {PAGE_SIZES.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
-              <span className="hidden sm:inline text-white/30">·</span>
+              <span className="hidden sm:inline text-[var(--text-disabled)]">·</span>
               <span>{t('audit.page_range', { start: rangeStart, end: rangeEnd, total })}</span>
             </div>
 
@@ -453,7 +453,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset(0)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
                 aria-label={t('audit.first_page')}
               >
                 <ChevronsLeft className="h-4 w-4" />
@@ -462,7 +462,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
                 aria-label={t('audit.prev_page')}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -483,7 +483,7 @@ export default function AuditLog() {
                       className={`min-w-[2rem] h-8 rounded-lg text-xs font-mono border transition-all ${
                         page === currentPage
                           ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
-                          : 'border-white/10 text-white/50 hover:text-white hover:border-white/25'
+                          : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)]'
                       }`}
                     >
                       {page}
@@ -496,7 +496,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((o) => o + pageSize)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
                 aria-label={t('audit.next_page')}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -505,7 +505,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((totalPages - 1) * pageSize)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
                 aria-label={t('audit.last_page')}
               >
                 <ChevronsRight className="h-4 w-4" />

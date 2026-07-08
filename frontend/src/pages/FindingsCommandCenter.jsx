@@ -115,9 +115,9 @@ function formatDate(val) {
 // ─── Small UI pieces ──────────────────────────────────────────────────────────
 
 function MitreBadge({ id }) {
-  if (!id) return <span className="text-white/25 font-mono text-[11px]">—</span>
+  if (!id) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   return (
-    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-white/10 text-white/55 tracking-wider">
+    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider">
       {id}
     </span>
   )
@@ -125,7 +125,7 @@ function MitreBadge({ id }) {
 
 function ComplianceBadges({ compliance }) {
   const list = Array.isArray(compliance) ? compliance : []
-  if (list.length === 0) return <span className="text-white/25 font-mono text-[11px]">—</span>
+  if (list.length === 0) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   return (
     <div className="flex flex-wrap gap-1.5">
       {list.slice(0, 12).map((c, idx) => {
@@ -134,7 +134,7 @@ function ComplianceBadges({ compliance }) {
         return (
           <span
             key={`${label}-${idx}`}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-white/10 text-white/55 tracking-wider"
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider"
             title={sanitizeFindingPlainText(raw || '', 256)}
           >
             {label}
@@ -142,14 +142,14 @@ function ComplianceBadges({ compliance }) {
         )
       })}
       {list.length > 12 ? (
-        <span className="text-[10px] font-mono text-white/35 px-1.5 py-0.5">+{list.length - 12}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)] px-1.5 py-0.5">+{list.length - 12}</span>
       ) : null}
     </div>
   )
 }
 
 function ScoreBadge({ score }) {
-  if (score == null || score === '') return <span className="text-white/25 font-mono text-[11px]">—</span>
+  if (score == null || score === '') return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   const n = typeof score === 'number' ? score : parseFloat(score)
   const color = n >= 9 ? '#ef4444' : n >= 7 ? '#f97316' : n >= 4 ? '#f59e0b' : '#22d3ee'
   return (
@@ -189,7 +189,7 @@ function buildColumns(t, onVerifyRow) {
           const groupDef = eng.group ? ENGINE_GROUPS[eng.group] : null
           return (
             <div className="min-w-0">
-              <div className="text-[12px] text-white/80 truncate">{getValue()}</div>
+              <div className="text-[12px] text-[var(--text-secondary)] truncate">{getValue()}</div>
               {groupDef && (
                 <div
                   className="text-[10px] font-mono truncate"
@@ -217,7 +217,7 @@ function buildColumns(t, onVerifyRow) {
       size: 280,
       cell: ({ getValue }) => (
         <span
-          className="text-[12px] text-white/85 line-clamp-2 leading-snug"
+          className="text-[12px] text-[var(--text-primary)] line-clamp-2 leading-snug"
           title={sanitizeFindingPlainText(getValue() || '', 512)}
         >
           {sanitizeFindingPlainText(getValue() || t('findings.untitled'), 128)}
@@ -233,9 +233,9 @@ function buildColumns(t, onVerifyRow) {
         enableSorting: false,
         cell: ({ getValue }) => {
           const v = getValue()
-          if (!v) return <span className="text-white/25 font-mono text-[11px]">—</span>
+          if (!v) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
           return (
-            <span className="text-[11px] font-mono text-white/55 line-clamp-1" title={sanitizeFindingPlainText(String(v), 512)}>
+            <span className="text-[11px] font-mono text-[var(--text-tertiary)] line-clamp-1" title={sanitizeFindingPlainText(String(v), 512)}>
               {sanitizeFindingPlainText(String(v), 96)}
             </span>
           )
@@ -277,7 +277,7 @@ function buildColumns(t, onVerifyRow) {
             <div className="flex flex-col gap-0.5">
               <ScoreBadge score={v} />
               {(kev || epss != null) && (
-                <span className="text-[9px] font-mono text-white/40">
+                <span className="text-[9px] font-mono text-[var(--text-muted)]">
                   {kev ? 'KEV' : ''}{kev && epss != null ? ' · ' : ''}{epss != null ? `EPSS ${(epss * 100).toFixed(0)}%` : ''}
                 </span>
               )}
@@ -294,7 +294,7 @@ function buildColumns(t, onVerifyRow) {
         size: 70,
         cell: ({ getValue }) => {
           const n = getValue()
-          if (!n || n <= 1) return <span className="text-white/25 font-mono text-[11px]">1×</span>
+          if (!n || n <= 1) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">1×</span>
           return (
             <span className="text-[11px] font-mono text-amber-300/90" title="Recurrence count from dedup engine">
               {n}×
@@ -377,7 +377,7 @@ function buildColumns(t, onVerifyRow) {
         header: t('findings.col_date'),
         size: 160,
         cell: ({ getValue }) => (
-          <span className="text-[11px] font-mono text-white/45 whitespace-nowrap">
+          <span className="text-[11px] font-mono text-[var(--text-muted)] whitespace-nowrap">
             {formatDate(getValue())}
           </span>
         ),
@@ -622,18 +622,18 @@ export default function FindingsCommandCenter() {
         background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-3 text-[11px] font-mono">
-          <Link to="/" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+          <Link to="/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
             ← {t('nav.dashboard')}
           </Link>
-          <span className="text-white/15">|</span>
-          <Link to="/engines" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+          <span className="text-[var(--text-disabled)]">|</span>
+          <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
             {t('nav.engine_matrix')}
           </Link>
           {region && (
             <>
-              <span className="text-white/15">|</span>
+              <span className="text-[var(--text-disabled)]">|</span>
               <span
                 className="text-[10px] px-2 py-0.5 rounded-full border"
                 style={{ color: '#22d3ee', borderColor: '#22d3ee30', backgroundColor: '#22d3ee08' }}
@@ -666,7 +666,7 @@ export default function FindingsCommandCenter() {
           <button
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-white/[0.03] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
           </button>
@@ -728,9 +728,9 @@ export default function FindingsCommandCenter() {
               ]}
             />
 
-            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/8">
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[var(--border-subtle)]">
               <div className="relative flex-1 min-w-[220px] max-w-md">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] text-xs pointer-events-none">
                   ⌕
                 </span>
                 <input
@@ -741,13 +741,13 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   placeholder={t('findings.search_findings')}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-8 py-2.5 text-xs text-white/80 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
                 />
                 {globalFilter && (
                   <button
                     type="button"
                     onClick={() => setGlobalFilter('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                     aria-label={t('common.close')}
                   >
                     ✕
@@ -761,7 +761,7 @@ export default function FindingsCommandCenter() {
                   setEngineFilter(e.target.value)
                   setPagination((p) => ({ ...p, pageIndex: 0 }))
                 }}
-                className="bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
               >
                 <option value="">{t('findings.all_engine_groups')}</option>
                 {ENGINE_GROUP_DEFS.map((g) => (
@@ -780,7 +780,7 @@ export default function FindingsCommandCenter() {
                     setKevFilter(false)
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
-                  className="px-3 py-2.5 rounded-xl text-xs font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
+                  className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('common.clear_filters')}
                 </button>

@@ -36,7 +36,7 @@ function StatusBadge({ online, last_seen_at, t }) {
   }
   if (!last_seen_at) {
     return (
-      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/45">
+      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-muted)]">
         {t('agents.status_never')}
       </span>
     )
@@ -183,27 +183,27 @@ export default function AgentManagement() {
       columnHelper.accessor((a) => clientName(a.client_id), {
         id: 'client',
         header: t('agents.col_client'),
-        cell: (ctx) => <span className="text-white/70">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-secondary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor((a) => a.hostname || '', {
         id: 'hostname',
         header: t('agents.col_hostname'),
-        cell: (ctx) => <span className="text-white/85">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-primary)]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((a) => `${a.os || ''} / ${a.arch || ''}`, {
         id: 'os',
         header: t('agents.col_os'),
-        cell: (ctx) => <span className="text-white/60">{ctx.getValue()}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)]">{ctx.getValue()}</span>,
       }),
       columnHelper.accessor((a) => a.agent_version || '', {
         id: 'version',
         header: t('agents.version'),
-        cell: (ctx) => <span className="text-white/55">{ctx.getValue() || '—'}</span>,
+        cell: (ctx) => <span className="text-[var(--text-tertiary)]">{ctx.getValue() || '—'}</span>,
       }),
       columnHelper.accessor((a) => a.last_seen_at || '', {
         id: 'last_seen',
         header: t('agents.last_seen'),
-        cell: (ctx) => <span className="text-white/45">{timeAgo(ctx.getValue(), t)}</span>,
+        cell: (ctx) => <span className="text-[var(--text-muted)]">{timeAgo(ctx.getValue(), t)}</span>,
       }),
     ],
     [t, clients], // clientName is derived from `clients`; rebuild when it changes
@@ -247,7 +247,7 @@ export default function AgentManagement() {
             type="button"
             onClick={() => setAutoRefresh((v) => !v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-mono ${
-              autoRefresh ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-white/10 text-white/50'
+              autoRefresh ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-[var(--border-default)] text-[var(--text-tertiary)]'
             }`}
           >
             <Radio className={`w-3 h-3 inline mr-1 ${autoRefresh ? 'animate-pulse' : ''}`} />
@@ -277,14 +277,14 @@ export default function AgentManagement() {
           </div>
         )}
 
-        <section className="rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-5 space-y-4">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-white/55">{t('agents.issue_token')}</h2>
+        <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 space-y-4">
+          <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>
           {err && <div className="text-[12px] font-mono text-rose-400">{err}</div>}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_140px_auto] gap-3">
             <select
               value={tokenClient}
               onChange={(e) => setTokenClient(e.target.value)}
-              className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
             >
               <option value="">{t('agents.select_client')}</option>
               {clients.map((c) => (
@@ -297,7 +297,7 @@ export default function AgentManagement() {
               max={1440}
               value={tokenValidity}
               onChange={(e) => setTokenValidity(e.target.value)}
-              className="bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white"
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
               placeholder={t('agents.validity_minutes')}
             />
             <button
@@ -319,7 +319,7 @@ export default function AgentManagement() {
           </div>
 
           {generatedToken && (
-            <div className="space-y-3 border-t border-white/10 pt-4">
+            <div className="space-y-3 border-t border-[var(--border-default)] pt-4">
               <TokenBlock
                 label={t('agents.token_one_time')}
                 value={generatedToken.enrollment_token}
@@ -340,13 +340,13 @@ export default function AgentManagement() {
               className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
                 statusFilter === f
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'border-white/10 text-white/45 hover:text-white/70'
+                  : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
               {t(`agents.filter_${f}`)}
             </button>
           ))}
-          <span className="text-[10px] font-mono text-white/35 ml-auto">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
             {t('agents.registered_count', { total: visibleAgents.length })}
           </span>
         </div>
@@ -359,8 +359,8 @@ export default function AgentManagement() {
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-          <section className="rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-5 overflow-hidden">
-            <h2 className="text-xs font-mono uppercase tracking-widest text-white/55 mb-3">{t('agents.registered_heading')}</h2>
+          <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 overflow-hidden">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)] mb-3">{t('agents.registered_heading')}</h2>
             {loading && agents.length === 0 ? (
               <SkeletonTable rows={4} cols={6} />
             ) : agents.length === 0 ? (
@@ -388,10 +388,10 @@ export default function AgentManagement() {
             )}
           </section>
 
-          <aside className="rounded-2xl bg-black/40 border border-white/10 p-5 min-h-[200px]">
-            <h3 className="text-xs font-mono uppercase tracking-widest text-white/45 mb-4">{t('agents.detail_heading')}</h3>
+          <aside className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5 min-h-[200px]">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">{t('agents.detail_heading')}</h3>
             {!selectedAgent ? (
-              <p className="text-xs text-white/35">{t('agents.detail_hint')}</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('agents.detail_hint')}</p>
             ) : (
               <div className="space-y-4 text-sm">
                 <div>
@@ -404,9 +404,9 @@ export default function AgentManagement() {
                 <DetailRow label={t('agents.version')} value={selectedAgent.agent_version || '—'} />
                 <DetailRow label={t('agents.last_seen')} value={timeAgo(selectedAgent.last_seen_at, t)} />
                 <div>
-                  <div className="text-[10px] font-mono uppercase text-white/35 mb-2">{t('agents.capabilities_heading')}</div>
+                  <div className="text-[10px] font-mono uppercase text-[var(--text-muted)] mb-2">{t('agents.capabilities_heading')}</div>
                   {(selectedAgent.capabilities || []).length === 0 ? (
-                    <span className="text-xs text-white/40">{t('agents.no_capabilities')}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{t('agents.no_capabilities')}</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {selectedAgent.capabilities.map((cap) => (
@@ -431,10 +431,10 @@ export default function AgentManagement() {
 
 function Kpi({ label, value, color, sub }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-      <div className="text-[10px] font-mono uppercase text-white/40">{label}</div>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+      <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{label}</div>
       <div className="text-2xl font-bold mt-1" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] font-mono text-white/30 mt-1">{sub}</div>}
+      {sub && <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-1">{sub}</div>}
     </div>
   )
 }
@@ -443,11 +443,11 @@ function TokenBlock({ label, value, hint }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[10px] uppercase font-mono text-white/45">{label}</div>
+        <div className="text-[10px] uppercase font-mono text-[var(--text-muted)]">{label}</div>
         <CopyButton value={value} label="Copy" />
       </div>
-      <code className="block bg-black/70 border border-white/10 rounded-lg p-3 text-xs font-mono text-emerald-300 break-all whitespace-pre-wrap">{value}</code>
-      {hint && <div className="text-[10px] text-white/40 mt-1">{hint}</div>}
+      <code className="block bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg p-3 text-xs font-mono text-emerald-300 break-all whitespace-pre-wrap">{value}</code>
+      {hint && <div className="text-[10px] text-[var(--text-muted)] mt-1">{hint}</div>}
     </div>
   )
 }
@@ -455,9 +455,9 @@ function TokenBlock({ label, value, hint }) {
 function DetailRow({ label, value, mono, copy }) {
   return (
     <div className="flex items-start justify-between gap-2">
-      <span className="text-[10px] font-mono uppercase text-white/35 shrink-0">{label}</span>
+      <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] shrink-0">{label}</span>
       <div className="flex items-center gap-1 min-w-0">
-        <span className={`text-xs text-white/75 truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
+        <span className={`text-xs text-[var(--text-secondary)] truncate ${mono ? 'font-mono' : ''}`}>{value}</span>
         {copy && <CopyButton value={value} />}
       </div>
     </div>

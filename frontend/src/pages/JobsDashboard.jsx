@@ -254,12 +254,12 @@ export default function JobsDashboard() {
       icon={<Briefcase className="w-5 h-5" />}
       actions={
         <>
-          <label className="flex items-center gap-2 text-[11px] font-mono text-white/55">
+          <label className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
+              className="w-3.5 h-3.5 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500 focus:ring-cyan-500/40"
             />
             {t('pages.jobsDashboard.auto_refresh')}
           </label>
@@ -278,7 +278,7 @@ export default function JobsDashboard() {
         </div>
 
         {lastUpdated && (
-          <p className="text-[11px] font-mono text-white/40">
+          <p className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.jobsDashboard.last_updated', {
               time: lastUpdated.toLocaleTimeString(i18n.language),
             })}
@@ -311,7 +311,7 @@ export default function JobsDashboard() {
                   className={`p-4 rounded-xl border text-center transition-all ${
                     statusFilter === status
                       ? 'border-cyan-500/40 bg-cyan-500/10 ring-1 ring-cyan-500/20'
-                      : 'border-white/10 bg-black/30 hover:border-white/20'
+                      : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
                   }`}
                 >
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
@@ -326,13 +326,13 @@ export default function JobsDashboard() {
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-[200px] max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
                 <input
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('pages.jobsDashboard.search_placeholder')}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-sm text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                 />
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -344,7 +344,7 @@ export default function JobsDashboard() {
                     className={`px-3 py-1.5 rounded-full text-[11px] font-mono border transition-all ${
                       statusFilter === key
                         ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
-                        : 'bg-white/5 text-white/50 border-white/10 hover:border-white/25'
+                        : 'bg-white/5 text-[var(--text-tertiary)] border-[var(--border-default)] hover:border-[var(--border-strong)]'
                     }`}
                   >
                     {t(`pages.jobsDashboard.filter_${key}`)}
@@ -384,7 +384,7 @@ export default function JobsDashboard() {
                   emptyFilteredMessage={t('pages.jobsDashboard.empty_filtered')}
                 />
 
-                <aside className="rounded-xl border border-white/10 bg-black/40 p-5 space-y-4 h-fit sticky top-4">
+                <aside className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 space-y-4 h-fit sticky top-4">
                   <h3 className="text-sm font-semibold text-white">
                     {selectedJob ? t('pages.jobsDashboard.detail_title') : t('pages.jobsDashboard.detail_empty')}
                   </h3>
@@ -396,22 +396,22 @@ export default function JobsDashboard() {
                       />
                       <div className="grid grid-cols-2 gap-3 text-[12px]">
                         <div>
-                          <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.jobsDashboard.col_kind')}</div>
-                          <div className="text-white/80 mt-0.5">{selectedJob.kind || selectedJob.type || '—'}</div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_kind')}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.kind || selectedJob.type || '—'}</div>
                         </div>
                         <div>
-                          <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.jobsDashboard.col_status')}</div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_status')}</div>
                           <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(selectedJob.status)}`}>
                             {normalizeJobStatus(selectedJob.status)}
                           </span>
                         </div>
                         <div>
-                          <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
-                          <div className="text-white/80 mt-0.5">{selectedJob.attempt_count ?? selectedJob.retries ?? 0}</div>
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.attempt_count ?? selectedJob.retries ?? 0}</div>
                         </div>
                         <div>
-                          <div className="text-[10px] font-mono text-white/40 uppercase">{t('pages.jobsDashboard.field_client')}</div>
-                          <div className="text-white/80 mt-0.5">
+                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_client')}</div>
+                          <div className="text-[var(--text-secondary)] mt-0.5">
                             {selectedJob.client_id != null ? (
                               <Link to={`/clients/${selectedJob.client_id}`} className="text-cyan-400 hover:underline">
                                 #{selectedJob.client_id}
@@ -429,7 +429,7 @@ export default function JobsDashboard() {
                       {selectedJob.worker_id && (
                         <CopyableField label={t('pages.jobsDashboard.field_worker')} value={selectedJob.worker_id} />
                       )}
-                      <div className="text-[11px] font-mono text-white/45 space-y-1">
+                      <div className="text-[11px] font-mono text-[var(--text-muted)] space-y-1">
                         <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(selectedJob.created_at)}</div>
                         <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(selectedJob.updated_at)}</div>
                         {selectedJob.heartbeat_at && (
@@ -448,7 +448,7 @@ export default function JobsDashboard() {
                       )}
                     </>
                   ) : (
-                    <p className="text-[12px] text-white/45">{t('pages.jobsDashboard.detail_hint')}</p>
+                    <p className="text-[12px] text-[var(--text-muted)]">{t('pages.jobsDashboard.detail_hint')}</p>
                   )}
                 </aside>
               </div>
