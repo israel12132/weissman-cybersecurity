@@ -31,6 +31,7 @@ export const NAV_GROUPS = [
     labelKey: 'nav.groups.command',
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
+      { to: '/overview', labelKey: 'nav.overview', icon: '▤' },
       { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
       { to: '/jobs', labelKey: 'nav.jobs', icon: '⏱' },
     ],
