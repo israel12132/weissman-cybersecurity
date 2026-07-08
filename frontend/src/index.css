@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap');
+/* Fonts are self-hosted — see public/fonts/fonts.css (loaded from index.html).
+   No third-party font requests (works under the strict CSP, offline, private). */
 @import './styles/tokens.css';
 
 @tailwind base;
