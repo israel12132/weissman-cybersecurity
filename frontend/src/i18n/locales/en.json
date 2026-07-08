@@ -2435,6 +2435,11 @@
     },
     "engineManagementConsole": {
       "title": "Engine Management Console",
+      "accounting_heading": "Engine Reality Accounting",
+      "acc_total_ids": "Advertised IDs",
+      "acc_distinct_canonical": "Distinct Implementations",
+      "acc_alias_ids": "Alias IDs",
+      "acc_remotely_detecting": "Remote-Detecting",
       "total_engines": "Total Engines",
       "enabled": "Enabled",
       "disabled": "Disabled",

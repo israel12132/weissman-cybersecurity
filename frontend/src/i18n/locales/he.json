@@ -2512,6 +2512,11 @@
     },
     "engineManagementConsole": {
       "title": "קונסולת ניהול מנועים",
+      "accounting_heading": "חשבונאות מציאות המנועים",
+      "acc_total_ids": "מזהים מפורסמים",
+      "acc_distinct_canonical": "מימושים נבדלים",
+      "acc_alias_ids": "מזהי כינוי",
+      "acc_remotely_detecting": "מזהים מרחוק",
       "total_engines": "סה״כ מנועים",
       "enabled": "מופעל",
       "disabled": "מושבת",

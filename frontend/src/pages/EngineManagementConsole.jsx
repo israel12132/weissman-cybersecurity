@@ -52,6 +52,7 @@ export default function EngineManagementConsole() {
   const [statusFilter, setStatusFilter] = useState('all'); // all, enabled, disabled
   const [selectedEngine, setSelectedEngine] = useState(null);
   const [configModal, setConfigModal] = useState(false);
+  const [accounting, setAccounting] = useState(null);
 
   // Engine categories from enginesRegistry.js
   const categories = [
@@ -74,6 +75,9 @@ export default function EngineManagementConsole() {
 
   useEffect(() => {
     fetchEngines();
+    // Engine reality-accounting — transparency on advertised IDs vs distinct
+    // real probe implementations. Wired to GET /api/engines/accounting.
+    api.get('/api/engines/accounting').then(setAccounting).catch(() => setAccounting(null));
   }, []);
 
   useEffect(() => {
@@ -248,6 +252,34 @@ export default function EngineManagementConsole() {
     >
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {accounting && (
+          <div className="rounded-xl border border-cyan-500/20 bg-[var(--bg-2)] p-4">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">
+              {t(`${NS}.accounting_heading`)}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { key: 'total_ids', value: accounting.total_ids, color: '#22d3ee' },
+                { key: 'distinct_canonical', value: accounting.distinct_canonical, color: '#4ade80' },
+                { key: 'alias_ids', value: accounting.alias_ids, color: '#a78bfa' },
+                { key: 'remotely_detecting', value: accounting.remotely_detecting, color: '#f97316' },
+              ].map(({ key, value, color }) => (
+                <div key={key}>
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">
+                    {t(`${NS}.acc_${key}`)}
+                  </div>
+                  <div className="text-xl font-bold tabular-nums" style={{ color }}>
+                    {value ?? '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {accounting.note && (
+              <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">{accounting.note}</p>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <>
