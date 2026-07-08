@@ -100,6 +100,81 @@ pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> bool {
     )
 }
 
+/// Set the live enable toggle (system config `self_improve_enabled`). Takes effect on
+/// the next hourly tick with no restart.
+pub async fn set_enabled(pool: &PgPool, tenant_id: i64, enabled: bool) -> Result<(), sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"INSERT INTO system_configs (tenant_id, key, value)
+           VALUES ($1, 'self_improve_enabled', $2)
+           ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value"#,
+    )
+    .bind(tenant_id)
+    .bind(if enabled { "true" } else { "false" })
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Configured interval in seconds (env `WEISSMAN_SELF_IMPROVE_INTERVAL_SECS`, default 3600).
+pub fn configured_interval_secs() -> u64 {
+    std::env::var("WEISSMAN_SELF_IMPROVE_INTERVAL_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(3600)
+        .max(300)
+}
+
+/// Status summary for the Command Center console: toggle state, interval, queue counts,
+/// and the last cycle time.
+pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
+    let enabled = is_enabled(pool, tenant_id).await;
+    let interval = configured_interval_secs();
+    let mut pending = 0i64;
+    let mut approved = 0i64;
+    let mut rejected = 0i64;
+    let mut applied = 0i64;
+    let mut last_cycle_at: Option<chrono::DateTime<chrono::Utc>> = None;
+    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
+        for (status, slot) in [
+            ("PENDING_APPROVAL", &mut pending),
+            ("APPROVED", &mut approved),
+            ("REJECTED", &mut rejected),
+            ("APPLIED", &mut applied),
+        ] {
+            *slot = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*)::bigint FROM system_improvement_queue WHERE tenant_id = $1 AND status = $2",
+            )
+            .bind(tenant_id)
+            .bind(status)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap_or(0);
+        }
+        last_cycle_at = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
+            "SELECT MAX(proposed_at) FROM system_improvement_queue WHERE tenant_id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let _ = tx.commit().await;
+    }
+    json!({
+        "enabled": enabled,
+        "interval_secs": interval,
+        "counts": {
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "applied": applied,
+        },
+        "last_cycle_at": last_cycle_at,
+    })
+}
+
 // ─── Queue operations (mirror council_hitl) ─────────────────────────────────────
 
 /// Insert a batch of proposals for one cycle. Returns the number inserted.
