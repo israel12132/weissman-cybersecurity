@@ -1106,14 +1106,6 @@ struct PipelineStateQuery {
     client_id: String,
 }
 
-/// Legacy shape for POST /api/system/configs: `[{ "key", "value" }]`. The handler also accepts `{ "configs": { ... } }`.
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct SystemConfigBody {
-    key: String,
-    value: String,
-}
-
 #[derive(Deserialize)]
 struct IdentityContextBody {
     role_name: String,

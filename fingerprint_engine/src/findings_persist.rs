@@ -429,7 +429,21 @@ pub async fn persist_engine_findings(
         } else {
             severity_to_score(&severity)
         };
-        let effective_risk = ((base_risk * conf_mult).min(10.0) * 10.0).round() / 10.0;
+        // Fold live exploit intel (already resolved above) into the platform's core priority
+        // score so a KEV-listed / high-EPSS finding outranks a theoretical one with the same CVSS.
+        let mut effective = base_risk * conf_mult;
+        if let Some(epss) = epss_score {
+            // EPSS = P(exploitation within 30d) ∈ [0,1]; boost up to +50%.
+            effective *= 1.0 + (epss as f64).clamp(0.0, 1.0) * 0.5;
+        }
+        if kev_listed {
+            // CISA KEV = known-exploited in the wild — never rank below high.
+            effective = effective.max(8.5);
+            if kev_known_ransomware {
+                effective = effective.max(9.5);
+            }
+        }
+        let effective_risk = (effective.min(10.0) * 10.0).round() / 10.0;
         let finding_verified = f.get("verified").and_then(Value::as_bool).unwrap_or(false)
             || f.get("verification_method")
                 .and_then(Value::as_str)
