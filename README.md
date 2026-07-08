@@ -8,8 +8,7 @@
 
 **Status:** Production-ready core. Self-serve signup is implemented behind an
 opt-in env flag. Billing integration (Paddle) is wired and gated by
-`WEISSMAN_BILLING_STRICT`. See [`docs/archive/`](docs/archive/) for historical
-design notes — every living doc is in the repo root or under `docs/`.
+`WEISSMAN_BILLING_STRICT`. Every living doc is in the repo root or under `docs/`.
 
 ---
 
@@ -133,7 +132,6 @@ via WSS+JWT, and on every dispatch ships:
 | [`SIG_CAIQ_PREP_QA.md`](SIG_CAIQ_PREP_QA.md) | Pre-filled SIG / CAIQ vendor security questionnaire |
 | [`CHANGELOG.md`](CHANGELOG.md) | Per-release changes (phase 1–3 of the autonomous-defence rollout) |
 | [`docs/SOC_ENGINES_ARCHITECTURE.md`](docs/SOC_ENGINES_ARCHITECTURE.md) | Engine wiring + dispatch path |
-| [`docs/archive/`](docs/archive/) | Historical design notes (24 archived audits / specs) |
 
 The interactive **OpenAPI spec** lives at <code>/api/docs/</code> (Swagger UI)
 with the raw 3.1 JSON at <code>/api/openapi.json</code>.
