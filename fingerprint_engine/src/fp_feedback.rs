@@ -12,7 +12,8 @@
 //!
 //! Public API:
 //!   * [`record_fp`] / [`record_tp`] — called from `api_findings_update_status`
-//!   * [`is_suppressed`] — called from `findings_persist::persist_engine_findings`
+//!   * [`active_suppressions_for_engine`] / [`bump_suppression_hits`] — the persist write path
+//!     preloads suppression rules once per `(tenant, engine)` and bumps hit-counts in one batch
 //!   * [`confidence_multiplier`] — called from `findings_persist` and the read API
 
 use sqlx::{PgPool, Postgres, Transaction};
@@ -117,50 +118,6 @@ pub async fn record_tp(
 
 /// Returns `true` if there's an active suppression matching this finding.
 /// Used by the persist path to silently mark new instances as FALSE_POSITIVE.
-pub async fn is_suppressed(
-    pool: &PgPool,
-    tenant_id: i64,
-    engine: &str,
-    signature_hash: &str,
-) -> bool {
-    if engine.is_empty() || signature_hash.is_empty() {
-        return false;
-    }
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
-    let row: Option<(i64,)> = sqlx::query_as(
-        r#"SELECT id FROM finding_suppressions
-            WHERE tenant_id = $1
-              AND engine = $2
-              AND signature_hash = $3
-              AND (expires_at IS NULL OR expires_at > now())
-            LIMIT 1"#,
-    )
-    .bind(tenant_id)
-    .bind(engine)
-    .bind(signature_hash)
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten();
-    if let Some((id,)) = row {
-        let _ = sqlx::query(
-            r#"UPDATE finding_suppressions
-                  SET hit_count = hit_count + 1, last_hit_at = now()
-                WHERE id = $1"#,
-        )
-        .bind(id)
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
-        true
-    } else {
-        let _ = tx.commit().await;
-        false
-    }
-}
-
 /// Confidence multiplier in `[0.1, 1.0]` derived from the FP/TP ratio.
 ///
 /// Formula: `(tp + 1) / (tp + fp + 1)` clamped to `[0.1, 1.0]` — a Bayesian
@@ -266,6 +223,75 @@ pub async fn confidence_multipliers_batch(
         out.insert((engine, sig), multiplier_from_counts(tp, fp));
     }
     out
+}
+
+/// Batch-load the set of **active** suppression signature-hashes for one `(tenant, engine)` in a
+/// single query. Replaces the per-finding [`is_suppressed`] call in the persist write path (which
+/// opened one tenant transaction + query *per finding* — an N+1 that, on a scan yielding hundreds
+/// of findings, cost hundreds of extra round-trips). All findings in a `persist_engine_findings`
+/// call share one engine, so we can resolve suppression once. Hit-count telemetry is applied
+/// separately via [`bump_suppression_hits`] inside the caller's existing transaction.
+pub async fn active_suppressions_for_engine(
+    pool: &PgPool,
+    tenant_id: i64,
+    engine: &str,
+) -> std::collections::HashSet<String> {
+    let mut out: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if engine.is_empty() {
+        return out;
+    }
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return out;
+    };
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT signature_hash FROM finding_suppressions
+            WHERE tenant_id = $1
+              AND engine = $2
+              AND (expires_at IS NULL OR expires_at > now())"#,
+    )
+    .bind(tenant_id)
+    .bind(engine)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+    for (sig,) in rows {
+        out.insert(sig);
+    }
+    out
+}
+
+/// Increment `hit_count` / `last_hit_at` for the suppression rules that matched findings this run,
+/// in one statement inside the caller's transaction. `signature_hashes` may contain duplicates —
+/// each rule is incremented by the number of findings it suppressed, exactly matching the per-row
+/// side effect that per-finding [`is_suppressed`] used to perform. No-op on an empty slice.
+pub async fn bump_suppression_hits(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    engine: &str,
+    signature_hashes: &[String],
+) {
+    if engine.is_empty() || signature_hashes.is_empty() {
+        return;
+    }
+    let _ = sqlx::query(
+        r#"UPDATE finding_suppressions f
+              SET hit_count = f.hit_count + c.n, last_hit_at = now()
+             FROM (
+                 SELECT sig, COUNT(*) AS n
+                   FROM unnest($3::text[]) AS sig
+                  GROUP BY sig
+             ) c
+            WHERE f.tenant_id = $1
+              AND f.engine = $2
+              AND f.signature_hash = c.sig
+              AND (f.expires_at IS NULL OR f.expires_at > now())"#,
+    )
+    .bind(tenant_id)
+    .bind(engine)
+    .bind(signature_hashes)
+    .execute(&mut **tx)
+    .await;
 }
 
 #[cfg(test)]

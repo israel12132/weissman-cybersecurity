@@ -268,6 +268,14 @@ pub async fn persist_engine_findings(
     .await
     .map_err(|e| format!("insert report_runs: {e}"))?;
 
+    // Resolve suppression rules ONCE for this (tenant, engine) rather than per finding. All
+    // findings in this call share `engine`, so a single query replaces the former per-finding
+    // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
+    // collected and their hit_count telemetry is bumped in one statement before commit.
+    let active_suppressions =
+        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine).await;
+    let mut suppression_hits: Vec<String> = Vec::new();
+
     let mut inserted: u64 = 0;
     for raw in findings.iter().cloned() {
         let Some(gated) = gate_finding(engine, target, raw) else {
@@ -461,16 +469,15 @@ pub async fn persist_engine_findings(
             }
         }
 
-        // If a suppression rule exists for this combo, demote to FALSE_POSITIVE
-        // before insert. We still persist (audit trail) but the inbox stays clean.
-        // We have to commit the existing tx to call is_suppressed (which opens its
-        // own short-lived tx); cheap because we restart immediately below.
-        let suppressed = fp_feedback::is_suppressed(pool, tenant_id, engine, &signature_hash).await;
+        // If a suppression rule exists for this combo, demote to FALSE_POSITIVE before insert. We
+        // still persist (audit trail) but the inbox stays clean. Membership is checked against the
+        // set preloaded once above (no per-finding round-trip); matched hashes get their hit_count
+        // bumped in a single statement before commit.
+        let suppressed = active_suppressions.contains(&signature_hash);
+        if suppressed {
+            suppression_hits.push(signature_hash.clone());
+        }
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
-
-        // Re-open the tx if it was committed during the suppression check. We
-        // keep one tx per finding for clean rollback semantics.
-        // (Implementation note: is_suppressed uses its own tx, so ours is still alive.)
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
@@ -725,6 +732,10 @@ pub async fn persist_engine_findings(
             .await;
         });
     }
+
+    // Bump hit_count telemetry for every suppression rule that matched this run, in one statement
+    // inside the batch transaction (replaces the per-finding UPDATE that is_suppressed used to do).
+    fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
 
