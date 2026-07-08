@@ -824,6 +824,10 @@
     "default_timeout": "Timeout ברירת מחדל (שניות)",
     "max_concurrency": "הרצה מקבילית מקסימלית"
   },
+  "scanStatus": {
+    "active": "סורק",
+    "active_hint": "סריקה אחת או יותר פועלות כעת (GET /api/scan/status)."
+  },
   "errors": {
     "loading_failed": "טעינה נכשלה: {{detail}}",
     "permission_denied": "אין לך הרשאה לבצע פעולה זו.",

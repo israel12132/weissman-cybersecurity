@@ -887,6 +887,10 @@
     "default_timeout": "Default Scan Timeout (seconds)",
     "max_concurrency": "Max Concurrency"
   },
+  "scanStatus": {
+    "active": "Scanning",
+    "active_hint": "One or more scans are running right now (GET /api/scan/status)."
+  },
   "errors": {
     "loading_failed": "Failed to load: {{detail}}",
     "permission_denied": "You don't have permission for this action.",

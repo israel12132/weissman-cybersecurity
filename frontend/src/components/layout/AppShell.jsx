@@ -7,6 +7,7 @@ import ProfileMenu from '../ui/ProfileMenu'
 import GlobalSearch from '../GlobalSearch'
 import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
+import ScanStatusIndicator from './ScanStatusIndicator'
 import { buildBreadcrumbs } from '../../lib/appNav'
 
 // Themeable via the --shell-bg token (flips with data-theme).
@@ -83,6 +84,7 @@ export default function AppShell({
               <div className="flex-1 min-w-0 mr-4">
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
+              <ScanStatusIndicator />
               <RateLimitStatus compact />
               <NotificationBell />
               <ProfileMenu />
