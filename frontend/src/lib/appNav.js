@@ -128,6 +128,7 @@ export const NAV_GROUPS = [
       { to: '/social-engineering', labelKey: 'nav.social_engineering', icon: '👥' },
       { to: '/alert-rules', labelKey: 'nav.alert_rules', icon: '🔔' },
       { to: '/containment-rules', labelKey: 'nav.containment_rules', icon: '🚧' },
+      { to: '/suppressions', labelKey: 'nav.suppressions', icon: '🙈' },
       { to: '/scan-scheduler', labelKey: 'nav.scan_scheduler', icon: '📅' },
     ],
   },

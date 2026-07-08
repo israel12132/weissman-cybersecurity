@@ -76,6 +76,7 @@ export const AttackCoverage = React.lazy(() => import('../pages/AttackCoverage.j
 export const SecurityPosture = React.lazy(() => import('../pages/SecurityPosture.jsx'))
 export const IocFeed = React.lazy(() => import('../pages/IocFeed.jsx'))
 export const UebaAnomalies = React.lazy(() => import('../pages/UebaAnomalies.jsx'))
+export const FindingSuppressions = React.lazy(() => import('../pages/FindingSuppressions.jsx'))
 export const ExecutiveOverview = React.lazy(() => import('../pages/ExecutiveOverview.jsx'))
 export const AgentManagement = React.lazy(() => import('../pages/AgentManagement'))
 export const DarkWebMonitor = React.lazy(() => import('../pages/DarkWebMonitor'))
