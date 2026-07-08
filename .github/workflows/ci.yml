@@ -92,6 +92,14 @@ jobs:
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104
 
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Run cargo deny (license + advisory + source provenance gate)
+        # Enforces the dependency-license allow-list (fails on GPL/AGPL/unknown),
+        # advisory policy, and crates.io-only sources. Config: deny.toml.
+        run: cargo deny check licenses advisories sources bans
+
       - name: Check Rust formatting
         run: cargo fmt --all --check
 
