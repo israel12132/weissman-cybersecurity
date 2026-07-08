@@ -75,6 +75,10 @@ struct JwtClaims {
 pub const WEISSMAN_COOKIE_NAME: &str = "weissman_token";
 
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+/// Verification keyring: current signing key first, then any rotated-out `WEISSMAN_JWT_SECRET_PREVIOUS`
+/// keys. Signing always uses the current key; verification accepts any key here so a rotated secret
+/// verifies tokens minted under the old one — zero-downtime JWT rotation.
+static JWT_VERIFY_KEYS: OnceLock<Vec<Vec<u8>>> = OnceLock::new();
 
 fn access_token_ttl_secs() -> i64 {
     std::env::var("WEISSMAN_ACCESS_TOKEN_MINUTES")
@@ -110,7 +114,53 @@ pub fn init_jwt_secret_from_env() -> Result<(), String> {
     }
     JWT_SECRET
         .set(trimmed.as_bytes().to_vec())
-        .map_err(|_| "WEISSMAN_JWT_SECRET: internal init race".to_string())
+        .map_err(|_| "WEISSMAN_JWT_SECRET: internal init race".to_string())?;
+
+    // Build the verification keyring: current key first, then any comma-separated
+    // WEISSMAN_JWT_SECRET_PREVIOUS keys (rotated out but still within their token TTL window).
+    let mut keys = vec![trimmed.as_bytes().to_vec()];
+    if let Ok(prev) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
+        for k in prev
+            .split(',')
+            .map(str::trim)
+            .filter(|k| !k.is_empty())
+            .map(|k| k.as_bytes().to_vec())
+        {
+            if !keys.contains(&k) {
+                keys.push(k);
+            }
+        }
+    }
+    let _ = JWT_VERIFY_KEYS.set(keys);
+    Ok(())
+}
+
+/// Verification keyring (current + rotated-out previous keys). Falls back to the single
+/// current secret when the keyring wasn't initialized (e.g. unit tests that set `JWT_SECRET` directly).
+fn verify_keys() -> Vec<Vec<u8>> {
+    if let Some(keys) = JWT_VERIFY_KEYS.get() {
+        return keys.clone();
+    }
+    let s = jwt_secret();
+    if s.is_empty() {
+        Vec::new()
+    } else {
+        vec![s.to_vec()]
+    }
+}
+
+/// Decode + validate claims, trying each verification key (current, then previous) in turn.
+/// Returns the first key that both verifies the signature and passes `validation`.
+fn decode_claims(token: &str, validation: &Validation) -> Option<JwtClaims> {
+    for key in verify_keys() {
+        if key.is_empty() {
+            continue;
+        }
+        if let Ok(d) = decode::<JwtClaims>(token, &DecodingKey::from_secret(&key), validation) {
+            return Some(d.claims);
+        }
+    }
+    None
 }
 
 pub fn jwt_secret() -> &'static [u8] {
@@ -337,88 +387,56 @@ pub fn verify_stream_context(auth: &AuthContext, client_ip: &str, tls_fp: Option
 }
 
 pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        return None;
-    }
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
-        .ok()
-        .and_then(|d| {
-            let c = d.claims;
-            if c.typ.as_deref() != Some("mfa_pending") {
-                return None;
-            }
-            auth_context_from_claims(c)
-        })
+    let c = decode_claims(token, &validation)?;
+    if c.typ.as_deref() != Some("mfa_pending") {
+        return None;
+    }
+    auth_context_from_claims(c)
 }
 
 /// Verify access JWT; rejects explicit refresh-type claims and expired tokens.
 /// Returns AuthContext on success, None on any verification failure.
 pub fn verify_access_token(token: &str) -> Option<AuthContext> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        tracing::warn!(
-            target: "auth_jwt",
-            "JWT secret empty — verify_access_token returning None"
-        );
-        return None;
-    }
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    match decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation) {
-        Ok(d) => {
-            let c = d.claims;
-            if matches!(
-                c.typ.as_deref(),
-                Some("refresh") | Some("mfa_pending") | Some("sse_ticket")
-            ) {
-                tracing::debug!(
-                    target: "auth_jwt",
-                    "Rejected refresh token used as access token"
-                );
-                return None;
-            }
-            let sub = c.sub;
-            let tid = c.tid;
-            let typ = c.typ.clone();
-            auth_context_from_claims(c).or_else(|| {
-                tracing::warn!(
-                    target: "auth_jwt",
-                    sub,
-                    tid,
-                    typ = ?typ,
-                    "Invalid JWT claims for access token"
-                );
-                None
-            })
-        }
-        Err(e) => {
-            // Log token verification failure for debugging
-            let token_preview: String = token.chars().take(20).collect();
-            tracing::debug!(
-                target: "auth_jwt",
-                error = %e,
-                token_preview = %token_preview,
-                "JWT verification failed"
-            );
-            None
-        }
+    let Some(c) = decode_claims(token, &validation) else {
+        let token_preview: String = token.chars().take(20).collect();
+        tracing::debug!(
+            target: "auth_jwt",
+            token_preview = %token_preview,
+            "JWT verification failed (no verification key matched)"
+        );
+        return None;
+    };
+    if matches!(
+        c.typ.as_deref(),
+        Some("refresh") | Some("mfa_pending") | Some("sse_ticket")
+    ) {
+        tracing::debug!(target: "auth_jwt", "Rejected refresh token used as access token");
+        return None;
     }
+    let sub = c.sub;
+    let tid = c.tid;
+    let typ = c.typ.clone();
+    auth_context_from_claims(c).or_else(|| {
+        tracing::warn!(
+            target: "auth_jwt",
+            sub,
+            tid,
+            typ = ?typ,
+            "Invalid JWT claims for access token"
+        );
+        None
+    })
 }
 
 /// Verified access JWT `(jti, exp)` for logout revocation. Legacy tokens without `jti` return `None`.
 pub fn access_token_revocation_info(token: &str) -> Option<(String, i64)> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        return None;
-    }
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    let c = decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
-        .ok()?
-        .claims;
+    let c = decode_claims(token, &validation)?;
     if matches!(
         c.typ.as_deref(),
         Some("refresh") | Some("mfa_pending") | Some("sse_ticket") | Some("agent")
@@ -443,22 +461,14 @@ pub fn is_user_access_context(ctx: &AuthContext) -> bool {
 
 /// Verify endpoint-agent session JWT (`typ: agent`). Rejects human user access tokens.
 pub fn verify_agent_session_token(token: &str) -> Option<AuthContext> {
-    let secret = jwt_secret();
-    if secret.is_empty() {
-        return None;
-    }
     let mut validation = Validation::default();
     validation.validate_exp = true;
-    decode::<JwtClaims>(token, &DecodingKey::from_secret(secret), &validation)
-        .ok()
-        .and_then(|d| {
-            let c = d.claims;
-            if c.typ.as_deref() != Some("agent") {
-                return None;
-            }
-            auth_context_from_claims(c)
-                .filter(|ctx| ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent"))
-        })
+    let c = decode_claims(token, &validation)?;
+    if c.typ.as_deref() != Some("agent") {
+        return None;
+    }
+    auth_context_from_claims(c)
+        .filter(|ctx| ctx.agent_id.is_some() && ctx.role.eq_ignore_ascii_case("agent"))
 }
 
 /// `Set-Cookie` for access token. Max-Age tracks JWT lifetime.
@@ -572,5 +582,31 @@ mod agent_token_tests {
             ctx.agent_id.as_deref(),
             Some("550e8400-e29b-41d4-a716-446655440000")
         );
+    }
+
+    #[test]
+    fn access_token_signed_with_unknown_key_is_rejected() {
+        // Keyring security invariant: a token signed with a key that is NOT in the
+        // verification keyring must never verify (rotation must not widen trust).
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let wrong = b"a-totally-different-secret-not-in-the-ring";
+        let now = chrono::Utc::now();
+        let claims = JwtClaims {
+            sub: 1,
+            tid: 10,
+            exp: (now + chrono::Duration::hours(1)).timestamp(),
+            iat: now.timestamp(),
+            typ: Some("access".to_string()),
+            role: Some("admin".to_string()),
+            is_superadmin: Some(false),
+            agent_id: None,
+            jti: Some("j".to_string()),
+            bind_ip: None,
+            bind_tls_fp: None,
+        };
+        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(wrong))
+            .expect("mint");
+        assert!(verify_access_token(&token).is_none());
     }
 }
