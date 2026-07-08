@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Server, RefreshCw, Radio, Zap } from 'lucide-react'
+import { Server, Radio, Zap } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import DataTable from '../components/ui/DataTable'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+
+const columnHelper = createColumnHelper()
 
 function timeAgo(iso, t) {
   if (!iso) return t('agents.never_seen')
@@ -166,6 +170,44 @@ export default function AgentManagement() {
   }, [agents, statusFilter])
 
   const clientName = (id) => clients.find((c) => String(c.id) === String(id))?.name || `#${id}`
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor((a) => (a.online ? 'online' : a.last_seen_at ? 'offline' : 'never'), {
+        id: 'status',
+        header: t('agents.col_status'),
+        cell: (ctx) => (
+          <StatusBadge online={ctx.row.original.online} last_seen_at={ctx.row.original.last_seen_at} t={t} />
+        ),
+      }),
+      columnHelper.accessor((a) => clientName(a.client_id), {
+        id: 'client',
+        header: t('agents.col_client'),
+        cell: (ctx) => <span className="text-white/70">{ctx.getValue()}</span>,
+      }),
+      columnHelper.accessor((a) => a.hostname || '', {
+        id: 'hostname',
+        header: t('agents.col_hostname'),
+        cell: (ctx) => <span className="text-white/85">{ctx.getValue() || '—'}</span>,
+      }),
+      columnHelper.accessor((a) => `${a.os || ''} / ${a.arch || ''}`, {
+        id: 'os',
+        header: t('agents.col_os'),
+        cell: (ctx) => <span className="text-white/60">{ctx.getValue()}</span>,
+      }),
+      columnHelper.accessor((a) => a.agent_version || '', {
+        id: 'version',
+        header: t('agents.version'),
+        cell: (ctx) => <span className="text-white/55">{ctx.getValue() || '—'}</span>,
+      }),
+      columnHelper.accessor((a) => a.last_seen_at || '', {
+        id: 'last_seen',
+        header: t('agents.last_seen'),
+        cell: (ctx) => <span className="text-white/45">{timeAgo(ctx.getValue(), t)}</span>,
+      }),
+    ],
+    [t, clients], // clientName is derived from `clients`; rebuild when it changes
+  )
 
   const listFindings = useMemo(() => agents.map((a) => ({
     id: a.agent_id || a.id,
@@ -333,36 +375,16 @@ export default function AgentManagement() {
             ) : visibleAgents.length === 0 ? (
               <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px] font-mono">
-                  <thead>
-                    <tr className="text-left text-white/45 border-b border-white/10">
-                      <th className="py-2 pr-3">{t('agents.col_status')}</th>
-                      <th className="py-2 pr-3">{t('agents.col_client')}</th>
-                      <th className="py-2 pr-3">{t('agents.col_hostname')}</th>
-                      <th className="py-2 pr-3">{t('agents.col_os')}</th>
-                      <th className="py-2 pr-3">{t('agents.version')}</th>
-                      <th className="py-2 pr-3">{t('agents.last_seen')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {visibleAgents.map((a) => (
-                      <tr
-                        key={a.agent_id}
-                        onClick={() => setSelectedAgent(a)}
-                        className={`hover:bg-white/[0.04] cursor-pointer ${selectedAgent?.agent_id === a.agent_id ? 'bg-emerald-500/5' : ''}`}
-                      >
-                        <td className="py-2 pr-3"><StatusBadge online={a.online} last_seen_at={a.last_seen_at} t={t} /></td>
-                        <td className="py-2 pr-3 text-white/70">{clientName(a.client_id)}</td>
-                        <td className="py-2 pr-3 text-white/85">{a.hostname}</td>
-                        <td className="py-2 pr-3 text-white/60">{a.os} / {a.arch}</td>
-                        <td className="py-2 pr-3 text-white/55">{a.agent_version || '—'}</td>
-                        <td className="py-2 pr-3 text-white/45">{timeAgo(a.last_seen_at, t)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                id="agents-table"
+                columns={columns}
+                data={visibleAgents}
+                onRowClick={(row) => setSelectedAgent(row.original)}
+                getRowId={(a) => a.agent_id}
+                selectedRowId={selectedAgent?.agent_id ?? null}
+                getRowAccentColor={(a) => (a.online ? '#34d399' : a.last_seen_at ? '#f87171' : undefined)}
+                animateRows={false}
+              />
             )}
           </section>
 
