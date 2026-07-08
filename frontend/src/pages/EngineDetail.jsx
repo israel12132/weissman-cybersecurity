@@ -327,6 +327,79 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
   )
 }
 
+/**
+ * Engine contract — MITRE ATT&CK mappings, evidence schema, and remediation
+ * playbook for a production engine. Wired to GET /api/engines/:id/contract
+ * (404s for non-production ids → panel shows an unavailable notice).
+ */
+function EngineContractPanel({ engineId }) {
+  const { t } = useTranslation()
+  const [contract, setContract] = useState(null)
+  const [state, setState] = useState('loading') // loading | ok | none
+
+  useEffect(() => {
+    let cancelled = false
+    setState('loading')
+    apiFetch(`/api/engines/${encodeURIComponent(engineId)}/contract`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}))
+        if (cancelled) return
+        if (r.ok && !d.error) {
+          setContract(d)
+          setState('ok')
+        } else {
+          setState('none')
+        }
+      })
+      .catch(() => { if (!cancelled) setState('none') })
+    return () => { cancelled = true }
+  }, [engineId])
+
+  if (state === 'loading') return <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('engines.contract_loading')}</p>
+  if (state === 'none' || !contract) return <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('engines.contract_unavailable')}</p>
+
+  const mitre = Array.isArray(contract.mitre_mapping) ? contract.mitre_mapping : []
+  const playbook = contract.remediation_playbook
+  return (
+    <div className="space-y-4">
+      {mitre.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('engines.contract_mitre')}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {mitre.map((m) => (
+              <a
+                key={m}
+                href={`https://attack.mitre.org/techniques/${String(m).replace('.', '/')}/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-mono px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-200/90 hover:bg-rose-500/20 transition-colors"
+              >
+                {m}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      {playbook && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('engines.contract_playbook')}</div>
+          <pre className="text-[11px] font-mono text-emerald-200/85 bg-[var(--bg-3)] rounded-lg p-3 overflow-auto max-h-64 leading-relaxed whitespace-pre-wrap break-words">
+            {typeof playbook === 'string' ? playbook : JSON.stringify(playbook, null, 2)}
+          </pre>
+        </div>
+      )}
+      {contract.evidence_schema && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('engines.contract_evidence')}</div>
+          <pre className="text-[10px] font-mono text-[var(--text-tertiary)] bg-[var(--bg-3)] rounded-lg p-3 overflow-auto max-h-56 leading-relaxed">
+            {JSON.stringify(contract.evidence_schema, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function EngineDetail() {
@@ -854,6 +927,7 @@ export default function EngineDetail() {
               { id:'output',   label: t('engines.live_output'),  badge: lines.length > 0 ? lines.length : null },
               { id:'findings', label: t('engines.findings_tab'), badge: findings.length > 0 ? findings.length : null },
               { id:'history',  label: t('engines.run_history'),  badge: runHistory.length > 0 ? runHistory.length : null },
+              { id:'contract', label: t('engines.contract_tab'), badge: null },
             ].map((tab) => (
               <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-[11px] font-mono uppercase tracking-widest transition-colors flex items-center gap-2 ${
@@ -898,6 +972,7 @@ export default function EngineDetail() {
                 : <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('engines.detail_no_findings')}</p>
             )}
             {activeTab === 'history'  && <RunHistoryPanel engineId={engineId} emptyLabel={t('engines.detail_no_history')} />}
+            {activeTab === 'contract' && <EngineContractPanel engineId={engineId} />}
           </div>
         </motion.section>
 
