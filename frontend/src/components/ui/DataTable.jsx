@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   useReactTable,
@@ -116,6 +116,22 @@ export default function DataTable({
   const effectiveGlobalFilter = globalFilterControlled ? globalFilter : internalGlobalFilter
   const [columnVisibility, setColumnVisibility] = useState({})
   const [colMenuOpen, setColMenuOpen] = useState(false)
+  const colMenuRef = useRef(null)
+
+  // Close the column-visibility menu on outside click / Escape.
+  useEffect(() => {
+    if (!colMenuOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setColMenuOpen(false) }
+    const onClick = (e) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setColMenuOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onClick)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onClick)
+    }
+  }, [colMenuOpen])
 
   const table = useReactTable({
     data: data ?? [],
@@ -206,7 +222,7 @@ export default function DataTable({
             </div>
           )}
           {columnToggle && (
-            <div className="relative">
+            <div className="relative" ref={colMenuRef}>
               <button
                 type="button"
                 onClick={() => setColMenuOpen((v) => !v)}
