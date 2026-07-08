@@ -576,7 +576,7 @@ export default function EngineDetail() {
       showToast('error', e?.message ?? 'Network error')
       setRunning(false)
     }
-  }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, showToast, resetFindings, addFinding, isProduction, t])
+  }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, clientIntegrations, showToast, resetFindings, addFinding, isProduction, t])
 
   const handleStop = useCallback(() => {
     if (esRef.current) { esRef.current.close(); esRef.current = null }

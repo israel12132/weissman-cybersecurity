@@ -32,8 +32,10 @@ export default function LiveFeed() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const timerRef = useRef(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts = {}) => {
     setError('')
+    // Manual refresh shows the spinner; the 15s poll refreshes silently.
+    if (!opts.silent) setLoading(true)
     try {
       const r = await apiFetch('/api/command-center/ticker')
       const d = await r.json().catch(() => ({}))
@@ -54,7 +56,7 @@ export default function LiveFeed() {
   // Live polling — suspended while paused.
   useEffect(() => {
     if (paused) return undefined
-    timerRef.current = setInterval(load, REFRESH_MS)
+    timerRef.current = setInterval(() => load({ silent: true }), REFRESH_MS)
     return () => clearInterval(timerRef.current)
   }, [paused, load])
 

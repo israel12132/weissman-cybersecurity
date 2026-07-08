@@ -172,6 +172,7 @@ export default function RiskGraphVisualization() {
   const [layout, setLayout] = useState('force');
   const canvasRef = useRef(null);
   const positionsRef = useRef([]);
+  const layoutSigRef = useRef('');
 
   useEffect(() => {
     if (clientLoading) return;
@@ -283,8 +284,19 @@ export default function RiskGraphVisualization() {
 
     if (!searchFilteredNodes.length) return;
 
-    const nodePositions = computeForceLayout(searchFilteredNodes, searchFilteredEdges, width, height, layout);
-    positionsRef.current = nodePositions;
+    // Cache positions by their real inputs so re-renders driven only by
+    // selection (selectedNode) reuse the layout instead of re-seeding the
+    // force simulation with fresh Math.random() — which made the graph
+    // visibly teleport on every node click.
+    const layoutSig = `${layout}|${width}x${height}|${searchFilteredNodes.map((n) => n.id).join(',')}|${searchFilteredEdges.length}`;
+    let nodePositions;
+    if (layoutSigRef.current === layoutSig && positionsRef.current.length) {
+      nodePositions = positionsRef.current;
+    } else {
+      nodePositions = computeForceLayout(searchFilteredNodes, searchFilteredEdges, width, height, layout);
+      positionsRef.current = nodePositions;
+      layoutSigRef.current = layoutSig;
+    }
     const posById = new Map(nodePositions.map((n) => [String(n.id), n]));
 
     searchFilteredEdges.forEach((edge) => {
