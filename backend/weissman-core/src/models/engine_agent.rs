@@ -13,7 +13,7 @@ pub const AGENT_REQUIRED_ENGINES: &[&str] = &[
     "log_tampering_engine",
     "timestomping",
     "anti_debug_evasion",
-    "rootkit_simulation",
+    "rootkit_surface_probe",
     "memory_forensics_evasion",
     "usb_enumeration",
     "dns_tunneling_c2",

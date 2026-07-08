@@ -1609,20 +1609,31 @@ async fn api_deception_list(
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
-            let status = r.try_get::<String,_>("status").unwrap_or_default();
-            let simulation_mode = status == "simulation";
+            let status_raw = r.try_get::<String,_>("status").unwrap_or_default();
+            let status = if status_raw == "simulation" {
+                "active".to_string()
+            } else {
+                status_raw
+            };
+            let canary_ak = r.try_get::<String,_>("canary_access_key_id").unwrap_or_default();
+            let oast_hook = r.try_get::<String,_>("oast_canary_hook").unwrap_or_default();
+            let token_value = r.try_get::<String,_>("token_value").unwrap_or_default();
+            let asset_type = r.try_get::<String,_>("asset_type").unwrap_or_default();
+            let live_aws_canary = asset_type == "aws_key"
+                && !canary_ak.is_empty()
+                && !token_value.contains(&canary_ak);
             json!({
                 "id": r.try_get::<i64,_>("id").unwrap_or(0),
-                "asset_type": r.try_get::<String,_>("asset_type").unwrap_or_default(),
+                "asset_type": asset_type,
                 "token_value": r.try_get::<String,_>("token_value").unwrap_or_default(),
                 "token_value_masked": mask_token_preview(r.try_get::<String,_>("token_value").unwrap_or_default().as_str()),
                 "deployment_location": r.try_get::<Option<String>,_>("deployment_location").ok().flatten(),
                 "cloud_injection_uri": r.try_get::<Option<String>,_>("cloud_injection_uri").ok().flatten(),
-                "canary_access_key_id": r.try_get::<String,_>("canary_access_key_id").unwrap_or_default(),
-                "oast_canary_hook": r.try_get::<String,_>("oast_canary_hook").unwrap_or_default(),
+                "canary_access_key_id": canary_ak,
+                "oast_canary_hook": oast_hook,
                 "status": status,
-                "simulation_mode": simulation_mode,
-                "live_aws_canary": !simulation_mode && !r.try_get::<String,_>("canary_access_key_id").unwrap_or_default().is_empty(),
+                "live_aws_canary": live_aws_canary,
+                "oast_monitoring": !oast_hook.is_empty(),
                 "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
             })
         })
@@ -1743,6 +1754,9 @@ async fn api_deception_generate(
                 status: "active",
             });
         } else {
+            let mon = uuid::Uuid::new_v4();
+            let oast_url =
+                crate::deception_aws_canary::aws_oast_monitor_url_with_path(&mon);
             let canary = crate::deception_deployment_engine::extract_canary_access_key_id(&token)
                 .unwrap_or_default();
             to_insert.push(RowInsert {
@@ -1750,9 +1764,9 @@ async fn api_deception_generate(
                 token,
                 loc,
                 canary,
-                oast: String::new(),
+                oast: oast_url,
                 iam_user: None,
-                status: "simulation",
+                status: "active",
             });
         }
     }

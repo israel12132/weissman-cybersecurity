@@ -277,7 +277,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "rdp_attack_engine",
     "ldap_injection_engine",
     "voip_sip_attack",
-    "ss7_attack_simulation",
+    "ss7_signaling_probe",
     "wifi_attack_engine",
     "bluetooth_attack_engine",
     "ospf_bgp_hijack",
@@ -311,7 +311,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "cognitive_starvation",
     "liquid_matrix",
     "sovereign_active_defense_fusion",
-    "adversarial_simulation",
+    "adversarial_threat_emulation",
     "dark_web_monitor",
     "passive_dns_forensics",
     // ── Advanced Social Engineering engines ──────────────────────────────────
@@ -418,7 +418,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "profinet_attack",
     "pypi_supply_chain",
     "ransomware_emulation",
-    "rootkit_simulation",
+    "rootkit_surface_probe",
     "rop_chain_engine",
     "s3_bucket_attack",
     "saml_advanced_attack",
@@ -829,7 +829,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "industrial_protocol_fuzz",
     "dll_hijacking_engine",
     "sandbox_evasion",
-    "rootkit_simulation",
+    "rootkit_surface_probe",
     "memory_forensics_evasion",
     "av_bypass_engine",
     "dns_tunneling_c2",
@@ -866,7 +866,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "snmp_exploitation",
     "rdp_attack_engine",
     "ldap_injection_engine",
-    "ss7_attack_simulation",
+    "ss7_signaling_probe",
     "wifi_attack_engine",
     "bluetooth_attack_engine",
     "ospf_bgp_hijack",
@@ -981,7 +981,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "liquid_matrix",
     "sovereign_active_defense_fusion",
     "cognitive_starvation",
-    "adversarial_simulation",
+    "adversarial_threat_emulation",
     "dark_web_monitor",
     "passive_dns_forensics",
     "network_baseline_anomaly",
@@ -1246,6 +1246,10 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
 #[must_use]
 pub fn resolve_engine_id(id: &str) -> &str {
     match id.trim() {
+        // Live-only renames (legacy *simulation* production IDs → live probe names).
+        "rootkit_simulation" => "rootkit_surface_probe",
+        "ss7_attack_simulation" => "ss7_signaling_probe",
+        "adversarial_simulation" => "adversarial_threat_emulation",
         // dedicated probe: graphql_deep_attack
         // dedicated probe: jwt_advanced_attack
         // dedicated probe: grpc_reflection_attack
@@ -1418,7 +1422,7 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "ipsec_vpn_audit" => "mpls_vpn_attack",
         "5g_security" | "network_slice_isolation_bypass" => "lte_5g_attack",
         "bluetooth_attack" => "bluetooth_attack_engine",
-        "telco_ss7_attack" => "ss7_attack_simulation",
+        "telco_ss7_attack" => "ss7_signaling_probe",
         "network_tap_implant" => "network_tap_advanced",
         "arp_spoofing" => "arp_spoofing_engine",
         "icmp_covert_channel" => "network_covert_channel",

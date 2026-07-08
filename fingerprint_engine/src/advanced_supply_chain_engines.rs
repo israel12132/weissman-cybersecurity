@@ -5,7 +5,7 @@
 //! manifest is published. If no public match is found, we emit no finding.
 
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, finding, http_client, http_get, normalize_url};
+use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get, normalize_url, tcp_open, tcp_scan};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
 
@@ -27,23 +27,49 @@ async fn registry_probe(
     if t.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    let pkg = t.trim().trim_start_matches('@');
+    let host_hint = extract_host(t);
+    let org_token = host_hint.split('.').next().unwrap_or("").to_ascii_lowercase();
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    let url = registry_url.replace("{}", &urlencoding::encode(t.trim()));
+    let url = registry_url.replace("{}", &urlencoding::encode(pkg));
     if let Some(p) = http_get(&client, &url).await {
+        if p.status == 404 {
+            return empty_ok(engine_id, t);
+        }
         if p.status == 200 {
-            findings.push(finding(
-                engine_id,
-                title,
-                "info",
-                mitre,
-                &format!(
-                    "Public registry record found at {} (HTTP 200, {} B).",
-                    p.final_url,
-                    p.body.len()
-                ),
-                t,
-            ));
+            let body_low = p.body.to_ascii_lowercase();
+            let mut severity = "info";
+            let mut notes = format!(
+                "Public registry record at {} (HTTP 200, {} B).",
+                p.final_url,
+                p.body.len()
+            );
+            if !org_token.is_empty() && pkg.to_ascii_lowercase() != org_token {
+                let dist = levenshtein_distance(&pkg.to_ascii_lowercase(), &org_token);
+                if dist > 0 && dist <= 3 {
+                    severity = "high";
+                    notes.push_str(&format!(
+                        " Package name '{pkg}' is {dist} edit(s) from org token '{org_token}' — typosquat/supply-chain impersonation risk."
+                    ));
+                } else if pkg.to_ascii_lowercase().contains(&org_token)
+                    && pkg.to_ascii_lowercase() != org_token
+                {
+                    severity = "medium";
+                    notes.push_str(&format!(
+                        " Package embeds org token '{org_token}' with extra characters — review for dependency confusion."
+                    ));
+                }
+            }
+            if body_low.contains("\"deprecated\"") || body_low.contains("security hold") {
+                severity = "medium";
+                notes.push_str(" Registry metadata flags deprecation or security hold.");
+            }
+            if body_low.contains("bitcoin") || body_low.contains("wallet") || body_low.contains("mnemonic") {
+                severity = "critical";
+                notes.push_str(" Registry README/metadata references crypto wallet strings — review for malicious package.");
+            }
+            findings.push(finding(engine_id, title, severity, mitre, &notes, t));
         }
     }
     if findings.is_empty() {
@@ -54,6 +80,39 @@ async fn registry_probe(
             format!("{}: {}", engine_id, findings.len()),
         )
     }
+}
+
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let m = a.len();
+    let n = b.len();
+    if m == 0 {
+        return n;
+    }
+    if n == 0 {
+        return m;
+    }
+    if m.abs_diff(n) > 6 {
+        return usize::MAX;
+    }
+    let mut dp = vec![vec![0usize; n + 1]; m + 1];
+    for (i, row) in dp.iter_mut().enumerate().take(m + 1) {
+        row[0] = i;
+    }
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
+    for i in 1..=m {
+        for j in 1..=n {
+            dp[i][j] = if a[i - 1] == b[j - 1] {
+                dp[i - 1][j - 1]
+            } else {
+                1 + dp[i - 1][j].min(dp[i][j - 1]).min(dp[i - 1][j - 1])
+            };
+        }
+    }
+    dp[m][n]
 }
 
 pub async fn run_npm_package_attack_result(t: &str) -> EngineResult {

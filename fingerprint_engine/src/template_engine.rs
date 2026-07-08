@@ -123,7 +123,7 @@ pub fn builtin_template_yaml(id: &str) -> Option<&'static str> {
     match id {
         "http_baseline" => Some(include_str!("../templates/http_baseline.yaml")),
         "reflected_xss_token" => Some(include_str!("../templates/reflected_xss_token.yaml")),
-        "multi_step_state_demo" => Some(include_str!("../templates/multi_step_state_demo.yaml")),
+        "multi_step_state_chain" => Some(include_str!("../templates/multi_step_state_chain.yaml")),
         _ => None,
     }
 }
@@ -133,7 +133,7 @@ fn builtin_templates() -> Vec<TemplateDoc> {
     for id in [
         "http_baseline",
         "reflected_xss_token",
-        "multi_step_state_demo",
+        "multi_step_state_chain",
     ] {
         if let Some(yaml) = builtin_template_yaml(id) {
             if let Ok(t) = serde_yaml::from_str::<TemplateDoc>(yaml) {

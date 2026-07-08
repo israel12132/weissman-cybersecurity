@@ -34,7 +34,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "dll_hijacking_engine",
         "process_inventory",
         "anti_debug_evasion",
-        "rootkit_simulation",
+        "rootkit_surface_probe",
         "memory_forensics_evasion",
         // persistence / malware
         "persistence_mechanism",
@@ -137,7 +137,7 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
                 Ok(findings)
             }
             "timestomping" => timestomp::run(&engine).await,
-            "anti_debug_evasion" | "rootkit_simulation" | "memory_forensics_evasion" => {
+            "anti_debug_evasion" | "rootkit_surface_probe" | "rootkit_simulation" | "memory_forensics_evasion" => {
                 process_modules::run_unusual_runtime(&engine).await
             }
             "usb_enumeration" => usb_devices::run(&engine).await,
@@ -200,7 +200,7 @@ mod tests {
         "log_tampering_engine",
         "timestomping",
         "anti_debug_evasion",
-        "rootkit_simulation",
+        "rootkit_surface_probe",
         "memory_forensics_evasion",
         "usb_enumeration",
         "dns_tunneling_c2",

@@ -2055,7 +2055,7 @@
       "evidence_notice": "מלאי cloud, פאנל posture K8s וסריקות multi-provider מ-POST /api/command-center/scan ו-scope מ-GET /api/clients. ממצאי Kubernetes דורשים credentials ל-cluster ב-scope או API servers נגישים."
     },
     "socialEngineering": {
-      "title": "סימולטור הנדסה חברתית",
+      "title": "מרכז שליטה — הנדסה חברתית",
       "subtitle": "הערכות פישינג מייל מממצאי טננט חיים והרצות מנוע spear_phishing",
       "active_campaigns": "קמפיינים פעילים",
       "total_campaigns": "סה״כ קמפיינים",
@@ -2674,45 +2674,45 @@
       "evidence_notice": "ממצאי SBOM, תלויות ו-typosquat מ-POST /api/command-center/scan (מנועי sbom_analyzer / typosquatting_monitor / supply_chain). שורות package ממופות לבדיקות registry שניתן לאמת."
     },
     "digitalTwinSimulator": {
-      "title": "סימולטור תאום דיגיטלי",
-      "badge": "APT / סימולציה",
-      "subtitle": "מידול נתיבי תקיפה בסביבה",
+      "title": "תאום דיגיטלי — בדיקות לייב",
+      "badge": "APT / LIVE",
+      "subtitle": "בדיקות נתיב תקיפה HTTP/TLS חיות מול יעדים מורשים",
       "client_label": "לקוח:",
       "select_client": "— בחר לקוח —",
-      "run_all": "▶ הפעל את כל הסימולציות",
+      "run_all": "▶ הפעל את כל הבדיקות",
       "select_client_first": "בחר לקוח תחילה",
       "no_domain": "ללקוח אין יעד דומיין מאושר",
-      "simulation_failed": "הסימולציה נכשלה",
-      "simulation_queued": "סימולציית תאום דיגיטלי בתור: {{jobId}}",
+      "simulation_failed": "הרצת הבדיקה נכשלה",
+      "simulation_queued": "בדיקת תאום דיגיטלי בתור: {{jobId}}",
       "env_profile": "פרופיל סביבה",
       "client_heading": "לקוח",
       "domains_heading": "דומיינים",
       "tech_stack_heading": "מחסנית טכנולוגית",
       "env_empty": "בחר לקוח כדי לטעון את פרופיל הסביבה שלו.",
-      "attack_simulations": "סימולציות נתיב תקיפה",
-      "simulating": "⟳ מסמל",
-      "simulate": "▶ סמל",
+      "attack_simulations": "בדיקות נתיב תקיפה חיות",
+      "simulating": "⟳ בודק",
+      "simulate": "▶ הרץ בדיקה",
       "vulnerable_paths": "פגיע — נמצאו {{count}} נתיבי תקיפה",
       "not_vulnerable": "לא נמצאו נתיבים נצילים",
-      "running_simulation": "מריץ סימולציה…",
-      "simulation_signals": "{{count}} אותות סימולציה",
-      "simulation_status": "סימולציה {{status}}",
+      "running_simulation": "מריץ בדיקה חיה…",
+      "simulation_signals": "{{count}} אותות בדיקה חיים",
+      "simulation_status": "בדיקה {{status}}",
       "scenarios": {
         "xss": {
           "label": "הזרקת XSS",
-          "description": "מדמה נתיבי XSS מוחזרים, מאוחסנים ו-DOM"
+          "description": "בדיקות XSS differential חיות — reflected, stored ו-DOM"
         },
         "sqli": {
           "label": "הזרקת SQL",
-          "description": "מדגם union, blind, time-based ו-OOB SQL injection"
+          "description": "בדיקות SQLi error-based חיות — union, blind, time-based ו-OOB"
         },
         "mitm": {
           "label": "MITM / הורדת TLS",
-          "description": "מדמה MITM דרך SSL stripping, הורדת cipher, עקיפת HSTS"
+          "description": "בדיקות transport חיות: SSL stripping, הורדת cipher, פערי HSTS"
         },
         "cors": {
           "label": "תצורת CORS שגויה",
-          "description": "מדגם חשיפת cross-origin דרך CORS מתירני ו-wildcard origins"
+          "description": "בדיקות cross-origin חיות דרך CORS מתירני ו-wildcard origins"
         }
       },
       "risk_critical": "קריטי",
@@ -2721,11 +2721,11 @@
       "risk_low": "נמוך",
       "status_pending": "רץ",
       "rerun": "הרץ שוב",
-      "not_run_hint": "הרץ את הסימולציה כדי למדל נתיבי תקיפה אמיתיים.",
-      "pending_status": "סימולציה רצה — תוצאה בהמתנה",
+      "not_run_hint": "הרץ בדיקות חיות כדי למפות נתיבי תקיפה אמיתיים מתצפיות HTTP.",
+      "pending_status": "בדיקה חיה רצה — תוצאה בהמתנה",
       "job_ref": "משימה {{jobId}}",
       "clear_results": "נקה תוצאות",
-      "overview_simulated": "סומלצו",
+      "overview_scenarios_completed": "בדיקות הושלמו",
       "overview_vulnerable": "פגיעים",
       "overview_clear": "ללא נתיבים",
       "overview_running": "רצים",
@@ -2763,7 +2763,7 @@
       "profile_stack": "מחסנית",
       "profile_cleartext": "HTTP cleartext",
       "profile_paths": "נתיבים שהתגלו",
-      "evidence_notice": "תרחישי digital twin משחזרים גרפי ממצאים מורשים ב-POST /api/command-center/scan (digital_twin). חישוב blast-radius משתמש ב-GET /api/financial-risk/:clientId כשיש קלט FAIR."
+      "evidence_notice": "כל תרחיש מבצע I/O רשת HTTP/TLS אמיתי דרך POST /api/command-center/scan (digital_twin). verdict 'נקי' = הבדיקות לא זיהו אות ניצול — לא דילוג. blast-radius מ-GET /api/financial-risk/:clientId כשיש קלט FAIR."
     },
     "exploitResearchLab": {
       "title": "מעבדת מחקר ניצול",
@@ -4762,6 +4762,8 @@
         "loading": "טוען…",
         "noAssets": "אין נכסי הטעיה. צור אסימונים, ואז פרוס ל-AWS למעלה.",
         "canaryAkia": "canary AKIA: {{id}}",
+        "liveOastBadge": "OAST חי",
+        "liveAwsBadge": "AWS חי",
         "refresh": "רענן"
       },
       "containmentRules": {

@@ -2403,8 +2403,8 @@
         "scope_ips"
       ]
     },
-    "ss7_attack_simulation": {
-      "id": "ss7_attack_simulation",
+    "ss7_signaling_probe": {
+      "id": "ss7_signaling_probe",
       "group": "network",
       "kind": "real_probe",
       "label": "SS7 Telecom Protocol Attack",
@@ -2751,8 +2751,8 @@
         "scope_domains"
       ]
     },
-    "adversarial_simulation": {
-      "id": "adversarial_simulation",
+    "adversarial_threat_emulation": {
+      "id": "adversarial_threat_emulation",
       "group": "recon",
       "kind": "real_probe",
       "label": "Full Adversarial Simulation Engine",
@@ -3815,8 +3815,8 @@
         "scope_domains"
       ]
     },
-    "rootkit_simulation": {
-      "id": "rootkit_simulation",
+    "rootkit_surface_probe": {
+      "id": "rootkit_surface_probe",
       "group": "stealth",
       "kind": "agent_required",
       "label": "Kernel Rootkit Simulation",

@@ -85,7 +85,7 @@ async fn chat_json(
     .await
 }
 
-const SYS_PROPOSER: &str = "You are DeepSeek-class offensive researcher. Given simulated attack-graph context, output ONE minified JSON only: chain_steps (string array), summary, estimated_severity (low|medium|high|critical). Authorized lab research. No prose outside JSON.";
+const SYS_PROPOSER: &str = "You are DeepSeek-class offensive researcher. Given live attack-graph path context from eternal fuzz feedback, output ONE minified JSON only: chain_steps (string array), summary, estimated_severity (low|medium|high|critical). Authorized lab research. No prose outside JSON.";
 
 const SYS_CRITIC: &str = "You are Mistral-class defender. Given an attack chain, output ONE minified JSON only: constraint_description, breaks_chain (boolean), mitigation_hint. Challenge feasibility and name defenses that block the chain. No prose outside JSON.";
 
