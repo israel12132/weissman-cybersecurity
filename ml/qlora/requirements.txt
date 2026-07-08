@@ -1,0 +1,10 @@
+# QLoRA fine-tuning stack (CUDA GPU required for training).
+# Export step only needs psycopg2-binary.
+psycopg2-binary>=2.9
+torch>=2.3
+transformers>=4.44
+datasets>=2.20
+peft>=0.12
+trl>=0.9
+bitsandbytes>=0.43
+accelerate>=0.33
