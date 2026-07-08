@@ -14,6 +14,7 @@ import { SkeletonTable } from './Skeleton'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
+const PAGE_SIZE_KEY = 'weissman_table_page_size'
 
 /** Case-insensitive substring match across every cell value of a row. */
 function fuzzyGlobalFilter(row, _columnId, value) {
@@ -103,12 +104,33 @@ export default function DataTable({
   toolbarTitle,
 }) {
   const defaultPageSize = pageSizes?.[0] ?? 25
-  const [internalPagination, setInternalPagination] = useState({
-    pageIndex: 0,
-    pageSize: defaultPageSize,
+  // Remember the user's rows-per-page across sessions (only affects uncontrolled
+  // pagination; a page passing its own `pagination` prop is untouched).
+  const [internalPagination, setInternalPagination] = useState(() => {
+    let stored = null
+    try {
+      stored = Number(localStorage.getItem(PAGE_SIZE_KEY))
+    } catch {
+      /* storage may be unavailable */
+    }
+    const pageSize = pageSizes?.includes(stored) ? stored : defaultPageSize
+    return { pageIndex: 0, pageSize }
   })
+  const persistingSetPagination = React.useCallback((updater) => {
+    setInternalPagination((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      if (next?.pageSize && next.pageSize !== prev.pageSize) {
+        try {
+          localStorage.setItem(PAGE_SIZE_KEY, String(next.pageSize))
+        } catch {
+          /* ignore */
+        }
+      }
+      return next
+    })
+  }, [])
   const effectivePagination = pagination ?? internalPagination
-  const effectiveOnPaginationChange = onPaginationChange ?? setInternalPagination
+  const effectiveOnPaginationChange = onPaginationChange ?? persistingSetPagination
 
   // Uncontrolled global filter (only when searchable and not externally driven).
   const [internalGlobalFilter, setInternalGlobalFilter] = useState('')
