@@ -139,9 +139,19 @@ export default function DataTable({
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-[var(--border)]">
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header) => {
+                  const sorted = header.column.getIsSorted()
+                  const ariaSort = header.column.getCanSort()
+                    ? sorted === 'asc'
+                      ? 'ascending'
+                      : sorted === 'desc'
+                        ? 'descending'
+                        : 'none'
+                    : undefined
+                  return (
                   <th
                     key={header.id}
+                    aria-sort={ariaSort}
                     style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                     className={`px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] select-none whitespace-nowrap ${
                       stickyHeader ? '' : 'relative'
@@ -160,7 +170,8 @@ export default function DataTable({
                       flexRender(header.column.columnDef.header, header.getContext())
                     )}
                   </th>
-                ))}
+                  )
+                })}
               </tr>
             ))}
           </thead>
