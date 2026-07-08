@@ -29,20 +29,49 @@ if (!probes.includes('icmp_echo_reachable')) {
   failures.push('engine_probes.rs missing icmp_echo_reachable live probe')
 }
 
-// Web — military vectors
+// Web — military vectors (Wave 1 complete — all 25 canonical web engines)
 const webChecks = [
   ['http2_attack', ['http1_client', 'http2_client', 'Connection']],
   ['api_gateway_bypass', ['probe_paths_concurrent', 'X-Original-URL']],
   ['api_rate_limit_bypass', ['X-Forwarded-For']],
   ['web_cache_poison_adv', ['X-Forwarded-Host']],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
+  ['graphql_deep_attack', ['probe_paths_concurrent', 'depth_bomb', 'introspection over GET']],
+  ['grpc_reflection_attack', ['grpc-web', 'grpc.reflection.v1']],
+  ['cors_misconfiguration', ['OPTIONS', 'null']],
+  ['swagger_abuse', ['probe_paths_concurrent', 'openapi']],
+  ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
+  ['odata_injection', ['$filter', 'probe_paths_concurrent']],
+  ['css_injection', ['weissman_css_probe', 'style-src']],
+  ['template_injection_adv', ['<%= 7*7 %>', '*{7*7}']],
+  ['http_parameter_pollution', ['semicolon', 'duplicate key']],
+  ['api_mass_assignment', ['permissions', 'scope']],
+  ['clickjacking_engine', ['/login', 'frame-ancestors']],
+  ['subdomain_takeover', ['Shopify', 'Netlify']],
+  ['graphql_subscription_attack', ['Upgrade', 'websocket']],
+  ['webrtc_attack', ['iceServers', 'probe_paths_concurrent']],
+  ['web3_dapp_attack', ['WalletConnect', 'probe_paths_concurrent']],
 ]
 for (const [engine, needles] of webChecks) {
-  const block = web.slice(web.indexOf(`run_${engine}_result`))
+  const idx = web.indexOf(`run_${engine}_result`)
+  if (idx < 0) {
+    failures.push(`web engine ${engine} missing from advanced_web_engines.rs`)
+    continue
+  }
+  const block = web.slice(idx, idx + 8000)
   for (const n of needles) {
     if (!block.includes(n)) {
       failures.push(`${engine} missing military probe pattern: ${n}`)
     }
+  }
+}
+
+// Strong engines — must use web_finding depth marker or delegate to deep canonical
+const webStrong = ['file_inclusion_rfi', 'deserialization_net', 'nosql_deep_injection']
+for (const engine of webStrong) {
+  const block = web.slice(web.indexOf(`run_${engine}_result`))
+  if (!block.includes('web_finding') && !block.includes('canary') && !block.includes('nosql_bypass')) {
+    failures.push(`${engine} missing deep probe markers`)
   }
 }
 

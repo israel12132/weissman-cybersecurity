@@ -42,6 +42,7 @@ const BATCHES = [
     ],
     acceptance: '≥5 probe vectors OR delegate to deep canonical; parallel path crawl; no header-only positives',
     target_tier: 'T4',
+    status: 'complete',
   },
   {
     id: 'cloud',

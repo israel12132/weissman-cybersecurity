@@ -6,8 +6,9 @@
 
 use crate::engine_probes::{
     empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
-    http1_client, http2_client, http_client, http_get, http_get_with_headers, http_post_json,
-    join_url, normalize_url, probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY, HttpProbe,
+    http1_client, http2_client, http_client, http_get, http_get_with_headers,
+    http_method_with_headers, http_post_json, join_url, normalize_url, probe_paths_concurrent,
+    DEFAULT_PROBE_CONCURRENCY, HttpProbe,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -52,13 +53,38 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
     let intro = serde_json::json!({"query":"{__schema{types{name fields{name}}}}"});
     let mutation_intro = serde_json::json!({"query":"{__schema{mutationType{name}}}"});
     let batch = serde_json::json!([{"query":"{__typename}"},{"query":"{__typename}"}]);
-    for path in [
+    let depth_bomb = serde_json::json!({"query":"{a{a{a{a{a{__typename}}}}}}"});
+    let alias_bomb = serde_json::json!({"query":"{q1:__typename q2:__typename q3:__typename q4:__typename q5:__typename q6:__typename q7:__typename q8:__typename}"});
+    let graphql_paths = [
         "/graphql",
         "/api/graphql",
         "/v1/graphql",
         "/query",
         "/api/v1/graphql",
-    ] {
+        "/gql",
+        "/api/gql",
+    ];
+
+    let path_probes = probe_paths_concurrent(&client, &base, &graphql_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in path_probes {
+        if p.status == 405 || p.status == 200 {
+            if p.body.to_ascii_lowercase().contains("graphql") {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "GraphQL endpoint surface discovered",
+                    "info",
+                    "T1190",
+                    &format!(
+                        "{} ({}) advertises GraphQL — enumerate introspection, batching, and depth limits.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
+        }
+    }
+
+    for path in graphql_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &intro).await {
             if p.status < 500 && p.body.contains("__schema") && p.body.contains("types") {
@@ -69,6 +95,26 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
                     "T1190",
                     &format!(
                         "GraphQL endpoint {} accepts __schema introspection (HTTP {}), exposing the full type graph to unauthenticated users.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
+        }
+        // GET-based introspection (some servers allow query string transport)
+        let get_intro = format!(
+            "{url}?query={}",
+            urlencoding::encode("{__schema{queryType{name}}}")
+        );
+        if let Some(p) = http_get(&client, &get_intro).await {
+            if p.status < 500 && p.body.contains("__schema") {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "GraphQL introspection over GET",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "GET introspection at {} (HTTP {}) — CSRF/log-based query exfiltration risk.",
                         p.final_url, p.status
                     ),
                     target,
@@ -105,6 +151,42 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
                 ));
             }
         }
+        if let Some(p) = http_post_json(&client, &url, &depth_bomb).await {
+            let body_low = p.body.to_ascii_lowercase();
+            if p.status < 500
+                && !body_low.contains("max depth")
+                && !body_low.contains("depth limit")
+                && !body_low.contains("too complex")
+                && p.body.contains("__typename")
+            {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "Deep nested query accepted (no depth limit)",
+                    "medium",
+                    "T1499",
+                    &format!(
+                        "Nested depth query accepted at {} (HTTP {}) — DoS/recursion abuse possible.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+            }
+        }
+        if let Some(p) = http_post_json(&client, &url, &alias_bomb).await {
+            if p.status < 500 && p.body.matches("__typename").count() >= 4 {
+                findings.push(web_finding(
+                    "graphql_deep_attack",
+                    "Alias-heavy query accepted",
+                    "low",
+                    "T1499",
+                    &format!(
+                        "Alias fan-out query accepted at {} — cost-limit bypass candidate.",
+                        p.final_url
+                    ),
+                    target,
+                ));
+            }
+        }
     }
     if findings.is_empty() {
         empty_ok("graphql_deep_attack", target)
@@ -128,7 +210,14 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     let grpc_paths = [
         "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+        "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
         "/grpc.health.v1.Health/Check",
+        "/grpc.health.v1.Health/Watch",
+        "/envoy.service.auth.v3.Authorization/Check",
+    ];
+    let grpc_headers = [
+        ("Content-Type", "application/grpc"),
+        ("TE", "trailers"),
     ];
     for path in grpc_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
@@ -136,7 +225,7 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
             &client,
             &url,
             &serde_json::json!({}),
-            &[("Content-Type", "application/grpc"), ("TE", "trailers")],
+            &grpc_headers,
         )
         .await
         {
@@ -157,6 +246,30 @@ pub async fn run_grpc_reflection_attack_result(target: &str) -> EngineResult {
             }
         }
     }
+
+    // grpc-web transport (common behind API gateways)
+    let web_paths = ["/grpc", "/api/grpc", "/grpc-web"];
+    let probes = probe_paths_concurrent(&client, &base, &web_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status < 500 {
+            let ct = header_value(&p.headers, "content-type").unwrap_or_default();
+            if ct.contains("application/grpc-web") || p.body.contains("grpc-status") {
+                findings.push(web_finding(
+                    "grpc_reflection_attack",
+                    "grpc-web transport detected",
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "{} ({}) — grpc-web may expose services without mTLS; enumerate protobuf services.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("grpc_reflection_attack", target)
     } else {
@@ -216,22 +329,26 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings: Vec<Value> = Vec::new();
     let evil_origin = format!("https://weissman-cors-probe.{}", host);
-    for (sent_origin, probe) in [
-        (None, http_get(&client, &url).await),
-        (
-            Some(evil_origin.as_str()),
-            http_get_with_headers(&client, &url, &[("Origin", evil_origin.as_str())]).await,
-        ),
-    ] {
+    let origins: [Option<&str>; 3] = [
+        None,
+        Some(evil_origin.as_str()),
+        Some("null"),
+    ];
+    for sent_origin in origins {
+        let probe = if let Some(o) = sent_origin {
+            http_get_with_headers(&client, &url, &[("Origin", o)]).await
+        } else {
+            http_get(&client, &url).await
+        };
         let Some(p) = probe else { continue };
         let Some(acao) = header_value(&p.headers, "access-control-allow-origin") else {
             continue;
         };
         let creds = has_header(&p.headers, "access-control-allow-credentials");
         if let Some((title, severity, detail)) =
-            cors_misconfiguration_signal(sent_origin, &acao, creds)
+            cors_misconfiguration_signal(sent_origin, acao, creds)
         {
-            findings.push(finding(
+            findings.push(web_finding(
                 "cors_misconfiguration",
                 title,
                 severity,
@@ -243,6 +360,36 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
                 target,
             ));
             break;
+        }
+    }
+
+    if let Some(p) = http_method_with_headers(
+        &client,
+        "OPTIONS",
+        &url,
+        None,
+        &[
+            ("Origin", evil_origin.as_str()),
+            ("Access-Control-Request-Method", "POST"),
+            ("Access-Control-Request-Headers", "Authorization, Content-Type"),
+        ],
+    )
+    .await
+    {
+        let acao = header_value(&p.headers, "access-control-allow-origin").unwrap_or_default();
+        let acam = header_value(&p.headers, "access-control-allow-methods").unwrap_or_default();
+        if !acao.is_empty() && acam.contains("POST") {
+            findings.push(web_finding(
+                "cors_misconfiguration",
+                "Preflight allows cross-origin POST",
+                "high",
+                "T1185",
+                &format!(
+                    "OPTIONS {} → ACAO='{acao}' ACAM='{acam}' — credentialed cross-site writes may be permitted.",
+                    p.final_url
+                ),
+                target,
+            ));
         }
     }
     if findings.is_empty() {
@@ -368,29 +515,37 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
         "/swagger-ui.html",
         "/swagger/index.html",
         "/api/swagger.json",
+        "/api/openapi.json",
+        "/docs/openapi.json",
+        "/redoc",
+        "/api/swagger-ui/",
     ];
     let mut findings: Vec<Value> = Vec::new();
-    for path in paths {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = http_get(&client, &url).await {
-            let body_low = p.body.to_ascii_lowercase();
-            if p.status == 200
-                && (body_low.contains("swagger")
-                    || body_low.contains("openapi")
-                    || body_low.contains("\"paths\""))
-            {
-                findings.push(finding(
-                    "swagger_abuse",
-                    "Exposed Swagger/OpenAPI spec",
-                    "medium",
-                    "T1190",
-                    &format!(
-                        "Public OpenAPI document at {} (HTTP {}) — leaks routes, params, auth schemes.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
-            }
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        let body_low = p.body.to_ascii_lowercase();
+        if p.status == 200
+            && (body_low.contains("swagger")
+                || body_low.contains("openapi")
+                || body_low.contains("\"paths\""))
+        {
+            let has_auth = body_low.contains("securityschemes")
+                || body_low.contains("bearer")
+                || body_low.contains("oauth2");
+            findings.push(web_finding(
+                "swagger_abuse",
+                "Exposed Swagger/OpenAPI spec",
+                if has_auth { "medium" } else { "high" },
+                "T1190",
+                &format!(
+                    "Public OpenAPI document at {} (HTTP {}) — leaks routes, params{}.",
+                    p.final_url,
+                    p.status,
+                    if has_auth { ", and auth schemes" } else { "" }
+                ),
+                target,
+            ));
+            break;
         }
     }
     if findings.is_empty() {
@@ -417,32 +572,68 @@ pub async fn run_soap_injection_result(target: &str) -> EngineResult {
         "/soap?wsdl",
         "/axis2/services/listServices",
         "/service.asmx?WSDL",
+        "/soap",
+        "/ws",
     ];
     let mut findings: Vec<Value> = Vec::new();
-    for path in paths {
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status == 200 && (p.body.contains("<wsdl:") || p.body.contains("<definitions")) {
+            findings.push(web_finding(
+                "soap_injection",
+                "Public SOAP/WSDL surface",
+                "medium",
+                "T1190",
+                &format!(
+                    "WSDL document accessible at {} (HTTP {}) — review parameters for XML/SOAP injection.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
+    let xxe_envelope = r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "weissman_xxe_probe">]><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><probe>&xxe;</probe></soap:Body></soap:Envelope>"#;
+    for path in ["/soap", "/ws", "/services", "/service.asmx"] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && (p.body.contains("<wsdl:") || p.body.contains("<definitions")) {
-                findings.push(finding(
+        if let Some(p) = crate::engine_probes::http_post_bytes_with_headers(
+            &client,
+            &url,
+            xxe_envelope.as_bytes(),
+            &[
+                ("Content-Type", "text/xml"),
+                ("SOAPAction", "probe"),
+            ],
+        )
+        .await
+        {
+            if p.body.contains("weissman_xxe_probe")
+                || p.body.to_ascii_lowercase().contains("entity")
+                || p.body.to_ascii_lowercase().contains("doctype")
+            {
+                findings.push(web_finding(
                     "soap_injection",
-                    "Public SOAP/WSDL surface",
-                    "medium",
+                    "SOAP endpoint may resolve external entities (XXE signal)",
+                    "high",
                     "T1190",
                     &format!(
-                        "WSDL document accessible at {} (HTTP {}) — review parameters for XML/SOAP injection.",
+                        "POST {} returned XXE-related response (HTTP {}) — disable DTD/entity expansion.",
                         p.final_url, p.status
                     ),
                     target,
                 ));
+                break;
             }
         }
     }
+
     if findings.is_empty() {
         empty_ok("soap_injection", target)
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("soap_injection: {} WSDL(s)", findings.len()),
+            format!("soap_injection: {} WSDL/signal(s)", findings.len()),
         )
     }
 }
@@ -456,15 +647,16 @@ pub async fn run_odata_injection_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    for path in [
+    let meta_paths = [
         "/odata/$metadata",
         "/api/odata/$metadata",
         "/odata/v4/$metadata",
-    ] {
+    ];
+    for path in meta_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
             if p.status == 200 && (p.body.contains("<edmx:") || p.body.contains("EntityType")) {
-                findings.push(finding(
+                findings.push(web_finding(
                     "odata_injection",
                     "Exposed OData metadata",
                     "medium",
@@ -478,6 +670,34 @@ pub async fn run_odata_injection_result(target: &str) -> EngineResult {
             }
         }
     }
+
+    let filter_probes = [
+        "/odata/Users?$filter=1 eq 1",
+        "/api/odata/Accounts?$filter='' eq ''",
+        "/odata/v4/Products?$filter=true",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &filter_probes, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status == 200
+            && (p.body.contains("\"value\"")
+                || p.body.contains("EntitySet")
+                || p.body.contains("@odata.context"))
+        {
+            findings.push(web_finding(
+                "odata_injection",
+                "OData $filter accepted without auth gate",
+                "high",
+                "T1190",
+                &format!(
+                    "{} returned OData collection (HTTP {}) — injection/filter bypass may leak records.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("odata_injection", target)
     } else {
@@ -495,12 +715,12 @@ pub async fn run_css_injection_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
+    if let Some(p) = http_get(&client, &base).await {
         let csp = header_value(&p.headers, "content-security-policy").unwrap_or("");
         if css_injection_csp_weak(csp) {
-            findings.push(finding(
+            findings.push(web_finding(
                 "css_injection",
                 "Permissive style-src enables CSS injection",
                 "medium",
@@ -512,7 +732,42 @@ pub async fn run_css_injection_result(target: &str) -> EngineResult {
                 target,
             ));
         }
+        if p.body.contains("@import") || p.body.contains("url(") {
+            findings.push(web_finding(
+                "css_injection",
+                "Page embeds dynamic CSS import/url()",
+                "low",
+                "T1185",
+                &format!(
+                    "{} references @import/url() — attacker-controlled stylesheets can exfiltrate attribute values.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
     }
+
+    let css_payload = "weissman_css_probe%7bbackground%3aurl%28%2f%2fevil%2f%29%7d";
+    for param in ["style", "css", "theme", "color", "q"] {
+        let url = format!("{}/?{}={}", base.trim_end_matches('/'), param, css_payload);
+        if let Some(p) = http_get(&client, &url).await {
+            if p.body.contains("weissman_css_probe") || p.body.contains("url(/evil/)") {
+                findings.push(web_finding(
+                    "css_injection",
+                    &format!("Reflected CSS in parameter '{param}'"),
+                    "medium",
+                    "T1185",
+                    &format!(
+                        "?{param}= on {} reflects attacker CSS — attribute-selector exfiltration possible.",
+                        p.final_url
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("css_injection", target)
     } else {
@@ -532,7 +787,14 @@ pub async fn run_template_injection_adv_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    let payloads = [("{{7*7}}", "49"), ("${7*7}", "49"), ("#{7*7}", "49")];
+    let payloads = [
+        ("{{7*7}}", "49"),
+        ("${7*7}", "49"),
+        ("#{7*7}", "49"),
+        ("<%= 7*7 %>", "49"),
+        ("*{7*7}", "49"),
+        ("${{7*7}}", "49"),
+    ];
     let params = ["q", "search", "name", "template", "page"];
     'outer: for param in params {
         for (payload, expected) in payloads {
@@ -581,27 +843,60 @@ pub async fn run_http_parameter_pollution_result(target: &str) -> EngineResult {
     }
     let client = http_client().await;
     let base = normalize_url(target);
-    let single = format!("{}/?a=1", base.trim_end_matches('/'));
-    let polluted = format!("{}/?a=1&a=2&a=3", base.trim_end_matches('/'));
     let mut findings: Vec<Value> = Vec::new();
-    if let (Some(p1), Some(p2)) = (
-        http_get(&client, &single).await,
-        http_get(&client, &polluted).await,
-    ) {
-        if p1.status != p2.status || (p1.body.len() as i64 - p2.body.len() as i64).abs() > 64 {
-            findings.push(finding(
-                "http_parameter_pollution",
-                "Differential response to duplicated query params",
-                "medium",
-                "T1190",
-                &format!(
-                    "?a=1 → HTTP {} ({} B); ?a=1&a=2&a=3 → HTTP {} ({} B). Backend may concatenate or pick-last/first inconsistently.",
-                    p1.status, p1.body.len(), p2.status, p2.body.len()
-                ),
-                target,
-            ));
+
+    let variants: [(&str, &str, &str); 4] = [
+        ("duplicate_query", "?a=1", "?a=1&a=2&a=3"),
+        ("semicolon", "?a=1;b=2", "?a=1;a=2;a=3"),
+        ("bracket", "?a[]=1", "?a[]=1&a[]=2&a[]=3"),
+        ("encoded_dup", "?a=1", "?a=1%26a=2"),
+    ];
+    for (label, single_q, polluted_q) in variants {
+        let single = format!("{}{}", base.trim_end_matches('/'), single_q);
+        let polluted = format!("{}{}", base.trim_end_matches('/'), polluted_q);
+        if let (Some(p1), Some(p2)) = (
+            http_get(&client, &single).await,
+            http_get(&client, &polluted).await,
+        ) {
+            if p1.status != p2.status || (p1.body.len() as i64 - p2.body.len() as i64).abs() > 64 {
+                findings.push(web_finding(
+                    "http_parameter_pollution",
+                    &format!("HPP differential ({label})"),
+                    "medium",
+                    "T1190",
+                    &format!(
+                        "{single_q} → HTTP {} ({} B); {polluted_q} → HTTP {} ({} B). Backend may concatenate or pick-last/first inconsistently.",
+                        p1.status, p1.body.len(), p2.status, p2.body.len()
+                    ),
+                    target,
+                ));
+                break;
+            }
         }
     }
+
+    for path in ["/api/search", "/search", "/api/users"] {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        let payload = serde_json::json!({"role": "user", "role": "admin"});
+        if let Some(p) = http_post_json(&client, &url, &payload).await {
+            let body_low = p.body.to_ascii_lowercase();
+            if body_low.contains("\"role\":\"admin\"") || body_low.contains("'role': 'admin'") {
+                findings.push(web_finding(
+                    "http_parameter_pollution",
+                    "JSON duplicate key may elevate privilege field",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "POST {} with duplicate JSON keys echoed admin role (HTTP {}).",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("http_parameter_pollution", target)
     } else {
@@ -632,7 +927,13 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
         "/account",
     ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        let payload = serde_json::json!({"is_admin": true, "role": "admin"});
+        let payload = serde_json::json!({
+            "is_admin": true,
+            "role": "admin",
+            "admin": true,
+            "permissions": ["*"],
+            "scope": "admin"
+        });
         if let Some(p) = crate::engine_probes::http_post_json(&client, &url, &payload).await {
             let body_low = p.body.to_ascii_lowercase();
             if (200..300).contains(&p.status)
@@ -746,26 +1047,48 @@ pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        let xfo = header_value(&p.headers, "x-frame-options").unwrap_or("");
-        let csp = header_value(&p.headers, "content-security-policy").unwrap_or("");
-        let csp_frame = csp.contains("frame-ancestors");
-        if xfo.is_empty() && !csp_frame {
-            findings.push(finding(
-                "clickjacking_engine",
-                "No X-Frame-Options or frame-ancestors CSP",
-                "medium",
-                "T1185",
-                &format!(
-                    "{} can be iframed (no XFO, no frame-ancestors).",
-                    p.final_url
-                ),
-                target,
-            ));
+
+    let sensitive_paths = ["", "/login", "/signin", "/auth", "/account", "/checkout"];
+    for path in sensitive_paths {
+        let url = if path.is_empty() {
+            base.clone()
+        } else {
+            format!("{}{}", base.trim_end_matches('/'), path)
+        };
+        if let Some(p) = http_get(&client, &url).await {
+            let xfo = header_value(&p.headers, "x-frame-options").unwrap_or_default();
+            let csp = header_value(&p.headers, "content-security-policy").unwrap_or_default();
+            let csp_frame = csp.contains("frame-ancestors");
+            let xfo_ok = xfo.eq_ignore_ascii_case("DENY")
+                || xfo.eq_ignore_ascii_case("SAMEORIGIN")
+                || csp.contains("frame-ancestors 'none'")
+                || csp_frame;
+            if !xfo_ok {
+                let is_sensitive = !path.is_empty()
+                    || p.body.to_ascii_lowercase().contains("password")
+                    || p.body.to_ascii_lowercase().contains("login");
+                findings.push(web_finding(
+                    "clickjacking_engine",
+                    if is_sensitive {
+                        "Sensitive page lacks clickjacking defenses"
+                    } else {
+                        "No X-Frame-Options or frame-ancestors CSP"
+                    },
+                    if is_sensitive { "high" } else { "medium" },
+                    "T1185",
+                    &format!(
+                        "{} can be iframed (XFO='{xfo}', frame-ancestors={csp_frame}).",
+                        p.final_url
+                    ),
+                    target,
+                ));
+                break;
+            }
         }
     }
+
     if findings.is_empty() {
         empty_ok("clickjacking_engine", target)
     } else {
@@ -798,6 +1121,11 @@ pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
             ("trying to access your account", "Tilda"),
             ("fastly error: unknown domain", "Fastly"),
             ("the request could not be satisfied", "CloudFront"),
+            ("is not a registered", "Azure"),
+            ("unconfigured", "Fly.io"),
+            ("domain is not configured", "Netlify"),
+            ("this shop is unavailable", "Shopify"),
+            ("help.instagram.com", "Instagram"),
         ];
         for (sig, vendor) in signatures {
             if body_low.contains(sig) {
@@ -1219,12 +1547,15 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let sub_query = serde_json::json!({"query":"subscription { __typename }"});
-    for path in [
+    let ws_paths = [
         "/graphql",
         "/api/graphql",
         "/subscriptions",
         "/api/subscriptions",
-    ] {
+        "/graphql/ws",
+        "/api/graphql/stream",
+    ];
+    for path in ws_paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &sub_query).await {
             let body_low = p.body.to_ascii_lowercase();
@@ -1259,6 +1590,39 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
                 ));
             }
         }
+        if let Some(p) = http_method_with_headers(
+            &client,
+            "GET",
+            &url,
+            None,
+            &[
+                ("Connection", "Upgrade"),
+                ("Upgrade", "websocket"),
+                ("Sec-WebSocket-Version", "13"),
+                ("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ=="),
+            ],
+        )
+        .await
+        {
+            if p.status == 101
+                || header_value(&p.headers, "upgrade")
+                    .map(|u| u.to_ascii_lowercase().contains("websocket"))
+                    .unwrap_or(false)
+            {
+                findings.push(web_finding(
+                    "graphql_subscription_attack",
+                    "WebSocket upgrade accepted on GraphQL path",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "GET {} returned HTTP {} with Upgrade:websocket — live subscription streams may lack auth.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
     }
     if findings.is_empty() {
         empty_ok("graphql_subscription_attack", target)
@@ -1280,23 +1644,67 @@ pub async fn run_webrtc_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        if p.body.contains("RTCPeerConnection") || p.body.contains("getUserMedia") {
-            let perms = header_value(&p.headers, "permissions-policy").unwrap_or("");
+
+    if let Some(p) = http_get(&client, &base).await {
+        let body = &p.body;
+        let has_rtc = body.contains("RTCPeerConnection")
+            || body.contains("getUserMedia")
+            || body.contains("webkitRTCPeerConnection");
+        if has_rtc {
+            let perms = header_value(&p.headers, "permissions-policy").unwrap_or_default();
             if !perms.contains("camera") && !perms.contains("microphone") {
-                findings.push(finding(
+                findings.push(web_finding(
                     "webrtc_attack",
                     "WebRTC code without Permissions-Policy hardening",
-                    "low",
+                    "medium",
                     "T1185",
-                    &format!("{} uses WebRTC APIs but Permissions-Policy is missing for camera/microphone.", p.final_url),
+                    &format!(
+                        "{} uses WebRTC APIs but Permissions-Policy is missing for camera/microphone.",
+                        p.final_url
+                    ),
                     target,
                 ));
             }
         }
+        if body.contains("stun:") || body.contains("turn:") || body.contains("iceServers") {
+            findings.push(web_finding(
+                "webrtc_attack",
+                "STUN/TURN ICE servers exposed in page",
+                "medium",
+                "T1185",
+                &format!(
+                    "{} embeds ICE server configuration — review for credential leakage and SSRF via TURN.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
     }
+
+    let rtc_paths = ["/webrtc", "/api/webrtc", "/call", "/video", "/rtc"];
+    let probes = probe_paths_concurrent(&client, &base, &rtc_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status < 400 {
+            let b = p.body.to_ascii_lowercase();
+            if b.contains("rtcpeerconnection") || b.contains("getusermedia") || b.contains("iceservers") {
+                findings.push(web_finding(
+                    "webrtc_attack",
+                    "WebRTC surface on dedicated path",
+                    "medium",
+                    "T1185",
+                    &format!(
+                        "{} ({}) — WebRTC signaling endpoint may leak media permissions or TURN creds.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("webrtc_attack", target)
     } else {
@@ -1314,20 +1722,75 @@ pub async fn run_web3_dapp_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        if p.body.contains("window.ethereum") || p.body.contains("web3.eth") {
-            findings.push(finding(
+
+    if let Some(p) = http_get(&client, &base).await {
+        let body = &p.body;
+        if body.contains("window.ethereum")
+            || body.contains("web3.eth")
+            || body.contains("WalletConnect")
+            || body.contains("ethers.")
+        {
+            findings.push(web_finding(
                 "web3_dapp_attack",
                 "Web3/dApp surface detected in DOM",
                 "info",
                 "T1190",
-                &format!("{} references window.ethereum / web3.eth — review wallet/transaction flows for replay and phishing.", p.final_url),
+                &format!(
+                    "{} references wallet/provider APIs — review transaction signing, chainId validation, and phishing.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
+        if body.contains("chainId") && body.contains("0x") {
+            findings.push(web_finding(
+                "web3_dapp_attack",
+                "chainId configuration exposed client-side",
+                "low",
+                "T1190",
+                &format!(
+                    "{} exposes chainId in client bundle — verify network mismatch and replay protections.",
+                    p.final_url
+                ),
                 target,
             ));
         }
     }
+
+    let web3_paths = [
+        "/api/nft",
+        "/api/mint",
+        "/api/web3",
+        "/wallet",
+        "/connect",
+        "/.well-known/walletconnect.txt",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &web3_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        let b = p.body.to_ascii_lowercase();
+        if p.status < 500
+            && (b.contains("ethereum")
+                || b.contains("wallet")
+                || b.contains("nft")
+                || b.contains("contract"))
+        {
+            findings.push(web_finding(
+                "web3_dapp_attack",
+                "Web3 API path exposes blockchain surface",
+                "medium",
+                "T1190",
+                &format!(
+                    "{} ({}) — review smart-contract calls and wallet connect flows for drain/phishing.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("web3_dapp_attack", target)
     } else {
