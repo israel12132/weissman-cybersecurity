@@ -770,7 +770,9 @@ async fn dispatch_engine_match(
         "cors_misconfiguration" => {
             crate::advanced_web_engines::run_cors_misconfiguration_result_ctx(target, ctx).await
         }
-        "swagger_abuse" => crate::advanced_web_engines::run_swagger_abuse_result(target).await,
+        "swagger_abuse" => {
+            crate::advanced_web_engines::run_swagger_abuse_result_ctx(target, ctx).await
+        }
         "soap_injection" => crate::advanced_web_engines::run_soap_injection_result(target).await,
         "odata_injection" => crate::advanced_web_engines::run_odata_injection_result(target).await,
         "css_injection" => crate::advanced_web_engines::run_css_injection_result(target).await,

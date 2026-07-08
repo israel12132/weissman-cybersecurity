@@ -5,6 +5,10 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_dispatch::EngineRunContext;
+use crate::swagger_abuse_synthesis::{
+    probe_openapi_followup_paths, probe_swagger_vectors_concurrent,
+    synthesize_swagger_abuse_vectors, swagger_probe_bases,
+};
 use crate::grpc_reflection_synthesis::{
     grpc_probe_bases, probe_grpc_vectors_concurrent, synthesize_grpc_reflection_vectors,
     GrpcProbeTransport,
@@ -30,6 +34,7 @@ const ENGINE_GATEWAY: &str = "api_gateway_bypass";
 const ENGINE_RATE_LIMIT: &str = "api_rate_limit_bypass";
 const ENGINE_CACHE_POISON: &str = "web_cache_poison_adv";
 const ENGINE_GRPC_REFLECTION: &str = "grpc_reflection_attack";
+const ENGINE_SWAGGER: &str = "swagger_abuse";
 
 fn web_finding(
     engine_id: &str,
@@ -1107,63 +1112,227 @@ cli_wrapper!(run_http2_attack, run_http2_attack_result);
 
 // ── swagger_abuse ─────────────────────────────────────────────────────────────
 pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
+    run_swagger_abuse_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_swagger_abuse_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    let host = extract_host(target);
     let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = [
-        "/swagger.json",
-        "/swagger/v1/swagger.json",
-        "/v2/api-docs",
-        "/v3/api-docs",
-        "/openapi.json",
-        "/api-docs",
-        "/swagger-ui.html",
-        "/swagger/index.html",
-        "/api/swagger.json",
-        "/api/openapi.json",
-        "/docs/openapi.json",
-        "/redoc",
-        "/api/swagger-ui/",
-    ];
+    let bases = swagger_probe_bases(target, ctx);
     let mut findings: Vec<Value> = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        let body_low = p.body.to_ascii_lowercase();
-        if p.status == 200
-            && (body_low.contains("swagger")
-                || body_low.contains("openapi")
-                || body_low.contains("\"paths\""))
-        {
-            let has_auth = body_low.contains("securityschemes")
-                || body_low.contains("bearer")
-                || body_low.contains("oauth2");
-            findings.push(web_finding(
-                "swagger_abuse",
-                "Exposed Swagger/OpenAPI spec",
-                if has_auth { "medium" } else { "high" },
+    let mut flags = SwaggerAbuseFlags::default();
+    let mut total_vectors = 0usize;
+    let mut total_synthetic = 0usize;
+    let mut categories_hit: Vec<String> = Vec::new();
+    let mut followup_probed = 0usize;
+
+    for base in &bases {
+        let (vectors, stats) = synthesize_swagger_abuse_vectors(&host, ctx);
+        total_vectors += stats.vectors_generated;
+        total_synthetic += stats.synthetic_generated;
+
+        let hits = probe_swagger_vectors_concurrent(&client, base, vectors).await;
+        for hit in hits {
+            if hit.signal.is_spec {
+                flags.spec_exposed = true;
+            }
+            if hit.signal.is_ui {
+                flags.ui_exposed = true;
+            }
+            if hit.signal.has_auth_schemes {
+                flags.auth_schemes_leaked = true;
+            }
+            if !hit.signal.has_auth_schemes && hit.signal.is_spec {
+                flags.unauthenticated_spec = true;
+            }
+            if hit.signal.sensitive_hints {
+                flags.sensitive_operations = true;
+            }
+            if hit.vector.synthetic {
+                flags.synthetic_hit = true;
+            }
+            if hit.signal.operation_count > 10 {
+                flags.large_surface = true;
+            }
+            if !categories_hit.iter().any(|c| c == hit.vector.category) {
+                categories_hit.push(hit.vector.category.to_string());
+            }
+
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "openapi_spec_url",
+                    &hit.final_url,
+                    &hit.final_url,
+                    ENGINE_SWAGGER,
+                    if hit.vector.synthetic {
+                        "http_surface_openapi_synthetic"
+                    } else {
+                        "http_surface_openapi_catalog"
+                    },
+                );
+            }
+
+            let severity = if hit.signal.sensitive_hints && !hit.signal.has_auth_schemes {
+                "critical"
+            } else if hit.signal.is_spec && hit.signal.has_oauth {
+                "high"
+            } else if hit.vector.synthetic {
+                "high"
+            } else {
+                "medium"
+            };
+
+            findings.push(web_finding_sync(
+                ENGINE_SWAGGER,
+                &format!(
+                    "OpenAPI surface [{}] {}",
+                    hit.vector.category,
+                    if hit.signal.is_ui {
+                        "Swagger UI exposed"
+                    } else {
+                        "spec document exposed"
+                    }
+                ),
+                severity,
                 "T1190",
                 &format!(
-                    "Public OpenAPI document at {} (HTTP {}) — leaks routes, params{}.",
-                    p.final_url,
-                    p.status,
-                    if has_auth { ", and auth schemes" } else { "" }
+                    "{} → HTTP {} ({}B, ops~{}, paths~{}, auth={}, synthetic={}, version={:?}) — API map abuse surface.",
+                    hit.final_url,
+                    hit.status,
+                    hit.body_len,
+                    hit.signal.operation_count,
+                    hit.signal.path_estimate,
+                    hit.signal.has_auth_schemes,
+                    hit.vector.synthetic,
+                    hit.signal.version
                 ),
                 target,
+                &[
+                    "api_mass_assignment",
+                    "api_gateway_bypass",
+                    "idor_advanced",
+                    "graphql_deep_attack",
+                ],
+                &[
+                    "external_exposure_supreme",
+                    "risk_superposition_collapse",
+                    "threat_surface_intelligence_fusion",
+                ],
+                json!({
+                    "category": hit.vector.category,
+                    "synthetic": hit.vector.synthetic,
+                    "endpoint": hit.final_url,
+                    "operations": hit.signal.operation_count,
+                    "oauth": hit.signal.has_oauth,
+                    "bearer": hit.signal.has_bearer,
+                    "sensitive": hit.signal.sensitive_hints
+                }),
             ));
-            break;
+
+            if !hit.sample_paths.is_empty() {
+                let followups = probe_openapi_followup_paths(&client, base, &hit.sample_paths).await;
+                for (path, probe) in followups {
+                    followup_probed += 1;
+                    if probe.status >= 200 && probe.status < 300 {
+                        flags.followup_live = true;
+                        findings.push(web_finding_sync(
+                            ENGINE_SWAGGER,
+                            "OpenAPI-derived endpoint live (spec abuse)",
+                            "high",
+                            "T1190",
+                            &format!(
+                                "Spec at {} enumerated {} → live HTTP {} ({}B) — documented attack surface confirmed.",
+                                hit.final_url, path, probe.status, probe.body.len()
+                            ),
+                            target,
+                            &["api_mass_assignment", "idor_advanced"],
+                            &["pipeline_to_runtime_risk"],
+                            json!({"spec_url": hit.final_url, "abused_path": path, "status": probe.status}),
+                        ));
+                    }
+                }
+            }
         }
     }
+
+    if flags.spec_exposed && flags.unauthenticated_spec && flags.sensitive_operations {
+        findings.push(web_finding_sync(
+            ENGINE_SWAGGER,
+            "Toxic chain: unauth OpenAPI + sensitive operations",
+            "critical",
+            "T1190",
+            &format!(
+                "Live OpenAPI fusion: spec public without securitySchemes and documents admin/token/delete operations ({} vectors, {} synthetic).",
+                total_vectors, total_synthetic
+            ),
+            target,
+            &["api_gateway_bypass", "cors_misconfiguration"],
+            &["risk_superposition_collapse", "identity_attack_chain"],
+            json!({"toxic_chain": true, "categories": categories_hit}),
+        ));
+    }
+
+    if flags.spec_exposed && flags.ui_exposed {
+        findings.push(web_finding_sync(
+            ENGINE_SWAGGER,
+            "Toxic chain: spec + Swagger UI interactive abuse",
+            "critical",
+            "T1190",
+            "OpenAPI document and Swagger UI both reachable — interactive API execution from browser.",
+            target,
+            &["cors_misconfiguration", "clickjacking_engine"],
+            &["external_exposure_supreme"],
+            json!({"toxic_chain": true, "ui_spec": true}),
+        ));
+    }
+
+    if flags.synthetic_hit && flags.followup_live {
+        findings.push(web_finding_sync(
+            ENGINE_SWAGGER,
+            "Toxic chain: synthetic spec path → live endpoint abuse",
+            "critical",
+            "T1190",
+            &format!(
+                "Zero-day synthesis: runtime-generated OpenAPI path yielded spec and {followup_probed} follow-up probes confirmed live routes.",
+            ),
+            target,
+            &["graphql_deep_attack", "api_rate_limit_bypass"],
+            &["threat_surface_intelligence_fusion"],
+            json!({"toxic_chain": true, "synthetic_abuse": true}),
+        ));
+    }
+
     if findings.is_empty() {
-        empty_ok("swagger_abuse", target)
+        empty_ok(ENGINE_SWAGGER, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("swagger_abuse: {} doc(s)", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_SWAGGER}: {n} finding(s) vectors={total_vectors} synthetic={total_synthetic} followups={followup_probed}"
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct SwaggerAbuseFlags {
+    spec_exposed: bool,
+    ui_exposed: bool,
+    auth_schemes_leaked: bool,
+    unauthenticated_spec: bool,
+    sensitive_operations: bool,
+    synthetic_hit: bool,
+    large_surface: bool,
+    followup_live: bool,
+}
+
 cli_wrapper!(run_swagger_abuse, run_swagger_abuse_result);
 
 // ── soap_injection ────────────────────────────────────────────────────────────

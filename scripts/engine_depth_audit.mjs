@@ -90,7 +90,16 @@ const webChecks = [
   ],
   ['grpc_reflection_attack', ['synthesize_grpc_reflection_vectors', 'toxic_chain', 'run_grpc_reflection_attack_result_ctx', 'grpc-web', 'Connect-RPC']],
   ['cors_misconfiguration', ['OPTIONS', 'null', 'toxic_chain', 'run_cors_misconfiguration_result_ctx']],
-  ['swagger_abuse', ['probe_paths_concurrent', 'openapi']],
+  [
+    'swagger_abuse',
+    [
+      'synthesize_swagger_abuse_vectors',
+      'toxic_chain',
+      'run_swagger_abuse_result_ctx',
+      'probe_openapi_followup_paths',
+      'synthetic_hit',
+    ],
+  ],
   ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
   ['odata_injection', ['$filter', 'probe_paths_concurrent']],
   ['css_injection', ['weissman_css_probe', 'style-src']],
@@ -201,6 +210,27 @@ for (const n of [
 }
 if (!grpcSynth.includes('200')) {
   failures.push('grpc_reflection_synthesis missing 200 vector cap')
+}
+
+// Swagger abuse synthesis module
+const swaggerSynth = read('fingerprint_engine/src/swagger_abuse_synthesis.rs')
+if (!swaggerSynth.includes('fn synthesize_swagger_abuse_vectors')) {
+  failures.push('swagger_abuse_synthesis missing synthesize_swagger_abuse_vectors')
+}
+for (const n of [
+  'spring_v3',
+  'swagger_ui',
+  'synthetic_bus_artifact',
+  'extract_sample_paths',
+  'MAX_VECTORS_PER_BASE',
+  'analyze_openapi_body',
+]) {
+  if (!swaggerSynth.includes(n)) {
+    failures.push(`swagger_abuse_synthesis missing: ${n}`)
+  }
+}
+if (!swaggerSynth.includes('180')) {
+  failures.push('swagger_abuse_synthesis missing 180 vector cap')
 }
 for (const n of [
   'toxic_chain',
