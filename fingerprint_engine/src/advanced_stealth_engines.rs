@@ -1,7 +1,9 @@
 //! Advanced Stealth/Evasion engines — real HTTP/security-header analysis. No simulation.
 
 use crate::engine_probes::{
-    empty_ok, finding, has_header, header_value, http_client, http_get, normalize_url,
+    empty_ok, extract_host, finding, has_header, header_value, http_client, http_get,
+    icmp_echo_reachable, normalize_url, probe_paths_concurrent, status_indicates_presence,
+    DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -332,14 +334,69 @@ pub async fn run_https_c2_masquerade_result(t: &str) -> EngineResult {
 cli_wrapper!(run_https_c2_masquerade, run_https_c2_masquerade_result);
 
 pub async fn run_icmp_covert_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
-        "icmp_covert",
-        "ICMP exposure surface",
-        "T1095",
-        &["x-trace-id"],
-    )
-    .await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+
+    match icmp_echo_reachable(&host).await {
+        Some(true) => {
+            findings.push(finding(
+                "icmp_covert",
+                "ICMP echo reachable (covert channel path open)",
+                "medium",
+                "T1095",
+                &format!(
+                    "Live ping to {host} succeeded — ICMP tunneling/exfil cannot be ruled out from perimeter; agent validates local raw-socket egress policy."
+                ),
+                t,
+            ));
+        }
+        Some(false) => {
+            findings.push(finding(
+                "icmp_covert",
+                "ICMP echo filtered (covert channel constrained)",
+                "info",
+                "T1095",
+                &format!(
+                    "Live ping to {host} failed — ICMP may be filtered; agent still tests local ICMP capability for host-resident covert channels."
+                ),
+                t,
+            ));
+        }
+        None => {}
+    }
+
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let ping_paths = ["/ping", "/api/ping", "/health/ping", "/icmp", "/api/health"];
+    let probes = probe_paths_concurrent(&client, &base, &ping_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) && p.body.len() < 4096 {
+            findings.push(finding(
+                "icmp_covert",
+                "HTTP ping/health endpoint exposes ICMP-adjacent probe",
+                "low",
+                "T1095",
+                &format!(
+                    "{} ({}) — monitor for timing side-channels and ICMP-in-HTTP encapsulation.",
+                    p.final_url, p.status
+                ),
+                t,
+            ));
+            break;
+        }
+    }
+
+    if findings.is_empty() {
+        empty_ok("icmp_covert", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("icmp_covert: {} live signal(s)", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_icmp_covert, run_icmp_covert_result);
 
@@ -359,14 +416,61 @@ pub async fn run_timing_evasion_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_timing_evasion_engine, run_timing_evasion_engine_result);
 
 pub async fn run_log_tampering_engine_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
-        "log_tampering_engine",
-        "Audit chain headers",
-        "T1562.008",
-        &["x-request-id", "x-trace-id"],
-    )
-    .await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let client = http_client().await;
+    let base = normalize_url(t);
+    let paths = [
+        "/logs",
+        "/kibana",
+        "/elastic/",
+        "/_search",
+        "/api/logs",
+        "/graylog/",
+        "/splunk/",
+        "/opensearch/",
+        "/api/audit",
+    ];
+    let mut findings: Vec<Value> = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let body_low = p.body.to_ascii_lowercase();
+        let platform = if body_low.contains("kibana") {
+            "Kibana"
+        } else if body_low.contains("splunk") {
+            "Splunk"
+        } else if body_low.contains("graylog") {
+            "Graylog"
+        } else if body_low.contains("opensearch") || body_low.contains("elasticsearch") {
+            "OpenSearch/Elastic"
+        } else {
+            "log platform"
+        };
+        findings.push(finding(
+            "log_tampering_engine",
+            &format!("{platform} surface reachable"),
+            "high",
+            "T1562.008",
+            &format!(
+                "{} ({}) — centralized logging reachable; tamper detection requires agent-side log integrity + immutable store.",
+                p.final_url, p.status
+            ),
+            t,
+        ));
+        break;
+    }
+    if findings.is_empty() {
+        empty_ok("log_tampering_engine", t)
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("log_tampering_engine: {} SIEM signal(s)", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_log_tampering_engine, run_log_tampering_engine_result);
 

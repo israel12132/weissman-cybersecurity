@@ -8,8 +8,8 @@
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     dns_a, dns_txt, empty_ok, extract_host, finding_with_probe_depth, fingerprint_stack,
-    has_header, header_value, http_client, http_get, http_get_with_headers, join_url,
-    normalize_url, probe_matched_token, probe_paths_concurrent, status_indicates_presence,
+    has_header, header_value, http_client, http_get, http_get_with_headers, icmp_echo_reachable,
+    join_url, normalize_url, probe_matched_token, probe_paths_concurrent, status_indicates_presence,
     tcp_banner, tcp_open, tcp_scan, udp_probe_response, DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::EngineResult;
@@ -248,6 +248,12 @@ async fn probe_edr_av_surface(engine_id: &str, target: &str) -> EngineResult {
             "cylance",
             "defender",
             "x-protected-by",
+            "x-cdn",
+            "x-waf",
+            "akamai",
+            "cloudflare",
+            "imperva",
+            "incapsula",
         ] {
             if blob.contains(sig) {
                 findings.push(remote_finding(
@@ -256,7 +262,7 @@ async fn probe_edr_av_surface(engine_id: &str, target: &str) -> EngineResult {
                     "info",
                     "T1562.001",
                     &format!(
-                        "Response from {} includes '{}' — AV/EDR bypass tradecraft targets this stack; agent validates host-resident controls.",
+                        "Response from {} includes '{}' — AV/EDR/WAF bypass tradecraft targets this stack; agent validates host-resident controls.",
                         p.final_url, sig
                     ),
                     target,
@@ -392,12 +398,81 @@ async fn probe_anti_debug_surface(engine_id: &str, target: &str) -> EngineResult
 }
 
 async fn probe_rootkit_surface(engine_id: &str, target: &str) -> EngineResult {
-    probe_edr_av_surface(engine_id, target).await
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let paths = [
+        "/proc/modules",
+        "/proc/self/maps",
+        "/sys/kernel/security/",
+        "/boot/grub/grub.cfg",
+        "/api/kernel/modules",
+        "/debug/kmem",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            let body_low = p.body.to_ascii_lowercase();
+            if body_low.contains("module")
+                || body_low.contains("kernel")
+                || body_low.contains("grub")
+                || p.final_url.contains("/proc")
+            {
+                findings.push(remote_finding(
+                    engine_id,
+                    "Kernel/module introspection surface exposed",
+                    "high",
+                    "T1014",
+                    &format!(
+                        "{} ({}) — rootkit tradecraft targets kernel module visibility; agent collects live LKM enumeration.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+    if findings.is_empty() {
+        probe_edr_av_surface(engine_id, target).await
+    } else {
+        collect(engine_id, target, findings)
+    }
 }
 
 async fn probe_memory_forensics_surface(engine_id: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
     let mut findings = Vec::new();
+
+    let mem_paths = [
+        "/debug/pprof",
+        "/debug/pprof/heap",
+        "/debug/vars",
+        "/core",
+        "/crash.dump",
+        "/api/dump",
+        "/memory",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &mem_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(remote_finding(
+                engine_id,
+                "Memory/debug dump surface exposed",
+                "high",
+                "T1003",
+                &format!(
+                    "{} ({}) — memory forensics evasion is host-resident; exposed pprof/core endpoints leak secrets.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
     if tcp_open(&host, 22).await {
         if let Some(banner) = tcp_banner(&host, 22).await {
             let b = banner.to_ascii_lowercase();
@@ -408,7 +483,7 @@ async fn probe_memory_forensics_surface(engine_id: &str, target: &str) -> Engine
                     "low",
                     "T1003",
                     &format!(
-                        "SSH banner on {}:{} — memory forensics evasion is host-resident; agent collects live kernel module/process integrity.",
+                        "SSH banner on {}:{} — agent collects live kernel module/process integrity and core-dump policy.",
                         host, 22
                     ),
                     target,
@@ -509,19 +584,46 @@ async fn probe_dns_tunneling_surface(engine_id: &str, target: &str) -> EngineRes
 async fn probe_icmp_covert_surface(engine_id: &str, target: &str) -> EngineResult {
     let host = extract_host(target);
     let mut findings = Vec::new();
-    // ICMP reachability via ping is OS-dependent; TCP fallback signals flat perimeter
-    if tcp_open(&host, 443).await || tcp_open(&host, 80).await {
-        findings.push(remote_finding(
-            engine_id,
-            "Host reachable — ICMP covert channels require L3 path validation",
-            "info",
-            "T1095",
-            &format!(
-                "Host {} accepts TCP — ICMP covert exfil cannot be confirmed remotely; agent performs local ICMP capability test.",
-                host
-            ),
-            target,
-        ));
+
+    match icmp_echo_reachable(&host).await {
+        Some(true) => {
+            findings.push(remote_finding(
+                engine_id,
+                "Live ICMP echo succeeded (covert channel path)",
+                "medium",
+                "T1095",
+                &format!(
+                    "Ping to {host} succeeded — ICMP exfil/tunneling may be viable; agent tests local raw-socket policy."
+                ),
+                target,
+            ));
+        }
+        Some(false) => {
+            findings.push(remote_finding(
+                engine_id,
+                "ICMP echo filtered at perimeter",
+                "info",
+                "T1095",
+                &format!(
+                    "Ping to {host} failed — perimeter may block ICMP; agent still validates host ICMP egress."
+                ),
+                target,
+            ));
+        }
+        None => {
+            if tcp_open(&host, 443).await || tcp_open(&host, 80).await {
+                findings.push(remote_finding(
+                    engine_id,
+                    "Host TCP-reachable — ICMP covert requires agent validation",
+                    "info",
+                    "T1095",
+                    &format!(
+                        "Host {host} accepts TCP — ICMP covert exfil cannot be confirmed remotely; agent performs local ICMP capability test."
+                    ),
+                    target,
+                ));
+            }
+        }
     }
     collect(engine_id, target, findings)
 }

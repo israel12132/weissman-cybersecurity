@@ -1,7 +1,7 @@
 //! Advanced Recon Engines — real OSINT/DNS/HTTP probes. No simulated content.
 
 use crate::engine_probes::{
-    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
+    dns_a, dns_mx, dns_ns, dns_txt, empty_ok, extract_host, finding, header_value, http_client, http_get,
     http_get_with_headers, http_post_json_with_headers, normalize_url, tcp_scan,
 };
 use crate::engine_result::{print_result, EngineResult};
@@ -821,7 +821,8 @@ pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
     let a = dns_a(&host).await;
     let txt = dns_txt(&host).await;
     let mx = dns_mx(&host).await;
-    if !passive_dns_has_records(&a, &mx, &txt) {
+    let ns = dns_ns(&host).await;
+    if a.is_empty() && mx.is_empty() && txt.is_empty() && ns.is_empty() {
         return empty_ok("passive_dns_forensics", target);
     }
     findings.push(finding(
@@ -830,13 +831,39 @@ pub async fn run_passive_dns_forensics_result(target: &str) -> EngineResult {
         "info",
         "T1590.002",
         &format!(
-            "A={} MX={} TXT={}",
+            "A={} NS={} MX={} TXT={}",
             a.join(","),
+            ns.join(","),
             mx.join(","),
             txt.join(" | ")
         ),
         target,
     ));
+    if ns.len() >= 4 {
+        findings.push(finding(
+            "passive_dns_forensics",
+            &format!("High nameserver count ({}) — delegation sprawl", ns.len()),
+            "medium",
+            "T1590.002",
+            &format!(
+                "{} has {} NS records ({}) — review for shadow DNS providers and takeover risk.",
+                host,
+                ns.len(),
+                ns.join(", ")
+            ),
+            target,
+        ));
+    }
+    if txt.iter().any(|r| r.contains("v=spf1") && r.contains("+all")) {
+        findings.push(finding(
+            "passive_dns_forensics",
+            "SPF +all in TXT (email spoofing risk)",
+            "high",
+            "T1598.003",
+            &format!("TXT on {host} contains SPF +all — passive DNS shows spoofable email posture."),
+            target,
+        ));
+    }
     EngineResult::ok(
         findings.clone(),
         format!("passive_dns_forensics: {} record set(s)", findings.len()),

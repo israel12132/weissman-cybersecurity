@@ -6,8 +6,8 @@
 
 use crate::engine_probes::{
     empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
-    http_client, http_get, http_get_with_headers, http_post_json, join_url, normalize_url,
-    HttpProbe,
+    http1_client, http2_client, http_client, http_get, http_get_with_headers, http_post_json,
+    join_url, normalize_url, probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY, HttpProbe,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -261,44 +261,91 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let client = http_client().await;
     let url = normalize_url(target);
+    let h1 = http1_client().await;
+    let h2 = http2_client().await;
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        let via = header_value(&p.headers, "alt-svc").unwrap_or("");
-        if via.contains("h3") {
-            findings.push(finding(
+
+    let (p1, p2) = tokio::join!(http_get(&h1, &url), http_get(&h2, &url));
+    if let (Some(a), Some(b)) = (p1, p2) {
+        let h1_server = header_value(&a.headers, "server").unwrap_or_default();
+        let h2_server = header_value(&b.headers, "server").unwrap_or_default();
+        if a.status != b.status || a.body.len().abs_diff(b.body.len()) > 64 {
+            findings.push(web_finding(
                 "http2_attack",
-                "HTTP/3 advertised via Alt-Svc",
-                "info",
+                "HTTP/1 vs HTTP/2 response differential",
+                "medium",
                 "T1190",
                 &format!(
-                    "Alt-Svc on {} = '{}'. HTTP/3 surface present.",
-                    p.final_url, via
+                    "H1→HTTP {} ({}B) vs H2→HTTP {} ({}B) on {} — protocol downgrade/smuggling review required.",
+                    a.status, a.body.len(), b.status, b.body.len(), url
                 ),
                 target,
             ));
         }
-        if via.contains("h2") || via.contains("h2c") {
-            findings.push(finding(
+        if h1_server != h2_server && (!h1_server.is_empty() || !h2_server.is_empty()) {
+            findings.push(web_finding(
                 "http2_attack",
-                "HTTP/2 advertised via Alt-Svc",
-                "info",
+                "Server fingerprint differs between HTTP/1 and HTTP/2",
+                "medium",
                 "T1190",
                 &format!(
-                    "Alt-Svc on {} = '{}'. H2 surface present (test for h2c smuggling).",
-                    p.final_url, via
+                    "H1 Server='{h1_server}' vs H2 Server='{h2_server}' — backend may be reachable on only one ALPN path."
                 ),
                 target,
             ));
         }
     }
+
+    if let Some(p) = http_get(&h1, &url).await {
+        let via = header_value(&p.headers, "alt-svc").unwrap_or_default();
+        if via.contains("h3") || via.contains("h2") {
+            findings.push(web_finding(
+                "http2_attack",
+                "Alt-Svc advertises modern HTTP stack",
+                "info",
+                "T1190",
+                &format!("Alt-Svc='{via}' on {} — test h2c smuggling and cache poisoning on shared frontends.", p.final_url),
+                target,
+            ));
+        }
+    }
+
+    // h2c upgrade smuggling signal — frontends that accept Connection: Upgrade
+    if let Some(p) = http_get_with_headers(
+        &h1,
+        &url,
+        &[
+            ("Connection", "Upgrade, HTTP2-Settings"),
+            ("Upgrade", "h2c"),
+            ("HTTP2-Settings", "AAMAAABkAARAAAAAAAIAAAAA"),
+        ],
+    )
+    .await
+    {
+        if p.status == 101
+            || header_value(&p.headers, "upgrade").map(|u| u.contains("h2")).unwrap_or(false)
+        {
+            findings.push(web_finding(
+                "http2_attack",
+                "h2c Upgrade accepted (cleartext HTTP/2 risk)",
+                "high",
+                "T1190",
+                &format!(
+                    "GET {} with Upgrade:h2c returned HTTP {} — cleartext HTTP/2 may bypass TLS-only WAF rules.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("http2_attack", target)
     } else {
         EngineResult::ok(
             findings.clone(),
-            format!("http2_attack: {} finding(s)", findings.len()),
+            format!("http2_attack: {} live protocol finding(s)", findings.len()),
         )
     }
 }
@@ -626,27 +673,62 @@ pub async fn run_web_cache_poison_adv_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        let cache_status = header_value(&p.headers, "x-cache").unwrap_or("");
-        let cdn = header_value(&p.headers, "via").unwrap_or("");
-        let vary = header_value(&p.headers, "vary").unwrap_or("");
+    let baseline = http_get(&client, &url).await;
+    let base_body_len = baseline.as_ref().map(|p| p.body.len()).unwrap_or(0);
+    let base_status = baseline.as_ref().map(|p| p.status).unwrap_or(0);
+
+    if let Some(p) = baseline.as_ref() {
+        let cache_status = header_value(&p.headers, "x-cache").unwrap_or_default();
+        let cdn = header_value(&p.headers, "via").unwrap_or_default();
+        let vary = header_value(&p.headers, "vary").unwrap_or_default();
         if (cache_status.contains("HIT") || cdn.contains("cloudfront") || cdn.contains("varnish"))
             && !vary.to_ascii_lowercase().contains("cookie")
             && !vary.to_ascii_lowercase().contains("authorization")
         {
-            findings.push(finding(
+            findings.push(web_finding(
                 "web_cache_poison_adv",
                 "CDN cache without per-user Vary",
                 "medium",
                 "T1185",
                 &format!(
-                    "x-cache='{}', via='{}', vary='{}' on {} — unkeyed input or unsafe headers may poison shared cache entries.",
-                    cache_status, cdn, vary, p.final_url
+                    "x-cache='{cache_status}', via='{cdn}', vary='{vary}' on {} — unkeyed input may poison shared cache.",
+                    p.final_url
                 ),
                 target,
             ));
         }
     }
+
+    let poison_headers: &[(&str, &str)] = &[
+        ("X-Forwarded-Host", "evil-cache-poison.test"),
+        ("X-Forwarded-Scheme", "nothttps"),
+        ("X-Original-URL", "/admin"),
+        ("X-Rewrite-URL", "/internal"),
+    ];
+    for (hdr, val) in poison_headers {
+        if let Some(p) = http_get_with_headers(&client, &url, &[(*hdr, *val)]).await {
+            let reflected = p.body.contains(val)
+                || p.body.contains("evil-cache-poison")
+                || header_value(&p.headers, "location")
+                    .map(|l| l.contains(val))
+                    .unwrap_or(false);
+            let size_delta = (p.body.len() as i64 - base_body_len as i64).unsigned_abs();
+            if reflected || (p.status != base_status && size_delta > 128) {
+                findings.push(web_finding(
+                    "web_cache_poison_adv",
+                    &format!("Unkeyed header {hdr} alters response"),
+                    "high",
+                    "T1185",
+                    &format!(
+                        "Baseline HTTP {base_status}({base_body_len}B) vs {hdr}={val}→HTTP {}({}B) on {} — cache poisoning / routing bypass candidate.",
+                        p.status, p.body.len(), p.final_url
+                    ),
+                    target,
+                ));
+            }
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("web_cache_poison_adv", target)
     } else {
@@ -1047,26 +1129,70 @@ pub async fn run_api_rate_limit_bypass_result(target: &str) -> EngineResult {
     let client = http_client().await;
     let url = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    let mut sent = 0;
-    let mut limited = 0;
-    for _ in 0..20 {
+    let mut baseline_limited = 0;
+    let mut baseline_sent = 0;
+    for _ in 0..12 {
         if let Some(p) = http_get(&client, &url).await {
-            sent += 1;
+            baseline_sent += 1;
             if p.status == 429 {
-                limited += 1;
+                baseline_limited += 1;
             }
         }
     }
-    if sent > 0 && limited == 0 {
-        findings.push(finding(
+
+    let spoof_ips = [
+        "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5",
+        "192.168.1.10", "172.16.0.8", "203.0.113.7", "198.51.100.42",
+    ];
+    let mut spoof_limited = 0;
+    let mut spoof_sent = 0;
+    for (i, ip) in spoof_ips.iter().enumerate() {
+        if let Some(p) = http_get_with_headers(
+            &client,
+            &url,
+            &[
+                ("X-Forwarded-For", ip),
+                ("X-Real-IP", ip),
+                ("Client-IP", ip),
+                ("X-Originating-IP", ip),
+            ],
+        )
+        .await
+        {
+            spoof_sent += 1;
+            if p.status == 429 {
+                spoof_limited += 1;
+            }
+            if i > 3 && p.status == 200 && baseline_limited > 0 && spoof_limited == 0 {
+                findings.push(web_finding(
+                    "api_rate_limit_bypass",
+                    "Rate limit bypass via X-Forwarded-For rotation",
+                    "high",
+                    "T1499.003",
+                    &format!(
+                        "Baseline burst hit {}×429 but rotating X-Forwarded-For still returns HTTP 200 on {} — per-IP limits are spoofable.",
+                        baseline_limited, p.final_url
+                    ),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+
+    if baseline_sent > 0 && baseline_limited == 0 && spoof_sent > 0 {
+        findings.push(web_finding(
             "api_rate_limit_bypass",
-            "No 429 observed across 20 rapid requests",
-            "low",
+            "No 429 across baseline or spoofed bursts",
+            "medium",
             "T1499.003",
-            &format!("Sent {} requests to {} without observing HTTP 429 — verify per-IP/per-user limits.", sent, url),
+            &format!(
+                "Sent {baseline_sent} baseline + {spoof_sent} X-Forwarded-For requests to {url} without HTTP 429 — verify per-user/API-key throttles."
+            ),
             target,
         ));
     }
+
     if findings.is_empty() {
         empty_ok("api_rate_limit_bypass", target)
     } else {
@@ -1219,26 +1345,95 @@ pub async fn run_api_gateway_bypass_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        let server = header_value(&p.headers, "server").unwrap_or("");
+
+    if let Some(p) = http_get(&client, &base).await {
+        let server = header_value(&p.headers, "server").unwrap_or_default();
         let vendor = header_value(&p.headers, "x-amz-apigw-id")
-            .or_else(|| header_value(&p.headers, "x-azure-ref"));
-        if server.to_ascii_lowercase().contains("kong")
-            || server.to_ascii_lowercase().contains("apigee")
+            .or_else(|| header_value(&p.headers, "x-azure-ref"))
+            .or_else(|| header_value(&p.headers, "x-envoy-upstream-service-time"));
+        let srv = server.to_ascii_lowercase();
+        if srv.contains("kong")
+            || srv.contains("apigee")
+            || srv.contains("envoy")
             || vendor.is_some()
         {
-            findings.push(finding(
+            findings.push(web_finding(
                 "api_gateway_bypass",
-                "API Gateway detected",
+                "API gateway / mesh detected",
                 "info",
                 "T1190",
-                &format!("Server='{}' / gateway-marker={:?} on {} — verify direct backend access bypassing gateway WAF rules.", server, vendor, p.final_url),
+                &format!(
+                    "Server='{server}' gateway-marker={vendor:?} on {} — test direct-backend bypass paths.",
+                    p.final_url
+                ),
                 target,
             ));
         }
     }
+
+    let bypass_paths = [
+        "/api/../admin",
+        "/api/v1/../internal",
+        "/%2e%2e/admin",
+        "/api/..;/admin",
+        "/v1/api/../../admin",
+        "/api/internal",
+        "/backend/api",
+        "/_gateway_bypass_probe",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &bypass_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status == 200
+            && !p.body.is_empty()
+            && (p.body.to_ascii_lowercase().contains("admin")
+                || p.body.to_ascii_lowercase().contains("dashboard")
+                || p.body.to_ascii_lowercase().contains("internal"))
+        {
+            findings.push(web_finding(
+                "api_gateway_bypass",
+                "Path normalization may bypass gateway ACL",
+                "high",
+                "T1190",
+                &format!(
+                    "{} returned HTTP 200 with privileged keywords — gateway path normalization bypass candidate.",
+                    p.final_url
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
+    if let Some(p) = http_get_with_headers(
+        &client,
+        &base,
+        &[
+            ("X-Original-URL", "/admin"),
+            ("X-Rewrite-URL", "/internal/config"),
+        ],
+    )
+    .await
+    {
+        if p.status < 500
+            && (p.body.to_ascii_lowercase().contains("admin")
+                || p.body.to_ascii_lowercase().contains("config"))
+        {
+            findings.push(web_finding(
+                "api_gateway_bypass",
+                "X-Original-URL / X-Rewrite-URL routing override signal",
+                "high",
+                "T1190",
+                &format!(
+                    "Headers X-Original-URL/X-Rewrite-URL altered routing on {} (HTTP {}) — reverse-proxy bypass risk.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("api_gateway_bypass", target)
     } else {
@@ -1256,21 +1451,82 @@ pub async fn run_browser_extension_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let base = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        let csp = header_value(&p.headers, "content-security-policy").unwrap_or("");
-        if !csp.contains("script-src") {
-            findings.push(finding(
+
+    if let Some(p) = http_get(&client, &base).await {
+        let csp = header_value(&p.headers, "content-security-policy").unwrap_or_default();
+        let csp_low = csp.to_ascii_lowercase();
+        if !csp_low.contains("script-src") {
+            findings.push(web_finding(
                 "browser_extension_attack",
                 "Missing script-src CSP",
-                "low",
+                "medium",
                 "T1185",
-                &format!("{} lacks a script-src CSP — extension content scripts can inject without restriction.", p.final_url),
+                &format!(
+                    "{} lacks script-src CSP — extension content scripts can inject without restriction.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
+        if csp.contains("chrome-extension://") || csp.contains("moz-extension://") {
+            findings.push(web_finding(
+                "browser_extension_attack",
+                "CSP allows browser extension origins",
+                "high",
+                "T1185",
+                &format!(
+                    "CSP on {} whitelists extension schemes — malicious extensions may read credentialed pages.",
+                    p.final_url
+                ),
+                target,
+            ));
+        }
+        if !csp_low.contains("connect-src") {
+            findings.push(web_finding(
+                "browser_extension_attack",
+                "Missing connect-src CSP (extension exfil surface)",
+                "medium",
+                "T1185",
+                &format!(
+                    "{} lacks connect-src — pages may beacon data to arbitrary origins from extension contexts.",
+                    p.final_url
+                ),
                 target,
             ));
         }
     }
+
+    let ext_paths = [
+        "/manifest.json",
+        "/extension/manifest.json",
+        "/static/manifest.json",
+        "/assets/manifest.json",
+        "/chrome-extension/manifest.json",
+    ];
+    let probes = probe_paths_concurrent(&client, &base, &ext_paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if p.status == 200
+            && (p.body.contains("\"manifest_version\"")
+                || p.body.contains("web_accessible_resources")
+                || p.body.contains("content_scripts"))
+        {
+            findings.push(web_finding(
+                "browser_extension_attack",
+                "Web-accessible extension manifest exposed",
+                "high",
+                "T1185",
+                &format!(
+                    "Extension manifest at {} — review web_accessible_resources and content_scripts for XSS→extension pivot.",
+                    p.final_url
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("browser_extension_attack", target)
     } else {
