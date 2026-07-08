@@ -38,18 +38,49 @@ const CSP = [
   "form-action 'self'",
 ].join('; ')
 
+/**
+ * Security response headers that can only take effect as real HTTP headers
+ * (not <meta>). Applied to the dev + preview servers so they're testable here;
+ * production should set the same set (plus CSP) at the proxy/CDN layer.
+ */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+}
+
+function securityHeaderMiddleware() {
+  return (_req, res, next) => {
+    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v)
+    next()
+  }
+}
+
 export default function cspPlugin() {
   return {
     name: 'weissman-csp',
-    apply: 'build',
-    transformIndexHtml() {
-      return [
-        {
-          tag: 'meta',
-          attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP },
-          injectTo: 'head-prepend',
-        },
-      ]
+    // CSP <meta> is injected only for production builds — dev relies on inline
+    // scripts/eval for HMR which a strict script-src would break.
+    transformIndexHtml: {
+      order: 'pre',
+      handler(_html, ctx) {
+        if (ctx?.server) return [] // dev server: skip the strict CSP meta
+        return [
+          {
+            tag: 'meta',
+            attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP },
+            injectTo: 'head-prepend',
+          },
+        ]
+      },
+    },
+    configureServer(server) {
+      server.middlewares.use(securityHeaderMiddleware())
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(securityHeaderMiddleware())
     },
   }
 }
