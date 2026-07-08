@@ -184,14 +184,14 @@ export default function SecurityPosture() {
               {/* Live worklist filter — free-text over id/detail + pass/fail status */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
                 <div className="relative flex-1 min-w-0">
-                  <Search className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-[var(--text-muted)]" aria-hidden />
+                  <Search className="absolute top-1/2 -translate-y-1/2 left-2.5 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" aria-hidden />
                   <input
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t(`${NS}.search_placeholder`)}
                     aria-label={t(`${NS}.search_placeholder`)}
-                    className="w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg ltr:pl-8 rtl:pr-8 ltr:pr-2.5 rtl:pl-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
+                    className="w-full bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_status`)}>
