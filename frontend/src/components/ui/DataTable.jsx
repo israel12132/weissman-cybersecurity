@@ -192,7 +192,9 @@ export default function DataTable({
                 selectedRowId != null && rowId != null && String(selectedRowId) === String(rowId)
               const rowClasses = [
                 'border-b border-white/5 transition-colors duration-100',
-                onRowClick ? 'cursor-pointer weissman-row-hover' : 'weissman-row-hover',
+                onRowClick
+                  ? 'cursor-pointer weissman-row-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60'
+                  : 'weissman-row-hover',
                 zebra ? 'weissman-row-zebra' : '',
                 isSelected ? 'bg-cyan-500/[0.08] ring-1 ring-inset ring-cyan-500/25' : '',
               ]
@@ -209,6 +211,23 @@ export default function DataTable({
                 ? { borderLeftWidth: 2, borderLeftColor: accent, borderLeftStyle: 'solid' }
                 : undefined
 
+              // Make clickable rows keyboard-operable (WCAG 2.1 / Section 508):
+              // focusable, activated by Enter/Space, announced as a button.
+              const interactiveProps = onRowClick
+                ? {
+                    onClick: () => onRowClick(row),
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-selected': isSelected || undefined,
+                    onKeyDown: (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onRowClick(row)
+                      }
+                    },
+                  }
+                : {}
+
               if (animateRows) {
                 return (
                   <motion.tr
@@ -216,9 +235,9 @@ export default function DataTable({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.12, delay: Math.min(i * 0.012, 0.25) }}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
                     className={rowClasses}
                     style={style}
+                    {...interactiveProps}
                   >
                     {cells}
                   </motion.tr>
@@ -226,12 +245,7 @@ export default function DataTable({
               }
 
               return (
-                <tr
-                  key={row.id}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={rowClasses}
-                  style={style}
-                >
+                <tr key={row.id} className={rowClasses} style={style} {...interactiveProps}>
                   {cells}
                 </tr>
               )
