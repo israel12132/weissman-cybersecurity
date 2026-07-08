@@ -226,6 +226,24 @@ def _splunk_tls_verify():
     return v  # treat as a CA bundle path
 
 
+def _splunk_timeout():
+    """Connect/read timeout (seconds) for the Splunk HEC POST.
+
+    Without a timeout a hung or black-holed HEC endpoint blocks the caller forever
+    (the rest of the codebase clamps every outbound request via http_client). Defaults
+    to 8s; override with WEISSMAN_SIEM_HTTP_TIMEOUT. On send failure the caller already
+    falls back to file logging, so a bounded timeout degrades gracefully.
+    """
+    raw = os.environ.get("WEISSMAN_SIEM_HTTP_TIMEOUT", "").strip()
+    try:
+        t = float(raw)
+        if t > 0:
+            return t
+    except (TypeError, ValueError):
+        pass
+    return 8.0
+
+
 def _send_to_splunk(event: Dict[str, Any]):
     """Send event to Splunk HEC."""
     client = _get_splunk_client()
@@ -246,6 +264,7 @@ def _send_to_splunk(event: Dict[str, Any]):
             client["url"],
             json=payload,
             verify=_splunk_tls_verify(),
+            timeout=_splunk_timeout(),
         )
 
         if response.status_code != 200:
