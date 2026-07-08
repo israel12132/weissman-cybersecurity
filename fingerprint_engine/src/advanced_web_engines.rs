@@ -5,6 +5,10 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_dispatch::EngineRunContext;
+use crate::soap_injection_synthesis::{
+    probe_soap_vectors_concurrent, probe_wsdl_locations, probe_wsdl_operations,
+    synthesize_soap_injection_vectors, soap_probe_bases,
+};
 use crate::swagger_abuse_synthesis::{
     probe_alternate_servers, probe_openapi_followup_paths, probe_openapi_operations,
     probe_swagger_vectors_concurrent, probe_ui_spec_urls, synthesize_swagger_abuse_vectors,
@@ -36,6 +40,7 @@ const ENGINE_RATE_LIMIT: &str = "api_rate_limit_bypass";
 const ENGINE_CACHE_POISON: &str = "web_cache_poison_adv";
 const ENGINE_GRPC_REFLECTION: &str = "grpc_reflection_attack";
 const ENGINE_SWAGGER: &str = "swagger_abuse";
+const ENGINE_SOAP: &str = "soap_injection";
 
 fn web_finding(
     engine_id: &str,
@@ -1521,82 +1526,251 @@ cli_wrapper!(run_swagger_abuse, run_swagger_abuse_result);
 
 // ── soap_injection ────────────────────────────────────────────────────────────
 pub async fn run_soap_injection_result(target: &str) -> EngineResult {
+    run_soap_injection_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_soap_injection_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    let host = extract_host(target);
     let client = http_client().await;
-    let base = normalize_url(target);
-    let paths = [
-        "/services?wsdl",
-        "/ws?wsdl",
-        "/soap?wsdl",
-        "/axis2/services/listServices",
-        "/service.asmx?WSDL",
-        "/soap",
-        "/ws",
-    ];
+    let bases = soap_probe_bases(target, ctx);
     let mut findings: Vec<Value> = Vec::new();
-    let probes = probe_paths_concurrent(&client, &base, &paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in probes {
-        if p.status == 200 && (p.body.contains("<wsdl:") || p.body.contains("<definitions")) {
-            findings.push(web_finding(
-                "soap_injection",
-                "Public SOAP/WSDL surface",
-                "medium",
+    let mut flags = SoapInjectionFlags::default();
+    let mut total_vectors = 0usize;
+    let mut total_synthetic = 0usize;
+    let mut categories_hit: Vec<String> = Vec::new();
+    let mut ops_probed = 0usize;
+
+    for base in &bases {
+        let (vectors, stats) = synthesize_soap_injection_vectors(&host, ctx);
+        total_vectors += stats.vectors_generated;
+        total_synthetic += stats.synthetic_generated;
+
+        let hits = probe_soap_vectors_concurrent(&client, base, vectors).await;
+        for hit in hits {
+            if hit.wsdl.is_wsdl {
+                flags.wsdl_exposed = true;
+            }
+            if hit.injection.xxe_reflected {
+                flags.xxe_reflected = true;
+            }
+            if hit.injection.entity_error {
+                flags.entity_error = true;
+            }
+            if hit.injection.soap_fault {
+                flags.soap_fault = true;
+            }
+            if hit.injection.wsse_accepted {
+                flags.wsse_surface = true;
+            }
+            if hit.wsdl.has_ws_security {
+                flags.ws_security_policy = true;
+            }
+            if hit.vector.synthetic {
+                flags.synthetic_hit = true;
+            }
+            if !categories_hit.iter().any(|c| c == hit.vector.category) {
+                categories_hit.push(hit.vector.category.to_string());
+            }
+
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "soap_wsdl_surface",
+                    &hit.final_url,
+                    &hit.final_url,
+                    ENGINE_SOAP,
+                    if hit.vector.synthetic {
+                        "http_surface_soap_synthetic"
+                    } else if hit.wsdl.is_wsdl {
+                        "http_surface_wsdl_catalog"
+                    } else {
+                        "http_surface_soap_injection"
+                    },
+                );
+            }
+
+            let severity = if hit.injection.xxe_reflected {
+                "critical"
+            } else if hit.injection.entity_error || hit.wsdl.is_wsdl && hit.wsdl.has_operations {
+                "high"
+            } else {
+                "medium"
+            };
+
+            findings.push(web_finding_sync(
+                ENGINE_SOAP,
+                &format!(
+                    "SOAP surface [{}] {}",
+                    hit.vector.category,
+                    if hit.wsdl.is_wsdl {
+                        "WSDL exposed"
+                    } else if hit.injection.xxe_reflected {
+                        "XXE canary reflected"
+                    } else {
+                        "XML/SOAP injection signal"
+                    }
+                ),
+                severity,
                 "T1190",
                 &format!(
-                    "WSDL document accessible at {} (HTTP {}) — review parameters for XML/SOAP injection.",
-                    p.final_url, p.status
+                    "{} → HTTP {} ({}B, ops~{}, xxe={}, fault={}, synthetic={}) — SOAP/XML abuse surface.",
+                    hit.final_url,
+                    hit.status,
+                    hit.body_len,
+                    hit.wsdl.operation_estimate,
+                    hit.injection.xxe_reflected,
+                    hit.injection.soap_fault,
+                    hit.vector.synthetic
                 ),
                 target,
+                &["xxe", "api_gateway_bypass", "swagger_abuse"],
+                &[
+                    "risk_superposition_collapse",
+                    "external_exposure_supreme",
+                    "threat_surface_intelligence_fusion",
+                ],
+                json!({
+                    "category": hit.vector.category,
+                    "synthetic": hit.vector.synthetic,
+                    "endpoint": hit.final_url,
+                    "wsdl": hit.wsdl.is_wsdl,
+                    "xxe": hit.injection.xxe_reflected,
+                    "operations": hit.wsdl.operation_estimate
+                }),
             ));
-            break;
-        }
-    }
 
-    let xxe_envelope = r#"<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "weissman_xxe_probe">]><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><probe>&xxe;</probe></soap:Body></soap:Envelope>"#;
-    for path in ["/soap", "/ws", "/services", "/service.asmx"] {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = crate::engine_probes::http_post_bytes_with_headers(
-            &client,
-            &url,
-            xxe_envelope.as_bytes(),
-            &[
-                ("Content-Type", "text/xml"),
-                ("SOAPAction", "probe"),
-            ],
-        )
-        .await
-        {
-            if p.body.contains("weissman_xxe_probe")
-                || p.body.to_ascii_lowercase().contains("entity")
-                || p.body.to_ascii_lowercase().contains("doctype")
-            {
-                findings.push(web_finding(
-                    "soap_injection",
-                    "SOAP endpoint may resolve external entities (XXE signal)",
-                    "high",
-                    "T1190",
-                    &format!(
-                        "POST {} returned XXE-related response (HTTP {}) — disable DTD/entity expansion.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
-                break;
+            if !hit.extraction.operations.is_empty() {
+                let op_hits =
+                    probe_wsdl_operations(&client, base, &hit.extraction.operations, &hit.vector.canary)
+                        .await;
+                for oh in op_hits {
+                    ops_probed += 1;
+                    flags.operation_live = true;
+                    findings.push(web_finding_sync(
+                        ENGINE_SOAP,
+                        &format!("WSDL operation '{}' live SOAP response", oh.operation),
+                        if oh.fault { "medium" } else { "high" },
+                        "T1190",
+                        &format!(
+                            "WSDL at {} documents operation {} → POST {} HTTP {} ({}B).",
+                            hit.final_url, oh.operation, oh.final_url, oh.status, oh.body_len
+                        ),
+                        target,
+                        &["api_mass_assignment", "idor_advanced"],
+                        &["pipeline_to_runtime_risk"],
+                        json!({
+                            "wsdl_url": hit.final_url,
+                            "operation": oh.operation,
+                            "status": oh.status,
+                            "fault": oh.fault
+                        }),
+                    ));
+                }
+            }
+
+            if !hit.extraction.locations.is_empty() {
+                let loc_hits =
+                    probe_wsdl_locations(&client, &hit.extraction.locations, &hit.vector.canary).await;
+                for lh in loc_hits {
+                    flags.alternate_location = true;
+                    findings.push(web_finding_sync(
+                        ENGINE_SOAP,
+                        "WSDL soap:address location reachable",
+                        "high",
+                        "T1190",
+                        &format!(
+                            "WSDL {} lists location {} → HTTP {} — alternate SOAP endpoint.",
+                            hit.final_url, lh.final_url, lh.status
+                        ),
+                        target,
+                        &["cloud_metadata_ssrf", "cors_misconfiguration"],
+                        &["external_exposure_supreme"],
+                        json!({"wsdl_url": hit.final_url, "location": lh.final_url}),
+                    ));
+                }
             }
         }
     }
 
+    if flags.wsdl_exposed && flags.xxe_reflected {
+        findings.push(web_finding_sync(
+            ENGINE_SOAP,
+            "Toxic chain: WSDL exposed + XXE canary reflected",
+            "critical",
+            "T1190",
+            &format!(
+                "Live SOAP fusion: WSDL enumerable and SOAP endpoint reflects XML entity canary ({} vectors, {} synthetic, {} ops probed).",
+                total_vectors, total_synthetic, ops_probed
+            ),
+            target,
+            &["xxe", "swagger_abuse"],
+            &["risk_superposition_collapse", "identity_attack_chain"],
+            json!({"toxic_chain": true, "wsdl_xxe": true}),
+        ));
+    }
+
+    if flags.wsdl_exposed && flags.operation_live && flags.ws_security_policy {
+        findings.push(web_finding_sync(
+            ENGINE_SOAP,
+            "Toxic chain: WSDL + live operations + WS-Security policy",
+            "critical",
+            "T1190",
+            "WSDL documents WS-Security policy and live SOAP operations respond — credential/token attack surface.",
+            target,
+            &["mfa_bypass_engine", "jwt_advanced_attack"],
+            &["identity_attack_chain"],
+            json!({"toxic_chain": true, "wsse_ops": true}),
+        ));
+    }
+
+    if flags.synthetic_hit && (flags.xxe_reflected || flags.operation_live) {
+        findings.push(web_finding_sync(
+            ENGINE_SOAP,
+            "Toxic chain: synthetic SOAP path → live XML abuse",
+            "critical",
+            "T1190",
+            &format!(
+                "Zero-day synthesis: runtime WSDL/SOAP path confirmed (categories={:?}).",
+                categories_hit
+            ),
+            target,
+            &["api_gateway_bypass", "graphql_deep_attack"],
+            &["threat_surface_intelligence_fusion"],
+            json!({"toxic_chain": true, "synthetic_soap": true}),
+        ));
+    }
+
     if findings.is_empty() {
-        empty_ok("soap_injection", target)
+        empty_ok(ENGINE_SOAP, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("soap_injection: {} WSDL/signal(s)", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_SOAP}: {n} signal(s) vectors={total_vectors} synthetic={total_synthetic} ops={ops_probed}"
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct SoapInjectionFlags {
+    wsdl_exposed: bool,
+    xxe_reflected: bool,
+    entity_error: bool,
+    soap_fault: bool,
+    wsse_surface: bool,
+    ws_security_policy: bool,
+    synthetic_hit: bool,
+    operation_live: bool,
+    alternate_location: bool,
+}
+
 cli_wrapper!(run_soap_injection, run_soap_injection_result);
 
 // ── odata_injection ───────────────────────────────────────────────────────────

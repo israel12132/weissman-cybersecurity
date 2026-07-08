@@ -773,7 +773,9 @@ async fn dispatch_engine_match(
         "swagger_abuse" => {
             crate::advanced_web_engines::run_swagger_abuse_result_ctx(target, ctx).await
         }
-        "soap_injection" => crate::advanced_web_engines::run_soap_injection_result(target).await,
+        "soap_injection" => {
+            crate::advanced_web_engines::run_soap_injection_result_ctx(target, ctx).await
+        }
         "odata_injection" => crate::advanced_web_engines::run_odata_injection_result(target).await,
         "css_injection" => crate::advanced_web_engines::run_css_injection_result(target).await,
         "template_injection_adv" => crate::advanced_web_engines::run_template_injection_adv_result(target).await,

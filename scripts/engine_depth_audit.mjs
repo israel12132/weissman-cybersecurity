@@ -101,7 +101,16 @@ const webChecks = [
       'alternate_server_spec',
     ],
   ],
-  ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
+  [
+    'soap_injection',
+    [
+      'synthesize_soap_injection_vectors',
+      'toxic_chain',
+      'run_soap_injection_result_ctx',
+      'probe_wsdl_operations',
+      'xxe_reflected',
+    ],
+  ],
   ['odata_injection', ['$filter', 'probe_paths_concurrent']],
   ['css_injection', ['weissman_css_probe', 'style-src']],
   ['template_injection_adv', ['<%= 7*7 %>', '*{7*7}']],
@@ -237,6 +246,28 @@ for (const n of [
 }
 if (!swaggerSynth.includes('280')) {
   failures.push('swagger_abuse_synthesis missing 280 vector cap')
+}
+
+// SOAP injection synthesis module
+const soapSynth = read('fingerprint_engine/src/soap_injection_synthesis.rs')
+if (!soapSynth.includes('fn synthesize_soap_injection_vectors')) {
+  failures.push('soap_injection_synthesis missing synthesize_soap_injection_vectors')
+}
+for (const n of [
+  'xxe_doctype',
+  'ws_security',
+  'axis2_list',
+  'probe_wsdl_operations',
+  'extract_wsdl_operations',
+  'synthetic_bus_artifact',
+  'MAX_VECTORS_PER_BASE',
+]) {
+  if (!soapSynth.includes(n)) {
+    failures.push(`soap_injection_synthesis missing: ${n}`)
+  }
+}
+if (!soapSynth.includes('260')) {
+  failures.push('soap_injection_synthesis missing 260 vector cap')
 }
 for (const n of [
   'toxic_chain',

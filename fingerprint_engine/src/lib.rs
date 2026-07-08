@@ -175,6 +175,7 @@ pub mod advanced_web_engines;
 pub mod web_cache_poison_synthesis;
 pub mod grpc_reflection_synthesis;
 pub mod swagger_abuse_synthesis;
+pub mod soap_injection_synthesis;
 pub mod adversarial_ml_engine;
 pub mod agent_registry_sync;
 pub mod alert_delivery;
