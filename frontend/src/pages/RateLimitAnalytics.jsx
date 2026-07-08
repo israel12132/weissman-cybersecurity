@@ -207,7 +207,7 @@ export default function RateLimitAnalytics() {
             <SkeletonBar className="h-[300px] w-full" />
           ) : history.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={history}>
+              <AreaChart accessibilityLayer data={history}>
                 <defs>
                   <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -301,7 +301,7 @@ export default function RateLimitAnalytics() {
               />
             ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={visibleEndpoints.slice(0, 10)} layout="vertical">
+              <BarChart accessibilityLayer data={visibleEndpoints.slice(0, 10)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} />
                 <YAxis type="category" dataKey="endpoint" stroke="#64748b" style={{ fontSize: '12px' }} width={150} />

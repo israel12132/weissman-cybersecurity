@@ -128,7 +128,7 @@ export default function SystemPulseEKG() {
         )}
       </div>
       <ResponsiveContainer width="100%" height={44}>
-        <LineChart data={data} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
+        <LineChart accessibilityLayer data={data} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
           <XAxis dataKey="index" hide />
           <YAxis domain={[0, 'auto']} hide />
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />

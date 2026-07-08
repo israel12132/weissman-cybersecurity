@@ -386,7 +386,7 @@ export default function BusinessEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
             <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={statusData}>
+              <BarChart accessibilityLayer data={statusData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
                 <XAxis dataKey="name" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />
@@ -398,7 +398,7 @@ export default function BusinessEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.findings_trend')}</h3>
             <ResponsiveContainer width="100%" height="90%">
-              <LineChart data={findingsData}>
+              <LineChart accessibilityLayer data={findingsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
                 <XAxis dataKey="run" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />

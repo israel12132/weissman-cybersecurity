@@ -262,7 +262,7 @@ export default function MetricsDashboard() {
                 </div>
                 {totalFindings > 0 ? (
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={severityChartData}>
+                    <BarChart accessibilityLayer data={severityChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                       <XAxis dataKey="label" stroke="#64748b" style={{ fontSize: '12px' }} />
                       <YAxis stroke="#64748b" style={{ fontSize: '12px' }} allowDecimals={false} />

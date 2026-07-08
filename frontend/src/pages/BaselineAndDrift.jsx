@@ -207,7 +207,7 @@ export default function BaselineAndDrift() {
           <ChartPanel title={t('pages.baselineAndDrift.drift_over_time')} icon={<TrendingUp className="w-4 h-4 text-cyan-400" />}>
             {driftData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={driftData}>
+                <LineChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '11px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '11px' }} domain={[0, 100]} />
@@ -223,7 +223,7 @@ export default function BaselineAndDrift() {
           <ChartPanel title={t('pages.baselineAndDrift.anomaly_volume')} icon={<AlertTriangle className="w-4 h-4 text-orange-400" />}>
             {driftData.some((d) => d.anomalies > 0) ? (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={driftData}>
+                <BarChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '11px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '11px' }} allowDecimals={false} />

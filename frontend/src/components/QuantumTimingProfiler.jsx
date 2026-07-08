@@ -229,6 +229,7 @@ export default function QuantumTimingProfiler() {
           <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
+                accessibilityLayer
                 data={chartPoints}
                 margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
               >

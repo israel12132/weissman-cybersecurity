@@ -420,7 +420,7 @@ export default function TopTierEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.job_status_chart')}</h2>
             <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={statusChartData}>
+              <BarChart accessibilityLayer data={statusChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="name" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />
@@ -432,7 +432,7 @@ export default function TopTierEngineProfile() {
           <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h2 className="text-sm font-semibold text-white mb-2">{t('pages.topTierEngineProfile.findings_trend')}</h2>
             <ResponsiveContainer width="100%" height="90%">
-              <LineChart data={findingsTrendData}>
+              <LineChart accessibilityLayer data={findingsTrendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="run" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />
