@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { ProtectedProviders } from './providers/ProtectedProviders'
 import { AuthProvider } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
 import RequireRole from './components/auth/RequireRole'
@@ -302,10 +303,12 @@ export default function TacticalApp() {
 
 export function TacticalProviders({ children }) {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <RateLimitProvider>{children}</RateLimitProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RateLimitProvider>{children}</RateLimitProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

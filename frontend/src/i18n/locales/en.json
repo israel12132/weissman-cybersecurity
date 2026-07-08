@@ -1,5 +1,10 @@
 {
   "common": {
+    "theme": "Theme",
+    "toggle_theme": "Toggle light/dark theme",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
+    "switch": "Switch",
     "loading": "Loading…",
     "save": "Save",
     "cancel": "Cancel",

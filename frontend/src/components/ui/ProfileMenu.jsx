@@ -12,8 +12,11 @@ import {
   ScrollText,
   Activity,
   CreditCard,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '../../context/ThemeContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 import useFocusTrap from '../../hooks/useFocusTrap'
 
@@ -34,6 +37,7 @@ const QUICK_LINKS = [
 export default function ProfileMenu({ variant = 'header' }) {
   const { t, i18n } = useTranslation()
   const { session, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const menuRef = useRef(null)
@@ -134,6 +138,26 @@ export default function ProfileMenu({ variant = 'header' }) {
                 )
               })}
             </div>
+          </div>
+
+          <div className="border-t border-white/10 pt-3">
+            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5 px-1">
+              {t('common.theme')}
+            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] text-[12px] font-mono text-white/70 hover:border-white/20 hover:text-white/90 transition-colors"
+              aria-label={t('common.toggle_theme')}
+            >
+              <span className="flex items-center gap-2">
+                {theme === 'light' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                {theme === 'light' ? t('common.theme_light') : t('common.theme_dark')}
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-white/35">
+                {t('common.switch')}
+              </span>
+            </button>
           </div>
 
           <div className="border-t border-white/10 pt-3 space-y-0.5">

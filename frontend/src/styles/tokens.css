@@ -45,6 +45,9 @@
   --app-bg: var(--bg-0);
   --card-bg: var(--bg-2);
 
+  /* App shell background (radial). Themeable so the frame flips with the theme. */
+  --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%);
+
   /* ── Borders ────────────────────────────────────────────────────────────── */
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-default: rgba(255, 255, 255, 0.08);
@@ -199,4 +202,65 @@
   --z-sticky: 100;
   --z-modal: 200;
   --z-toast: 300;
+}
+
+/**
+ * ── Light theme ──────────────────────────────────────────────────────────────
+ * Opt-in via <html data-theme="light">. Overrides ONLY the surface / border /
+ * text / shadow / shell tokens; the semantic severity, status, KEV/EPSS and
+ * accent hues carry over (their bg tints read correctly on light too). Dark is
+ * the default and is completely unaffected by this block.
+ */
+:root[data-theme='light'] {
+  /* Surfaces */
+  --bg-0: #f4f6fa;
+  --bg-1: #eceff4;
+  --bg-2: #ffffff;
+  --bg-3: #f5f7fb;
+  --bg-4: #e7ebf2;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(236, 239, 244, 0.86);
+  --bg-glass: rgba(255, 255, 255, 0.68);
+  --bg-glass-elevated: rgba(255, 255, 255, 0.82);
+
+  --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #eef2f8 0%, #f4f6fa 55%, #e9edf4 100%);
+
+  /* Borders */
+  --border-subtle: rgba(15, 23, 42, 0.05);
+  --border-default: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --border-accent: rgba(8, 145, 178, 0.30);
+  --border-accent-violet: rgba(124, 58, 237, 0.30);
+  --border-danger: rgba(220, 38, 38, 0.35);
+
+  /* Text hierarchy */
+  --text-primary: #0f1220;
+  --text-secondary: #363a47;
+  --text-tertiary: #565b6a;
+  --text-muted: #7c828f;
+  --text-disabled: #aab0bc;
+  --text-inverse: #ffffff;
+  --text-accent: #0891b2;
+  --text-accent-violet: #7c3aed;
+
+  /* Accent muteds a touch stronger for contrast on white */
+  --accent-cyan-muted: rgba(8, 145, 178, 0.14);
+  --accent-violet-muted: rgba(124, 58, 237, 0.14);
+
+  /* Shadows — softer, cooler on light */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 8px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 16px 48px rgba(15, 23, 42, 0.16), 0 8px 16px rgba(15, 23, 42, 0.08);
+  --shadow-inner: inset 0 1px 0 rgba(15, 23, 42, 0.04), inset 0 -1px 0 rgba(15, 23, 42, 0.05);
+
+  --selection-bg: rgba(8, 145, 178, 0.2);
+}
+
+/* Flip the document background in light mode (higher specificity than the
+   hardcoded body utility class), so no dark flashes behind the app shell. */
+:root[data-theme='light'] body {
+  background-color: var(--bg-0);
+  color: var(--text-secondary);
 }

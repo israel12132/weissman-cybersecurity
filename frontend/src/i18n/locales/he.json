@@ -1,5 +1,10 @@
 {
   "common": {
+    "theme": "ערכת נושא",
+    "toggle_theme": "החלף ערכת נושא בהירה/כהה",
+    "theme_light": "בהיר",
+    "theme_dark": "כהה",
+    "switch": "החלף",
     "loading": "טוען…",
     "save": "שמור",
     "cancel": "ביטול",

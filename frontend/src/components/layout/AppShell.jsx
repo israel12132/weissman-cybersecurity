@@ -9,8 +9,8 @@ import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
 import { buildBreadcrumbs } from '../../lib/appNav'
 
-const SHELL_BG =
-  'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)'
+// Themeable via the --shell-bg token (flips with data-theme).
+const SHELL_BG = 'var(--shell-bg)'
 
 function BreadcrumbTrail({ crumbs }) {
   if (!crumbs.length) return null
