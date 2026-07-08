@@ -17,8 +17,51 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { usePageAutoRefresh } from '../hooks/usePageAutoRefresh'
+import { computeSla, slaBand, SLA_BAND_COLOR, slaCountdownLabel } from '../lib/incidentSla'
 
 const NS = 'pages.incidentResponseCenter'
+
+/**
+ * Ticking clock for live SLA countdowns. Updates on a coarse interval
+ * (minute-granularity display doesn't need per-second churn) and pauses when
+ * the tab is hidden to avoid needless re-renders.
+ */
+function useNow(intervalMs = 30_000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now())
+    }
+    const id = setInterval(tick, intervalMs)
+    const onVis = () => { if (document.visibilityState === 'visible') setNow(Date.now()) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [intervalMs])
+  return now
+}
+
+/** Compact SLA countdown pill, colored by band. */
+function SlaBadge({ incident, now, t, showLabel = true }) {
+  const sla = computeSla(incident, now)
+  if (sla.unknown) return null
+  const band = slaBand(sla)
+  const color = SLA_BAND_COLOR[band]
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider"
+      style={{ color, borderColor: `${color}40`, background: `${color}10` }}
+      title={t(`${NS}.sla_tooltip`, { defaultValue: 'Time to SLA breach' })}
+    >
+      {band === 'breached' && !sla.resolved ? '⚠ ' : ''}
+      {showLabel ? t(`${NS}.sla_prefix`, { defaultValue: 'SLA' }) + ' ' : ''}
+      {slaCountdownLabel(sla, t)}
+    </span>
+  )
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -176,7 +219,7 @@ function MetricCard({ label, value, sub, color, icon }) {
   )
 }
 
-function IncidentRow({ incident, selected, onSelect, t }) {
+function IncidentRow({ incident, selected, onSelect, t, now }) {
   const sm = STATUS_META[incident.status] ?? { labelKey: null, color: '#6b7280' }
   const sc = SEVERITY_COLOR[incident.severity] ?? '#6b7280'
   const statusLabel = sm.labelKey ? t(sm.labelKey) : incident.status.toUpperCase()
@@ -209,6 +252,7 @@ function IncidentRow({ incident, selected, onSelect, t }) {
             >
               {severityLabel(incident.severity, t)}
             </span>
+            <SlaBadge incident={incident} now={now} t={t} showLabel={false} />
           </div>
           <p className="text-xs font-semibold text-white/85 leading-snug">{incident.title}</p>
         </div>
@@ -330,9 +374,11 @@ export default function IncidentResponseCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [stepSaving, setStepSaving] = useState(false)
+  const now = useNow(30_000)
 
-  const loadIncidents = useCallback(async () => {
-    setLoading(true)
+  const loadIncidents = useCallback(async (opts) => {
+    const silent = opts?.silent === true
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const r = await apiFetch('/api/soc/incidents')
@@ -342,15 +388,19 @@ export default function IncidentResponseCenter() {
       setIncidents(list)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
     } catch (e) {
-      setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+      // A background refresh must not blow away a working view with an error.
+      if (!silent) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [t])
 
   useEffect(() => {
     loadIncidents()
   }, [loadIncidents])
+
+  // Keep the queue live without a full-page skeleton flash.
+  usePageAutoRefresh(() => loadIncidents({ silent: true }), 30_000, true)
 
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
@@ -411,8 +461,13 @@ export default function IncidentResponseCenter() {
     const avgH = incidents.length
       ? (totalMs / incidents.length / 3_600_000).toFixed(1)
       : '0.0'
-    return { active, crit, resolved, avgH }
-  }, [incidents])
+    // Open incidents already past their SLA target — the number an IR lead
+    // watches. Recomputed on the SLA clock tick.
+    const slaBreaching = incidents.filter(
+      (i) => i.status !== 'resolved' && computeSla(i, now).breached,
+    ).length
+    return { active, crit, resolved, avgH, slaBreaching }
+  }, [incidents, now])
 
   const listFindings = useMemo(() => incidents.map((i) => ({
     id: i.id,
@@ -469,9 +524,16 @@ export default function IncidentResponseCenter() {
       ) : (
         <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         <MetricCard label={t(`${NS}.active_incidents`)} value={metrics.active} sub={t(`${NS}.active_sub`)} color="#ef4444" icon="🔥" />
         <MetricCard label={t(`${NS}.critical_severity`)} value={metrics.crit} sub={t(`${NS}.critical_sub`)} color="#f97316" icon="⚠️" />
+        <MetricCard
+          label={t(`${NS}.sla_breaching`, { defaultValue: 'SLA breaching' })}
+          value={metrics.slaBreaching}
+          sub={t(`${NS}.sla_breaching_sub`, { defaultValue: 'open, past target' })}
+          color={metrics.slaBreaching > 0 ? '#ef4444' : '#4ade80'}
+          icon="⏳"
+        />
         <MetricCard label={t(`${NS}.avg_mttr`)} value={`${metrics.avgH}h`} sub={t(`${NS}.mttr_sub`)} color="#22d3ee" icon="⏱️" />
         <MetricCard label={t(`${NS}.resolved_7d`)} value={metrics.resolved} sub={t(`${NS}.resolved_sub`)} color="#4ade80" icon="✅" />
       </div>
@@ -521,6 +583,7 @@ export default function IncidentResponseCenter() {
               selected={selectedId === inc.id}
               onSelect={setSelectedId}
               t={t}
+              now={now}
             />
           ))}
         </div>
@@ -572,7 +635,7 @@ export default function IncidentResponseCenter() {
               </div>
 
               {/* Meta row */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: t('pages.incidentResponseCenter.assignee'), value: selected.assignee },
                   { label: t('pages.incidentResponseCenter.source'), value: selected.source },
@@ -583,6 +646,20 @@ export default function IncidentResponseCenter() {
                     <div className="text-xs font-semibold text-white/75">{value}</div>
                   </div>
                 ))}
+                {(() => {
+                  const sla = computeSla(selected, now)
+                  const color = SLA_BAND_COLOR[slaBand(sla)]
+                  return (
+                    <div className="rounded-lg bg-black/30 border border-white/8 p-3">
+                      <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">
+                        {t(`${NS}.sla_prefix`, { defaultValue: 'SLA' })}
+                      </div>
+                      <div className="text-xs font-semibold" style={{ color }}>
+                        {sla.unknown ? '—' : slaCountdownLabel(sla, t)}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Tabs */}
