@@ -20,6 +20,7 @@ const ENGINE_GRAPHQL_DEEP: &str = "graphql_deep_attack";
 const ENGINE_CORS: &str = "cors_misconfiguration";
 const ENGINE_GATEWAY: &str = "api_gateway_bypass";
 const ENGINE_RATE_LIMIT: &str = "api_rate_limit_bypass";
+const ENGINE_CACHE_POISON: &str = "web_cache_poison_adv";
 
 fn web_finding(
     engine_id: &str,
@@ -1439,78 +1440,189 @@ pub async fn run_api_mass_assignment_result(target: &str) -> EngineResult {
 cli_wrapper!(run_api_mass_assignment, run_api_mass_assignment_result);
 
 // ── web_cache_poison_adv ──────────────────────────────────────────────────────
+fn cache_probe_urls(target: &str, ctx: &EngineRunContext) -> Vec<String> {
+    let root = normalize_url(target);
+    let mut urls = vec![root.clone()];
+    for p in &ctx.discovered_paths {
+        if !p.contains('?') {
+            urls.push(join_url(&root, p));
+        }
+    }
+    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+        for art in bus.snapshot() {
+            if art.proof.starts_with("http_surface_") || art.proof.starts_with("graphql_") {
+                urls.push(art.source_url.clone());
+            }
+        }
+    }
+    urls.sort();
+    urls.dedup();
+    urls
+}
+
 pub async fn run_web_cache_poison_adv_result(target: &str) -> EngineResult {
+    run_web_cache_poison_adv_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_web_cache_poison_adv_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
+    let urls = cache_probe_urls(target, ctx);
     let mut findings: Vec<Value> = Vec::new();
-    let baseline = http_get(&client, &url).await;
-    let base_body_len = baseline.as_ref().map(|p| p.body.len()).unwrap_or(0);
-    let base_status = baseline.as_ref().map(|p| p.status).unwrap_or(0);
+    let mut flags = CachePoisonFlags::default();
 
-    if let Some(p) = baseline.as_ref() {
-        let cache_status = header_value(&p.headers, "x-cache").unwrap_or_default();
-        let cdn = header_value(&p.headers, "via").unwrap_or_default();
-        let vary = header_value(&p.headers, "vary").unwrap_or_default();
-        if (cache_status.contains("HIT") || cdn.contains("cloudfront") || cdn.contains("varnish"))
-            && !vary.to_ascii_lowercase().contains("cookie")
-            && !vary.to_ascii_lowercase().contains("authorization")
-        {
-            findings.push(web_finding(
-                "web_cache_poison_adv",
-                "CDN cache without per-user Vary",
-                "medium",
-                "T1185",
-                &format!(
-                    "x-cache='{cache_status}', via='{cdn}', vary='{vary}' on {} — unkeyed input may poison shared cache.",
-                    p.final_url
-                ),
-                target,
-            ));
-        }
-    }
+    for url in &urls {
+        let baseline = http_get(&client, url).await;
+        let base_body_len = baseline.as_ref().map(|p| p.body.len()).unwrap_or(0);
+        let base_status = baseline.as_ref().map(|p| p.status).unwrap_or(0);
 
-    let poison_headers: &[(&str, &str)] = &[
-        ("X-Forwarded-Host", "evil-cache-poison.test"),
-        ("X-Forwarded-Scheme", "nothttps"),
-        ("X-Original-URL", "/admin"),
-        ("X-Rewrite-URL", "/internal"),
-    ];
-    for (hdr, val) in poison_headers {
-        if let Some(p) = http_get_with_headers(&client, &url, &[(*hdr, *val)]).await {
-            let reflected = p.body.contains(val)
-                || p.body.contains("evil-cache-poison")
-                || header_value(&p.headers, "location")
-                    .map(|l| l.contains(val))
-                    .unwrap_or(false);
-            let size_delta = (p.body.len() as i64 - base_body_len as i64).unsigned_abs();
-            if reflected || (p.status != base_status && size_delta > 128) {
-                findings.push(web_finding(
-                    "web_cache_poison_adv",
-                    &format!("Unkeyed header {hdr} alters response"),
-                    "high",
+        if let Some(p) = baseline.as_ref() {
+            let cache_status = header_value(&p.headers, "x-cache").unwrap_or_default();
+            let cdn = header_value(&p.headers, "via").unwrap_or_default();
+            let age = header_value(&p.headers, "age").unwrap_or_default();
+            let vary = header_value(&p.headers, "vary").unwrap_or_default();
+            let vary_low = vary.to_ascii_lowercase();
+            if (cache_status.contains("HIT")
+                || !age.is_empty()
+                || cdn.contains("cloudfront")
+                || cdn.contains("varnish")
+                || cdn.contains("akamai")
+                || cdn.contains("fastly"))
+                && !vary_low.contains("cookie")
+                && !vary_low.contains("authorization")
+                && !vary_low.contains("origin")
+            {
+                flags.cdn_weak_vary = true;
+                findings.push(web_finding_sync(
+                    ENGINE_CACHE_POISON,
+                    "CDN cache without per-user Vary",
+                    "medium",
                     "T1185",
                     &format!(
-                        "Baseline HTTP {base_status}({base_body_len}B) vs {hdr}={val}→HTTP {}({}B) on {} — cache poisoning / routing bypass candidate.",
-                        p.status, p.body.len(), p.final_url
+                        "x-cache='{cache_status}', age='{age}', via='{cdn}', vary='{vary}' on {} — unkeyed input may poison shared cache.",
+                        p.final_url
                     ),
                     target,
+                    &["api_gateway_bypass", "cors_misconfiguration"],
+                    &["external_exposure_supreme"],
+                    json!({"endpoint": p.final_url, "via": cdn, "vary": vary}),
+                ));
+            }
+        }
+
+        let poison_headers: [(&str, &str); 7] = [
+            ("X-Forwarded-Host", "evil-cache-poison.test"),
+            ("X-Forwarded-Scheme", "nothttps"),
+            ("X-Forwarded-Proto", "http"),
+            ("X-Original-URL", "/admin"),
+            ("X-Rewrite-URL", "/internal"),
+            ("X-Host", "evil-cache-poison.test"),
+            ("X-Forwarded-Server", "evil-cache-poison.test"),
+        ];
+        for (hdr, val) in poison_headers {
+            if let Some(p) = http_get_with_headers(&client, url, &[(hdr, val)]).await {
+                let reflected = p.body.contains(val)
+                    || p.body.contains("evil-cache-poison")
+                    || header_value(&p.headers, "location")
+                        .map(|l| l.contains(val))
+                        .unwrap_or(false);
+                let size_delta = (p.body.len() as i64 - base_body_len as i64).unsigned_abs();
+                if reflected || (p.status != base_status && size_delta > 128) {
+                    flags.header_poison = true;
+                    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                        bus.publish_http_surface(
+                            "cache_poison_header",
+                            hdr,
+                            &p.final_url,
+                            ENGINE_CACHE_POISON,
+                            "http_surface_cache_poison_header",
+                        );
+                    }
+                    findings.push(web_finding_sync(
+                        ENGINE_CACHE_POISON,
+                        &format!("Unkeyed header {hdr} alters response"),
+                        "high",
+                        "T1185",
+                        &format!(
+                            "Baseline HTTP {base_status}({base_body_len}B) vs {hdr}={val}→HTTP {}({}B) on {} — cache poisoning candidate.",
+                            p.status, p.body.len(), p.final_url
+                        ),
+                        target,
+                        &["api_gateway_bypass", "graphql_deep_attack"],
+                        &["risk_superposition_collapse"],
+                        json!({"header": hdr, "endpoint": p.final_url}),
+                    ));
+                }
+            }
+        }
+
+        let param_url = format!(
+            "{url}{}cb=weissman_cache_poison_{}",
+            if url.contains('?') { "&" } else { "?" },
+            Instant::now().elapsed().as_nanos()
+        );
+        if let Some(p) = http_get(&client, &param_url).await {
+            let size_delta = (p.body.len() as i64 - base_body_len as i64).unsigned_abs();
+            if p.body.contains("weissman_cache_poison") || size_delta > 256 {
+                flags.param_unkeyed = true;
+                findings.push(web_finding_sync(
+                    ENGINE_CACHE_POISON,
+                    "Unkeyed query parameter alters cacheable response",
+                    "medium",
+                    "T1185",
+                    &format!(
+                        "Query param probe on {} changed body by {size_delta}B (HTTP {}) — fat-GET/cache-key gap.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                    &["http_parameter_pollution"],
+                    &[],
+                    json!({"endpoint": p.final_url, "size_delta": size_delta}),
                 ));
             }
         }
     }
 
+    if flags.cdn_weak_vary && flags.header_poison {
+        findings.push(web_finding_sync(
+            ENGINE_CACHE_POISON,
+            "Toxic chain: CDN weak Vary + unkeyed header poison",
+            "critical",
+            "T1185",
+            "Live cache fusion: shared CDN cache without auth/cookie Vary and unkeyed header alters response — mass user poisoning chain.",
+            target,
+            &["cors_misconfiguration", "api_gateway_bypass"],
+            &["risk_superposition_collapse", "external_exposure_supreme"],
+            json!({"toxic_chain": true}),
+        ));
+    }
+
     if findings.is_empty() {
-        empty_ok("web_cache_poison_adv", target)
+        empty_ok(ENGINE_CACHE_POISON, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("web_cache_poison_adv: {}", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_CACHE_POISON}: {n} finding(s) (cdn_vary={} header={} param={})",
+                flags.cdn_weak_vary, flags.header_poison, flags.param_unkeyed
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct CachePoisonFlags {
+    cdn_weak_vary: bool,
+    header_poison: bool,
+    param_unkeyed: bool,
+}
+
 cli_wrapper!(run_web_cache_poison_adv, run_web_cache_poison_adv_result);
 
 // ── clickjacking_engine ───────────────────────────────────────────────────────

@@ -63,7 +63,16 @@ const webChecks = [
       'http_surface_rate_limit',
     ],
   ],
-  ['web_cache_poison_adv', ['X-Forwarded-Host']],
+  [
+    'web_cache_poison_adv',
+    [
+      'X-Forwarded-Host',
+      'toxic_chain',
+      'run_web_cache_poison_adv_result_ctx',
+      'http_surface_cache_poison',
+      'X-Forwarded-Proto',
+    ],
+  ],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
   [
     'graphql_deep_attack',

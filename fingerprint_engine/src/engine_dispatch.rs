@@ -799,7 +799,9 @@ async fn dispatch_engine_match(
         "idor_advanced" => crate::advanced_web_engines::run_idor_advanced_result(target).await,
         "jwt_advanced_attack" => crate::advanced_web_engines::run_jwt_advanced_attack_result(target).await,
         "nosql_deep_injection" => crate::advanced_web_engines::run_nosql_deep_injection_result(target).await,
-        "web_cache_poison_adv" => crate::advanced_web_engines::run_web_cache_poison_adv_result(target).await,
+        "web_cache_poison_adv" => {
+            crate::advanced_web_engines::run_web_cache_poison_adv_result_ctx(target, ctx).await
+        }
 
         // ── Advanced Recon engines (new live probes) ───────────────────────────
         "satellite_recon" => crate::advanced_recon_engines::run_satellite_recon_result(target).await,
