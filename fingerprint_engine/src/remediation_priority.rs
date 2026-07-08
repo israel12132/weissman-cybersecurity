@@ -38,6 +38,9 @@ pub struct FindingInput {
     pub cluster_id: Option<i64>,
     /// True when this finding's risk-graph node is a choke point (high betweenness proxy).
     pub on_choke_point: bool,
+    /// Age in whole days since the finding was first discovered (`discovered_at`). Drives the
+    /// remediation SLA / overdue clock. `None` when unknown → the action is never marked breached.
+    pub first_seen_days: Option<i64>,
 }
 
 /// One ranked remediation action (a root-cause group), highest priority first.
@@ -55,8 +58,40 @@ pub struct RemediationItem {
     pub on_choke_point: bool,
     pub max_effective_risk: f64,
     pub max_epss: Option<f64>,
+    /// Age of the OLDEST finding in this group (most conservative for the SLA clock), in days.
+    pub oldest_finding_age_days: Option<i64>,
+    /// Remediation SLA for this action: target window, remaining days, and breach state.
+    pub sla: SlaStatus,
     pub rationale: String,
     pub finding_ids: Vec<String>,
+}
+
+/// Where an action stands against its remediation SLA.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlaState {
+    /// Past its due date — a breach that must be reported.
+    Overdue,
+    /// Inside the window but close to the deadline (≤20% of the window remaining).
+    DueSoon,
+    /// Comfortably within the window.
+    OnTrack,
+    /// Age unknown, so the clock cannot be evaluated.
+    Unknown,
+}
+
+/// A remediation SLA verdict for one action. Deterministic given (urgency, age).
+#[derive(Debug, Clone, Serialize)]
+pub struct SlaStatus {
+    /// Allowed remediation window in calendar days (see the SLA_* constants for the policy).
+    pub target_days: i64,
+    /// Plain-language reason the window is what it is (drives the policy audit trail).
+    pub basis: String,
+    pub age_days: Option<i64>,
+    /// `target_days - age_days`; negative once breached. `None` when age is unknown.
+    pub due_in_days: Option<i64>,
+    pub state: SlaState,
+    pub breached: bool,
 }
 
 /// KEV floor: a known-exploited vuln is fix-first regardless of a modest CVSS.
@@ -68,6 +103,83 @@ const CHOKE_POINT_MULTIPLIER: f64 = 1.25;
 /// Per-extra-finding efficiency bonus (one fix closing N findings is worth more), and its cap.
 const FIX_EFFICIENCY_PER_FINDING: f64 = 1.5;
 const FIX_EFFICIENCY_CAP: f64 = 15.0;
+
+// --- Remediation SLA policy (calendar days) -------------------------------------------------
+// Windows are aligned with CISA BOD 22-01 (known-exploited vulns get an aggressive, fixed clock)
+// and common NIST-aligned vuln-management practice for everything else. KEV overrides severity:
+// a known-exploited medium is more urgent than a theoretical critical.
+/// Ransomware-associated KEV — the tightest window; active campaigns exploit these immediately.
+const SLA_KEV_RANSOMWARE_DAYS: i64 = 7;
+/// Known-exploited (CISA KEV) — BOD 22-01 posture for recently-added entries.
+const SLA_KEV_DAYS: i64 = 14;
+/// Critical risk (effective_risk ≥ 9.0) not on KEV.
+const SLA_CRITICAL_DAYS: i64 = 15;
+/// High risk (≥ 7.0).
+const SLA_HIGH_DAYS: i64 = 30;
+/// Medium risk (≥ 4.0).
+const SLA_MEDIUM_DAYS: i64 = 90;
+/// Low / informational.
+const SLA_LOW_DAYS: i64 = 180;
+
+/// Pick the SLA window (days) and its human-readable basis for one action's urgency.
+/// KEV precedence mirrors the scoring floors: exploited-in-the-wild beats a high CVSS.
+fn sla_target(kev: bool, kev_ransomware: bool, max_effective_risk: f64) -> (i64, &'static str) {
+    if kev_ransomware {
+        (SLA_KEV_RANSOMWARE_DAYS, "KEV — ransomware-associated")
+    } else if kev {
+        (SLA_KEV_DAYS, "KEV — known exploited in the wild")
+    } else if max_effective_risk >= 9.0 {
+        (SLA_CRITICAL_DAYS, "critical risk")
+    } else if max_effective_risk >= 7.0 {
+        (SLA_HIGH_DAYS, "high risk")
+    } else if max_effective_risk >= 4.0 {
+        (SLA_MEDIUM_DAYS, "medium risk")
+    } else {
+        (SLA_LOW_DAYS, "low risk")
+    }
+}
+
+/// Evaluate an action against its SLA. Pure: the same (urgency, age) always yields the same
+/// verdict, so ranking stays deterministic and testable. `age_days == None` → `Unknown`, never a
+/// breach (we don't invent a deadline for a finding whose discovery time we don't know).
+fn evaluate_sla(
+    kev: bool,
+    kev_ransomware: bool,
+    max_effective_risk: f64,
+    age_days: Option<i64>,
+) -> SlaStatus {
+    let (target_days, basis) = sla_target(kev, kev_ransomware, max_effective_risk);
+    match age_days {
+        Some(age) => {
+            let due_in = target_days - age;
+            // "Due soon" = within 20% of the window (at least 1 day) of the deadline.
+            let soon = ((target_days as f64) * 0.2).ceil().max(1.0) as i64;
+            let state = if due_in < 0 {
+                SlaState::Overdue
+            } else if due_in <= soon {
+                SlaState::DueSoon
+            } else {
+                SlaState::OnTrack
+            };
+            SlaStatus {
+                target_days,
+                basis: basis.to_string(),
+                age_days: Some(age),
+                due_in_days: Some(due_in),
+                state,
+                breached: due_in < 0,
+            }
+        }
+        None => SlaStatus {
+            target_days,
+            basis: basis.to_string(),
+            age_days: None,
+            due_in_days: None,
+            state: SlaState::Unknown,
+            breached: false,
+        },
+    }
+}
 
 /// Map a categorical severity to an approximate 0..10 risk when a finding was never risk-ranked.
 fn severity_fallback_risk(severity: &str) -> f64 {
@@ -170,6 +282,12 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
                 group.iter().map(|f| f.finding_id.clone()).collect();
             finding_ids.sort();
             finding_ids.dedup();
+            let kev = group.iter().any(|f| f.kev);
+            let kev_ransomware = group.iter().any(|f| f.kev_ransomware);
+            // Oldest finding drives the SLA clock (most conservative — the group has been open at
+            // least this long). Uses the full-precision max_risk, not the display-rounded value.
+            let oldest_age = group.iter().filter_map(|f| f.first_seen_days).max();
+            let sla = evaluate_sla(kev, kev_ransomware, max_risk, oldest_age);
             RemediationItem {
                 rank: 0, // assigned after sort
                 priority_score: score,
@@ -177,11 +295,13 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
                 cwe: rep.cwe.clone(),
                 asset: rep.asset.clone(),
                 closes_findings: finding_ids.len(),
-                kev: group.iter().any(|f| f.kev),
-                kev_ransomware: group.iter().any(|f| f.kev_ransomware),
+                kev,
+                kev_ransomware,
                 on_choke_point: group.iter().any(|f| f.on_choke_point),
                 max_effective_risk: (max_risk * 10.0).round() / 10.0,
                 max_epss,
+                oldest_finding_age_days: oldest_age,
+                sla,
                 rationale,
                 finding_ids,
             }
@@ -227,7 +347,9 @@ pub async fn load_and_rank(
                   COALESCE(v.kev_listed, false)                           AS kev,
                   COALESCE(v.kev_known_ransomware, false)                 AS kev_ransomware,
                   v.cluster_id,
-                  COALESCE(n.is_choke_point, false)                       AS on_choke_point
+                  COALESCE(n.is_choke_point, false)                       AS on_choke_point,
+                  FLOOR(EXTRACT(EPOCH FROM (now() - v.discovered_at)) / 86400.0)::bigint
+                                                                          AS first_seen_days
              FROM vulnerabilities v
              LEFT JOIN risk_graph_nodes n
                     ON n.tenant_id = v.tenant_id
@@ -270,6 +392,10 @@ pub async fn load_and_rank(
                 kev_ransomware: r.try_get("kev_ransomware").unwrap_or(false),
                 cluster_id: r.try_get::<Option<i64>, _>("cluster_id").unwrap_or(None),
                 on_choke_point: r.try_get("on_choke_point").unwrap_or(false),
+                first_seen_days: r
+                    .try_get::<Option<i64>, _>("first_seen_days")
+                    .unwrap_or(None)
+                    .map(|d| d.max(0)),
             })
         })
         .collect();
@@ -278,6 +404,14 @@ pub async fn load_and_rank(
     let program = rank(&findings);
     let kev_actions = program.iter().filter(|i| i.kev).count();
     let choke_actions = program.iter().filter(|i| i.on_choke_point).count();
+    let overdue_actions = program
+        .iter()
+        .filter(|i| i.sla.state == SlaState::Overdue)
+        .count();
+    let due_soon_actions = program
+        .iter()
+        .filter(|i| i.sla.state == SlaState::DueSoon)
+        .count();
 
     Ok(json!({
         "ok": true,
@@ -286,6 +420,8 @@ pub async fn load_and_rank(
         "remediation_actions": program.len(),
         "kev_actions": kev_actions,
         "choke_point_actions": choke_actions,
+        "overdue_actions": overdue_actions,
+        "due_soon_actions": due_soon_actions,
         "program": program,
     }))
 }
@@ -307,6 +443,7 @@ mod tests {
             kev_ransomware: false,
             cluster_id: None,
             on_choke_point: false,
+            first_seen_days: None,
         }
     }
 
@@ -390,5 +527,73 @@ mod tests {
         let program = rank(&items);
         assert_eq!(program[0].rank, 1);
         assert_eq!(program[1].rank, 2);
+    }
+
+    #[test]
+    fn kev_gets_tighter_sla_than_equal_risk_non_kev() {
+        let mut kev = f("kev", "medium", Some(5.0));
+        kev.kev = true;
+        let non_kev = f("non", "medium", Some(5.0));
+        assert!(
+            evaluate_sla(true, false, 5.0, None).target_days
+                < evaluate_sla(false, false, 5.0, None).target_days
+        );
+        // sanity: the constructed findings carry the flags used above
+        assert!(kev.kev && !non_kev.kev);
+    }
+
+    #[test]
+    fn ransomware_kev_has_the_tightest_window() {
+        assert_eq!(
+            evaluate_sla(true, true, 3.0, None).target_days,
+            SLA_KEV_RANSOMWARE_DAYS
+        );
+        assert!(SLA_KEV_RANSOMWARE_DAYS < SLA_KEV_DAYS);
+    }
+
+    #[test]
+    fn overdue_when_age_exceeds_window() {
+        // KEV window is 14 days; a finding open 30 days is breached.
+        let sla = evaluate_sla(true, false, 5.0, Some(30));
+        assert_eq!(sla.state, SlaState::Overdue);
+        assert!(sla.breached);
+        assert_eq!(sla.due_in_days, Some(14 - 30));
+    }
+
+    #[test]
+    fn due_soon_inside_the_final_fifth_of_the_window() {
+        // High risk => 30-day window; soon threshold = ceil(30*0.2)=6. Age 25 => due_in 5 <= 6.
+        let sla = evaluate_sla(false, false, 7.5, Some(25));
+        assert_eq!(sla.state, SlaState::DueSoon);
+        assert!(!sla.breached);
+    }
+
+    #[test]
+    fn on_track_early_in_the_window() {
+        let sla = evaluate_sla(false, false, 7.5, Some(1));
+        assert_eq!(sla.state, SlaState::OnTrack);
+    }
+
+    #[test]
+    fn unknown_age_is_never_a_breach() {
+        let sla = evaluate_sla(true, true, 9.9, None);
+        assert_eq!(sla.state, SlaState::Unknown);
+        assert!(!sla.breached);
+        assert_eq!(sla.due_in_days, None);
+    }
+
+    #[test]
+    fn group_sla_uses_the_oldest_finding() {
+        // Same cluster: one finding is fresh, one is old. The old one drives the clock.
+        let mut fresh = f("fresh", "high", Some(7.5));
+        let mut old = f("old", "high", Some(7.5));
+        fresh.cluster_id = Some(9);
+        old.cluster_id = Some(9);
+        fresh.first_seen_days = Some(2);
+        old.first_seen_days = Some(40); // > 30-day high-risk window
+        let program = rank(&[fresh, old]);
+        assert_eq!(program.len(), 1);
+        assert_eq!(program[0].oldest_finding_age_days, Some(40));
+        assert_eq!(program[0].sla.state, SlaState::Overdue);
     }
 }
