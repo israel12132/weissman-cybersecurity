@@ -12,11 +12,41 @@ spec:
       labels:
         app: weissman-redis
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
           image: redis:7-alpine
+          # Bound memory so a runaway producer can't OOM the node; LRU eviction is safe
+          # because Postgres is the durable source of truth for the job bus (Redis is
+          # best-effort fan-out / leases / rate-limit counters).
+          args:
+            - "--maxmemory"
+            - "384mb"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
           ports:
             - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
           readinessProbe:
             exec:
               command: ["redis-cli", "ping"]
@@ -27,6 +57,9 @@ spec:
               command: ["redis-cli", "ping"]
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
