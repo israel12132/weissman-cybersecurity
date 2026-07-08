@@ -387,9 +387,12 @@ function Scorecard({ summary }) {
               <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-2">{t('pages.cloudPostureCommandCenter.risk_register_title')}</div>
               <DataTable
                 columns={columns}
-                data={riskRegister.slice(0, 10)}
+                data={riskRegister}
                 animateRows={false}
                 getRowId={(item) => item.resource_id}
+                searchable
+                exportable
+                exportFilename="weissman-cloud-risk"
               />
             </div>
           )}
