@@ -10,9 +10,15 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+
+const columnHelper = createColumnHelper()
 
 const ENGINE = 'pki_tls'
 const ACCENT = '#34d399'
+
+const PROTOCOL_VERSIONS = ['SSLv3', 'TLSv1.0', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3']
 
 const TOGGLES = [
   { key: 'check_protocols', label: 'Protocol matrix', hint: 'Force handshakes per SSL/TLS version', defaultVal: true },
@@ -159,39 +165,36 @@ function ProtocolMatrix({ gradeFindings }) {
     }
     return out
   }, [gradeFindings])
+  return <ProtocolMatrixTable rows={rows} />
+}
+
+function ProtocolMatrixTable({ rows }) {
+  const columns = useMemo(() => [
+    columnHelper.accessor('port', {
+      header: 'Port',
+      cell: (ctx) => <span className="text-emerald-300">{ctx.getValue()}</span>,
+    }),
+    columnHelper.accessor('grade', {
+      header: 'Grade',
+      cell: (ctx) => <span style={{ color: gradeColor(ctx.getValue()) }}>{ctx.getValue()}</span>,
+    }),
+    ...PROTOCOL_VERSIONS.map((v) =>
+      columnHelper.accessor((row) => row.protos.find((x) => x.version === v)?.supported ?? false, {
+        id: v,
+        header: v,
+        cell: (ctx) => {
+          const ok = ctx.getValue()
+          return <span className={ok ? 'text-rose-400' : 'text-emerald-400/60'}>{ok ? '●' : '○'}</span>
+        },
+      }),
+    ),
+  ], [])
+
   if (!rows.length) return null
-  const versions = ['SSLv3', 'TLSv1.0', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3']
   return (
     <div className="rounded-2xl bg-black/40 border border-white/10 p-5 mb-6">
       <h3 className="text-sm font-mono text-white/70 uppercase tracking-wider mb-4">Protocol Matrix</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs font-mono">
-          <thead>
-            <tr className="text-white/40 border-b border-white/5">
-              <th className="text-left py-2 pr-4">Port</th>
-              <th className="text-left py-2 pr-4">Grade</th>
-              {versions.map((v) => <th key={v} className="text-center py-2 px-2">{v}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.port} className="border-b border-white/5">
-                <td className="py-2 pr-4 text-emerald-300">{r.port}</td>
-                <td className="py-2 pr-4" style={{ color: gradeColor(r.grade) }}>{r.grade}</td>
-                {versions.map((v) => {
-                  const p = r.protos.find((x) => x.version === v)
-                  const ok = p?.supported
-                  return (
-                    <td key={v} className="text-center py-2 px-2">
-                      <span className={ok ? 'text-rose-400' : 'text-emerald-400/60'}>{ok ? '●' : '○'}</span>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable columns={columns} data={rows} animateRows={false} getRowId={(item) => item.port} />
       <p className="text-[10px] font-mono text-white/30 mt-3">● = negotiated (deprecated versions flagged separately) · ○ = not offered</p>
     </div>
   )

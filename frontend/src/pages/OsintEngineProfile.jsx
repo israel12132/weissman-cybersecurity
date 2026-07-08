@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
+import DataTable from '../components/ui/DataTable'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -16,6 +18,8 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+
+const columnHelper = createColumnHelper()
 
 const MAX_LINES = 500
 const ENGINE_ID = 'osint'
@@ -187,6 +191,44 @@ export default function OsintEngineProfile() {
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
     return findings.filter((f) => ids.has(String(f.id)))
   }, [findings, filteredFindings, searchQuery])
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor((f) => f.severity, {
+        id: 'severity',
+        header: () => t('pages.osintEngineProfile.col_severity'),
+        cell: (info) => info.row.original.severity || '—',
+      }),
+      columnHelper.accessor((f) => f.title, {
+        id: 'title',
+        header: () => t('pages.osintEngineProfile.col_title'),
+        cell: (info) => (
+          <span className="text-white/85">{info.row.original.title || '—'}</span>
+        ),
+      }),
+      columnHelper.accessor((f) => f.type || f.asset_type, {
+        id: 'type',
+        header: () => t('pages.osintEngineProfile.col_type'),
+        cell: (info) => {
+          const f = info.row.original
+          return f.type || f.asset_type || '—'
+        },
+      }),
+      columnHelper.accessor((f) => f.discovered_at, {
+        id: 'discovered',
+        header: () => t('pages.osintEngineProfile.col_discovered'),
+        cell: (info) => {
+          const { discovered_at: discoveredAt } = info.row.original
+          return (
+            <span className="text-white/50">
+              {discoveredAt ? new Date(discoveredAt).toLocaleString() : '—'}
+            </span>
+          )
+        },
+      }),
+    ],
+    [t],
+  )
 
   const handleRun = useCallback(async () => {
     if (!selectedClientId) {
@@ -442,28 +484,12 @@ export default function OsintEngineProfile() {
               compact
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs font-mono text-white/70">
-                <thead>
-                  <tr className="text-white/40 border-b border-white/10">
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_severity')}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_title')}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_type')}</th>
-                    <th className="text-left py-2">{t('pages.osintEngineProfile.col_discovered')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleFindings.map((f) => (
-                    <tr key={f.id} className="border-b border-white/5">
-                      <td className="py-2 pr-3">{f.severity || '—'}</td>
-                      <td className="py-2 pr-3 text-white/85">{f.title || '—'}</td>
-                      <td className="py-2 pr-3">{f.type || f.asset_type || '—'}</td>
-                      <td className="py-2 text-white/50">{f.discovered_at ? new Date(f.discovered_at).toLocaleString() : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              data={visibleFindings}
+              getRowId={(f) => f.id}
+              animateRows={false}
+            />
           )}
         </section>
       )}

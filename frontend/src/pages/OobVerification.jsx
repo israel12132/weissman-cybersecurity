@@ -2,13 +2,17 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Radio, RefreshCw, Zap, ExternalLink } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
+import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../lib/apiBase'
+
+const columnHelper = createColumnHelper()
 
 const PROBE_TYPE_KEYS = [
   { id: 'generic', key: 'probe_generic' },
@@ -153,6 +157,34 @@ export default function OobVerification() {
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
     return recentHits.filter((c, i) => ids.has(String(c.id || `recent-${i}`)))
   }, [recentHits, filteredFindings, searchQuery])
+
+  const recentHitsColumns = useMemo(() => [
+    columnHelper.accessor('timestamp', {
+      header: t('pages.oobVerification.col_time'),
+      cell: (ctx) => {
+        const ts = ctx.getValue()
+        return (
+          <span className="text-white/50 whitespace-nowrap">
+            {ts ? new Date(ts).toLocaleString() : '—'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor('channel', {
+      header: t('pages.oobVerification.col_channel'),
+      cell: (ctx) => <span className="text-cyan-300/70">{ctx.getValue()}</span>,
+    }),
+    columnHelper.accessor('source_ip', {
+      header: t('pages.oobVerification.col_source'),
+      cell: (ctx) => <span className="text-white/55">{ctx.getValue() || '—'}</span>,
+    }),
+    columnHelper.accessor('payload', {
+      header: t('pages.oobVerification.col_payload'),
+      cell: (ctx) => (
+        <span className="text-white/45 truncate max-w-xs block">{ctx.getValue() || '—'}</span>
+      ),
+    }),
+  ], [t])
 
   return (
     <PageShell
@@ -374,30 +406,13 @@ export default function OobVerification() {
                 compact
               />
             ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px] font-mono">
-                <thead>
-                  <tr className="text-left text-white/40 border-b border-white/10">
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_time')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_channel')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_source')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_payload')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {visibleRecentHits.map((cb) => (
-                    <tr key={cb.id} className={cb.interaction_token === probe?.token ? 'bg-emerald-500/5' : ''}>
-                      <td className="py-2 pr-3 text-white/50 whitespace-nowrap">
-                        {cb.timestamp ? new Date(cb.timestamp).toLocaleString() : '—'}
-                      </td>
-                      <td className="py-2 pr-3 text-cyan-300/70">{cb.channel}</td>
-                      <td className="py-2 pr-3 text-white/55">{cb.source_ip || '—'}</td>
-                      <td className="py-2 pr-3 text-white/45 truncate max-w-xs">{cb.payload || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={recentHitsColumns}
+              data={visibleRecentHits}
+              animateRows={false}
+              getRowId={(cb) => cb.id}
+              getRowAccentColor={(cb) => (cb.interaction_token === probe?.token ? '#10b981' : undefined)}
+            />
             )}
           </section>
         )}
