@@ -441,6 +441,24 @@
     "sign_in_again": "Sign in again",
     "open_operator_cockpit": "Open operator cockpit"
   },
+  "notifications": {
+    "title": "Notifications",
+    "aria_label": "Notifications",
+    "aria_with_unread": "Notifications, {{count}} unread",
+    "unread_count": "{{count}} new",
+    "mark_all_read": "Mark all as read",
+    "clear_all": "Clear all",
+    "empty": "No notifications yet",
+    "untitled": "Event",
+    "just_now": "just now",
+    "minutes_ago": "{{count}}m ago",
+    "hours_ago": "{{count}}h ago",
+    "days_ago": "{{count}}d ago"
+  },
+  "session": {
+    "idle_warning": "You've been inactive. You'll be signed out soon to protect this session.",
+    "stay_signed_in": "Stay signed in"
+  },
   "status": {
     "title": "Weissman Status",
     "subtitle": "Public health status for the Weissman Cybersecurity platform. Refreshes every 30 seconds.",

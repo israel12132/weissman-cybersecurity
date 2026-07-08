@@ -6,6 +6,7 @@ import AppSidebar from './AppSidebar'
 import ProfileMenu from '../ui/ProfileMenu'
 import GlobalSearch from '../GlobalSearch'
 import RateLimitStatus from '../RateLimitStatus'
+import NotificationBell from './NotificationBell'
 import { buildBreadcrumbs } from '../../lib/appNav'
 
 const SHELL_BG =
@@ -83,6 +84,7 @@ export default function AppShell({
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
               <RateLimitStatus compact />
+              <NotificationBell />
               <ProfileMenu />
             </div>
 

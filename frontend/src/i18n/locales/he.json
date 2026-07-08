@@ -443,6 +443,24 @@
     "sign_in_again": "התחבר מחדש",
     "open_operator_cockpit": "פתח את תא הבקרה"
   },
+  "notifications": {
+    "title": "התראות",
+    "aria_label": "התראות",
+    "aria_with_unread": "התראות, {{count}} שלא נקראו",
+    "unread_count": "{{count}} חדשות",
+    "mark_all_read": "סמן הכל כנקרא",
+    "clear_all": "נקה הכל",
+    "empty": "אין התראות עדיין",
+    "untitled": "אירוע",
+    "just_now": "הרגע",
+    "minutes_ago": "לפני {{count}} דק׳",
+    "hours_ago": "לפני {{count}} שע׳",
+    "days_ago": "לפני {{count}} ימים"
+  },
+  "session": {
+    "idle_warning": "היית לא פעיל. תנותק בקרוב כדי להגן על הסשן.",
+    "stay_signed_in": "השאר מחובר"
+  },
   "status": {
     "title": "סטטוס מערכת",
     "subtitle": "סטטוס פומבי של פלטפורמת Weissman Cybersecurity. מתרענן כל 30 שניות.",
