@@ -8,12 +8,36 @@ import {
   getPaginationRowModel,
   flexRender,
 } from '@tanstack/react-table'
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search, Download, Columns3, X } from 'lucide-react'
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
+
+/** Case-insensitive substring match across every cell value of a row. */
+function fuzzyGlobalFilter(row, _columnId, value) {
+  const needle = String(value ?? '').toLowerCase()
+  if (!needle) return true
+  return row.getAllCells().some((cell) => {
+    const v = cell.getValue()
+    return v != null && String(v).toLowerCase().includes(needle)
+  })
+}
+
+/** Serialize the currently-filtered rows × visible accessor columns to CSV. */
+function tableToCsv(table) {
+  const cols = table.getVisibleLeafColumns().filter((c) => typeof c.accessorFn === 'function')
+  const header = cols.map((c) =>
+    typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id,
+  )
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    header.map(esc).join(','),
+    ...table.getFilteredRowModel().rows.map((r) => cols.map((c) => esc(r.getValue(c.id))).join(',')),
+  ]
+  return lines.join('\n')
+}
 
 function SortIndicator({ sorted }) {
   if (!sorted) {
@@ -70,6 +94,13 @@ export default function DataTable({
   className = '',
   tableClassName = '',
   id,
+  // ── Opt-in toolbar (all default off → existing usages unchanged) ──
+  searchable = false,
+  searchPlaceholder = 'Search…',
+  exportable = false,
+  exportFilename = 'weissman-export',
+  columnToggle = false,
+  toolbarTitle,
 }) {
   const defaultPageSize = pageSizes?.[0] ?? 25
   const [internalPagination, setInternalPagination] = useState({
@@ -79,6 +110,13 @@ export default function DataTable({
   const effectivePagination = pagination ?? internalPagination
   const effectiveOnPaginationChange = onPaginationChange ?? setInternalPagination
 
+  // Uncontrolled global filter (only when searchable and not externally driven).
+  const [internalGlobalFilter, setInternalGlobalFilter] = useState('')
+  const globalFilterControlled = globalFilter !== undefined
+  const effectiveGlobalFilter = globalFilterControlled ? globalFilter : internalGlobalFilter
+  const [columnVisibility, setColumnVisibility] = useState({})
+  const [colMenuOpen, setColMenuOpen] = useState(false)
+
   const table = useReactTable({
     data: data ?? [],
     columns,
@@ -86,11 +124,14 @@ export default function DataTable({
       sorting,
       pagination: effectivePagination,
       columnFilters,
-      globalFilter,
+      globalFilter: effectiveGlobalFilter,
+      columnVisibility,
     },
     onSortingChange,
     onPaginationChange: effectiveOnPaginationChange,
-    globalFilterFn,
+    onGlobalFilterChange: globalFilterControlled ? undefined : setInternalGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
+    globalFilterFn: globalFilterFn ?? fuzzyGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -99,6 +140,19 @@ export default function DataTable({
       pagination: { pageIndex: 0, pageSize: defaultPageSize },
     },
   })
+
+  const hasToolbar = searchable || exportable || columnToggle || toolbarTitle
+
+  const handleExport = () => {
+    const csv = tableToCsv(table)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${exportFilename}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const { rows } = table.getRowModel()
   const totalFiltered = table.getFilteredRowModel().rows.length
@@ -128,10 +182,81 @@ export default function DataTable({
   }
 
   return (
-    <div
-      id={id}
-      className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md overflow-hidden ${className}`}
-    >
+    <div className="flex flex-col gap-2">
+      {hasToolbar && (
+        <div className="flex flex-wrap items-center gap-2">
+          {toolbarTitle && (
+            <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mr-auto">
+              {toolbarTitle}
+            </span>
+          )}
+          {searchable && (
+            <div className={`relative ${toolbarTitle ? '' : 'mr-auto'} min-w-[180px]`}>
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" aria-hidden />
+              <input
+                type="search"
+                value={effectiveGlobalFilter ?? ''}
+                onChange={(e) =>
+                  globalFilterControlled ? undefined : setInternalGlobalFilter(e.target.value)
+                }
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          )}
+          {columnToggle && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setColMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={colMenuOpen}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
+              >
+                <Columns3 className="w-3.5 h-3.5" aria-hidden />
+                Columns
+              </button>
+              {colMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute end-0 mt-1 z-30 min-w-[160px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-2xl p-1.5"
+                >
+                  <div className="flex items-center justify-between px-1.5 pb-1">
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)]">Columns</span>
+                    <button type="button" onClick={() => setColMenuOpen(false)} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                      <X className="w-3 h-3" aria-hidden />
+                    </button>
+                  </div>
+                  {table.getAllLeafColumns().filter((c) => typeof c.accessorFn === 'function').map((col) => (
+                    <label key={col.id} className="flex items-center gap-2 px-1.5 py-1 rounded text-[11px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] cursor-pointer">
+                      <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()} className="accent-cyan-500" />
+                      <span className="truncate">
+                        {typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {exportable && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={totalFiltered === 0}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              CSV
+            </button>
+          )}
+        </div>
+      )}
+      <div
+        id={id}
+        className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md overflow-hidden ${className}`}
+      >
       <div className="overflow-x-auto custom-scroll max-h-[70vh]">
         <table
           className={`weissman-data-table w-full text-left border-collapse ${tableClassName}`}
@@ -357,6 +482,7 @@ export default function DataTable({
             </PaginationBtn>
           </div>
         </div>
+      </div>
     </div>
   )
 }

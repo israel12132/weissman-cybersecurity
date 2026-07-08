@@ -442,6 +442,11 @@ export default function AdminManagement() {
               data={visibleUsers}
               getRowId={(u) => u.id}
               animateRows={false}
+              searchable
+              searchPlaceholder={t('pages.adminManagement.search_users', 'Search users…')}
+              exportable
+              exportFilename="weissman-users"
+              columnToggle
             />
           )}
         </section>

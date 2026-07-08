@@ -1651,6 +1651,7 @@
       "evidence_notice": "Detection rules from GET/POST /api/alert-rules. Firings correlate to live finding events in your tenant — rules never evaluate against synthetic event feeds."
     },
     "adminManagement": {
+      "search_users": "Search users…",
       "title": "Admin Management",
       "subtitle": "Enterprise User & Role Management",
       "subtitle_loading": "User & Role Management",

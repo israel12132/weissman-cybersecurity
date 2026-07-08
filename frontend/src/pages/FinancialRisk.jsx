@@ -293,6 +293,7 @@ export default function FinancialRisk() {
                   columns={columns}
                   data={contributors}
                   animateRows={false}
+                  searchable
                   getRowId={(r) => r.node_id}
                   getRowAccentColor={(r) => (r.kev_present ? '#ef4444' : r.crown_jewel ? '#a78bfa' : undefined)}
                 />

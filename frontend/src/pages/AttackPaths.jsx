@@ -300,6 +300,7 @@ export default function AttackPaths() {
                   columns={columns}
                   data={chokePoints}
                   animateRows={false}
+                  searchable
                   getRowId={(r) => r.node_id}
                   getRowAccentColor={(r) => (r.kev_present ? '#ef4444' : r.coverage_pct >= 66 ? '#f97316' : undefined)}
                 />

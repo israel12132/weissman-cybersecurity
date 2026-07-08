@@ -415,6 +415,9 @@ export default function ClientEvidenceVault() {
                 data={visibleEvidence}
                 animateRows={false}
                 getRowId={(item) => item.id}
+                searchable
+                exportable
+                exportFilename="weissman-evidence"
               />
             </div>
             )}

@@ -1659,6 +1659,7 @@
       "evidence_notice": "כללי detection מ-GET/POST /api/alert-rules. הפעלות מקושרות לאירועי ממצאים חיים ב-tenant — כללים לא מוערכים מול feeds סינתטיים."
     },
     "adminManagement": {
+      "search_users": "חיפוש משתמשים…",
       "title": "ניהול מנהלים",
       "subtitle": "ניהול משתמשים ותפקידים ארגוני",
       "subtitle_loading": "ניהול משתמשים ותפקידים",
