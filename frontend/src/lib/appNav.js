@@ -110,6 +110,7 @@ export const NAV_GROUPS = [
     id: 'governance',
     labelKey: 'nav.groups.governance',
     items: [
+      { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },
       { to: '/sbom', labelKey: 'nav.sbom', icon: '📦' },
       { to: '/risk-graph', labelKey: 'nav.risk_graph', icon: '🕸' },
