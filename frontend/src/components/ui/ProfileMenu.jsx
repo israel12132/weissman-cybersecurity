@@ -64,8 +64,8 @@ export default function ProfileMenu({ variant = 'header' }) {
   const lang = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
 
   const triggerClass = isSidebar
-    ? 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/20 hover:bg-white/[0.05] transition-colors'
-    : 'inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-white/10 bg-black/30 text-white/80 hover:border-white/30 hover:text-white'
+    ? 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-colors'
+    : 'inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-white'
 
   return (
     <div ref={ref} className={`relative ${isSidebar ? 'w-full' : ''}`}>
@@ -82,8 +82,8 @@ export default function ProfileMenu({ variant = 'header' }) {
         </span>
         {isSidebar ? (
           <span className="flex-1 min-w-0 text-start">
-            <span className="block text-[11px] text-white/85 font-mono truncate">{email}</span>
-            <span className="block text-[9px] uppercase tracking-widest text-white/35 mt-0.5">
+            <span className="block text-[11px] text-[var(--text-primary)] font-mono truncate">{email}</span>
+            <span className="block text-[9px] uppercase tracking-widest text-[var(--text-muted)] mt-0.5">
               {isSuper ? t('profile.ceo') : role}
             </span>
           </span>
@@ -105,17 +105,17 @@ export default function ProfileMenu({ variant = 'header' }) {
           aria-label={t('a11y.account_menu')}
           className={`${
             isSidebar ? 'absolute bottom-full mb-2 start-0 end-0' : 'absolute end-0 mt-2'
-          } w-64 rounded-xl border border-white/10 bg-[#0b1120]/98 backdrop-blur-md shadow-2xl z-50 p-3 space-y-3`}
+          } w-64 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] backdrop-blur-md shadow-2xl z-50 p-3 space-y-3`}
         >
           <div className="px-1">
-            <div className="text-[13px] text-white/85 font-mono truncate">{email}</div>
-            <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
+            <div className="text-[13px] text-[var(--text-primary)] font-mono truncate">{email}</div>
+            <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
               {isSuper ? t('profile.superadmin') : role}{session?.tenant_id ? ` · ${t('profile.tenant', { id: session.tenant_id })}` : ''}
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-3">
-            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5 px-1">
+          <div className="border-t border-[var(--border-default)] pt-3">
+            <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1.5 px-1">
               {t('common.language')}
             </div>
             <div className="flex gap-1">
@@ -129,7 +129,7 @@ export default function ProfileMenu({ variant = 'header' }) {
                     className={`flex-1 px-2 py-1 rounded text-[11px] font-mono ${
                       active
                         ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
-                        : 'text-white/55 border border-transparent hover:border-white/10'
+                        : 'text-[var(--text-tertiary)] border border-transparent hover:border-[var(--border-default)]'
                     }`}
                     aria-pressed={active}
                   >
@@ -140,27 +140,27 @@ export default function ProfileMenu({ variant = 'header' }) {
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-3">
-            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5 px-1">
+          <div className="border-t border-[var(--border-default)] pt-3">
+            <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1.5 px-1">
               {t('common.theme')}
             </div>
             <button
               type="button"
               onClick={toggleTheme}
-              className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] text-[12px] font-mono text-white/70 hover:border-white/20 hover:text-white/90 transition-colors"
+              className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[12px] font-mono text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
               aria-label={t('common.toggle_theme')}
             >
               <span className="flex items-center gap-2">
                 {theme === 'light' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                 {theme === 'light' ? t('common.theme_light') : t('common.theme_dark')}
               </span>
-              <span className="text-[9px] uppercase tracking-widest text-white/35">
+              <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
                 {t('common.switch')}
               </span>
             </button>
           </div>
 
-          <div className="border-t border-white/10 pt-3 space-y-0.5">
+          <div className="border-t border-[var(--border-default)] pt-3 space-y-0.5">
             {QUICK_LINKS.map(({ to, labelKey, icon: Icon }) => (
               <MenuLink
                 key={to}
@@ -180,7 +180,7 @@ export default function ProfileMenu({ variant = 'header' }) {
             )}
           </div>
 
-          <div className="border-t border-white/10 pt-3">
+          <div className="border-t border-[var(--border-default)] pt-3">
             <button
               type="button"
               onClick={() => { setOpen(false); logout() }}
@@ -201,10 +201,10 @@ function MenuLink({ to, label, icon: Icon, onClick }) {
     <Link
       to={to}
       onClick={onClick}
-      className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-white/70 hover:bg-white/5 hover:text-white"
+      className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] hover:text-white"
       role="menuitem"
     >
-      <Icon className="w-3.5 h-3.5 shrink-0 text-white/40" strokeWidth={1.75} />
+      <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" strokeWidth={1.75} />
       <span className="flex-1 truncate">{label}</span>
     </Link>
   )

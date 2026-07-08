@@ -68,13 +68,13 @@ export default function RouteLoader() {
           />
           <Logo compact size={44} className="relative animate-pulse-subtle drop-shadow-[0_0_18px_rgba(34,211,238,0.35)]" />
         </div>
-        <p className="text-[10px] font-mono tracking-[0.22em] text-white/35 uppercase mb-1.5">
+        <p className="text-[10px] font-mono tracking-[0.22em] text-[var(--text-muted)] uppercase mb-1.5">
           {t('components.routeLoader.loading_module')}
         </p>
         <p className="text-sm font-medium text-cyan-200/80 capitalize">
           {moduleName}
         </p>
-        <div className="mt-5 mx-auto w-32 h-[2px] rounded-full overflow-hidden bg-white/5">
+        <div className="mt-5 mx-auto w-32 h-[2px] rounded-full overflow-hidden bg-[var(--row-hover-bg)]">
           <div className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent animate-shimmer" />
         </div>
       </div>

@@ -34,7 +34,7 @@ export default function KevEpssBadge({ kev, epss, compact = false, className = '
   const hasEpss = epssLabel != null
 
   if (!hasKev && !hasEpss) {
-    return <span className={`text-[11px] font-mono text-white/25 ${className}`}>—</span>
+    return <span className={`text-[11px] font-mono text-[var(--text-disabled)] ${className}`}>—</span>
   }
 
   const epssColor =

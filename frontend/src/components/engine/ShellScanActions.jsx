@@ -19,7 +19,7 @@ export default function ShellScanActions({
         type="button"
         onClick={onRefresh}
         disabled={refreshDisabled || refreshLoading}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[11px] font-mono text-white/55 hover:text-white/85 hover:border-white/25 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40"
       >
         <RefreshCw className={`w-3.5 h-3.5 ${refreshLoading ? 'animate-spin' : ''}`} />
         {t('weissmanFindings.refresh')}

@@ -214,7 +214,7 @@ export function PremiumToastItem({
         <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${c.accent}`} aria-hidden="true" strokeWidth={2.25} />
         <div className="flex-1 min-w-0">
           {subtitle && (
-            <p className="text-[10px] uppercase tracking-[0.14em] text-white/40 mb-0.5 truncate">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-0.5 truncate">
               {subtitle}
             </p>
           )}
@@ -223,7 +223,7 @@ export function PremiumToastItem({
             <button
               type="button"
               onClick={() => { onAction(); handleDismiss() }}
-              className={`mt-2 text-[10px] uppercase tracking-widest px-2 py-1 rounded-md border ${c.border} ${c.accent} hover:bg-black/25 transition-colors`}
+              className={`mt-2 text-[10px] uppercase tracking-widest px-2 py-1 rounded-md border ${c.border} ${c.accent} hover:bg-[var(--table-surface)] transition-colors`}
               style={{ transitionDuration: 'var(--duration-fast)' }}
             >
               {actionLabel}
@@ -234,14 +234,14 @@ export function PremiumToastItem({
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss notification"
-          className="shrink-0 p-1 rounded-md text-white/40 hover:text-white/90 hover:bg-white/8 transition-colors"
+          className="shrink-0 p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/8 transition-colors"
           style={{ transitionDuration: 'var(--duration-fast)' }}
         >
           <X className="w-3.5 h-3.5" strokeWidth={2.5} />
         </button>
       </div>
       {ttl > 0 && (
-        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/5" aria-hidden="true">
+        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--row-hover-bg)]" aria-hidden="true">
           <div
             className={`h-full ${c.bar} animate-toast-progress origin-left`}
             style={{

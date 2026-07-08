@@ -9,7 +9,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/35">{label}</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</div>
       )}
       <div className="flex flex-wrap gap-2">
         {pills.map((pill) => {

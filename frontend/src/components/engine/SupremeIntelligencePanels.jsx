@@ -44,18 +44,18 @@ export function CategoryScoresPanel({ scores, title = 'Security domain scores', 
     ? axes.map(([k, label]) => [k, label])
     : Object.entries(scores).map(([k]) => [k, k.replace(/_/g, ' ')])
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-4 mb-4">
-      <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-3">{title}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-4">
+      <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-3">{title}</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {entries.map(([k, label]) => {
           const v = Number(scores[k] ?? 0)
           return (
             <div key={k}>
-              <div className="flex justify-between text-[10px] font-mono text-white/45 mb-1">
+              <div className="flex justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
                 <span className="truncate pr-1">{label}</span>
                 <span style={{ color: scoreColor(v) }}>{v}</span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{ width: `${v}%`, backgroundColor: scoreColor(v) }}
@@ -76,7 +76,7 @@ export function ToxicBanner({ finding, title = 'Toxic combination detected' }) {
       <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300 mb-1">{title}</p>
       <h3 className="text-sm font-bold text-rose-100 leading-snug">{finding.title}</h3>
       {finding.description && (
-        <p className="text-xs text-white/55 mt-2 leading-relaxed">{finding.description}</p>
+        <p className="text-xs text-[var(--text-tertiary)] mt-2 leading-relaxed">{finding.description}</p>
       )}
     </div>
   )
@@ -92,10 +92,10 @@ export function RoadmapCard({ finding, title = 'Prioritized remediation roadmap'
         {steps.map((s, i) => (
           <li key={i} className="flex gap-2 text-xs font-mono">
             <span className="shrink-0 text-emerald-400 font-bold">{s.priority ?? i + 1}.</span>
-            <span className="text-white/80">
+            <span className="text-[var(--text-secondary)]">
               <b className="text-emerald-200">{s.action}</b>
               {s.detail ? ` — ${s.detail}` : ''}
-              {s.tier && <span className="text-white/35"> ({s.tier})</span>}
+              {s.tier && <span className="text-[var(--text-muted)]"> ({s.tier})</span>}
             </span>
           </li>
         ))}
@@ -112,9 +112,9 @@ export function AgentGapPanel({ findings, title = 'Agent-required capabilities' 
       <p className="text-[10px] font-mono uppercase tracking-widest text-violet-300/70 mb-3">{title}</p>
       <ul className="space-y-2">
         {gaps.map((f, i) => (
-          <li key={i} className="text-xs font-mono text-white/70 leading-relaxed">
+          <li key={i} className="text-xs font-mono text-[var(--text-secondary)] leading-relaxed">
             <span className="text-violet-300">○</span> {f.title}
-            {f.description && <span className="block text-white/40 mt-0.5 pl-4">{f.description}</span>}
+            {f.description && <span className="block text-[var(--text-muted)] mt-0.5 pl-4">{f.description}</span>}
           </li>
         ))}
       </ul>
@@ -132,10 +132,10 @@ export function AttackPathsPanel({ paths, title = 'Attack paths' }) {
       </p>
       <div className="space-y-2 max-h-48 overflow-auto">
         {list.map((p, i) => (
-          <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
-            <p className="text-xs font-mono text-white/85">{p.title}</p>
+          <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+            <p className="text-xs font-mono text-[var(--text-primary)]">{p.title}</p>
             {Array.isArray(p.attack_path) && (
-              <ol className="mt-1 list-decimal list-inside text-[10px] font-mono text-white/45">
+              <ol className="mt-1 list-decimal list-inside text-[10px] font-mono text-[var(--text-muted)]">
                 {p.attack_path.map((s, j) => <li key={j}>{s}</li>)}
               </ol>
             )}

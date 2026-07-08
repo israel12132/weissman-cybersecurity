@@ -47,7 +47,7 @@ export default function EmptyState({
 
   return (
     <div
-      className={`flex flex-col items-center text-center rounded-2xl border border-white/[0.07] bg-[var(--card-bg)]/40 backdrop-blur-sm ${
+      className={`flex flex-col items-center text-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--card-bg)]/40 backdrop-blur-sm ${
         compact ? 'py-8 px-5' : 'py-14 px-8'
       } ${className}`}
       role="status"

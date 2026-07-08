@@ -62,7 +62,7 @@ export function FindingVerifyChecks({ checks }) {
               {c.passed ? t('findings.liveVerify.pass') : t('findings.liveVerify.fail')}
             </span>
           </div>
-          <p className="text-white/55 leading-relaxed break-words">{c.detail}</p>
+          <p className="text-[var(--text-tertiary)] leading-relaxed break-words">{c.detail}</p>
         </li>
       ))}
     </ul>
@@ -77,12 +77,12 @@ export function FindingVerifyPanel({ verification }) {
       <div className="flex flex-wrap items-center gap-2">
         <LiveVerdictBadge verification={verification} />
         {verification.confidence != null && (
-          <span className="text-[10px] font-mono text-white/45">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('findings.liveVerify.confidence_pct', { pct: Math.round(verification.confidence * 100) })}
           </span>
         )}
         {verification.verified_at && (
-          <span className="text-[10px] font-mono text-white/30 ltr-only">
+          <span className="text-[10px] font-mono text-[var(--text-disabled)] ltr-only">
             {new Date(verification.verified_at).toLocaleString()}
           </span>
         )}
@@ -206,7 +206,7 @@ export default function FindingVerifyButton({
                 .finally(() => setLoading(false))
             }}
             disabled={loading || !rawId}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-mono border border-white/10 text-white/50 hover:text-white/80 disabled:opacity-40"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] disabled:opacity-40"
           >
             {t('findings.liveVerify.button_deep')}
           </button>

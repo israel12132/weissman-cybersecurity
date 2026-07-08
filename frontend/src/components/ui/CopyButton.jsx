@@ -32,7 +32,7 @@ export default function CopyButton({ value, label = 'Copy', size = 'sm', classNa
         e.stopPropagation()
         copy()
       }}
-      className={`inline-flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] text-white/45 hover:text-cyan-300/90 hover:border-cyan-500/30 transition-colors ${pad} ${className}`}
+      className={`inline-flex items-center gap-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-muted)] hover:text-cyan-300/90 hover:border-cyan-500/30 transition-colors ${pad} ${className}`}
       aria-label={copied ? 'Copied' : label}
       title={copied ? 'Copied' : label}
     >
@@ -58,12 +58,12 @@ export function CopyableField({ label, value, mono = true, className = '' }) {
   return (
     <div className={`flex items-start gap-2 min-w-0 ${className}`}>
       {label && (
-        <span className="shrink-0 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-1">
+        <span className="shrink-0 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide pt-1">
           {label}
         </span>
       )}
       <code
-        className={`flex-1 min-w-0 text-[12px] text-white/75 break-all ltr-only ${
+        className={`flex-1 min-w-0 text-[12px] text-[var(--text-secondary)] break-all ltr-only ${
           mono ? 'font-mono' : ''
         }`}
       >
