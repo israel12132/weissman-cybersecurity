@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Factory, Cpu, AlertTriangle, Activity, Zap, Shield, ShieldAlert,
-  ShieldCheck, Network,
+  ShieldCheck, Network, Fingerprint,
 } from 'lucide-react';
 import PageShell from './PageShell';
 import AgentRequiredGate from '../components/engine/AgentRequiredGate';
@@ -229,6 +229,8 @@ export default function OtIcsSecurity() {
   const [lastJobId, setLastJobId] = useState(null);
   const [engineFindingsMap, setEngineFindingsMap] = useState({});
   const [toast, setToast] = useState(null);
+  const [fingerprints, setFingerprints] = useState([]);
+  const [fpLoading, setFpLoading] = useState(false);
 
   const fetchOtDevices = useCallback(async () => {
     try {
@@ -245,6 +247,30 @@ export default function OtIcsSecurity() {
       setLoading(false);
     }
   }, []);
+
+  // Per-client passive fingerprints — deeper forensic detail (vendor hint,
+  // confidence, raw protocol bytes) beyond the global device inventory.
+  // Wired to GET /api/clients/:id/ot-ics/fingerprints.
+  const fetchFingerprints = useCallback(async (cid) => {
+    if (cid == null || cid === '') {
+      setFingerprints([]);
+      return;
+    }
+    setFpLoading(true);
+    try {
+      const r = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
+      const d = await r.json().catch(() => ({}));
+      setFingerprints(Array.isArray(d.fingerprints) ? d.fingerprints : []);
+    } catch {
+      setFingerprints([]);
+    } finally {
+      setFpLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFingerprints(selectedClientId);
+  }, [selectedClientId, fetchFingerprints]);
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now();
@@ -427,6 +453,64 @@ export default function OtIcsSecurity() {
             ))}
           </div>
         </div>
+
+        {selectedClientId != null && (fpLoading || fingerprints.length > 0) && (
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <Fingerprint className="w-4 h-4 text-cyan-400" />
+              {t('pages.otIcsSecurity.fingerprints_heading')}
+              {!fpLoading && (
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">({fingerprints.length})</span>
+              )}
+            </h3>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3">{t('pages.otIcsSecurity.fingerprints_hint')}</p>
+            {fpLoading ? (
+              <SkeletonTable rows={3} cols={4} />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {fingerprints.map((fp) => {
+                  const conf = Math.max(0, Math.min(1, Number(fp.confidence) || 0));
+                  const confPct = Math.round(conf * 100);
+                  const confColor = conf >= 0.75 ? '#4ade80' : conf >= 0.4 ? '#facc15' : '#fb923c';
+                  return (
+                    <div key={fp.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <code className="text-[12px] font-mono text-[var(--text-primary)]">
+                          {fp.host || '—'}:{fp.port || 0}
+                        </code>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300/85 uppercase tracking-wider">
+                          {fp.protocol || t('pages.otIcsSecurity.fp_unknown_protocol')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] shrink-0">
+                          {t('pages.otIcsSecurity.fp_vendor')}
+                        </span>
+                        <span className="text-[12px] text-[var(--text-secondary)] truncate">
+                          {fp.vendor_hint || t('pages.otIcsSecurity.fp_unknown_vendor')}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
+                          <span className="uppercase tracking-widest">{t('pages.otIcsSecurity.fp_confidence')}</span>
+                          <span style={{ color: confColor }}>{confPct}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-[var(--border-strong)] overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${confPct}%`, background: confColor }} />
+                        </div>
+                      </div>
+                      {fp.raw_excerpt_hex && (
+                        <code className="ltr-only block text-[10px] font-mono text-[var(--text-tertiary)] bg-[var(--bg-3)] rounded-lg px-2 py-1.5 truncate" title={fp.raw_excerpt_hex}>
+                          {fp.raw_excerpt_hex}
+                        </code>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
