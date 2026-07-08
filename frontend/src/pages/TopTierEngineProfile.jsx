@@ -17,6 +17,8 @@ import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeade
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
 import {
   CartesianGrid,
   Line,
@@ -28,6 +30,8 @@ import {
   Bar,
   BarChart,
 } from 'recharts'
+
+const columnHelper = createColumnHelper()
 
 function JsonBlock({ value }) {
   return (
@@ -142,6 +146,32 @@ export default function TopTierEngineProfile() {
     const ids = new Set(filteredJobFindings.map((f) => String(f.id)))
     return jobs.filter((j) => ids.has(String(j.job_id)))
   }, [jobs, filteredJobFindings, searchQuery])
+
+  const columns = useMemo(() => [
+    columnHelper.accessor('job_id', {
+      header: t('pages.topTierEngineProfile.col_job'),
+      cell: (info) => info.row.original.job_id,
+    }),
+    columnHelper.accessor('kind', {
+      header: t('pages.topTierEngineProfile.col_kind'),
+      cell: (info) => info.row.original.kind,
+    }),
+    columnHelper.accessor('status', {
+      header: t('pages.topTierEngineProfile.col_status'),
+      cell: (info) => {
+        const j = info.row.original
+        return <>{j.status}{j.probe_status ? ` / ${j.probe_status}` : ''}</>
+      },
+    }),
+    columnHelper.accessor('findings_count', {
+      header: t('pages.topTierEngineProfile.col_findings'),
+      cell: (info) => info.row.original.findings_count,
+    }),
+    columnHelper.accessor('created_at', {
+      header: t('pages.topTierEngineProfile.col_created'),
+      cell: (info) => info.row.original.created_at || '-',
+    }),
+  ], [t])
 
   const statusChartData = useMemo(() => {
     const tally = { completed: 0, running: 0, failed: 0, pending: 0, dead: 0 }
@@ -456,30 +486,12 @@ export default function TopTierEngineProfile() {
               compact
             />
           ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-xs font-mono text-white/70">
-              <thead>
-                <tr className="text-white/40 border-b border-white/10">
-                  <th className="text-left py-2">{t('pages.topTierEngineProfile.col_job')}</th>
-                  <th className="text-left py-2">{t('pages.topTierEngineProfile.col_kind')}</th>
-                  <th className="text-left py-2">{t('pages.topTierEngineProfile.col_status')}</th>
-                  <th className="text-left py-2">{t('pages.topTierEngineProfile.col_findings')}</th>
-                  <th className="text-left py-2">{t('pages.topTierEngineProfile.col_created')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleJobs.slice(0, 20).map((j) => (
-                  <tr key={`${j.job_id}-${j.created_at}`} className="border-b border-white/5">
-                    <td className="py-2">{j.job_id}</td>
-                    <td className="py-2">{j.kind}</td>
-                    <td className="py-2">{j.status}{j.probe_status ? ` / ${j.probe_status}` : ''}</td>
-                    <td className="py-2">{j.findings_count}</td>
-                    <td className="py-2">{j.created_at || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            data={visibleJobs.slice(0, 20)}
+            animateRows={false}
+            getRowId={(j) => `${j.job_id}-${j.created_at}`}
+          />
           )}
         </section>
         </AgentRequiredGate>

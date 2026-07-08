@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/apiBase'
 import PageShell from './PageShell'
+import DataTable from '../components/ui/DataTable'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { confirmDialog } from '../utils/confirmDialog'
+
+const columnHelper = createColumnHelper()
 
 /**
  * Admin Management Dashboard - Enterprise User & Role Management
@@ -177,6 +181,95 @@ export default function AdminManagement() {
     return users.filter((u) => emails.has(u.email))
   }, [users, filteredFindings, searchQuery])
 
+  const columns = useMemo(() => [
+    columnHelper.accessor('email', {
+      header: 'Email',
+      cell: (ctx) => (
+        <span className="text-white font-mono">{ctx.getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((u) => u.role || 'viewer', {
+      id: 'role',
+      header: 'Role',
+      cell: (ctx) => {
+        const role = ctx.getValue()
+        return (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
+              role === 'ceo'
+                ? 'bg-amber-500/20 text-amber-400'
+                : role === 'admin'
+                ? 'bg-violet-500/20 text-violet-400'
+                : role === 'operator'
+                ? 'bg-cyan-500/20 text-cyan-400'
+                : role === 'analyst'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-slate-500/20 text-slate-400'
+            }`}
+          >
+            {role}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor((u) => u.is_active !== false, {
+      id: 'status',
+      header: 'Status',
+      cell: (ctx) => {
+        const active = ctx.getValue()
+        return (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${
+              active
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-red-500/20 text-red-400'
+            }`}
+          >
+            {active ? 'Active' : 'Inactive'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor((u) => Boolean(u.is_superadmin), {
+      id: 'superadmin',
+      header: 'Superadmin',
+      cell: (ctx) =>
+        ctx.getValue() ? (
+          <span className="text-amber-400 font-semibold">★</span>
+        ) : null,
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      enableSorting: false,
+      cell: (ctx) => {
+        const user = ctx.row.original
+        return (
+          <div className="text-right space-x-2">
+            <button
+              id={`adminmgmt-edit-user-${user.id}-btn`}
+              type="button"
+              onClick={() => openEditModal(user)}
+              className="px-2 py-1 rounded text-xs border border-white/20 text-slate-400 hover:text-white hover:bg-white/10"
+            >
+              Edit
+            </button>
+            {user.is_active !== false && (
+              <button
+                id={`adminmgmt-deactivate-user-${user.id}-btn`}
+                type="button"
+                onClick={() => handleDeactivateUser(user.id, user.email)}
+                className="px-2 py-1 rounded text-xs border border-red-500/30 text-red-400 hover:bg-red-500/20"
+              >
+                Deactivate
+              </button>
+            )}
+          </div>
+        )
+      },
+    }),
+  ], [t])
+
   if (!isCeo && !session?.is_superadmin) {
     return (
       <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle_loading')}>
@@ -344,92 +437,12 @@ export default function AdminManagement() {
           ) : visibleUsers.length === 0 ? (
             <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Role
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Superadmin
-                    </th>
-                    <th className="text-right py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleUsers.map((user, idx) => (
-                    <tr
-                      key={user.id || idx}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                    >
-                      <td className="py-3 px-2 text-white font-mono">{user.email}</td>
-                      <td className="py-3 px-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
-                            user.role === 'ceo'
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : user.role === 'admin'
-                              ? 'bg-violet-500/20 text-violet-400'
-                              : user.role === 'operator'
-                              ? 'bg-cyan-500/20 text-cyan-400'
-                              : user.role === 'analyst'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-slate-500/20 text-slate-400'
-                          }`}
-                        >
-                          {user.role || 'viewer'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            user.is_active !== false
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-red-500/20 text-red-400'
-                          }`}
-                        >
-                          {user.is_active !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        {user.is_superadmin && (
-                          <span className="text-amber-400 font-semibold">★</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-2 text-right space-x-2">
-                        <button
-                          id={`adminmgmt-edit-user-${user.id}-btn`}
-                          type="button"
-                          onClick={() => openEditModal(user)}
-                          className="px-2 py-1 rounded text-xs border border-white/20 text-slate-400 hover:text-white hover:bg-white/10"
-                        >
-                          Edit
-                        </button>
-                        {user.is_active !== false && (
-                          <button
-                            id={`adminmgmt-deactivate-user-${user.id}-btn`}
-                            type="button"
-                            onClick={() => handleDeactivateUser(user.id, user.email)}
-                            className="px-2 py-1 rounded text-xs border border-red-500/30 text-red-400 hover:bg-red-500/20"
-                          >
-                            Deactivate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              data={visibleUsers}
+              getRowId={(u) => u.id}
+              animateRows={false}
+            />
           )}
         </section>
 

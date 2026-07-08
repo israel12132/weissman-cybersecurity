@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
+import DataTable from '../components/ui/DataTable'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+
+const columnHelper = createColumnHelper()
 
 async function fileToBase64(file) {
   const buf = await file.arrayBuffer()
@@ -186,6 +190,87 @@ export default function ClientEvidenceVault() {
     return evidence.filter((item) => ids.has(String(item.id)))
   }, [evidence, filteredFindings, searchQuery])
 
+  const columns = useMemo(() => [
+    columnHelper.accessor((ev) => ev.filename, {
+      id: 'file',
+      header: t('pages.clientEvidenceVault.col_file'),
+      cell: ({ row }) => {
+        const ev = row.original
+        return (
+          <div className="text-white">
+            <div className="font-medium">{ev.filename}</div>
+            <div className="text-[11px] text-slate-500">{new Date(ev.created_at).toLocaleString()}</div>
+          </div>
+        )
+      },
+    }),
+    columnHelper.accessor((ev) => ev.label || '', {
+      id: 'label',
+      header: t('pages.clientEvidenceVault.col_label'),
+      cell: ({ row }) => {
+        const ev = row.original
+        return <span className="text-slate-200">{ev.label || <span className="text-slate-600">—</span>}</span>
+      },
+    }),
+    columnHelper.accessor((ev) => Number(ev.size_bytes || 0), {
+      id: 'size',
+      header: t('pages.clientEvidenceVault.col_size'),
+      cell: ({ row }) => (
+        <span className="text-slate-200 font-mono">{formatBytes(row.original.size_bytes)}</span>
+      ),
+    }),
+    columnHelper.accessor((ev) => ev.sha256_hex || '', {
+      id: 'sha',
+      header: t('pages.clientEvidenceVault.col_sha'),
+      cell: ({ row }) => (
+        <span className="text-slate-300 font-mono text-[11px]">
+          {(row.original.sha256_hex || '').slice(0, 16)}…
+        </span>
+      ),
+    }),
+    columnHelper.display({
+      id: 'links',
+      header: t('pages.clientEvidenceVault.col_links'),
+      enableSorting: false,
+      cell: ({ row }) => {
+        const ev = row.original
+        return (
+          <div className="text-slate-300 font-mono text-[11px]">
+            <div>{t('pages.clientEvidenceVault.eng_link', { id: ev.engagement_id ?? '—' })}</div>
+            <div>{t('pages.clientEvidenceVault.vuln_link', { id: ev.vulnerability_id ?? '—' })}</div>
+          </div>
+        )
+      },
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: t('pages.clientEvidenceVault.col_actions'),
+      enableSorting: false,
+      cell: ({ row }) => {
+        const ev = row.original
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => downloadEvidence(ev)}
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
+            >
+              {t('pages.clientEvidenceVault.download')}
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteEvidence(ev)}
+              className="px-3 py-1 text-xs bg-red-900/30 text-red-200 rounded hover:bg-red-900/50 border border-red-500/20"
+            >
+              {t('pages.clientEvidenceVault.delete')}
+            </button>
+          </div>
+        )
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t])
+
   if (loading) {
     return (
       <PageShell title={t('pages.clientEvidenceVault.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
@@ -324,56 +409,13 @@ export default function ClientEvidenceVault() {
                 compact
               />
             ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-400 border-b border-slate-700">
-                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_file')}</th>
-                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_label')}</th>
-                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_size')}</th>
-                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_sha')}</th>
-                    <th className="py-2 pr-4">{t('pages.clientEvidenceVault.col_links')}</th>
-                    <th className="py-2 pr-2">{t('pages.clientEvidenceVault.col_actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleEvidence.map((ev) => (
-                    <tr key={ev.id} className="border-b border-slate-800/60">
-                      <td className="py-2 pr-4 text-white">
-                        <div className="font-medium">{ev.filename}</div>
-                        <div className="text-[11px] text-slate-500">{new Date(ev.created_at).toLocaleString()}</div>
-                      </td>
-                      <td className="py-2 pr-4 text-slate-200">{ev.label || <span className="text-slate-600">—</span>}</td>
-                      <td className="py-2 pr-4 text-slate-200 font-mono">{formatBytes(ev.size_bytes)}</td>
-                      <td className="py-2 pr-4 text-slate-300 font-mono text-[11px]">
-                        {(ev.sha256_hex || '').slice(0, 16)}…
-                      </td>
-                      <td className="py-2 pr-4 text-slate-300 font-mono text-[11px]">
-                        <div>{t('pages.clientEvidenceVault.eng_link', { id: ev.engagement_id ?? '—' })}</div>
-                        <div>{t('pages.clientEvidenceVault.vuln_link', { id: ev.vulnerability_id ?? '—' })}</div>
-                      </td>
-                      <td className="py-2 pr-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => downloadEvidence(ev)}
-                            className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
-                          >
-                            {t('pages.clientEvidenceVault.download')}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteEvidence(ev)}
-                            className="px-3 py-1 text-xs bg-red-900/30 text-red-200 rounded hover:bg-red-900/50 border border-red-500/20"
-                          >
-                            {t('pages.clientEvidenceVault.delete')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4">
+              <DataTable
+                columns={columns}
+                data={visibleEvidence}
+                animateRows={false}
+                getRowId={(item) => item.id}
+              />
             </div>
             )}
             </>
