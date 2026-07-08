@@ -6,6 +6,7 @@ import { ENGINES_BY_ID, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { downloadBytes } from '../lib/pdfExport'
+import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
@@ -23,6 +24,10 @@ import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useClient } from '../context/ClientContext'
 import { useRegisterHubClient } from '../context/EngineHubContext'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+
+const columnHelper = createColumnHelper()
 
 const MAX_LINES_REAL = 1000
 const DEDICATED_ENGINE_IDS = new Set(strategicEnginesNeedingDedicatedPage().map((e) => e.id))
@@ -333,6 +338,18 @@ export default function EngineDetail() {
   const engineType    = getEngineType(engineId || '')
   const engineTypeMeta= ENGINE_TYPE_META[engineType] || ENGINE_TYPE_META.live_probe
   const extraParamDefs= useMemo(() => getEngineParams(engine), [engine])
+  const metadataColumns = useMemo(() => [
+    columnHelper.accessor('k', {
+      header: '',
+      enableSorting: false,
+      cell: (info) => <span className="text-white/35">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('v', {
+      header: '',
+      enableSorting: false,
+      cell: (info) => <span className="text-white/75">{info.getValue()}</span>,
+    }),
+  ], [])
   const [runHistory, setRunHistory] = useState([])
   const lastHistoryRun= runHistory[0] ?? null
 
@@ -893,23 +910,19 @@ export default function EngineDetail() {
         >
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
             <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_metadata')}</h3>
-            <table className="w-full text-[12px] font-mono">
-              <tbody className="divide-y divide-white/5">
-                {[
-                  ['ID', engine.id],
-                  ['Group', groupDef?.label || engine.group || '—'],
-                  ['Type', `${engineTypeMeta.icon} ${engineTypeMeta.label}`],
-                  ['MITRE', engine.mitre || '—'],
-                  ['Requires Target', engine.requiresTarget ? 'Yes' : 'Optional'],
-                  ['Parameters', extraParamDefs.length > 0 ? `${extraParamDefs.length} configurable` : 'Standard only'],
-                ].map(([k, v]) => (
-                  <tr key={k}>
-                    <td className="py-1.5 pr-4 text-white/35 w-40">{k}</td>
-                    <td className="py-1.5 text-white/75">{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={metadataColumns}
+              data={[
+                ['ID', engine.id],
+                ['Group', groupDef?.label || engine.group || '—'],
+                ['Type', `${engineTypeMeta.icon} ${engineTypeMeta.label}`],
+                ['MITRE', engine.mitre || '—'],
+                ['Requires Target', engine.requiresTarget ? 'Yes' : 'Optional'],
+                ['Parameters', extraParamDefs.length > 0 ? `${extraParamDefs.length} configurable` : 'Standard only'],
+              ].map(([k, v]) => ({ k, v }))}
+              animateRows={false}
+              getRowId={(item) => item.k}
+            />
           </div>
           <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
             <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('engines.detail_api_ref')}</h3>

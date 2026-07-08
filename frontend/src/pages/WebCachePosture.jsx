@@ -10,6 +10,10 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+
+const columnHelper = createColumnHelper()
 
 // Command Center GUI for the `cache_poisoning` engine (Web Cache Poisoning & Deception Posture).
 // Every control maps 1:1 to a real engine parameter read from the scan body via ArsenalConfig.
@@ -105,48 +109,60 @@ const SEV_MATRIX_COLORS = {
   info: '#64748b',
 }
 
+const SEV_MATRIX_ORDER = ['critical', 'high', 'medium', 'low', 'info']
+
 function RiskMatrix({ matrix, t }) {
-  if (!matrix || typeof matrix !== 'object' || Object.keys(matrix).length === 0) return null
-  const cats = Object.keys(matrix).sort()
-  const sevs = ['critical', 'high', 'medium', 'low', 'info']
+  const data = useMemo(() => {
+    if (!matrix || typeof matrix !== 'object') return []
+    return Object.keys(matrix).sort().map((cat) => {
+      const row = matrix[cat] || {}
+      const meta = CATEGORY_META[cat] || CATEGORY_META.other
+      return {
+        cat,
+        icon: meta.icon,
+        label: meta.label,
+        critical: Number(row.critical || 0),
+        high: Number(row.high || 0),
+        medium: Number(row.medium || 0),
+        low: Number(row.low || 0),
+        info: Number(row.info || 0),
+      }
+    })
+  }, [matrix])
+
+  const columns = useMemo(() => [
+    columnHelper.accessor((r) => r.label, {
+      id: 'category',
+      header: t('pages.webCachePosture.category', 'Category'),
+      cell: (ctx) => (
+        <span className="text-white/60 whitespace-nowrap">{ctx.row.original.icon} {ctx.row.original.label}</span>
+      ),
+    }),
+    ...SEV_MATRIX_ORDER.map((s) => columnHelper.accessor((r) => r[s], {
+      id: s,
+      header: s.slice(0, 4),
+      cell: (ctx) => {
+        const n = ctx.row.original[s]
+        return n > 0 ? (
+          <span className="inline-block min-w-[1.25rem] px-1 rounded font-bold text-center" style={{ backgroundColor: `${SEV_MATRIX_COLORS[s]}22`, color: SEV_MATRIX_COLORS[s] }}>{n}</span>
+        ) : (
+          <span className="text-white/15">·</span>
+        )
+      },
+    })),
+  ], [t])
+
+  if (data.length === 0) return null
+
   return (
     <div className="mt-4 pt-4 border-t border-white/5">
       <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.risk_matrix', 'Risk matrix (category × severity)')}</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[10px] font-mono border-collapse">
-          <thead>
-            <tr>
-              <th className="text-left text-white/30 pb-1 pr-2">{t('pages.webCachePosture.category', 'Category')}</th>
-              {sevs.map((s) => (
-                <th key={s} className="text-center text-white/30 pb-1 px-1 uppercase">{s.slice(0, 4)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {cats.map((cat) => {
-              const row = matrix[cat] || {}
-              const meta = CATEGORY_META[cat] || CATEGORY_META.other
-              return (
-                <tr key={cat} className="border-t border-white/5">
-                  <td className="py-1 pr-2 text-white/60 whitespace-nowrap">{meta.icon} {meta.label}</td>
-                  {sevs.map((s) => {
-                    const n = Number(row[s] || 0)
-                    return (
-                      <td key={s} className="text-center py-1 px-1">
-                        {n > 0 ? (
-                          <span className="inline-block min-w-[1.25rem] px-1 rounded font-bold" style={{ backgroundColor: `${SEV_MATRIX_COLORS[s]}22`, color: SEV_MATRIX_COLORS[s] }}>{n}</span>
-                        ) : (
-                          <span className="text-white/15">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={data}
+        animateRows={false}
+        getRowId={(item) => item.cat}
+      />
     </div>
   )
 }

@@ -9,6 +9,10 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+
+const columnHelper = createColumnHelper()
 
 // Agentless CSPM/CNAPP — `cloud_posture` engine (Wiz-style cross-account read-only IAM role).
 // Every control maps 1:1 to CloudScanOptions / ArsenalConfig keys in the scan body.
@@ -160,6 +164,28 @@ function SubScoreBar({ label, value }) {
 
 function Scorecard({ summary }) {
   const { t } = useTranslation()
+  const columns = useMemo(() => [
+    columnHelper.accessor('resource_id', {
+      header: () => t('pages.cloudPostureCommandCenter.table_resource'),
+      cell: (ctx) => (
+        <span className="truncate max-w-[220px] block" title={ctx.row.original.resource_id}>{ctx.row.original.resource_id}</span>
+      ),
+    }),
+    columnHelper.accessor('resource_type', {
+      header: () => t('pages.cloudPostureCommandCenter.table_type'),
+      cell: (ctx) => ctx.row.original.resource_type,
+    }),
+    columnHelper.accessor('domain', {
+      header: () => t('pages.cloudPostureCommandCenter.table_domain'),
+      cell: (ctx) => ctx.row.original.domain,
+    }),
+    columnHelper.accessor('risk_score', {
+      header: () => t('pages.cloudPostureCommandCenter.table_risk'),
+      cell: (ctx) => (
+        <span className={SEV_STYLE[ctx.row.original.peak_severity]?.text || 'text-white/50'}>{ctx.row.original.risk_score}</span>
+      ),
+    }),
+  ], [t])
   if (!summary) return null
   const score = summary.posture_score ?? summary.score ?? 0
   const grade = summary.grade || '—'
@@ -359,30 +385,12 @@ function Scorecard({ summary }) {
           {riskRegister.length > 0 && (
             <div className="lg:col-span-2">
               <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300/70 mb-2">{t('pages.cloudPostureCommandCenter.risk_register_title')}</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[10px] font-mono">
-                  <thead>
-                    <tr className="text-white/35 border-b border-white/5">
-                      <th className="text-left py-1 pr-2">{t('pages.cloudPostureCommandCenter.table_resource')}</th>
-                      <th className="text-left py-1 pr-2">{t('pages.cloudPostureCommandCenter.table_type')}</th>
-                      <th className="text-left py-1 pr-2">{t('pages.cloudPostureCommandCenter.table_domain')}</th>
-                      <th className="text-right py-1">{t('pages.cloudPostureCommandCenter.table_risk')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {riskRegister.slice(0, 10).map((row) => (
-                      <tr key={row.resource_id} className="border-b border-white/5 text-white/60">
-                        <td className="py-1.5 pr-2 truncate max-w-[220px]" title={row.resource_id}>{row.resource_id}</td>
-                        <td className="py-1.5 pr-2">{row.resource_type}</td>
-                        <td className="py-1.5 pr-2">{row.domain}</td>
-                        <td className="py-1.5 text-right">
-                          <span className={SEV_STYLE[row.peak_severity]?.text || 'text-white/50'}>{row.risk_score}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={columns}
+                data={riskRegister.slice(0, 10)}
+                animateRows={false}
+                getRowId={(item) => item.resource_id}
+              />
             </div>
           )}
         </div>
