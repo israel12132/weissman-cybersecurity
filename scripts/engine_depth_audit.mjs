@@ -56,7 +56,7 @@ const webChecks = [
     ],
   ],
   ['grpc_reflection_attack', ['grpc-web', 'grpc.reflection.v1']],
-  ['cors_misconfiguration', ['OPTIONS', 'null']],
+  ['cors_misconfiguration', ['OPTIONS', 'null', 'toxic_chain', 'run_cors_misconfiguration_result_ctx']],
   ['swagger_abuse', ['probe_paths_concurrent', 'openapi']],
   ['soap_injection', ['xxe_envelope', 'probe_paths_concurrent']],
   ['odata_injection', ['$filter', 'probe_paths_concurrent']],

@@ -17,6 +17,7 @@ use std::time::Instant;
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
 const ENGINE_GRAPHQL_DEEP: &str = "graphql_deep_attack";
+const ENGINE_CORS: &str = "cors_misconfiguration";
 
 fn web_finding(
     engine_id: &str,
@@ -652,87 +653,224 @@ fn cors_misconfiguration_signal(
 }
 
 // ── cors_misconfiguration ─────────────────────────────────────────────────────
+fn cors_probe_urls(base: &str, ctx: &EngineRunContext) -> Vec<String> {
+    let root = normalize_url(base);
+    let mut urls = vec![root.clone()];
+    for p in &ctx.discovered_paths {
+        urls.push(join_url(&root, p));
+    }
+    if let Some(bus) = ctx.intelligence_bus.as_ref() {
+        for art in bus.snapshot() {
+            let kind = art.kind.to_ascii_lowercase();
+            if kind.contains("graphql")
+                || art.source_url.to_ascii_lowercase().contains("graphql")
+                || art.proof.starts_with("graphql_")
+            {
+                urls.push(art.source_url.clone());
+            }
+        }
+    }
+    urls.sort();
+    urls.dedup();
+    urls
+}
+
+fn cors_test_origins(host: &str) -> Vec<(Option<String>, &'static str)> {
+    vec![
+        (None, "baseline"),
+        (
+            Some(format!("https://weissman-cors-probe.{host}")),
+            "evil_reflection",
+        ),
+        (Some("null".into()), "null_origin"),
+        (
+            Some(format!("https://{host}.evil.weissman-cors-probe.test")),
+            "subdomain_suffix",
+        ),
+        (
+            Some(format!("https://evil-{host}")),
+            "prefix_host",
+        ),
+    ]
+}
+
 pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
+    run_cors_misconfiguration_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_cors_misconfiguration_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
-    let url = normalize_url(target);
     let host = extract_host(target);
+    let auth_pairs = graphql_auth_header_pairs(&ctx.job_params);
+    let auth_refs = auth_pairs_as_refs(&auth_pairs);
+    let has_auth = !auth_pairs.is_empty();
     let mut findings: Vec<Value> = Vec::new();
-    let evil_origin = format!("https://weissman-cors-probe.{}", host);
-    let origins: [Option<&str>; 3] = [
-        None,
-        Some(evil_origin.as_str()),
-        Some("null"),
-    ];
-    for sent_origin in origins {
-        let probe = if let Some(o) = sent_origin {
-            http_get_with_headers(&client, &url, &[("Origin", o)]).await
-        } else {
-            http_get(&client, &url).await
-        };
-        let Some(p) = probe else { continue };
-        let Some(acao) = header_value(&p.headers, "access-control-allow-origin") else {
-            continue;
-        };
-        let creds = has_header(&p.headers, "access-control-allow-credentials");
-        if let Some((title, severity, detail)) =
-            cors_misconfiguration_signal(sent_origin, acao, creds)
+    let mut flags = CorsProbeFlags::default();
+
+    for url in cors_probe_urls(target, ctx) {
+        for (origin_opt, origin_tag) in cors_test_origins(&host) {
+            let probe = if let Some(ref o) = origin_opt {
+                if has_auth {
+                    let mut hdrs = vec![("Origin", o.as_str())];
+                    for (k, v) in &auth_refs {
+                        hdrs.push((k, v));
+                    }
+                    http_get_with_headers(&client, &url, &hdrs).await
+                } else {
+                    http_get_with_headers(&client, &url, &[("Origin", o.as_str())]).await
+                }
+            } else if has_auth {
+                http_get_with_headers(&client, &url, &auth_refs).await
+            } else {
+                http_get(&client, &url).await
+            };
+            let Some(p) = probe else { continue };
+            let Some(acao) = header_value(&p.headers, "access-control-allow-origin") else {
+                continue;
+            };
+            let creds = has_header(&p.headers, "access-control-allow-credentials");
+            let sent_ref = origin_opt.as_deref();
+            if let Some((title, severity, detail)) =
+                cors_misconfiguration_signal(sent_ref, acao, creds)
+            {
+                if sent_ref.is_some() {
+                    flags.reflected = true;
+                }
+                if creds {
+                    flags.credentials = true;
+                }
+                if acao.trim() == "*" {
+                    flags.wildcard = true;
+                }
+                if origin_tag == "null_origin" {
+                    flags.null_origin = true;
+                }
+                if url.to_ascii_lowercase().contains("graphql") {
+                    flags.graphql_surface = true;
+                }
+                if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                    bus.publish_http_surface(
+                        "cors_misconfiguration_url",
+                        &p.final_url,
+                        &p.final_url,
+                        ENGINE_CORS,
+                        "http_surface_cors_reflection",
+                    );
+                }
+                findings.push(web_finding_sync(
+                    ENGINE_CORS,
+                    title,
+                    severity,
+                    "T1185",
+                    &format!(
+                        "{detail} on {} (ACAO='{acao}', credentials={creds}, origin_probe={origin_tag}, auth={has_auth}).",
+                        p.final_url
+                    ),
+                    target,
+                    &["graphql_deep_attack", "clickjacking_engine", "idor_advanced"],
+                    &["external_exposure_supreme", "identity_attack_chain"],
+                    json!({
+                        "endpoint": p.final_url,
+                        "acao": acao,
+                        "credentials": creds,
+                        "origin_probe": origin_tag,
+                        "authenticated": has_auth
+                    }),
+                ));
+            }
+        }
+
+        let evil = format!("https://weissman-cors-probe.{host}");
+        if let Some(p) = http_method_with_headers(
+            &client,
+            "OPTIONS",
+            &url,
+            None,
+            &[
+                ("Origin", evil.as_str()),
+                ("Access-Control-Request-Method", "POST"),
+                ("Access-Control-Request-Headers", "Authorization, Content-Type, X-Api-Key"),
+            ],
+        )
+        .await
         {
-            findings.push(web_finding(
-                "cors_misconfiguration",
-                title,
-                severity,
-                "T1185",
-                &format!(
-                    "{} on {} (ACAO='{}', credentials={}, Origin sent={:?}).",
-                    detail, p.final_url, acao, creds, sent_origin
-                ),
-                target,
-            ));
-            break;
+            let acao = header_value(&p.headers, "access-control-allow-origin").unwrap_or_default();
+            let acam = header_value(&p.headers, "access-control-allow-methods").unwrap_or_default();
+            let acah = header_value(&p.headers, "access-control-allow-headers")
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if !acao.is_empty() && acam.to_ascii_uppercase().contains("POST") {
+                flags.preflight_post = true;
+                if acah.contains("authorization") {
+                    flags.preflight_auth_header = true;
+                }
+                findings.push(web_finding_sync(
+                    ENGINE_CORS,
+                    "Preflight allows cross-origin POST",
+                    if has_header(&p.headers, "access-control-allow-credentials") {
+                        "critical"
+                    } else {
+                        "high"
+                    },
+                    "T1185",
+                    &format!(
+                        "OPTIONS {} → ACAO='{acao}' ACAM='{acam}' ACAAH='{acah}' — pairs with graphql_deep_attack GET introspection exfil.",
+                        p.final_url
+                    ),
+                    target,
+                    &["graphql_deep_attack", "api_mass_assignment"],
+                    &["risk_superposition_collapse"],
+                    json!({"endpoint": p.final_url, "acam": acam, "acah": acah}),
+                ));
+            }
         }
     }
 
-    if let Some(p) = http_method_with_headers(
-        &client,
-        "OPTIONS",
-        &url,
-        None,
-        &[
-            ("Origin", evil_origin.as_str()),
-            ("Access-Control-Request-Method", "POST"),
-            ("Access-Control-Request-Headers", "Authorization, Content-Type"),
-        ],
-    )
-    .await
-    {
-        let acao = header_value(&p.headers, "access-control-allow-origin").unwrap_or_default();
-        let acam = header_value(&p.headers, "access-control-allow-methods").unwrap_or_default();
-        if !acao.is_empty() && acam.contains("POST") {
-            findings.push(web_finding(
-                "cors_misconfiguration",
-                "Preflight allows cross-origin POST",
-                "high",
-                "T1185",
-                &format!(
-                    "OPTIONS {} → ACAO='{acao}' ACAM='{acam}' — credentialed cross-site writes may be permitted.",
-                    p.final_url
-                ),
-                target,
-            ));
-        }
+    if flags.reflected && flags.credentials && flags.preflight_post {
+        findings.push(web_finding_sync(
+            ENGINE_CORS,
+            "Toxic chain: reflected ACAO + credentials + preflight POST",
+            "critical",
+            "T1185",
+            "Live CORS fusion: arbitrary origin reflected with credentials and POST preflight — authenticated cross-site read/write against API/GraphQL surfaces.",
+            target,
+            &["graphql_deep_attack", "websocket_attack"],
+            &["risk_superposition_collapse", "identity_attack_chain"],
+            json!({"toxic_chain": true, "graphql_surface": flags.graphql_surface}),
+        ));
     }
+
     if findings.is_empty() {
-        empty_ok("cors_misconfiguration", target)
+        empty_ok(ENGINE_CORS, target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("cors_misconfiguration: {} finding(s)", findings.len()),
+            findings,
+            format!(
+                "{ENGINE_CORS}: {n} live finding(s) (reflect={} creds={} graphql={})",
+                flags.reflected, flags.credentials, flags.graphql_surface
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct CorsProbeFlags {
+    reflected: bool,
+    credentials: bool,
+    wildcard: bool,
+    null_origin: bool,
+    preflight_post: bool,
+    preflight_auth_header: bool,
+    graphql_surface: bool,
+}
+
 cli_wrapper!(run_cors_misconfiguration, run_cors_misconfiguration_result);
 
 // ── http2_attack ──────────────────────────────────────────────────────────────
