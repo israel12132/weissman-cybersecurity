@@ -1,7 +1,8 @@
 # Weissman Cybersecurity
 
 > An autonomous offensive-security + active-defence platform for SOC teams and
-> security service providers. One backend, **530+ production engines**, an endpoint
+> security service providers. One backend, **563 production engine IDs** (303 real
+> live probes + 212 aliases + 48 agent-required), an endpoint
 > agent with on-host UEBA, a customer-facing command center, SOAR playbooks,
 > attack-path inference, and an NL→SQL "Ask Weissman" console.
 
@@ -20,7 +21,7 @@ design notes — every living doc is in the repo root or under `docs/`.
 | **Worker** (`weissman-worker`) | Async job consumer with `SKIP LOCKED`, heartbeats, per-kind timeouts. Hot-query backed by the partial index `ix_async_jobs_pending(created_at, kind) WHERE status='pending'` |
 | **Endpoint agent** (`weissman-agent`) | 5.3 MB single binary (Linux / macOS / Windows). 15 on-host detections + **UEBA baseline sampler** — 7-day learning window, z-score > 3 fires `medium`, > 6 fires `high` |
 | **Command center** (React/Vite) | Cockpit with live KPI strip + SSE telemetry, findings drawer with EPSS/KEV badges, **PlaybookBuilder** (visual SOAR editor), **AskWeissman** (NL→SQL chat), audit log viewer, agent management |
-| **Engines** | **530+ production engine IDs** (≈319 canonical implementations + aliases; web / cloud / OT-ICS / AI-LLM / supply-chain / network / mobile / OSINT / fuzzers / endpoint agent), every one wired to a real HTTP / TCP / DNS / TLS / agent probe and verified end-to-end in CI by `scripts/verify_engine_wiring.mjs` — **no fabricated or randomised findings**: every persisted finding derives from a live probe, with agent-required and advisory results clearly labelled `info` / `advisory` |
+| **Engines** | **563 production engine IDs** — CI-verified breakdown (`scripts/engine_reality_audit.mjs`): **303 real live probes** (295 distinct implementations), **212 aliases** that resolve to a real probe, **48 agent-required** host-level techniques; web / cloud / OT-ICS / AI-LLM / supply-chain / network / mobile / OSINT / fuzzers / endpoint agent. Every one wired to a real HTTP / TCP / DNS / TLS / agent probe and verified end-to-end in CI by `scripts/verify_engine_wiring.mjs` (0 gaps, 0 no_path) — **no fabricated or randomised findings**: every persisted finding derives from a live probe, with agent-required and advisory results clearly labelled `info` / `advisory` |
 | **Threat intel** | Live mirrors of **CISA KEV** (6h refresh) and **FIRST.org EPSS** (12h, on-demand). Every CVE-tagged finding is enriched at persist-time with `epss_score`, `epss_percentile`, `kev_listed`, `kev_known_ransomware`, `kev_due_date` |
 | **Detection intelligence** | Finding-cluster dedup (sha256 of `target‖signature‖cwe`); FP/TP feedback loop with auto-suppression at 3 FPs; confidence multiplier on `risk_score`; reweighted ordering: `KEV → EPSS → CVSS × confidence` |
 | **Attack-path inference** | Dijkstra over `risk_graph_nodes` from `internet_exposed → crown_jewel`; CVSS+EPSS+KEV-weighted edges; top-K + choke-point analysis; snapshots persisted in `attack_path_snapshots` |
@@ -163,7 +164,7 @@ with the raw 3.1 JSON at <code>/api/openapi.json</code>.
                                   └────────┬───────────────────────┘
                                            │
                                   ┌────────▼───────────┐    HTTP/TCP/DNS/TLS
-                                  │ weissman-worker    │──────────▶ 530+ engines
+                                  │ weissman-worker    │──────────▶ 563 engines
                                   │  SKIP LOCKED       │
                                   │  per-kind timeouts │
                                   └────────┬───────────┘

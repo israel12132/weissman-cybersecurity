@@ -38,7 +38,7 @@ xdg-open docs/sales/viewer/index.html
 | **א׳** | 001–008 | מבוא, מפת מוצר, billing, Agent, עקרון Live Only |
 | **ב׳** | 009–018 | Server, Worker, Agent, DB, Redis, Paddle, SMTP, LLM, OAST, Frontend |
 | **ג׳** | 019–126 | **כל** מסך Command Center (108 routes) |
-| **ד׳** | 127–659 | **533 מנועים** — אנציקלopediה מלאה |
+| **ד׳** | 127–659 | **563 מנועי-ID** — אנציקלopediה מלאה |
 
 ---
 
