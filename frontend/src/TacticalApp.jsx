@@ -4,6 +4,7 @@ import { ProtectedProviders } from './providers/ProtectedProviders'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
+import RequireRole from './components/auth/RequireRole'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
@@ -240,7 +241,7 @@ export default function TacticalApp() {
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
           <Route path="engine-reliability" element={<EngineReliability />} />
-          <Route path="admin" element={<AdminManagement />} />
+          <Route path="admin" element={<RequireRole min="ceo"><AdminManagement /></RequireRole>} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/new" element={<ClientNew />} />
           <Route path="clients/:id" element={<ClientDetail />} />
@@ -256,9 +257,9 @@ export default function TacticalApp() {
           <Route path="social-engineering" element={<SocialEngineering />} />
           <Route path="remediation" element={<RemediationHub />} />
           <Route path="engine-management" element={<EngineManagementConsole />} />
-          <Route path="system-config" element={<SystemConfiguration />} />
+          <Route path="system-config" element={<RequireRole min="admin"><SystemConfiguration /></RequireRole>} />
           <Route path="metrics" element={<MetricsDashboard />} />
-          <Route path="ceo-vault" element={<CeoVault />} />
+          <Route path="ceo-vault" element={<RequireRole min="ceo"><CeoVault /></RequireRole>} />
           <Route path="risk-graph" element={<RiskGraphVisualization />} />
           <Route path="compliance" element={<ComplianceFrameworks />} />
           <Route path="sbom" element={<SBOMBrowser />} />
@@ -278,7 +279,7 @@ export default function TacticalApp() {
           <Route path="playbooks" element={<PlaybookBuilder />} />
           <Route path="ask" element={<AskWeissman />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
-          <Route path="supreme-nerve-center" element={<SupremeNerveCenter />} />
+          <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />
           <Route path="*" element={<NotFound />} />
         </Route>
         <Route path="*" element={<NotFound />} />

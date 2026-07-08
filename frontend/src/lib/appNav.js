@@ -2,8 +2,9 @@
  * Single source of truth for AppShell navigation and breadcrumbs.
  * Only routes registered in main.jsx — no fake nav items.
  */
+import { sessionHasRole } from './roles'
 
-/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean }} NavItem */
+/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean, minRole?: string }} NavItem */
 /** @typedef {{ id: string, labelKey: string, items: NavItem[] }} NavGroup */
 
 /** Production-ready surfaces — always visible at the top of the sidebar. */
@@ -252,11 +253,23 @@ function dedupeCrumbs(crumbs) {
   return out
 }
 
-/** Gate restricted nav targets (admin / CEO vault). */
+/**
+ * Minimum role required per restricted route. Kept in lockstep with the route
+ * guards in TacticalApp.jsx so the sidebar and the guard can never drift.
+ * @type {Record<string, string>}
+ */
+export const NAV_MIN_ROLE = {
+  '/admin': 'ceo',
+  '/ceo-vault': 'ceo',
+  '/ceo': 'ceo',
+  '/supreme-nerve-center': 'ceo',
+  '/system-config': 'admin',
+}
+
+/** Gate restricted nav targets via the shared RBAC ladder. */
 export function canAccessNavItem(item, session) {
   if (item?.hideFromNav) return false
-  const restricted = item?.to === '/admin' || item?.to === '/ceo-vault' || item?.to === '/ceo' || item?.to === '/supreme-nerve-center'
-  if (!restricted) return true
-  const role = (session?.role || '').toLowerCase()
-  return session?.is_superadmin === true || session?.is_ceo === true || role === 'ceo'
+  const min = item?.minRole || NAV_MIN_ROLE[item?.to]
+  if (!min) return true
+  return sessionHasRole(session, min)
 }

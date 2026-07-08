@@ -437,7 +437,11 @@
     "privacy": "פרטיות",
     "status_link": "סטטוס",
     "api_docs": "תיעוד API",
-    "secure_connection": "TLS 1.3 · סשן Zero-trust · מתועד ביומן ביקורת"
+    "secure_connection": "TLS 1.3 · סשן Zero-trust · מתועד ביומן ביקורת",
+    "verifying_access": "מאמת הרשאות",
+    "requires_role": "אזור זה מחייב תפקיד {{min}} ומעלה. לחשבון שלך יש תפקיד {{role}}. אם מנהל שדרג אותך זה עתה, התחבר מחדש כדי לרענן את הטוקן.",
+    "sign_in_again": "התחבר מחדש",
+    "open_operator_cockpit": "פתח את תא הבקרה"
   },
   "status": {
     "title": "סטטוס מערכת",

@@ -435,7 +435,11 @@
     "privacy": "Privacy",
     "status_link": "Status",
     "api_docs": "API docs",
-    "secure_connection": "TLS 1.3 · Zero-trust session · Audit logged"
+    "secure_connection": "TLS 1.3 · Zero-trust session · Audit logged",
+    "verifying_access": "Verifying access",
+    "requires_role": "This area requires the {{min}} role or higher. Your account has the {{role}} role. If an admin just upgraded you, sign in again so your token refreshes.",
+    "sign_in_again": "Sign in again",
+    "open_operator_cockpit": "Open operator cockpit"
   },
   "status": {
     "title": "Weissman Status",

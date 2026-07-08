@@ -49,7 +49,18 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
 
   it('allows restricted targets for ceo / superadmin', () => {
     expect(canAccessNavItem({ to: '/admin' }, { role: 'ceo' })).toBe(true)
-    expect(canAccessNavItem({ to: '/ceo-vault' }, { is_ceo: true })).toBe(true)
+    expect(canAccessNavItem({ to: '/ceo-vault' }, { role: 'ceo' })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo' }, { is_superadmin: true })).toBe(true)
+  })
+
+  it('gates /system-config at admin (not visible to operator/analyst)', () => {
+    expect(canAccessNavItem({ to: '/system-config' }, { role: 'operator' })).toBe(false)
+    expect(canAccessNavItem({ to: '/system-config' }, { role: 'admin' })).toBe(true)
+    expect(canAccessNavItem({ to: '/system-config' }, { role: 'ceo' })).toBe(true)
+  })
+
+  it('honors an explicit per-item minRole override', () => {
+    expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'analyst' })).toBe(false)
+    expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'operator' })).toBe(true)
   })
 })

@@ -5,14 +5,12 @@ import {
   setStoredAccessToken,
   clearStoredAccessToken,
 } from '../lib/apiBase'
+import { effectiveRole, sessionRoleRank, sessionHasRole } from '../lib/roles'
 
 const AuthContext = createContext(null)
 
 function computeIsCeo(session) {
-  if (!session || session.ok === false) return false
-  if (session.is_superadmin === true) return true
-  const r = (session.role || '').toString().trim().toLowerCase()
-  return r === 'ceo'
+  return sessionHasRole(session, 'ceo')
 }
 
 export function AuthProvider({ children }) {
@@ -157,12 +155,18 @@ export function AuthProvider({ children }) {
   }, [])
 
   const isCeo = computeIsCeo(session)
+  const role = effectiveRole(session)
+  const roleRank = sessionRoleRank(session)
+  const hasRole = useCallback((minRole) => sessionHasRole(session, minRole), [session])
 
   const value = {
     isAuthenticated,
     isLoading,
     session,
     isCeo,
+    role,
+    roleRank,
+    hasRole,
     login,
     verifyMfa,
     logout,
@@ -176,4 +180,13 @@ export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
+}
+
+/**
+ * Convenience hook for role checks in pages/components.
+ * `usePermissions().hasRole('admin')` → boolean.
+ */
+export function usePermissions() {
+  const { role, roleRank, hasRole, isCeo, session } = useAuth()
+  return { role, roleRank, hasRole, isCeo, isSuperadmin: session?.is_superadmin === true }
 }
