@@ -24,6 +24,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.uebaAnomalies'
 const columnHelper = createColumnHelper()
@@ -45,22 +46,10 @@ function fmtNum(n) {
 
 function anomaliesCsv(rows) {
   const header = ['agent_id', 'metric_name', 'observed', 'baseline_mean', 'baseline_stddev', 'z_score', 'severity', 'detected_at']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((r) =>
-      [r.agent_id, r.metric_name, r.observed, r.baseline_mean, r.baseline_stddev, r.z_score, r.severity, r.detected_at]
-        .map(esc)
-        .join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-ueba-anomalies-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = rows.map((r) => [
+    r.agent_id, r.metric_name, r.observed, r.baseline_mean, r.baseline_stddev, r.z_score, r.severity, r.detected_at,
+  ])
+  downloadCsv(data, header, 'weissman-ueba-anomalies')
 }
 
 export default function UebaAnomalies() {

@@ -24,26 +24,17 @@ import { usePermissions } from '../context/AuthContext'
 import { confirmDialog } from '../utils/confirmDialog'
 import { apiFetch } from '../lib/apiBase'
 import { isExpired, isExpiringSoon } from '../lib/suppressionStatus'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.findingSuppressions'
 const columnHelper = createColumnHelper()
 
 function suppressionsCsv(rows) {
   const header = ['engine', 'signature_hash', 'target_glob', 'reason', 'hit_count', 'created_at', 'expires_at']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((r) =>
-      [r.engine, r.signature_hash, r.target_glob, r.reason, r.hit_count, r.created_at, r.expires_at].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-suppressions-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = rows.map((r) => [
+    r.engine, r.signature_hash, r.target_glob, r.reason, r.hit_count, r.created_at, r.expires_at,
+  ])
+  downloadCsv(data, header, 'weissman-suppressions')
 }
 
 export default function FindingSuppressions() {

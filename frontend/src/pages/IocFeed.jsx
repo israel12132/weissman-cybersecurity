@@ -20,24 +20,15 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.iocFeed'
 const columnHelper = createColumnHelper()
 
 function iocCsv(rows) {
   const header = ['type', 'value', 'severity', 'source', 'added', 'finding_id']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((r) => [r.type, r.value, r.severity, r.source, r.added, r.finding_id].map(esc).join(',')),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-iocs-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = rows.map((r) => [r.type, r.value, r.severity, r.source, r.added, r.finding_id])
+  downloadCsv(data, header, 'weissman-iocs')
 }
 
 export default function IocFeed() {
