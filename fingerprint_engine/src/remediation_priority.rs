@@ -62,8 +62,23 @@ pub struct RemediationItem {
     pub oldest_finding_age_days: Option<i64>,
     /// Remediation SLA for this action: target window, remaining days, and breach state.
     pub sla: SlaStatus,
+    /// Framework controls this fix helps satisfy (advisory crosswalk keyed on CWE). Lets a CISO
+    /// see the audit-coverage payoff of a fix, deduped across the group's CWEs.
+    pub compliance: Vec<ControlRef>,
     pub rationale: String,
     pub finding_ids: Vec<String>,
+}
+
+/// A control/requirement in an external framework that a remediation helps satisfy.
+/// This is an advisory crosswalk, not a certification claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ControlRef {
+    /// e.g. "OWASP Top 10 2021", "NIST 800-53r5", "PCI DSS 4.0".
+    pub framework: &'static str,
+    /// The control/requirement id within that framework, e.g. "A03:2021", "SI-10", "6.2.4".
+    pub control: &'static str,
+    /// Short human title for the control.
+    pub title: &'static str,
 }
 
 /// Where an action stands against its remediation SLA.
@@ -181,6 +196,162 @@ fn evaluate_sla(
     }
 }
 
+/// Parse a CWE id ("CWE-89", "cwe89", "89") to its numeric id. `None` if it isn't a CWE number.
+fn cwe_number(cwe: &str) -> Option<u32> {
+    let digits: String = cwe.chars().filter(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        None
+    } else {
+        digits.parse().ok()
+    }
+}
+
+/// Advisory crosswalk from a weakness (CWE) to framework controls a fix helps satisfy.
+///
+/// Mappings favour published, defensible crosswalks: the OWASP Top 10 2021 category comes from
+/// MITRE/OWASP's own CWE→category mapping; NIST 800-53r5 and PCI DSS 4.0 entries use the
+/// well-established control most directly addressed by the weakness. Unknown CWEs return empty —
+/// we never invent coverage. Returned refs are deduped by (framework, control) upstream.
+fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
+    let Some(n) = cwe_number(cwe) else {
+        return Vec::new();
+    };
+    // Helper category refs reused across related CWEs.
+    let injection = ControlRef {
+        framework: "OWASP Top 10 2021",
+        control: "A03:2021",
+        title: "Injection",
+    };
+    let broken_access = ControlRef {
+        framework: "OWASP Top 10 2021",
+        control: "A01:2021",
+        title: "Broken Access Control",
+    };
+    let crypto_fail = ControlRef {
+        framework: "OWASP Top 10 2021",
+        control: "A02:2021",
+        title: "Cryptographic Failures",
+    };
+    let authn_fail = ControlRef {
+        framework: "OWASP Top 10 2021",
+        control: "A07:2021",
+        title: "Identification and Authentication Failures",
+    };
+    let si10 = ControlRef {
+        framework: "NIST 800-53r5",
+        control: "SI-10",
+        title: "Information Input Validation",
+    };
+    let ia5 = ControlRef {
+        framework: "NIST 800-53r5",
+        control: "IA-5",
+        title: "Authenticator Management",
+    };
+    let ia2 = ControlRef {
+        framework: "NIST 800-53r5",
+        control: "IA-2",
+        title: "Identification and Authentication",
+    };
+    let sc8 = ControlRef {
+        framework: "NIST 800-53r5",
+        control: "SC-8",
+        title: "Transmission Confidentiality and Integrity",
+    };
+    let ac6 = ControlRef {
+        framework: "NIST 800-53r5",
+        control: "AC-6",
+        title: "Least Privilege",
+    };
+
+    match n {
+        // --- Injection family -------------------------------------------------------------
+        89 => vec![
+            injection,
+            si10,
+            ControlRef { framework: "PCI DSS 4.0", control: "6.2.4", title: "Injection prevention" },
+        ],
+        79 => vec![
+            injection,
+            si10,
+            ControlRef { framework: "PCI DSS 4.0", control: "6.2.4", title: "XSS prevention" },
+        ],
+        77 | 78 | 94 | 943 => vec![injection, si10],
+        90 | 91 | 611 => vec![injection, si10],
+        // --- Broken access control --------------------------------------------------------
+        22 | 23 | 35 => vec![
+            broken_access,
+            si10,
+            ControlRef { framework: "NIST 800-53r5", control: "AC-3", title: "Access Enforcement" },
+        ],
+        639 | 862 | 863 | 425 => vec![
+            broken_access,
+            ControlRef { framework: "NIST 800-53r5", control: "AC-3", title: "Access Enforcement" },
+        ],
+        352 => vec![
+            broken_access,
+            ControlRef { framework: "OWASP ASVS 4.0", control: "V4.2.2", title: "CSRF defenses" },
+        ],
+        918 => vec![ControlRef {
+            framework: "OWASP Top 10 2021",
+            control: "A10:2021",
+            title: "Server-Side Request Forgery",
+        }],
+        732 => vec![
+            broken_access,
+            ac6,
+            ControlRef { framework: "PCI DSS 4.0", control: "7.2.1", title: "Least-privilege access" },
+        ],
+        // --- Cryptographic failures -------------------------------------------------------
+        327 | 326 | 328 => vec![
+            crypto_fail,
+            ControlRef { framework: "NIST 800-53r5", control: "SC-13", title: "Cryptographic Protection" },
+        ],
+        319 | 311 => vec![
+            crypto_fail,
+            sc8,
+            ControlRef { framework: "PCI DSS 4.0", control: "4.2.1", title: "Encrypt data in transit" },
+        ],
+        // --- AuthN / secrets --------------------------------------------------------------
+        798 | 259 | 321 => vec![
+            authn_fail,
+            ia5,
+            ControlRef { framework: "PCI DSS 4.0", control: "8.3.1", title: "No hardcoded credentials" },
+        ],
+        287 | 306 | 288 => vec![
+            authn_fail,
+            ia2,
+            ControlRef { framework: "PCI DSS 4.0", control: "8.3", title: "Strong authentication" },
+        ],
+        522 | 640 => vec![authn_fail, ia5],
+        // --- Misconfiguration / exposure --------------------------------------------------
+        16 | 1004 | 614 => vec![ControlRef {
+            framework: "OWASP Top 10 2021",
+            control: "A05:2021",
+            title: "Security Misconfiguration",
+        }],
+        200 | 209 | 532 => vec![
+            crypto_fail,
+            ControlRef { framework: "NIST 800-53r5", control: "SC-28", title: "Protection of Information at Rest" },
+        ],
+        _ => Vec::new(),
+    }
+}
+
+/// Union the crosswalk over a group's distinct CWEs, deduped by (framework, control).
+fn compliance_for_group(group: &[FindingInput]) -> Vec<ControlRef> {
+    let mut out: Vec<ControlRef> = Vec::new();
+    for f in group {
+        for ctrl in controls_for_cwe(&f.cwe) {
+            if !out.iter().any(|c| c.framework == ctrl.framework && c.control == ctrl.control) {
+                out.push(ctrl);
+            }
+        }
+    }
+    // Deterministic order for stable output.
+    out.sort_by(|a, b| a.framework.cmp(b.framework).then(a.control.cmp(b.control)));
+    out
+}
+
 /// Map a categorical severity to an approximate 0..10 risk when a finding was never risk-ranked.
 fn severity_fallback_risk(severity: &str) -> f64 {
     match severity.trim().to_ascii_lowercase().as_str() {
@@ -288,6 +459,7 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
             // least this long). Uses the full-precision max_risk, not the display-rounded value.
             let oldest_age = group.iter().filter_map(|f| f.first_seen_days).max();
             let sla = evaluate_sla(kev, kev_ransomware, max_risk, oldest_age);
+            let compliance = compliance_for_group(&group);
             RemediationItem {
                 rank: 0, // assigned after sort
                 priority_score: score,
@@ -302,6 +474,7 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
                 max_epss,
                 oldest_finding_age_days: oldest_age,
                 sla,
+                compliance,
                 rationale,
                 finding_ids,
             }
@@ -412,6 +585,13 @@ pub async fn load_and_rank(
         .iter()
         .filter(|i| i.sla.state == SlaState::DueSoon)
         .count();
+    let actions_mapped_to_controls = program.iter().filter(|i| !i.compliance.is_empty()).count();
+    let mut compliance_frameworks: Vec<&'static str> = program
+        .iter()
+        .flat_map(|i| i.compliance.iter().map(|c| c.framework))
+        .collect();
+    compliance_frameworks.sort_unstable();
+    compliance_frameworks.dedup();
 
     Ok(json!({
         "ok": true,
@@ -422,6 +602,8 @@ pub async fn load_and_rank(
         "choke_point_actions": choke_actions,
         "overdue_actions": overdue_actions,
         "due_soon_actions": due_soon_actions,
+        "actions_mapped_to_controls": actions_mapped_to_controls,
+        "compliance_frameworks": compliance_frameworks,
         "program": program,
     }))
 }
@@ -580,6 +762,46 @@ mod tests {
         assert_eq!(sla.state, SlaState::Unknown);
         assert!(!sla.breached);
         assert_eq!(sla.due_in_days, None);
+    }
+
+    #[test]
+    fn cwe_number_parses_common_forms() {
+        assert_eq!(cwe_number("CWE-89"), Some(89));
+        assert_eq!(cwe_number("cwe89"), Some(89));
+        assert_eq!(cwe_number("89"), Some(89));
+        assert_eq!(cwe_number(""), None);
+        assert_eq!(cwe_number("n/a"), None);
+    }
+
+    #[test]
+    fn sqli_maps_to_injection_controls() {
+        let ctrls = controls_for_cwe("CWE-89");
+        assert!(ctrls
+            .iter()
+            .any(|c| c.framework == "OWASP Top 10 2021" && c.control == "A03:2021"));
+        assert!(ctrls.iter().any(|c| c.framework == "NIST 800-53r5"));
+    }
+
+    #[test]
+    fn unknown_cwe_maps_to_no_controls() {
+        assert!(controls_for_cwe("CWE-99999").is_empty());
+        assert!(controls_for_cwe("").is_empty());
+    }
+
+    #[test]
+    fn group_compliance_dedups_across_same_cwe() {
+        // Two SQLi findings on the same asset collapse into one action; controls must not double.
+        let a = f("a", "high", Some(7.0));
+        let b = f("b", "high", Some(7.0)); // same CWE-89 + asset => same group
+        let program = rank(&[a, b]);
+        assert_eq!(program.len(), 1);
+        let controls = &program[0].compliance;
+        let owasp = controls
+            .iter()
+            .filter(|c| c.framework == "OWASP Top 10 2021")
+            .count();
+        assert_eq!(owasp, 1, "no duplicate OWASP entry from two same-CWE findings");
+        assert!(!controls.is_empty());
     }
 
     #[test]
