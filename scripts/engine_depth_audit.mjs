@@ -28,6 +28,12 @@ const recon = read('fingerprint_engine/src/advanced_recon_engines.rs')
 if (!probes.includes('icmp_echo_reachable')) {
   failures.push('engine_probes.rs missing icmp_echo_reachable live probe')
 }
+if (!web.includes('fn web_finding_sync') || !web.includes('"correlation_hints"')) {
+  failures.push('advanced_web_engines missing web_finding_sync / correlation_hints')
+}
+if (!web.includes('publish_http_surface')) {
+  failures.push('ws_intelligence_bus or web engines missing publish_http_surface integration')
+}
 
 // Web — military vectors (Wave 1 complete — all 25 canonical web engines)
 const webChecks = [
@@ -36,7 +42,19 @@ const webChecks = [
   ['api_rate_limit_bypass', ['X-Forwarded-For']],
   ['web_cache_poison_adv', ['X-Forwarded-Host']],
   ['browser_extension_attack', ['manifest.json', 'connect-src']],
-  ['graphql_deep_attack', ['probe_paths_concurrent', 'depth_bomb', 'introspection over GET']],
+  [
+    'graphql_deep_attack',
+    [
+      'probe_paths_concurrent',
+      'depth_bomb',
+      'introspection over GET',
+      'Auth differential',
+      'graphql-transport-ws',
+      'toxic_chain',
+      'persistedQuery',
+      'run_graphql_deep_attack_result_ctx',
+    ],
+  ],
   ['grpc_reflection_attack', ['grpc-web', 'grpc.reflection.v1']],
   ['cors_misconfiguration', ['OPTIONS', 'null']],
   ['swagger_abuse', ['probe_paths_concurrent', 'openapi']],
@@ -53,12 +71,19 @@ const webChecks = [
   ['web3_dapp_attack', ['WalletConnect', 'probe_paths_concurrent']],
 ]
 for (const [engine, needles] of webChecks) {
-  const idx = web.indexOf(`run_${engine}_result`)
+  const fnCtx = `pub async fn run_${engine}_result_ctx`
+  const fnBase = `pub async fn run_${engine}_result`
+  let idx = web.indexOf(fnCtx)
+  if (idx < 0) {
+    idx = web.indexOf(fnBase)
+  }
   if (idx < 0) {
     failures.push(`web engine ${engine} missing from advanced_web_engines.rs`)
     continue
   }
-  const block = web.slice(idx, idx + 8000)
+  const nextSection = web.indexOf('// ──', idx + 40)
+  const block =
+    nextSection > idx ? web.slice(idx, nextSection) : web.slice(idx, idx + 25000)
   for (const n of needles) {
     if (!block.includes(n)) {
       failures.push(`${engine} missing military probe pattern: ${n}`)

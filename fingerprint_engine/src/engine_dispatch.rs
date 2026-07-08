@@ -785,7 +785,9 @@ async fn dispatch_engine_match(
         "browser_extension_attack" => crate::advanced_web_engines::run_browser_extension_attack_result(target).await,
         "web3_dapp_attack" => crate::advanced_web_engines::run_web3_dapp_attack_result(target).await,
         "api_gateway_bypass" => crate::advanced_web_engines::run_api_gateway_bypass_result(target).await,
-        "graphql_deep_attack" => crate::advanced_web_engines::run_graphql_deep_attack_result(target).await,
+        "graphql_deep_attack" => {
+            crate::advanced_web_engines::run_graphql_deep_attack_result_ctx(target, ctx).await
+        }
         "grpc_reflection_attack" => crate::advanced_web_engines::run_grpc_reflection_attack_result(target).await,
         "http2_attack" => crate::advanced_web_engines::run_http2_attack_result(target).await,
         "idor_advanced" => crate::advanced_web_engines::run_idor_advanced_result(target).await,

@@ -4,14 +4,19 @@
 //! security-relevant signal is detected (header anomaly, response pattern, exposed endpoint).
 //! On no signal: returns ok with empty findings.
 
+use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{
     empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
     http1_client, http2_client, http_client, http_get, http_get_with_headers,
-    http_method_with_headers, http_post_json, join_url, normalize_url, probe_paths_concurrent,
-    DEFAULT_PROBE_CONCURRENCY, HttpProbe,
+    http_method_with_headers, http_post_json, http_post_json_with_headers, join_url,
+    normalize_url, probe_paths_concurrent, DEFAULT_PROBE_CONCURRENCY, HttpProbe,
 };
+use crate::engine_result::{print_result, EngineResult};
+use serde_json::{json, Value};
+use std::time::Instant;
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
+const ENGINE_GRAPHQL_DEEP: &str = "graphql_deep_attack";
 
 fn web_finding(
     engine_id: &str,
@@ -31,8 +36,103 @@ fn web_finding(
         WEB_PROBE_DEPTH,
     )
 }
-use crate::engine_result::{print_result, EngineResult};
-use serde_json::Value;
+
+fn web_finding_sync(
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    description: &str,
+    target: &str,
+    correlation_hints: &[&str],
+    feeds_engines: &[&str],
+    metadata: Value,
+) -> Value {
+    let mut f = web_finding(engine_id, title, severity, mitre, description, target);
+    if let Some(obj) = f.as_object_mut() {
+        obj.insert(
+            "correlation_hints".into(),
+            Value::Array(correlation_hints.iter().map(|s| json!(*s)).collect()),
+        );
+        obj.insert(
+            "feeds_engines".into(),
+            Value::Array(feeds_engines.iter().map(|s| json!(*s)).collect()),
+        );
+        if !metadata.is_null() {
+            obj.insert("sync_metadata".into(), metadata);
+        }
+    }
+    f
+}
+
+fn jp_lookup<'a>(p: &'a Value, key: &str) -> Option<&'a Value> {
+    p.get(key)
+        .or_else(|| p.get("options").and_then(|o| o.get(key)))
+}
+
+fn jp_str(params: &Value, key: &str) -> Option<String> {
+    jp_lookup(params, key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn graphql_auth_header_pairs(params: &Value) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    if let Some(token) = jp_str(params, "bearer_token") {
+        pairs.push((
+            "Authorization".into(),
+            if token.starts_with("Bearer ") {
+                token
+            } else {
+                format!("Bearer {token}")
+            },
+        ));
+    }
+    if let Some(cookie) = jp_str(params, "cookie") {
+        pairs.push(("Cookie".into(), cookie));
+    }
+    if let Some(key) = jp_str(params, "api_key") {
+        let hdr = jp_str(params, "api_key_header").unwrap_or_else(|| "X-API-Key".into());
+        pairs.push((hdr, key));
+    }
+    crate::ws_intelligence_bus::apply_intelligence_artifacts_to_headers(params, &mut pairs);
+    pairs
+}
+
+fn auth_pairs_as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
+    pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+}
+
+fn introspection_enabled(body: &str) -> bool {
+    body.contains("__schema") && body.contains("types")
+}
+
+fn count_schema_types(body: &str) -> usize {
+    body.matches("\"name\"").count().min(5000)
+}
+
+fn graphql_endpoint_paths(ctx: &EngineRunContext) -> Vec<String> {
+    let mut paths = vec![
+        "/graphql".into(),
+        "/api/graphql".into(),
+        "/v1/graphql".into(),
+        "/query".into(),
+        "/api/v1/graphql".into(),
+        "/gql".into(),
+        "/api/gql".into(),
+    ];
+    for p in &ctx.discovered_paths {
+        let pl = p.to_ascii_lowercase();
+        if pl.contains("graphql") && !paths.iter().any(|x| x == p) {
+            paths.push(p.clone());
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
 
 macro_rules! cli_wrapper {
     ($name:ident, $result_fn:ident) => {
@@ -44,113 +144,227 @@ macro_rules! cli_wrapper {
 
 // ── graphql_deep_attack ───────────────────────────────────────────────────────
 pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
+    run_graphql_deep_attack_result_ctx(target, &EngineRunContext::default()).await
+}
+
+pub async fn run_graphql_deep_attack_result_ctx(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let base = normalize_url(target);
     let client = http_client().await;
+    let params = &ctx.job_params;
+    let auth_pairs = graphql_auth_header_pairs(params);
+    let auth_refs = auth_pairs_as_refs(&auth_pairs);
+    let has_auth = !auth_pairs.is_empty();
     let mut findings: Vec<Value> = Vec::new();
-    let intro = serde_json::json!({"query":"{__schema{types{name fields{name}}}}"});
-    let mutation_intro = serde_json::json!({"query":"{__schema{mutationType{name}}}"});
-    let batch = serde_json::json!([{"query":"{__typename}"},{"query":"{__typename}"}]);
-    let depth_bomb = serde_json::json!({"query":"{a{a{a{a{a{__typename}}}}}}"});
-    let alias_bomb = serde_json::json!({"query":"{q1:__typename q2:__typename q3:__typename q4:__typename q5:__typename q6:__typename q7:__typename q8:__typename}"});
-    let graphql_paths = [
-        "/graphql",
-        "/api/graphql",
-        "/v1/graphql",
-        "/query",
-        "/api/v1/graphql",
-        "/gql",
-        "/api/gql",
-    ];
+    let mut flags = GraphqlProbeFlags::default();
 
-    let path_probes = probe_paths_concurrent(&client, &base, &graphql_paths, DEFAULT_PROBE_CONCURRENCY).await;
-    for p in path_probes {
-        if p.status == 405 || p.status == 200 {
-            if p.body.to_ascii_lowercase().contains("graphql") {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
-                    "GraphQL endpoint surface discovered",
-                    "info",
-                    "T1190",
-                    &format!(
-                        "{} ({}) advertises GraphQL — enumerate introspection, batching, and depth limits.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
+    let intro = json!({"query":"{__schema{types{name fields{name}}}}"});
+    let mutation_intro = json!({"query":"{__schema{mutationType{name}}}"});
+    let batch = json!([{"query":"{__typename}"},{"query":"{__typename}"}]);
+    let depth_bomb = json!({"query":"{a{a{a{a{a{__typename}}}}}}"});
+    let alias_bomb = json!({"query":"{q1:__typename q2:__typename q3:__typename q4:__typename q5:__typename q6:__typename q7:__typename q8:__typename}"});
+    let apq = json!({
+        "extensions": {
+            "persistedQuery": {
+                "version": 1,
+                "sha256Hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
             }
+        },
+        "query": "{__typename}"
+    });
+    let defer_q = json!({"query":"query { __typename @defer }"});
+
+    let path_strings = graphql_endpoint_paths(ctx);
+    let path_refs: Vec<&str> = path_strings.iter().map(String::as_str).collect();
+
+    let path_probes =
+        probe_paths_concurrent(&client, &base, &path_refs, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in path_probes {
+        if (p.status == 405 || p.status == 200)
+            && p.body.to_ascii_lowercase().contains("graphql")
+        {
+            if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                bus.publish_http_surface(
+                    "graphql_endpoint",
+                    &p.final_url,
+                    &p.final_url,
+                    ENGINE_GRAPHQL_DEEP,
+                    "graphql_endpoint_discovered",
+                );
+            }
+            findings.push(web_finding_sync(
+                ENGINE_GRAPHQL_DEEP,
+                "GraphQL endpoint surface discovered",
+                "info",
+                "T1190",
+                &format!(
+                    "{} ({}) advertises GraphQL — introspection, batching, and auth differential probed.",
+                    p.final_url, p.status
+                ),
+                target,
+                &["graphql_subscription_attack", "api_gateway_bypass"],
+                &["risk_superposition_collapse", "external_exposure_supreme"],
+                json!({"endpoint": p.final_url, "status": p.status}),
+            ));
         }
     }
 
-    for path in graphql_paths {
+    for path in &path_strings {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = http_post_json(&client, &url, &intro).await {
-            if p.status < 500 && p.body.contains("__schema") && p.body.contains("types") {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
-                    "GraphQL introspection enabled",
+
+        let t0 = Instant::now();
+        let anon_intro = http_post_json(&client, &url, &intro).await;
+        let anon_intro_ms = t0.elapsed().as_millis() as u64;
+
+        let auth_intro = if has_auth {
+            http_post_json_with_headers(&client, &url, &intro, &auth_refs).await
+        } else {
+            None
+        };
+
+        if let Some(p) = anon_intro.as_ref() {
+            if p.status < 500 && introspection_enabled(&p.body) {
+                flags.introspection_anon = true;
+                let types = count_schema_types(&p.body);
+                if let Some(bus) = ctx.intelligence_bus.as_ref() {
+                    bus.publish_http_surface(
+                        "graphql_introspection_url",
+                        &p.final_url,
+                        &p.final_url,
+                        ENGINE_GRAPHQL_DEEP,
+                        "graphql_introspection_anon",
+                    );
+                }
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
+                    "GraphQL introspection enabled (unauthenticated)",
                     "high",
                     "T1190",
                     &format!(
-                        "GraphQL endpoint {} accepts __schema introspection (HTTP {}), exposing the full type graph to unauthenticated users.",
+                        "POST {} returns __schema with ~{types} type markers (HTTP {}, {anon_intro_ms}ms).",
                         p.final_url, p.status
                     ),
                     target,
+                    &["cors_misconfiguration", "idor_advanced", "api_mass_assignment"],
+                    &["graphql_subscription_attack", "graphql_attack", "risk_superposition_collapse"],
+                    json!({"types_estimate": types, "latency_ms": anon_intro_ms, "endpoint": p.final_url}),
                 ));
             }
         }
-        // GET-based introspection (some servers allow query string transport)
+
+        if let (Some(anon), Some(auth)) = (anon_intro.as_ref(), auth_intro.as_ref()) {
+            let anon_has = introspection_enabled(&anon.body);
+            let auth_has = introspection_enabled(&auth.body);
+            if anon_has != auth_has || (anon_has && anon.body.len() > auth.body.len() + 256) {
+                flags.auth_differential = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
+                    "Auth differential on GraphQL introspection",
+                    "high",
+                    "T1078",
+                    &format!(
+                        "Anon introspection={anon_has} (HTTP {}) vs authenticated={auth_has} (HTTP {}) on {} — schema exposure differs by credential.",
+                        anon.status, auth.status, url
+                    ),
+                    target,
+                    &["jwt_advanced_attack", "mfa_bypass_engine"],
+                    &["identity_attack_chain"],
+                    json!({
+                        "anon_status": anon.status,
+                        "auth_status": auth.status,
+                        "anon_schema": anon_has,
+                        "auth_schema": auth_has
+                    }),
+                ));
+            }
+        }
+
         let get_intro = format!(
             "{url}?query={}",
             urlencoding::encode("{__schema{queryType{name}}}")
         );
         if let Some(p) = http_get(&client, &get_intro).await {
             if p.status < 500 && p.body.contains("__schema") {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
+                flags.get_introspection = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
                     "GraphQL introspection over GET",
                     "high",
                     "T1190",
                     &format!(
-                        "GET introspection at {} (HTTP {}) — CSRF/log-based query exfiltration risk.",
+                        "GET introspection at {} (HTTP {}) — CSRF/log-based exfiltration risk.",
                         p.final_url, p.status
                     ),
                     target,
+                    &["cors_misconfiguration", "clickjacking_engine"],
+                    &["external_exposure_supreme"],
+                    json!({"transport": "GET", "endpoint": p.final_url}),
                 ));
             }
         }
+
         if let Some(p) = http_post_json(&client, &url, &mutation_intro).await {
             if p.status < 500 && p.body.contains("mutationType") {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
+                flags.mutations = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
                     "GraphQL mutation schema enumerable",
                     "medium",
                     "T1190",
-                    &format!(
-                        "Mutation root exposed via introspection at {} (HTTP {}).",
-                        p.final_url, p.status
-                    ),
+                    &format!("Mutation root exposed at {} (HTTP {}).", p.final_url, p.status),
                     target,
+                    &["api_mass_assignment"],
+                    &["pipeline_to_runtime_risk"],
+                    json!({"endpoint": p.final_url}),
                 ));
             }
         }
+
         if let Some(p) = http_post_json(&client, &url, &batch).await {
             if p.status >= 200 && p.status < 300 && p.body.trim_start().starts_with('[') {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
+                flags.batching = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
                     "GraphQL batching accepted",
                     "medium",
                     "T1190",
                     &format!(
-                        "Endpoint {} returned batched JSON array for multi-query POST — brute-force/DoS amplification risk.",
+                        "{} returned batched JSON — pairs with api_rate_limit_bypass amplification.",
                         p.final_url
                     ),
                     target,
+                    &["api_rate_limit_bypass"],
+                    &["risk_superposition_collapse"],
+                    json!({"endpoint": p.final_url}),
                 ));
             }
         }
+
+        let t_light = Instant::now();
+        let _ = http_post_json(&client, &url, &json!({"query":"{__typename}"})).await;
+        let light_ms = t_light.elapsed().as_millis() as u64;
+        if anon_intro_ms > 0 && light_ms > 0 && anon_intro_ms > light_ms.saturating_mul(8) {
+            flags.cost_amplification = true;
+            findings.push(web_finding_sync(
+                ENGINE_GRAPHQL_DEEP,
+                "Query cost amplification (introspection >> typename)",
+                "medium",
+                "T1499",
+                &format!(
+                    "__typename {light_ms}ms vs introspection {anon_intro_ms}ms on {url} — DoS/cost bypass surface."
+                ),
+                target,
+                &["api_rate_limit_bypass"],
+                &[],
+                json!({"light_ms": light_ms, "intro_ms": anon_intro_ms}),
+            ));
+        }
+
         if let Some(p) = http_post_json(&client, &url, &depth_bomb).await {
             let body_low = p.body.to_ascii_lowercase();
             if p.status < 500
@@ -159,45 +373,163 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
                 && !body_low.contains("too complex")
                 && p.body.contains("__typename")
             {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
+                flags.no_depth_limit = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
                     "Deep nested query accepted (no depth limit)",
                     "medium",
                     "T1499",
-                    &format!(
-                        "Nested depth query accepted at {} (HTTP {}) — DoS/recursion abuse possible.",
-                        p.final_url, p.status
-                    ),
+                    &format!("Nested depth bomb accepted at {} (HTTP {}).", p.final_url, p.status),
                     target,
+                    &["api_rate_limit_bypass"],
+                    &[],
+                    json!({"endpoint": p.final_url}),
                 ));
             }
         }
+
         if let Some(p) = http_post_json(&client, &url, &alias_bomb).await {
             if p.status < 500 && p.body.matches("__typename").count() >= 4 {
-                findings.push(web_finding(
-                    "graphql_deep_attack",
+                flags.alias_fanout = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
                     "Alias-heavy query accepted",
                     "low",
                     "T1499",
+                    &format!("Alias fan-out accepted at {}.", p.final_url),
+                    target,
+                    &["api_rate_limit_bypass"],
+                    &[],
+                    json!({}),
+                ));
+            }
+        }
+
+        if let Some(p) = http_post_json(&client, &url, &apq).await {
+            if p.status < 500
+                && (p.body.contains("__typename")
+                    || p.body.to_ascii_lowercase().contains("persistedquery"))
+            {
+                flags.apq = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
+                    "APQ / persisted-query surface responds",
+                    "medium",
+                    "T1190",
                     &format!(
-                        "Alias fan-out query accepted at {} — cost-limit bypass candidate.",
-                        p.final_url
+                        "APQ probe at {} (HTTP {}) — verify allowlist on sha256Hash.",
+                        p.final_url, p.status
                     ),
                     target,
+                    &["web_cache_poison_adv"],
+                    &[],
+                    json!({"endpoint": p.final_url}),
+                ));
+            }
+        }
+
+        if let Some(p) = http_post_json(&client, &url, &defer_q).await {
+            let bl = p.body.to_ascii_lowercase();
+            if p.status < 500 && (bl.contains("@defer") || bl.contains("defer")) {
+                flags.defer = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
+                    "@defer / incremental delivery referenced",
+                    "medium",
+                    "T1190",
+                    &format!("@defer probe at {} — incremental delivery may leak data.", p.final_url),
+                    target,
+                    &["graphql_subscription_attack"],
+                    &[],
+                    json!({}),
+                ));
+            }
+        }
+
+        if let Some(p) = http_method_with_headers(
+            &client,
+            "GET",
+            &url,
+            None,
+            &[
+                ("Connection", "Upgrade"),
+                ("Upgrade", "websocket"),
+                ("Sec-WebSocket-Version", "13"),
+                ("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ=="),
+                ("Sec-WebSocket-Protocol", "graphql-transport-ws"),
+            ],
+        )
+        .await
+        {
+            if p.status == 101
+                || header_value(&p.headers, "upgrade")
+                    .map(|u| u.to_ascii_lowercase().contains("websocket"))
+                    .unwrap_or(false)
+            {
+                flags.ws_upgrade = true;
+                findings.push(web_finding_sync(
+                    ENGINE_GRAPHQL_DEEP,
+                    "GraphQL WebSocket upgrade accepted",
+                    "high",
+                    "T1190",
+                    &format!(
+                        "GET {} → HTTP {} with Upgrade:websocket — sync with graphql_subscription_attack.",
+                        p.final_url, p.status
+                    ),
+                    target,
+                    &["graphql_subscription_attack", "websocket_attack"],
+                    &["risk_superposition_collapse"],
+                    json!({"endpoint": p.final_url}),
                 ));
             }
         }
     }
+
+    if flags.introspection_anon && flags.batching && flags.no_depth_limit {
+        findings.push(web_finding_sync(
+            ENGINE_GRAPHQL_DEEP,
+            "Toxic chain: anon introspection + batching + no depth limit",
+            "critical",
+            "T1190",
+            "Live GraphQL fusion: schema enumerable without auth, batched queries accepted, depth unlimited — brute-force and DoS amplification chain.",
+            target,
+            &["api_rate_limit_bypass", "cors_misconfiguration"],
+            &["risk_superposition_collapse", "external_exposure_supreme"],
+            json!({"toxic_chain": true}),
+        ));
+    }
+
     if findings.is_empty() {
-        empty_ok("graphql_deep_attack", target)
+        empty_ok(ENGINE_GRAPHQL_DEEP, target)
     } else {
         let n = findings.len();
         EngineResult::ok(
             findings,
-            format!("graphql_deep_attack: {} live finding(s)", n),
+            format!(
+                "{ENGINE_GRAPHQL_DEEP}: {n} live finding(s) (auth_diff={} ws={} apq={})",
+                flags.auth_differential,
+                flags.ws_upgrade,
+                flags.apq
+            ),
         )
     }
 }
+
+#[derive(Default)]
+struct GraphqlProbeFlags {
+    introspection_anon: bool,
+    auth_differential: bool,
+    get_introspection: bool,
+    mutations: bool,
+    batching: bool,
+    no_depth_limit: bool,
+    alias_fanout: bool,
+    cost_amplification: bool,
+    apq: bool,
+    defer: bool,
+    ws_upgrade: bool,
+}
+
 cli_wrapper!(run_graphql_deep_attack, run_graphql_deep_attack_result);
 
 // ── grpc_reflection_attack ────────────────────────────────────────────────────
