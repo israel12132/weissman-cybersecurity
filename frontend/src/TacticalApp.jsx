@@ -83,6 +83,7 @@ import {
   IocFeed,
   UebaAnomalies,
   FindingSuppressions,
+  CryptoPosture,
   ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
@@ -253,6 +254,7 @@ export default function TacticalApp() {
           <Route path="iocs" element={<IocFeed />} />
           <Route path="ueba" element={<UebaAnomalies />} />
           <Route path="suppressions" element={<FindingSuppressions />} />
+          <Route path="crypto-posture" element={<CryptoPosture />} />
           <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="threat-hunting" element={<ThreatHuntingWorkbench />} />
