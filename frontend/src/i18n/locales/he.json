@@ -4164,6 +4164,15 @@
     "threatAnalysisCenter": {
       "evidence_notice": "clustering דפוסי התקפה ומיפוי MITRE מ-GET /api/findings ו-GET /api/soc/ai-patterns. כל שורת technique מקושרת להוכחת ממצא חיה ב-tenant שלך."
     },
+    "threatAnalysis": {
+      "exposure_heading": "חשיפת ATT&CK",
+      "exposure_export": "ייצוא CSV",
+      "exposure_no_client": "בחר לקוח כדי לטעון חשיפת ATT&CK.",
+      "exposure_error": "לא ניתן לטעון חשיפת ATT&CK: {{error}}.",
+      "exposure_empty": "אין עדיין ממצאים מתויגי-ATT&CK ללקוח זה.",
+      "exposure_tactics": "טקטיקות",
+      "exposure_top": "טכניקות מובילות"
+    },
     "engineReliability": {
       "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."
     },

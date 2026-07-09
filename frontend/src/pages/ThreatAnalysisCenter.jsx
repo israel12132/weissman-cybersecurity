@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId } from '../lib/aliasClient';
+import AttackExposurePanel from './AttackExposurePanel';
 
 const ACCENT = '#22d3ee';
 
@@ -172,6 +173,9 @@ export default function ThreatAnalysisCenter() {
         <p className="text-sm text-gray-400 max-w-2xl">
           {t('pages.threatAnalysis.subtitle', { })}
         </p>
+
+        {/* Live MITRE ATT&CK exposure for the selected client (technique ranking + tactic rollup). */}
+        <AttackExposurePanel clientId={clientId} />
 
         {persistedNote && (
           <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
