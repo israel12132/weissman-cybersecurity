@@ -17,27 +17,10 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
+import { fmtUsd, postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 
 const NS = 'pages.executiveOverview'
 
-function fmtUsd(n) {
-  const v = Number(n) || 0
-  const abs = Math.abs(v)
-  if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
-  if (abs >= 1_000) return `$${(v / 1_000).toFixed(1)}K`
-  return `$${v.toLocaleString()}`
-}
-function gradeColor(grade) {
-  return { A: '#4ade80', B: '#84cc16', C: '#facc15', D: '#f97316', F: '#ef4444' }[String(grade || '').toUpperCase()] || '#22d3ee'
-}
-function scoreColor(s) {
-  const n = Number(s) || 0
-  if (n >= 90) return '#4ade80'
-  if (n >= 75) return '#84cc16'
-  if (n >= 60) return '#facc15'
-  if (n >= 40) return '#f97316'
-  return '#ef4444'
-}
 function riskColor(r) {
   const n = Number(r) || 0
   if (n >= 8) return '#ef4444'

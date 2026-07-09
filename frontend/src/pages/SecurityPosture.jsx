@@ -13,20 +13,9 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
+import { postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 
 const NS = 'pages.securityPosture'
-
-function gradeColor(grade) {
-  return { A: '#4ade80', B: '#84cc16', C: '#facc15', D: '#f97316', F: '#ef4444' }[String(grade || '').toUpperCase()] || '#22d3ee'
-}
-function scoreColor(score) {
-  const s = Number(score) || 0
-  if (s >= 90) return '#4ade80'
-  if (s >= 75) return '#84cc16'
-  if (s >= 60) return '#facc15'
-  if (s >= 40) return '#f97316'
-  return '#ef4444'
-}
 
 /** Circular score gauge. */
 function ScoreRing({ score, grade }) {

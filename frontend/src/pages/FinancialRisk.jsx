@@ -19,19 +19,11 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
+import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
 
 const NS = 'pages.financialRisk'
 const columnHelper = createColumnHelper()
-
-/** Compact USD formatter — $1.2M / $940K / $512. */
-function fmtUsd(n) {
-  const v = Number(n) || 0
-  const abs = Math.abs(v)
-  if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
-  if (abs >= 1_000) return `$${(v / 1_000).toFixed(1)}K`
-  return `$${v.toLocaleString()}`
-}
 
 function fmtUsdFull(n) {
   return `$${(Number(n) || 0).toLocaleString()}`
