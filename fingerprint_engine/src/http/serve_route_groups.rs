@@ -85,6 +85,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/executive-summary/:client_id",
             get(api_executive_summary_for_client),
         )
+        // Backlog-aging analytics: open findings bucketed by age x severity + aged-critical flags.
+        .route(
+            "/api/remediation/aging/:client_id",
+            get(api_finding_aging_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),

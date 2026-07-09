@@ -84,6 +84,7 @@ pub mod executive_summary;
 pub mod exploit_synthesis_engine;
 pub mod external_exposure_supreme;
 pub mod financial_risk;
+pub mod finding_aging;
 pub mod finding_attestation;
 pub mod finding_live_verify;
 pub mod findings_correlator;
