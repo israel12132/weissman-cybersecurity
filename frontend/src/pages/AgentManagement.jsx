@@ -12,6 +12,7 @@ import DataTable from '../components/ui/DataTable'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const columnHelper = createColumnHelper()
 
@@ -92,11 +93,8 @@ export default function AgentManagement() {
       .catch(() => {})
   }, [refresh])
 
-  useEffect(() => {
-    if (!autoRefresh) return undefined
-    const id = setInterval(refresh, 15000)
-    return () => clearInterval(id)
-  }, [autoRefresh, refresh])
+  // Auto-refresh every 15s, skipping ticks while the tab is hidden.
+  useVisiblePolling(refresh, 15000, { paused: !autoRefresh })
 
   const createToken = useCallback(async () => {
     setErr(null)

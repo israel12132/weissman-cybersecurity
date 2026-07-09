@@ -11,6 +11,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const SEVERITY_COLORS = {
   critical: '#ef4444',
@@ -83,11 +84,8 @@ export default function MetricsDashboard() {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  useEffect(() => {
-    if (!autoRefresh) return undefined;
-    const interval = setInterval(() => fetchMetrics(true), 10000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, fetchMetrics]);
+  // Auto-refresh every 10s, skipping ticks while the tab is hidden.
+  useVisiblePolling(() => fetchMetrics(true), 10000, { paused: !autoRefresh });
 
   const severityLabel = (severity) => t(`pages.metricsDashboard.severity_${severity}`, {
     defaultValue: severity.charAt(0).toUpperCase() + severity.slice(1),

@@ -11,6 +11,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 /**
  * RateLimitAnalytics — live request-budget monitoring.
@@ -83,9 +84,10 @@ export default function RateLimitAnalytics() {
   useEffect(() => {
     setLoading(true);
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 30000);
-    return () => clearInterval(interval);
   }, [fetchAnalytics]);
+
+  // Refresh every 30s, skipping ticks while the tab is hidden.
+  useVisiblePolling(fetchAnalytics, 30000);
 
   const TILE_COLORS = { scans: '#22d3ee', logins: '#fbbf24', api: '#34d399' };
   const history = data?.history ?? [];

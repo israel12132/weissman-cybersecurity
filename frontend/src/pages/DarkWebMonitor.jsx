@@ -15,6 +15,7 @@ import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const columnHelper = createColumnHelper()
 
@@ -82,11 +83,8 @@ export default function DarkWebMonitor() {
     load()
   }, [load])
 
-  useEffect(() => {
-    if (!autoRefresh) return undefined
-    const id = setInterval(load, 60000)
-    return () => clearInterval(id)
-  }, [autoRefresh, load])
+  // Auto-refresh every 60s, skipping ticks while the tab is hidden.
+  useVisiblePolling(load, 60000, { paused: !autoRefresh })
 
   const sources = useMemo(
     () => [...new Set(findings.map((f) => (f.source || f.engine || '').toLowerCase()).filter(Boolean))].sort(),

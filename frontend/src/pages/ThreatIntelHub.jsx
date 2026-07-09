@@ -35,6 +35,7 @@ import EmptyState from '../components/ui/EmptyState'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 
 // ── Severity model ────────────────────────────────────────────────────────────
@@ -101,11 +102,8 @@ function useApiResource(path, autoRefreshMs) {
     load()
   }, [load])
 
-  useEffect(() => {
-    if (!autoRefreshMs) return undefined
-    const id = setInterval(() => load(true), autoRefreshMs)
-    return () => clearInterval(id)
-  }, [autoRefreshMs, load])
+  // Auto-refresh, skipping ticks while the tab is hidden.
+  useVisiblePolling(() => load(true), autoRefreshMs || 0, { paused: !autoRefreshMs })
 
   return { data, loading, error, reload: load, updatedAt }
 }

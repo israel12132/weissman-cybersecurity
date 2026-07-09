@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import EngineRealityBadge, { REALITY_KIND_META, EngineRealitySummary } from '../components/EngineRealityBadge'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { api } from '../utils/apiFetch'
 
 const KIND_FILTERS = ['all', 'real_probe', 'alias', 'agent_required', 'special']
@@ -77,10 +78,8 @@ export default function EngineReliability() {
     loadTelem()
   }, [loadTelem])
 
-  useEffect(() => {
-    const id = setInterval(loadTelem, 8000)
-    return () => clearInterval(id)
-  }, [loadTelem])
+  // Refresh telemetry every 8s, skipping ticks while the tab is hidden.
+  useVisiblePolling(loadTelem, 8000)
 
   const refreshAll = useCallback(() => {
     refreshCaps()

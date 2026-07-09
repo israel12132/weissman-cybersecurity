@@ -12,6 +12,7 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
 import { apiFetch } from '../lib/apiBase'
 import { normalizeJobStatus } from '../lib/useJobPoll'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 
 const columnHelper = createColumnHelper()
@@ -109,11 +110,8 @@ export default function JobsDashboard() {
     loadJobs()
   }, [authLoading, loadJobs])
 
-  useEffect(() => {
-    if (!autoRefresh || authLoading) return
-    const interval = setInterval(loadJobs, 5000)
-    return () => clearInterval(interval)
-  }, [autoRefresh, authLoading, loadJobs])
+  // Auto-refresh every 5s, skipping ticks while the tab is hidden.
+  useVisiblePolling(loadJobs, 5000, { paused: !autoRefresh || authLoading })
 
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
