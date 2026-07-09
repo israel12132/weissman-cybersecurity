@@ -6529,6 +6529,10 @@
       "quickNav": "Quick navigation",
       "navigate": "Navigate",
       "navigateHint": "Navigate",
+      "command": "Command",
+      "action_theme_dark": "Switch to dark theme",
+      "action_theme_light": "Switch to light theme",
+      "action_signout": "Sign out",
       "triggerLabel": "Search",
       "brand": "Weissman Global Search"
     },

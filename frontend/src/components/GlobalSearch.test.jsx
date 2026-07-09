@@ -7,9 +7,14 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => navigateSpy }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k, opts) => (opts?.query ? `${k}:${opts.query}` : k) }),
 }))
+const logoutSpy = vi.fn()
 vi.mock('../context/AuthContext', () => ({
   // A session with no special role → items without minRole stay accessible.
-  useAuth: () => ({ session: { role: 'admin', roleRank: 3 } }),
+  useAuth: () => ({ session: { role: 'admin', roleRank: 3 }, logout: logoutSpy }),
+}))
+const toggleThemeSpy = vi.fn()
+vi.mock('../context/ThemeContext', () => ({
+  useTheme: () => ({ toggleTheme: toggleThemeSpy, isLight: false }),
 }))
 vi.mock('../lib/apiBase', () => ({
   apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) })),
@@ -35,7 +40,7 @@ function open() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
 }
 
-beforeEach(() => { navigateSpy.mockClear() })
+beforeEach(() => { navigateSpy.mockClear(); logoutSpy.mockClear(); toggleThemeSpy.mockClear() })
 afterEach(() => cleanup())
 
 describe('GlobalSearch command palette', () => {
@@ -76,6 +81,24 @@ describe('GlobalSearch command palette', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(navigateSpy).toHaveBeenCalledWith('/engines')
+  })
+
+  it('runs a matched global action (theme toggle) on Enter', () => {
+    render(<GlobalSearch />)
+    open()
+    const input = screen.getByRole('combobox')
+    // 'theme' matches the theme-toggle action label, not any route.
+    fireEvent.change(input, { target: { value: 'theme' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(toggleThemeSpy).toHaveBeenCalledTimes(1)
+    expect(navigateSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not show actions in the idle quick-nav list', () => {
+    render(<GlobalSearch />)
+    open()
+    // Idle: only nav suggestions, no Sign out / theme actions.
+    expect(screen.queryByText('components.globalSearch.action_signout')).toBeNull()
   })
 
   it('Escape closes the palette', () => {

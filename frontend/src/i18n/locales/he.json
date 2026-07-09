@@ -6529,6 +6529,10 @@
       "quickNav": "ניווט מהיר",
       "navigate": "ניווט",
       "navigateHint": "ניווט",
+      "command": "פקודה",
+      "action_theme_dark": "מעבר לערכת נושא כהה",
+      "action_theme_light": "מעבר לערכת נושא בהירה",
+      "action_signout": "התנתקות",
       "triggerLabel": "חיפוש",
       "brand": "Weissman Global Search"
     },

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../lib/apiBase';
 import { PRIMARY_NAV, NAV_GROUPS, canAccessNavItem } from '../lib/appNav';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * GlobalSearch — command palette (Ctrl/Cmd+K).
@@ -18,7 +19,8 @@ import { useAuth } from '../context/AuthContext';
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
+  const { toggleTheme, isLight } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -56,7 +58,32 @@ export default function GlobalSearch() {
       .slice(0, 8);
   }, [navRoutes, query]);
 
-  const combined = useMemo(() => [...localResults, ...results], [localResults, results]);
+  // Global command actions (shown only when the query matches — keeps idle clean).
+  const actions = useMemo(() => [
+    {
+      type: 'action',
+      icon: isLight ? '🌙' : '☀️',
+      title: isLight ? t('components.globalSearch.action_theme_dark') : t('components.globalSearch.action_theme_light'),
+      run: toggleTheme,
+    },
+    {
+      type: 'action',
+      icon: '🚪',
+      title: t('components.globalSearch.action_signout'),
+      run: () => logout?.(),
+    },
+  ], [isLight, toggleTheme, logout, t]);
+
+  const actionResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return actions.filter((a) => a.title.toLowerCase().includes(q));
+  }, [actions, query]);
+
+  const combined = useMemo(
+    () => [...localResults, ...actionResults, ...results],
+    [localResults, actionResults, results],
+  );
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -107,6 +134,12 @@ export default function GlobalSearch() {
 
   const goTo = useCallback((result) => {
     if (!result) return;
+    if (result.type === 'action') {
+      setIsOpen(false);
+      setQuery('');
+      result.run?.();
+      return;
+    }
     const path = result.to
       || result.path
       || (result.type === 'engine' && result.id ? `/engines/${result.id}` : '/');
@@ -218,7 +251,11 @@ export default function GlobalSearch() {
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-[var(--text-primary)] truncate">{result.title}</div>
                         <div className="text-xs text-[var(--text-muted)] capitalize">
-                          {isNav ? t('components.globalSearch.navigate') : result.type}
+                          {isNav
+                            ? t('components.globalSearch.navigate')
+                            : result.type === 'action'
+                              ? t('components.globalSearch.command')
+                              : result.type}
                         </div>
                       </div>
                       {active ? (
