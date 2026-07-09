@@ -105,6 +105,7 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 | Method     | Path                                                | Purpose                                  |
 |------------|-----------------------------------------------------|------------------------------------------|
 | POST       | `/api/clients/:id/auto-heal`                        | Start a heal (operator + dual-auth)      |
+| POST       | `/api/clients/:id/heal-revert`                      | Close (revert) an auto-opened PR/MR       |
 | GET/POST   | `/api/clients/:id/findings/:finding_id/brief`       | Bilingual (he/en) remediation brief      |
 | GET        | `/api/heal-verify/:job_id/steps`                    | Live verification timeline               |
 | GET        | `/api/heal-verify/:job_id`                          | Status + verdict + PR + attempts         |

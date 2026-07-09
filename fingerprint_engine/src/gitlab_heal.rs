@@ -268,6 +268,28 @@ pub async fn create_branch_commit_and_mr(
     }
 }
 
+/// Close an auto-opened Merge Request (revert). `remove_source_branch` was set on open, so GitLab
+/// cleans up the branch on close/merge.
+pub async fn close_merge_request(
+    token: &str,
+    gitlab_host: &str,
+    project_path: &str,
+    mr_iid: i64,
+) -> Result<(), String> {
+    let api_base = v4_base(gitlab_host);
+    let project = enc_project(project_path);
+    let url = format!("{}/projects/{}/merge_requests/{}", api_base, project, mr_iid);
+    let resp = send_with_retry(|| {
+        gitlab_client()
+            .put(&url)
+            .header("PRIVATE-TOKEN", token)
+            .json(&serde_json::json!({ "state_event": "close" }))
+    })
+    .await?;
+    let _ = resp.bytes().await;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

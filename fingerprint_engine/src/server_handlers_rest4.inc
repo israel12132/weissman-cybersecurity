@@ -1770,6 +1770,120 @@ async fn api_heal_stats(
         .into_response()
 }
 
+/// `POST /api/clients/:id/heal-revert` — close an auto-opened remediation PR/MR (undo). Requires
+/// operator + destructive dual-authorization; the git token is supplied in the request (it is
+/// cleared from the spec after the original run).
+async fn api_heal_revert(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<HealRevertBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    if let Err(detail) = crate::security_hardening::validate_finding_id_token(&body.finding_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid finding_id", "detail": detail})),
+        )
+            .into_response();
+    }
+    let token = body.git_token.as_deref().unwrap_or("").trim().to_string();
+    let repo = body.repo_slug.as_deref().unwrap_or("").trim().to_string();
+    if token.is_empty() || repo.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "git_token and repo_slug required"})),
+        )
+            .into_response();
+    }
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT pr_number, COALESCE(branch_name,'') AS branch_name, COALESCE(channel,'github_pr') AS channel
+           FROM heal_requests
+           WHERE client_id = $1 AND finding_id = $2
+             AND verification_status IN ('verified_pr_opened','verified_mr_opened')
+             AND pr_number IS NOT NULL
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(id)
+    .bind(&body.finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "no open heal PR/MR to revert"}))).into_response();
+    };
+    let pr_number: i64 = r.try_get::<Option<i32>, _>("pr_number").ok().flatten().map(|n| n as i64).unwrap_or(0);
+    let branch: String = r.try_get("branch_name").unwrap_or_default();
+    let stored_channel: String = r.try_get("channel").unwrap_or_else(|_| "github_pr".into());
+    let channel = crate::heal_channels::DeliveryChannel::from_id(
+        body.channel.as_deref().unwrap_or(&stored_channel),
+    );
+
+    let result = if channel == crate::heal_channels::DeliveryChannel::GitlabMr {
+        let host = body.gitlab_host.as_deref().unwrap_or("gitlab.com");
+        crate::gitlab_heal::close_merge_request(&token, host, &repo, pr_number).await
+    } else {
+        let del = if body.delete_branch.unwrap_or(false) && !branch.is_empty() {
+            Some(branch.as_str())
+        } else {
+            None
+        };
+        crate::auto_heal::close_pull_request(&token, &repo, pr_number, del).await
+    };
+
+    let ip = extract_client_ip(&headers, addr);
+    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    match result {
+        Ok(()) => {
+            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+                let _ = sqlx::query(
+                    r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, branch_name, pr_number, verification_status, verification_job_id, channel)
+                       VALUES ($1, $2, $3, $4, $5, 'reverted', '', $6)"#,
+                )
+                .bind(auth.tenant_id)
+                .bind(id)
+                .bind(&body.finding_id)
+                .bind(&branch)
+                .bind(pr_number as i32)
+                .bind(channel.id())
+                .execute(&mut *tx)
+                .await;
+                let _ = audit_log::insert_audit(
+                    &mut tx,
+                    auth.tenant_id,
+                    Some(auth.user_id),
+                    &actor,
+                    "heal_reverted",
+                    &format!("finding={} repo={} pr={} channel={}", body.finding_id, repo, pr_number, channel.id()),
+                    &ip,
+                )
+                .await;
+                let _ = tx.commit().await;
+            }
+            (StatusCode::OK, Json(json!({"ok": true, "reverted": true, "pr_number": pr_number, "channel": channel.id()}))).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"ok": false, "error": "revert_failed", "detail": e})),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_heal_requests_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

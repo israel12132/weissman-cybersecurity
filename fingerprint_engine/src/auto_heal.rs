@@ -549,6 +549,46 @@ pub async fn open_pull_request(
     ))
 }
 
+/// Close an auto-opened remediation PR (revert). Optionally deletes the heal branch.
+pub async fn close_pull_request(
+    token: &str,
+    repo_slug: &str,
+    pr_number: i64,
+    delete_branch: Option<&str>,
+) -> Result<(), String> {
+    let client = github_client();
+    let auth = format!("Bearer {}", token);
+    let patch_url = format!("{}/repos/{}/pulls/{}", GITHUB_API, repo_slug, pr_number);
+    let resp = github_send_with_retry(|| {
+        client
+            .patch(&patch_url)
+            .header("Authorization", &auth)
+            .header("Accept", "application/vnd.github+json")
+            .json(&serde_json::json!({ "state": "closed" }))
+    })
+    .await?;
+    let _ = resp.bytes().await;
+
+    if let Some(branch) = delete_branch.filter(|b| !b.trim().is_empty()) {
+        let del_url = format!(
+            "{}/repos/{}/git/refs/heads/{}",
+            GITHUB_API, repo_slug, branch
+        );
+        // Best-effort branch cleanup — a failure here doesn't fail the revert.
+        if let Ok(r) = github_send_with_retry(|| {
+            client
+                .delete(&del_url)
+                .header("Authorization", &auth)
+                .header("Accept", "application/vnd.github+json")
+        })
+        .await
+        {
+            let _ = r.bytes().await;
+        }
+    }
+    Ok(())
+}
+
 /// Create a branch and PR from a single file (legacy); PR opened immediately after commit.
 pub async fn create_branch_and_pr(
     token: &str,

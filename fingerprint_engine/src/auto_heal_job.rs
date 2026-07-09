@@ -1040,3 +1040,55 @@ pub async fn run_auto_heal_job(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::verification_sandbox::{HealVerdict, VerificationResult};
+
+    fn vr(verdict: HealVerdict, after: u16, health: u16) -> VerificationResult {
+        VerificationResult {
+            verified: verdict == HealVerdict::Fixed,
+            verdict,
+            container_id: None,
+            baseline_status: 200,
+            after_patch_status: after,
+            baseline_was_vulnerable: true,
+            exploit_neutralized: !(200..=299).contains(&after),
+            health_after_ok: (200..400).contains(&health),
+            health_status: health,
+            changed_files: vec![("app.js".to_string(), "safe\n".to_string())],
+            deleted_paths: vec![],
+            tests_ran: false,
+            tests_passed: false,
+            test_output: String::new(),
+            error: None,
+            steps: vec![],
+        }
+    }
+
+    #[test]
+    fn failure_reason_maps_verdicts() {
+        assert!(failure_reason(&vr(HealVerdict::StillVulnerable, 200, 200)).contains("STILL SUCCEEDS"));
+        assert!(failure_reason(&vr(HealVerdict::BrokeApp, 500, 0)).contains("BROKE"));
+        assert!(failure_reason(&vr(HealVerdict::Inconclusive, 0, 0))
+            .to_lowercase()
+            .contains("apply"));
+    }
+
+    #[test]
+    fn build_pr_text_is_honest_and_notes_self_repair() {
+        let (title, body) = build_pr_text("F-1", &vr(HealVerdict::Fixed, 403, 200), "app.js: ...", 2, None);
+        assert!(title.contains("fixed"));
+        assert!(title.contains("F-1"));
+        assert!(body.contains("F-1"));
+        assert!(body.contains("403"));
+        assert!(body.contains("Self-repair")); // attempts > 1
+    }
+
+    #[test]
+    fn build_pr_text_no_self_repair_line_on_first_attempt() {
+        let (_t, body) = build_pr_text("F-2", &vr(HealVerdict::Fixed, 404, 200), "x", 1, None);
+        assert!(!body.contains("Self-repair"));
+    }
+}

@@ -1156,6 +1156,49 @@ mod tests {
         assert_eq!(HealVerdict::Inconclusive.as_str(), "inconclusive");
     }
 
+    #[test]
+    fn tail_chars_returns_suffix() {
+        assert_eq!(tail_chars("abcdef", 3), "def");
+        assert_eq!(tail_chars("ab", 5), "ab");
+        assert_eq!(tail_chars("", 3), "");
+    }
+
+    #[test]
+    fn detect_test_command_by_manifest() {
+        let d1 = tempfile::tempdir().unwrap();
+        std::fs::write(d1.path().join("Cargo.toml"), "[package]\n").unwrap();
+        assert!(detect_test_command(d1.path())
+            .unwrap()
+            .last()
+            .unwrap()
+            .contains("cargo test"));
+
+        let d2 = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d2.path().join("package.json"),
+            r#"{"scripts":{"test":"jest"}}"#,
+        )
+        .unwrap();
+        assert!(detect_test_command(d2.path())
+            .unwrap()
+            .last()
+            .unwrap()
+            .contains("npm test"));
+
+        // package.json with the npm default placeholder is NOT a runnable test.
+        let d3 = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d3.path().join("package.json"),
+            r#"{"scripts":{"test":"echo \"Error: no test specified\" && exit 1"}}"#,
+        )
+        .unwrap();
+        assert!(detect_test_command(d3.path()).is_none());
+
+        // empty repo → no gate.
+        let d4 = tempfile::tempdir().unwrap();
+        assert!(detect_test_command(d4.path()).is_none());
+    }
+
     #[tokio::test]
     async fn collect_changed_files_reads_applied_content() {
         // Build a throwaway git repo, commit a baseline, modify + add files, and assert the

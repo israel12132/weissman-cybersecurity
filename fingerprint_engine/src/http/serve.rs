@@ -1159,6 +1159,17 @@ struct AutoHealBody {
 }
 
 #[derive(Deserialize)]
+struct HealRevertBody {
+    finding_id: String,
+    git_token: Option<String>,
+    repo_slug: Option<String>,
+    channel: Option<String>,
+    gitlab_host: Option<String>,
+    #[serde(default)]
+    delete_branch: Option<bool>,
+}
+
+#[derive(Deserialize)]
 #[allow(dead_code)]
 struct DeceptionGenerateBody {
     types: Option<Vec<String>>,
