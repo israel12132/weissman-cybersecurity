@@ -234,7 +234,7 @@ export default function ScanScheduler() {
             </div>
           ) : filteredSchedules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No schedules found. Click "Create Schedule" to get started.
+              No schedules found. Click &quot;Create Schedule&quot; to get started.
             </div>
           ) : visibleSchedules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>

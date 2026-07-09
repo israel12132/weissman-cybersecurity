@@ -235,7 +235,7 @@ export default function AlertRulesEngine() {
             </div>
           ) : filteredRules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              No alert rules found. Click "Create Rule" to get started.
+              No alert rules found. Click &quot;Create Rule&quot; to get started.
             </div>
           ) : visibleRules.length === 0 ? (
             <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
