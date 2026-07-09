@@ -5,9 +5,10 @@
  * 100 most recent findings as an event feed (time, target, severity, message).
  * Auto-refreshes on an interval for a live "wall display" surface. Route: /live-feed
  */
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Radio, Search, Pause, Play } from 'lucide-react'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -30,7 +31,6 @@ export default function LiveFeed() {
   const [sevFilter, setSevFilter] = useState('all')
   const [paused, setPaused] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const timerRef = useRef(null)
 
   const load = useCallback(async (opts = {}) => {
     setError('')
@@ -53,12 +53,8 @@ export default function LiveFeed() {
     load()
   }, [load])
 
-  // Live polling — suspended while paused.
-  useEffect(() => {
-    if (paused) return undefined
-    timerRef.current = setInterval(() => load({ silent: true }), REFRESH_MS)
-    return () => clearInterval(timerRef.current)
-  }, [paused, load])
+  // Live polling — suspended while paused; skips ticks while the tab is hidden.
+  useVisiblePolling(() => load({ silent: true }), REFRESH_MS, { paused })
 
   const severities = useMemo(
     () => [...new Set(events.map((e) => (e.severity || '').toLowerCase()).filter(Boolean))].sort(

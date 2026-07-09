@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Radar } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const POLL_MS = 15000
 
@@ -15,28 +16,22 @@ const POLL_MS = 15000
 export default function ScanStatusIndicator() {
   const { t } = useTranslation()
   const [active, setActive] = useState(false)
-  const timerRef = useRef(null)
 
-  useEffect(() => {
-    let cancelled = false
-    const poll = async () => {
-      // Skip work when the tab is hidden — saves needless requests.
-      if (typeof document !== 'undefined' && document.hidden) return
-      try {
-        const r = await apiFetch('/api/scan/status')
-        const d = await r.json().catch(() => ({}))
-        if (!cancelled) setActive(r.ok && d.scanning_active === true)
-      } catch {
-        if (!cancelled) setActive(false)
-      }
-    }
-    poll()
-    timerRef.current = setInterval(poll, POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timerRef.current)
+  const poll = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/scan/status')
+      const d = await r.json().catch(() => ({}))
+      setActive(r.ok && d.scanning_active === true)
+    } catch {
+      setActive(false)
     }
   }, [])
+
+  useEffect(() => {
+    poll()
+  }, [poll])
+
+  useVisiblePolling(poll, POLL_MS)
 
   if (!active) return null
 
