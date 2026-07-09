@@ -281,6 +281,7 @@ export default function NetworkProtocols() {
               type="search"
               value={protocolSearch}
               onChange={(e) => setProtocolSearch(e.target.value)}
+              aria-label={t('pages.networkProtocols.search_placeholder')}
               placeholder={t('pages.networkProtocols.search_placeholder')}
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />

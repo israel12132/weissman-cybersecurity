@@ -199,6 +199,7 @@ export default function CryptoPosture() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  aria-label={t(`${NS}.search_placeholder`)}
                   placeholder={t(`${NS}.search_placeholder`)}
                   className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                 />

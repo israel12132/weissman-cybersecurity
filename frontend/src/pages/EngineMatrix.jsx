@@ -803,6 +803,7 @@ export default function EngineMatrix() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={t('engines.search_placeholder')}
               placeholder={t('engines.search_placeholder')}
               className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
             />

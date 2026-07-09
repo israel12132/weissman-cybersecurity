@@ -224,6 +224,7 @@ export default function ClientIntegrations() {
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label={t('pages.clientIntegrations.search_placeholder')}
           placeholder={t('pages.clientIntegrations.search_placeholder')}
           className="w-full px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />

@@ -231,6 +231,7 @@ export default function EngineRoomTab() {
         <div className="relative flex-1 min-w-[260px]">
           <input
             type="search"
+            aria-label={t('engines.search_placeholder')}
             placeholder={t('engines.search_placeholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}

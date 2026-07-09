@@ -452,6 +452,7 @@ export default function AIAnalysisEngine() {
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.search_placeholder')}
                     placeholder={t('pages.aiAnalysisEngine.search_placeholder')}
                     className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40"
                   />

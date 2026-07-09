@@ -266,6 +266,7 @@ export default function TopTierEngineHub() {
               type="search"
               value={engineSearch}
               onChange={(e) => setEngineSearch(e.target.value)}
+              aria-label={t('pages.topTierEngineHub.search_placeholder')}
               placeholder={t('pages.topTierEngineHub.search_placeholder')}
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />

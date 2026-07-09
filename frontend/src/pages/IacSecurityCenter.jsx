@@ -2215,6 +2215,7 @@ export default function IacSecurityCenter() {
                     type="search"
                     value={findingSearch}
                     onChange={(e) => setFindingSearch(e.target.value)}
+                    aria-label={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
                     placeholder={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
                     className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
                   />

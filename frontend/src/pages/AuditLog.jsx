@@ -436,6 +436,7 @@ export default function AuditLog() {
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
+              aria-label={t('audit.actor_placeholder')}
               placeholder={t('audit.actor_placeholder')}
               value={actor}
               onChange={(e) => { setActor(e.target.value); setOffset(0) }}

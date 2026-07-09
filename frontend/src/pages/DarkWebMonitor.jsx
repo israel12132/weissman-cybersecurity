@@ -262,6 +262,7 @@ export default function DarkWebMonitor() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={t('pages.darkWebMonitor.search_placeholder')}
               placeholder={t('pages.darkWebMonitor.search_placeholder')}
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40"
             />

@@ -333,6 +333,7 @@ function SupremeNerveCenterInner() {
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label={t('supremeNerveCenter.searchEngines')}
                   placeholder={t('supremeNerveCenter.searchEngines')}
                   className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600"
                 />

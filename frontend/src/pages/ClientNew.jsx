@@ -72,6 +72,7 @@ export default function ClientNew() {
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label={t('pages.clientNew.search_placeholder')}
           placeholder={t('pages.clientNew.search_placeholder')}
           className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />

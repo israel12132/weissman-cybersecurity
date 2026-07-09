@@ -586,6 +586,7 @@ export default function JwtAttackLab() {
                       type="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label={t('pages.jwtLab.search_placeholder')}
                       placeholder={t('pages.jwtLab.search_placeholder')}
                       className="pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-[#a855f7]/40 min-w-[200px]"
                     />

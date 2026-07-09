@@ -525,6 +525,7 @@ export default function DomainDiscovery() {
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label={t('pages.domainDiscovery.search_placeholder')}
                     placeholder={t('pages.domainDiscovery.search_placeholder')}
                     className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-8 pr-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 w-44"
                   />

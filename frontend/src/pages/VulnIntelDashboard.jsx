@@ -351,6 +351,7 @@ export default function VulnIntelDashboard() {
               </span>
               <input
                 type="search"
+                aria-label={t('findings.search_placeholder')}
                 placeholder={t('findings.search_placeholder')}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}

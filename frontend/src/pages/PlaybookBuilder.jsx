@@ -574,6 +574,7 @@ export default function PlaybookBuilder() {
                 type="search"
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
+                aria-label={t('playbooks.library_search')}
                 placeholder={t('playbooks.library_search')}
                 className="w-full rounded-lg bg-[var(--bg-2)] pl-8 pr-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
               />
