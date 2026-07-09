@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
+import { bulkUpdateFindingStatus } from '../lib/bulkFindingStatus'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
@@ -408,6 +409,12 @@ export default function FindingsCommandCenter() {
   // Pagination
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
 
+  // Bulk selection / actions
+  const [selectedRows, setSelectedRows] = useState([])
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [selectionResetSignal, setSelectionResetSignal] = useState(0)
+
   const loadFindings = useCallback(() => {
     setLoading(true)
     setError(null)
@@ -458,6 +465,30 @@ export default function FindingsCommandCenter() {
       })
       .catch((e) => toast.error(t('findings.toast_status_failed', { detail: e?.message || t('findings.network_error') })))
   }, [toast, t])
+
+  // Bulk status update — batches the per-finding PATCH /api/findings/:id/status
+  // (there is no server bulk endpoint) with concurrency-limited requests, then
+  // reports an aggregate result. Local state is patched from each success.
+  const applyBulkStatus = useCallback(async () => {
+    const status = bulkStatus
+    const targets = selectedRows.map((f) => f.raw_id ?? f.id)
+    if (!status || targets.filter((id) => id != null).length === 0) return
+    setBulkBusy(true)
+    const { ok, failed } = await bulkUpdateFindingStatus(targets, status, {
+      apiFetch,
+      onSuccess: (rawId, serverStatus) => {
+        setRawFindings((prev) => prev.map((f) => (Number(f.raw_id) === Number(rawId) ? { ...f, status: serverStatus } : f)))
+      },
+    })
+    setBulkBusy(false)
+    setSelectionResetSignal((n) => n + 1)
+    setSelectedRows([])
+    if (failed.length === 0) {
+      toast.success(t('findings.bulk_status_ok', { count: ok, status }))
+    } else {
+      toast.warning(t('findings.bulk_status_partial', { ok, failed: failed.length }))
+    }
+  }, [bulkStatus, selectedRows, toast, t])
 
   const handleExportCsv = useCallback(() => {
     apiFetch('/api/findings/export/csv')
@@ -780,6 +811,44 @@ export default function FindingsCommandCenter() {
           />
         )}
 
+        {selectedRows.length > 0 && (
+          <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-500/30 bg-[var(--bg-elevated)] px-4 py-2.5 shadow-lg">
+            <span className="text-[12px] font-mono text-cyan-300">
+              {t('findings.bulk_selected', { count: selectedRows.length })}
+            </span>
+            <div className="flex items-center gap-2 ms-auto">
+              <label className="text-[11px] font-mono text-[var(--text-muted)]">{t('findings.bulk_set_status')}</label>
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                aria-label={t('findings.bulk_set_status')}
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
+              >
+                <option value="">{t('findings.bulk_choose_status')}</option>
+                {FINDING_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>{t(s.label)}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!bulkStatus || bulkBusy}
+                onClick={applyBulkStatus}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[12px] font-mono text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {bulkBusy && <span className="w-3 h-3 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />}
+                {t('findings.bulk_apply', { count: selectedRows.length })}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSelectionResetSignal((n) => n + 1); setSelectedRows([]) }}
+                className="rounded-lg border border-[var(--border-default)] px-2.5 py-1.5 text-[12px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                {t('findings.bulk_clear')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {(tableData.length > 0 || loading) && (
           <DataTable
             id="findings-command-table"
@@ -796,6 +865,11 @@ export default function FindingsCommandCenter() {
             pageSizes={PAGE_SIZES}
             onRowClick={handleRowClick}
             selectedRowId={selectedRowId}
+            enableSelection
+            onSelectionChange={setSelectedRows}
+            selectionResetSignal={selectionResetSignal}
+            selectLabel={t('findings.select_row')}
+            selectAllLabel={t('findings.select_all')}
             getRowAccentColor={(row) => getSeverityMeta(row.severity).border ?? getSeverityMeta(row.severity).color}
             emptyFilteredMessage={t('findings.no_filter_match')}
             zebra
