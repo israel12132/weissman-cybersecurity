@@ -6526,6 +6526,9 @@
       "noResults": "לא נמצאו תוצאות עבור \"{{query}}\"",
       "startTyping": "התחל להקליד לחיפוש…",
       "select": "בחר",
+      "quickNav": "ניווט מהיר",
+      "navigate": "ניווט",
+      "navigateHint": "ניווט",
       "brand": "Weissman Global Search"
     },
     "routeLoader": {

@@ -6526,6 +6526,9 @@
       "noResults": "No results found for \"{{query}}\"",
       "startTyping": "Start typing to search…",
       "select": "Select",
+      "quickNav": "Quick navigation",
+      "navigate": "Navigate",
+      "navigateHint": "Navigate",
       "brand": "Weissman Global Search"
     },
     "routeLoader": {
