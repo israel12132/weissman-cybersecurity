@@ -184,12 +184,37 @@ bodyHtml = bodyHtml.replace(/<h2>([\s\S]*?)<\/h2>/g, (full, inner) => {
   }
   toc.push({ id, num: tocNum, label, appendix: isAppendix })
   const cls = isAppendix ? 'appendix pbreak' : ''
-  return `<h2 id="${id}" class="${cls}"><span class="secnum">${chip}</span>${escapeHtml(label)}</h2>`
+  return `<h2 id="${id}" class="${cls}"><span class="secnum">${chip}</span><span class="sectitle">${escapeHtml(label)}</span></h2>`
 })
 
 function escapeHtml(s) {
   return s.replace(/&(?!#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
+
+// "By the numbers" KPI band — injected right after the Executive Summary heading
+const KPIS = rtl ? [
+  { n: '563', u: 'מנועי אבטחה' },
+  { n: '~193K', u: 'שורות קוד מקורי' },
+  { n: '~130', u: 'נקודות־קצה API' },
+  { n: '~88', u: 'טבלאות PostgreSQL' },
+  { n: '6', u: 'דרגות RBAC' },
+  { n: '0', u: 'ממצאים מזויפים' },
+] : [
+  { n: '563', u: 'security engines' },
+  { n: '~193K', u: 'lines of first-party code' },
+  { n: '~130', u: 'API endpoints' },
+  { n: '~88', u: 'PostgreSQL tables' },
+  { n: '6', u: 'RBAC tiers' },
+  { n: '0', u: 'fabricated findings' },
+]
+const kpiHtml = `
+<div class="kpi">
+  <div class="kpi__eyebrow">${rtl ? 'הפלטפורמה במספרים' : 'The platform by the numbers'}</div>
+  <div class="kpi__grid">
+    ${KPIS.map((k) => `<div class="kpi__card"><span class="kpi__num">${k.n}</span><span class="kpi__lbl">${escapeHtml(k.u)}</span></div>`).join('\n    ')}
+  </div>
+</div>`
+bodyHtml = bodyHtml.replace(/(<h2 id="sec-1"[^>]*>[\s\S]*?<\/h2>)/, `$1\n${kpiHtml}`)
 
 /* ---------------------------------------------------------------------------
  * 4. Cover + TOC HTML
@@ -197,9 +222,9 @@ function escapeHtml(s) {
 const coverTitle = rtl ? (titleDescriptor || 'מסמך חברה ומערכת')
                        : (titleDescriptor || 'Company & System Briefing')
 
-// metadata cells (render inline markdown in values)
+// metadata cells (render inline markdown in values); long values span full width
 const metaCells = meta.map(({ k, v }) => {
-  const long = stripTags(md.renderInline(v)).length > 40
+  const long = stripTags(md.renderInline(v)).length > 58
   return `<div class="metacell${long ? ' metacell--wide' : ''}"><span class="k">${escapeHtml(k)}</span><span class="v">${md.renderInline(v)}</span></div>`
 }).join('\n')
 
@@ -376,6 +401,41 @@ const mupdf = await import('mupdf')
 const dst = mupdf.PDFDocument.openDocument(new Uint8Array(bodyBuf), 'application/pdf')
 const cover = mupdf.PDFDocument.openDocument(new Uint8Array(coverBuf), 'application/pdf')
 dst.graftPage(0, cover, 0)
+
+// --- document metadata (shows in the viewer's title bar / properties) ---
+const docTitle = `${productName} — ${coverTitle}`
+const subject = rtl
+  ? `${tagline} · תקציר מנהלי וטכני מבוסס־קוד`
+  : `${tagline} · Source-verified executive & technical briefing`
+const keywords = rtl
+  ? 'Weissman, אבטחת סייבר, אבטחה התקפית אוטונומית, Red Teaming, ASM, מודיעין איומים, SOAR, EDR, UEBA, OAST, FAIR, RBAC'
+  : 'Weissman, cybersecurity, autonomous offensive security, red teaming, ASM, threat intelligence, SOAR, EDR, UEBA, OAST, FAIR, RBAC'
+try {
+  dst.setMetaData('info:Title', docTitle)
+  dst.setMetaData('info:Author', 'Weissman Cybersecurity')
+  dst.setMetaData('info:Subject', subject)
+  dst.setMetaData('info:Keywords', keywords)
+  dst.setMetaData('info:Creator', 'Weissman Briefing Builder')
+  dst.setLanguage(rtl ? 'he-IL' : 'en-US')
+} catch (e) { console.warn(`  metadata skipped: ${e.message}`) }
+
+// --- bookmark outline: one entry per section/appendix, in document order ---
+try {
+  const it = dst.outlineIterator()
+  let added = 0
+  for (const t of toc) {
+    let uri
+    try { uri = dst.formatLinkURI(dst.resolveLinkDestination('#nameddest=' + t.id)) }
+    catch { continue }
+    const title = t.appendix ? t.label : `${t.num}. ${t.label}`
+    it.insert({ title, uri, open: false })
+    added += 1
+  }
+  // open the bookmarks panel by default
+  dst.getTrailer().get('Root').put('PageMode', dst.newName('UseOutlines'))
+  if (process.env.PDF_DEBUG) console.log(`  bookmarks added: ${added}`)
+} catch (e) { console.warn(`  outline skipped: ${e.message}`) }
+
 const merged = dst.saveToBuffer('compress')
 fs.writeFileSync(outputPath, Buffer.from(merged.asUint8Array()))
 

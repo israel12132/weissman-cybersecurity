@@ -178,6 +178,7 @@ html[dir="rtl"] .cover__rule {
   max-width: 168mm;
 }
 .metacell { display: flex; flex-direction: column; gap: 1.2mm; }
+.metacell--wide { grid-column: 1 / -1; }
 .metacell .k {
   font-family: 'Heebo', sans-serif; font-weight: 600;
   font-size: 7.6pt; letter-spacing: .1em; text-transform: uppercase;
@@ -283,12 +284,17 @@ html[dir="rtl"] .toc__group-label { letter-spacing: 0; text-transform: none; }
   position: relative;
   break-after: avoid;
   break-inside: avoid;
+  display: flex;
+  align-items: baseline;
+  gap: 3.5mm;
 }
+.doc h2 .sectitle { flex: 1; min-width: 0; }
 .doc h2 .secnum {
+  flex: 0 0 auto;
   display: inline-grid; place-items: center;
   min-width: 9mm; height: 9mm; padding: 0 1.5mm;
-  margin-inline-end: 3.5mm;
-  vertical-align: -1.6mm;
+  align-self: baseline;
+  transform: translateY(1.4mm);
   font-family: 'Heebo', sans-serif; font-weight: 800; font-size: 11pt;
   color: #FFFFFF;
   background: linear-gradient(150deg, var(--brand), var(--brand-strong));
@@ -308,8 +314,12 @@ html[dir="rtl"] .toc__group-label { letter-spacing: 0; text-transform: none; }
 }
 .doc h2.appendix::after { background: linear-gradient(90deg, var(--amber), #E7A94A); }
 
-/* new page before each numbered section & appendix */
+/* new page before each appendix */
 .doc h2.pbreak { break-before: page; }
+/* keep the architecture section (§3) together with its full-page diagram */
+.doc h2#sec-3 { break-before: page; }
+/* headings that open a fresh page don't need the large top margin */
+.doc h2.pbreak, .doc h2#sec-3 { margin-top: 2mm; }
 
 .doc h3 {
   font-family: 'Heebo', sans-serif;
@@ -328,6 +338,43 @@ html[dir="rtl"] .toc__group-label { letter-spacing: 0; text-transform: none; }
 .doc p { margin: 0 0 3mm 0; }
 .doc strong { color: var(--ink); font-weight: 700; }
 .doc a { color: var(--brand); text-decoration: none; }
+
+/* KPI "by the numbers" band */
+.kpi { margin: 5mm 0 6mm 0; break-inside: avoid; }
+.kpi__eyebrow {
+  font-family: 'Heebo', sans-serif; font-weight: 700;
+  font-size: 8pt; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--brand); margin-bottom: 3mm;
+}
+html[dir="rtl"] .kpi__eyebrow { letter-spacing: 0; text-transform: none; font-size: 9pt; }
+.kpi__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+.kpi__card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 2.8mm;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(34,195,210,.06), transparent 60%),
+    linear-gradient(160deg, #FFFFFF, var(--paper-2));
+  padding: 4mm 4.5mm 3.6mm 4.5mm;
+  overflow: hidden;
+}
+.kpi__card::before {
+  content: ""; position: absolute; top: 0; inset-inline-start: 0;
+  width: 100%; height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--cyan));
+}
+.kpi__num {
+  display: block;
+  font-family: 'Heebo', sans-serif; font-weight: 800;
+  font-size: 21pt; line-height: 1.05; color: var(--brand-strong);
+  letter-spacing: -0.01em; direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+html[dir="rtl"] .kpi__num { text-align: right; }
+.kpi__lbl {
+  display: block; margin-top: 1.6mm;
+  font-size: 8.6pt; color: var(--muted); line-height: 1.35;
+}
 
 /* Lists */
 .doc ul, .doc ol { margin: 0 0 3.5mm 0; padding-inline-start: 6mm; }
@@ -447,19 +494,19 @@ html[dir="rtl"] .toc__group-label { letter-spacing: 0; text-transform: none; }
    BESPOKE ARCHITECTURE DIAGRAM
    ========================================================================== */
 .arch {
-  margin: 5mm 0 6mm 0;
+  margin: 4mm 0 5mm 0;
   border: 1px solid var(--line);
   border-radius: 3.5mm;
   background:
     radial-gradient(120% 80% at 100% 0%, rgba(34,195,210,.05), transparent 55%),
     var(--paper-2);
-  padding: 6mm 6mm 5mm 6mm;
+  padding: 5mm 6mm 4mm 6mm;
   break-inside: avoid;
 }
 .arch__title {
   font-family: 'Heebo', sans-serif; font-weight: 700; font-size: 9pt;
   letter-spacing: .06em; color: var(--brand-strong);
-  text-transform: uppercase; margin-bottom: 4mm;
+  text-transform: uppercase; margin-bottom: 3mm;
 }
 html[dir="rtl"] .arch__title { letter-spacing: 0; text-transform: none; font-size: 10pt; }
 .arch__flow { display: flex; flex-direction: column; gap: 0; }
@@ -467,19 +514,19 @@ html[dir="rtl"] .arch__title { letter-spacing: 0; text-transform: none; font-siz
   border: 1px solid #DCE7EE;
   border-radius: 3mm;
   background: var(--paper);
-  padding: 3.4mm 4mm;
+  padding: 2.8mm 3.6mm;
   position: relative;
 }
-.band + .band { margin-top: 6.5mm; }
+.band + .band { margin-top: 4.8mm; }
 .band + .band::before {
   content: "";
-  position: absolute; top: -6.5mm; height: 6.5mm; width: 2px;
+  position: absolute; top: -4.8mm; height: 4.8mm; width: 2px;
   inset-inline-start: 50%;
   background: linear-gradient(180deg, var(--cyan), var(--brand));
 }
 .band + .band::after {
   content: "";
-  position: absolute; top: -2.3mm; inset-inline-start: calc(50% - 1.4mm);
+  position: absolute; top: -1.9mm; inset-inline-start: calc(50% - 1.4mm);
   width: 0; height: 0;
   border-left: 1.4mm solid transparent;
   border-right: 1.4mm solid transparent;
@@ -488,7 +535,7 @@ html[dir="rtl"] .arch__title { letter-spacing: 0; text-transform: none; font-siz
 .band__label {
   font-family: 'Heebo', sans-serif; font-weight: 700; font-size: 8pt;
   color: var(--muted); letter-spacing: .04em;
-  margin-bottom: 2.6mm;
+  margin-bottom: 2.2mm;
 }
 .band__nodes { display: flex; flex-wrap: wrap; gap: 3mm; }
 .node {
@@ -497,7 +544,7 @@ html[dir="rtl"] .arch__title { letter-spacing: 0; text-transform: none; font-siz
   border: 1px solid #D3E2EA;
   border-radius: 2.4mm;
   background: linear-gradient(165deg, #FFFFFF, #F3F8FC);
-  padding: 2.6mm 3mm;
+  padding: 2.2mm 3mm;
 }
 .node .n-name {
   font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 8.4pt;
@@ -509,8 +556,8 @@ html[dir="rtl"] .node .n-name { text-align: right; }
 .band--api .node { border-color: #B9DEE3; background: linear-gradient(165deg, #FFFFFF, #EFF9FA); }
 .band--data .node .n-name { color: #35507A; }
 .arch__legend {
-  margin-top: 4.5mm; display: flex; flex-wrap: wrap; gap: 2mm 5mm;
-  border-top: 1px dashed var(--line); padding-top: 3.5mm;
+  margin-top: 3.5mm; display: flex; flex-wrap: wrap; gap: 2mm 5mm;
+  border-top: 1px dashed var(--line); padding-top: 3mm;
 }
 .legchip { display: inline-flex; align-items: center; gap: 1.8mm; font-size: 7.8pt; color: var(--muted); }
 .legchip .lc { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--brand); font-size: 7.6pt; }
