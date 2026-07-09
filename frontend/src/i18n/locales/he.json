@@ -1171,7 +1171,15 @@
       "top_risk": "סיכון הנתיב המוביל",
       "top_risk_sub": "הסיכון הגבוה ביותר בנתיב יחיד",
       "search_placeholder": "סינון אותות…",
-      "no_matches": "אין אותות התואמים את הסינון."
+      "no_matches": "אין אותות התואמים את הסינון.",
+      "ueba": "אנומליות UEBA",
+      "ueba_sub": "{{total}} בסך הכול · קריטי/גבוה מוצג",
+      "open_ueba": "פתח UEBA",
+      "crypto": "מצב הצפנה",
+      "crypto_sub": "מוכנות פוסט-קוונטית (ML-KEM)",
+      "open_crypto": "פתח מצב הצפנה",
+      "pq_ready": "מוכן PQ",
+      "pq_check": "אמת"
     },
     "liveFeed": {
       "title": "הזנת ממצאים חיה",

@@ -1171,7 +1171,15 @@
       "top_risk": "Top Path Risk",
       "top_risk_sub": "Highest single-path risk",
       "search_placeholder": "Filter signals…",
-      "no_matches": "No signals match your filter."
+      "no_matches": "No signals match your filter.",
+      "ueba": "UEBA Anomalies",
+      "ueba_sub": "{{total}} total · crit/high shown",
+      "open_ueba": "Open UEBA",
+      "crypto": "Crypto Posture",
+      "crypto_sub": "Post-quantum readiness (ML-KEM)",
+      "open_crypto": "Open crypto posture",
+      "pq_ready": "PQ-Ready",
+      "pq_check": "Verify"
     },
     "liveFeed": {
       "title": "Live Findings Feed",

@@ -93,7 +93,7 @@ export default function ExecutiveOverview() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
 
-  const [global, setGlobal] = useState({ loading: true, posture: null, coverage: null, iocs: null, intel: null })
+  const [global, setGlobal] = useState({ loading: true, posture: null, coverage: null, iocs: null, intel: null, ueba: null, crypto: null })
   const [client, setClient] = useState({ loading: false, financial: null, attack: null })
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -106,13 +106,15 @@ export default function ExecutiveOverview() {
   const loadGlobal = useCallback(async () => {
     setGlobal((g) => ({ ...g, loading: true }))
     // Each signal is independent — one failure must not blank the others.
-    const [posture, coverage, iocs, intel] = await Promise.all([
+    const [posture, coverage, iocs, intel, ueba, crypto] = await Promise.all([
       getJson('/api/security/posture-score').catch(() => null),
       getJson('/api/attack-coverage').catch(() => null),
       getJson('/api/soc/iocs').catch(() => null),
       getJson('/api/intel/status').catch(() => null),
+      getJson('/api/ueba/anomalies?limit=500').catch(() => null),
+      getJson('/api/crypto/capabilities').catch(() => null),
     ])
-    setGlobal({ loading: false, posture, coverage, iocs, intel })
+    setGlobal({ loading: false, posture, coverage, iocs, intel, ueba, crypto })
   }, [])
 
   const loadClient = useCallback(async (cid) => {
@@ -141,6 +143,11 @@ export default function ExecutiveOverview() {
   const iocCount = Array.isArray(global.iocs?.iocs) ? global.iocs.iocs.length : null
   const kev = global.intel?.kev
   const epss = global.intel?.epss
+  const uebaList = Array.isArray(global.ueba?.anomalies) ? global.ueba.anomalies : null
+  const uebaCritHigh = uebaList
+    ? uebaList.filter((a) => ['critical', 'high'].includes(String(a.severity || '').toLowerCase())).length
+    : null
+  const pqReady = global.crypto?.post_quantum?.ml_kem_selftest_ok === true
 
   const fin = client.financial?.snapshot
   const atk = client.attack?.snapshot
@@ -152,7 +159,9 @@ export default function ExecutiveOverview() {
   const showCoverage = tileMatches(t(`${NS}.coverage`))
   const showIocs = tileMatches(t(`${NS}.iocs`), t(`${NS}.iocs_sub`))
   const showIntel = tileMatches(t(`${NS}.intel`))
-  const platformVisible = showPosture || showCoverage || showIocs || showIntel
+  const showUeba = tileMatches(t(`${NS}.ueba`), t(`${NS}.ueba_sub`))
+  const showCrypto = tileMatches(t(`${NS}.crypto`), t(`${NS}.crypto_sub`))
+  const platformVisible = showPosture || showCoverage || showIocs || showIntel || showUeba || showCrypto
   const showAle = tileMatches(t(`${NS}.ale`))
   const showPaths = tileMatches(t(`${NS}.paths`))
   const showTopRisk = tileMatches(t(`${NS}.top_risk`))
@@ -202,13 +211,13 @@ export default function ExecutiveOverview() {
         <div>
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t(`${NS}.platform_heading`)}</h2>
           {global.loading ? (
-            <SkeletonWidgetGrid count={4} />
+            <SkeletonWidgetGrid count={6} />
           ) : !platformVisible ? (
             <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)] px-4 py-6 text-center text-[12px] font-mono text-[var(--text-muted)]">
               {t(`${NS}.no_matches`)}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {showPosture && (
               <Tile
                 to="/security-posture"
@@ -256,6 +265,26 @@ export default function ExecutiveOverview() {
                 }
                 accent="#22d3ee"
                 linkLabel={t(`${NS}.open_intel`)}
+              />
+              )}
+              {showUeba && (
+              <Tile
+                to="/ueba"
+                label={t(`${NS}.ueba`)}
+                value={uebaList ? (uebaCritHigh > 0 ? <span style={{ color: '#f43f5e' }}>{uebaCritHigh}</span> : uebaList.length) : t(`${NS}.na`)}
+                sub={t(`${NS}.ueba_sub`, { total: uebaList ? uebaList.length : 0 })}
+                accent="#a78bfa"
+                linkLabel={t(`${NS}.open_ueba`)}
+              />
+              )}
+              {showCrypto && (
+              <Tile
+                to="/crypto-posture"
+                label={t(`${NS}.crypto`)}
+                value={global.crypto ? <span style={{ color: pqReady ? '#4ade80' : '#facc15' }}>{pqReady ? t(`${NS}.pq_ready`) : t(`${NS}.pq_check`)}</span> : t(`${NS}.na`)}
+                sub={t(`${NS}.crypto_sub`)}
+                accent={pqReady ? '#4ade80' : '#facc15'}
+                linkLabel={t(`${NS}.open_crypto`)}
               />
               )}
             </div>
