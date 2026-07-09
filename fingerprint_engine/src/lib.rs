@@ -135,6 +135,7 @@ pub mod request_trace;
 pub mod resilience;
 pub mod risk_superposition_collapse_engine;
 pub mod saas_idp_discovery;
+pub mod sla_forecast;
 pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;

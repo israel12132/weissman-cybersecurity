@@ -75,6 +75,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/compliance/posture/:client_id",
             get(api_compliance_posture_for_client),
         )
+        // Proactive SLA breach forecast: cumulative breaches by 7/14/30/60/90-day horizons.
+        .route(
+            "/api/remediation/sla-forecast/:client_id",
+            get(api_sla_forecast_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
