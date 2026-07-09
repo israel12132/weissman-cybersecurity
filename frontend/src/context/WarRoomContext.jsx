@@ -5,7 +5,6 @@ const WarRoomContext = createContext(null)
 
 const LATENCY_HISTORY_MAX = 60
 const US_CENTER = [37.09, -95.71]
-const ENGINE_ACTIVITY_WINDOW_MS = 3000
 
 export function WarRoomProvider({ children }) {
   const [redTeamActive, setRedTeamActive] = useState(false)

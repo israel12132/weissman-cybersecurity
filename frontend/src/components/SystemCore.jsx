@@ -11,7 +11,6 @@ import LabForensicEvidence from './ui/LabForensicEvidence'
 
 export default function SystemCore() {
   const { t } = useTranslation()
-  const [configs, setConfigs] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -65,7 +64,6 @@ export default function SystemCore() {
     apiFetch(`/api/system/configs`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to load configs'))))
       .then((list) => {
-        setConfigs(Array.isArray(list) ? list : [])
         const enableVal = list?.find((c) => c.key === 'enable_rfc3161_signing')?.value ?? 'true'
         setRfc3161Enabled(enableVal === 'true' || enableVal === '1')
         const certVal = list?.find((c) => c.key === 'x509_cert_path')?.value ?? ''

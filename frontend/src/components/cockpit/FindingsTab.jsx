@@ -21,7 +21,7 @@ function severityToCvss(severity) {
   return '—'
 }
 
-function parseDescription(description, source) {
+function parseDescription(description) {
   if (!description || typeof description !== 'string') return {}
   try {
     const d = JSON.parse(description)
@@ -75,7 +75,7 @@ function CopyableBlock({ label, value }) {
 /** Forensic / PoE text is rendered as plain React children (escaped) — never HTML. */
 function ExpandedRow({ finding, onClose, onVerified }) {
   const { t } = useTranslation()
-  const desc = parseDescription(finding.description, finding.source)
+  const desc = parseDescription(finding.description)
   const proofText = finding.poc_exploit?.trim()
     ? finding.poc_exploit.trim()
     : t('components.cockpitTabs.findings.awaiting_poe')

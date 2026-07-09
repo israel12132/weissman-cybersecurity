@@ -10,7 +10,7 @@ const NS = 'components.intelWidgets.redTeamSkullSwitch'
 export default function RedTeamSkullSwitch() {
   const { t } = useTranslation()
   const { selectedClientId, clientConfig, patchConfig, configLoading } = useClient()
-  const { redTeamActive, setRedTeamActive, confirmCommand, refuseCommand, commandRefused } = useWarRoom()
+  const { setRedTeamActive, confirmCommand, refuseCommand, commandRefused } = useWarRoom()
   const isWeaponized = (clientConfig?.roe_mode || 'safe_proofs') === 'weaponized_god_mode'
 
   React.useEffect(() => {

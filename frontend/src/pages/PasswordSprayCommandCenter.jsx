@@ -18,7 +18,6 @@ import { downloadBytes } from '../lib/pdfExport'
 
 const ENGINE_ID = 'password_spray'
 const ACCENT = '#f43f5e'
-const ACCENT2 = '#38bdf8'
 
 const LABELS = {
   en: {
@@ -68,6 +67,11 @@ const LABELS = {
     cookies: 'Session cookie',
     reset: 'Reset defaults',
     export: 'Export JSON',
+    lastRun: 'Last run',
+    statusIdle: 'Idle',
+    statusRunning: 'Running',
+    statusCompleted: 'Completed',
+    statusError: 'Error',
     posture: 'Credential-stuffing posture',
     friction: 'Stuffing friction',
     grade: 'Grade',
@@ -153,6 +157,11 @@ const LABELS = {
     cookies: 'עוגיית session',
     reset: 'אפס ברירות מחדל',
     export: 'ייצוא JSON',
+    lastRun: 'ריצה אחרונה',
+    statusIdle: 'ממתין',
+    statusRunning: 'רץ',
+    statusCompleted: 'הושלם',
+    statusError: 'שגיאה',
     posture: 'תנוחת credential stuffing',
     friction: 'חיכוך stuffing',
     grade: 'דירוג',
@@ -491,7 +500,7 @@ export default function PasswordSprayCommandCenter() {
     downloadBytes(new TextEncoder().encode(JSON.stringify(payload, null, 2)), `spray-posture-${Date.now()}.json`, 'application/json')
   }, [target, params, findings])
 
-  const { posture, paths, regular, categories, m365, lockoutCurves, ropc, entra, remediation, subdomains, toxic, roadmap, agentGaps, categoryScores } = useMemo(() => {
+  const { posture, paths, regular, m365, lockoutCurves, ropc, entra, remediation, subdomains, toxic, roadmap, agentGaps, categoryScores } = useMemo(() => {
     const postureF = findings.find((f) => f.category === 'posture_score') || null
     const toxicF = findings.find((f) => f.category === 'toxic_combination') || null
     const roadmapF = findings.find((f) => f.category === 'remediation_roadmap') || null
@@ -507,9 +516,8 @@ export default function PasswordSprayCommandCenter() {
       .filter((f) => !['posture_score', 'attack_path', 'toxic_combination', 'remediation_roadmap', 'agent_guidance'].includes(f.category)
         && !(f.title || '').includes('Agent-required'))
       .sort((a, b) => sevWeight(b.severity) - sevWeight(a.severity))
-    const cats = [...new Set(regularF.map((f) => f.category).filter(Boolean))]
     const scores = postureF?.evidence?.category_scores || roadmapF?.evidence?.category_scores || null
-    return { posture: postureF, paths: pathsF, regular: regularF, categories: cats, m365: m365F, lockoutCurves: lockoutF, ropc: ropcF, entra: entraF, remediation: remF, subdomains: subF, toxic: toxicF, roadmap: roadmapF, agentGaps: agentF, categoryScores: scores }
+    return { posture: postureF, paths: pathsF, regular: regularF, m365: m365F, lockoutCurves: lockoutF, ropc: ropcF, entra: entraF, remediation: remF, subdomains: subF, toxic: toxicF, roadmap: roadmapF, agentGaps: agentF, categoryScores: scores }
   }, [findings])
 
   const {
@@ -590,6 +598,11 @@ export default function PasswordSprayCommandCenter() {
         <Link to="/identity-security" className="text-[11px] font-mono text-violet-300/80 hover:text-violet-200 border border-violet-500/25 rounded-lg px-3 py-1.5">
           {L.relatedIdentity} →
         </Link>
+        <span className="inline-flex items-center gap-2 text-[11px] font-mono text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg px-3 py-1.5">
+          <span className="w-2 h-2 rounded-full" style={{ background: statusColor, boxShadow: status === 'running' ? `0 0 8px ${statusColor}` : 'none' }} />
+          {{ idle: L.statusIdle, running: L.statusRunning, completed: L.statusCompleted, error: L.statusError }[status] ?? status}
+          {lastRun && <span className="text-[var(--text-disabled)]">· {L.lastRun}: {lastRun}</span>}
+        </span>
       </div>
 
       <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">

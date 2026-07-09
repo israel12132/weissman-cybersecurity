@@ -70,7 +70,7 @@ function linkProgram(gl, vs, fs) {
   return p
 }
 
-function nodeColor(node, mask, focusId, pathEdgeActive) {
+function nodeColor(node, mask, focusId) {
   const id = String(node.id)
   const dim = mask?.relevantNodes && !mask.relevantNodes.has(id)
   if (node.is_shadow) return [0.55, 0.35, 1.0, dim ? 0.15 : 0.75]

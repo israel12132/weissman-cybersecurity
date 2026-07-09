@@ -198,13 +198,6 @@ export default function MemoryForensicsLab() {
     return 'Shellcode'
   }
 
-  const payloadToHex = (str) => {
-    if (!str || typeof str !== 'string') return ''
-    return Array.from(str)
-      .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase())
-      .join(' ')
-  }
-
   const ENTROPY_BLOCK = 256
   const hasEntropyMap = selected?.entropy_map && Array.isArray(selected.entropy_map) && selected.entropy_map.length > 0
   const responseBytes = useMemo(() => {

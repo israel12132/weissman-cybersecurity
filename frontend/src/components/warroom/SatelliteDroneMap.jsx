@@ -26,7 +26,7 @@ function mapCenterFromLatLng([lat, lng]) {
 
 export default function SatelliteDroneMap() {
   const { t } = useTranslation()
-  const { selectedClient, selectedClientId } = useClient()
+  const { selectedClientId } = useClient()
   const { vulnMarkers, setVulnMarkers, mapZoomComplete, setMapZoomComplete, lastNewTarget, setLastNewTarget, discoveredTargets, lastLatencyMs, US_CENTER: usCenter } = useWarRoom()
   const { playZoom } = useWarRoomSound()
   const usMapCenter = mapCenterFromLatLng(usCenter || US_CENTER)
@@ -39,9 +39,16 @@ export default function SatelliteDroneMap() {
   const lastTargetTimeRef = useRef(0)
   const patrolOffsetRef = useRef(0)
 
+  // Seed the map with targets already discovered for this client (live telemetry
+  // accumulated in WarRoom context) so the flight path isn't empty on mount — new
+  // targets still animate in on top via the lastNewTarget effect below.
   useEffect(() => {
-    setTargetCoordsList([])
-  }, [selectedClientId])
+    const seeded = (discoveredTargets || [])
+      .filter((tgt) => String(tgt.client_id) === String(selectedClientId) && tgt.host)
+      .map((tgt) => geoForTarget(tgt.host))
+      .slice(-16)
+    setTargetCoordsList(seeded)
+  }, [selectedClientId, discoveredTargets])
 
   useEffect(() => {
     if (!lastNewTarget || !selectedClientId || String(lastNewTarget.client_id) !== String(selectedClientId)) return
