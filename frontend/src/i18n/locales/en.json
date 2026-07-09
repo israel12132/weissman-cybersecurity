@@ -669,6 +669,8 @@
     "catalog_clear_selection": "Clear",
     "catalog_no_match": "No engines match your search.",
     "catalog_run_all_bottom": "Run All {{count}} Selected Engines",
+    "catalog_run_single": "Run this engine now",
+    "catalog_run_single_label": "Run",
     "catalog_running_all": "Running all engines…",
     "catalog_select_client_bottom": "Select a client above to enable scanning",
     "catalog_matrix_link": "Engine Matrix (full view)",
@@ -5056,7 +5058,8 @@
     "engineClientCatalog": {
       "evidence_notice": "Scan profile templates launch real engine bundles via POST /api/command-center/scan and POST /api/scan/all-engines. Profile cards are RoE presets — telemetry from GET /api/engines/telemetry.",
       "readiness_blocked": "Client readiness {{pct}}% — complete integrations first",
-      "readiness_pct": "Readiness {{pct}}%"
+      "readiness_pct": "Readiness {{pct}}%",
+      "engine_queued": "Engine queued (Job: {{jobId}})"
     },
     "agentManagement": {
       "evidence_notice": "Endpoint agent roster and heartbeat from GET /api/agents/status. Remote tasking uses authenticated agent channels — offline agents show honest last-seen timestamps."

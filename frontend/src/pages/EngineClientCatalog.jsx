@@ -183,7 +183,7 @@ function StatusDot({ status }) {
   )
 }
 
-function EngineRow({ engine, status, selected, onSelect, isProductionEngine, capability, telemetry, t }) {
+function EngineRow({ engine, status, selected, onSelect, onRun, runDisabled, isProductionEngine, capability, telemetry, t }) {
   const gDef = getGroupDef(engine.group)
   const groupColor = gDef?.color ?? '#6b7280'
   return (
@@ -257,6 +257,20 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
           >
             Profile
           </Link>
+          {isProductionEngine && onRun && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRun(engine.id) }}
+              disabled={runDisabled || status === 'running'}
+              title={t('engines.catalog_run_single', 'Run this engine now')}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 hover:border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+            >
+              {status === 'running' ? (
+                <span className="w-2.5 h-2.5 border border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
+              ) : '▶'}
+              {t('engines.catalog_run_single_label', 'Run')}
+            </button>
+          )}
         </div>
         <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">{engine.description}</p>
       </div>
@@ -264,7 +278,7 @@ function EngineRow({ engine, status, selected, onSelect, isProductionEngine, cap
   )
 }
 
-function ProfileCard({ profile, count, active, onClick, enginesLabel }) {
+function ProfileCard({ profile, active, onClick, enginesLabel }) {
   return (
     <motion.button
       type="button"
@@ -572,6 +586,23 @@ export default function EngineClientCatalog() {
     }
   }, [selectedClientId, selectedEngines, showToast, isProduction, t, clientReadiness])
 
+  const handleRunEngine = useCallback(async (engineId) => {
+    if (!selectedClientId) {
+      showToast('error', t('engines.catalog_select_client_bottom'))
+      return
+    }
+    if (!isProduction(engineId)) {
+      showToast('error', t('engines.catalog_only_run_disabled'))
+      return
+    }
+    const res = await runEngine(engineId)
+    if (res?.ok) {
+      showToast('info', t('pages.engineClientCatalog.engine_queued', { jobId: res.jobId ?? '—' }))
+    } else {
+      showToast('error', res?.msg ?? t('common.error'))
+    }
+  }, [selectedClientId, isProduction, runEngine, showToast, t])
+
   // Group engines by their group for display
   const groupedEngines = useMemo(() => {
     const map = new Map()
@@ -700,7 +731,6 @@ export default function EngineClientCatalog() {
             <ProfileCard
               key={profile.id}
               profile={profile}
-              count={profileEngines(profile).length}
               enginesLabel={t('engines.catalog_engines_count', { count: profileEngines(profile).length })}
               active={profile.id === activeProfileId}
               onClick={() => setActiveProfileId(profile.id)}
@@ -900,6 +930,8 @@ export default function EngineClientCatalog() {
                               status={engineStates[engine.id]?.status}
                               selected={selectedEngines.has(engine.id)}
                               onSelect={handleToggleEngine}
+                              onRun={handleRunEngine}
+                              runDisabled={!selectedClientId}
                               isProductionEngine={isProduction(engine.id)}
                               capability={capabilityById[engine.id]}
                               telemetry={telemetryById[engine.id]}

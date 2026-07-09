@@ -606,6 +606,8 @@
     "catalog_clear_selection": "Clear",
     "catalog_no_match": "No engines match your search.",
     "catalog_run_all_bottom": "Run All {{count}} Selected Engines",
+    "catalog_run_single": "הרץ מנוע זה עכשיו",
+    "catalog_run_single_label": "הרץ",
     "catalog_running_all": "Running all engines…",
     "catalog_select_client_bottom": "Select a client above to enable scanning",
     "catalog_matrix_link": "Engine Matrix (full view)",
@@ -5056,7 +5058,8 @@
     "engineClientCatalog": {
       "evidence_notice": "תבניות פרופיל סריקה מפעילות חבילות מנועים אמיתיות ב-POST /api/command-center/scan ו-POST /api/scan/all-engines. כרטיסי פרופיל הם presets של RoE — טלמטריה מ-GET /api/engines/telemetry.",
       "readiness_blocked": "מוכנות לקוח {{pct}}% — השלם אינטגרציות תחילה",
-      "readiness_pct": "מוכנות {{pct}}%"
+      "readiness_pct": "מוכנות {{pct}}%",
+      "engine_queued": "המנוע נכנס לתור (משימה: {{jobId}})"
     },
     "agentManagement": {
       "evidence_notice": "roster agents ו-heartbeat מ-GET /api/agents/status. tasking מרחוק משתמש בערוצי agent מאומתים — agents offline מציגים timestamps last-seen כנים."
