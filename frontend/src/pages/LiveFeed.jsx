@@ -16,6 +16,7 @@ import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 
@@ -24,6 +25,7 @@ const REFRESH_MS = 15000
 
 export default function LiveFeed() {
   const { t } = useTranslation()
+  const { clients } = useClient()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -88,6 +90,12 @@ export default function LiveFeed() {
     ],
     [severities, sevFilter, t],
   )
+
+  // Resolve the event's client id → a human name (falls back to "client N").
+  const clientName = useMemo(() => {
+    const byId = new Map((clients || []).map((c) => [String(c.id), c.name || c.domain]))
+    return (id) => byId.get(String(id)) || t(`${NS}.client`, { id })
+  }, [clients, t])
 
   return (
     <PageShell
@@ -176,8 +184,8 @@ export default function LiveFeed() {
                       <span className="text-[12px] text-[var(--text-secondary)] truncate flex-1 min-w-0" title={e.message}>
                         {e.message || '—'}
                       </span>
-                      <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 hidden sm:inline">
-                        {t(`${NS}.client`, { id: e.target })}
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 hidden sm:inline max-w-[10rem] truncate" title={clientName(e.target)}>
+                        {clientName(e.target)}
                       </span>
                     </li>
                   )
