@@ -145,58 +145,58 @@ export default function GlobalSearch() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4 bg-[var(--scrim)] backdrop-blur-sm"
         onClick={() => setIsOpen(false)}
       >
         <motion.div
           initial={{ scale: 0.95, y: -20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: -20 }}
-          className="w-full max-w-2xl bg-gray-900/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden"
+          className="w-full max-w-2xl bg-[var(--bg-elevated)] backdrop-blur-xl border border-[var(--border-strong)] rounded-2xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-label={t('components.globalSearch.placeholder')}
         >
-          <div className="flex items-center gap-3 p-4 border-b border-white/10">
-            <Search className="w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-3 p-4 border-b border-[var(--border-default)]">
+            <Search className="w-5 h-5 text-[var(--text-muted)]" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onInputKeyDown}
               placeholder={t('components.globalSearch.placeholder')}
-              className="flex-1 bg-transparent text-white placeholder-gray-500 outline-none text-lg"
+              className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none text-lg"
               autoFocus
               role="combobox"
               aria-expanded="true"
               aria-controls="global-search-listbox"
               aria-activedescendant={combined.length ? `gs-opt-${activeIndex}` : undefined}
             />
-            <kbd className="px-2 py-1 bg-white/10 rounded text-xs text-gray-400">Esc</kbd>
+            <kbd className="px-2 py-1 bg-[var(--row-hover-bg)] rounded text-xs text-[var(--text-muted)]">Esc</kbd>
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto" ref={listRef} id="global-search-listbox" role="listbox">
             {showQuickNav && (
-              <div className="px-4 pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-gray-600">
+              <div className="px-4 pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
                 {t('components.globalSearch.quickNav')}
               </div>
             )}
             {combined.length === 0 ? (
               loading && query.length >= 2 ? (
-                <div className="p-8 text-center text-gray-500">{t('components.globalSearch.searching')}</div>
+                <div className="p-8 text-center text-[var(--text-muted)]">{t('components.globalSearch.searching')}</div>
               ) : query.length >= 2 ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-[var(--text-muted)]">
                   {t('components.globalSearch.noResults', { query })}
                 </div>
               ) : (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-[var(--text-muted)]">
                   <Command className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   {t('components.globalSearch.startTyping')}
                 </div>
               )
             ) : (
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-[var(--border-subtle)]">
                 {combined.map((result, index) => {
                   const active = index === activeIndex;
                   const isNav = result.type === 'navigate';
@@ -209,22 +209,22 @@ export default function GlobalSearch() {
                       role="option"
                       aria-selected={active}
                       className={`w-full flex items-center gap-3 p-4 transition-colors text-left ${
-                        active ? 'bg-cyan-500/15' : 'hover:bg-white/5'
+                        active ? 'bg-cyan-500/15' : 'hover:bg-[var(--row-hover-bg)]'
                       }`}
                       onClick={() => goTo(result)}
                       onMouseEnter={() => setActiveIndex(index)}
                     >
                       <span className="text-2xl">{result.icon || (isNav ? '→' : '🔎')}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-white truncate">{result.title}</div>
-                        <div className="text-xs text-gray-500 capitalize">
+                        <div className="text-sm font-medium text-[var(--text-primary)] truncate">{result.title}</div>
+                        <div className="text-xs text-[var(--text-muted)] capitalize">
                           {isNav ? t('components.globalSearch.navigate') : result.type}
                         </div>
                       </div>
                       {active ? (
                         <CornerDownLeft className="w-4 h-4 text-cyan-400" />
                       ) : (
-                        <Zap className="w-4 h-4 text-gray-600" />
+                        <Zap className="w-4 h-4 text-[var(--text-disabled)]" />
                       )}
                     </button>
                   );
@@ -233,13 +233,13 @@ export default function GlobalSearch() {
             )}
           </div>
 
-          <div className="flex items-center justify-between p-3 border-t border-white/10 bg-white/5 text-xs text-gray-500">
+          <div className="flex items-center justify-between p-3 border-t border-[var(--border-default)] bg-[var(--bg-2)] text-xs text-[var(--text-muted)]">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded">↑↓</kbd> {t('components.globalSearch.navigateHint')}
+                <kbd className="px-1.5 py-0.5 bg-[var(--row-hover-bg)] rounded">↑↓</kbd> {t('components.globalSearch.navigateHint')}
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded">Enter</kbd> {t('components.globalSearch.select')}
+                <kbd className="px-1.5 py-0.5 bg-[var(--row-hover-bg)] rounded">Enter</kbd> {t('components.globalSearch.select')}
               </span>
             </div>
             <span>{t('components.globalSearch.brand')}</span>
