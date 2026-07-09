@@ -479,7 +479,6 @@ export default function IncidentResponseCenter() {
   })), [incidents])
 
   const {
-    exportCsv,
     filteredFindings,
     searchQuery,
     setSearchQuery,

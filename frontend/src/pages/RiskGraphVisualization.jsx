@@ -210,7 +210,7 @@ export default function RiskGraphVisualization() {
     resource: n.is_choke_point ? 'choke_point' : '',
   })), [graphData.nodes])
 
-  const { exportCsv, filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-risk-graph',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })

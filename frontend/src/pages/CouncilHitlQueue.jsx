@@ -291,7 +291,7 @@ export default function CouncilHitlQueue() {
     resource: String(item.client_id ?? ''),
   })), [filteredItems])
 
-  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-hitl-queue',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })

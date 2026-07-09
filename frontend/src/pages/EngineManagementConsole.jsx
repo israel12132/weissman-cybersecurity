@@ -232,7 +232,7 @@ export default function EngineManagementConsole() {
     description: e.description || '',
   })), [filteredEngines])
 
-  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-engines',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
