@@ -25,7 +25,9 @@ export default [
   {
     files: ['src/**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2023,
+      // 'latest' so the parser understands import attributes (`with { type: 'json' }`),
+      // which some engine-manifest modules use; older ecmaVersions error on it.
+      ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         ...globals.browser,

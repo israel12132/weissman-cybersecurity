@@ -59,7 +59,10 @@ export function nodesReachableToTarget(seeds, targetId, adj) {
     }
   }
 
-  if (!dist.has(target)) return new Set(nodes.map((n) => String(n.id)))
+  // Target unreachable from any seed → we can't narrow the subgraph, so treat
+  // every node known to the graph as relevant (no masking). `adj` keys are the
+  // canonical string ids built in buildAdjacency().
+  if (!dist.has(target)) return new Set(adj.keys())
 
   const targetDist = dist.get(target)
   relevant.add(target)
