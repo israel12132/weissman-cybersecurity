@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveSlaView, scoreFraction, formatUsd } from './FixFirstProgram.jsx'
+import { deriveSlaView, scoreFraction, formatUsd, programToCsvRows, PROGRAM_CSV_HEADER } from './FixFirstProgram.jsx'
 
 describe('FixFirstProgram helpers', () => {
   describe('deriveSlaView', () => {
@@ -68,6 +68,48 @@ describe('FixFirstProgram helpers', () => {
       expect(formatUsd(null)).toBeNull()
       expect(formatUsd(undefined)).toBeNull()
       expect(formatUsd('nope')).toBeNull()
+    })
+  })
+
+  describe('programToCsvRows', () => {
+    it('flattens an action into a row aligned with the header', () => {
+      const rows = programToCsvRows([
+        {
+          rank: 1,
+          title: 'SQL injection',
+          asset: 'app.example.com',
+          priority_score: 92.5,
+          max_effective_risk: 9.1,
+          closes_findings: 3,
+          kev: true,
+          kev_ransomware: false,
+          on_choke_point: true,
+          crown_jewel: true,
+          business_value_usd: 5000000,
+          sla: { state: 'overdue', due_in_days: -4, target_days: 14 },
+          compliance: [
+            { framework: 'OWASP Top 10 2021', control: 'A03:2021' },
+            { framework: 'NIST 800-53r5', control: 'SI-10' },
+          ],
+          rationale: 'base risk 9.1/10; KEV',
+        },
+      ])
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toHaveLength(PROGRAM_CSV_HEADER.length)
+      expect(rows[0][0]).toBe(1) // rank
+      expect(rows[0][6]).toBe('yes') // kev
+      expect(rows[0][7]).toBe('no') // kev_ransomware
+      expect(rows[0][11]).toBe('overdue') // sla_state
+      expect(rows[0][14]).toBe('OWASP Top 10 2021:A03:2021 | NIST 800-53r5:SI-10') // frameworks
+    })
+
+    it('is robust to missing fields and non-array input', () => {
+      expect(programToCsvRows(null)).toEqual([])
+      expect(programToCsvRows(undefined)).toEqual([])
+      const rows = programToCsvRows([{}])
+      expect(rows[0]).toHaveLength(PROGRAM_CSV_HEADER.length)
+      expect(rows[0][6]).toBe('no') // kev defaults to no
+      expect(rows[0][14]).toBe('') // no compliance
     })
   })
 })

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem } from 'lucide-react'
+import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem, Download } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 
@@ -38,6 +39,42 @@ export function scoreFraction(score) {
   const n = Number(score)
   if (!Number.isFinite(n)) return 0
   return Math.max(0, Math.min(1, n / 100))
+}
+
+/** CSV header for the exported program. Exported so tests assert column stability. */
+export const PROGRAM_CSV_HEADER = [
+  'rank', 'title', 'asset', 'priority_score', 'max_effective_risk', 'closes_findings',
+  'kev', 'kev_ransomware', 'on_choke_point', 'crown_jewel', 'business_value_usd',
+  'sla_state', 'sla_due_in_days', 'sla_target_days', 'frameworks', 'rationale',
+]
+
+/** Pure: flatten a program array into CSV rows aligned with PROGRAM_CSV_HEADER. */
+export function programToCsvRows(program) {
+  if (!Array.isArray(program)) return []
+  return program.map((it) => {
+    const sla = it?.sla || {}
+    const frameworks = Array.isArray(it?.compliance)
+      ? it.compliance.map((c) => `${c.framework}:${c.control}`).join(' | ')
+      : ''
+    return [
+      it?.rank ?? '',
+      it?.title ?? '',
+      it?.asset ?? '',
+      it?.priority_score ?? '',
+      it?.max_effective_risk ?? '',
+      it?.closes_findings ?? '',
+      it?.kev ? 'yes' : 'no',
+      it?.kev_ransomware ? 'yes' : 'no',
+      it?.on_choke_point ? 'yes' : 'no',
+      it?.crown_jewel ? 'yes' : 'no',
+      it?.business_value_usd ?? '',
+      sla.state ?? '',
+      sla.due_in_days ?? '',
+      sla.target_days ?? '',
+      frameworks,
+      it?.rationale ?? '',
+    ]
+  })
 }
 
 /** Pure: compact USD formatter ($5M, $250K, $900). Returns null for non-positive/invalid. */
@@ -137,9 +174,20 @@ export default function FixFirstProgram() {
           <Target className="w-4 h-4 text-cyan-400" />
           {t('pages.remediationHub.program_heading', { defaultValue: 'Fix-First Program' })}
         </h3>
-        <span className="text-[10px] text-white/35 font-mono">
-          {t('pages.remediationHub.program_caption', { defaultValue: 'Backend-ranked · root-cause deduplicated · EPSS/KEV + choke points + SLA' })}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-white/35 font-mono hidden sm:inline">
+            {t('pages.remediationHub.program_caption', { defaultValue: 'Backend-ranked · root-cause deduplicated · EPSS/KEV + choke points + SLA' })}
+          </span>
+          <button
+            type="button"
+            disabled={program.length === 0}
+            onClick={() => downloadCsv(programToCsvRows(program), PROGRAM_CSV_HEADER, 'weissman-fix-first')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {t('pages.remediationHub.program_export', { defaultValue: 'Export CSV' })}
+          </button>
+        </div>
       </div>
 
       {clientId == null ? (

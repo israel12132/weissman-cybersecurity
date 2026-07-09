@@ -1454,6 +1454,7 @@
       "program_stat_choke": "צמתי חנק",
       "program_stat_crown": "תכשיטי כתר",
       "program_crown": "תכשיט כתר",
+      "program_export": "ייצוא CSV",
       "program_frameworks": "מסגרות",
       "program_closes": "תיקון אחד סוגר {{count}} ממצאים",
       "program_ransomware": "כופר",
