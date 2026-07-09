@@ -52,7 +52,14 @@ export default [
       // Surface dead/typo'd bindings without blocking on intentional throwaways.
       'no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrors: 'none',
+          // `const { engine, ...rest } = body` names properties to OMIT — the
+          // siblings are used (to exclude them), not dead bindings.
+          ignoreRestSiblings: true,
+        },
       ],
       // Stylistic React rules → warnings (backlog, not a merge blocker).
       'react/no-unescaped-entities': 'warn',

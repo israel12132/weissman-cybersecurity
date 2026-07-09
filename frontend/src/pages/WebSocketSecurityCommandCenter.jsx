@@ -594,6 +594,11 @@ export default function WebSocketSecurityCommandCenter() {
                         className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.concurrency', 'Concurrency (parallel probes)')}</label>
+                      <input type="number" min={1} max={64} value={concurrency} onChange={(e) => setConcurrency(e.target.value)}
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    </div>
+                    <div>
                       <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.bearer_token', 'Bearer token (optional)')}</label>
                       <input type="password" value={bearerToken} onChange={(e) => setBearerToken(e.target.value)} placeholder="eyJ…"
                         className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40" />

@@ -92,16 +92,16 @@ function AstFuzzingStudioBody() {
     description: String(m),
   })), [mutations])
 
-  const {
-    filteredFindings,
-    counts,
-    searchQuery,
-    setSearchQuery,
-    severityFilter,
-    setSeverityFilter,
-    exportCsv,
-    total,
-  } = useFindingsWorkbench(mutationFindings, { csvPrefix: 'weissman-ast-mutations' })
+  const { filteredFindings, exportCsv } = useFindingsWorkbench(mutationFindings, {
+    csvPrefix: 'weissman-ast-mutations',
+  })
+
+  const [mutationQuery, setMutationQuery] = useState('')
+  const visibleMutations = useMemo(() => {
+    const q = mutationQuery.trim().toLowerCase()
+    if (!q) return mutations
+    return mutations.filter((m) => String(m).toLowerCase().includes(q))
+  }, [mutations, mutationQuery])
 
   const handleRefresh = useCallback(() => {
     if (result) run()
@@ -214,18 +214,40 @@ function AstFuzzingStudioBody() {
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest flex items-center gap-2">
               <FlaskConical className="w-3.5 h-3.5 text-amber-300/70" />
               {t('pages.astFuzzingStudio.mutations')}
+              {mutations.length > 0 && (
+                <span className="text-[10px] font-mono text-[var(--text-disabled)] normal-case tracking-normal">
+                  {visibleMutations.length === mutations.length
+                    ? mutations.length
+                    : `${visibleMutations.length}/${mutations.length}`}
+                </span>
+              )}
             </h3>
             {mutations.length > 0 && (
               <CopyButton value={allText} size="md" label={t('pages.astFuzzingStudio.copy_all')} />
             )}
           </div>
 
+          {mutations.length > 0 && (
+            <input
+              type="search"
+              value={mutationQuery}
+              onChange={(e) => setMutationQuery(e.target.value)}
+              placeholder={t('pages.astFuzzingStudio.search_mutations', 'Filter mutations…')}
+              aria-label={t('pages.astFuzzingStudio.search_mutations', 'Filter mutations…')}
+              className="w-full rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-amber-500/40"
+            />
+          )}
+
           <AstTreeViewer
-            nodes={mutations}
+            nodes={visibleMutations}
             maxNodes={maxAstNodes}
             loading={loading && !mutations.length}
             emptyTitle={t('pages.astFuzzingStudio.mutations')}
-            emptyBody={t('pages.astFuzzingStudio.preview_empty')}
+            emptyBody={
+              mutationQuery.trim() && mutations.length
+                ? t('pages.astFuzzingStudio.no_match', 'No mutations match the filter.')
+                : t('pages.astFuzzingStudio.preview_empty')
+            }
           />
         </div>
       </div>

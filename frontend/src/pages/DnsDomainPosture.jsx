@@ -655,6 +655,11 @@ export default function DnsDomainPosture() {
                       <input type="number" min="30" max="86400" step="30" value={lowTtlThreshold} onChange={(e) => setLowTtlThreshold(e.target.value)}
                         className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                     </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.resolver_timing_factor', 'Resolver timing factor (×)')}</label>
+                      <input type="number" min="2" max="10" step="1" value={resolverTimingFactor} onChange={(e) => setResolverTimingFactor(e.target.value)}
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.resolvers', 'Custom resolvers (name=DoH-URL per line)')}</label>

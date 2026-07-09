@@ -238,6 +238,12 @@ export default function ServerlessSecurityCommandCenter() {
   const setHeader = useCallback((i, field, val) => {
     setParams((p) => ({ ...p, extra_headers: p.extra_headers.map((h, idx) => (idx === i ? { ...h, [field]: val } : h)) }))
   }, [])
+  const addHeader = useCallback(() => {
+    setParams((p) => ({ ...p, extra_headers: [...p.extra_headers, { name: '', value: '' }] }))
+  }, [])
+  const removeHeader = useCallback((i) => {
+    setParams((p) => ({ ...p, extra_headers: p.extra_headers.filter((_, idx) => idx !== i) }))
+  }, [])
   const resetParams = useCallback(() => setParams({ ...DEFAULT_PARAMS, extra_headers: [{ name: 'Authorization', value: '' }] }), [])
 
   const previewBody = useMemo(() => buildScanBody(params, selectedClientId || 0, target), [params, selectedClientId, target])
@@ -425,6 +431,30 @@ export default function ServerlessSecurityCommandCenter() {
                 <Txt label="Max Requests" value={params.max_requests} onChange={(v) => setField('max_requests', v)} />
                 <Txt label="Bearer Token" value={params.bearer_token} onChange={(v) => setField('bearer_token', v)} placeholder="optional" />
                 <Txt label="User-Agent" value={params.user_agent} onChange={(v) => setField('user_agent', v)} placeholder="(default probe UA)" />
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('serverlessSec.extra_headers', 'Extra Headers')}</span>
+                    <button type="button" onClick={addHeader}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-pink-300 hover:border-pink-500/40 transition-colors">
+                      + {t('serverlessSec.add_header', 'Add')}
+                    </button>
+                  </div>
+                  {params.extra_headers.map((h, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <input value={h.name} onChange={(e) => setHeader(i, 'name', e.target.value)} placeholder={t('serverlessSec.header_name', 'Header')}
+                        aria-label={t('serverlessSec.header_name', 'Header')}
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                      <input value={h.value} onChange={(e) => setHeader(i, 'value', e.target.value)} placeholder={t('serverlessSec.header_value', 'Value')}
+                        aria-label={t('serverlessSec.header_value', 'Value')}
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                      <button type="button" onClick={() => removeHeader(i)} aria-label={t('serverlessSec.remove_header', 'Remove header')}
+                        className="shrink-0 w-6 h-6 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-rose-300 hover:border-rose-500/40 transition-colors">×</button>
+                    </div>
+                  ))}
+                  {params.extra_headers.length === 0 && (
+                    <p className="text-[9px] font-mono text-[var(--text-disabled)]">{t('serverlessSec.no_headers', 'No custom headers — Authorization/Bearer sent separately.')}</p>
+                  )}
+                </div>
               </Section>
 
               <Section title={t('serverlessSec.output', 'Output & Synthesis')} icon="📊" defaultOpen={false}>
