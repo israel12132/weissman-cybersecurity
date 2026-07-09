@@ -227,6 +227,57 @@ pub fn score(items: &[RemediationItem], total_findings: usize) -> PostureScore {
     }
 }
 
+/// Default number of remediation steps to project forward.
+const DEFAULT_PROJECTION_STEPS: usize = 10;
+
+/// One "what-if" step: the posture you'd reach after fixing the top-ranked actions down to a rank.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProjectionStep {
+    /// All actions with rank ≤ this are assumed fixed at this step.
+    pub after_fixing_rank: usize,
+    pub actions_fixed: usize,
+    /// Findings closed cumulatively by the fixed actions (root-cause groups can close many).
+    pub findings_closed: usize,
+    pub projected_score: f64,
+    pub projected_grade: char,
+    /// Improvement over the current score.
+    pub delta: f64,
+}
+
+/// Project how the posture score improves as the highest-priority actions are fixed in rank order.
+///
+/// `items` must be the rank-ordered program from [`crate::remediation_priority::rank`] (rank 1 =
+/// fix first). Each step removes the next-highest action and re-scores the remainder with the same
+/// pure model, so the projection is exactly consistent with [`score`]. Deterministic; stops at
+/// `max_steps` or when everything is fixed. `findings_closed` folds `closes_findings`, so this also
+/// tells a CISO how many findings each tranche of work retires.
+#[must_use]
+pub fn project(items: &[RemediationItem], total_findings: usize, max_steps: usize) -> Vec<ProjectionStep> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+    let baseline = score(items, total_findings).score;
+    let steps = max_steps.min(items.len());
+    let mut out = Vec::with_capacity(steps);
+    let mut findings_closed = 0usize;
+    for k in 1..=steps {
+        // items are rank-sorted ascending; fixing the top k means scoring the remainder.
+        findings_closed += items[k - 1].closes_findings;
+        let remaining = &items[k..];
+        let remaining_findings = total_findings.saturating_sub(findings_closed);
+        let projected = score(remaining, remaining_findings);
+        out.push(ProjectionStep {
+            after_fixing_rank: k,
+            actions_fixed: k,
+            findings_closed,
+            projected_score: projected.score,
+            projected_grade: projected.grade,
+            delta: ((projected.score - baseline) * 10.0).round() / 10.0,
+        });
+    }
+    out
+}
+
 /// Load a client's live findings, rank them, and compute the posture score. Read-only; RLS-scoped.
 pub async fn load_and_score(
     pool: &sqlx::PgPool,
@@ -239,11 +290,13 @@ pub async fn load_and_score(
     let total_findings = findings.len();
     let program = crate::remediation_priority::rank(&findings);
     let posture = score(&program, total_findings);
+    let projection = project(&program, total_findings, DEFAULT_PROJECTION_STEPS);
 
     Ok(json!({
         "ok": true,
         "client_id": client_id,
         "posture": posture,
+        "projection": projection,
     }))
 }
 
@@ -335,5 +388,45 @@ mod tests {
             finding("b", "critical", Some(9.2)),
         ]);
         assert_eq!(score(&program, 2), score(&program, 2));
+    }
+
+    #[test]
+    fn projection_of_empty_program_is_empty() {
+        assert!(project(&[], 0, 10).is_empty());
+    }
+
+    #[test]
+    fn fixing_the_only_action_projects_to_a_perfect_score() {
+        let mut f = finding("a", "critical", Some(9.5));
+        f.kev = true;
+        f.kev_ransomware = true;
+        f.first_seen_days = Some(90);
+        let program = rank(&[f]);
+        let proj = project(&program, 1, 10);
+        assert_eq!(proj.len(), 1);
+        assert_eq!(proj[0].actions_fixed, 1);
+        assert_eq!(proj[0].findings_closed, 1);
+        assert_eq!(proj[0].projected_score, 100.0);
+        assert_eq!(proj[0].projected_grade, 'A');
+        assert!(proj[0].delta > 0.0, "fixing the worst action must improve posture");
+    }
+
+    #[test]
+    fn projection_is_monotonic_nondecreasing_and_capped_by_steps() {
+        let mut a = finding("a", "critical", Some(9.5));
+        a.kev = true;
+        a.kev_ransomware = true;
+        a.first_seen_days = Some(90);
+        let mut b = finding("b", "high", Some(7.5));
+        b.kev = true;
+        b.first_seen_days = Some(90);
+        let c = finding("c", "medium", Some(5.0));
+        let program = rank(&[a, b, c]);
+        let proj = project(&program, 3, 2); // cap at 2 steps
+        assert_eq!(proj.len(), 2);
+        assert!(proj[1].projected_score >= proj[0].projected_score);
+        assert!(proj[1].findings_closed >= proj[0].findings_closed);
+        assert_eq!(proj[0].after_fixing_rank, 1);
+        assert_eq!(proj[1].after_fixing_rank, 2);
     }
 }
