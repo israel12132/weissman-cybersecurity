@@ -6529,6 +6529,7 @@
       "quickNav": "Quick navigation",
       "navigate": "Navigate",
       "navigateHint": "Navigate",
+      "triggerLabel": "Search",
       "brand": "Weissman Global Search"
     },
     "routeLoader": {

@@ -66,8 +66,14 @@ export default function GlobalSearch() {
       }
       if (e.key === 'Escape') setIsOpen(false);
     };
+    // Lets a visible affordance (e.g. the header search button) open the palette.
+    const handleOpenEvent = () => setIsOpen(true);
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('weissman:open-command-palette', handleOpenEvent);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('weissman:open-command-palette', handleOpenEvent);
+    };
   }, []);
 
   // Reset selection whenever the candidate list changes.
@@ -242,6 +248,11 @@ export default function GlobalSearch() {
       </motion.div>
     </AnimatePresence>
   );
+}
+
+/** Open the command palette from anywhere (e.g. a header button). */
+export function openCommandPalette() {
+  document.dispatchEvent(new CustomEvent('weissman:open-command-palette'));
 }
 
 export function useGlobalSearch() {

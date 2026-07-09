@@ -1,10 +1,10 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import AppSidebar from './AppSidebar'
 import ProfileMenu from '../ui/ProfileMenu'
-import GlobalSearch from '../GlobalSearch'
+import GlobalSearch, { openCommandPalette } from '../GlobalSearch'
 import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
 import ScanStatusIndicator from './ScanStatusIndicator'
@@ -65,6 +65,11 @@ export default function AppShell({
 }) {
   const { t } = useTranslation()
   const { pathname } = useLocation()
+  const modKey =
+    typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '')
+      ? '⌘'
+      : 'Ctrl+'
 
   const breadcrumbs =
     breadcrumbsOverride ??
@@ -84,6 +89,25 @@ export default function AppShell({
               <div className="flex-1 min-w-0 mr-4">
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                aria-keyshortcuts="Meta+K Control+K"
+                title={t('components.globalSearch.placeholder')}
+                className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] px-2.5 py-1.5 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
+              >
+                <Search className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{t('components.globalSearch.triggerLabel')}</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">{modKey}K</kbd>
+              </button>
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                aria-label={t('components.globalSearch.placeholder')}
+                className="sm:hidden inline-flex items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              >
+                <Search className="w-4 h-4" aria-hidden="true" />
+              </button>
               <ScanStatusIndicator />
               <RateLimitStatus compact />
               <NotificationBell />
