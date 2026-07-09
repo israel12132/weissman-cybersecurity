@@ -1486,7 +1486,10 @@
       "heal_runs": "ריצות",
       "heal_fix_rate": "שיעור תיקון",
       "heal_avg_attempts": "ניסיונות בממוצע",
-      "heal_attested": "מאומתים"
+      "heal_attested": "מאומתים",
+      "revert": "בטל",
+      "reverted": "בוטל",
+      "revert_hint": "סגור את ה-PR/MR שנפתח אוטומטית"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",

@@ -1478,7 +1478,10 @@
       "heal_runs": "runs",
       "heal_fix_rate": "fix rate",
       "heal_avg_attempts": "avg attempts",
-      "heal_attested": "attested"
+      "heal_attested": "attested",
+      "revert": "Revert",
+      "reverted": "reverted",
+      "revert_hint": "Close the auto-opened PR/MR"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",

@@ -88,6 +88,8 @@ export default function RemediationDetail({ finding, onClose }) {
 
   const [healing, setHealing] = useState(false)
   const [healError, setHealError] = useState(null)
+  const [reverting, setReverting] = useState(false)
+  const [reverted, setReverted] = useState(false)
   const [jobId, setJobId] = useState(null)
   const [steps, setSteps] = useState([])
   const [jobStatus, setJobStatus] = useState(null)
@@ -193,6 +195,39 @@ export default function RemediationDetail({ finding, onClose }) {
       setHealError(e.message || 'failed')
     }
   }, [clientId, findingId, repoSlug, gitToken, baseBranch, channel, healthCurl, destructiveConfirm, dualApprove, selectedChannelMeta, t])
+
+  const runRevert = useCallback(async () => {
+    if (!clientId || !findingId) return
+    if (!repoSlug.trim() || !gitToken.trim()) {
+      setHealError(t('pages.remediationHub.repo_token_required', { defaultValue: 'repo_slug and git_token are required' }))
+      return
+    }
+    setReverting(true)
+    setHealError(null)
+    try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
+      if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
+      const r = await apiFetch(`/api/clients/${clientId}/heal-revert`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          finding_id: findingId,
+          repo_slug: repoSlug.trim(),
+          git_token: gitToken.trim(),
+          channel,
+          delete_branch: true,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
+      setReverted(true)
+    } catch (e) {
+      setHealError(e.message || 'revert failed')
+    } finally {
+      setReverting(false)
+    }
+  }, [clientId, findingId, repoSlug, gitToken, channel, destructiveConfirm, dualApprove, t])
 
   const verdict = jobStatus?.verdict
   const verdictMeta = verdict ? VERDICT_META[verdict] : null
@@ -392,9 +427,27 @@ export default function RemediationDetail({ finding, onClose }) {
               </div>
 
               {jobStatus?.pr_url && (
-                <a href={jobStatus.pr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
-                  <GitPullRequest className="w-3.5 h-3.5" /> {t('pages.remediationHub.view_pr', { defaultValue: 'View pull request' })}
-                </a>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <a href={jobStatus.pr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
+                    <GitPullRequest className="w-3.5 h-3.5" /> {t('pages.remediationHub.view_pr', { defaultValue: 'View pull request' })}
+                  </a>
+                  {reverted ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-white/40">
+                      <X className="w-3.5 h-3.5" /> {t('pages.remediationHub.reverted', { defaultValue: 'reverted' })}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={runRevert}
+                      disabled={reverting}
+                      className="inline-flex items-center gap-1.5 text-xs text-rose-300/80 hover:text-rose-200 disabled:opacity-50"
+                      title={t('pages.remediationHub.revert_hint', { defaultValue: 'Close the auto-opened PR/MR' })}
+                    >
+                      {reverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                      {t('pages.remediationHub.revert', { defaultValue: 'Revert' })}
+                    </button>
+                  )}
+                </div>
               )}
               {jobId && (jobStatus?.channel === 'diff_download' || jobStatus?.channel === 'virtual_patch') && jobStatus?.status === 'completed' && (
                 <a href={apiUrl(`/api/heal-verify/${jobId}/patch`)} className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">

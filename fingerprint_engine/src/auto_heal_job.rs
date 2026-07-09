@@ -373,6 +373,34 @@ pub async fn run_auto_heal_job(
     let health_check_curl: String = row.try_get::<String, _>("health_check_curl").unwrap_or_default();
     let channel = crate::heal_channels::DeliveryChannel::from_id(&channel_id);
 
+    // Concurrency guard: never run the sandbox for a finding that another spec is already healing
+    // (two workers picking up heals for the same finding would waste work and race on the branch).
+    let running_dupe: i64 = sqlx::query_scalar(
+        "SELECT count(*)::bigint FROM auto_heal_job_specs WHERE tenant_id = $1 AND finding_id = $2 AND status = 'running' AND id <> $3",
+    )
+    .bind(tenant_id)
+    .bind(&finding_id)
+    .bind(spec_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    if running_dupe > 0 {
+        let _ = sqlx::query(
+            "UPDATE auto_heal_job_specs SET status = 'skipped', git_token = '', updated_at = now() WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(spec_id)
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await;
+        let _ = tx.commit().await;
+        return Ok(json!({
+            "ok": true,
+            "skipped": true,
+            "message": "another heal is already running for this finding",
+            "spec_id": spec_id,
+        }));
+    }
+
     sqlx::query("DELETE FROM heal_verification_steps WHERE tenant_id = $1 AND job_id = $2")
         .bind(tenant_id)
         .bind(spec_id)
