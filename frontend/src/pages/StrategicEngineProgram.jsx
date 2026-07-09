@@ -1,14 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { Search, Map, Rocket, Layers } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import DataTable from '../components/ui/DataTable'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { SkeletonTable } from '../components/ui/Skeleton'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
+
+const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2 }
+const columnHelper = createColumnHelper()
 
 const STATUS_KEY = {
   planned_wave_1: 'pages.strategicEngineProgram.status_planned_wave_1',
@@ -72,6 +76,69 @@ export default function StrategicEngineProgram() {
     csvPrefix: 'weissman-strategic-engines',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
+
+  const columns = useMemo(() => [
+    columnHelper.accessor((row) => ENGINES_BY_ID[row.id]?.label || row.id, {
+      id: 'engine',
+      header: t('pages.strategicEngineProgram.col_engine'),
+      cell: ({ row, getValue }) => {
+        const live = isProduction(row.original.id)
+        return (
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link to={`/engines/${row.original.id}`} className="text-white font-medium hover:text-cyan-300 transition-colors">
+                {getValue()}
+              </Link>
+              <span className={`px-2 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider ${
+                live
+                  ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
+                  : 'text-[var(--text-muted)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'
+              }`}>
+                {live ? t('pages.strategicEngineProgram.production') : t('pages.strategicEngineProgram.catalog')}
+              </span>
+            </div>
+            <div className="text-[11px] font-mono text-[var(--text-muted)]">{row.original.id}</div>
+          </div>
+        )
+      },
+    }),
+    columnHelper.accessor((row) => PRIORITY_RANK[row.priority] ?? 99, {
+      id: 'priority',
+      header: t('pages.strategicEngineProgram.col_priority'),
+      size: 110,
+      cell: ({ row }) => (
+        <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{row.original.priority}</span>
+      ),
+    }),
+    columnHelper.accessor((row) => (STATUS_KEY[row.status] ? t(STATUS_KEY[row.status]) : row.status), {
+      id: 'status',
+      header: t('pages.strategicEngineProgram.col_status'),
+      size: 150,
+      cell: ({ row, getValue }) => (
+        <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${STATUS_COLOR[row.original.status] || 'text-[var(--text-secondary)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'}`}>
+          {getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.reason || '', {
+      id: 'reason',
+      header: t('pages.strategicEngineProgram.col_reason'),
+      cell: ({ getValue }) => <span className="text-[var(--text-tertiary)] text-xs">{getValue()}</span>,
+    }),
+    columnHelper.display({
+      id: 'action',
+      header: t('pages.strategicEngineProgram.col_action'),
+      size: 120,
+      cell: ({ row }) => (
+        <Link
+          to={row.original.route}
+          className="px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 text-xs font-mono hover:bg-cyan-500/10"
+        >
+          {t('pages.strategicEngineProgram.open_page')}
+        </Link>
+      ),
+    }),
+  ], [t, isProduction])
 
   return (
     <PageShell
@@ -180,74 +247,14 @@ export default function StrategicEngineProgram() {
             </span>
           </div>
 
-          {productionLoading ? (
-            <SkeletonTable rows={6} cols={5} />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-tertiary)] border-b border-[var(--border-default)]">
-                    <th className="py-2 pr-3">{t('pages.strategicEngineProgram.col_engine')}</th>
-                    <th className="py-2 pr-3">{t('pages.strategicEngineProgram.col_priority')}</th>
-                    <th className="py-2 pr-3">{t('pages.strategicEngineProgram.col_status')}</th>
-                    <th className="py-2 pr-3">{t('pages.strategicEngineProgram.col_reason')}</th>
-                    <th className="py-2">{t('pages.strategicEngineProgram.col_action')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-[var(--text-muted)] text-xs font-mono">
-                        {t('pages.strategicEngineProgram.no_results')}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRows.map((row) => {
-                      const reg = ENGINES_BY_ID[row.id]
-                      const label = reg?.label || row.id
-                      const live = isProduction(row.id)
-                      return (
-                        <tr key={row.id} className="border-b border-[var(--border-subtle)]">
-                          <td className="py-3 pr-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Link to={`/engines/${row.id}`} className="text-white font-medium hover:text-cyan-300 transition-colors">
-                                {label}
-                              </Link>
-                              <span className={`px-2 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider ${
-                                live
-                                  ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
-                                  : 'text-[var(--text-muted)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'
-                              }`}>
-                                {live ? t('pages.strategicEngineProgram.production') : t('pages.strategicEngineProgram.catalog')}
-                              </span>
-                            </div>
-                            <div className="text-[11px] font-mono text-[var(--text-muted)]">{row.id}</div>
-                          </td>
-                          <td className="py-3 pr-3">
-                            <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{row.priority}</span>
-                          </td>
-                          <td className="py-3 pr-3">
-                            <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${STATUS_COLOR[row.status] || 'text-[var(--text-secondary)] border-[var(--border-strong)] bg-[var(--row-hover-bg)]'}`}>
-                              {STATUS_KEY[row.status] ? t(STATUS_KEY[row.status]) : row.status}
-                            </span>
-                          </td>
-                          <td className="py-3 pr-3 text-[var(--text-tertiary)] text-xs max-w-xs">{row.reason}</td>
-                          <td className="py-3">
-                            <Link
-                              to={row.route}
-                              className="px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 text-xs font-mono hover:bg-cyan-500/10"
-                            >
-                              {t('pages.strategicEngineProgram.open_page')}
-                            </Link>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={columns}
+            data={filteredRows}
+            loading={productionLoading}
+            getRowId={(row) => row.id}
+            emptyFilteredMessage={t('pages.strategicEngineProgram.no_results')}
+            emptyState={{ icon: 'search', title: t('pages.strategicEngineProgram.no_results') }}
+          />
         </section>
 
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
