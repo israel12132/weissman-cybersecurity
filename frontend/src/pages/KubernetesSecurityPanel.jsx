@@ -378,7 +378,7 @@ function AttackPathCard({ finding }) {
   const steps = Array.isArray(ev.steps) ? ev.steps : []
   const chain = Array.isArray(ev.kill_chain) ? ev.kill_chain : []
   return (
-    <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4">
+    <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-4">
       <div className="flex items-start justify-between gap-3 mb-2">
         <h4 className="text-sm font-bold text-rose-200">{finding.title}</h4>
         <SeverityPill sev={finding.severity} />

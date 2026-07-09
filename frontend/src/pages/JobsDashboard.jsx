@@ -435,7 +435,7 @@ export default function JobsDashboard() {
                         )}
                       </div>
                       {selectedJob.last_error && (
-                        <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
+                        <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
                           <div className="text-[10px] font-mono text-rose-300/70 uppercase mb-1">
                             {t('pages.jobsDashboard.field_error')}
                           </div>

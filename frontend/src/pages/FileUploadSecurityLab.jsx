@@ -406,7 +406,7 @@ function Scorecard({ summary, t }) {
           <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400/80 mb-2">{t('pages.fileUploadLab.toxic_combinations', 'Toxic combinations')}</div>
           <div className="space-y-2">
             {toxic.map((tx, i) => (
-              <div key={i} className="rounded-lg border border-rose-500/30 bg-rose-950/20 px-3 py-2">
+              <div role="alert" key={i} className="rounded-lg border border-rose-500/30 bg-rose-950/20 px-3 py-2">
                 <div className="text-[11px] font-mono text-rose-300 font-bold">{tx.name}</div>
                 <div className="text-[10px] font-mono text-[var(--text-tertiary)] mt-1">{tx.rationale}</div>
               </div>

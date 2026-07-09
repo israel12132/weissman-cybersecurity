@@ -1375,7 +1375,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
   const elevation = liveBlast.risk_elevation ?? 0
   const verification = liveBlast.verification_status || 'static_graph'
   return (
-    <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-3">
+    <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/90">
           {t('iacSecurity.live_blast_panel_title', 'Sovereign Live Blast Engine')}

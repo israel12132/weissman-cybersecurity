@@ -163,7 +163,7 @@ export default function ClientDetail() {
     return (
       <PageShell title={t('client_detail.title')} subtitle={t('common.error')}>
         <div className="max-w-2xl mx-auto space-y-5">
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
             {error}
           </div>
           <button

@@ -225,7 +225,7 @@ export default function OobVerification() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
         )}
