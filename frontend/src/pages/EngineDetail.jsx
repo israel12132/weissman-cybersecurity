@@ -196,30 +196,6 @@ function FindingBadge({ severity }) {
   )
 }
 
-function FindingsTable({ findings }) {
-  if (!findings.length) return null
-  return (
-    <div className="space-y-2 max-h-96 overflow-auto">
-      {findings.map((f, i) => (
-        <div key={i} className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-3 space-y-1">
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">{f.title || f.type || 'Finding'}</span>
-            <FindingBadge severity={f.severity} />
-          </div>
-          {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
-          <div className="flex flex-wrap gap-3 mt-1">
-            {f.mitre_attack && (
-              <a href={`https://attack.mitre.org/techniques/${(f.mitre_attack||'').replace('.','/')}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-cyan-400 hover:underline">{f.mitre_attack}</a>
-            )}
-            {f.url && <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-xs">{f.url}</span>}
-            {f.target && <span className="text-[10px] font-mono text-[var(--text-muted)]">{f.target}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function useFindings() {
   const [findings, setFindings] = useState([])
   const addFinding = useCallback((data) => {
@@ -965,6 +941,22 @@ export default function EngineDetail() {
                           <FindingBadge severity={f.severity} />
                         </div>
                         {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
+                        {(f.mitre_attack || f.url || f.target) && (
+                          <div className="flex flex-wrap gap-3 mt-1">
+                            {f.mitre_attack && (
+                              <a
+                                href={`https://attack.mitre.org/techniques/${(f.mitre_attack || '').replace('.', '/')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] font-mono text-cyan-400 hover:underline"
+                              >
+                                {f.mitre_attack}
+                              </a>
+                            )}
+                            {f.url && <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-xs">{f.url}</span>}
+                            {f.target && <span className="text-[10px] font-mono text-[var(--text-muted)]">{f.target}</span>}
+                          </div>
+                        )}
                       </div>
                     )}
                   />

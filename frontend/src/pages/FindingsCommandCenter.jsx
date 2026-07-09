@@ -123,31 +123,6 @@ function MitreBadge({ id }) {
   )
 }
 
-function ComplianceBadges({ compliance }) {
-  const list = Array.isArray(compliance) ? compliance : []
-  if (list.length === 0) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {list.slice(0, 12).map((c, idx) => {
-        const raw = typeof c === 'string' ? c : JSON.stringify(c)
-        const label = sanitizeFindingPlainText(raw || '—', 48)
-        return (
-          <span
-            key={`${label}-${idx}`}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider"
-            title={sanitizeFindingPlainText(raw || '', 256)}
-          >
-            {label}
-          </span>
-        )
-      })}
-      {list.length > 12 ? (
-        <span className="text-[10px] font-mono text-[var(--text-muted)] px-1.5 py-0.5">+{list.length - 12}</span>
-      ) : null}
-    </div>
-  )
-}
-
 function ScoreBadge({ score }) {
   if (score == null || score === '') return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   const n = typeof score === 'number' ? score : parseFloat(score)
@@ -328,7 +303,7 @@ function buildColumns(t, onVerifyRow) {
         header: t('findings.col_compliance'),
         size: 110,
         enableSorting: false,
-        cell: ({ row, getValue }) => {
+        cell: ({ getValue }) => {
           const count = getValue()
           const has = count > 0
           return (

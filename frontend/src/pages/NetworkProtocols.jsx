@@ -4,147 +4,13 @@ import { Link } from 'react-router-dom';
 import { Network, Globe, Shield, Activity, AlertTriangle, Search, Download } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { apiFetch } from '../lib/apiBase';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 
 /**
- * NetworkProtocols — probe-derived protocol exposure from live findings and,
- * when a client is selected, contextual risk-graph network nodes. No fabricated stats.
+ * NetworkProtocols — live protocol-exposure posture served by the SOC
+ * aggregator at GET /api/soc/network-protocols. No fabricated stats.
  */
-
-const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-
-const NETWORK_SOURCES = new Set([
-  'asm',
-  'bgp_dns_hijacking',
-  'ipv6_attack',
-  'mtls_grpc',
-  'smb_netbios',
-  'pki_tls',
-  'discovery_engine',
-  'recon',
-]);
-
-const ENGINE_PROTOCOL_NAMES = {
-  bgp_dns_hijacking: 'DNS / BGP',
-  ipv6_attack: 'IPv6',
-  mtls_grpc: 'Transport Security',
-  smb_netbios: 'SMB / NetBIOS',
-  pki_tls: 'TLS / SSL',
-  asm: 'ASM Services',
-};
-
-function parseFindingsResponse(data) {
-  return Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : [];
-}
-
-function findingSource(f) {
-  return (f.source || f.engine || '').toLowerCase();
-}
-
-function isNetworkFinding(f) {
-  const src = findingSource(f);
-  if (NETWORK_SOURCES.has(src)) return true;
-  const text = `${f.title || ''} ${f.description || ''}`.toLowerCase();
-  return /smb|netbios|dns|bgp|tls|ssl|ftp|smtp|ssh|grpc|mtls|ipv6|open port|exposed.+port|port.?(\d{2,5})/i.test(text);
-}
-
-function classifyProtocol(finding) {
-  const src = findingSource(finding);
-  if (ENGINE_PROTOCOL_NAMES[src]) return ENGINE_PROTOCOL_NAMES[src];
-
-  const text = `${finding.title || ''} ${finding.description || ''}`.toLowerCase();
-  if (/smb|netbios|port.?445|port.?139|port.?137/.test(text)) return 'SMB';
-  if (/\bftp\b/.test(text)) return 'FTP';
-  if (/\bsmtp\b/.test(text)) return 'SMTP';
-  if (/\bssh\b/.test(text)) return 'SSH';
-  if (/\bdns\b|bgp\b|hijack/.test(text)) return 'DNS';
-  if (/tls|ssl|hsts|certificate/.test(text)) return 'TLS/SSL';
-  if (/grpc|mtls/.test(text)) return 'mTLS / gRPC';
-  if (/ipv6|aaaa/.test(text)) return 'IPv6';
-  if (/http/.test(text)) return 'HTTP/HTTPS';
-  if (src === 'asm') return 'ASM Services';
-  return null;
-}
-
-function statusFromSeverities(severities, count) {
-  const max = severities.reduce((m, s) => Math.max(m, SEVERITY_ORDER[s] ?? 0), 0);
-  if (max >= SEVERITY_ORDER.critical || max >= SEVERITY_ORDER.high) return 'critical';
-  if (max >= SEVERITY_ORDER.medium || count > 3) return 'warning';
-  if (count > 0) return 'warning';
-  return 'secure';
-}
-
-function protocolsFromFindings(findings) {
-  const buckets = new Map();
-  for (const f of findings) {
-    if (!isNetworkFinding(f)) continue;
-    const name = classifyProtocol(f);
-    if (!name) continue;
-    const cur = buckets.get(name) || { name, findings: 0, severities: [] };
-    cur.findings += 1;
-    cur.severities.push((f.severity || 'info').toLowerCase());
-    buckets.set(name, cur);
-  }
-  return Array.from(buckets.values()).map((p) => ({
-    name: p.name,
-    findings: p.findings,
-    status: statusFromSeverities(p.severities, p.findings),
-  }));
-}
-
-function protocolNameFromRiskNode(node) {
-  const ext = node.external_id || '';
-  if (ext.startsWith('ot:')) {
-    const parts = ext.split(':');
-    if (parts.length >= 4 && parts[3]) return parts[3].toUpperCase();
-  }
-  const label = (node.label || '').trim();
-  if (!label) return 'Network';
-  const first = label.split(/\s+/)[0];
-  return first.length <= 12 ? first : label.slice(0, 40);
-}
-
-function protocolsFromRiskGraph(nodes) {
-  const buckets = new Map();
-  for (const n of nodes) {
-    const nt = (n.node_type || '').toLowerCase();
-    if (nt !== 'network' && nt !== 'physical_asset') continue;
-    const name = protocolNameFromRiskNode(n);
-    const cur = buckets.get(name) || { name, findings: 0, severities: [] };
-    cur.findings += 1;
-    const score = Number(n.risk_score) || 0;
-    if (score >= 8) cur.severities.push('critical');
-    else if (score >= 5) cur.severities.push('high');
-    else cur.severities.push('medium');
-    buckets.set(name, cur);
-  }
-  return Array.from(buckets.values()).map((p) => ({
-    name: p.name,
-    findings: p.findings,
-    status: statusFromSeverities(p.severities, p.findings),
-  }));
-}
-
-function mergeProtocols(primary, supplemental) {
-  const map = new Map(primary.map((p) => [p.name, { ...p }]));
-  for (const p of supplemental) {
-    const existing = map.get(p.name);
-    if (existing) {
-      existing.findings += p.findings;
-      const mergedStatus = [existing.status, p.status];
-      existing.status = mergedStatus.includes('critical')
-        ? 'critical'
-        : mergedStatus.includes('warning')
-          ? 'warning'
-          : 'secure';
-    } else {
-      map.set(p.name, { ...p });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.findings - a.findings);
-}
 
 function getStatusColor(status) {
   switch (status) {
@@ -229,16 +95,6 @@ export default function NetworkProtocols() {
     a.click();
     URL.revokeObjectURL(url);
   }, [filteredProtocols]);
-
-  const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(
-    filteredProtocols.map((p) => ({
-      severity: p.status === 'critical' ? 'critical' : p.status === 'warning' ? 'medium' : 'info',
-      title: p.name,
-      type: 'protocol',
-      description: String(p.findings ?? ''),
-    })),
-    { csvPrefix: 'network-protocols' },
-  )
 
   return (
     <PageShell

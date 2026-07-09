@@ -144,7 +144,7 @@ export default function JobsDashboard() {
     resource: String(j.client_id ?? ''),
   })), [filteredJobs])
 
-  const { exportCsv: exportWorkbenchCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-jobs',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })

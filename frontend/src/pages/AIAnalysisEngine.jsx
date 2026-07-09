@@ -366,7 +366,7 @@ export default function AIAnalysisEngine() {
     description: p.description || '',
   })), [filtered])
 
-  const { exportCsv: exportWorkbenchCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-ai-patterns',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })

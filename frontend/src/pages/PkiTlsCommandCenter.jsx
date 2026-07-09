@@ -63,7 +63,6 @@ function gradeColor(g) {
   return { 'A+': '#34d399', A: '#4ade80', B: '#a3e635', C: '#fbbf24', D: '#fb923c', E: '#f87171', F: '#ef4444', T: '#f472b6' }[base] || '#94a3b8'
 }
 
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 
 
 function csvToArray(s) { return String(s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) }
@@ -149,6 +148,36 @@ function FindingCard({ f }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+function CategoryBreakdown({ findings }) {
+  const groups = useMemo(() => {
+    const counts = new Map()
+    for (const f of findings) {
+      const key = CATEGORY_META[inferCategory(f)] ? inferCategory(f) : 'other'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => ({ key, count, meta: CATEGORY_META[key] || CATEGORY_META.other }))
+      .sort((a, b) => a.meta.order - b.meta.order)
+  }, [findings])
+
+  if (!groups.length) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map(({ key, count, meta }) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border"
+          style={{ color: meta.color, borderColor: `${meta.color}33`, background: `${meta.color}0f` }}
+        >
+          <span aria-hidden="true">{meta.icon}</span>
+          {meta.label}
+          <span className="px-1.5 py-0.5 rounded bg-[var(--scrim)] text-[var(--text-secondary)]">{count}</span>
+        </span>
+      ))}
     </div>
   )
 }
@@ -534,6 +563,7 @@ export default function PkiTlsCommandCenter() {
       {findings.length > 0 && <Scorecard summary={summary} t={t} />}
       {findings.length > 0 && <ProtocolMatrix gradeFindings={gradeFindings} />}
       {findings.length > 0 && <CipherPanel gradeFindings={gradeFindings} />}
+      {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
 
       <WeissmanFindingsPanel
         findings={detailFindings}

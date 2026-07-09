@@ -95,12 +95,7 @@ export default function AskWeissman() {
     resource: turn.sql || '',
   })), [completedTurns])
 
-  const {
-    searchQuery,
-    setSearchQuery,
-    filteredFindings,
-    exportCsv: exportTranscriptWorkbench,
-  } = useFindingsWorkbench(transcriptFindings, {
+  const { searchQuery, setSearchQuery, filteredFindings } = useFindingsWorkbench(transcriptFindings, {
     csvPrefix: 'weissman-ask-transcript',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
