@@ -65,7 +65,7 @@ export default function ProfileMenu({ variant = 'header' }) {
 
   const triggerClass = isSidebar
     ? 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-colors'
-    : 'inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-white'
+    : 'inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]'
 
   return (
     <div ref={ref} className={`relative ${isSidebar ? 'w-full' : ''}`}>
@@ -201,7 +201,7 @@ function MenuLink({ to, label, icon: Icon, onClick }) {
     <Link
       to={to}
       onClick={onClick}
-      className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] hover:text-white"
+      className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
       role="menuitem"
     >
       <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" strokeWidth={1.75} />

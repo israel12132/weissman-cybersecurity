@@ -104,7 +104,7 @@ export default function KeyboardShortcuts() {
           <button
             type="button"
             onClick={() => setHelpOpen(false)}
-            className="text-[var(--text-muted)] hover:text-white text-2xl leading-none"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-2xl leading-none"
             aria-label={t('a11y.close')}
           >×</button>
         </div>

@@ -66,7 +66,7 @@ export default function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-white transition-colors"
+        className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={
@@ -109,7 +109,7 @@ export default function NotificationBell() {
                 disabled={unreadCount === 0}
                 title={t('notifications.mark_all_read')}
                 aria-label={t('notifications.mark_all_read')}
-                className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Check className="w-3.5 h-3.5" aria-hidden />
               </button>
@@ -119,7 +119,7 @@ export default function NotificationBell() {
                 disabled={notifications.length === 0}
                 title={t('notifications.clear_all')}
                 aria-label={t('notifications.clear_all')}
-                className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-white hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Trash2 className="w-3.5 h-3.5" aria-hidden />
               </button>
