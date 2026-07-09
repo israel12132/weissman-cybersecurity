@@ -623,6 +623,9 @@ export default function ComplianceFrameworks() {
                     data={filteredMappings}
                     animateRows={false}
                     getRowId={(m) => m.id}
+                    exportable
+                    exportFilename="weissman-control-mappings"
+                    columnToggle
                     emptyFilteredMessage={t('pages.complianceFrameworks.mappings_empty')}
                     emptyState={{ icon: 'search', title: t('pages.complianceFrameworks.mappings_empty') }}
                   />

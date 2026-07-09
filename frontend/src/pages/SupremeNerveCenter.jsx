@@ -460,6 +460,9 @@ function SupremeNerveCenterInner() {
               animateRows={false}
               getRowId={(e) => e.engine_id}
               tableClassName="min-w-[900px]"
+              exportable
+              exportFilename="weissman-engine-lifecycle"
+              columnToggle
               emptyState={{ icon: 'inbox', title: t('supremeNerveCenter.filterAll') }}
             />
             <p className="px-1 pt-2 text-[10px] text-slate-600">
