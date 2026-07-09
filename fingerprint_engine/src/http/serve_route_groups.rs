@@ -65,6 +65,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/attack-exposure/:client_id",
             get(api_attack_exposure_for_client),
         )
+        // Board-level security posture score (0..100 + A–F) distilled from the fix-first program.
+        .route(
+            "/api/posture/score/:client_id",
+            get(api_posture_score_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),

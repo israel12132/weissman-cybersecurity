@@ -172,6 +172,30 @@ async fn api_remediation_priority_for_client(
     }
 }
 
+// ─── Board-level security posture score (distilled from the fix-first program) ───
+async fn api_posture_score_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::posture_score::load_and_score(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Live per-client MITRE ATT&CK exposure (technique ranking + tactic rollup) ───
 async fn api_attack_exposure_for_client(
     State(state): State<Arc<AppState>>,

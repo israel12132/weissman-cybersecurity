@@ -527,14 +527,15 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
     items
 }
 
-/// Load open findings for a client (joined to risk-graph choke-point flags) and rank them.
-/// Read-only; RLS-scoped via the caller's tenant transaction helper.
-pub async fn load_and_rank(
+/// Load a client's open findings, joined to risk-graph criticality/choke-point flags, as
+/// [`FindingInput`]s. Read-only; RLS-scoped via the caller's tenant transaction helper. Shared by
+/// [`load_and_rank`] and the posture-score engine so they agree on exactly the same live data.
+pub async fn load_findings(
     pool: &sqlx::PgPool,
     tenant_id: i64,
     client_id: i64,
     limit: i64,
-) -> Result<Value, String> {
+) -> Result<Vec<FindingInput>, String> {
     use sqlx::Row;
 
     let limit = limit.clamp(1, 5000);
@@ -616,6 +617,19 @@ pub async fn load_and_rank(
             })
         })
         .collect();
+
+    Ok(findings)
+}
+
+/// Load open findings and rank them into a deduplicated, priority-ordered "fix-first" program
+/// (JSON for the API). Read-only; RLS-scoped.
+pub async fn load_and_rank(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i64,
+) -> Result<Value, String> {
+    let findings = load_findings(pool, tenant_id, client_id, limit).await?;
 
     let total_findings = findings.len();
     let program = rank(&findings);
