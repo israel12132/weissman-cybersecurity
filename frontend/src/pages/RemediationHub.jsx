@@ -11,6 +11,7 @@ import { apiFetch } from '../lib/apiBase'
 import FixFirstProgram from './FixFirstProgram'
 import PostureScoreCard from './PostureScoreCard'
 import SlaForecastStrip from './SlaForecastStrip'
+import BacklogAgingPanel from './BacklogAgingPanel'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -184,6 +185,9 @@ export default function RemediationHub() {
 
         {/* Proactive SLA breach forecast over 7/14/30/60/90-day horizons. */}
         <SlaForecastStrip />
+
+        {/* Backlog-aging health: open findings by age × severity, aged-critical flags. */}
+        <BacklogAgingPanel />
 
         {/* Authoritative, backend-ranked program (fix-first). The family board below is the
             client-side derived view over the same findings. */}
