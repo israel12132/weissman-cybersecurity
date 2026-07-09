@@ -289,7 +289,7 @@ export default function OobVerification() {
                   type="button"
                   disabled={polling}
                   onClick={poll}
-                  className="flex items-center gap-1 text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white px-2 py-1 rounded"
+                  className="flex items-center gap-1 text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] px-2 py-1 rounded"
                 >
                   <RefreshCw className={`w-3 h-3 ${polling ? 'animate-spin' : ''}`} />
                   {polling ? t('pages.oobVerification.polling') : t('pages.oobVerification.poll_btn')}

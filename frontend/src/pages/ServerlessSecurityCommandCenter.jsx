@@ -381,7 +381,7 @@ export default function ServerlessSecurityCommandCenter() {
                 {t('serverlessSec.hero_desc', 'Evidence-only remote assessment: platform fingerprinting, env leaks, CORS, IaC exposure, event injection — every finding backed by a real HTTP signal.')}
               </p>
             </div>
-            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
+            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
           </div>
         </motion.div>
 
@@ -469,7 +469,7 @@ export default function ServerlessSecurityCommandCenter() {
                   {running ? t('common.running', 'Running…') : t('serverlessSec.run', 'Run Serverless Scan')}
                 </button>
                 <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
-                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] disabled:opacity-40 transition-all">
+                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 transition-all">
                   Dry Run
                 </button>
               </div>

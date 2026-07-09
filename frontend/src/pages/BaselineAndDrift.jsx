@@ -186,7 +186,7 @@ export default function BaselineAndDrift() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   timeRange === range
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
+                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.baselineAndDrift.range_${range}`)}

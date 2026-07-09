@@ -199,7 +199,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
             <button
               type="button"
               onClick={onClose}
-              className="text-white/60 hover:text-white text-lg leading-none px-2 py-1"
+              className="text-white/60 hover:text-[var(--text-primary)] text-lg leading-none px-2 py-1"
               aria-label={t(`${NS}.close`)}
             >
               ×

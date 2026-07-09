@@ -324,7 +324,7 @@ export default function IntegrationManager() {
                       onClick={() => setConfigureTarget(integration)}
                       title={t('pages.integrationManager.configure')}
                       aria-label={t('pages.integrationManager.configure')}
-                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] transition-colors"
+                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -467,7 +467,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
           </button>

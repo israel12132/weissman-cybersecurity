@@ -732,7 +732,7 @@ function ConfigSchemaPanel({ schema, onClose }) {
       <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-zinc-950 p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-white">✕</button>
+          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
         </div>
         {schema.completeness && (
           <p className="text-[10px] font-mono text-emerald-400/80 mb-2">
@@ -1644,7 +1644,7 @@ export default function NexusSovereignSwarm() {
             </div>
             <div className="flex gap-2 flex-wrap items-center">
               <ShellScanActions onRefresh={handleRefresh} onExport={exportCsv} exportDisabled={!filteredFindings.length} />
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
               <Link to={`/engines/top-tier/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition-colors">

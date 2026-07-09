@@ -410,7 +410,7 @@ function IdentityDetailModal({ identity, onClose }) {
             <h3 id="modal-title" className="text-lg font-bold text-white">{identity.username}</h3>
             <button
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
+              className="p-1 text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
               aria-label={t('pages.identityContextManager.close_modal')}
             >
               <X className="w-5 h-5" />

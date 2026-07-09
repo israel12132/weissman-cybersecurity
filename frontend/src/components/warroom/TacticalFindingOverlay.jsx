@@ -57,7 +57,7 @@ export default function TacticalFindingOverlay() {
             <button
               type="button"
               onClick={() => setLastFinding(null)}
-              className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-lg text-white/60 hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
               aria-label={t(`${NS}.dismiss`)}
             >
               <X className="w-4 h-4" />

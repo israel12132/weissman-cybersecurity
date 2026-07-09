@@ -186,14 +186,14 @@ export default function LivePipelineMonitor() {
             <button
               type="button"
               onClick={() => setViewMode('stages')}
-              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
+              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
             >
               {t(`${NS}.stages`)}
             </button>
             <button
               type="button"
               onClick={() => setViewMode('dag')}
-              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
+              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
             >
               <GitBranch className="w-3 h-3" /> {t(`${NS}.dagTree`)}
             </button>

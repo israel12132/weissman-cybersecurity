@@ -238,7 +238,7 @@ export default function SystemConfiguration() {
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/10'
-                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
+                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {tab.icon}

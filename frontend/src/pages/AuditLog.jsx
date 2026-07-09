@@ -523,7 +523,7 @@ export default function AuditLog() {
                 key={r.days}
                 type="button"
                 onClick={() => setQuickRange(r.days)}
-                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] whitespace-nowrap"
+                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] whitespace-nowrap"
               >
                 {r.label}
               </button>
@@ -584,7 +584,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset(0)}
-                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.first_page')}
               >
                 <ChevronsLeft className="h-4 w-4" />
@@ -593,7 +593,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
-                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.prev_page')}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -614,7 +614,7 @@ export default function AuditLog() {
                       className={`min-w-[2rem] h-8 rounded-lg text-xs font-mono border transition-all ${
                         page === currentPage
                           ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
-                          : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)]'
+                          : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
                       }`}
                     >
                       {page}
@@ -627,7 +627,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((o) => o + pageSize)}
-                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.next_page')}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -636,7 +636,7 @@ export default function AuditLog() {
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((totalPages - 1) * pageSize)}
-                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.last_page')}
               >
                 <ChevronsRight className="h-4 w-4" />

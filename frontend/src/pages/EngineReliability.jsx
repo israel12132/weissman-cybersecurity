@@ -265,7 +265,7 @@ export default function EngineReliability() {
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
                       kindFilter === k
                         ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-white'
+                        : 'text-gray-400 hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {k === 'all'

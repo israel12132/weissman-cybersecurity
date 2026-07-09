@@ -169,7 +169,7 @@ export default function ClientDetail() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
+            className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -186,7 +186,7 @@ export default function ClientDetail() {
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-white font-mono text-sm transition-colors"
+            className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
           </button>
@@ -223,7 +223,7 @@ export default function ClientDetail() {
   })()
 
   const navBtnClass =
-    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-white hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
+    'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all whitespace-nowrap'
 
   return (
     <PageShell

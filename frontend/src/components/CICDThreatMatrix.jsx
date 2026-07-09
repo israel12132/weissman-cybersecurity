@@ -141,7 +141,7 @@ export default function CICDThreatMatrix() {
                 <button
                   type="button"
                   onClick={() => setModalFinding(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-slate-400 hover:text-[var(--text-primary)]"
                 >
                   ✕
                 </button>

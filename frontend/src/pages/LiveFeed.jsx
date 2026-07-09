@@ -110,7 +110,7 @@ export default function LiveFeed() {
             type="button"
             onClick={() => setPaused((p) => !p)}
             aria-pressed={paused}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] text-xs font-mono hover:text-white hover:border-[var(--border-strong)] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] text-xs font-mono hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
           >
             {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
             {paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}

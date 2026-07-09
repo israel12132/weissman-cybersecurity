@@ -250,7 +250,7 @@ export default function AdminManagement() {
               id={`adminmgmt-edit-user-${user.id}-btn`}
               type="button"
               onClick={() => openEditModal(user)}
-              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-slate-400 hover:text-white hover:bg-[var(--row-hover-bg)]"
+              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-slate-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
             >
               Edit
             </button>

@@ -107,7 +107,7 @@ function ExpandedRow({ finding, onClose, onVerified }) {
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-2 right-2 text-[#6b7280] hover:text-white text-sm"
+            className="absolute top-2 right-2 text-[#6b7280] hover:text-[var(--text-primary)] text-sm"
             aria-label={t('components.cockpitTabs.findings.expanded.close')}
           >
             {t('components.cockpitTabs.findings.expanded.close_button')}

@@ -369,7 +369,7 @@ export default function EngineManagementConsole() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   statusFilter === status
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
+                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {status === 'all'
@@ -597,7 +597,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
           >
             <XCircle className="w-5 h-5" />
           </button>

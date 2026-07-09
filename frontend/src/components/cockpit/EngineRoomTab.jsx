@@ -242,7 +242,7 @@ export default function EngineRoomTab() {
               type="button"
               onClick={() => setSearch('')}
               aria-label={t('common.close')}
-              className="absolute end-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
+              className="absolute end-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-[var(--text-primary)] text-xs"
             >
               ✕
             </button>

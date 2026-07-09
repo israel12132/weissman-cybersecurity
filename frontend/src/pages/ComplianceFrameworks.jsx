@@ -655,7 +655,7 @@ export default function ComplianceFrameworks() {
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
                     isSelected
                       ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-                      : 'bg-[var(--bg-2)] text-gray-400 border-[var(--border-default)] hover:bg-[var(--row-hover-bg)] hover:text-white'
+                      : 'bg-[var(--bg-2)] text-gray-400 border-[var(--border-default)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <span className="text-xl">{FRAMEWORK_ICONS[fw.id] || '🛡️'}</span>
@@ -753,7 +753,7 @@ export default function ComplianceFrameworks() {
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                         filter === f
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'text-gray-400 hover:text-white hover:bg-[var(--row-hover-bg)]'
+                          : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                       }`}
                     >
                       {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}

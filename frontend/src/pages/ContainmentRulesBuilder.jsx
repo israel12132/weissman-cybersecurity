@@ -363,7 +363,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           <h3 className="text-lg font-bold text-white">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-400 hover:text-[var(--text-primary)]">
             ✕
           </button>
         </div>
