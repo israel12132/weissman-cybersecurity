@@ -10,6 +10,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import FixFirstProgram from './FixFirstProgram'
 import PostureScoreCard from './PostureScoreCard'
+import SlaForecastStrip from './SlaForecastStrip'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -180,6 +181,9 @@ export default function RemediationHub() {
 
         {/* Board-level posture score, distilled from the same fix-first program below. */}
         <PostureScoreCard />
+
+        {/* Proactive SLA breach forecast over 7/14/30/60/90-day horizons. */}
+        <SlaForecastStrip />
 
         {/* Authoritative, backend-ranked program (fix-first). The family board below is the
             client-side derived view over the same findings. */}
