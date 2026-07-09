@@ -104,7 +104,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
   )
 }
 
-function NavSection({ id, title, children, defaultOpen = true, open, onToggle }) {
+function NavSection({ id, title, children, open, onToggle }) {
   return (
     <div className="mb-0.5">
       <button

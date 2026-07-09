@@ -223,7 +223,6 @@ const ATTACK_REFERENCE = [
 ]
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 function csvToArray(s) { return String(s || '').split(/[\n,]+/).map((x) => x.trim()).filter(Boolean) }
 function isSummary(f) { return f && (f.category === 'posture_summary' || f.summary === true || typeof f.posture_score === 'number') }
 
@@ -306,7 +305,6 @@ function Scorecard({ summary, t }) {
   const grade = summary.grade ?? summary.evidence?.grade ?? 'A'
   const color = gradeColor(grade)
   const ev = summary.evidence || {}
-  const bd = ev.severity_breakdown || {}
   const cats = summary.weak_categories || ev.weak_categories || []
   const dims = summary.posture_dimensions || ev.posture_dimensions || {}
   const paths = summary.attack_paths || ev.attack_paths || []

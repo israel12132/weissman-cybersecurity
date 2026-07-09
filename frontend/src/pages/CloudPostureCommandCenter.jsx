@@ -134,10 +134,6 @@ function gradeColor(grade) {
   }[grade] || '#fb7185'
 }
 
-function sevValue(s) {
-  return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0
-}
-
 function isSummary(f) {
   return f && (f.category === 'summary' || typeof f.posture_score === 'number')
 }

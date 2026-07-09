@@ -148,7 +148,8 @@ export default function CloudControlTower() {
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
-  const { postScan } = useCommandCenterScan(selectedClientId)
+  // Registers this client with the engine hub (side effect); this view has no scan button.
+  useCommandCenterScan(selectedClientId)
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [engineStatus, setEngineStatus] = useState({})
