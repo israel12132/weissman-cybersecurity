@@ -22,6 +22,7 @@ import CopyButton from '../components/ui/CopyButton'
 import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 import { downloadCsv } from '../lib/exportFindingsCsv'
@@ -54,6 +55,7 @@ function anomaliesCsv(rows) {
 
 export default function UebaAnomalies() {
   const { t } = useTranslation()
+  const { clients } = useClient()
   const [anomalies, setAnomalies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -122,19 +124,35 @@ export default function UebaAnomalies() {
     [severities, sevFilter, t],
   )
 
+  // Resolve an anomaly's client id → name for at-a-glance tenant context.
+  const clientName = useMemo(() => {
+    const byId = new Map((clients || []).map((c) => [String(c.id), c.name || c.domain]))
+    return (id) => (id ? byId.get(String(id)) : null)
+  }, [clients])
+
   const columns = useMemo(
     () => [
       columnHelper.accessor((a) => a.agent_id || '', {
         id: 'agent_id',
         header: t(`${NS}.col_agent`),
-        cell: (ctx) => (
-          <span className="flex items-center gap-1.5 min-w-0">
-            <code className="text-[12px] text-[var(--text-primary)] font-mono truncate max-w-[14rem]" title={ctx.getValue()}>
-              {ctx.getValue() || '—'}
-            </code>
-            {ctx.getValue() && <CopyButton value={ctx.getValue()} />}
-          </span>
-        ),
+        cell: (ctx) => {
+          const cname = clientName(ctx.row.original.client_id)
+          return (
+            <div className="min-w-0">
+              <span className="flex items-center gap-1.5 min-w-0">
+                <code className="text-[12px] text-[var(--text-primary)] font-mono truncate max-w-[14rem]" title={ctx.getValue()}>
+                  {ctx.getValue() || '—'}
+                </code>
+                {ctx.getValue() && <CopyButton value={ctx.getValue()} />}
+              </span>
+              {cname && (
+                <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[14rem]" title={cname}>
+                  {cname}
+                </span>
+              )}
+            </div>
+          )
+        },
       }),
       columnHelper.accessor((a) => a.metric_name || '', {
         id: 'metric_name',
@@ -214,7 +232,7 @@ export default function UebaAnomalies() {
         ),
       }),
     ],
-    [t],
+    [t, clientName],
   )
 
   return (
