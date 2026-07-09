@@ -1452,6 +1452,8 @@
       "program_stat_due_soon": "מתקרב ליעד",
       "program_stat_kev": "KEV",
       "program_stat_choke": "צמתי חנק",
+      "program_stat_crown": "תכשיטי כתר",
+      "program_crown": "תכשיט כתר",
       "program_frameworks": "מסגרות",
       "program_closes": "תיקון אחד סוגר {{count}} ממצאים",
       "program_ransomware": "כופר",

@@ -1444,6 +1444,8 @@
       "program_stat_due_soon": "Due soon",
       "program_stat_kev": "KEV",
       "program_stat_choke": "Choke points",
+      "program_stat_crown": "Crown jewels",
+      "program_crown": "Crown jewel",
       "program_frameworks": "Frameworks",
       "program_closes": "One fix closes {{count}} findings",
       "program_ransomware": "Ransomware",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveSlaView, scoreFraction } from './FixFirstProgram.jsx'
+import { deriveSlaView, scoreFraction, formatUsd } from './FixFirstProgram.jsx'
 
 describe('FixFirstProgram helpers', () => {
   describe('deriveSlaView', () => {
@@ -50,6 +50,24 @@ describe('FixFirstProgram helpers', () => {
       expect(scoreFraction(-10)).toBe(0)
       expect(scoreFraction('nope')).toBe(0)
       expect(scoreFraction(undefined)).toBe(0)
+    })
+  })
+
+  describe('formatUsd', () => {
+    it('formats billions, millions, thousands, and units', () => {
+      expect(formatUsd(5_000_000_000)).toBe('$5B')
+      expect(formatUsd(2_500_000)).toBe('$2.5M')
+      expect(formatUsd(5_000_000)).toBe('$5M')
+      expect(formatUsd(250_000)).toBe('$250K')
+      expect(formatUsd(900)).toBe('$900')
+    })
+
+    it('returns null for non-positive or invalid input', () => {
+      expect(formatUsd(0)).toBeNull()
+      expect(formatUsd(-100)).toBeNull()
+      expect(formatUsd(null)).toBeNull()
+      expect(formatUsd(undefined)).toBeNull()
+      expect(formatUsd('nope')).toBeNull()
     })
   })
 })

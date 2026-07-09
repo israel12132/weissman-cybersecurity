@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { SkeletonTable } from '../components/ui/Skeleton'
@@ -38,6 +38,16 @@ export function scoreFraction(score) {
   const n = Number(score)
   if (!Number.isFinite(n)) return 0
   return Math.max(0, Math.min(1, n / 100))
+}
+
+/** Pure: compact USD formatter ($5M, $250K, $900). Returns null for non-positive/invalid. */
+export function formatUsd(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return null
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return `$${Math.round(n)}`
 }
 
 const TONE_CLASS = {
@@ -149,12 +159,13 @@ export default function FixFirstProgram() {
         </div>
       ) : (
         <>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 border-b border-white/5">
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-b border-white/5">
             <SummaryStat label={t('pages.remediationHub.program_stat_actions', { defaultValue: 'Actions' })} value={data.remediation_actions ?? program.length} />
             <SummaryStat label={t('pages.remediationHub.program_stat_overdue', { defaultValue: 'Overdue' })} value={data.overdue_actions ?? 0} color="#f43f5e" />
             <SummaryStat label={t('pages.remediationHub.program_stat_due_soon', { defaultValue: 'Due soon' })} value={data.due_soon_actions ?? 0} color="#fbbf24" />
             <SummaryStat label={t('pages.remediationHub.program_stat_kev', { defaultValue: 'KEV' })} value={data.kev_actions ?? 0} color="#fb923c" />
             <SummaryStat label={t('pages.remediationHub.program_stat_choke', { defaultValue: 'Choke points' })} value={data.choke_point_actions ?? 0} color="#a78bfa" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_crown', { defaultValue: 'Crown jewels' })} value={data.crown_jewel_actions ?? 0} color="#f0abfc" />
           </div>
 
           {frameworks.length > 0 && (
@@ -182,6 +193,12 @@ export default function FixFirstProgram() {
                         ) : null}
                         {item.on_choke_point && (
                           <Chip color="#a78bfa" title="On an attack-path choke point"><GitBranch className="w-3 h-3" />{t('pages.remediationHub.program_choke', { defaultValue: 'Choke point' })}</Chip>
+                        )}
+                        {item.crown_jewel && (
+                          <Chip color="#f0abfc" title="Affects a business-critical crown-jewel asset"><Gem className="w-3 h-3" />{t('pages.remediationHub.program_crown', { defaultValue: 'Crown jewel' })}</Chip>
+                        )}
+                        {formatUsd(item.business_value_usd) && (
+                          <Chip color="#f0abfc" title="Estimated financial blast radius">{formatUsd(item.business_value_usd)}</Chip>
                         )}
                       </div>
                       {item.asset && <div className="text-[11px] font-mono text-white/45 truncate mb-1.5">{item.asset}</div>}
