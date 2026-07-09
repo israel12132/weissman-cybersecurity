@@ -160,6 +160,10 @@ let bodyHtml = md.render(bodyMd)
 
 const toc = []
 function stripTags(s) { return s.replace(/<[^>]+>/g, '').trim() }
+function decodeEntities(s) {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+}
 
 let hIndex = 0
 bodyHtml = bodyHtml.replace(/<h2>([\s\S]*?)<\/h2>/g, (full, inner) => {
@@ -182,6 +186,7 @@ bodyHtml = bodyHtml.replace(/<h2>([\s\S]*?)<\/h2>/g, (full, inner) => {
     chip = num
     tocNum = num
   }
+  label = decodeEntities(label)
   toc.push({ id, num: tocNum, label, appendix: isAppendix })
   const cls = isAppendix ? 'appendix pbreak' : ''
   return `<h2 id="${id}" class="${cls}"><span class="secnum">${chip}</span><span class="sectitle">${escapeHtml(label)}</span></h2>`
@@ -292,9 +297,87 @@ const tocHtml = `
   </div>
   <div class="toc__group-label toc__group-label--appendix">${escapeHtml(STR.appendixLabel)}</div>
   <div class="toc__grid">
-    <div class="toc__section">${tocItems(tocAppendix.slice(0, 2))}</div>
-    <div class="toc__section">${tocItems(tocAppendix.slice(2))}</div>
+    <div class="toc__section">${tocItems(tocAppendix.slice(0, Math.ceil(tocAppendix.length / 2)))}</div>
+    <div class="toc__section">${tocItems(tocAppendix.slice(Math.ceil(tocAppendix.length / 2)))}</div>
   </div>
+</section>`
+
+/* ---------------------------------------------------------------------------
+ * 4b. Front matter — Document Control + Legal & Confidentiality Notice
+ * ------------------------------------------------------------------------- */
+const DOC_ID = `WCS-BRIEF-2026.06-${rtl ? 'HE' : 'EN'}`
+const dc = rtl ? {
+  eyebrow: 'ממשל מסמך', title: 'בקרת מסמך',
+  rows: [
+    ['מזהה מסמך', DOC_ID], ['גרסה', '1.0'], ['סטטוס', 'מאושר לשחרור'],
+    ['סיווג', 'חסוי · TLP:AMBER+STRICT'], ['שפה', 'עברית (he-IL)'],
+    ['בעלים', 'משרד ה־CISO · Weissman Cybersecurity'], ['אישור', 'נותן החסות הביצועי (CEO/CISO)'],
+    ['בתוקף מ־', ISSUED_DATE], ['סקירה הבאה', '2026-10-09 (רבעונית)'],
+    ['תפוצה', 'נמענים נקובים בשם — תחת NDA'],
+  ],
+  revHead: ['גרסה', 'תאריך', 'עורך', 'תיאור השינוי'],
+  revRows: [['1.0', ISSUED_DATE, 'Weissman Cybersecurity', 'שחרור ראשוני — הופק ואומת מול קוד־המקור בפרודקשן']],
+} : {
+  eyebrow: 'Document Governance', title: 'Document Control',
+  rows: [
+    ['Document ID', DOC_ID], ['Version', '1.0'], ['Status', 'Released'],
+    ['Classification', 'Confidential · TLP:AMBER+STRICT'], ['Language', 'English (en-US)'],
+    ['Owner', 'Office of the CISO · Weissman Cybersecurity'], ['Approver', 'Executive Sponsor (CEO/CISO)'],
+    ['Effective', ISSUED_DATE], ['Next review', '2026-10-09 (quarterly)'],
+    ['Distribution', 'Named recipients — under NDA'],
+  ],
+  revHead: ['Version', 'Date', 'Author', 'Change summary'],
+  revRows: [['1.0', ISSUED_DATE, 'Weissman Cybersecurity', 'Initial release — generated and verified against production source code']],
+}
+const docControlHtml = `
+<section class="fm" id="fm-doc-control">
+  <div class="fm__head">
+    <div class="fm__eyebrow">${escapeHtml(dc.eyebrow)}</div>
+    <h1 class="fm__title">${escapeHtml(dc.title)}</h1>
+    <div class="fm__rule"></div>
+  </div>
+  <div class="dc__grid">
+    ${dc.rows.map(([k, v]) => `<div class="dc__row"><span class="dc__k">${escapeHtml(k)}</span><span class="dc__v">${escapeHtml(v)}</span></div>`).join('\n    ')}
+  </div>
+  <table class="fmtable">
+    <thead><tr>${dc.revHead.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+    <tbody>${dc.revRows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>
+</section>`
+
+const legal = rtl ? {
+  eyebrow: 'הודעה משפטית', title: 'הודעת סודיות ותנאים משפטיים',
+  items: [
+    ['סודיות ו־NDA', 'מסמך זה ותוכנו הם מידע קנייני וסודי של Weissman Cybersecurity, ומסופקים לנמען הנקוב בלבד תחת הסכם סודיות (NDA). אין להעתיק, לשכפל, לצלם, להפיץ או לגלות אותו — כולו או חלקו — לצד שלישי ללא אישור מראש ובכתב. יש להשמיד או להשיב את המסמך לפי דרישה.'],
+    ['קניין רוחני', '© 2026 Weissman Cybersecurity. כל הזכויות שמורות. האדריכלות, המנועים, האלגוריתמים והתכנים המתוארים כאן מוגנים כקניין רוחני וסוד מסחרי.'],
+    ['סימני מסחר', 'Weissman Cybersecurity, שם המוצר והסמל הם סימני מסחר של החברה. שמות וסימנים של צד שלישי (למשל AWS, Azure, GCP, PostgreSQL, Kubernetes) הם רכוש בעליהם ומובאים לצורכי זיהוי בלבד.'],
+    ['ללא אחריות ("כמות שהוא")', 'המידע מסופק למטרות מידע בלבד, נכון למועד ההפקה, וכפוף לשינוי ללא הודעה. אין בו משום אחריות מפורשת או משתמעת (לרבות סחירות, התאמה למטרה, או אי־הפרה), ואינו מהווה התחייבות חוזית.'],
+    ['הצהרות צופות פני עתיד', 'תיאורי יכולות עתידיות, מפת דרכים או תת־מערכות בהצטרפות (opt-in) אינם ערובה לזמינות עתידית ועשויים להשתנות לפי שיקול דעת החברה.'],
+    ['יישור רגולטורי — לא הסמכה', 'תיאורי הציות משקפים יישור ומיפוי בקרות ועמדת ציות מדידה בזמן־אמת; אין הם מהווים דוח הסמכה של צד שלישי. סטטוס הסמכות (למשל SOC 2 Type II / ISO 27001) מוצהר על־ידי הישות המפעילה ומבקריה החיצוניים.'],
+    ['עדיפות חוזית · יצוא · אבטחה', 'בכל מקרה של סתירה, ההסכם המסחרי החתום (MSA/DPA/SOW) גובר. השימוש כפוף לחוקי היצוא והרגולציה החלים. דיווח פגיעויות באחריות: security@weissman-cybersecurity.com.'],
+  ],
+} : {
+  eyebrow: 'Legal Notice', title: 'Confidentiality & Legal Notices',
+  items: [
+    ['Confidentiality & NDA', 'This document and its contents are proprietary and confidential information of Weissman Cybersecurity, provided to the named recipient only under a non-disclosure agreement. It may not be copied, reproduced, redistributed or disclosed — in whole or in part — to any third party without prior written consent. Destroy or return on request.'],
+    ['Intellectual Property', '© 2026 Weissman Cybersecurity. All rights reserved. The architecture, engines, algorithms and content described herein are protected as intellectual property and trade secrets.'],
+    ['Trademarks', 'Weissman Cybersecurity, the product name and logo are trademarks of the company. Third-party names and marks (e.g. AWS, Azure, GCP, PostgreSQL, Kubernetes) are the property of their respective owners and used for identification only.'],
+    ['No Warranty ("as-is")', 'Information is provided for informational purposes only, is accurate as of the issue date, and is subject to change without notice. It carries no express or implied warranty (including merchantability, fitness for purpose, or non-infringement) and is not a contractual commitment.'],
+    ['Forward-Looking Statements', 'Descriptions of future capabilities, roadmap, or opt-in subsystems are not a guarantee of future availability and may change at the company\'s discretion.'],
+    ['Regulatory Alignment — not certification', 'Compliance descriptions reflect control alignment/mapping and a measurable, real-time compliance posture; they do not constitute a third-party certification report. Certification status (e.g. SOC 2 Type II / ISO 27001) is declared by the operating entity and its external auditors.'],
+    ['Precedence · Export · Security', 'In case of conflict, the signed commercial agreement (MSA/DPA/SOW) prevails. Use is subject to applicable export-control and regulatory law. Responsible vulnerability disclosure: security@weissman-cybersecurity.com.'],
+  ],
+}
+const legalHtml = `
+<section class="fm" id="fm-legal">
+  <div class="fm__head">
+    <div class="fm__eyebrow">${escapeHtml(legal.eyebrow)}</div>
+    <h1 class="fm__title">${escapeHtml(legal.title)}</h1>
+    <div class="fm__rule"></div>
+  </div>
+  <ol class="legal">
+    ${legal.items.map(([h, p]) => `<li class="legal__item"><span class="legal__h">${escapeHtml(h)}</span><span class="legal__p">${escapeHtml(p)}</span></li>`).join('\n    ')}
+  </ol>
 </section>`
 
 /* ---------------------------------------------------------------------------
@@ -303,7 +386,7 @@ const tocHtml = `
 // Chromium does not subset *variable* fonts when printing — it embeds a full
 // copy per rendered weight, bloating the PDF. So we pin each used weight to a
 // static instance and glyph-subset it to the characters actually in the doc.
-const usedText = coverHtml + tocHtml + bodyHtml +
+const usedText = coverHtml + tocHtml + bodyHtml + docControlHtml + legalHtml +
   ' 0123456789…—–‑·•⇄→←↔״׳“”‘’()[]{}/\\<>%+=:;.,\'"`~@#&*|_^°'
 const FONTS = [
   { family: 'Frank Ruhl Libre', file: 'FrankRuhlLibre.ttf', weights: [800, 900] },
@@ -347,7 +430,7 @@ ${inner}
 }
 
 const coverDoc = fullDoc(coverHtml)
-const bodyDoc = fullDoc(`${tocHtml}\n<main class="doc">\n${bodyHtml}\n</main>`)
+const bodyDoc = fullDoc(`${docControlHtml}\n${legalHtml}\n${tocHtml}\n<main class="doc">\n${bodyHtml}\n</main>`)
 
 // optional combined HTML artifact for inspection (set PDF_DEBUG=1)
 if (process.env.PDF_DEBUG) {
@@ -419,10 +502,21 @@ try {
   dst.setLanguage(rtl ? 'he-IL' : 'en-US')
 } catch (e) { console.warn(`  metadata skipped: ${e.message}`) }
 
-// --- bookmark outline: one entry per section/appendix, in document order ---
+// --- bookmark outline: front matter + one entry per section/appendix ---
 try {
   const it = dst.outlineIterator()
   let added = 0
+  // front-matter bookmarks by fixed page index (cover=0, then doc-control/legal/TOC)
+  const frontMatter = rtl
+    ? [['בקרת מסמך', 1], ['הודעה משפטית', 2], ['תוכן עניינים', 3]]
+    : [['Document Control', 1], ['Legal Notice', 2], ['Table of Contents', 3]]
+  for (const [title, page] of frontMatter) {
+    try {
+      const uri = dst.formatLinkURI({ chapter: 0, page, type: 'Fit', x: 0, y: 0, width: 0, height: 0, zoom: 0 })
+      it.insert({ title, uri, open: false })
+      added += 1
+    } catch { /* skip if unsupported */ }
+  }
   for (const t of toc) {
     let uri
     try { uri = dst.formatLinkURI(dst.resolveLinkDestination('#nameddest=' + t.id)) }

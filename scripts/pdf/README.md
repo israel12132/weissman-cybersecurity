@@ -34,6 +34,13 @@ cover/body sizes.
 - **Cover** built from the front-matter metadata table (product, category,
   version, footprint, license …), with brand emblem, classification band and
   issue date.
+- **Document Control + Legal & Confidentiality Notice** front-matter pages
+  (document ID, version, classification, owner, revision history; NDA,
+  copyright, no-warranty, forward-looking, and regulatory-alignment notices),
+  generated bilingually.
+- **PDF bookmarks** (front matter + every section/appendix, panel open by
+  default) and **document metadata** (title/author/subject/keywords/language).
+- **KPI "by the numbers"** band on the executive summary.
 - **Clickable table of contents** — sections split across two balanced columns,
   appendices below; every entry is an internal PDF link.
 - **Bespoke architecture diagram** replacing the Mermaid block, hand-laid so the

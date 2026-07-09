@@ -264,6 +264,41 @@ html[dir="rtl"] .toc__eyebrow { letter-spacing: .05em; text-transform: none; }
 html[dir="rtl"] .toc__group-label { letter-spacing: 0; text-transform: none; }
 
 /* ============================================================================
+   FRONT MATTER — Document Control + Legal Notice
+   ========================================================================== */
+.fm { padding: 17mm 18mm 20mm 18mm; break-after: page; }
+.fm__head { margin-bottom: 8mm; }
+.fm__eyebrow {
+  font-family: 'Heebo', sans-serif; font-weight: 700;
+  font-size: 8.6pt; letter-spacing: .18em; text-transform: uppercase; color: var(--brand);
+}
+html[dir="rtl"] .fm__eyebrow { letter-spacing: .05em; text-transform: none; }
+.fm__title { font-family: 'Frank Ruhl Libre', serif; font-weight: 800; font-size: 23pt; color: var(--ink); margin: 2mm 0 0 0; }
+.fm__rule { height: 2px; width: 100%; background: var(--line); margin-top: 5mm; position: relative; }
+.fm__rule::before { content: ""; position: absolute; top: 0; height: 2px; width: 32mm; background: linear-gradient(90deg, var(--brand), var(--cyan)); inset-inline-start: 0; }
+
+.dc__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12mm; margin-bottom: 6mm; }
+.dc__row { display: flex; align-items: baseline; gap: 4mm; padding: 2.4mm 0; border-bottom: 1px solid var(--line-soft); }
+.dc__k { flex: 0 0 34mm; font-family: 'Heebo', sans-serif; font-weight: 600; font-size: 8.6pt; color: var(--muted); }
+.dc__v { flex: 1; font-size: 9.6pt; color: var(--ink-soft); font-weight: 500; }
+
+.fmtable { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 3mm; font-size: 9pt; border: 1px solid var(--line); border-radius: 2.6mm; overflow: hidden; }
+.fmtable thead th { background: linear-gradient(160deg, var(--brand-strong), var(--brand-deep)); color: #EAF6F8; font-family: 'Heebo', sans-serif; font-weight: 600; font-size: 8.6pt; text-align: start; padding: 2.6mm 3.2mm; }
+.fmtable tbody td { padding: 2.5mm 3.2mm; border-top: 1px solid var(--line-soft); color: var(--body); vertical-align: top; }
+
+.legal { list-style: none; counter-reset: legal; margin: 0; padding: 0; }
+.legal__item { counter-increment: legal; position: relative; padding: 0 0 4mm 0; margin-bottom: 4mm; padding-inline-start: 11mm; border-bottom: 1px solid var(--line-soft); break-inside: avoid; }
+.legal__item:last-child { border-bottom: none; }
+.legal__item::before {
+  content: counter(legal); position: absolute; inset-inline-start: 0; top: 0;
+  width: 7mm; height: 7mm; display: grid; place-items: center;
+  font-family: 'Heebo', sans-serif; font-weight: 800; font-size: 9pt; color: #fff;
+  background: linear-gradient(150deg, var(--brand), var(--brand-strong)); border-radius: 2mm;
+}
+.legal__h { display: block; font-family: 'Heebo', sans-serif; font-weight: 700; font-size: 10pt; color: var(--ink); margin-bottom: 1.2mm; }
+.legal__p { display: block; font-size: 9pt; line-height: 1.55; color: var(--body); }
+
+/* ============================================================================
    DOCUMENT BODY
    ========================================================================== */
 .doc {
