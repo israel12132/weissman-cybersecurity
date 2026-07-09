@@ -26,7 +26,7 @@ export default function RequireRole({ min = 'admin', children }) {
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
           <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">
-            {t('auth.verifying_access', 'Verifying access')}
+            {t('auth.verifying_access')}
           </span>
         </div>
       </div>
@@ -41,18 +41,13 @@ export default function RequireRole({ min = 'admin', children }) {
     return (
       <div
         role="alert"
-        className="min-h-screen flex flex-col items-center justify-center bg-[#030712] text-slate-200 px-6"
+        className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg-0)] text-[var(--text-secondary)] px-6"
       >
         <h1 className="text-xl font-semibold text-red-400 mb-2">
-          {t('auth.access_denied', 'Access denied')}
+          {t('auth.access_denied')}
         </h1>
-        <p className="text-sm text-slate-400 text-center max-w-md mb-6">
-          {t('auth.requires_role', {
-            defaultValue:
-              'This area requires the {{min}} role or higher. Your account has the {{role}} role. If an admin just upgraded you, sign in again so your token refreshes.',
-            min,
-            role,
-          })}
+        <p className="text-sm text-[var(--text-muted)] text-center max-w-md mb-6">
+          {t('auth.requires_role', { min, role })}
         </p>
         <div className="flex flex-col sm:flex-row gap-4 items-center">
           <button
@@ -63,13 +58,13 @@ export default function RequireRole({ min = 'admin', children }) {
               navigate('/login', { replace: true, state: { from: location } })
             }}
           >
-            {t('auth.sign_in_again', 'Sign in again')}
+            {t('auth.sign_in_again')}
           </button>
           <Link
             to="/operations"
             className="text-sm font-mono text-cyan-400 hover:text-cyan-300 underline underline-offset-4"
           >
-            {t('auth.open_operator_cockpit', 'Open operator cockpit')}
+            {t('auth.open_operator_cockpit')}
           </Link>
         </div>
       </div>

@@ -59,17 +59,17 @@ export const SLA_BAND_COLOR = {
  * @param {(key: string, opts?: object) => string} t i18n translator
  */
 export function slaCountdownLabel(sla, t) {
-  if (sla.unknown) return t('pages.incidentResponseCenter.sla_unknown', { defaultValue: '—' })
+  if (sla.unknown) return t('pages.incidentResponseCenter.sla_unknown')
   const ms = Math.abs(sla.remainingMs)
   const h = Math.floor(ms / HOUR_MS)
   const m = Math.floor((ms % HOUR_MS) / 60_000)
   const parts = h > 0 ? `${h}h ${m}m` : `${m}m`
   if (sla.resolved) {
     return sla.breached
-      ? t('pages.incidentResponseCenter.sla_resolved_late', { time: parts, defaultValue: `resolved ${parts} late` })
-      : t('pages.incidentResponseCenter.sla_resolved_ontime', { defaultValue: 'resolved within SLA' })
+      ? t('pages.incidentResponseCenter.sla_resolved_late', { time: parts })
+      : t('pages.incidentResponseCenter.sla_resolved_ontime')
   }
   return sla.breached
-    ? t('pages.incidentResponseCenter.sla_over', { time: parts, defaultValue: `${parts} over` })
-    : t('pages.incidentResponseCenter.sla_left', { time: parts, defaultValue: `${parts} left` })
+    ? t('pages.incidentResponseCenter.sla_over', { time: parts })
+    : t('pages.incidentResponseCenter.sla_left', { time: parts })
 }

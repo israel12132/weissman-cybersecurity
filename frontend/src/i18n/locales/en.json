@@ -5127,6 +5127,11 @@
       "engine_detail": "Engine Detail →",
       "hint": "Missing integrations are hydrated server-side when configured; complete client setup for full live coverage."
     },
+    "neuralEngineWeb": {
+      "title": "Neural engine web",
+      "no_clients": "No clients yet",
+      "no_engines": "No engines active"
+    },
     "cockpitWidgets": {
       "protectedRoute": {
         "verifying": "Verifying session"
@@ -5338,6 +5343,7 @@
         "defaultTitle": "Digital Evidence"
       },
       "satelliteDroneMap": {
+        "title": "Satellite map",
         "patrolMode": "Patrol mode",
         "zooming": "Drone zooming…",
         "markersActive": "Markers active",

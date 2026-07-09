@@ -5127,6 +5127,11 @@
       "engine_detail": "פרטי מנוע →",
       "hint": "אינטגרציות חסרות ייטענו בשרת כשהוגדרו; השלם הגדרת לקוח לכיסוי לייב מלא."
     },
+    "neuralEngineWeb": {
+      "title": "רשת מנועים עצבית",
+      "no_clients": "אין לקוחות עדיין",
+      "no_engines": "אין מנועים פעילים"
+    },
     "cockpitWidgets": {
       "protectedRoute": {
         "verifying": "מאמת סשן"
@@ -5338,6 +5343,7 @@
         "defaultTitle": "ראיות דיגיטליות"
       },
       "satelliteDroneMap": {
+        "title": "מפת לוויין",
         "patrolMode": "מצב סיור",
         "zooming": "רחפן מתקרב…",
         "markersActive": "סמנים פעילים",

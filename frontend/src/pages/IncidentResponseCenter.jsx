@@ -54,10 +54,10 @@ function SlaBadge({ incident, now, t, showLabel = true }) {
     <span
       className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider"
       style={{ color, borderColor: `${color}40`, background: `${color}10` }}
-      title={t(`${NS}.sla_tooltip`, { defaultValue: 'Time to SLA breach' })}
+      title={t(`${NS}.sla_tooltip`)}
     >
       {band === 'breached' && !sla.resolved ? '⚠ ' : ''}
-      {showLabel ? t(`${NS}.sla_prefix`, { defaultValue: 'SLA' }) + ' ' : ''}
+      {showLabel ? t(`${NS}.sla_prefix`) + ' ' : ''}
       {slaCountdownLabel(sla, t)}
     </span>
   )
@@ -141,7 +141,7 @@ const STATUS_META = {
 
 function severityLabel(severity, t) {
   const s = String(severity ?? 'high').toLowerCase()
-  return t(`${NS}.severity_${s}`, { defaultValue: s.toUpperCase() })
+  return t(`${NS}.severity_${s}`)
 }
 
 function durationHuman(created, updated, t) {
@@ -528,9 +528,9 @@ export default function IncidentResponseCenter() {
         <MetricCard label={t(`${NS}.active_incidents`)} value={metrics.active} sub={t(`${NS}.active_sub`)} color="#ef4444" icon="🔥" />
         <MetricCard label={t(`${NS}.critical_severity`)} value={metrics.crit} sub={t(`${NS}.critical_sub`)} color="#f97316" icon="⚠️" />
         <MetricCard
-          label={t(`${NS}.sla_breaching`, { defaultValue: 'SLA breaching' })}
+          label={t(`${NS}.sla_breaching`)}
           value={metrics.slaBreaching}
-          sub={t(`${NS}.sla_breaching_sub`, { defaultValue: 'open, past target' })}
+          sub={t(`${NS}.sla_breaching_sub`)}
           color={metrics.slaBreaching > 0 ? '#ef4444' : '#4ade80'}
           icon="⏳"
         />
@@ -652,7 +652,7 @@ export default function IncidentResponseCenter() {
                   return (
                     <div className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
                       <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-1">
-                        {t(`${NS}.sla_prefix`, { defaultValue: 'SLA' })}
+                        {t(`${NS}.sla_prefix`)}
                       </div>
                       <div className="text-xs font-semibold" style={{ color }}>
                         {sla.unknown ? '—' : slaCountdownLabel(sla, t)}
