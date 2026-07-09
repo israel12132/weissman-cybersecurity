@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import FixFirstProgram from './FixFirstProgram'
+import PostureScoreCard from './PostureScoreCard'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -176,6 +177,9 @@ export default function RemediationHub() {
     >
       <div className="space-y-6">
         <p className="text-xs text-white/45 font-mono">{t('pages.remediationHub.intro')}</p>
+
+        {/* Board-level posture score, distilled from the same fix-first program below. */}
+        <PostureScoreCard />
 
         {/* Authoritative, backend-ranked program (fix-first). The family board below is the
             client-side derived view over the same findings. */}
