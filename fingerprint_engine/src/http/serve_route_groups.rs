@@ -60,6 +60,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/remediation/priority/:client_id",
             get(api_remediation_priority_for_client),
         )
+        // Live per-client MITRE ATT&CK exposure: technique ranking + tactic rollup over findings.
+        .route(
+            "/api/attack-exposure/:client_id",
+            get(api_attack_exposure_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
