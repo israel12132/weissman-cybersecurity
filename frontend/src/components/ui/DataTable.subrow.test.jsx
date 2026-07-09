@@ -84,6 +84,17 @@ describe('DataTable expandable sub-rows', () => {
     expect(screen.getByTestId('detail')).toBeTruthy()
   })
 
+  it('hidePagination hides the bar and renders every row', () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({ id: String(i), name: `n${i}`, kind: 'ip' }))
+    const { container } = render(
+      <DataTable columns={columns} data={many} animateRows={false} hidePagination />,
+    )
+    // No "Rows:" pagination control.
+    expect(container.textContent).not.toContain('Rows:')
+    // All 60 rows render (no client-side page slice to 25).
+    expect(container.querySelectorAll('tbody tr').length).toBe(60)
+  })
+
   it('detail row spans the full column count', () => {
     const { container } = render(
       <DataTable

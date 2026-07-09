@@ -111,6 +111,9 @@ export default function DataTable({
   exportFilename = 'weissman-export',
   columnToggle = false,
   toolbarTitle,
+  // Hide the built-in pagination bar and render every filtered row (the parent
+  // owns paging — e.g. server-side limit/offset over a large ledger).
+  hidePagination = false,
 }) {
   const defaultPageSize = pageSizes?.[0] ?? 25
   // Remember the user's rows-per-page across sessions (only affects uncontrolled
@@ -218,7 +221,7 @@ export default function DataTable({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(hidePagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     getExpandedRowModel: getExpandedRowModel(),
     initialState: {
       pagination: { pageIndex: 0, pageSize: defaultPageSize },
@@ -489,6 +492,7 @@ export default function DataTable({
       </div>
 
       {/* Pagination bar */}
+      {!hidePagination && (
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-subtle)] bg-[var(--bg-1)]">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono text-[var(--text-muted)]">Rows:</span>
@@ -580,6 +584,7 @@ export default function DataTable({
             </PaginationBtn>
           </div>
         </div>
+      )}
       </div>
     </div>
   )

@@ -874,6 +874,8 @@
     "col_target": "Target",
     "col_ip": "IP address",
     "detail_payload": "Event payload",
+    "expand_payload": "הצג מטען אירוע",
+    "collapse_payload": "הסתר מטען אירוע",
     "rows_per_page": "Rows",
     "page_range": "{{start}}–{{end}} of {{total}}",
     "first_page": "First page",

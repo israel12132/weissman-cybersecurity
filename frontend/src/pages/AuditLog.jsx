@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import {
   Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -16,11 +16,12 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import EmptyState from '../components/ui/EmptyState'
+import DataTable from '../components/ui/DataTable'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
-import { SkeletonTable } from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toaster'
+
+const columnHelper = createColumnHelper()
 
 const ACTION_PILLS = [
   { key: '', labelKey: 'audit.all_actions' },
@@ -143,7 +144,6 @@ export default function AuditLog() {
   const [dateTo, setDateTo] = useState('')
   const [offset, setOffset] = useState(0)
   const [pageSize, setPageSize] = useState(50)
-  const [expandedId, setExpandedId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -262,6 +262,76 @@ export default function AuditLog() {
     }).length
     return { shown: filteredEntries.length, denied }
   }, [filteredEntries])
+
+  // Audit rows stay in the server's chronological order — column sorting is left
+  // off so a single fetched page can't be reordered into a misleading sequence.
+  const columns = useMemo(() => [
+    columnHelper.accessor('created_at', {
+      id: 'when',
+      header: t('audit.col_when'),
+      size: 176,
+      enableSorting: false,
+      cell: ({ getValue }) => (
+        <span className="font-mono text-[var(--text-tertiary)] whitespace-nowrap text-[12px]">
+          {fmtTime(getValue(), i18n.language)}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('action', {
+      id: 'action',
+      header: t('audit.col_action'),
+      size: 160,
+      enableSorting: false,
+      cell: ({ getValue }) => <ActionBadge action={getValue()} />,
+    }),
+    columnHelper.accessor((e) => e.actor_email || `user#${e.user_id || '—'}`, {
+      id: 'actor',
+      header: t('audit.col_actor'),
+      size: 208,
+      enableSorting: false,
+      cell: ({ row, getValue }) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-[10px] text-cyan-300">
+            {(row.original.actor_email || '?')[0]?.toUpperCase()}
+          </span>
+          <span className="text-cyan-300/90 truncate max-w-[14rem] text-[12px]" title={row.original.actor_email}>
+            {getValue()}
+          </span>
+        </div>
+      ),
+    }),
+    columnHelper.accessor((e) => extractTarget(e), {
+      id: 'target',
+      header: t('audit.col_target'),
+      enableSorting: false,
+      cell: ({ getValue }) => (
+        <span className="text-[var(--text-tertiary)] font-mono truncate block max-w-[20rem] text-[12px]" title={getValue()}>
+          {getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('client_ip', {
+      id: 'ip',
+      header: t('audit.col_ip'),
+      size: 128,
+      enableSorting: false,
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-muted)] text-[12px]">{getValue() || '—'}</span>,
+    }),
+  ], [t, i18n.language])
+
+  const renderAuditDetail = useCallback((entry) => {
+    const { text, json } = parseDetails(entry.details)
+    return (
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+          {t('audit.detail_payload')}
+        </div>
+        <pre className="text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-64 overflow-auto leading-relaxed">
+          {json ? JSON.stringify(json, null, 2) : (text || '—')}
+        </pre>
+      </div>
+    )
+  }, [t])
 
   return (
     <div
@@ -474,93 +544,26 @@ export default function AuditLog() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md overflow-hidden">
+      <section className="max-w-7xl mx-auto space-y-3">
         {error && (
-          <div className="px-5 pt-4 text-sm text-rose-300 font-mono">{error}</div>
+          <div className="text-sm text-rose-300 font-mono">{error}</div>
         )}
-        {loading ? (
-          <div className="p-5">
-            <SkeletonTable rows={10} cols={5} />
-          </div>
-        ) : filteredEntries.length === 0 ? (
-          <div className="p-8">
-            <EmptyState
-              icon="📋"
-              title={t('audit.empty_title')}
-              body={t('audit.empty_body')}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)] bg-[var(--row-hover-bg)]">
-                  <th className="py-3 px-4 w-10" />
-                  <th className="py-3 px-4 w-44">{t('audit.col_when')}</th>
-                  <th className="py-3 px-4 w-40">{t('audit.col_action')}</th>
-                  <th className="py-3 px-4 w-52">{t('audit.col_actor')}</th>
-                  <th className="py-3 px-4">{t('audit.col_target')}</th>
-                  <th className="py-3 px-4 w-32">{t('audit.col_ip')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-subtle)]">
-                {filteredEntries.map((e) => {
-                  const open = expandedId === e.id
-                  const { text, json } = parseDetails(e.details)
-                  return (
-                    <React.Fragment key={e.id}>
-                      <tr
-                        className={`align-top cursor-pointer transition-colors ${open ? 'bg-cyan-500/[0.04]' : 'hover:bg-[var(--row-hover-bg)]'}`}
-                        onClick={() => setExpandedId(open ? null : e.id)}
-                      >
-                        <td className="py-3 px-4 text-[var(--text-muted)]">
-                          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180 text-cyan-400' : ''}`} />
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[var(--text-tertiary)] whitespace-nowrap">
-                          {fmtTime(e.created_at, i18n.language)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <ActionBadge action={e.action} />
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-[10px] text-cyan-300">
-                              {(e.actor_email || '?')[0]?.toUpperCase()}
-                            </span>
-                            <span className="text-cyan-300/90 truncate max-w-[14rem]" title={e.actor_email}>
-                              {e.actor_email || `user#${e.user_id || '—'}`}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-[var(--text-tertiary)] font-mono truncate max-w-[20rem]" title={extractTarget(e)}>
-                          {extractTarget(e)}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[var(--text-muted)]">{e.client_ip || '—'}</td>
-                      </tr>
-                      {open && (
-                        <tr className="bg-[var(--table-surface)]">
-                          <td colSpan={6} className="px-4 pb-4 pt-0">
-                            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
-                                {t('audit.detail_payload')}
-                              </div>
-                              <pre className="text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-64 overflow-auto leading-relaxed">
-                                {json ? JSON.stringify(json, null, 2) : (text || '—')}
-                              </pre>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={filteredEntries}
+          loading={loading}
+          hidePagination
+          animateRows={false}
+          getRowId={(e) => e.id}
+          renderSubRow={renderAuditDetail}
+          getRowCanExpand={(row) => Boolean(row.original.details)}
+          expandLabel={t('audit.expand_payload')}
+          collapseLabel={t('audit.collapse_payload')}
+          emptyState={{ icon: '📋', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+        />
 
         {total > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-[var(--border-default)] bg-[var(--row-hover-bg)]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)]">
             <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>
               <select

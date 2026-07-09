@@ -552,6 +552,8 @@
     "col_target": "Target",
     "col_ip": "IP address",
     "detail_payload": "Event payload",
+    "expand_payload": "Show event payload",
+    "collapse_payload": "Hide event payload",
     "rows_per_page": "Rows",
     "page_range": "{{start}}–{{end}} of {{total}}",
     "first_page": "First page",
