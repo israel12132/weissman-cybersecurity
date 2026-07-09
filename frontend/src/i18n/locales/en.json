@@ -345,6 +345,13 @@
   "clients_page": {
     "title": "Client Management",
     "subtitle": "Manage customer organizations and authorized scanning scope",
+    "portfolio_heading": "Portfolio Posture",
+    "portfolio_avg": "avg {{score}}",
+    "portfolio_at_risk": "{{count}} at risk",
+    "portfolio_grades": "Grade distribution",
+    "portfolio_fleet": "{{findings}} findings · {{kev}} KEV · {{overdue}} overdue",
+    "portfolio_worst": "Needs attention first",
+    "portfolio_kev": "{{count}} KEV",
     "clients_heading": "Clients",
     "clients_count": "{{count}} client configured",
     "clients_count_plural": "{{count}} clients configured",

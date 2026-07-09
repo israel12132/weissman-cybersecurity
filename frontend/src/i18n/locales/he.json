@@ -340,6 +340,13 @@
   "clients_page": {
     "title": "ניהול לקוחות",
     "subtitle": "ניהול ארגוני לקוחות וסקופ סריקה מורשה",
+    "portfolio_heading": "מצב תיק הלקוחות",
+    "portfolio_avg": "ממוצע {{score}}",
+    "portfolio_at_risk": "{{count}} בסיכון",
+    "portfolio_grades": "התפלגות דירוגים",
+    "portfolio_fleet": "{{findings}} ממצאים · {{kev}} KEV · {{overdue}} באיחור",
+    "portfolio_worst": "דורשים טיפול ראשון",
+    "portfolio_kev": "{{count}} KEV",
     "clients_heading": "לקוחות",
     "clients_count": "לקוח אחד מוגדר",
     "clients_count_plural": "{{count}} לקוחות מוגדרים",

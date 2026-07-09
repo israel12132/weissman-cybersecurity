@@ -6,6 +6,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import PortfolioPosturePanel from './PortfolioPosturePanel'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonCardGrid, SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -224,6 +225,9 @@ export default function Clients() {
             {t('clients_page.add_new')}
           </Link>
         </PremiumPageHeader>
+
+        {/* Fleet-wide (MSSP) posture roll-up across every client in the tenant. */}
+        <PortfolioPosturePanel />
 
         {loading && clients.length === 0 ? (
           <SkeletonWidgetGrid count={4} />
