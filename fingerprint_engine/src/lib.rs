@@ -80,6 +80,7 @@ pub mod engine_telemetry;
 pub mod engine_ui_manifest;
 pub mod eternal_fuzz;
 pub mod executive_pdf;
+pub mod executive_summary;
 pub mod exploit_synthesis_engine;
 pub mod external_exposure_supreme;
 pub mod financial_risk;

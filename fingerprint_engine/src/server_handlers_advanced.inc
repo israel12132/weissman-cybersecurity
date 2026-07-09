@@ -172,6 +172,30 @@ async fn api_remediation_priority_for_client(
     }
 }
 
+// ─── Unified executive summary (posture + projection + forecast + top actions, one query) ───
+async fn api_executive_summary_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::executive_summary::load_summary(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Proactive SLA breach forecast (cumulative breaches by horizon) ───
 async fn api_sla_forecast_for_client(
     State(state): State<Arc<AppState>>,

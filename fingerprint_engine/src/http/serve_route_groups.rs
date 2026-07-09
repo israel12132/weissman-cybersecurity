@@ -80,6 +80,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/remediation/sla-forecast/:client_id",
             get(api_sla_forecast_for_client),
         )
+        // Unified exec summary: posture + projection + SLA forecast + top actions in one query.
+        .route(
+            "/api/executive-summary/:client_id",
+            get(api_executive_summary_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
