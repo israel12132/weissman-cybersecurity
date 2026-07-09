@@ -81,11 +81,25 @@ export default [
   },
   // Standalone scripts (e.g. qa-walkthrough.mjs) drive a real browser, so their code
   // legitimately references both Node and browser globals (page.evaluate callbacks).
+  // Vite build plugins under plugins/ run in Node.
   {
-    files: ['*.mjs', 'scripts/**/*.{js,mjs}'],
+    files: ['*.mjs', 'scripts/**/*.{js,mjs}', 'plugins/**/*.{js,mjs,cjs}'],
     languageOptions: {
       sourceType: 'module',
       globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-unused-vars': 'warn',
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+    },
+  },
+  // Service workers under public/ run in the ServiceWorker global scope
+  // (self, caches, fetch, clients, …), not a DOM window.
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: { ...globals.serviceworker, ...globals.browser },
     },
     rules: {
       'no-unused-vars': 'warn',
