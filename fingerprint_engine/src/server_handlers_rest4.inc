@@ -1692,6 +1692,84 @@ async fn api_finding_brief(
         .into_response()
 }
 
+/// `GET /api/clients/:id/heal-stats` — aggregate auto-heal analytics for a client: total runs,
+/// verdict distribution, success rate, attempt stats, attested count, and per-channel breakdown.
+async fn api_heal_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let agg = sqlx::query(
+        r#"SELECT
+             count(*)::bigint AS total,
+             count(*) FILTER (WHERE verdict = 'fixed')::bigint AS fixed,
+             count(*) FILTER (WHERE verdict = 'broke_app')::bigint AS broke_app,
+             count(*) FILTER (WHERE verdict = 'still_vulnerable')::bigint AS still_vulnerable,
+             count(*) FILTER (WHERE verification_status LIKE 'verified_%')::bigint AS delivered,
+             count(*) FILTER (WHERE verification_receipt IS NOT NULL AND verification_receipt <> '')::bigint AS attested,
+             COALESCE(round(avg(attempts)::numeric, 2), 1)::float8 AS avg_attempts,
+             COALESCE(max(attempts), 1)::bigint AS max_attempts
+           FROM heal_requests WHERE client_id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let channels = sqlx::query(
+        "SELECT COALESCE(channel,'unknown') AS channel, count(*)::bigint AS n FROM heal_requests WHERE client_id = $1 GROUP BY 1 ORDER BY 2 DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let (total, fixed) = agg
+        .as_ref()
+        .map(|r| {
+            (
+                r.try_get::<i64, _>("total").unwrap_or(0),
+                r.try_get::<i64, _>("fixed").unwrap_or(0),
+            )
+        })
+        .unwrap_or((0, 0));
+    let success_rate = if total > 0 {
+        (fixed as f64 / total as f64 * 1000.0).round() / 1000.0
+    } else {
+        0.0
+    };
+    let by_channel: Vec<Value> = channels
+        .into_iter()
+        .map(|r| {
+            json!({
+                "channel": r.try_get::<String, _>("channel").unwrap_or_default(),
+                "count": r.try_get::<i64, _>("n").unwrap_or(0),
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "total": total,
+            "fixed": fixed,
+            "broke_app": agg.as_ref().and_then(|r| r.try_get::<i64,_>("broke_app").ok()).unwrap_or(0),
+            "still_vulnerable": agg.as_ref().and_then(|r| r.try_get::<i64,_>("still_vulnerable").ok()).unwrap_or(0),
+            "delivered": agg.as_ref().and_then(|r| r.try_get::<i64,_>("delivered").ok()).unwrap_or(0),
+            "attested": agg.as_ref().and_then(|r| r.try_get::<i64,_>("attested").ok()).unwrap_or(0),
+            "avg_attempts": agg.as_ref().and_then(|r| r.try_get::<f64,_>("avg_attempts").ok()).unwrap_or(1.0),
+            "max_attempts": agg.as_ref().and_then(|r| r.try_get::<i64,_>("max_attempts").ok()).unwrap_or(1),
+            "success_rate": success_rate,
+            "by_channel": by_channel,
+        })),
+    )
+        .into_response()
+}
+
 async fn api_heal_requests_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

@@ -114,6 +114,7 @@ export default function RemediationHub() {
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState({})
   const [selectedFinding, setSelectedFinding] = useState(null)
+  const [healStats, setHealStats] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -132,6 +133,29 @@ export default function RemediationHub() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Aggregate auto-heal analytics across the clients present in the current findings.
+  useEffect(() => {
+    const ids = [...new Set(findings.map((f) => f.client_id).filter(Boolean))].slice(0, 25)
+    if (!ids.length) { setHealStats(null); return undefined }
+    let cancelled = false
+    Promise.all(
+      ids.map((id) => apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
+    ).then((list) => {
+      if (cancelled) return
+      const agg = list.filter(Boolean).reduce(
+        (a, s) => ({
+          total: a.total + (s.total || 0),
+          fixed: a.fixed + (s.fixed || 0),
+          attested: a.attested + (s.attested || 0),
+          attemptsSum: a.attemptsSum + (s.avg_attempts || 1) * (s.total || 0),
+        }),
+        { total: 0, fixed: 0, attested: 0, attemptsSum: 0 },
+      )
+      setHealStats(agg.total > 0 ? agg : null)
+    })
+    return () => { cancelled = true }
+  }, [findings])
 
   const filteredFindings = useMemo(() => {
     let list = findings
@@ -195,6 +219,19 @@ export default function RemediationHub() {
           <StatCard label={t('pages.remediationHub.in_progress')} value={totals.running} icon={<Clock className="w-4 h-4 text-orange-400" />} loading={loading} />
           <StatCard label={t('pages.remediationHub.resolved')} value={totals.completed} icon={<CheckCircle className="w-4 h-4 text-green-400" />} loading={loading} />
         </div>
+
+        {/* Auto-heal analytics strip */}
+        {healStats && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics', { defaultValue: 'Auto-heal' })}
+            </span>
+            <HealStat label={t('pages.remediationHub.heal_runs', { defaultValue: 'runs' })} value={healStats.total} />
+            <HealStat label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
+            <HealStat label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
+            <HealStat label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={healStats.attested} color="#34d399" />
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -347,6 +384,15 @@ function Pill({ active, color = '#22d3ee', onClick, children }) {
     >
       {children}
     </button>
+  )
+}
+
+function HealStat({ label, value, color }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-sm font-bold tabular-nums" style={color ? { color } : { color: '#e2e8f0' }}>{value}</span>
+      <span className="text-[10px] text-white/40 uppercase tracking-wide">{label}</span>
+    </span>
   )
 }
 

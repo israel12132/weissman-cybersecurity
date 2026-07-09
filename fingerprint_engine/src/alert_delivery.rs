@@ -459,3 +459,53 @@ pub async fn notify_heal_completed(
         );
     }
 }
+
+/// Fire tenant alert channels when closed-loop verification finds a previously-fixed vulnerability
+/// has REGRESSED (reopened). Best-effort; pages on-call so the regression is re-remediated.
+pub async fn notify_regression(
+    pool: &PgPool,
+    tenant_id: i64,
+    finding_id: &str,
+    engine: &str,
+    target: &str,
+) {
+    let config = load_delivery_config(pool, tenant_id).await;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| Client::new());
+    let text = format!(
+        "[Weissman][Auto-Heal] ♻️ REGRESSION: finding {finding_id} reopened on {target} (engine {engine}) — re-remediation needed"
+    );
+    let payload = json!({
+        "event": "remediation_regression",
+        "tenant_id": tenant_id,
+        "finding_id": finding_id,
+        "engine": engine,
+        "target": target,
+        "text": text,
+    });
+    let mut delivered = false;
+    if let Some(url) = config.alert_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if let Some(url) = config.slack_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if let Some(key) = resolve_pagerduty_key(&config) {
+        let pd = json!({
+            "routing_key": key,
+            "event_action": "trigger",
+            "payload": {
+                "summary": format!("Remediation regression: {finding_id} reopened"),
+                "severity": "warning",
+                "source": "weissman-auto-heal",
+                "custom_details": payload,
+            }
+        });
+        delivered |= post_json(&client, "https://events.pagerduty.com/v2/enqueue", &pd).await;
+    }
+    if !delivered {
+        tracing::debug!(target: "alert_delivery", tenant_id, "regression alert not delivered (no channels configured)");
+    }
+}

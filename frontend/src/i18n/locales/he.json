@@ -1481,7 +1481,12 @@
       "download_patch": "הורד תיקון",
       "self_repair_attempts": "ריפוי עצמי ×{{n}}",
       "attested": "מאומת",
-      "verify_attestation": "אמת קבלה חתומה"
+      "verify_attestation": "אמת קבלה חתומה",
+      "heal_analytics": "ריפוי אוטומטי",
+      "heal_runs": "ריצות",
+      "heal_fix_rate": "שיעור תיקון",
+      "heal_avg_attempts": "ניסיונות בממוצע",
+      "heal_attested": "מאומתים"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",

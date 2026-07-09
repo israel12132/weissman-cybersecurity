@@ -196,6 +196,52 @@ fn failure_reason(vr: &crate::verification_sandbox::VerificationResult) -> Strin
     }
 }
 
+/// Idempotency: find a verified heal PR/MR already opened for this finding within the dedup
+/// window (`WEISSMAN_HEAL_DEDUP_HOURS`, default 24), so we never open a duplicate. Returns
+/// `(pr_url, pr_number, branch_name)`.
+async fn recent_open_pr(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    finding_id: &str,
+) -> Option<(String, Option<i64>, String)> {
+    let hours: i32 = std::env::var("WEISSMAN_HEAL_DEDUP_HOURS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|n: &i32| *n >= 0 && *n <= 720)
+        .unwrap_or(24);
+    if hours == 0 {
+        return None; // dedup disabled
+    }
+    let mut tx = db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let row = sqlx::query(
+        r#"SELECT pr_url, pr_number, COALESCE(branch_name,'') AS branch_name
+           FROM heal_requests
+           WHERE client_id = $1 AND finding_id = $2
+             AND verification_status IN ('verified_pr_opened', 'verified_mr_opened')
+             AND pr_url IS NOT NULL AND pr_url <> ''
+             AND created_at > now() - ($3::int * interval '1 hour')
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(client_id)
+    .bind(finding_id)
+    .bind(hours)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+    let r = row?;
+    let url: String = r.try_get::<Option<String>, _>("pr_url").ok().flatten()?;
+    let num: Option<i64> = r
+        .try_get::<Option<i32>, _>("pr_number")
+        .ok()
+        .flatten()
+        .map(|n| n as i64);
+    let branch: String = r.try_get("branch_name").unwrap_or_default();
+    Some((url, num, branch))
+}
+
 /// Load a finding's title/description/severity for patch regeneration (empty tuple if absent).
 async fn load_finding_context(
     pool: &PgPool,
@@ -571,6 +617,60 @@ pub async fn run_auto_heal_job(
         .await;
     }
     let attempts_i32 = attempt as i32;
+
+    // Idempotency: for repo channels, reuse an existing recent heal PR/MR instead of opening a duplicate.
+    if channel.touches_repo() {
+        if let Some((existing_url, existing_num, existing_branch)) =
+            recent_open_pr(app_pool.as_ref(), tenant_id, client_id, &finding_id).await
+        {
+            record_step(
+                &step_sink,
+                "dedup_existing_pr",
+                Some(format!("reusing existing open heal PR/MR: {}", existing_url)),
+            )
+            .await;
+            insert_heal_request_row(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                vuln_id,
+                &existing_branch,
+                Some(existing_url.as_str()),
+                existing_num,
+                "",
+                "deduped_existing_pr",
+                &jid_str,
+                channel.id(),
+                verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                Some(existing_url.as_str()),
+                true,
+                heal_started,
+            )
+            .await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            return Ok(json!({
+                "ok": true,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "pr_url": existing_url,
+                "pr_number": existing_num,
+                "deduped": true,
+                "spec_id": spec_id,
+            }));
+        }
+    }
 
     // 2) DELIVER the verified fix via the requested channel.
     let commit_msg = format!(

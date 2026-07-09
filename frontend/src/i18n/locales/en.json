@@ -1473,7 +1473,12 @@
       "download_patch": "Download patch",
       "self_repair_attempts": "self-repair ×{{n}}",
       "attested": "attested",
-      "verify_attestation": "Verify signed receipt"
+      "verify_attestation": "Verify signed receipt",
+      "heal_analytics": "Auto-heal",
+      "heal_runs": "runs",
+      "heal_fix_rate": "fix rate",
+      "heal_avg_attempts": "avg attempts",
+      "heal_attested": "attested"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",

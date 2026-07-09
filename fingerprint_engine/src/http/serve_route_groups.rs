@@ -472,6 +472,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/clients/:id/heal-requests",
             get(api_heal_requests_list),
         )
+        .route("/api/clients/:id/heal-stats", get(api_heal_stats))
         .route("/api/clients/:id/deception", get(api_deception_list))
         .route(
             "/api/clients/:id/deception/generate",

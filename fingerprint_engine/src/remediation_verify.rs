@@ -99,6 +99,17 @@ pub async fn run_verification(
     tx.commit()
         .await
         .map_err(|e| format!("remediation verify: commit failed: {e}"))?;
+
+    // Closed-loop regression alert: if a previously-fixed vector reopened, notify so it gets
+    // re-remediated (autonomous re-heal can be wired via a SOAR playbook on this signal).
+    if still
+        && std::env::var("WEISSMAN_REGRESSION_ALERT")
+            .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+            .unwrap_or(true)
+    {
+        crate::alert_delivery::notify_regression(pool, tenant_id, original_finding_id, engine, target)
+            .await;
+    }
     Ok(outcome)
 }
 
