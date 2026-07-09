@@ -134,7 +134,7 @@ export default function CryptoPosture() {
         )}
 
         {error && !loading && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
             {error}
           </div>
         )}
