@@ -1516,6 +1516,12 @@
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
       "subtitle": "Multi-framework compliance mapping and control tracking",
+      "posture_heading": "Live Compliance Exposure",
+      "posture_export": "Export CSV",
+      "posture_no_client": "Select a client to load live compliance exposure.",
+      "posture_error": "Couldn't load compliance exposure: {{error}}.",
+      "posture_empty": "No open findings map to a tracked control for this client.",
+      "posture_summary": "{{controls}} controls · {{findings}} findings",
       "loading": "Loading frameworks…",
       "select_framework": "Select a framework",
       "filter_all": "All",

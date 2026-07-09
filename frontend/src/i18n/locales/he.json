@@ -1524,6 +1524,12 @@
     "complianceFrameworks": {
       "title": "מסגרות ציות",
       "subtitle": "מיפוי ציות רב-מסגרתי ומעקב בקרות",
+      "posture_heading": "חשיפת ציות חיה",
+      "posture_export": "ייצוא CSV",
+      "posture_no_client": "בחר לקוח כדי לטעון חשיפת ציות חיה.",
+      "posture_error": "לא ניתן לטעון חשיפת ציות: {{error}}.",
+      "posture_empty": "אין ממצאים פתוחים הממופים לבקרה נעקבת עבור לקוח זה.",
+      "posture_summary": "{{controls}} בקרות · {{findings}} ממצאים",
       "loading": "טוען מסגרות…",
       "select_framework": "בחר מסגרת",
       "filter_all": "הכל",
