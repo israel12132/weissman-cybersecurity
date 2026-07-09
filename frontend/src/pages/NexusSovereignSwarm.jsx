@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const ENGINE_ID = 'nexus_sovereign_swarm'
 
@@ -1302,9 +1303,10 @@ export default function NexusSovereignSwarm() {
 
   useEffect(() => {
     loadAgents()
-    const id = setInterval(loadAgents, 15000)
-    return () => clearInterval(id)
   }, [loadAgents])
+
+  // Agent-roster refresh every 15s, skipping ticks while the tab is hidden.
+  useVisiblePolling(loadAgents, 15000)
 
   const appendLine = useCallback((msg) => {
     setLines((prev) => [...prev.slice(-400), msg])

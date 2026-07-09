@@ -13,6 +13,7 @@ import {
   Radio,
 } from 'lucide-react'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -410,9 +411,10 @@ export default function StatusPage() {
 
   useEffect(() => {
     probe()
-    const interval = setInterval(probe, 30_000)
-    return () => clearInterval(interval)
   }, [probe])
+
+  // Re-probe every 30s, skipping ticks while the tab is hidden.
+  useVisiblePolling(probe, 30_000)
 
   const services = deriveServices(state, t)
 

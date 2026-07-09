@@ -16,6 +16,7 @@ import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
 const POLL_MS = 2000
 const SECTIONS = ['overview', 'engines', 'modules', 'jobs', 'controls']
@@ -108,9 +109,10 @@ function SupremeNerveCenterInner() {
   useEffect(() => {
     setClientBoot(collectClientBootModules())
     load()
-    const id = setInterval(load, POLL_MS)
-    return () => clearInterval(id)
   }, [load])
+
+  // Refresh on POLL_MS cadence, skipping ticks while the tab is hidden.
+  useVisiblePolling(load, POLL_MS)
 
   const engines = snap?.engines || []
   const modules = snap?.system_modules || []
