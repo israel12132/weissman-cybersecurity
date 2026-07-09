@@ -6,9 +6,10 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   getPaginationRowModel,
+  getExpandedRowModel,
   flexRender,
 } from '@tanstack/react-table'
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search, Download, Columns3, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download, Columns3, X } from 'lucide-react'
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
 
@@ -70,6 +71,10 @@ function SortIndicator({ sorted }) {
  *  - pageSizes — default [25, 50, 100]
  *  - className, tableClassName
  *  - id — root element id
+ *  - renderSubRow — (rowOriginal, row) => node; enables an expander column whose
+ *      chevron toggles a full-width detail row. Opt-in: omit → unchanged behavior.
+ *  - getRowCanExpand — (row) => boolean; gate which rows show an expander
+ *  - expandLabel / collapseLabel — a11y labels for the expander button
  */
 export default function DataTable({
   columns,
@@ -95,6 +100,10 @@ export default function DataTable({
   className = '',
   tableClassName = '',
   id,
+  renderSubRow,
+  getRowCanExpand,
+  expandLabel = 'Expand row',
+  collapseLabel = 'Collapse row',
   // ── Opt-in toolbar (all default off → existing usages unchanged) ──
   searchable = false,
   searchPlaceholder = 'Search…',
@@ -155,25 +164,62 @@ export default function DataTable({
     }
   }, [colMenuOpen])
 
+  // Expandable sub-rows (opt-in via renderSubRow). Prepend a compact expander
+  // column so existing column layouts stay untouched when the feature is off.
+  const [expanded, setExpanded] = useState({})
+  const expandable = typeof renderSubRow === 'function'
+  const tableColumns = useMemo(() => {
+    if (!expandable) return columns
+    const expanderColumn = {
+      id: '__expander',
+      header: () => null,
+      size: 40,
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.getCanExpand() ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              row.getToggleExpandedHandler()()
+            }}
+            aria-label={row.getIsExpanded() ? collapseLabel : expandLabel}
+            aria-expanded={row.getIsExpanded()}
+            className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
+          >
+            <ChevronRight
+              className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? 'rotate-90 text-cyan-400' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+        ) : null,
+    }
+    return [expanderColumn, ...columns]
+  }, [columns, expandable, collapseLabel, expandLabel])
+
   const table = useReactTable({
     data: data ?? [],
-    columns,
+    columns: tableColumns,
     state: {
       sorting,
       pagination: effectivePagination,
       columnFilters,
       globalFilter: effectiveGlobalFilter,
       columnVisibility,
+      expanded,
     },
     onSortingChange,
     onPaginationChange: effectiveOnPaginationChange,
     onGlobalFilterChange: globalFilterControlled ? undefined : setInternalGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: expandable ? (getRowCanExpand ?? (() => true)) : undefined,
     globalFilterFn: globalFilterFn ?? fuzzyGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     initialState: {
       pagination: { pageIndex: 0, pageSize: defaultPageSize },
     },
@@ -193,6 +239,7 @@ export default function DataTable({
   }
 
   const { rows } = table.getRowModel()
+  const colCount = table.getVisibleLeafColumns().length
   const totalFiltered = table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
   const pageIndex = effectivePagination.pageIndex ?? 0
@@ -342,8 +389,8 @@ export default function DataTable({
           <tbody>
             {loading && rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-6">
-                  <SkeletonTable rows={8} cols={Math.min(columns.length, 6)} />
+                <td colSpan={colCount} className="px-4 py-6">
+                  <SkeletonTable rows={8} cols={Math.min(colCount, 6)} />
                 </td>
               </tr>
             )}
@@ -351,7 +398,7 @@ export default function DataTable({
             {showFilteredEmpty && (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={colCount}
                   className="px-4 py-10 text-center text-[var(--text-muted)] text-xs font-mono"
                 >
                   {emptyFilteredMessage}
@@ -402,26 +449,39 @@ export default function DataTable({
                   }
                 : {}
 
-              if (animateRows) {
-                return (
-                  <motion.tr
-                    key={row.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.12, delay: Math.min(i * 0.012, 0.25) }}
-                    className={rowClasses}
-                    style={style}
-                    {...interactiveProps}
-                  >
-                    {cells}
-                  </motion.tr>
-                )
-              }
+              const subRow =
+                expandable && row.getIsExpanded() ? (
+                  <tr key={`${row.id}-detail`} className="bg-[var(--table-surface)]">
+                    <td colSpan={colCount} className="px-4 pb-4 pt-0 align-top">
+                      {renderSubRow(row.original, row)}
+                    </td>
+                  </tr>
+                ) : null
 
-              return (
+              const mainRow = animateRows ? (
+                <motion.tr
+                  key={row.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.12, delay: Math.min(i * 0.012, 0.25) }}
+                  className={rowClasses}
+                  style={style}
+                  {...interactiveProps}
+                >
+                  {cells}
+                </motion.tr>
+              ) : (
                 <tr key={row.id} className={rowClasses} style={style} {...interactiveProps}>
                   {cells}
                 </tr>
+              )
+
+              if (!subRow) return mainRow
+              return (
+                <React.Fragment key={row.id}>
+                  {mainRow}
+                  {subRow}
+                </React.Fragment>
               )
             })}
           </tbody>
