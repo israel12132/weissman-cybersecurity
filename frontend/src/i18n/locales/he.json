@@ -1465,6 +1465,8 @@
       "posture_sub_severity": "עומס חומרה",
       "posture_drivers": "מניעים מובילים",
       "posture_clean": "אין מניעי-סיכון משמעותיים — מצב האבטחה תקין.",
+      "posture_projection": "תחזית השפעה",
+      "posture_fix_n": "תיקון {{count}} מובילים",
       "program_frameworks": "מסגרות",
       "program_closes": "תיקון אחד סוגר {{count}} ממצאים",
       "program_ransomware": "כופר",

@@ -25,6 +25,25 @@ export function gradeColor(grade) {
   }
 }
 
+/**
+ * Pure: pick the projection steps that first reach each distinct grade along the fix path — the
+ * natural "fix N → reach grade" milestones. Returns up to 3. Exported for tests.
+ */
+export function gradeMilestones(projection) {
+  if (!Array.isArray(projection)) return []
+  const out = []
+  const seen = new Set()
+  for (const s of projection) {
+    const g = String(s?.projected_grade || '')
+    if (g && !seen.has(g)) {
+      seen.add(g)
+      out.push(s)
+    }
+    if (out.length >= 3) break
+  }
+  return out
+}
+
 /** Pure: colour a 0..100 sub-score on the same scale as grades. Exported for tests. */
 export function scoreColor(value) {
   const n = Number(value)
@@ -61,11 +80,12 @@ export default function PostureScoreCard() {
   }, [selectedClientId, clients])
 
   const [data, setData] = useState(null)
+  const [projection, setProjection] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const load = useCallback(async (id) => {
-    if (id == null) { setData(null); return }
+    if (id == null) { setData(null); setProjection([]); return }
     setLoading(true)
     setError(null)
     try {
@@ -73,9 +93,11 @@ export default function PostureScoreCard() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const d = await r.json()
       setData(d?.posture && typeof d.posture === 'object' ? d.posture : null)
+      setProjection(Array.isArray(d?.projection) ? d.projection : [])
     } catch (e) {
       setError(e?.message || 'load failed')
       setData(null)
+      setProjection([])
     } finally {
       setLoading(false)
     }
@@ -134,6 +156,31 @@ export default function PostureScoreCard() {
             ) : (
               <div className="text-[11px] text-emerald-300/80">{t('pages.remediationHub.posture_clean', { defaultValue: 'No significant risk drivers — posture is healthy.' })}</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Remediation impact projection: fix the top N actions → reach this grade. */}
+      {!loading && !error && data && gradeMilestones(projection).length > 0 && (
+        <div className="px-4 pb-4 -mt-1">
+          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-2">
+            {t('pages.remediationHub.posture_projection', { defaultValue: 'Impact projection' })}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {gradeMilestones(projection).map((s) => (
+              <div key={s.after_fixing_rank} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.03]">
+                <span className="text-[11px] text-white/60">
+                  {t('pages.remediationHub.posture_fix_n', { count: s.actions_fixed, defaultValue: 'Fix top {{count}}' })}
+                </span>
+                <span className="text-[11px] text-white/30">→</span>
+                <span className="text-sm font-bold tabular-nums" style={{ color: gradeColor(s.projected_grade) }}>
+                  {Number(s.projected_score).toFixed(0)} {s.projected_grade}
+                </span>
+                {Number(s.delta) > 0 && (
+                  <span className="text-[10px] font-mono text-emerald-300/80">+{Number(s.delta).toFixed(0)}</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

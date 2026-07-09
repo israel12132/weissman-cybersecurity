@@ -1457,6 +1457,8 @@
       "posture_sub_severity": "Severity load",
       "posture_drivers": "Top drivers",
       "posture_clean": "No significant risk drivers — posture is healthy.",
+      "posture_projection": "Impact projection",
+      "posture_fix_n": "Fix top {{count}}",
       "program_frameworks": "Frameworks",
       "program_closes": "One fix closes {{count}} findings",
       "program_ransomware": "Ransomware",
