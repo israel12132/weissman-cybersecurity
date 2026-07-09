@@ -1,6 +1,6 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, CheckCircle2, XCircle, Layers } from 'lucide-react'
 import PageShell from './PageShell'

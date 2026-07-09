@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts'

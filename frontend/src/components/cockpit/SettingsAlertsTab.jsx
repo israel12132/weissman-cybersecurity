@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Component } from 'react'
+import { useEffect, useState, Component } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loadDestructiveConfirmToken, saveDestructiveConfirmToken } from '../../utils/destructiveConfirm'
 import { apiFetch } from '../../lib/apiBase'

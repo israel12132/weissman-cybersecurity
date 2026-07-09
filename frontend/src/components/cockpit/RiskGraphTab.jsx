@@ -2,7 +2,7 @@
  * CNAPP Layer 1: Contextual Risk Graph — zoomable graph of assets, identities, findings, network.
  * All data from live API; no hardcoded nodes.
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'

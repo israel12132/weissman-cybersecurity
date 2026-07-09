@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
 

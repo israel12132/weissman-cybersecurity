@@ -1,4 +1,3 @@
-import React from 'react'
 import { ShieldAlert, TrendingUp } from 'lucide-react'
 
 function formatEpss(epss) {

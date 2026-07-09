@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'

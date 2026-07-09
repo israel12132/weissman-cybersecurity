@@ -1,7 +1,7 @@
 /**
  * CNAPP Layer 3–4: Auto-Heal with 200% Docker verification — live sandbox steps, then PR.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'

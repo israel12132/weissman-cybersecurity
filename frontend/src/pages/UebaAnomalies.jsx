@@ -9,7 +9,7 @@
  * Optional query params the endpoint accepts: `limit` (1–500) and `agent_id`.
  * We fetch the default page and filter/search client-side over the result.
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Activity, Search } from 'lucide-react'

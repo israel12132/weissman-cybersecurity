@@ -1,4 +1,3 @@
-import React from 'react'
 
 /**
  * Pill toggle bar for severity, status, KEV-only, etc.

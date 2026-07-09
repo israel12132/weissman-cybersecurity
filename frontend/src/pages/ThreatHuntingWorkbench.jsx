@@ -5,7 +5,7 @@
  * hypothesis-driven hunting with YARA-like queries, hunt results.
  * Route: /threat-hunting
  */
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download } from 'lucide-react'

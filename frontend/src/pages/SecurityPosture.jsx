@@ -5,7 +5,7 @@
  * platform's own hardening (0–100 + letter grade) from a set of weighted
  * checks. Platform-wide — no client selection. Route: /security-posture
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Check, X, Search } from 'lucide-react'
 import PageShell from './PageShell'

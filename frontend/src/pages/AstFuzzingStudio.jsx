@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Braces, FlaskConical, Loader2, Play, Trash2 } from 'lucide-react'
 import PageShell from './PageShell'

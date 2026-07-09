@@ -11,7 +11,7 @@
  *
  * No fabricated rows. Every number on this page is sourced from a backend response.
  */
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'

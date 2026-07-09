@@ -8,7 +8,7 @@
  * Route: /engine-catalog
  */
 import { firstClientTarget } from '../lib/clientTarget'
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'

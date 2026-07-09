@@ -1,5 +1,5 @@
 import { firstClientTarget } from '../lib/clientTarget'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'

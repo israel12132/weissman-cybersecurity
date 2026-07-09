@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'

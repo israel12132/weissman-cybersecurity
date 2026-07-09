@@ -6,7 +6,7 @@
  * trail of report generation — when reports were produced and where the
  * artifact was written. Route: /reports
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { FileClock, Search } from 'lucide-react'

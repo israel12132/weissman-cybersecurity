@@ -1,4 +1,3 @@
-import React from 'react'
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 
 function DeltaDisplay({ delta, trend }) {

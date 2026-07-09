@@ -1,7 +1,7 @@
 /**
  * Phase 5: Auto-containment — CISO pre-approved AWS SG swap + K8s NetworkPolicy quarantine.
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'

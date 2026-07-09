@@ -1,6 +1,6 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'

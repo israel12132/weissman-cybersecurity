@@ -5,7 +5,7 @@
  * real-time timelines, containment / eradication actions, MTTR metrics.
  * Route: /incident-response
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download } from 'lucide-react'

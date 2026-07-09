@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 
 const SUPREME_CATEGORIES = new Set([
   'toxic_combination',

@@ -6,7 +6,7 @@
  * server-side from asset values × CVSS/EPSS/KEV). `?recompute=1` forces a fresh
  * snapshot. Route: /financial-risk
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DollarSign, RefreshCw } from 'lucide-react'

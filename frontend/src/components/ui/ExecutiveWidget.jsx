@@ -1,4 +1,3 @@
-import React from 'react'
 
 /**
  * Executive dashboard metric widget — subtle border, formatted value slot.

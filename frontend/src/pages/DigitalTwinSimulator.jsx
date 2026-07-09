@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useHubBodySync } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'

@@ -4,7 +4,7 @@
  * Wired to the live GET /api/soc/iocs endpoint, which extracts network IOCs
  * (IPs, domains, URLs, hashes) from persisted findings. Route: /iocs
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { openSseStream } from '../../lib/sseStream'
 

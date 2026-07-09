@@ -7,7 +7,7 @@
  *            threat-intel feed freshness (KEV/EPSS).
  *   Client:  financial ALE (FAIR) + attack-path count/top-risk.
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LayoutDashboard, ArrowRight, Search } from 'lucide-react'

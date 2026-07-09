@@ -7,7 +7,7 @@
  * Row click: drawer showing raw JSON + technical details + status update.
  * Export: CSV download of all findings.
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'

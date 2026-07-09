@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
-import React from 'react'
 import { useVisiblePolling } from './useVisiblePolling'
 
 function Harness({ fn, intervalMs, paused }) {

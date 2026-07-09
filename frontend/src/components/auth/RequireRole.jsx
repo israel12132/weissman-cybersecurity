@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'

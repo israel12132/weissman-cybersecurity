@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 
 /**
  * Renders the reconstructed dependency graph from a supply-chain inventory finding.

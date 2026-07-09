@@ -1,7 +1,7 @@
 /**
  * CNAPP Layer 4: Deception Grid — honeytokens, active cloud injection map, CRITICAL on trigger.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { useClient } from '../../context/ClientContext'

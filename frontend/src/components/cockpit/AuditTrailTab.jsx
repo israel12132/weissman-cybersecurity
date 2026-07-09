@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'

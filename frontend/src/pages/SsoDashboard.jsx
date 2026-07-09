@@ -6,7 +6,7 @@
  *  2. Configuration Form — fields tailored to the selected vendor
  *  3. Active IdP Table — list of configured IdPs with status, Test Connection, edit/delete
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'

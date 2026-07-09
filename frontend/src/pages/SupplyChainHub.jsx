@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { Link } from 'react-router-dom'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'

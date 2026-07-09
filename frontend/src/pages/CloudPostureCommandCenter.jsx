@@ -1,6 +1,6 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'

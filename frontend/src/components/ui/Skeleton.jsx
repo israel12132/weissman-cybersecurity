@@ -1,4 +1,3 @@
-import React from 'react'
 
 /**
  * Single skeleton bar with shimmer animation.

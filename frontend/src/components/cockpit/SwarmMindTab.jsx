@@ -1,7 +1,7 @@
 /**
  * Phase 5: Swarm Mind — live multi-agent graph (Recon → Exploitation ← Stealth) via WebSocket.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { Network, Play, Radio, Bot } from 'lucide-react'

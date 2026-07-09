@@ -7,7 +7,7 @@
  * revoke a suppression via the live DELETE /api/intel/suppressions/:id.
  * Route: /suppressions
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { EyeOff, Search, Trash2 } from 'lucide-react'

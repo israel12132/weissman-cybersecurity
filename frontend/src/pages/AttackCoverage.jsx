@@ -6,7 +6,7 @@
  * plus rollup totals. Global capability view — no client selection. Route:
  * /attack-coverage
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Grid3x3, Search } from 'lucide-react'
 import PageShell from './PageShell'

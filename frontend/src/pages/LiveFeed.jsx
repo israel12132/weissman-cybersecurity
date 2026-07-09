@@ -5,7 +5,7 @@
  * 100 most recent findings as an event feed (time, target, severity, message).
  * Auto-refreshes on an interval for a live "wall display" surface. Route: /live-feed
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Radio, Search, Pause, Play } from 'lucide-react'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'

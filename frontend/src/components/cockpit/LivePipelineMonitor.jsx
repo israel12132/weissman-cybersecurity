@@ -2,7 +2,7 @@
  * Live Pipeline Monitor — Stages 0–4 and true DAG tree in real time. Pause, resume, skip per client.
  * Data from GET /api/pipeline/state, GET /api/dag, and SSE pipeline_stage events.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'

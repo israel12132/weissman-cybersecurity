@@ -1,6 +1,6 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
