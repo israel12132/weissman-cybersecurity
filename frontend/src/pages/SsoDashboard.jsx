@@ -16,7 +16,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
-import { confirmDialog } from '../utils/confirmDialog'
+
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
 

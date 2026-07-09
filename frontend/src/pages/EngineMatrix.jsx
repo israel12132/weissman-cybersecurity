@@ -17,7 +17,7 @@ import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { downloadCsv } from '../lib/exportFindingsCsv'

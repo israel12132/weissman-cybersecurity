@@ -12,7 +12,7 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import EmptyState from '../components/ui/EmptyState'

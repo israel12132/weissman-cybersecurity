@@ -6,8 +6,8 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
-import { confirmDialog } from '../utils/confirmDialog'
-import { useToast } from '../components/ui/Toaster'
+
+
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 
 export default function ContainmentRulesBuilder() {

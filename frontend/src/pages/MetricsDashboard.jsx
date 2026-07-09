@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity, AlertTriangle, CheckCircle, Database, Scan, XCircle, RefreshCw, Shield,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Database, Scan, XCircle, Shield } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import PageShell from './PageShell';
 import ShellScanActions from '../components/engine/ShellScanActions';

@@ -10,7 +10,7 @@ import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'

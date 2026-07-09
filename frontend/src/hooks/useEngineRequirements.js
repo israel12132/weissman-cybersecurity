@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/apiBase'
 
 const DEFAULT_MODULES = ['baseline_asm']

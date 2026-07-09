@@ -10,7 +10,7 @@ import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { buildScanPayload, normalizeIntegrations } from '../lib/engineClientPrefill'

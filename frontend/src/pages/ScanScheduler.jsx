@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'

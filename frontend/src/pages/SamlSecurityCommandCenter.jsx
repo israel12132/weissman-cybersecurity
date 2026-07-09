@@ -13,7 +13,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
-import { downloadBytes } from '../lib/pdfExport'
+
 
 const ENGINE_ID = 'saml_attack'
 const ACCENT = '#f59e0b'

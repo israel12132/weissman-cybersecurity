@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, RefreshCw, X } from 'lucide-react';
+import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, X } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'

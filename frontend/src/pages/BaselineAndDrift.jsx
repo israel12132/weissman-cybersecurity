@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity, TrendingUp, AlertTriangle, CheckCircle, RefreshCw, Search, Cpu,
-} from 'lucide-react';
+import { Activity, TrendingUp, AlertTriangle, CheckCircle, Search, Cpu } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';

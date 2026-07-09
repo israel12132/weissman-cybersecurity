@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useTelemetry } from '../../context/TelemetryContext'
 import { useWarRoom } from '../../context/WarRoomContext'
-import { apiFetch } from '../../lib/apiBase'
+
 import { openSseStream } from '../../lib/sseStream'
 import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clientTarget'
 import { launchEngineScan } from '../../lib/launchEngineScan'

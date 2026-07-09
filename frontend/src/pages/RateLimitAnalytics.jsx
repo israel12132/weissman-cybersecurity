@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
+import { TrendingUp, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';

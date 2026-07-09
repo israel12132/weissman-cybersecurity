@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Download } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { SkeletonBar } from '../components/ui/Skeleton'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
 

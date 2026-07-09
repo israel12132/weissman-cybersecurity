@@ -8,7 +8,7 @@ import { useIntegrationsPrefill } from '../hooks/useHubLocalScanParams'
 import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { apiFetch } from '../lib/apiBase'
+
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 

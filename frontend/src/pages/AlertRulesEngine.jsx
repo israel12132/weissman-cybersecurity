@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, Plus, Trash2, Edit, Play, Pause, Filter, AlertTriangle } from 'lucide-react';
+import { Bell, Plus, Trash2, Edit, Play, Pause, AlertTriangle } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
